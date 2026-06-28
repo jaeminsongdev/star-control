@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Star Sentinel Fixture Outcome",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "fixture_id",
+    "profile",
+    "expected_decision",
+    "expected_diagnostics"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "fixture_id": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string"
+    },
+    "expected_decision": {
+      "type": "string"
+    },
+    "expected_diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
