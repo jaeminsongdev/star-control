@@ -36,6 +36,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          set-safe-directory: false
+          show-progress: false
       - name: Install CI dependencies
         run: python3 -m pip install --upgrade --quiet PyYAML
       - name: Run data format check
