@@ -16,8 +16,12 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 8. `provider-system.md`
 9. `router-engine.md`
 10. `execution-engine.md`
+11. `validation-engine.md`
+12. `star-sentinel-full-spec.md`
+13. `approval-review-flow.md`
+14. `policy-profiles.md`
 
-이 문서 세트는 이후 추가될 validation, Star Sentinel full spec, approval/review flow, CLI, daemon, UI, security, observability, Codex work queue 문서의 기준점이다.
+이 문서 세트는 이후 추가될 CLI, daemon, UI, security, observability, testing, CI, release, Codex work queue 문서의 기준점이다.
 
 ## 용어 수준
 
