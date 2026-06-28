@@ -19,10 +19,41 @@
       "type": "string"
     },
     "state": {
-      "type": "string"
+      "type": "string",
+      "enum": [
+        "REQUESTED",
+        "ROUTING",
+        "ROUTED",
+        "PLANNING",
+        "PLANNED",
+        "WAITING_APPROVAL",
+        "IMPLEMENTING",
+        "IMPLEMENTED",
+        "VALIDATING",
+        "VALIDATED",
+        "REVIEWING",
+        "REVIEWED",
+        "POLISHING",
+        "POLISHED",
+        "REPORTING",
+        "DONE",
+        "FAILED",
+        "BLOCKED",
+        "CANCELLED"
+      ]
     },
     "current_stage": {
-      "type": "string"
+      "type": "string",
+      "enum": [
+        "route",
+        "plan",
+        "design",
+        "implement",
+        "validate",
+        "review",
+        "polish",
+        "report"
+      ]
     },
     "threads": {
       "type": "object"
