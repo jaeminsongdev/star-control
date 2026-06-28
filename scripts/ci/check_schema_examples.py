@@ -47,6 +47,8 @@ VALIDATION_CASES = [
     ("builtin-tools/star-sentinel/schemas/review-pack.schema.json", "builtin-tools/star-sentinel/examples/p0/review-pack-human-review.example.json"),
     ("builtin-tools/star-sentinel/schemas/repo-map.schema.json", "builtin-tools/star-sentinel/examples/p0/repo-map.example.json"),
     ("builtin-tools/star-sentinel/schemas/changed-lines.schema.json", "builtin-tools/star-sentinel/examples/p0/changed-lines.example.json"),
+    ("builtin-tools/star-sentinel/schemas/p0-rule-registry.schema.json", "builtin-tools/star-sentinel/policies/p0-rule-registry.json"),
+    ("builtin-tools/star-sentinel/schemas/fixture-outcome.schema.json", "builtin-tools/star-sentinel/examples/p0/fixture-outcome-scope-block.example.json"),
 ]
 
 
