@@ -1,15 +1,22 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ReviewPack",
+  "title": "Star Sentinel Review Pack",
   "type": "object",
   "required": [
+    "schema_version",
     "task_id",
     "decision",
     "summary",
+    "changed_files",
     "risks",
-    "validations"
+    "validations",
+    "unverified_claims",
+    "questions_for_human"
   ],
   "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
     "task_id": {
       "type": "string"
     },
@@ -38,7 +45,19 @@
     "validations": {
       "type": "array",
       "items": {
-        "type": "object"
+        "type": "object",
+        "required": [
+          "command",
+          "result"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        }
       }
     },
     "unverified_claims": {
@@ -52,6 +71,15 @@
       "items": {
         "type": "string"
       }
+    },
+    "generated_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "review_pack_markdown": {
+      "type": "string"
     }
   }
 }

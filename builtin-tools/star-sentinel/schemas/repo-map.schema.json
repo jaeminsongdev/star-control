@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Star Sentinel Repo Map",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_id",
+    "root",
+    "files"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "root": {
+      "type": "string"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "source",
+              "test",
+              "config",
+              "docs",
+              "schema",
+              "unknown"
+            ]
+          },
+          "language": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "E-P0-0001",
+  "task_id": "p0-task-demo",
+  "event_type": "GATE_DECIDED",
+  "stage": "validate",
+  "severity": "block",
+  "message": "Approval gate blocked the task because a P0 diagnostic was emitted.",
+  "created_at": "2026-01-01T00:00:00Z",
+  "source": {
+    "kind": "tool",
+    "name": "star-sentinel"
+  },
+  "artifacts": [
+    "tool-output/star-sentinel/approval.json"
+  ],
+  "metadata": {
+    "decision": "BLOCK"
+  }
+}

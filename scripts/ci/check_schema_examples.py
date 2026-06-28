@@ -40,6 +40,30 @@ VALIDATION_CASES = (
         "builtin-tools/star-sentinel/schemas/sentinel-task.schema.json",
         "builtin-tools/star-sentinel/examples/p0/sentinel-task.example.json",
     ),
+    (
+        "builtin-tools/star-sentinel/schemas/diagnostic.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/diagnostic-block.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/ledger-event.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/ledger-event.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/validation-run.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/validation-run.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/review-pack.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/review-pack-human-review.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/repo-map.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/repo-map.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/changed-lines.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/changed-lines.example.json",
+    ),
 )
 
 

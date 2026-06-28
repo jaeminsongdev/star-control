@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "p0-task-demo",
+  "root": ".",
+  "files": [
+    {
+      "path": "src/allowed/index.ts",
+      "kind": "source",
+      "language": "typescript",
+      "size_bytes": 120,
+      "symbols": [
+        "createStopwatch"
+      ]
+    },
+    {
+      "path": "tests/allowed/index.test.ts",
+      "kind": "test",
+      "language": "typescript",
+      "size_bytes": 240,
+      "symbols": [
+        "createStopwatch test"
+      ]
+    }
+  ]
+}

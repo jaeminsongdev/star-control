@@ -1,4 +1,5 @@
 {
+  "schema_version": "1.0.0",
   "task_id": "p0-dependency-demo",
   "decision": "HUMAN_REVIEW",
   "summary": "Dependency-related files changed and require explicit review before proceeding.",
@@ -18,5 +19,9 @@
   "unverified_claims": [],
   "questions_for_human": [
     "Was this dependency addition explicitly approved?"
-  ]
+  ],
+  "generated_artifacts": [
+    "tool-output/star-sentinel/review_pack.md"
+  ],
+  "review_pack_markdown": "# Review Pack\n\nDependency-related files changed and require explicit review before proceeding."
 }
