@@ -81,6 +81,30 @@ VALIDATION_CASES = (
         "examples/provider-contracts/provider-run-result.success.example.json",
     ),
     (
+        "specs/schemas/config.schema.json",
+        "examples/config-contracts/config.example.json",
+    ),
+    (
+        "specs/schemas/policy.schema.json",
+        "examples/config-contracts/policy.example.json",
+    ),
+    (
+        "specs/schemas/hook.schema.json",
+        "examples/config-contracts/hook.example.json",
+    ),
+    (
+        "specs/schemas/role.schema.json",
+        "examples/config-contracts/role.example.json",
+    ),
+    (
+        "specs/schemas/renderer.schema.json",
+        "examples/config-contracts/renderer.example.json",
+    ),
+    (
+        "specs/schemas/skill.schema.json",
+        "examples/config-contracts/skill.example.json",
+    ),
+    (
         "builtin-tools/star-sentinel/schemas/approval.schema.json",
         "builtin-tools/star-sentinel/examples/p0/approval-block.example.json",
     ),
