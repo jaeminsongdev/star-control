@@ -1,0 +1,22 @@
+{
+  "task_id": "p0-dependency-demo",
+  "decision": "HUMAN_REVIEW",
+  "summary": "Dependency-related files changed and require explicit review before proceeding.",
+  "changed_files": [
+    "package.json",
+    "package-lock.json"
+  ],
+  "risks": [
+    "dependency_addition"
+  ],
+  "validations": [
+    {
+      "command": "policy:p0",
+      "result": "requires_human_review"
+    }
+  ],
+  "unverified_claims": [],
+  "questions_for_human": [
+    "Was this dependency addition explicitly approved?"
+  ]
+}

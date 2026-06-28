@@ -1,0 +1,15 @@
+case_id: p0-dependency-approval-001
+rule_id: dependency.requires_approval
+should_fail: true
+input:
+  task_id: p0-dependency-demo
+  changed_files:
+    - "package.json"
+    - "package-lock.json"
+  detected_change_types:
+    - "dependency_addition"
+expected:
+  severity: block
+  decision: BLOCK
+  message_contains: "dependency_addition"
+notes: "새 의존성 추가는 P0에서 사람 승인을 요구한다."
