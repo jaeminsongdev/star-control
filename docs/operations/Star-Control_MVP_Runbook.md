@@ -1,6 +1,3 @@
-> 흡수 출처: `star-control_design_v3/operations/Star-Control_MVP_Runbook.md`
-> 정리 상태: 운영 runbook으로 흡수.
-
 # Star-Control MVP Runbook
 
 ## 1. 목표
@@ -11,16 +8,10 @@
 
 ## 2. 준비
 
-```powershell
-mkdir D:\개발\Star-Control
-cd D:\개발\Star-Control
-```
-
 필수 확인:
 
 ```powershell
 git --version
-python --version
 codex --version
 ```
 
@@ -91,9 +82,9 @@ star-control report J-0001
 
 ```powershell
 star-control status J-0001
-cat runs\J-0001\run-state.json
-cat runs\J-0001\events.jsonl
-cat runs\J-0001\final-report.md
+Get-Content .ai-runs\J-0001\run-state.json
+Get-Content .ai-runs\J-0001\events.jsonl
+Get-Content .ai-runs\J-0001\final-report.md
 ```
 
 ---
