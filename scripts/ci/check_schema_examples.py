@@ -36,6 +36,10 @@ VALIDATION_CASES = (
         "builtin-tools/star-sentinel/schemas/approval.schema.json",
         "builtin-tools/star-sentinel/examples/p0/approval-block.example.json",
     ),
+    (
+        "builtin-tools/star-sentinel/schemas/sentinel-task.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/sentinel-task.example.json",
+    ),
 )
 
 
