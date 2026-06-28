@@ -66,9 +66,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          show-progress: false
       - name: Run naming policy check
-        run: python scripts/ci/check_star_sentinel_naming.py
+        run: python3 scripts/ci/check_star_sentinel_naming.py
