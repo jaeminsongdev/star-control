@@ -13,6 +13,9 @@ Core contracts
   RouteSpec
   WorkSpec
   ReportSpec
+  CoreEvent
+  ArtifactRef
+  ErrorEnvelope
 
 Star Sentinel contracts
   SentinelTask
@@ -35,9 +38,10 @@ Provider contracts
 
 - 모든 새 JSON artifact는 `schema_version`을 가져야 한다.
 - 현재 기본 schema version은 `1.0.0`이다.
-- job id는 사람이 추적 가능한 문자열이어야 한다.
-- artifact는 가능하면 상대 경로를 사용한다.
+- job id는 `J-0001`처럼 사람이 추적 가능한 문자열이어야 한다.
+- artifact path는 가능하면 job directory 기준 상대 경로를 사용한다.
 - schema 변경은 example과 CI 검증 case를 함께 수정한다.
+- 사람이 읽는 Markdown 문서와 machine-readable JSON artifact는 구분한다.
 
 ## JobSpec
 
@@ -62,10 +66,13 @@ job_id
 project_root
 request_text
 created_at
+updated_at
 entrypoint
 state
 user_constraints
 ```
+
+`job_id`는 `^J-[0-9]{4,}$` 형식을 따른다.
 
 ## RunState
 
@@ -81,8 +88,27 @@ specs/schemas/run-state.schema.json
 - 현재 job의 진행 상태
 - 현재 stage
 - worker/provider 상태
+- artifact registry 요약
 - 다음 action
-- budget, artifact, history 요약
+- budget, history 요약
+
+핵심 필드:
+
+```text
+schema_version
+job_id
+state
+current_stage
+updated_at
+threads
+workers
+artifacts
+latest_event_id
+active_provider
+next_action
+budget
+history
+```
 
 `state`는 canonical job state enum을 사용한다. `current_stage`는 canonical stage enum을 사용한다.
 
@@ -99,6 +125,7 @@ specs/schemas/route.schema.json
 
 - 요청을 stage와 provider assignment로 나눈 결과
 - size/risk/approval 필요 여부 판단 결과
+- stage별 WorkSpec path 연결
 
 핵심 필드:
 
@@ -114,6 +141,8 @@ requires_user_approval
 approval_reasons
 workspecs
 ```
+
+`assignments`의 key는 stage 이름이고 value는 최소한 `role`, `provider`를 가진다. `profile`은 선택 필드다.
 
 ## WorkSpec
 
@@ -137,6 +166,7 @@ job_id
 stage
 role
 provider
+provider_instance
 project_root
 goal
 allowed_scope
@@ -145,6 +175,8 @@ context_pack
 required_outputs
 validation_requirements
 ```
+
+초기 구현에서는 `provider`와 `provider_instance`를 같은 값으로 둘 수 있다. ProviderInstance schema가 닫힌 뒤 두 필드의 의미를 더 엄격히 분리한다.
 
 ## ReportSpec
 
@@ -158,7 +190,7 @@ specs/schemas/report.schema.json
 역할:
 
 - stage 또는 job 완료 후 사람이 읽을 수 있는 보고 계약
-- changed files, validation, risks, next step을 정리
+- changed files, validation, risks, next step, generated artifacts를 정리
 
 핵심 필드:
 
@@ -175,6 +207,96 @@ blocked_reason
 next_step
 artifacts
 ```
+
+`commands_run`은 실행한 검증 또는 provider 명령의 요약만 둔다. 긴 로그 원문은 artifact path로 연결한다.
+
+## CoreEvent
+
+위치 후보:
+
+```text
+specs/schemas/event.schema.json
+.ai-runs/J-0001/events.jsonl
+examples/core/event.example.json
+```
+
+역할:
+
+- Star-Control core 흐름의 append-only event line item
+- 상태 전이, artifact 작성, validation 기록, approval 관련 작업을 추적
+- 사람이 실패 지점과 다음 조치를 파악할 수 있게 함
+
+핵심 필드:
+
+```text
+schema_version
+event_id
+job_id
+type
+created_at
+stage
+state
+message
+artifact_paths
+details
+```
+
+CoreEvent는 Star-Control core의 `events.jsonl`에 사용한다. Star Sentinel 내부 ledger는 `builtin-tools/star-sentinel/schemas/ledger-event.schema.json`을 사용한다.
+
+## ArtifactRef
+
+위치 후보:
+
+```text
+specs/schemas/artifact-ref.schema.json
+examples/core/artifact-ref.example.json
+```
+
+역할:
+
+- RunState, ReportSpec, event, review 자료에서 artifact를 상대 경로로 참조하기 위한 공통 형태
+- artifact의 kind, producer, 연결 schema path를 표현
+
+핵심 필드:
+
+```text
+schema_version
+path
+kind
+producer
+schema_path
+description
+```
+
+ArtifactRef의 `path`는 job directory 기준 상대 경로를 기본으로 한다.
+
+## ErrorEnvelope
+
+위치 후보:
+
+```text
+specs/schemas/error.schema.json
+examples/core/error.example.json
+```
+
+역할:
+
+- StateStore, RouterEngine, ExecutionEngine, ValidationEngine, CLI가 사용자에게 보여줄 수 있는 오류를 구조화
+- 오류 code, message, 복구 가능성, 관련 artifact path를 표현
+
+핵심 필드:
+
+```text
+schema_version
+code
+message
+recoverable
+category
+details
+artifact_paths
+```
+
+오류 메시지는 사용자가 이해할 수 있어야 하며 민감한 raw value를 그대로 포함하지 않는다.
 
 ## SentinelTask
 
@@ -254,15 +376,15 @@ builtin-tools/star-sentinel/schemas/validation-run.schema.json
 
 ```text
 builtin-tools/star-sentinel/schemas/ledger-event.schema.json
-.ai-runs/J-0001/events.jsonl
 .ai-runs/J-0001/tool-output/star-sentinel/ledger.jsonl
 ```
 
 역할:
 
-- append-only event 기록
-- 사람이 추적 가능한 run history 제공
-- failure debugging과 audit에 사용
+- Star Sentinel 내부 append-only event 기록
+- Star Sentinel command별 판단 흐름을 추적
+
+Core의 `.ai-runs/J-0001/events.jsonl`은 `CoreEvent` 계약을 사용하고, Star Sentinel 내부 `ledger.jsonl`은 `LedgerEvent` 계약을 사용한다.
 
 ## RepoMap
 
@@ -318,7 +440,7 @@ examples/fake/provider-instance.json
 역할:
 
 - 특정 project/run에서 사용할 provider 설정
-- credential 값은 직접 저장하지 않는다
+- secret raw value는 직접 저장하지 않는다
 
 ## ProviderOutput
 
@@ -332,6 +454,23 @@ examples/fake/provider-instance.json
 
 - provider stdout/stderr/log/result artifact 저장
 - core는 provider output을 해석 가능한 최소 계약으로만 읽는다
+
+## canonical examples
+
+Core-level canonical example은 다음을 포함한다.
+
+```text
+examples/runs/J-0001/job.json
+examples/runs/J-0001/run-state.json
+examples/runs/J-0001/route.json
+examples/runs/J-0001/workspecs/implement.json
+examples/fake/impl-report-done.json
+examples/core/event.example.json
+examples/core/artifact-ref.example.json
+examples/core/error.example.json
+```
+
+위 example은 `scripts/ci/check_schema_examples.py`에서 schema와 함께 검증한다.
 
 ## contract evolution
 
