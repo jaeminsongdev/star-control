@@ -1,15 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "SentinelTask",
+  "title": "Star Sentinel Task",
   "type": "object",
   "required": [
+    "schema_version",
     "task_id",
     "goal",
     "allowed_paths",
     "forbidden_paths",
+    "forbidden_change_types",
     "required_validation"
   ],
   "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
     "task_id": {
       "type": "string"
     },
@@ -45,6 +50,9 @@
       "items": {
         "type": "string"
       }
+    },
+    "notes": {
+      "type": "string"
     }
   }
 }
