@@ -1,5 +1,65 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "PolicySpec",
-  "type": "object"
+  "$id": "https://star-control.local/schemas/policy.schema.json",
+  "title": "Star-Control PolicySpec",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "policy_id",
+    "description",
+    "rules"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "policy_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "applies_to": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warn",
+              "block",
+              "approval_required"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "match": {
+            "type": "object"
+          },
+          "action": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
 }
