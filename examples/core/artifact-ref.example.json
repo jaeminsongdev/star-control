@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0.0",
+  "path": "route.json",
+  "kind": "route",
+  "producer": "router",
+  "schema_path": "specs/schemas/route.schema.json",
+  "description": "RouteSpec artifact"
+}
