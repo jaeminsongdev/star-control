@@ -65,7 +65,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        run: |
-          git clone -q --depth 1 --branch "${GITHUB_HEAD_REF:-main}" "https://github.com/${GITHUB_REPOSITORY}.git" .
+        uses: actions/checkout@v4
+        with:
+          show-progress: false
       - name: Run naming policy check
         run: python3 scripts/ci/check_star_sentinel_naming.py
