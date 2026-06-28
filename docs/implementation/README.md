@@ -12,22 +12,24 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 4. `data-contracts.md`
 5. `run-lifecycle.md`
 6. `artifact-layout.md`
-7. `state-store.md`
-8. `schema-validator.md`
-9. `provider-system.md`
-10. `router-engine.md`
-11. `execution-engine.md`
-12. `validation-engine.md`
-13. `star-sentinel-full-spec.md`
-14. `approval-review-flow.md`
-15. `policy-profiles.md`
-16. `cli-daemon-api-ui.md`
-17. `security-cost-observability.md`
-18. `testing-ci-release.md`
-19. `codex-long-run-workflow.md`
-20. `codex-work-queue.md`
-21. `codex-pr-template.md`
-22. `codex-validation-report.md`
+7. `artifact-naming.md`
+8. `state-store.md`
+9. `state-store-recovery.md`
+10. `schema-validator.md`
+11. `provider-system.md`
+12. `router-engine.md`
+13. `execution-engine.md`
+14. `validation-engine.md`
+15. `star-sentinel-full-spec.md`
+16. `approval-review-flow.md`
+17. `policy-profiles.md`
+18. `cli-daemon-api-ui.md`
+19. `security-cost-observability.md`
+20. `testing-ci-release.md`
+21. `codex-long-run-workflow.md`
+22. `codex-work-queue.md`
+23. `codex-pr-template.md`
+24. `codex-validation-report.md`
 
 이 문서 세트는 Codex 장시간 목표추진 구현의 기준점이다. Codex는 구현 작업 전에 이 문서와 `AGENTS.md`를 먼저 읽어야 한다.
 
@@ -36,6 +38,13 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 - `current-repository-map.md`는 현재 repository에 실제로 존재하는 경로의 상태와 의미를 설명한다.
 - `repository-layout.md`는 목표 package 경계와 장기 구조를 설명한다.
 - 현재 경로와 목표 경계가 다르게 보이면 `current-repository-map.md`로 현재 상태를 먼저 확인하고, 실제 구현은 `repository-layout.md`의 package 책임을 따른다.
+
+## artifact / StateStore 기준
+
+- `artifact-layout.md`: `.ai-runs/` directory 구조.
+- `artifact-naming.md`: 파일명, attempt, tmp, approval, review pack naming.
+- `state-store.md`: StateStore API와 저장 규칙.
+- `state-store-recovery.md`: 손상된 artifact와 event log 처리 기준.
 
 ## 용어 수준
 
