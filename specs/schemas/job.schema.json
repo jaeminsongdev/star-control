@@ -21,19 +21,25 @@
       "pattern": "^J-[0-9]{4,}$"
     },
     "project_root": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "request_text": {
       "type": "string",
       "minLength": 1
     },
     "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "updated_at": {
       "type": "string"
     },
     "entrypoint": {
       "type": "string"
     },
     "state": {
+      "type": "string",
       "enum": [
         "REQUESTED",
         "ROUTING",
