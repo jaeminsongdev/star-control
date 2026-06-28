@@ -1,11 +1,18 @@
 {
   "schema_version": "1.0.0",
-  "job_id": "J-FAKE-0001",
+  "job_id": "J-0001",
   "stage": "implement",
   "status": "DONE",
   "changed_files": [
     "src/stopwatch.ts",
     "tests/stopwatch.test.ts"
+  ],
+  "commands_run": [
+    {
+      "command": "npm test",
+      "result": "passed",
+      "evidence_path": "provider-output/my-fake-provider/stdout.txt"
+    }
   ],
   "validation": [
     {
@@ -14,5 +21,9 @@
     }
   ],
   "risks": [],
-  "next_step": "review"
+  "blocked_reason": null,
+  "next_step": "review",
+  "artifacts": [
+    "provider-output/my-fake-provider/response.json"
+  ]
 }
