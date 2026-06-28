@@ -4,6 +4,7 @@
   "title": "Star-Control WorkSpec",
   "type": "object",
   "required": [
+    "schema_version",
     "job_id",
     "stage",
     "role",
@@ -15,11 +16,23 @@
     "required_outputs"
   ],
   "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
     "job_id": {
       "type": "string"
     },
     "stage": {
-      "type": "string"
+      "enum": [
+        "route",
+        "plan",
+        "design",
+        "implement",
+        "validate",
+        "review",
+        "polish",
+        "report"
+      ]
     },
     "role": {
       "type": "string"
