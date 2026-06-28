@@ -10,6 +10,7 @@
 ## 작업 경계
 
 - 이 repository의 `README.md`, `docs/`, `specs/`, `configs/`, `builtin-providers/`, `builtin-tools/star-sentinel/`를 설계 기준으로 삼는다.
+- ChatGPT GitHub 작업은 `docs/operations/chatgpt-github-workflow.md`를 따른다.
 - 원격 저장소 push, 외부 계정 수정, 의존성 설치, 패키지 매니저 도입은 명시 승인 전까지 하지 않는다.
 - 실행 결과는 Star-Control repo가 아니라 대상 프로젝트의 `.ai-runs/` 아래에 둔다.
 - provider 구현은 제품명 package가 아니라 transport, adapter, capability 중심으로 분리한다.
