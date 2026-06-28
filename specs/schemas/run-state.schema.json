@@ -9,6 +9,7 @@
     "state",
     "current_stage",
     "workers",
+    "artifacts",
     "next_action"
   ],
   "properties": {
@@ -16,7 +17,8 @@
       "const": "1.0.0"
     },
     "job_id": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^J-[0-9]{4,}$"
     },
     "state": {
       "type": "string",
@@ -55,6 +57,9 @@
         "report"
       ]
     },
+    "updated_at": {
+      "type": "string"
+    },
     "threads": {
       "type": "object"
     },
@@ -63,6 +68,15 @@
     },
     "artifacts": {
       "type": "object"
+    },
+    "latest_event_id": {
+      "type": "string"
+    },
+    "active_provider": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "next_action": {
       "type": "string"
