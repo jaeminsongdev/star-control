@@ -32,6 +32,10 @@ VALIDATION_CASES = (
         "specs/schemas/report.schema.json",
         "examples/fake/impl-report-done.json",
     ),
+    (
+        "builtin-tools/star-sentinel/schemas/approval.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/approval-block.example.json",
+    ),
 )
 
 
