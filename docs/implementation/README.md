@@ -23,8 +23,12 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 15. `cli-daemon-api-ui.md`
 16. `security-cost-observability.md`
 17. `testing-ci-release.md`
+18. `codex-long-run-workflow.md`
+19. `codex-work-queue.md`
+20. `codex-pr-template.md`
+21. `codex-validation-report.md`
 
-이 문서 세트는 이후 추가될 Codex long-run workflow와 work queue 문서의 기준점이다.
+이 문서 세트는 Codex 장시간 목표추진 구현의 기준점이다. Codex는 구현 작업 전에 이 문서와 `AGENTS.md`를 먼저 읽어야 한다.
 
 ## 용어 수준
 
