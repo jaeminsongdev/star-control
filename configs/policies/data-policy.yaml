@@ -21,7 +21,7 @@ redaction:
   enabled: true
   patterns:
     - name: generic_api_key
-      regex: "(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*[^\s]+"
+      regex: '(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*[^\s]+'
       replacement: "[REDACTED]"
 
 retention:
