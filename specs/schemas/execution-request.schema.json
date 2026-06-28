@@ -8,23 +8,84 @@
     "request_id",
     "job_id",
     "stage",
-    "provider_instance_id"
+    "provider_instance_id",
+    "workspec_path",
+    "created_at",
+    "goal",
+    "allowed_scope",
+    "forbidden_actions",
+    "required_outputs"
   ],
   "properties": {
     "schema_version": {
       "const": "1.0.0"
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$"
     },
     "job_id": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^J-[0-9]{4,}$"
     },
     "stage": {
-      "type": "string"
+      "type": "string",
+      "enum": [
+        "route",
+        "plan",
+        "design",
+        "implement",
+        "validate",
+        "review",
+        "polish",
+        "report"
+      ]
     },
     "provider_instance_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attempt_id": {
       "type": "string"
+    },
+    "workspec_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "allowed_scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "required_outputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validation_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "context_pack": {
+      "type": "object"
     }
   }
 }
