@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/artifact-ref.schema.json",
+  "title": "Star-Control ArtifactRef",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "path",
+    "kind",
+    "producer"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "job",
+        "state",
+        "event_log",
+        "route",
+        "workspec",
+        "report",
+        "provider_output",
+        "tool_output",
+        "approval",
+        "review_pack",
+        "log",
+        "other"
+      ]
+    },
+    "producer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}
