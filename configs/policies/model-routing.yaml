@@ -1,0 +1,46 @@
+version: 1
+roles:
+  router-low:
+    preferred_tier: low-cost-cloud
+    fallback: local-30b
+    may_edit_files: false
+  worker-local-draft:
+    preferred_tier: local-14b
+    fallback: local-30b
+    may_edit_files: false
+    max_risk: LOW
+  worker-impl:
+    preferred_tier: high-cloud
+    fallback: low-cost-cloud
+    may_edit_files: true
+    max_risk: MEDIUM
+  worker-review:
+    preferred_tier: high-cloud
+    fallback: local-30b
+    may_edit_files: false
+  worker-security:
+    preferred_tier: high-cloud
+    fallback: none
+    may_edit_files: false
+stage_defaults:
+  SMALL:
+    plan: router-low
+    implement: worker-impl
+    validate: validator
+    review: reviewer-lite
+  MEDIUM:
+    plan: router-low
+    implement: worker-impl
+    validate: validator
+    review: worker-review
+  LARGE:
+    design: worker-design
+    implement: worker-impl
+    validate: validator
+    review: worker-review
+  CRITICAL:
+    design: worker-design
+    implement: worker-impl
+    validate: validator
+    review: worker-security
+    require_user_approval: true

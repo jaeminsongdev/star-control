@@ -1,0 +1,20 @@
+version: 1
+always_require_approval:
+  - 새 의존성 추가
+  - 의존성 버전 변경
+  - 파일 삭제
+  - 공개 API 변경
+  - DB 스키마 변경
+  - 파일 포맷 변경
+  - 원격 저장소 push
+  - git commit
+  - 배포
+  - 외부 업로드
+  - 시스템 설정 변경
+forbidden_auto:
+  - 테스트 약화
+  - 테스트 삭제
+  - validator 우회
+  - secret 출력
+  - force push
+  - 작업트리 전체 초기화

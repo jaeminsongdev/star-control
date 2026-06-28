@@ -1,0 +1,40 @@
+version: 1
+risk_levels:
+  LOW:
+    examples:
+      - 문서 수정
+      - 단일 파일 내부 수정
+      - 작은 테스트 추가
+    max_auto_stage: implement
+  MEDIUM:
+    examples:
+      - 여러 파일 수정
+      - 작은 기능 추가
+      - 테스트 추가 필요
+    max_auto_stage: review
+  HIGH:
+    examples:
+      - 공개 API 변경
+      - 파일 포맷 변경
+      - 동시성 변경
+      - 캐시/파일시스템 변경
+    require_cloud_high: true
+    require_review: true
+  CRITICAL:
+    examples:
+      - DB 스키마 변경
+      - 보안/권한 변경
+      - 대형 리팩토링
+      - 원격 반영
+    require_user_approval: true
+    require_cloud_high: true
+    require_review: true
+risk_escalation:
+  public_api_change: CRITICAL
+  db_schema_change: CRITICAL
+  auth_security_change: CRITICAL
+  file_format_change: HIGH
+  concurrency_change: HIGH
+  dependency_addition: MEDIUM
+  remote_push: CRITICAL
+  destructive_command: CRITICAL

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/run-state.schema.json",
+  "title": "Star-Control RunState",
+  "type": "object",
+  "required": [
+    "job_id",
+    "state",
+    "current_stage",
+    "workers",
+    "next_action"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "current_stage": {
+      "type": "string"
+    },
+    "threads": {
+      "type": "object"
+    },
+    "workers": {
+      "type": "object"
+    },
+    "artifacts": {
+      "type": "object"
+    },
+    "next_action": {
+      "type": "string"
+    },
+    "budget": {
+      "type": "object"
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

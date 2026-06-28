@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/provider-manifest.schema.json",
+  "title": "Star-Control Provider Manifest",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "kind",
+    "transport",
+    "adapter",
+    "capabilities",
+    "risk",
+    "outputs"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^provider\\.[a-z0-9][a-z0-9.-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "provider-kind.schema.json"
+    },
+    "transport": {
+      "enum": [
+        "cli",
+        "http",
+        "process",
+        "manual"
+      ]
+    },
+    "adapter": {
+      "enum": [
+        "code_agent",
+        "chat_model",
+        "openai_compatible"
+      ]
+    },
+    "command": {
+      "type": "object"
+    },
+    "endpoint": {
+      "type": "object"
+    },
+    "capabilities": {
+      "type": "object"
+    },
+    "risk": {
+      "type": "object"
+    },
+    "outputs": {
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/provider-result.schema.json",
+  "title": "Star-Control Provider Result",
+  "type": "object",
+  "required": [
+    "provider_instance_id",
+    "status",
+    "artifacts"
+  ],
+  "properties": {
+    "provider_instance_id": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "DONE",
+        "FAILED",
+        "BLOCKED",
+        "CANCELLED"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "raw_output_path": {
+      "type": "string"
+    },
+    "normalized_at": {
+      "type": "string"
+    }
+  }
+}

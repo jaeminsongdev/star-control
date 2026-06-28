@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "job_id": "J-FAKE-0001",
+  "stage": "implement",
+  "status": "DONE",
+  "changed_files": [
+    "src/stopwatch.ts",
+    "tests/stopwatch.test.ts"
+  ],
+  "validation": [
+    {
+      "command": "npm test",
+      "result": "passed"
+    }
+  ],
+  "risks": [],
+  "next_step": "review"
+}

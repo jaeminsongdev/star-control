@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/provider-kind.schema.json",
+  "title": "Star-Control Provider Kind",
+  "type": "string",
+  "enum": [
+    "cloud_cli_agent",
+    "cloud_api_model",
+    "local_openai_compatible_server",
+    "local_anthropic_compatible_server",
+    "local_process_model",
+    "remote_self_hosted_model",
+    "fake_provider",
+    "human_handoff"
+  ]
+}

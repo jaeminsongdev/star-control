@@ -1,0 +1,39 @@
+# error-taxonomy.yaml
+
+errors:
+  PROVIDER_LAUNCH_FAILED:
+    retryable: false
+    default_state: BLOCKED
+  PROVIDER_TIMEOUT:
+    retryable: true
+    default_state: FAILED
+  PROVIDER_RATE_LIMIT:
+    retryable: true
+    default_state: BLOCKED
+  MODEL_OUTPUT_INVALID:
+    retryable: true
+    default_state: FAILED
+  WORKSPEC_VIOLATION:
+    retryable: false
+    default_state: BLOCK
+  POLICY_DENIED:
+    retryable: false
+    default_state: BLOCK
+  APPROVAL_REQUIRED:
+    retryable: false
+    default_state: WAIT_APPROVAL
+  VALIDATION_FAILED:
+    retryable: true
+    default_state: FAILED
+  REVIEW_BLOCKED:
+    retryable: true
+    default_state: FAILED
+  CONFLICT_DETECTED:
+    retryable: false
+    default_state: BLOCKED
+  SECRET_EXPOSURE_RISK:
+    retryable: false
+    default_state: BLOCK
+  BUDGET_EXCEEDED:
+    retryable: false
+    default_state: STOPPED

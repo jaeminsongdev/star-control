@@ -1,0 +1,24 @@
+.DS_Store
+Thumbs.db
+
+# Local runtime artifacts
+.star-control/cache/
+.star-control/logs/
+.ai-runs/
+
+# Secrets
+*.secret
+*.key
+.env
+.env.*
+!.env.example
+
+# Build/cache outputs
+dist/
+build/
+target/
+node_modules/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

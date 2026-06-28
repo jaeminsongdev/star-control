@@ -1,0 +1,20 @@
+{
+  "job_id": "J-0001",
+  "state": "ROUTED",
+  "current_stage": "implement",
+  "threads": {},
+  "workers": {
+    "implement": {
+      "status": "PENDING"
+    },
+    "review": {
+      "status": "PENDING"
+    }
+  },
+  "artifacts": {},
+  "next_action": "start implement worker",
+  "budget": {
+    "max_iterations": 5
+  },
+  "history": []
+}

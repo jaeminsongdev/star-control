@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/route.schema.json",
+  "title": "Star-Control RouteSpec",
+  "type": "object",
+  "required": [
+    "job_id",
+    "summary",
+    "size",
+    "risk",
+    "stages",
+    "assignments",
+    "requires_user_approval"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "size": {
+      "enum": [
+        "SMALL",
+        "MEDIUM",
+        "LARGE",
+        "CRITICAL"
+      ]
+    },
+    "risk": {
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ]
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "route",
+          "plan",
+          "design",
+          "implement",
+          "validate",
+          "review",
+          "polish",
+          "report"
+        ]
+      }
+    },
+    "assignments": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "role",
+          "provider"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "requires_user_approval": {
+      "type": "boolean"
+    },
+    "approval_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "workspecs": {
+      "type": "object"
+    }
+  }
+}

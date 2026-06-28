@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewPack",
+  "type": "object",
+  "required": [
+    "task_id",
+    "decision",
+    "summary",
+    "risks",
+    "validations"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "decision": {
+      "enum": [
+        "AUTO_PASS",
+        "HUMAN_REVIEW",
+        "BLOCK"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "unverified_claims": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "questions_for_human": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

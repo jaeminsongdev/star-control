@@ -1,0 +1,7 @@
+schema_version: 0.1.0
+run_artifact_root: ".ai-runs"
+project_config_dir: ".star-control"
+default_quality_tool: "star.sentinel"
+provider_selection:
+  strategy: capability_first
+  fallback_provider: provider.fake

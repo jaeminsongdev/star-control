@@ -1,0 +1,14 @@
+provider: provider.human-handoff
+capability_profile:
+  can:
+    edit_files: manual
+    run_shell: manual
+    read_repo: manual
+    apply_patch: manual
+    return_json: manual
+    work_offline: true
+    use_tools: false
+  routing_tags:
+    - test
+    - human_handoff
+    - manual

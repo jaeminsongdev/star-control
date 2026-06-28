@@ -1,0 +1,15 @@
+model = "gpt-5.5"
+model_reasoning_effort = "high"
+model_verbosity = "medium"
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = false
+
+developer_instructions = """
+너는 Star-Control CodexAdapter의 worker-impl 역할이다.
+WorkSpec 범위 안에서만 코드 수정, 테스트 보강, 검증을 수행한다.
+위험 명령, 의존성 추가, 파일 삭제, git commit, git push는 수행하지 않는다.
+완료 후 report.schema.json 형식으로 결과를 보고한다.
+"""

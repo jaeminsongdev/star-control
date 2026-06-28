@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0.0",
+  "job_id": "J-FAKE-0001",
+  "summary": "스톱워치 기능 구현",
+  "size": "MEDIUM",
+  "risk": "LOW",
+  "stages": [
+    "implement",
+    "validate",
+    "review",
+    "report"
+  ],
+  "assignments": {
+    "implement": {
+      "role": "worker-impl",
+      "provider": "fake"
+    },
+    "review": {
+      "role": "worker-review",
+      "provider": "fake"
+    }
+  },
+  "requires_user_approval": false
+}

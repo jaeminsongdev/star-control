@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/workspec.schema.json",
+  "title": "Star-Control WorkSpec",
+  "type": "object",
+  "required": [
+    "job_id",
+    "stage",
+    "role",
+    "provider",
+    "project_root",
+    "goal",
+    "allowed_scope",
+    "forbidden_actions",
+    "required_outputs"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string"
+    },
+    "stage": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "project_root": {
+      "type": "string"
+    },
+    "goal": {
+      "type": "string"
+    },
+    "allowed_scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "context_pack": {
+      "type": "object"
+    },
+    "required_outputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validation_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

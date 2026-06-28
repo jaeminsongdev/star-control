@@ -1,0 +1,3 @@
+event: before-route
+description: 요청 저장, JobSpec 검증, 프로젝트 루트 확인
+steps: []

@@ -1,0 +1,11 @@
+id: my-claude-code
+provider: provider.claude-code
+enabled: true
+limits:
+  timeout_seconds: 300
+  max_parallel_jobs: 1
+routing_tags:
+  - cloud
+  - coding-agent
+command:
+  executable: claude

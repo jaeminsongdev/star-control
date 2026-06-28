@@ -1,0 +1,32 @@
+# data-policy.yaml
+
+classification:
+  PUBLIC:
+    cloud_allowed: true
+    local_allowed: true
+  INTERNAL:
+    cloud_allowed: true
+    local_allowed: true
+  SENSITIVE:
+    cloud_allowed: false
+    local_allowed: true
+  SECRET:
+    cloud_allowed: false
+    local_allowed: false
+  REGULATED:
+    cloud_allowed: false
+    local_allowed: false
+
+redaction:
+  enabled: true
+  patterns:
+    - name: generic_api_key
+      regex: "(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*[^\s]+"
+      replacement: "[REDACTED]"
+
+retention:
+  runs_days: 30
+  raw_logs_days: 7
+  summaries_days: 180
+  approvals_days: 365
+  final_reports: keep

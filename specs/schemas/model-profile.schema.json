@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/model-profile.schema.json",
+  "title": "Star-Control Model Profile",
+  "type": "object",
+  "required": [
+    "id",
+    "provider_kind",
+    "context_window",
+    "routing_tags"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "provider_kind": {
+      "$ref": "provider-kind.schema.json"
+    },
+    "context_window": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "routing_tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

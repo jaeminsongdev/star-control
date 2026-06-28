@@ -1,0 +1,12 @@
+id: my-anthropic-api
+provider: provider.anthropic
+enabled: true
+limits:
+  timeout_seconds: 300
+  max_parallel_jobs: 1
+routing_tags:
+  - cloud
+  - api
+endpoint:
+  base_url: "https://api.anthropic.com"
+  model: claude-example

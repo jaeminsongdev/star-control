@@ -1,0 +1,7 @@
+schema_version: 0.1.0
+provider_policy:
+  select_by_capability: true
+  deny_core_product_named_packages: true
+  require_sandbox_for:
+    - cli
+    - process

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/tool-manifest.schema.json",
+  "title": "Star-Control Builtin Tool Manifest",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "kind",
+    "package",
+    "entrypoint",
+    "commands"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "package": {
+      "type": "string"
+    },
+    "entrypoint": {
+      "type": "string"
+    },
+    "legacy_aliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "commands": {
+      "type": "array"
+    }
+  }
+}

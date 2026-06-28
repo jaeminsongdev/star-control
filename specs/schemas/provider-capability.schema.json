@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/provider-capability.schema.json",
+  "title": "Star-Control Provider Capability",
+  "type": "object",
+  "required": [
+    "provider",
+    "capability_profile"
+  ],
+  "properties": {
+    "provider": {
+      "type": "string"
+    },
+    "capability_profile": {
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+id: provider.llama-cpp
+name: llama.cpp Binary
+kind: local_process_model
+transport: process
+adapter: chat_model
+command:
+  executable: llama-cli
+  args_template:
+    - "{{rendered_input}}"
+capabilities:
+  edit_files: false
+  run_shell: false
+  read_repo: false
+  apply_patch: false
+  structured_output: partial
+  offline: true
+  requires_login_session: false
+risk:
+  can_modify_workspace: false
+  can_run_commands: false
+  requires_sandbox: true
+outputs:
+  parser: plain-text-or-json

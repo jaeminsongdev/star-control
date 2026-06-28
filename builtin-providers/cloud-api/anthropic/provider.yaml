@@ -1,0 +1,22 @@
+id: provider.anthropic
+name: Anthropic API
+kind: cloud_api_model
+transport: http
+adapter: chat_model
+endpoint:
+  base_url: "https://api.anthropic.com"
+  model: "{{model}}"
+capabilities:
+  edit_files: false
+  run_shell: false
+  read_repo: false
+  apply_patch: false
+  structured_output: partial
+  offline: false
+  requires_login_session: false
+risk:
+  can_modify_workspace: false
+  can_run_commands: false
+  requires_sandbox: false
+outputs:
+  parser: anthropic-messages

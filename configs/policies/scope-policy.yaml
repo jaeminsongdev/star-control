@@ -1,0 +1,8 @@
+version: 1
+rules:
+  - id: workspec_scope_only
+    description: Worker는 WorkSpec allowed_scope 밖 파일을 수정하지 않는다.
+  - id: no_unrequested_refactor
+    description: 요구사항에 없는 대형 리팩토링 금지.
+  - id: preserve_tests
+    description: 테스트 약화/삭제/무단 skip 금지.

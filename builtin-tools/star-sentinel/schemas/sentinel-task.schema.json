@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskSpec",
+  "type": "object",
+  "required": [
+    "task_id",
+    "goal",
+    "allowed_paths",
+    "forbidden_paths",
+    "required_validation"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string"
+    },
+    "goal": {
+      "type": "string"
+    },
+    "allowed_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_change_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "required_validation": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "approval_required_changes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

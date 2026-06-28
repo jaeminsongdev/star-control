@@ -1,0 +1,22 @@
+id: provider.google-gemini
+name: Google Gemini API
+kind: cloud_api_model
+transport: http
+adapter: chat_model
+endpoint:
+  base_url: "https://generativelanguage.googleapis.com"
+  model: "{{model}}"
+capabilities:
+  edit_files: false
+  run_shell: false
+  read_repo: false
+  apply_patch: false
+  structured_output: true
+  offline: false
+  requires_login_session: false
+risk:
+  can_modify_workspace: false
+  can_run_commands: false
+  requires_sandbox: false
+outputs:
+  parser: gemini-api

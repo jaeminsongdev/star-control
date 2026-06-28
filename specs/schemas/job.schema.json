@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/job.schema.json",
+  "title": "Star-Control JobSpec",
+  "type": "object",
+  "required": [
+    "job_id",
+    "project_root",
+    "request_text",
+    "created_at",
+    "entrypoint",
+    "state"
+  ],
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "pattern": "^J-[0-9]{4,}$"
+    },
+    "project_root": {
+      "type": "string"
+    },
+    "request_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "entrypoint": {
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "REQUESTED",
+        "ROUTING",
+        "ROUTED",
+        "PLANNING",
+        "PLANNED",
+        "IMPLEMENTING",
+        "IMPLEMENTED",
+        "VALIDATING",
+        "VALIDATED",
+        "REVIEWING",
+        "REVIEWED",
+        "POLISHING",
+        "DONE",
+        "BLOCKED",
+        "FAILED",
+        "NEEDS_APPROVAL",
+        "CANCELLED"
+      ]
+    },
+    "user_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

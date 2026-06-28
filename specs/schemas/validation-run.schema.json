@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/validation-run.schema.json",
+  "title": "Star-Control Validation Run",
+  "type": "object",
+  "required": [
+    "id",
+    "command",
+    "status",
+    "started_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "command": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "SKIPPED",
+        "ERROR"
+      ]
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "finished_at": {
+      "type": "string"
+    },
+    "log_path": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/provider-instance.schema.json",
+  "title": "Star-Control Provider Instance",
+  "type": "object",
+  "required": [
+    "id",
+    "provider",
+    "enabled",
+    "limits",
+    "routing_tags"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "pattern": "^provider\\."
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "command": {
+      "type": "object"
+    },
+    "endpoint": {
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
+    "routing_tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

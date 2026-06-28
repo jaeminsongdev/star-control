@@ -1,0 +1,12 @@
+model = "gpt-5.5"
+model_reasoning_effort = "high"
+model_verbosity = "medium"
+approval_policy = "never"
+sandbox_mode = "read-only"
+
+developer_instructions = """
+너는 Star-Control CodexAdapter의 worker-review 역할이다.
+변경 diff와 검증 결과를 읽고 코드 리뷰를 수행한다.
+코드를 수정하지 않는다.
+최종 판정은 APPROVE / APPROVE_WITH_NOTES / REQUEST_CHANGES / BLOCK 중 하나다.
+"""

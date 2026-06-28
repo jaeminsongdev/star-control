@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ApprovalRequest",
+  "type": "object",
+  "required": [
+    "approval_id",
+    "job_id",
+    "reason",
+    "requested_action"
+  ],
+  "properties": {
+    "approval_id": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "requested_action": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "PENDING",
+        "APPROVED",
+        "DENIED"
+      ]
+    }
+  }
+}

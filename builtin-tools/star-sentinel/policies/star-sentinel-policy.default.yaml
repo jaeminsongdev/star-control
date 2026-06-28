@@ -1,0 +1,47 @@
+risk_paths:
+  - ".github/**"
+  - "validators/**"
+  - "db/migrations/**"
+  - "auth/**"
+  - "security/**"
+  - "release/**"
+
+generated_paths:
+  - "dist/**"
+  - "target/**"
+  - "build/**"
+
+vendor_paths:
+  - "vendor/**"
+  - "third_party/**"
+
+gates:
+  block:
+    - test_deleted
+    - assertion_weakened
+    - secret_detected
+    - validator_disabled
+    - forbidden_path_changed
+  human_review:
+    - risk_path_changed
+    - new_dependency
+    - public_api_changed
+    - db_migration_changed
+    - schema_changed
+
+agent_permissions:
+  implementation_agent:
+    can_modify:
+      - "src/**"
+      - "tests/**"
+    cannot_modify:
+      - "validators/**"
+      - ".github/**"
+      - "release/**"
+  docs_agent:
+    can_modify:
+      - "docs/**"
+      - "README.md"
+    cannot_modify:
+      - "src/**"
+      - "tests/**"

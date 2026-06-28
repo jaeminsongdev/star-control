@@ -1,0 +1,19 @@
+task_id: example-task
+goal: "작업 목표를 한 문장으로 고정"
+allowed_paths:
+  - "src/example/**"
+  - "tests/example/**"
+forbidden_paths:
+  - "validators/**"
+  - ".github/**"
+forbidden_change_types:
+  - "dependency_addition"
+  - "test_deletion"
+  - "validator_config_change"
+required_validation:
+  - "quick"
+  - "near"
+approval_required_changes:
+  - "public_api_change"
+  - "schema_change"
+  - "risk_path_change"

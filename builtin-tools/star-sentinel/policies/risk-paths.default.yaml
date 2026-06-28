@@ -1,0 +1,14 @@
+risk_paths:
+  critical:
+    - "**/.github/**"
+    - "**/ci/**"
+    - "**/security/**"
+    - "**/auth/**"
+    - "**/policies/**"
+    - "**/validators/**"
+    - "**/secrets/**"
+  high:
+    - "**/package.json"
+    - "**/Cargo.toml"
+    - "**/pyproject.toml"
+    - "**/migrations/**"

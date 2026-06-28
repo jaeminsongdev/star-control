@@ -1,0 +1,3 @@
+event: after-route
+description: route.json schema 검증, approval 필요 여부 확인
+steps: []
