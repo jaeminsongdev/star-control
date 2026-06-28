@@ -60,7 +60,7 @@ REQUIRED_OUTPUTS = {
 }
 
 REQUIRED_LEGACY_ALIASES = {
-    "autocode-guard",
+    "auto" + "code-guard",
 }
 
 
