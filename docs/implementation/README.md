@@ -22,16 +22,17 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 14. `router-engine.md`
 15. `execution-engine.md`
 16. `validation-engine.md`
-17. `star-sentinel-full-spec.md`
-18. `approval-review-flow.md`
-19. `policy-profiles.md`
-20. `cli-daemon-api-ui.md`
-21. `security-cost-observability.md`
-22. `testing-ci-release.md`
-23. `codex-long-run-workflow.md`
-24. `codex-work-queue.md`
-25. `codex-pr-template.md`
-26. `codex-validation-report.md`
+17. `star-sentinel-p0-contracts.md`
+18. `star-sentinel-full-spec.md`
+19. `approval-review-flow.md`
+20. `policy-profiles.md`
+21. `cli-daemon-api-ui.md`
+22. `security-cost-observability.md`
+23. `testing-ci-release.md`
+24. `codex-long-run-workflow.md`
+25. `codex-work-queue.md`
+26. `codex-pr-template.md`
+27. `codex-validation-report.md`
 
 이 문서 세트는 Codex 장시간 목표추진 구현의 기준점이다. Codex는 구현 작업 전에 이 문서와 `AGENTS.md`를 먼저 읽어야 한다.
 
@@ -54,6 +55,11 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 - `config-system.md`: config, policy, hook, role, renderer, skill 계약과 병합 기준.
 - `router-decision-matrix.md`: size, risk, policy profile, approval, decision matrix.
 - `router-engine.md`: RouteSpec 생성 책임과 RouterEngine 구현 계약.
+
+## Star Sentinel 기준
+
+- `star-sentinel-p0-contracts.md`: P0 rule registry, ChangedLines input, fixture outcome 계약.
+- `star-sentinel-full-spec.md`: Star Sentinel 전체 command, output, profile 확장 목표.
 
 ## 용어 수준
 
