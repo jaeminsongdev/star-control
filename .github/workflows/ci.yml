@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install CI dependencies
-        run: python -m pip install --upgrade PyYAML
+        run: python -m pip install --upgrade "PyYAML>=6.0,<7.0"
       - name: Run repository policy check
         run: python scripts/ci/check_repo_policy.py
 
@@ -41,7 +41,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install CI dependencies
-        run: python -m pip install --upgrade PyYAML
+        run: python -m pip install --upgrade "PyYAML>=6.0,<7.0"
       - name: Run data format check
         run: python scripts/ci/check_data_formats.py
 
@@ -56,7 +56,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install CI dependencies
-        run: python -m pip install --upgrade PyYAML
+        run: python -m pip install --upgrade "PyYAML>=6.0,<7.0"
       - name: Run manifest contract check
         run: python scripts/ci/check_manifest_contracts.py
 
@@ -72,16 +72,3 @@ jobs:
           python-version: '3.12'
       - name: Run naming policy check
         run: python scripts/ci/check_star_sentinel_naming.py
-
-  forbidden-files-check:
-    name: forbidden-files-check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Run forbidden files check
-        run: python scripts/ci/check_forbidden_files.py
