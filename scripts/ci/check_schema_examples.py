@@ -17,6 +17,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 VALIDATION_CASES = (
     (
+        "specs/schemas/job.schema.json",
+        "examples/runs/J-0001/job.json",
+    ),
+    (
+        "specs/schemas/run-state.schema.json",
+        "examples/runs/J-0001/run-state.json",
+    ),
+    (
         "specs/schemas/route.schema.json",
         "configs/templates/route-template.json",
     ),
@@ -25,12 +33,32 @@ VALIDATION_CASES = (
         "examples/fake/route-done.json",
     ),
     (
+        "specs/schemas/route.schema.json",
+        "examples/runs/J-0001/route.json",
+    ),
+    (
+        "specs/schemas/workspec.schema.json",
+        "examples/runs/J-0001/workspecs/implement.json",
+    ),
+    (
         "specs/schemas/report.schema.json",
         "configs/templates/report-template.json",
     ),
     (
         "specs/schemas/report.schema.json",
         "examples/fake/impl-report-done.json",
+    ),
+    (
+        "specs/schemas/event.schema.json",
+        "examples/core/event.example.json",
+    ),
+    (
+        "specs/schemas/artifact-ref.schema.json",
+        "examples/core/artifact-ref.example.json",
+    ),
+    (
+        "specs/schemas/error.schema.json",
+        "examples/core/error.example.json",
     ),
     (
         "builtin-tools/star-sentinel/schemas/approval.schema.json",
