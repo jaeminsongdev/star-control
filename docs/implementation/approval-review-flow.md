@@ -4,6 +4,8 @@
 
 Approval / Review Flow는 자동 진행이 위험한 작업을 멈추고 사람이 판단할 수 있도록 만드는 흐름이다. 이 문서는 `AUTO_PASS`, `HUMAN_REVIEW`, `BLOCK` decision과 RunState 전이, approval artifact, review pack 생성 기준을 정의한다.
 
+Router 단계의 approval 판단은 `router-decision-matrix.md`를 따른다. ValidationEngine과 Star Sentinel gate는 route decision을 다시 검증하되, 더 위험한 decision으로 승격할 수만 있고 낮출 수는 없다.
+
 ## decision
 
 Star Sentinel gate와 ValidationEngine은 다음 decision을 사용한다.
@@ -27,6 +29,7 @@ BLOCK
 - approval required change 없음
 - changed files와 report 일치
 - unverified claims 없음
+- route decision도 AUTO_PASS 또는 그보다 낮은 위험으로 평가됨
 
 ### HUMAN_REVIEW
 
@@ -41,6 +44,8 @@ BLOCK
 - report와 diff 불일치 의심
 - high risk path 변경
 - release/profile 관련 변경
+- route가 `requires_user_approval: true`
+- policy profile이 `security`, `release`, `validator`
 
 ### BLOCK
 
@@ -54,6 +59,17 @@ BLOCK
 - validator policy self-change without approval
 - dangerous action
 - invalid or contradictory tool output
+- approval response가 rejected 또는 cancelled
+
+## decision precedence
+
+Decision은 아래 우선순위를 따른다.
+
+```text
+BLOCK > HUMAN_REVIEW > AUTO_PASS
+```
+
+`BLOCK` 조건이 하나라도 있으면 `HUMAN_REVIEW`보다 우선한다.
 
 ## RunState mapping
 
@@ -79,6 +95,8 @@ Star Sentinel output에도 gate decision을 남긴다.
 .ai-runs/J-0001/tool-output/star-sentinel/approval.json
 ```
 
+`approval-request.json`은 사람에게 묻는 control-plane artifact다. `tool-output/star-sentinel/approval.json`은 Star Sentinel gate decision이다.
+
 ## approval-request.json
 
 후보 필드:
@@ -88,7 +106,9 @@ schema_version
 job_id
 task_id
 decision
+policy_profile
 reasons
+change_types
 changed_files
 risks
 diagnostics
@@ -138,6 +158,7 @@ cancelled
 - route가 `requires_user_approval: true`
 - approval_required_changes가 존재
 - policy profile이 human review를 요구
+- router decision이 `HUMAN_REVIEW` 또는 `BLOCK`
 
 ## ReviewPack 생성 기준
 
@@ -150,6 +171,7 @@ ReviewPack은 다음 경우 생성한다.
 - validation evidence가 부족
 - provider output이 불완전
 - changed_files가 많거나 scope가 불명확
+- route decision과 validation decision이 서로 다름
 
 ## review pack 구조
 
@@ -174,6 +196,10 @@ JSON은 도구 간 계약이고 Markdown은 사람이 읽는 산출물이다.
 ```text
 summary
 decision
+policy_profile
+change_types
+approval_required
+approval_reasons
 changed_files
 risks
 validations
@@ -190,6 +216,7 @@ Markdown에는 다음 섹션을 권장한다.
 
 ## Summary
 ## Decision
+## Policy Profile
 ## Changed Files
 ## Risks
 ## Validation Evidence
@@ -241,6 +268,8 @@ approval과 review 관련 event는 `events.jsonl`과 Star Sentinel `ledger.jsonl
 ```text
 GATE_DECIDED
 REVIEW_PACK_CREATED
+APPROVAL_REQUESTED
+APPROVAL_RECORDED
 ARTIFACT_WRITTEN
 ERROR_RECORDED
 ```
@@ -252,14 +281,21 @@ approval required 후보:
 ```text
 public_api_change
 schema_change
+schema_breaking_change
 dependency_addition
 dependency_version_change
-validator_config_change
+validator_sensitive_change
+validator_self_bypass
 risk_path_change
 file_deletion
+bulk_move
 workflow_change
 release_change
+deploy_change
 credential_change
+secret_exposure
+external_account_change
+unknown_high_risk
 ```
 
 ## BLOCK 우선 원칙
@@ -280,7 +316,10 @@ BLOCK 조건이 있으면 HUMAN_REVIEW보다 BLOCK을 우선한다.
 
 ```text
 decision
+policy_profile
+change_types
 approval_required
+approval_reasons
 approval_response
 review_pack_path
 blocked_reason
@@ -299,6 +338,8 @@ next_step
 6. AUTO_PASS decision -> approval request 없음
 7. approval constraints가 다음 WorkSpec에 반영
 8. approval event가 events.jsonl에 기록
+9. route decision HUMAN_REVIEW가 validation 단계에서 AUTO_PASS로 낮아지지 않음
+10. BLOCK이 HUMAN_REVIEW보다 우선
 
 ## Codex 구현 지시
 
