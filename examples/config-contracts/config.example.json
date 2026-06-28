@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "config_id": "star-control.default",
+  "scope": "repository",
+  "extends": [],
+  "merge": {
+    "strategy": "deep_override",
+    "order": [
+      "repository",
+      "project",
+      "user",
+      "run"
+    ]
+  },
+  "providers": [
+    "configs/provider-instances/fake-provider.example.yaml"
+  ],
+  "policies": [
+    "examples/config-contracts/policy.example.json"
+  ],
+  "hooks": [
+    "examples/config-contracts/hook.example.json"
+  ],
+  "roles": [
+    "examples/config-contracts/role.example.json"
+  ],
+  "renderers": [
+    "examples/config-contracts/renderer.example.json"
+  ],
+  "skills": [
+    "examples/config-contracts/skill.example.json"
+  ]
+}
