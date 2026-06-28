@@ -4,6 +4,7 @@
   "title": "Star-Control ReportSpec",
   "type": "object",
   "required": [
+    "schema_version",
     "job_id",
     "stage",
     "status",
@@ -13,11 +14,23 @@
     "next_step"
   ],
   "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
     "job_id": {
       "type": "string"
     },
     "stage": {
-      "type": "string"
+      "enum": [
+        "route",
+        "plan",
+        "design",
+        "implement",
+        "validate",
+        "review",
+        "polish",
+        "report"
+      ]
     },
     "status": {
       "enum": [
