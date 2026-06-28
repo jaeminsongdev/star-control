@@ -8,10 +8,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-LEGACY_ALIAS = "autocode-guard"
+LEGACY_ALIAS = "autocode" + "-guard"
 ALLOWED_LEGACY_ALIAS_PATHS = {
     "builtin-tools/star-sentinel/tool.yaml",
     "docs/decisions/source-absorption-map.md",
+}
+
+SKIP_EXACT_PATHS = {
+    "scripts/ci/check_star_sentinel_naming.py",
 }
 
 SKIP_DIR_NAMES = {
@@ -56,6 +60,9 @@ PROVIDER_PRODUCT_ALLOWED_ROOTS = {
 
 
 def should_skip(path: Path) -> bool:
+    relative_path = path.relative_to(ROOT).as_posix()
+    if relative_path in SKIP_EXACT_PATHS:
+        return True
     relative_parts = path.relative_to(ROOT).parts
     return any(part in SKIP_DIR_NAMES for part in relative_parts)
 
@@ -86,7 +93,7 @@ def main() -> int:
 
         if LEGACY_ALIAS in text and relative_path not in ALLOWED_LEGACY_ALIAS_PATHS:
             errors.append(
-                f"{relative_path}: 과거 별칭 {LEGACY_ALIAS!r}는 허용 위치에서만 사용할 수 있습니다."
+                f"{relative_path}: 과거 별칭은 허용 위치에서만 사용할 수 있습니다."
             )
 
         if relative_path.startswith("packages/"):
