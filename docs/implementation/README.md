@@ -20,8 +20,11 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 12. `star-sentinel-full-spec.md`
 13. `approval-review-flow.md`
 14. `policy-profiles.md`
+15. `cli-daemon-api-ui.md`
+16. `security-cost-observability.md`
+17. `testing-ci-release.md`
 
-이 문서 세트는 이후 추가될 CLI, daemon, UI, security, observability, testing, CI, release, Codex work queue 문서의 기준점이다.
+이 문서 세트는 이후 추가될 Codex long-run workflow와 work queue 문서의 기준점이다.
 
 ## 용어 수준
 
