@@ -1,0 +1,4 @@
+provider: local-lmstudio
+status: planned
+roles: {}
+notes: MVP 이후 추가.

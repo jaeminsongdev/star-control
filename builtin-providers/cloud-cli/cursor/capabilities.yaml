@@ -1,0 +1,14 @@
+provider: provider.cursor
+capability_profile:
+  can:
+    edit_files: true
+    run_shell: partial
+    read_repo: true
+    apply_patch: partial
+    return_json: partial
+    work_offline: false
+    use_tools: true
+  routing_tags:
+    - cloud-cli
+    - cloud_cli_agent
+    - cli

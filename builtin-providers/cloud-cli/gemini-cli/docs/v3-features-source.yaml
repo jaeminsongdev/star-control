@@ -1,0 +1,18 @@
+provider: gemini-cli
+last_verified: 2026-06-28
+native:
+  gemini_md: true
+  plan_mode: true
+  extensions: true
+  mcp: true
+  commands: true
+  hooks: true
+  subagents: true
+  skills: true
+  settings: true
+  checkpointing: true
+  headless_mode: true
+  model_routing: true
+emulated:
+  goal_mode: Star-Control goal engine
+  command_rules: Star-Control policy gate

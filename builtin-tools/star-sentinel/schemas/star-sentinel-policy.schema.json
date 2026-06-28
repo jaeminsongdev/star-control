@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StarSentinelPolicy",
+  "type": "object",
+  "properties": {
+    "risk_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "generated_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "vendor_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "gates": {
+      "type": "object"
+    },
+    "agent_permissions": {
+      "type": "object"
+    },
+    "dependency_policy": {
+      "type": "object"
+    },
+    "test_policy": {
+      "type": "object"
+    }
+  }
+}

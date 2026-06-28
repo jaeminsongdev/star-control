@@ -1,0 +1,12 @@
+provider: jules
+last_verified: 2026-06-28
+native:
+  async_tasks: true
+  github_integration: true
+  branch_changes: true
+  diff_review: true
+  pr_creation: true
+  test_suite: true
+emulated:
+  local_worker: not_applicable
+  custom_policy: Star-Control outer policy gate

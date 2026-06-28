@@ -70,6 +70,7 @@ def normalize_design_text(text: str) -> str:
         "task_spec": "sentinel_task",
         "Task Spec": "Star Sentinel Task",
         "task spec": "sentinel task",
+        "AutocodePolicy": "StarSentinelPolicy",
         "review_pack.schema.json": "review-pack.schema.json",
         "corpus_case.schema.json": "corpus-case.schema.json",
     }
@@ -164,6 +165,111 @@ PROVIDERS = [
             "structured_output": "partial",
             "offline": False,
             "requires_login_session": True,
+        },
+    },
+    {
+        "group": "cloud-cli",
+        "slug": "cursor",
+        "id": "provider.cursor",
+        "name": "Cursor",
+        "kind": "cloud_cli_agent",
+        "transport": "cli",
+        "adapter": "code_agent",
+        "executable": "cursor",
+        "parser": "cursor-default",
+        "capabilities": {
+            "edit_files": True,
+            "run_shell": "partial",
+            "read_repo": True,
+            "apply_patch": "partial",
+            "structured_output": "partial",
+            "offline": False,
+            "requires_login_session": True,
+            "native_agent_mode": True,
+            "native_plan_mode": True,
+            "native_background_agents": True,
+            "native_rules": True,
+            "native_memories": True,
+            "native_mcp": True,
+            "native_semantic_search": True,
+        },
+    },
+    {
+        "group": "cloud-cli",
+        "slug": "github-copilot",
+        "id": "provider.github-copilot",
+        "name": "GitHub Copilot",
+        "kind": "cloud_cli_agent",
+        "transport": "manual",
+        "adapter": "code_agent",
+        "parser": "github-copilot-report",
+        "capabilities": {
+            "edit_files": "manual",
+            "run_shell": "manual",
+            "read_repo": True,
+            "apply_patch": "manual",
+            "structured_output": "manual",
+            "offline": False,
+            "requires_login_session": True,
+            "native_cloud_agent": True,
+            "native_custom_instructions": True,
+            "native_path_specific_instructions": True,
+            "native_custom_agents": True,
+            "native_agent_skills": True,
+            "native_prompt_files": True,
+            "native_mcp": True,
+            "native_code_review": True,
+            "native_branch_pr_workflow": True,
+            "native_budgets": True,
+        },
+    },
+    {
+        "group": "cloud-cli",
+        "slug": "jules",
+        "id": "provider.jules",
+        "name": "Jules",
+        "kind": "cloud_cli_agent",
+        "transport": "manual",
+        "adapter": "code_agent",
+        "parser": "jules-report",
+        "capabilities": {
+            "edit_files": "manual",
+            "run_shell": "manual",
+            "read_repo": True,
+            "apply_patch": "manual",
+            "structured_output": "manual",
+            "offline": False,
+            "requires_login_session": True,
+            "native_async_tasks": True,
+            "native_github_integration": True,
+            "native_branch_changes": True,
+            "native_diff_review": True,
+            "native_pr_creation": True,
+            "native_test_suite": True,
+        },
+    },
+    {
+        "group": "cloud-cli",
+        "slug": "devin",
+        "id": "provider.devin",
+        "name": "Devin",
+        "kind": "cloud_cli_agent",
+        "transport": "manual",
+        "adapter": "code_agent",
+        "parser": "devin-report",
+        "capabilities": {
+            "edit_files": "manual",
+            "run_shell": "manual",
+            "read_repo": True,
+            "apply_patch": "manual",
+            "structured_output": "manual",
+            "offline": False,
+            "requires_login_session": True,
+            "native_autonomous_software_engineer": True,
+            "native_cloud_workspace": True,
+            "native_saved_machine_state": True,
+            "native_long_running_sessions": True,
+            "native_team_workflow": True,
         },
     },
     {
@@ -1143,6 +1249,7 @@ def write_schemas() -> None:
         if src.exists():
             copy_binary_or_text(src, f"specs/schemas/{src_name}", transform=False)
     copy_binary_or_text(V4 / "schemas" / "diagnostic.schema.json", "specs/schemas/diagnostic.schema.json", transform=True)
+    copy_binary_or_text(V4 / "schemas" / "policy.schema.json", "builtin-tools/star-sentinel/schemas/star-sentinel-policy.schema.json", transform=True)
     for name, data in schema_defs().items():
         dump_json(f"specs/schemas/{name}", data)
     copy_binary_or_text(V4 / "schemas" / OLD_TASK_SCHEMA, "builtin-tools/star-sentinel/schemas/sentinel-task.schema.json", transform=True)
@@ -1290,6 +1397,20 @@ Builtin provider manifest for `{provider['id']}`.
 
 이 provider는 core package가 아니라 manifest/capability로 등록된다.
 """,
+        )
+    for src in sorted((V3 / "providers").glob("*.yaml")):
+        group, slug = provider_slug_from_v3(src.name)
+        copy_binary_or_text(
+            src,
+            f"builtin-providers/{group}/{slug}/docs/v3-provider-source.yaml",
+            transform=True,
+        )
+    for src in sorted((V3 / "provider-features").glob("*.features.yaml")):
+        group, slug = provider_slug_from_v3(src.name.replace(".features", ""))
+        copy_binary_or_text(
+            src,
+            f"builtin-providers/{group}/{slug}/docs/v3-features-source.yaml",
+            transform=True,
         )
 
 
@@ -1468,6 +1589,12 @@ def write_v3_docs() -> None:
         copy_binary_or_text(src, target, transform=True, header=source_header(f"{V3.name}/docs/{src.name}", "v3 상세 설계를 Star-Control 정규 문서 트리로 흡수."))
     for src in sorted((V3 / "operations").glob("*.md")):
         copy_binary_or_text(src, f"docs/operations/{src.name}", transform=True, header=source_header(f"{V3.name}/operations/{src.name}", "운영 runbook으로 흡수."))
+    copy_binary_or_text(
+        V3 / "provider-features" / "CHANGELOG.md",
+        "docs/providers/v3/provider-feature-matrix-changelog.md",
+        transform=True,
+        header=source_header(f"{V3.name}/provider-features/CHANGELOG.md", "Provider feature matrix 변경 로그로 흡수."),
+    )
 
 
 def write_apps_packages_examples_tests() -> None:
@@ -1539,6 +1666,7 @@ def write_apps_packages_examples_tests() -> None:
         if src.is_file():
             rel = src.relative_to(V3 / "examples")
             copy_binary_or_text(src, f"examples/{rel}", transform=True)
+    touch("examples/runs/.gitkeep")
     for src in sorted((V3 / "codex-output").rglob("*")):
         if src.is_file():
             rel = src.relative_to(V3 / "codex-output")
@@ -1632,10 +1760,12 @@ def map_v3_source(rel: Path) -> tuple[str, str, str]:
         return f"configs/renderers/{Path(*rel.parts[1:]).as_posix()}", "흡수됨", "provider renderer 설정"
     if first == "providers":
         group, slug = provider_slug_from_v3(rel.name)
-        return f"builtin-providers/{group}/{slug}/provider.yaml", "정규화 흡수", "제품별 provider 초안을 builtin manifest로 흡수"
+        return f"builtin-providers/{group}/{slug}/provider.yaml", "정규화 흡수", "제품별 provider 초안을 builtin manifest로 흡수하고 docs/v3-provider-source.yaml에 원본 세부 보존"
     if first == "provider-features":
+        if rel.name == "CHANGELOG.md":
+            return "docs/providers/v3/provider-feature-matrix-changelog.md", "흡수됨", "provider feature matrix 변경 로그"
         group, slug = provider_slug_from_v3(rel.name.replace(".features", ""))
-        return f"builtin-providers/{group}/{slug}/capabilities.yaml", "정규화 흡수", "provider feature matrix를 capability profile로 흡수"
+        return f"builtin-providers/{group}/{slug}/capabilities.yaml", "정규화 흡수", "provider feature matrix를 capability profile로 흡수하고 docs/v3-features-source.yaml에 원본 세부 보존"
     if first == "examples":
         return f"examples/{Path(*rel.parts[1:]).as_posix()}", "흡수됨", "예시 artifact"
     if first == "codex-output":
@@ -1669,7 +1799,7 @@ def map_v4_source(rel: Path) -> tuple[str, str, str]:
             "review_pack.schema.json": "builtin-tools/star-sentinel/schemas/review-pack.schema.json",
             "corpus_case.schema.json": "builtin-tools/star-sentinel/schemas/corpus-case.schema.json",
             "diagnostic.schema.json": "specs/schemas/diagnostic.schema.json",
-            "policy.schema.json": "specs/schemas/policy.schema.json",
+            "policy.schema.json": "builtin-tools/star-sentinel/schemas/star-sentinel-policy.schema.json",
         }
         return mapping.get(rel.name, f"builtin-tools/star-sentinel/schemas/{rel.name}"), "정규화 흡수", "Star Sentinel schema"
     if first == "templates":

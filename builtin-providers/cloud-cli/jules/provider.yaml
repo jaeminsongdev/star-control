@@ -1,0 +1,28 @@
+id: provider.jules
+name: Jules
+kind: cloud_cli_agent
+transport: manual
+adapter: code_agent
+handoff:
+  mode: manual
+  expected_report: normalized-provider-result.json
+capabilities:
+  edit_files: manual
+  run_shell: manual
+  read_repo: true
+  apply_patch: manual
+  structured_output: manual
+  offline: false
+  requires_login_session: true
+  native_async_tasks: true
+  native_github_integration: true
+  native_branch_changes: true
+  native_diff_review: true
+  native_pr_creation: true
+  native_test_suite: true
+risk:
+  can_modify_workspace: false
+  can_run_commands: false
+  requires_sandbox: false
+outputs:
+  parser: jules-report
