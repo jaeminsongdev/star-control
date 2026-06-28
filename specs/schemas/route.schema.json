@@ -11,19 +11,22 @@
     "risk",
     "stages",
     "assignments",
-    "requires_user_approval"
+    "requires_user_approval",
+    "approval_reasons"
   ],
   "properties": {
     "schema_version": {
       "const": "1.0.0"
     },
     "job_id": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^J-[0-9]{4,}$"
     },
     "summary": {
       "type": "string"
     },
     "size": {
+      "type": "string",
       "enum": [
         "SMALL",
         "MEDIUM",
@@ -32,6 +35,7 @@
       ]
     },
     "risk": {
+      "type": "string",
       "enum": [
         "LOW",
         "MEDIUM",
@@ -85,7 +89,10 @@
       }
     },
     "workspecs": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   }
 }
