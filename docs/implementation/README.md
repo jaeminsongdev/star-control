@@ -18,19 +18,20 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 10. `schema-validator.md`
 11. `provider-system.md`
 12. `config-system.md`
-13. `router-engine.md`
-14. `execution-engine.md`
-15. `validation-engine.md`
-16. `star-sentinel-full-spec.md`
-17. `approval-review-flow.md`
-18. `policy-profiles.md`
-19. `cli-daemon-api-ui.md`
-20. `security-cost-observability.md`
-21. `testing-ci-release.md`
-22. `codex-long-run-workflow.md`
-23. `codex-work-queue.md`
-24. `codex-pr-template.md`
-25. `codex-validation-report.md`
+13. `router-decision-matrix.md`
+14. `router-engine.md`
+15. `execution-engine.md`
+16. `validation-engine.md`
+17. `star-sentinel-full-spec.md`
+18. `approval-review-flow.md`
+19. `policy-profiles.md`
+20. `cli-daemon-api-ui.md`
+21. `security-cost-observability.md`
+22. `testing-ci-release.md`
+23. `codex-long-run-workflow.md`
+24. `codex-work-queue.md`
+25. `codex-pr-template.md`
+26. `codex-validation-report.md`
 
 이 문서 세트는 Codex 장시간 목표추진 구현의 기준점이다. Codex는 구현 작업 전에 이 문서와 `AGENTS.md`를 먼저 읽어야 한다.
 
@@ -47,10 +48,12 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 - `state-store.md`: StateStore API와 저장 규칙.
 - `state-store-recovery.md`: 손상된 artifact와 event log 처리 기준.
 
-## provider / config 기준
+## provider / config / router 기준
 
 - `provider-system.md`: provider manifest, instance, capability, registry, adapter 경계.
 - `config-system.md`: config, policy, hook, role, renderer, skill 계약과 병합 기준.
+- `router-decision-matrix.md`: size, risk, policy profile, approval, decision matrix.
+- `router-engine.md`: RouteSpec 생성 책임과 RouterEngine 구현 계약.
 
 ## 용어 수준
 
