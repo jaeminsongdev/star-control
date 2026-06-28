@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/execution-request.schema.json",
+  "title": "Star-Control ExecutionRequest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "request_id",
+    "job_id",
+    "stage",
+    "provider_instance_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "stage": {
+      "type": "string"
+    },
+    "provider_instance_id": {
+      "type": "string"
+    }
+  }
+}
