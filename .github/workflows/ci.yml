@@ -30,6 +30,21 @@ jobs:
       - name: Run repository policy check
         run: python scripts/ci/check_repo_policy.py
 
+  data-format-check:
+    name: data-format-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install CI dependencies
+        run: python -m pip install --upgrade PyYAML
+      - name: Run data format check
+        run: python scripts/ci/check_data_formats.py
+
   manifest-contract-check:
     name: manifest-contract-check
     runs-on: ubuntu-latest
