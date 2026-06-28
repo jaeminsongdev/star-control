@@ -763,47 +763,85 @@ __pycache__/
         "PLANS.md",
         """# PLANS.md
 
-## 활성 작업
+## 목적
 
-| ID | 상태 | 목표 | 검증 상태 |
-|---|---|---|---|
-| P-0001 | IN_PROGRESS | v3/v4 설계를 Star-Control monorepo 스캐폴드와 정본 문서로 흡수 | 실행 예정 |
+현재 작업 상태를 짧게 유지하는 원장이다. 상세 로그, 전체 diff, 반복 검증 출력은 여기에 누적하지 않는다. 장기 보존이 필요한 근거는 `docs/decisions/*`, report, changelog, commit history에 둔다.
 
-## 결정 기록
+## Context Pack
 
-| ID | 결정 |
-|---|---|
-| D-0001 | 원본 폴더는 삭제하지 않고, 정규 구조와 `source-absorption-map.md`로 흡수 상태를 기록한다. |
-| D-0002 | 라이선스는 MIT를 사용한다. |
-| D-0003 | provider core package에는 특정 provider 이름을 넣지 않고 transport/adapter/capability 중심으로 분리한다. |
-| D-0004 | Star Sentinel의 과거 이름은 `tool.yaml` legacy alias와 원본 흡수 맵의 출처 표기에만 남긴다. |
+### 현재 목표
 
-## 변경 파일 목록
+- Star-Control 설계 흡수 스캐폴드는 완료됨.
+- `PLANS.md`는 bounded snapshot으로 유지한다.
 
-| 파일 | 상태 | 변경 요약 | 검증 상태 |
-|---|---|---|---|
-| 루트 스캐폴드 | 추가됨 | README, AGENTS, LICENSE, CHANGELOG, gitignore 생성 | 미실행 |
-| docs/ | 추가됨 | 정본 문서와 원본 흡수 맵 생성 | 미실행 |
-| specs/ | 추가됨 | schema와 contract 생성 | 미실행 |
-| configs/ | 추가됨 | 정책, 역할, hook, template, registry 흡수 | 미실행 |
-| builtin-providers/ | 추가됨 | provider manifest와 capability 생성 | 미실행 |
-| builtin-tools/star-sentinel/ | 추가됨 | Star Sentinel manifest, policy, schema, template, docs 생성 | 미실행 |
-| packages/, apps/, examples/, tests/, scripts/ | 추가됨 | 구현 전 스캐폴드 생성 | 미실행 |
+### 반드시 지켜야 할 제약
+
+- 원본 설계 폴더는 별도 승인 없이 삭제하지 않는다.
+- 의존성 추가, 패키지 매니저 도입, 원격 공개 작업은 명시 요청이 있을 때만 한다.
+- 실행 결과는 Star-Control repo가 아니라 대상 프로젝트 `.ai-runs/`에 둔다.
+
+### 이미 끝난 것
+
+- v3/v4 원본 237개 파일을 정규 구조로 흡수했다.
+- 흡수 감사에서 mapped target 누락 0개, content absorption failure 0개를 확인했다.
+- GitHub `origin/main`에 설계 흡수 커밋까지 반영했다.
+
+### 아직 남은 것
+
+- 실제 구현 언어와 패키지 매니저 결정.
+- 원본 설계 폴더 삭제 여부는 사용자 별도 승인 필요.
+
+### 건드리면 안 되는 것
+
+- `D:/개발/관제/star-control_design_v3`
+- `D:/개발/관제/custom_dev_verification_platform_design_v4_curated`
+- 사용자 승인 없는 의존성 설치, 파일 삭제, 테스트 약화.
+
+### 먼저 확인할 파일
+
+- `README.md`
+- `docs/decisions/source-absorption-map.md`
+- `docs/decisions/source-absorption-audit.md`
+- `configs/registries/builtin-provider-registry.yaml`
+
+### 먼저 실행할 명령
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ./scripts/test.ps1
+python scripts/audit_source_absorption.py
+```
+
+### 현재 차단 요소
+
+- 없음.
+
+## 현재 활성 작업
+
+| ID | 상태 | 목표 | 주요 파일 | 다음 조치 |
+|---|---|---|---|---|
 
 ## 열린 리스크
 
-| ID | 리스크 | 대응 |
-|---|---|---|
-| R-0001 | 실제 구현 언어와 패키지 매니저가 아직 확정되지 않음 | 의존성 추가 없이 스캐폴드와 문서만 생성 |
-| R-0002 | 원본 폴더 삭제는 되돌리기 어려움 | 이번 작업에서는 삭제하지 않고 삭제 가능 판단 근거만 남김 |
+| ID | 내용 | 영향 | 다음 조치 |
+|---|---|---|---|
+| R-0001 | 실제 구현 언어와 패키지 매니저가 미정 | 다음 구현 단계의 build/test 전략 미확정 | 구현 착수 전 결정 |
+| R-0002 | 원본 설계 폴더 삭제 보류 | 디스크에는 중복 원본이 남음 | 삭제 요청 시 흡수 감사 문서 확인 후 별도 처리 |
 
-## 다음 검증
+## Archive References
 
-- JSON 파일 전체 파싱.
-- Star Sentinel legacy alias가 `tool.yaml` 외부에 정식 명칭으로 남지 않았는지 검색.
-- 금지된 provider 제품명 core package가 없는지 검색.
-- 실행 결과 경로가 `.ai-runs/.../tool-output/star-sentinel/`로 문서화됐는지 검색.
-- Star Sentinel task schema가 새 파일명으로 존재하는지 검색.
+| 항목 | 위치 |
+|---|---|
+| 원본 파일별 흡수 위치 | `docs/decisions/source-absorption-map.md` |
+| 흡수 감사 결과 | `docs/decisions/source-absorption-audit.md` |
+| 설계 흡수 보강 커밋 | `c321f11` |
+
+## 완료 작업
+
+| ID | 완료일 | 한 줄 요약 | 근거 |
+|---|---|---|---|
+| P-0001 | 2026-06-28 | v3/v4 설계를 Star-Control monorepo 스캐폴드와 정본 문서로 흡수 | `7ccdce5` |
+| P-0002 | 2026-06-28 | 원본 237개 파일 흡수 누락 재검토 및 provider/source 보존 보강 | `c321f11` |
+| P-0003 | 2026-06-28 | `PLANS.md`와 plan-ledger 운영을 bounded snapshot 기준으로 압축 | git history |
 """,
     )
 
@@ -1345,6 +1383,110 @@ models:
     for src in sorted((V3 / "templates").glob("*")):
         if src.is_file():
             copy_binary_or_text(src, f"configs/templates/{src.name}", transform=True)
+    write(
+        "configs/skills/plan-ledger.md",
+        """# plan-ledger
+
+## 목적
+
+`PLANS.md` 또는 RunState를 생성, 갱신, 압축, 인계한다.
+
+`PLANS.md`는 append-only 로그가 아니라 현재 작업 상태 snapshot이다. 현재 판단에 필요한 목표, 활성 작업, 열린 리스크, 다음 명령, Context Pack만 남긴다.
+
+## 운영 원칙
+
+- 완료 작업은 1행 요약으로 압축한다.
+- 상세 로그, 전체 diff, 반복 검증 출력은 남기지 않는다.
+- 상세 근거는 `docs/decisions/*`, `reports/*`, changelog, commit history를 참조한다.
+- 새 작업 시작 전, 작업 완료 후, handoff 전, 파일이 약 120줄을 넘을 때 압축한다.
+
+## 갱신 대상
+
+- 현재 목표
+- 활성 작업 상태
+- 열린 이슈와 리스크
+- 다음 실행 명령
+- 다음 스레드 인계 내용
+- 상세 근거 문서 링크
+
+## 금지 대상
+
+- 전체 diff
+- 긴 로그
+- 완료 작업별 상세 파일 목록
+- 반복 검증 출력
+- 현재 판단과 무관한 과거 진행 과정
+""",
+    )
+    write(
+        "configs/templates/plans-template.md",
+        """# PLANS.md
+
+## 목적
+
+현재 작업 상태를 짧게 유지하는 원장이다. 상세 로그 저장소가 아니며, 완료된 세부 과정은 `docs/decisions/*`, `reports/*`, changelog, commit history로 보낸다.
+
+## Context Pack
+
+### 현재 목표
+
+-
+
+### 반드시 지켜야 할 제약
+
+-
+
+### 이미 끝난 것
+
+-
+
+### 아직 남은 것
+
+-
+
+### 건드리면 안 되는 것
+
+-
+
+### 먼저 확인할 파일
+
+-
+
+### 먼저 실행할 명령
+
+-
+
+### 현재 차단 요소
+
+-
+
+## 현재 활성 작업
+
+| ID | 상태 | 목표 | 주요 파일 | 다음 조치 |
+|---|---|---|---|---|
+
+## 열린 리스크
+
+| ID | 내용 | 영향 | 다음 조치 |
+|---|---|---|---|
+
+## 다음 실행 명령
+
+```bash
+# 필요한 명령만 남긴다.
+```
+
+## Archive References
+
+| 항목 | 위치 |
+|---|---|
+
+## 완료 작업
+
+| ID | 완료일 | 한 줄 요약 | 근거 |
+|---|---|---|---|
+""",
+    )
     for src in sorted((V3 / "renderers").rglob("*.yaml")):
         rel = src.relative_to(V3 / "renderers")
         copy_binary_or_text(src, f"configs/renderers/{rel}", transform=True)
@@ -1749,10 +1891,14 @@ def map_v3_source(rel: Path) -> tuple[str, str, str]:
     if first == "roles":
         return f"configs/roles/{rel.name}", "흡수됨", "역할 지침"
     if first == "skills":
+        if rel.name == "plan-ledger.md":
+            return "configs/skills/plan-ledger.md", "정책 갱신 흡수", "bounded snapshot 운영 원칙으로 갱신"
         return f"configs/skills/{rel.name}", "흡수됨", "provider-neutral skill 원본"
     if first == "hooks":
         return f"configs/hooks/{rel.name}", "흡수됨", "lifecycle hook"
     if first == "templates":
+        if rel.name == "plans-template.md":
+            return "configs/templates/plans-template.md", "정책 갱신 흡수", "bounded snapshot template으로 갱신"
         return f"configs/templates/{rel.name}", "흡수됨", "공통 template"
     if first == "capabilities":
         return "configs/registries/capability-registry.yaml", "흡수됨", "capability registry"

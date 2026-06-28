@@ -190,14 +190,14 @@
 | `star-control_design_v3/skills/docs-update.md` | `configs/skills/docs-update.md` | 흡수됨 | provider-neutral skill 원본 |
 | `star-control_design_v3/skills/migration.md` | `configs/skills/migration.md` | 흡수됨 | provider-neutral skill 원본 |
 | `star-control_design_v3/skills/model-routing.md` | `configs/skills/model-routing.md` | 흡수됨 | provider-neutral skill 원본 |
-| `star-control_design_v3/skills/plan-ledger.md` | `configs/skills/plan-ledger.md` | 흡수됨 | provider-neutral skill 원본 |
+| `star-control_design_v3/skills/plan-ledger.md` | `configs/skills/plan-ledger.md` | 정책 갱신 흡수 | bounded snapshot 운영 원칙으로 갱신 |
 | `star-control_design_v3/skills/release.md` | `configs/skills/release.md` | 흡수됨 | provider-neutral skill 원본 |
 | `star-control_design_v3/skills/security-review.md` | `configs/skills/security-review.md` | 흡수됨 | provider-neutral skill 원본 |
 | `star-control_design_v3/skills/task-orchestrator.md` | `configs/skills/task-orchestrator.md` | 흡수됨 | provider-neutral skill 원본 |
 | `star-control_design_v3/skills/validation.md` | `configs/skills/validation.md` | 흡수됨 | provider-neutral skill 원본 |
 | `star-control_design_v3/templates/approval-request-template.md` | `configs/templates/approval-request-template.md` | 흡수됨 | 공통 template |
 | `star-control_design_v3/templates/final-report-template.md` | `configs/templates/final-report-template.md` | 흡수됨 | 공통 template |
-| `star-control_design_v3/templates/plans-template.md` | `configs/templates/plans-template.md` | 흡수됨 | 공통 template |
+| `star-control_design_v3/templates/plans-template.md` | `configs/templates/plans-template.md` | 정책 갱신 흡수 | bounded snapshot template으로 갱신 |
 | `star-control_design_v3/templates/report-template.json` | `configs/templates/report-template.json` | 흡수됨 | 공통 template |
 | `star-control_design_v3/templates/route-template.json` | `configs/templates/route-template.json` | 흡수됨 | 공통 template |
 | `star-control_design_v3/templates/workspec-template.md` | `configs/templates/workspec-template.md` | 흡수됨 | 공통 template |

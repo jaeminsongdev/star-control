@@ -6,6 +6,7 @@
 - v4 files: 29
 - source map rows: 237
 - missing mapped targets: 0
+- policy override sources: 2
 - content absorption failures: 0
 
 ## Result
@@ -22,3 +23,4 @@ PASS
 - Every mapped target must exist, except split schema targets represented by `provider-*.schema.json`.
 - Directly absorbed text files must contain the normalized source text.
 - Provider manifests and feature matrices must also preserve the original v3 YAML under each builtin provider `docs/` directory.
+- Policy override sources may intentionally replace old source text when this repo updates its own operating policy; those overrides must still have mapped targets.

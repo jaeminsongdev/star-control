@@ -47,6 +47,10 @@ def assert_text_absorbed(source: Path, target: str, failures: list[str]) -> None
 def audit() -> tuple[list[str], list[str]]:
     failures: list[str] = []
     notes: list[str] = []
+    policy_overrides = {
+        "skills/plan-ledger.md",
+        "templates/plans-template.md",
+    }
 
     v3_files = source_files(V3)
     v4_files = source_files(V4)
@@ -68,7 +72,12 @@ def audit() -> tuple[list[str], list[str]]:
 
     for src in v3_files:
         rel = src.relative_to(V3)
+        rel_string = rel.as_posix()
         target, _status, _note = map_v3_source(rel)
+        if rel_string in policy_overrides:
+            if not target_exists(target):
+                failures.append(f"policy override target missing: {src} -> {target}")
+            continue
         first = rel.parts[0]
         if first == "providers":
             group, slug = target.split("/")[1], target.split("/")[2]
@@ -99,6 +108,7 @@ def audit() -> tuple[list[str], list[str]]:
     notes.append(f"v4 files: {len(v4_files)}")
     notes.append(f"source map rows: {len(rows)}")
     notes.append(f"missing mapped targets: 0" if not any("mapped target missing" in f for f in failures) else "missing mapped targets: present")
+    notes.append(f"policy override sources: {len(policy_overrides)}")
     notes.append(f"content absorption failures: {len(failures)}")
     return failures, notes
 
@@ -136,6 +146,7 @@ def write_report(failures: list[str], notes: list[str]) -> None:
             "- Every mapped target must exist, except split schema targets represented by `provider-*.schema.json`.",
             "- Directly absorbed text files must contain the normalized source text.",
             "- Provider manifests and feature matrices must also preserve the original v3 YAML under each builtin provider `docs/` directory.",
+            "- Policy override sources may intentionally replace old source text when this repo updates its own operating policy; those overrides must still have mapped targets.",
         ]
     )
     (ROOT / "docs" / "decisions" / "source-absorption-audit.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
