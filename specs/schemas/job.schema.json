@@ -4,6 +4,7 @@
   "title": "Star-Control JobSpec",
   "type": "object",
   "required": [
+    "schema_version",
     "job_id",
     "project_root",
     "request_text",
@@ -12,6 +13,9 @@
     "state"
   ],
   "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
     "job_id": {
       "type": "string",
       "pattern": "^J-[0-9]{4,}$"
@@ -36,6 +40,7 @@
         "ROUTED",
         "PLANNING",
         "PLANNED",
+        "WAITING_APPROVAL",
         "IMPLEMENTING",
         "IMPLEMENTED",
         "VALIDATING",
@@ -43,10 +48,11 @@
         "REVIEWING",
         "REVIEWED",
         "POLISHING",
+        "POLISHED",
+        "REPORTING",
         "DONE",
-        "BLOCKED",
         "FAILED",
-        "NEEDS_APPROVAL",
+        "BLOCKED",
         "CANCELLED"
       ]
     },

@@ -4,6 +4,7 @@
   "title": "Star-Control RouteSpec",
   "type": "object",
   "required": [
+    "schema_version",
     "job_id",
     "summary",
     "size",
@@ -13,6 +14,9 @@
     "requires_user_approval"
   ],
   "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
     "job_id": {
       "type": "string"
     },

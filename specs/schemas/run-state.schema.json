@@ -4,6 +4,7 @@
   "title": "Star-Control RunState",
   "type": "object",
   "required": [
+    "schema_version",
     "job_id",
     "state",
     "current_stage",
@@ -11,6 +12,9 @@
     "next_action"
   ],
   "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
     "job_id": {
       "type": "string"
     },
