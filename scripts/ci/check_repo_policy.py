@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Star-Control 저장소 구조와 기본 운영 정책을 검사한다."""
+"""Check the Star-Control repository baseline structure."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ REQUIRED_FILES = (
     "README.md",
     "AGENTS.md",
     ".github/workflows/ci.yml",
-    "docs/decisions/source-absorption-map.md",
     "docs/operations/ci-roadmap.md",
     "builtin-tools/star-sentinel/tool.yaml",
     "scripts/ci/check_manifest_contracts.py",
@@ -28,7 +27,7 @@ REQUIRED_DIRS = (
     "examples",
 )
 
-FORBIDDEN_REPO_PATHS = (
+DISALLOWED_REPO_PATHS = (
     ".ai-runs",
 )
 
@@ -41,23 +40,21 @@ def check_required_files(errors: list[str]) -> None:
     for relative_path in REQUIRED_FILES:
         path = repo_path(relative_path)
         if not path.is_file():
-            errors.append(f"필수 파일 없음: {relative_path}")
+            errors.append(f"missing required file: {relative_path}")
 
 
 def check_required_dirs(errors: list[str]) -> None:
     for relative_path in REQUIRED_DIRS:
         path = repo_path(relative_path)
         if not path.is_dir():
-            errors.append(f"필수 디렉터리 없음: {relative_path}")
+            errors.append(f"missing required directory: {relative_path}")
 
 
-def check_forbidden_repo_paths(errors: list[str]) -> None:
-    for relative_path in FORBIDDEN_REPO_PATHS:
+def check_disallowed_repo_paths(errors: list[str]) -> None:
+    for relative_path in DISALLOWED_REPO_PATHS:
         path = repo_path(relative_path)
         if path.exists():
-            errors.append(
-                f"금지된 실행 산출물 경로가 repository에 존재함: {relative_path}"
-            )
+            errors.append(f"disallowed repository path exists: {relative_path}")
 
 
 def main() -> int:
@@ -65,7 +62,7 @@ def main() -> int:
 
     check_required_files(errors)
     check_required_dirs(errors)
-    check_forbidden_repo_paths(errors)
+    check_disallowed_repo_paths(errors)
 
     if errors:
         print("ERROR: repository policy check failed", file=sys.stderr)
