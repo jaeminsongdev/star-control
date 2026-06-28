@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "p0-task-demo",
+  "files": [
+    {
+      "path": "src/allowed/index.ts",
+      "change_type": "modified",
+      "old_path": null,
+      "hunks": [
+        {
+          "old_start": 1,
+          "old_lines": 3,
+          "new_start": 1,
+          "new_lines": 4,
+          "lines": [
+            {
+              "kind": "context",
+              "old_line": 1,
+              "new_line": 1,
+              "content": "export function createStopwatch() {"
+            },
+            {
+              "kind": "added",
+              "old_line": null,
+              "new_line": 2,
+              "content": "  return { running: false };"
+            },
+            {
+              "kind": "context",
+              "old_line": 2,
+              "new_line": 3,
+              "content": "}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
