@@ -61,6 +61,26 @@ VALIDATION_CASES = (
         "examples/core/error.example.json",
     ),
     (
+        "specs/schemas/provider-manifest.schema.json",
+        "examples/provider-contracts/provider-manifest.fake.example.json",
+    ),
+    (
+        "specs/schemas/provider-instance.schema.json",
+        "examples/provider-contracts/provider-instance.fake.example.json",
+    ),
+    (
+        "specs/schemas/capability-profile.schema.json",
+        "examples/provider-contracts/capability-profile.fake.example.json",
+    ),
+    (
+        "specs/schemas/provider-registry.schema.json",
+        "examples/provider-contracts/provider-registry.example.json",
+    ),
+    (
+        "specs/schemas/provider-run-result.schema.json",
+        "examples/provider-contracts/provider-run-result.success.example.json",
+    ),
+    (
         "builtin-tools/star-sentinel/schemas/approval.schema.json",
         "builtin-tools/star-sentinel/examples/p0/approval-block.example.json",
     ),
