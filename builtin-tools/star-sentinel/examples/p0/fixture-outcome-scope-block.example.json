@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "fixture_id": "p0-scope-block",
+  "profile": "quick",
+  "expected_decision": "BLOCK",
+  "expected_diagnostics": [
+    {
+      "rule_id": "task.scope.allowed_paths",
+      "severity": "block",
+      "path": "src/other/hidden.ts"
+    }
+  ],
+  "notes": "Out-of-scope change must block automatic progress."
+}
