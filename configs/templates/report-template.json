@@ -1,4 +1,5 @@
 {
+  "schema_version": "1.0.0",
   "job_id": "J-0000",
   "stage": "implement",
   "status": "DONE",
