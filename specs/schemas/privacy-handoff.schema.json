@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/privacy-handoff.schema.json",
+  "title": "Star-Control PrivacyHandoff",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "job_id",
+    "destination",
+    "context_paths",
+    "redaction_required",
+    "approved"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^J-[0-9]{4,}$"
+    },
+    "destination": {
+      "type": "string"
+    },
+    "context_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "redaction_required": {
+      "type": "boolean"
+    },
+    "approved": {
+      "type": "boolean"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
