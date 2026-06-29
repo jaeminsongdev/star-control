@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/audit-event.schema.json",
+  "title": "Star-Control AuditEvent",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "job_id",
+    "type",
+    "created_at",
+    "actor",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^J-[0-9]{4,}$"
+    },
+    "type": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "actor": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "artifact_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risk_level": {
+      "type": "string"
+    }
+  }
+}
