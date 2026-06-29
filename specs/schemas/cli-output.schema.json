@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/cli-output.schema.json",
+  "title": "Star-Control CLI Output",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "exit_code",
+    "data"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "command": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "failed",
+        "blocked",
+        "waiting_approval"
+      ]
+    },
+    "exit_code": {
+      "type": "integer"
+    },
+    "data": {
+      "type": "object"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
