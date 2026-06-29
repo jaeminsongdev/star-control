@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "audit-0001",
+  "job_id": "J-0001",
+  "type": "approval_requested",
+  "created_at": "2026-06-28T00:00:00Z",
+  "actor": "validation-engine",
+  "summary": "Approval was requested for a schema-sensitive change.",
+  "artifact_paths": [
+    "approvals/approval-request.json"
+  ],
+  "risk_level": "HIGH"
+}
