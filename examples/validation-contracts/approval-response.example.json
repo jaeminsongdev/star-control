@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "job_id": "J-0001",
+  "stage": "validate",
+  "task_id": "p0-task-demo",
+  "response": "approved",
+  "reviewer": "human-reviewer",
+  "responded_at": "2026-06-28T00:05:00Z",
+  "reason": "Schema change is intentional and examples were updated.",
+  "allowed_next_stage": "report",
+  "constraints": [
+    "do not change workflow files"
+  ]
+}
