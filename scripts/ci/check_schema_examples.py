@@ -36,6 +36,7 @@ VALIDATION_CASES = [
     ("specs/schemas/audit-event.schema.json", "examples/security-contracts/audit-event.example.json"),
     ("specs/schemas/cost-metric.schema.json", "examples/security-contracts/cost-metric.fake.example.json"),
     ("specs/schemas/privacy-handoff.schema.json", "examples/security-contracts/privacy-handoff.example.json"),
+    ("specs/schemas/release-readiness.schema.json", "examples/release-contracts/release-readiness.example.json"),
     ("specs/schemas/workspec.schema.json", "examples/runs/J-0001/workspecs/implement.json"),
     ("specs/schemas/report.schema.json", "configs/templates/report-template.json"),
     ("specs/schemas/report.schema.json", "examples/fake/impl-report-done.json"),
