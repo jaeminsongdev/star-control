@@ -38,6 +38,7 @@ REQUIRED_DOCS = (
     "docs/implementation/security-cost-observability.md",
     "docs/implementation/security-privacy-observability-contracts.md",
     "docs/implementation/testing-ci-release.md",
+    "docs/implementation/release-readiness.md",
     "docs/implementation/codex-long-run-workflow.md",
     "docs/implementation/codex-work-queue.md",
     "docs/implementation/codex-pr-template.md",
@@ -55,6 +56,7 @@ REQUIRED_EXAMPLE_DIRS = (
     "examples/cli-contracts",
     "examples/surface-contracts",
     "examples/security-contracts",
+    "examples/release-contracts",
     "builtin-tools/star-sentinel/examples/p0",
 )
 
