@@ -9,6 +9,7 @@
     "stage",
     "role",
     "provider",
+    "provider_instance",
     "project_root",
     "goal",
     "allowed_scope",
@@ -61,7 +62,24 @@
     "forbidden_actions": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "enum": [
+          "dependency_install",
+          "dependency_change",
+          "file_delete",
+          "bulk_move",
+          "test_delete",
+          "test_skip_only_ignore",
+          "assertion_weakening",
+          "workflow_change",
+          "schema_breaking_change",
+          "validator_self_bypass",
+          "sensitive_data_output",
+          "credential_change",
+          "external_account_change",
+          "release_publish",
+          "deploy"
+        ]
       }
     },
     "context_pack": {

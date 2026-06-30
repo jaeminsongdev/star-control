@@ -72,7 +72,32 @@
     "change_types": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "enum": [
+          "docs_only",
+          "example_change",
+          "schema_change",
+          "schema_breaking_change",
+          "runtime_code_change",
+          "multi_package_change",
+          "provider_contract_change",
+          "dependency_addition",
+          "dependency_version_change",
+          "workflow_change",
+          "public_api_change",
+          "credential_change",
+          "sensitive_data_exposure",
+          "release_change",
+          "deploy_change",
+          "validator_sensitive_change",
+          "validator_self_bypass",
+          "file_deletion",
+          "bulk_move",
+          "risk_path_change",
+          "external_account_change",
+          "budget_exceeded",
+          "unknown_high_risk"
+        ]
       }
     },
     "routing_reasons": {
