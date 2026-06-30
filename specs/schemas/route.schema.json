@@ -9,10 +9,15 @@
     "summary",
     "size",
     "risk",
+    "policy_profile",
+    "decision",
+    "change_types",
+    "routing_reasons",
     "stages",
     "assignments",
     "requires_user_approval",
-    "approval_reasons"
+    "approval_reasons",
+    "workspecs"
   ],
   "properties": {
     "schema_version": {
