@@ -8,6 +8,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
+BRIEF_DOCS = tuple(
+    f"docs/implementation/briefs/{name}"
+    for name in (
+        "README.md",
+        "E01-schema-validator.md",
+        "E02-state-store.md",
+        "E03-artifact-layout-writer.md",
+        "E04-provider-registry.md",
+        "E05-fake-provider-adapter.md",
+        "E06-router-engine.md",
+        "E07-execution-engine.md",
+        "E08-cli-fake-flow.md",
+        "E09-star-sentinel-p0.md",
+        "E10-validation-engine.md",
+        "E11-integration-smoke.md",
+    )
+)
+
 REQUIRED_DOCS = (
     "docs/decisions/0002-runtime-stack.md",
     "docs/decisions/0003-fake-provider-instance.md",
@@ -50,6 +68,7 @@ REQUIRED_DOCS = (
     "docs/implementation/codex-work-queue-current.md",
     "docs/implementation/codex-pr-template.md",
     "docs/implementation/codex-validation-report.md",
+    *BRIEF_DOCS,
 )
 
 REQUIRED_EXAMPLE_DIRS = (
