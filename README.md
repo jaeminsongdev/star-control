@@ -26,10 +26,15 @@ Codex 또는 다른 구현자는 구현 전에 아래 문서를 먼저 읽는다
 
 ```text
 AGENTS.md
+README.md
 docs/implementation/README.md
 docs/implementation/current-repository-map.md
 docs/implementation/repository-layout.md
+docs/implementation/codex-long-run-workflow.md
+docs/implementation/codex-work-queue-current.md
 ```
+
+실제 구현 착수 순서는 `docs/implementation/codex-work-queue-current.md`를 우선한다. `docs/implementation/codex-work-queue.md`는 장기 backlog이며, 두 문서가 다르게 보이면 현재 착수 큐인 `codex-work-queue-current.md`를 기준으로 작업한다.
 
 그 다음 작업 대상에 따라 `data-contracts.md`, `state-store.md`, `provider-system.md`, `router-engine.md`, `execution-engine.md`, `validation-engine.md`, `star-sentinel-full-spec.md` 등을 읽는다.
 

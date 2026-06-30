@@ -4,6 +4,8 @@
 
 이 문서는 현재 Star-Control repository에 존재하는 경로의 의미를 고정한다. `repository-layout.md`가 목표 package 경계를 설명한다면, 이 문서는 구현자가 실제 파일을 볼 때 어떤 경로가 정본이고 어떤 경로가 예약 영역인지 판단하게 해 주는 기준표다.
 
+실제 구현 착수 순서는 `codex-work-queue-current.md`를 우선한다. 이 문서는 repository 경로 상태를 설명하고, 현재 EPIC/TASK의 세부 순서는 `codex-work-queue-current.md`가 결정한다.
+
 ## 상태 표기
 
 | 상태 | 의미 |
@@ -12,6 +14,7 @@
 | `SCAFFOLD` | 목표 구조를 표시하기 위한 골격이다. |
 | `RESERVED` | 장기 목표로 예약했지만 초기 구현 대상은 아니다. |
 | `EXAMPLE` | schema, 문서, smoke 검증을 위한 예시다. |
+| `BACKLOG` | 장기 구현 후보이며 현재 착수 큐보다 우선하지 않는다. |
 
 ## 현재 정본 경로
 
@@ -31,7 +34,7 @@
 | `builtin-providers/` | `CANONICAL` | builtin provider manifest와 capability profile을 둔다. provider 구현 코드는 두지 않는다. |
 | `builtin-tools/star-sentinel/` | `CANONICAL` | Star Sentinel manifest, policy, schema, fixture, example, corpus를 둔다. |
 | `examples/` | `EXAMPLE` | provider instance와 sample run artifact를 둔다. 실제 run output 위치가 아니다. |
-| `scripts/ci/` | `CANONICAL` | repository policy, data format, manifest, naming, schema example 검증 스크립트를 둔다. |
+| `scripts/ci/` | `CANONICAL` | repository policy, data format, manifest, naming, schema example, implementation docs 검증 스크립트를 둔다. |
 
 ## scaffold / reserved 경로
 
@@ -97,16 +100,36 @@ star.sentinel
 | python entrypoint 후보 | `star_sentinel.main` |
 | tool id | `star.sentinel` |
 
-## 후속 계약 정리 대상
+## 현재 계약 상태
 
-이 문서는 현재 repository map만 고정한다. 아래 항목은 별도 PR에서 schema, example, CI 검증과 함께 닫는다.
+현재 repository에는 v0 구현 착수를 위한 주요 계약 문서, schema, canonical example, 최소 CI 검증선이 들어 있다.
 
-| 후속 PR | 대상 |
+| 계약 묶음 | 현재 위치 | 상태 |
+|---|---|---|
+| core artifact 계약 | `specs/schemas/`, `examples/runs/`, `docs/implementation/data-contracts.md` | `CANONICAL` |
+| StateStore / artifact layout | `state-store.md`, `state-store-recovery.md`, `artifact-layout.md`, `artifact-naming.md` | `CANONICAL` |
+| provider 계약 | `provider-system.md`, `docs/providers/`, `examples/provider-contracts/` | `CANONICAL` |
+| config / policy / role / hook 계약 | `config-system.md`, `examples/config-contracts/` | `CANONICAL` |
+| router decision 계약 | `router-decision-matrix.md`, `router-engine.md`, `examples/router-contracts/` | `CANONICAL` |
+| execution 계약 | `execution-engine.md`, `examples/execution-contracts/` | `CANONICAL` |
+| Star Sentinel P0 계약 | `star-sentinel-p0-contracts.md`, `builtin-tools/star-sentinel/` | `CANONICAL` |
+| validation handoff 계약 | `validation-engine.md`, `validation-handoff.md`, `examples/validation-contracts/` | `CANONICAL` |
+| CLI / reserved surfaces | `cli-command-reference.md`, `daemon-contract.md`, `api-contract.md`, `ui-shell-contract.md` | `CANONICAL` / `RESERVED` |
+| CI 계약 검증 | `scripts/ci/`, `.github/workflows/ci.yml`, `ci-contract-validation.md` | `CANONICAL` |
+| 현재 구현 큐 | `codex-work-queue-current.md` | `CANONICAL` |
+| 장기 backlog | `codex-work-queue.md` | `BACKLOG` |
+
+## 남은 정리 대상
+
+아래 항목은 현재 구현 착수 전후로 보강할 수 있지만, `codex-work-queue-current.md`의 순서를 앞지르지 않는다.
+
+| 대상 | 처리 기준 |
 |---|---|
-| PR-02 | core artifact schema/example |
-| PR-04 | provider manifest, instance, capability, registry schema |
-| PR-06 | config, policy, hook, renderer, role, skill schema |
-| PR-07 | router risk, approval, policy profile decision matrix |
-| PR-11 | CLI command reference와 JSON/error output |
-| PR-12 | daemon, API, UI reserved contract |
-| PR-14 | docs, provider, config, policy contract validator |
+| handoff schema required field 강화 | 별도 schema/example PR에서 처리한다. |
+| forbidden action vocabulary 고정 | schema/example/docs를 함께 수정한다. |
+| work queue consistency CI | 별도 CI PR에서 추가한다. |
+| E08 CLI 세부 분할 | 현재 큐 또는 후속 consistency PR에서 명시한다. |
+| E09 Star Sentinel P0 세부 분할 | P0 evaluator/gate/review/selfcheck 단위로 정리한다. |
+| local/cloud provider | fake flow 안정화 전까지 `RESERVED`다. |
+| daemon/API/UI | CLI file-based flow 안정화 전까지 `RESERVED`다. |
+| release automation | 별도 승인 전까지 `RESERVED`다. |

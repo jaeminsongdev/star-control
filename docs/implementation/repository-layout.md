@@ -6,6 +6,8 @@
 
 현재 실제 경로의 상태는 `current-repository-map.md`를 우선 확인한다. 이 문서는 목표 구조와 package 책임을 설명한다.
 
+실제 구현 착수 순서는 `codex-work-queue-current.md`를 우선한다. 이 문서의 package 순서나 장기 구조 설명이 현재 작업 큐와 다르게 보이면, 현재 착수 큐인 `codex-work-queue-current.md`를 기준으로 한다.
+
 ## 현재 정본 경로
 
 ```text
@@ -213,8 +215,6 @@ Star Sentinel 전용 schema는 `builtin-tools/star-sentinel/schemas/`에 둔다.
 
 `configs/`는 runtime default, template, role, policy, registry 후보를 둔다. implementation package가 생기기 전까지는 정본 설정과 template 중심으로 유지한다.
 
-후속 계약 PR에서 config, policy, hook, renderer, role, skill schema를 별도로 고정한다.
-
 ## examples 경계
 
 `examples/`는 Star-Control core-level sample artifact를 둔다. Star Sentinel 전용 example은 `builtin-tools/star-sentinel/examples/`에 둔다.
@@ -232,8 +232,9 @@ Star Sentinel 전용 schema는 `builtin-tools/star-sentinel/schemas/`에 둔다.
 - manifest contract
 - Star Sentinel naming policy
 - schema example
+- implementation documentation
 
-후속 PR에서 문서 index, provider contract, config contract, policy fixture 검사를 추가할 수 있다.
+후속 PR에서 provider contract, config contract, policy fixture, work queue consistency 검사를 추가할 수 있다.
 
 ## 금지되는 구조
 
@@ -243,18 +244,34 @@ packages/star-control-star-sentinel # core와 tool 경계 혼동
 .ai-runs/                           # Star-Control repo 내부 실행 산출물
 ```
 
-## 구현 순서 기준
+## 현재 구현 순서 기준
 
-1. 문서와 schema 계약 고정
-2. file-based state package
-3. schema validator package
-4. provider registry와 fake provider
-5. router와 execution engine
-6. validation engine과 Star Sentinel P0 implementation
-7. CLI
-8. integration smoke
-9. local/cloud provider 확장
-10. daemon/API/UI 확장
+실제 착수 순서는 `docs/implementation/codex-work-queue-current.md`를 우선한다. 현재 v0 구현 순서는 다음과 같다.
+
+```text
+E01 Schema / Runtime Validator
+E02 File-based StateStore
+E03 Artifact Layout Writer
+E04 Provider Registry
+E05 FakeProviderAdapter
+E06 RouterEngine
+E07 ExecutionEngine
+E08 CLI read-only + fake run
+E09 Star Sentinel P0
+E10 ValidationEngine
+E11 Integration Smoke
+```
+
+장기 구현 흐름은 아래 원칙을 따른다.
+
+1. schema/runtime validator를 먼저 안정화한다.
+2. file-based StateStore와 artifact layout을 안정화한다.
+3. provider registry와 fake provider를 붙인다.
+4. router와 execution engine을 fake flow 기준으로 연결한다.
+5. CLI read-only와 fake run을 안정화한다.
+6. Star Sentinel P0와 ValidationEngine을 연결한다.
+7. fake provider 기반 integration smoke를 만든다.
+8. local/cloud provider, daemon/API/UI, release automation은 fake flow 안정화 후 별도 승인과 별도 PR에서 확장한다.
 
 ## PR 경계 원칙
 
