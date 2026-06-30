@@ -41,6 +41,7 @@ REQUIRED_DOCS = (
     "docs/implementation/release-readiness.md",
     "docs/implementation/codex-long-run-workflow.md",
     "docs/implementation/codex-work-queue.md",
+    "docs/implementation/codex-work-queue-current.md",
     "docs/implementation/codex-pr-template.md",
     "docs/implementation/codex-validation-report.md",
 )
