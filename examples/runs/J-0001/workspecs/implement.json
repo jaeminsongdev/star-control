@@ -11,11 +11,7 @@
     "src/**",
     "tests/**"
   ],
-  "forbidden_actions": [
-    "dependency_install",
-    "file_delete",
-    "test_weakening"
-  ],
+  "forbidden_actions": [],
   "context_pack": {
     "files": []
   },
