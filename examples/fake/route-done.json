@@ -3,7 +3,15 @@
   "job_id": "J-0001",
   "summary": "스톱워치 기능 구현",
   "size": "MEDIUM",
-  "risk": "LOW",
+  "risk": "MEDIUM",
+  "policy_profile": "near",
+  "decision": "AUTO_PASS",
+  "change_types": [
+    "runtime_code_change"
+  ],
+  "routing_reasons": [
+    "runtime code change routed to fake provider"
+  ],
   "stages": [
     "implement",
     "validate",
@@ -14,12 +22,12 @@
     "implement": {
       "role": "worker-impl",
       "provider": "my-fake-provider",
-      "profile": "quick"
+      "profile": "near"
     },
     "review": {
       "role": "worker-review",
       "provider": "my-fake-provider",
-      "profile": "quick"
+      "profile": "near"
     }
   },
   "requires_user_approval": false,
