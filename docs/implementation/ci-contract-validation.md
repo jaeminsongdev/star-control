@@ -2,7 +2,7 @@
 
 ## 목적
 
-이 문서는 Star-Control의 현재 CI가 어떤 계약을 막는지 설명한다. 현재 repository는 구현 전 계약 고정 단계이므로, CI는 코드 빌드보다 문서, schema, example, manifest, naming policy의 정합성을 우선 검증한다.
+이 문서는 Star-Control의 현재 CI가 어떤 계약을 막는지 설명한다. 현재 repository는 구현 전 계약 고정 단계이므로, CI는 코드 빌드보다 문서, schema, example, manifest, naming policy, current work queue 정합성을 우선 검증한다.
 
 ## CI jobs
 
@@ -13,6 +13,7 @@ manifest-contract-check
 naming-policy-check
 schema-example-check
 implementation-documentation-check
+work-queue-consistency-check
 ```
 
 ## repository-policy-check
@@ -97,6 +98,22 @@ python3 scripts/ci/check_implementation_docs.py
 - canonical example directory 존재 확인
 - CI workflow가 핵심 validator를 실제로 호출하는지 확인
 
+## work-queue-consistency-check
+
+명령:
+
+```text
+python3 scripts/ci/check_work_queue_consistency.py
+```
+
+역할:
+
+- 현재 구현 착수 큐의 우선권 문구 확인
+- E01~E11 EPIC heading 확인
+- EPIC별 handoff section marker 확인
+- E08/E09 split guidance 확인
+- RESERVED section 유지 확인
+
 ## 새 계약 추가 규칙
 
 새 schema/example/doc를 추가할 때 기본 절차:
@@ -106,6 +123,7 @@ python3 scripts/ci/check_implementation_docs.py
 3. `scripts/ci/check_schema_examples.py` validation case 추가
 4. 구현 문서에 machine-readable contracts section 추가
 5. 필요하면 `scripts/ci/check_implementation_docs.py` required docs 또는 example dirs에 추가
+6. work queue 흐름을 바꾸면 `scripts/ci/check_work_queue_consistency.py` 영향도 검토
 
 ## 금지 사항
 

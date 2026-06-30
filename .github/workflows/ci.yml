@@ -88,3 +88,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Run implementation documentation check
         run: python3 scripts/ci/check_implementation_docs.py
+
+  work-queue-consistency-check:
+    name: work-queue-consistency-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run work queue consistency check
+        run: python3 scripts/ci/check_work_queue_consistency.py
