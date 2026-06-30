@@ -1,18 +1,32 @@
 # CI 운영 로드맵
 
-## 0단계: 현재 적용된 초기 CI
+## 현재 적용된 CI
 
-현재 `main`에는 최소 안정 CI만 적용한다.
+현재 `main`에는 구현 전 계약 고정 단계의 최소 안정 CI를 적용한다.
 
-- 저장소 기본 구조 확인
-- Star Sentinel manifest 최소 계약 확인
+```text
+repository-policy-check
+data-format-check
+manifest-contract-check
+naming-policy-check
+schema-example-check
+implementation-documentation-check
+work-queue-consistency-check
+```
 
-이 단계의 목적은 AI 작업 PR에 대해 가장 낮은 비용의 자동 검증선을 먼저 세우는 것이다.
+로컬에서는 다음 명령으로 동일한 계약 검사를 한 번에 실행한다.
+
+```text
+python scripts/ci/run_all.py
+```
+
+현재 단계의 목적은 AI 작업 PR에 대해 낮은 비용의 자동 검증선을 제공하면서, schema/example/doc/work queue drift를 조기에 잡는 것이다.
 
 ## 1단계: 데이터 형식 검사
 
-정본 경로 기준으로 데이터 파일 파싱 검사를 추가한다.
-전체 저장소를 한 번에 검사하면 예시 산출물이나 아직 schema가 없는 파일 때문에 오탐 가능성이 있으므로, 초기에는 아래 경로부터 시작한다.
+정본 경로 기준으로 데이터 파일 파싱 검사를 유지한다.
+
+초기 검사 범위:
 
 - `.github/workflows/`
 - `configs/`
@@ -33,6 +47,8 @@
 - 문서 읽는 순서 문서와 실제 파일 존재 여부 비교
 - 정본 문서와 임시 작업 산출물의 혼동 방지 검사
 
+현재 `implementation-documentation-check`는 필수 문서와 canonical example directory 존재 여부, workflow/local runner wiring을 확인한다.
+
 ## 3단계: 명칭 정책 검사
 
 Star-Control은 명칭과 package 경계가 중요하므로 별도 검사를 둔다.
@@ -45,7 +61,7 @@ Star-Control은 명칭과 package 경계가 중요하므로 별도 검사를 둔
 
 ## 4단계: 스키마 검증
 
-`specs/`가 안정되면 schema 기반 검사를 추가한다.
+`specs/`와 canonical example이 안정되면 schema 기반 검사를 계속 확장한다.
 
 - schema 파일 자체의 파싱 가능 여부
 - manifest 예시가 schema를 만족하는지 확인
@@ -53,30 +69,20 @@ Star-Control은 명칭과 package 경계가 중요하므로 별도 검사를 둔
 - tool manifest 검증
 - capability registry 검증
 - run ledger, approval, review pack 관련 산출물 schema 검증
+- schema coverage 검사 후보
 
 ## 5단계: 구현 패키지 생성 후 언어별 검사
 
 `packages/` 아래 실제 구현이 생기면 언어별 CI를 추가한다.
 
-Rust 패키지가 생기면 다음 성격의 검사를 추가한다.
+Rust + Cargo workspace가 생기면 다음 검사를 추가한다.
 
-- formatting 검사
-- workspace check
-- clippy 기반 lint
-- workspace test
+- `cargo fmt --check`
+- `cargo clippy --workspace --all-targets`
+- `cargo test --workspace`
+- `cargo check --workspace`
 
-TypeScript 패키지가 생기면 다음 성격의 검사를 추가한다.
-
-- dependency lock 준수
-- lint
-- typecheck
-- test
-
-Python 패키지가 생기면 다음 성격의 검사를 추가한다.
-
-- import / compile 검사
-- lint
-- test
+TypeScript 또는 Python package는 별도 승인으로 package manager와 dependency policy가 확정된 뒤 추가한다.
 
 ## 6단계: Star Sentinel selfcheck
 
@@ -100,10 +106,17 @@ Star Sentinel 구현이 생기면 자체 검증 명령을 CI에 연결한다.
 
 초기 필수 status check 후보는 다음과 같다.
 
-- `repository-policy-check`
-- `manifest-contract-check`
+```text
+repository-policy-check
+manifest-contract-check
+data-format-check
+naming-policy-check
+schema-example-check
+implementation-documentation-check
+work-queue-consistency-check
+```
 
-데이터 형식 검사와 명칭 정책 검사가 안정화되면 필수 status check에 추가한다.
+Branch protection은 CI 안정화 후 GitHub settings에서 수동 적용한다. 이 작업은 외부 계정/저장소 설정 변경이므로 별도 승인 없이 자동으로 하지 않는다.
 
 ## 8단계: 보안 및 운영 정책 검사
 
