@@ -14,6 +14,40 @@ specs/schemas/router-decision.schema.json
 specs/schemas/workspec.schema.json
 ```
 
+`RouteSpec.change_types`와 `RouterDecision.change_types`는 같은 canonical enum을 사용한다. 같은 의미의 새 alias를 추가하지 않는다.
+
+## canonical change_types 기준
+
+민감정보 노출 위험은 다음 change type으로만 표현한다.
+
+```text
+sensitive_data_exposure
+```
+
+다음 표현은 canonical vocabulary로 사용하지 않는다.
+
+```text
+secret_exposure
+secret_leak
+plain_secret
+```
+
+## canonical forbidden_actions 기준
+
+민감정보 출력 금지는 다음 forbidden action으로만 표현한다.
+
+```text
+sensitive_data_output
+```
+
+다음 표현은 canonical vocabulary로 사용하지 않는다.
+
+```text
+secret_print
+secret_output
+plaintext_secret_output
+```
+
 ## RouteSpec handoff 필수 필드
 
 RouterEngine이 생성하는 RouteSpec은 다음 handoff 필드를 반드시 채워야 한다.

@@ -2,7 +2,7 @@
 
 ## 목적
 
-ExecutionEngine은 WorkSpec을 실제 provider 실행으로 연결하는 계층이다. 이 계층은 provider-neutral하게 동작해야 하며, provider-specific 세부사항은 ProviderAdapter 내부에 격리한다.
+ExecutionEngine은 WorkSpec을 provider-neutral 실행 흐름으로 연결하는 계층이다. provider-specific 세부사항은 ProviderAdapter 내부에 격리한다.
 
 ## 함께 읽을 문서
 
@@ -13,6 +13,7 @@ artifact-naming.md
 provider-system.md
 router-engine.md
 schema-validator.md
+handoff-vocabularies.md
 ```
 
 ## machine-readable contracts
@@ -21,6 +22,7 @@ schema-validator.md
 specs/schemas/execution-request.schema.json
 specs/schemas/execution-attempt.schema.json
 specs/schemas/provider-run-result.schema.json
+specs/schemas/workspec.schema.json
 examples/execution-contracts/execution-request.fake.example.json
 examples/execution-contracts/execution-attempt.success.example.json
 examples/execution-contracts/fake-provider-response.success.example.json
@@ -34,12 +36,12 @@ ExecutionEngine이 담당하는 것:
 
 - WorkSpec 로딩
 - ProviderInstance 선택 결과 확인
-- ProviderAdapter 호출
+- ProviderAdapter 연결
 - provider output directory 준비
 - ExecutionRequest 작성
 - ProviderRunResult 검증
 - attempt 기록
-- timeout/cancel/retry 정책 적용
+- timeout/cancel/retry 상태 반영
 - provider result를 ReportSpec과 RunState에 반영
 - event ledger append
 
@@ -50,7 +52,7 @@ ExecutionEngine이 담당하지 않는 것:
 - Star Sentinel 내부 구현
 - provider-specific credential 관리
 - UI 표시
-- 직접 shell command 실행
+- LocalProcessProvider 도입 전 로컬 명령 직접 실행
 
 ## 입력
 
@@ -86,7 +88,7 @@ stage ReportSpec 후보
 5. ExecutionRequest 생성
 6. request.json 작성
 7. ExecutionAttempt 생성 또는 갱신
-8. ProviderAdapter.execute 호출
+8. ProviderAdapter 연결
 9. response.json / stdout / stderr / artifacts 수집
 10. ProviderRunResult 검증
 11. ExecutionAttempt 완료 처리
@@ -156,8 +158,6 @@ attempt_id
 validation_requirements
 context_pack
 ```
-
-ExecutionRequest는 WorkSpec의 내용을 provider가 읽을 수 있는 실행 요청 형태로 정규화한 것이다.
 
 ## ProviderRunResult
 
@@ -232,11 +232,10 @@ attempt-0002
 FakeProviderAdapter는 다음을 수행한다.
 
 1. ExecutionRequest를 읽는다.
-2. 외부 network나 package manager를 사용하지 않는다.
-3. source file을 직접 수정하지 않는다.
-4. deterministic ProviderRunResult를 만든다.
-5. `request.json`과 `response.json`을 output directory에 둔다.
-6. 비용 metric은 0으로 둔다.
+2. 대상 프로젝트 source file을 직접 수정하지 않는다.
+3. deterministic ProviderRunResult를 만든다.
+4. `request.json`과 `response.json`을 output directory에 둔다.
+5. 비용 metric은 0으로 둔다.
 
 성공 response example은 다음을 따른다.
 
@@ -244,47 +243,15 @@ FakeProviderAdapter는 다음을 수행한다.
 examples/execution-contracts/fake-provider-response.success.example.json
 ```
 
-## timeout 정책
+## timeout / retry / cancel 정책
 
-초기 구현:
+초기 구현은 다음을 기본으로 한다.
 
 - timeout 값은 provider instance 또는 default config에서 읽는다.
-- timeout 발생 시 provider adapter에 cancel을 요청할 수 있다.
 - timeout event를 events.jsonl에 남긴다.
 - 자동 retry는 기본값으로 사용하지 않는다.
-
-장기 구현:
-
-- stage별 timeout
-- provider별 timeout
-- retry budget
-- daemon-level cancellation
-
-## retry 정책
-
-초기 구현은 자동 retry를 하지 않아도 된다.
-
-자동 retry를 도입할 때의 조건:
-
-- transport-level transient error만 제한적으로 retry
-- deterministic failure는 retry하지 않음
-- retry 횟수와 이유를 events.jsonl에 기록
-- retry로 인해 duplicate file write가 생기지 않아야 함
-- attempt directory 또는 attempt artifact를 함께 도입
-
-retry를 도입하기 전에는 같은 stage/provider output이 이미 있으면 `ProviderOutputAlreadyExists` 또는 `StageAlreadyExecuted` 계열 오류를 반환한다.
-
-## cancel 정책
-
-cancel 요청이 들어오면:
-
-1. RunState next_action을 cancel로 표시
-2. provider adapter cancel 지원 여부 확인
-3. cancel 가능한 경우 cancel 호출
-4. result를 `CANCELLED`로 반영
-5. event append
-
-Provider가 cancel을 지원하지 않으면 status와 report에 명확히 기록한다.
+- retry 도입 전에는 같은 stage/provider output이 이미 있으면 `ProviderOutputAlreadyExists` 또는 `StageAlreadyExecuted` 계열 오류를 반환한다.
+- cancel 요청은 RunState와 event에 명확히 반영한다.
 
 ## idempotency
 
@@ -348,26 +315,29 @@ ValidationEngine이 별도 검증을 수행하면 validation 필드는 나중에
 
 ## forbidden action guard
 
-ExecutionEngine은 WorkSpec의 `forbidden_actions`를 확인해야 한다.
+ExecutionEngine은 WorkSpec의 `forbidden_actions`를 확인해야 한다. 비교 가능한 값은 `specs/schemas/workspec.schema.json`의 canonical enum을 따른다.
 
 금지 후보:
 
 ```text
 dependency_install
+dependency_change
 file_delete
+bulk_move
 test_delete
+test_skip_only_ignore
 assertion_weakening
 workflow_change
-secret_print
+schema_breaking_change
+validator_self_bypass
+sensitive_data_output
+credential_change
 external_account_change
 release_publish
+deploy
 ```
 
-ProviderAdapter가 이를 시도했다는 evidence가 있으면 `BLOCKED` 또는 `FAILED`로 전환한다.
-
-## local command 실행 주의
-
-LocalProcessProvider가 생기기 전까지 ExecutionEngine은 직접 shell command를 실행하지 않는다. 모든 실행은 ProviderAdapter를 통한다.
+ProviderAdapter 결과에서 forbidden action evidence가 확인되면 `BLOCKED` 또는 `FAILED`로 전환한다.
 
 ## error model
 
