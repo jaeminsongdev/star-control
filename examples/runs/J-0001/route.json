@@ -21,12 +21,12 @@
   "assignments": {
     "implement": {
       "role": "worker-impl",
-      "provider": "my-fake-provider",
+      "provider": "fake-default",
       "profile": "near"
     },
     "review": {
       "role": "worker-review",
-      "provider": "my-fake-provider",
+      "provider": "fake-default",
       "profile": "near"
     }
   },
