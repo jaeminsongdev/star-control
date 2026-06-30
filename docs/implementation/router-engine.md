@@ -10,6 +10,7 @@ RouterEngine은 사용자 요청을 분석해 RouteSpec을 생성한다. RouteSp
 
 ```text
 router-decision-matrix.md
+handoff-vocabularies.md
 provider-system.md
 config-system.md
 policy-profiles.md
@@ -79,7 +80,7 @@ approval_reasons
 workspecs
 ```
 
-`policy_profile`, `decision`, `change_types`, `routing_reasons`는 optional로 시작하지만 RouterEngine 구현 시 채우는 것을 기본으로 한다.
+`policy_profile`, `decision`, `change_types`, `routing_reasons`, `workspecs`는 RouteSpec handoff 필수 필드다. RouterEngine 구현은 이 필드를 optional처럼 취급하지 않는다.
 
 ## decision pipeline
 
@@ -142,7 +143,7 @@ CRITICAL
 
 ## change_types
 
-RouterEngine은 request에서 change type 후보를 산출한다.
+RouterEngine은 request에서 change type 후보를 산출한다. 기록 가능한 값은 `specs/schemas/route.schema.json`과 `specs/schemas/router-decision.schema.json`의 canonical enum을 따른다.
 
 주요 후보:
 
@@ -157,17 +158,22 @@ provider_contract_change
 dependency_addition
 dependency_version_change
 workflow_change
+public_api_change
 credential_change
-secret_exposure
+sensitive_data_exposure
 release_change
 deploy_change
 validator_sensitive_change
 validator_self_bypass
 file_deletion
 bulk_move
+risk_path_change
 external_account_change
+budget_exceeded
 unknown_high_risk
 ```
+
+민감정보 노출 위험은 `sensitive_data_exposure`로 기록한다. 같은 의미의 별도 alias를 만들지 않는다.
 
 ## policy profile 선택
 
@@ -213,7 +219,7 @@ BLOCK
 
 - `AUTO_PASS`: approval false, risk LOW/MEDIUM, block reason 없음
 - `HUMAN_REVIEW`: approval true, 사람이 판단 가능, block reason 없음
-- `BLOCK`: secret exposure, out-of-scope, validator self-bypass, destructive action
+- `BLOCK`: 민감정보 노출, out-of-scope, validator self-bypass, destructive action
 
 `BLOCK` 조건이 있으면 `HUMAN_REVIEW`보다 우선한다.
 
@@ -315,7 +321,7 @@ file_deletion
 bulk_move
 risk_path_change
 credential_change
-secret_exposure
+sensitive_data_exposure
 validator_sensitive_change
 validator_self_bypass
 external_account_change
@@ -331,7 +337,7 @@ approval reason은 구체적으로 기록한다.
 schema_change_requires_approval
 validator_profile_requires_review
 workflow_change_requires_approval
-secret_exposure_blocked
+sensitive_data_exposure_blocked
 ```
 
 ## forbidden routing
@@ -343,7 +349,7 @@ RouterEngine은 다음을 자동 route로 보내면 안 된다.
 - 사용자 승인 없는 external account mutation
 - test 삭제나 weakening이 목표인 작업
 - CI 검사를 삭제해서 통과시키는 작업
-- secret 값을 출력하거나 저장하는 작업
+- 민감정보 값을 출력하거나 저장하는 작업
 - validator self-bypass 요청
 
 ## WorkSpec 생성 기준
@@ -405,7 +411,7 @@ RouteGenerationFailed
 1. 문서 요청 -> LOW/SMALL/quick/AUTO_PASS route
 2. schema 변경 요청 -> HIGH/validator/HUMAN_REVIEW route
 3. dependency 추가 요청 -> security profile과 approval reason 포함
-4. secret exposure -> BLOCK
+4. sensitive data exposure -> BLOCK
 5. unknown high risk 요청 -> HIGH 또는 CRITICAL
 6. provider capability 부족 -> NoProviderAvailable
 7. 같은 입력에 deterministic output
