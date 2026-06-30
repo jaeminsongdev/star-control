@@ -10,6 +10,8 @@
 
 - Star-Control repository는 현재 스캐폴드와 정본 설계 문서 상태다.
 - v0 runtime 구현 스택은 Rust + Cargo workspace로 결정했다.
+- v0 fake provider instance id는 `fake-default`로 결정했다.
+- v0 Star Sentinel P0 rule set은 5개 핵심 rule로 결정했다.
 - `PLANS.md`는 현재 상태만 남기는 bounded snapshot으로 유지한다.
 
 ### 반드시 지켜야 할 제약
@@ -24,11 +26,15 @@
 - Star Sentinel 명칭, policy, schema, template, output contract를 정리했다.
 - `PLANS.md`와 plan-ledger 운영 기준을 bounded snapshot 방식으로 정리했다.
 - v0 runtime stack을 Rust + Cargo workspace로 결정했다.
+- v0 fake provider instance id를 `fake-default`로 통일했다.
+- Star Sentinel v0 P0 scope와 E09a~E09d 구현 분할을 정리했다.
+- 로컬 contract check entrypoint를 `python scripts/ci/run_all.py`로 추가했다.
 
 ### 아직 남은 것
 
 - Cargo workspace와 최소 runtime crate 생성은 구현 PR에서 시작한다.
 - provider host, transport, adapter, Star Sentinel runtime 구현.
+- Codex EPIC별 brief와 work queue 최종 정리.
 
 ### 건드리면 안 되는 것
 
@@ -39,16 +45,17 @@
 ### 먼저 확인할 파일
 
 - `README.md`
-- `docs/decisions/0002-runtime-stack.md`
 - `docs/implementation/README.md`
+- `docs/decisions/0002-runtime-stack.md`
+- `docs/decisions/0003-fake-provider-instance.md`
+- `docs/decisions/0004-star-sentinel-p0-scope.md`
 - `docs/implementation/codex-work-queue-current.md`
-- `configs/registries/builtin-provider-registry.yaml`
-- `builtin-tools/star-sentinel/tool.yaml`
+- `docs/implementation/ci-contract-validation.md`
 
 ### 먼저 실행할 명령
 
-```powershell
-powershell -ExecutionPolicy Bypass -File ./scripts/test.ps1
+```text
+python scripts/ci/run_all.py
 ```
 
 ### 현재 차단 요소
@@ -65,7 +72,8 @@ powershell -ExecutionPolicy Bypass -File ./scripts/test.ps1
 | ID | 내용 | 영향 | 다음 조치 |
 |---|---|---|---|
 | R-0001 | runtime 구현 전 상태 | CLI/API/UI 동작 검증은 아직 불가 | 구현 스택 결정에 따라 E01부터 순차 구현 |
-| R-0002 | Cargo workspace 파일 미생성 | build/test 명령은 구현 PR 전까지 제한됨 | E01 구현 PR에서 최소 workspace 생성 |
+| R-0002 | Cargo workspace 파일 미생성 | Cargo build/test 명령은 구현 PR 전까지 제한됨 | E01 구현 PR에서 최소 workspace 생성 |
+| R-0003 | 로컬 CI 미실행 상태 | 현재 세션에서 full local validation evidence 없음 | Codex 또는 로컬 checkout에서 `python scripts/ci/run_all.py` 실행 |
 
 ## Archive References
 
@@ -73,6 +81,8 @@ powershell -ExecutionPolicy Bypass -File ./scripts/test.ps1
 |---|---|
 | 정본 구조 결정 | `docs/decisions/0001-canonical-repository.md` |
 | runtime stack 결정 | `docs/decisions/0002-runtime-stack.md` |
+| fake provider instance 결정 | `docs/decisions/0003-fake-provider-instance.md` |
+| Star Sentinel P0 scope 결정 | `docs/decisions/0004-star-sentinel-p0-scope.md` |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -83,3 +93,6 @@ powershell -ExecutionPolicy Bypass -File ./scripts/test.ps1
 | P-0002 | 2026-06-28 | provider, schema, Star Sentinel 설계 보강 | `c321f11` |
 | P-0003 | 2026-06-28 | `PLANS.md`와 plan-ledger 운영을 bounded snapshot 기준으로 압축 | git history |
 | P-0004 | 2026-07-01 | v0 runtime stack을 Rust + Cargo workspace로 결정 | `docs/decisions/0002-runtime-stack.md` |
+| P-0005 | 2026-07-01 | v0 fake provider instance id를 `fake-default`로 통일 | `docs/decisions/0003-fake-provider-instance.md` |
+| P-0006 | 2026-07-01 | Star Sentinel v0 P0 scope와 E09 분할 기준 정리 | `docs/decisions/0004-star-sentinel-p0-scope.md` |
+| P-0007 | 2026-07-01 | 로컬 contract check runner 추가 | `scripts/ci/run_all.py` |
