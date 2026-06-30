@@ -2,59 +2,34 @@
 
 ## 목적
 
-이 문서는 Codex가 구현 PR을 만들 때 사용할 표준 PR 본문 형식이다. 목표는 사람이 빠르게 변경 범위, 검증 결과, 남은 위험을 확인할 수 있게 하는 것이다.
+이 문서는 Codex가 구현 PR을 만들 때 사용할 표준 PR 본문 형식이다. 실제 GitHub PR 기본 템플릿은 `.github/pull_request_template.md`에 둔다. 이 문서는 상황별 확장 템플릿과 작성 규칙을 설명한다.
 
-## 기본 템플릿
-
-```markdown
-## 목표
-
-- 이 PR이 해결하는 TASK 또는 EPIC:
-- 한 문장 요약:
-
-## 변경 파일
-
-- `path/to/file`
-- `path/to/test`
-
-## 변경 내용
-
-- 
-- 
-- 
-
-## 수정 금지 파일 준수
-
-- [ ] workflow 변경 없음
-- [ ] 의존성/package manager 변경 없음
-- [ ] release/deploy/external account 변경 없음
-- [ ] test/CI/policy 약화 없음
-- [ ] Star-Control repo 내부 `.ai-runs/` 생성 없음
-
-## 검증
-
-실행한 명령:
+## 실제 PR template
 
 ```text
-
+.github/pull_request_template.md
 ```
 
-결과:
+실제 template에는 다음 section이 있어야 한다.
 
 ```text
-
+목표
+변경 범위
+변경 파일
+검증
+계약 준수
+위험 / 승인 필요 여부
+다음 작업
 ```
 
-## 위험 / 승인 필요 여부
+## 기본 작성 규칙
 
-- approval required change 여부:
-- 남은 risk:
-- 사람이 확인해야 하는 사항:
-
-## 다음 작업
-
-- 
-```
+- 변경 목표는 EPIC/TASK id와 한 문장 요약으로 시작한다.
+- 변경 범위를 docs/schema/CI/runtime/approval required 중 하나 이상으로 표시한다.
+- 검증은 실행 명령과 GitHub Actions 결과를 분리해서 적는다.
+- 실패한 검증을 숨기지 않는다.
+- approval required change는 PR 본문에서 반드시 드러낸다.
+- 긴 로그 전체를 붙이지 않고 핵심 오류만 요약한다.
 
 ## 문서-only PR 템플릿
 
@@ -62,6 +37,14 @@
 ## 목표
 
 문서 계약을 보강합니다.
+
+## 변경 범위
+
+- [x] docs only
+- [ ] schema/example contract
+- [ ] CI validator
+- [ ] runtime code
+- [ ] approval required change
 
 ## 변경 파일
 
@@ -75,12 +58,41 @@
 
 ## 검증
 
-- GitHub Actions 통과 예정 또는 통과 결과 기록
+- GitHub Actions 결과:
 
 ## runtime 영향
 
 - runtime code 변경 없음
 - dependency 변경 없음
+```
+
+## schema/example PR 템플릿
+
+```markdown
+## 목표
+
+새 data contract와 canonical example을 추가합니다.
+
+## 변경 파일
+
+- `specs/schemas/...`
+- `examples/...`
+- `scripts/ci/check_schema_examples.py`
+- `docs/implementation/...`
+
+## 계약 추가 절차
+
+- [ ] schema 추가
+- [ ] canonical example 추가
+- [ ] schema-example-check case 추가
+- [ ] 구현 문서에 machine-readable contracts section 추가
+- [ ] 필요 시 implementation-documentation-check required path 추가
+
+## 검증
+
+```text
+python3 scripts/ci/check_schema_examples.py
+```
 ```
 
 ## 구현 PR 템플릿
@@ -140,7 +152,9 @@ CI 실패 원인을 수정합니다.
 
 ## 원인 판단
 
-- 
+- 실제 코드 오류:
+- 문서/계약 위반:
+- CI 오탐 가능성:
 
 ## 수정 내용
 
@@ -158,6 +172,7 @@ CI 실패 원인을 수정합니다.
 - [ ] assertion을 약화하지 않음
 - [ ] schema-example-check case를 삭제하지 않음
 - [ ] naming policy를 우회하지 않음
+- [ ] implementation-documentation-check required path를 이유 없이 제거하지 않음
 ```
 
 ## approval required PR 템플릿
@@ -190,6 +205,10 @@ Approval required change를 제안합니다.
 1. 
 2. 
 
+## 승인 전까지 멈출 작업
+
+- 
+
 ## 검증
 
 ```text
@@ -214,6 +233,8 @@ execution:
 validation:
 sentinel:
 cli:
+security:
+release:
 ```
 
 피해야 할 제목:
@@ -231,3 +252,4 @@ massive rewrite
 - 핵심 오류와 결과만 요약한다.
 - 사람이 승인해야 하는 조건은 숨기지 않는다.
 - 변경 범위가 커지면 PR을 쪼갠다.
+- PR 본문이 실제 변경 범위와 맞지 않으면 후속 정리 PR에서 고친다.
