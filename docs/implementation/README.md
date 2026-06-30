@@ -6,7 +6,23 @@
 
 실제 구현 착수 순서는 `codex-work-queue-current.md`를 우선한다. `codex-work-queue.md`는 장기 backlog이며, 두 문서가 다르게 보이면 현재 착수 큐인 `codex-work-queue-current.md`를 기준으로 한다.
 
-구현자는 package 경계와 장기 구조를 이해할 때는 `repository-layout.md`를 보고, runtime stack 결정은 `docs/decisions/0002-runtime-stack.md`를 따른다. 지금 당장 어느 EPIC/TASK를 시작할지는 `codex-work-queue-current.md`에서 확인한다.
+구현자는 package 경계와 장기 구조를 이해할 때는 `repository-layout.md`를 보고, runtime stack 결정은 `docs/decisions/0002-runtime-stack.md`를 따른다. 지금 당장 어느 EPIC/TASK를 시작할지는 `codex-work-queue-current.md`와 해당 `briefs/E*.md`에서 확인한다.
+
+## 빠른 착수 경로
+
+Codex가 실제 구현 EPIC에 들어갈 때는 아래 순서를 먼저 따른다.
+
+```text
+AGENTS.md
+README.md
+docs/implementation/README.md
+docs/implementation/codex-long-run-workflow.md
+docs/implementation/codex-work-queue-current.md
+docs/implementation/briefs/README.md
+docs/implementation/briefs/E*.md
+```
+
+brief는 착수 범위와 검증 명령을 줄여 보여주는 entrypoint다. 상세 계약은 기존 implementation 문서와 schema/example을 따른다.
 
 ## 읽는 순서
 
@@ -45,9 +61,10 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 31. `ci-contract-validation.md`
 32. `codex-long-run-workflow.md`
 33. `codex-work-queue-current.md`
-34. `codex-work-queue.md`
-35. `codex-pr-template.md`
-36. `codex-validation-report.md`
+34. `briefs/README.md`
+35. `codex-work-queue.md`
+36. `codex-pr-template.md`
+37. `codex-validation-report.md`
 
 ## 경로 해석 기준
 
@@ -55,6 +72,7 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 - `repository-layout.md`는 목표 package 경계와 장기 구조를 설명한다.
 - 현재 경로와 목표 경계가 다르게 보이면 `current-repository-map.md`로 현재 상태를 먼저 확인하고, 실제 구현은 `repository-layout.md`의 package 책임을 따른다.
 - 구현 순서가 다르게 보이면 `codex-work-queue-current.md`를 우선한다.
+- EPIC별 착수 범위는 `briefs/E*.md`를 함께 확인한다.
 
 ## runtime stack 기준
 
@@ -97,6 +115,7 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 ## Codex 작업 큐 기준
 
 - `codex-work-queue-current.md`: 지금 실제로 착수할 EPIC/TASK 순서, 허용 파일, 금지 파일, 입력/출력 artifact, handoff 기준.
+- `briefs/`: 각 EPIC의 착수용 요약 entrypoint.
 - `codex-work-queue.md`: 장기 backlog와 후속 확장 후보.
 - `codex-long-run-workflow.md`: branch, PR, checkpoint, validation report 운영 규칙.
 
