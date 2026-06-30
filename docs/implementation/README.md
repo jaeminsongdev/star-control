@@ -2,6 +2,12 @@
 
 이 디렉터리는 Star-Control 전체 구현을 위한 정본 구현 문서다. 목표는 축소판 데모가 아니라 장시간 Codex 작업으로 전체 시스템을 완성할 수 있도록 구현 경계, 데이터 계약, 실행 흐름, 산출물 위치를 고정하는 것이다.
 
+## 현재 착수 큐 우선순위
+
+실제 구현 착수 순서는 `codex-work-queue-current.md`를 우선한다. `codex-work-queue.md`는 장기 backlog이며, 두 문서가 다르게 보이면 현재 착수 큐인 `codex-work-queue-current.md`를 기준으로 한다.
+
+구현자는 package 경계와 장기 구조를 이해할 때는 `repository-layout.md`를 보되, 지금 당장 어느 EPIC/TASK를 시작할지는 `codex-work-queue-current.md`에서 확인한다.
+
 ## 읽는 순서
 
 Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
@@ -26,13 +32,17 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 18. `star-sentinel-full-spec.md`
 19. `approval-review-flow.md`
 20. `policy-profiles.md`
-21. `cli-daemon-api-ui.md`
-22. `security-cost-observability.md`
-23. `testing-ci-release.md`
-24. `codex-long-run-workflow.md`
-25. `codex-work-queue.md`
-26. `codex-pr-template.md`
-27. `codex-validation-report.md`
+21. `cli-command-reference.md`
+22. `cli-daemon-api-ui.md`
+23. `security-cost-observability.md`
+24. `security-privacy-observability-contracts.md`
+25. `testing-ci-release.md`
+26. `ci-contract-validation.md`
+27. `codex-long-run-workflow.md`
+28. `codex-work-queue-current.md`
+29. `codex-work-queue.md`
+30. `codex-pr-template.md`
+31. `codex-validation-report.md`
 
 이 문서 세트는 Codex 장시간 목표추진 구현의 기준점이다. Codex는 구현 작업 전에 이 문서와 `AGENTS.md`를 먼저 읽어야 한다.
 
@@ -41,6 +51,7 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 - `current-repository-map.md`는 현재 repository에 실제로 존재하는 경로의 상태와 의미를 설명한다.
 - `repository-layout.md`는 목표 package 경계와 장기 구조를 설명한다.
 - 현재 경로와 목표 경계가 다르게 보이면 `current-repository-map.md`로 현재 상태를 먼저 확인하고, 실제 구현은 `repository-layout.md`의 package 책임을 따른다.
+- 구현 순서가 다르게 보이면 `codex-work-queue-current.md`를 우선한다.
 
 ## artifact / StateStore 기준
 
@@ -60,6 +71,12 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 
 - `star-sentinel-p0-contracts.md`: P0 rule registry, ChangedLines input, fixture outcome 계약.
 - `star-sentinel-full-spec.md`: Star Sentinel 전체 command, output, profile 확장 목표.
+
+## Codex 작업 큐 기준
+
+- `codex-work-queue-current.md`: 지금 실제로 착수할 EPIC/TASK 순서, 허용 파일, 금지 파일, 입력/출력 artifact, handoff 기준.
+- `codex-work-queue.md`: 장기 backlog와 후속 확장 후보.
+- `codex-long-run-workflow.md`: branch, PR, checkpoint, validation report 운영 규칙.
 
 ## 용어 수준
 
