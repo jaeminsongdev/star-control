@@ -4,6 +4,16 @@
 
 이 문서는 Star-Control의 현재 CI가 어떤 계약을 막는지 설명한다. 현재 repository는 구현 전 계약 고정 단계이므로, CI는 코드 빌드보다 문서, schema, example, manifest, naming policy, current work queue 정합성을 우선 검증한다.
 
+## local runner
+
+Codex와 구현자는 로컬에서 아래 명령을 우선 실행한다.
+
+```text
+python scripts/ci/run_all.py
+```
+
+`run_all.py`는 현재 contract validator를 GitHub Actions와 같은 의도 순서로 실행한다. 개별 실패를 디버깅할 때만 아래 job별 명령을 따로 실행한다.
+
 ## CI jobs
 
 ```text
@@ -62,7 +72,7 @@ python scripts/ci/check_manifest_contracts.py
 명령:
 
 ```text
-python3 scripts/ci/check_star_sentinel_naming.py
+python scripts/ci/check_star_sentinel_naming.py
 ```
 
 역할:
@@ -75,7 +85,7 @@ python3 scripts/ci/check_star_sentinel_naming.py
 명령:
 
 ```text
-python3 scripts/ci/check_schema_examples.py
+python scripts/ci/check_schema_examples.py
 ```
 
 역할:
@@ -89,21 +99,22 @@ python3 scripts/ci/check_schema_examples.py
 명령:
 
 ```text
-python3 scripts/ci/check_implementation_docs.py
+python scripts/ci/check_implementation_docs.py
 ```
 
 역할:
 
-- 구현자가 반드시 읽어야 하는 implementation docs 존재 확인
+- 구현자가 반드시 읽어야 하는 implementation docs와 decisions 존재 확인
 - canonical example directory 존재 확인
 - CI workflow가 핵심 validator를 실제로 호출하는지 확인
+- local runner가 핵심 validator를 모두 호출하는지 확인
 
 ## work-queue-consistency-check
 
 명령:
 
 ```text
-python3 scripts/ci/check_work_queue_consistency.py
+python scripts/ci/check_work_queue_consistency.py
 ```
 
 역할:
@@ -124,6 +135,7 @@ python3 scripts/ci/check_work_queue_consistency.py
 4. 구현 문서에 machine-readable contracts section 추가
 5. 필요하면 `scripts/ci/check_implementation_docs.py` required docs 또는 example dirs에 추가
 6. work queue 흐름을 바꾸면 `scripts/ci/check_work_queue_consistency.py` 영향도 검토
+7. 새 validator를 추가하면 `scripts/ci/run_all.py`와 GitHub Actions wiring을 함께 검토
 
 ## 금지 사항
 
