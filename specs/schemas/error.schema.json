@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/error.schema.json",
+  "title": "Star-Control ErrorEnvelope",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "code",
+    "message",
+    "recoverable"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recoverable": {
+      "type": "boolean"
+    },
+    "category": {
+      "type": "string"
+    },
+    "details": {
+      "type": "object"
+    },
+    "artifact_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

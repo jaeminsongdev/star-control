@@ -2,7 +2,35 @@
 
 ## 목적
 
-ValidationEngine은 provider 실행 결과가 정책, schema, evidence, 사용자 승인 기준을 만족하는지 검증하는 Star-Control core 계층이다. ValidationEngine은 Star Sentinel을 직접 내장 구현으로 호출하지 않고 builtin tool 계약을 통해 호출한다.
+ValidationEngine은 provider 실행 결과가 정책, schema, evidence, 사용자 승인 기준을 만족하는지 검증하는 Star-Control core 계층이다. ValidationEngine은 Star Sentinel rule을 직접 구현하지 않고 builtin tool 계약을 통해 호출한다.
+
+## 함께 읽을 문서
+
+```text
+validation-handoff.md
+approval-review-flow.md
+star-sentinel-p0-contracts.md
+star-sentinel-full-spec.md
+policy-profiles.md
+schema-validator.md
+```
+
+## machine-readable contracts
+
+```text
+specs/schemas/validation-decision.schema.json
+specs/schemas/approval-request.schema.json
+specs/schemas/approval-response.schema.json
+specs/schemas/review-pack-handoff.schema.json
+examples/validation-contracts/validation-decision.human-review.example.json
+examples/validation-contracts/approval-request.example.json
+examples/validation-contracts/approval-response.example.json
+examples/validation-contracts/review-pack-handoff.example.json
+builtin-tools/star-sentinel/schemas/approval.schema.json
+builtin-tools/star-sentinel/schemas/review-pack.schema.json
+```
+
+위 example은 `scripts/ci/check_schema_examples.py`에서 검증한다.
 
 ## 책임
 
@@ -14,6 +42,10 @@ ValidationEngine이 담당하는 것:
 - Star Sentinel `check`, `gate`, `review-pack` 호출 조정
 - validation_runs.json 수집
 - diagnostics와 approval decision 반영
+- ValidationDecision 생성
+- ApprovalRequest 생성
+- ApprovalResponse 읽기
+- ReviewPackHandoff 생성
 - RunState를 `VALIDATING`, `VALIDATED`, `WAITING_APPROVAL`, `BLOCKED`, `FAILED`로 전이
 - report에 validation 결과와 risks 연결
 
@@ -24,6 +56,7 @@ ValidationEngine이 담당하지 않는 것:
 - Star Sentinel rule 내부 판정 로직
 - 사람이 승인할지 여부 결정
 - CI 검사 삭제 또는 약화
+- UI approval screen 구현
 
 ## 입력
 
@@ -45,11 +78,14 @@ StateStore
 ```text
 validation_runs.json
 approval.json
-diagnostics.json
+validation-decision.json
+approval-request.json
+approval-response.json
 review_pack.json
 review_pack.md
+handoff.json
 updated RunState
-LedgerEvent
+CoreEvent
 ReportSpec validation section
 ```
 
@@ -65,14 +101,15 @@ ReportSpec validation section
 7. validation_runs.json 기록
 8. Star Sentinel gate 실행
 9. approval.json 수집
-10. decision에 따라 상태 전이
-11. 필요한 경우 review-pack 생성
-12. report에 validation 결과 연결
+10. ValidationDecision 생성
+11. decision에 따라 상태 전이
+12. 필요한 경우 review-pack 생성
+13. 필요한 경우 ApprovalRequest 생성
+14. approval response가 있으면 constraints 반영
+15. report에 validation 결과 연결
 ```
 
 ## Star Sentinel 호출 원칙
-
-Star Sentinel은 builtin tool이다. ValidationEngine은 다음 경계를 지킨다.
 
 - core 내부에 Star Sentinel rule을 직접 구현하지 않는다.
 - Star Sentinel policy file을 core가 직접 해석하지 않는다.
@@ -97,15 +134,16 @@ manual-review
 
 ## decision mapping
 
-Star Sentinel approval decision은 다음 상태 전이로 mapping한다.
+Star Sentinel approval decision은 ValidationDecision으로 정규화한 뒤 상태로 mapping한다.
 
 ```text
 AUTO_PASS -> VALIDATED
 HUMAN_REVIEW -> WAITING_APPROVAL
 BLOCK -> BLOCKED
+invalid output -> FAILED
 ```
 
-Validation command 자체가 실패하거나 tool output이 invalid이면 `FAILED`를 사용할 수 있다.
+ValidationEngine은 route decision 또는 Star Sentinel decision을 더 낮은 위험으로 낮추면 안 된다.
 
 ## diagnostics 처리
 
@@ -127,34 +165,43 @@ block
 
 ## approval 처리
 
-`HUMAN_REVIEW` 또는 approval required change가 있으면:
+`HUMAN_REVIEW` 또는 approval required change가 있으면 다음을 생성한다.
 
 ```text
 .ai-runs/J-0001/approvals/approval-request.json
 ```
 
-을 생성하고 RunState를 `WAITING_APPROVAL`로 전이한다.
-
 approval response가 없으면 다음 stage를 시작하지 않는다.
 
-## review pack 생성
+ApprovalResponse mapping:
 
-다음 경우 review pack을 생성한다.
+```text
+approved -> allowed_next_stage로 진행 가능
+rejected -> BLOCKED 또는 CANCELLED
+needs_changes -> REVIEWING 또는 POLISHING 후보
+cancelled -> CANCELLED
+```
 
-- decision이 `HUMAN_REVIEW`
-- decision이 `BLOCK`
-- route risk가 HIGH 이상
-- user가 review pack을 요구한 경우
-- validation evidence가 부족한 경우
+approval constraints는 다음 WorkSpec의 `allowed_scope` 또는 `forbidden_actions`에 반영한다.
 
-Review pack은 JSON과 Markdown을 모두 남긴다.
+## review pack handoff
+
+Star Sentinel 원본 output:
 
 ```text
 tool-output/star-sentinel/review_pack.json
 tool-output/star-sentinel/review_pack.md
+```
+
+Core canonical copy:
+
+```text
 review-packs/review_pack.json
 review-packs/review_pack.md
+review-packs/handoff.json
 ```
+
+ValidationEngine은 handoff artifact에 source path와 canonical path를 모두 기록한다.
 
 ## validation_runs.json
 
@@ -187,7 +234,9 @@ ChangedLinesMissing
 StarSentinelUnavailable
 StarSentinelOutputInvalid
 ApprovalDecisionInvalid
+ApprovalResponseInvalid
 ReviewPackGenerationFailed
+ReviewPackHandoffFailed
 ValidationCommandFailed
 HumanApprovalRequired
 PolicyBlocked
@@ -198,9 +247,10 @@ PolicyBlocked
 권장 event type:
 
 ```text
-POLICY_CHECKED
 VALIDATION_RECORDED
 GATE_DECIDED
+APPROVAL_REQUESTED
+APPROVAL_RECORDED
 REVIEW_PACK_CREATED
 ERROR_RECORDED
 ```
@@ -217,6 +267,7 @@ ValidationEngine은 다음을 하면 안 된다.
 - dependency 추가를 approval 없이 통과
 - secret exposure diagnostic을 warn으로 낮춤
 - Star Sentinel output schema 오류를 무시
+- approval response 없이 `WAITING_APPROVAL`에서 다음 stage로 진행
 
 ## 테스트 기준
 
@@ -229,9 +280,12 @@ ValidationEngine은 다음을 하면 안 된다.
 5. block diagnostic과 AUTO_PASS 불일치 감지
 6. validation_runs.json 생성
 7. review_pack 생성
-8. missing provider output 오류
-9. approval response 없이는 다음 stage 진입 금지
-10. events.jsonl에 gate decision 기록
+8. review-pack handoff 생성
+9. approval-request 생성
+10. approval-response approved constraints 반영
+11. missing provider output 오류
+12. approval response 없이는 다음 stage 진입 금지
+13. events.jsonl에 gate decision 기록
 
 ## Codex 구현 지시
 

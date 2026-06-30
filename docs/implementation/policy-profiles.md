@@ -4,6 +4,8 @@
 
 Policy profile은 Star Sentinel과 ValidationEngine이 어떤 강도의 검증을 수행할지 정하는 named profile이다. profile은 작업 위험도, stage, release 여부, validator 자체 변경 여부에 따라 선택된다.
 
+RouterEngine은 `router-decision-matrix.md`의 profile 선택 규칙을 따른다. ValidationEngine과 Star Sentinel은 선택된 profile을 validation run과 review pack에 기록한다.
+
 ## profile 목록
 
 현재 manifest와 policy 기준 profile:
@@ -24,8 +26,9 @@ validator
 - validator/policy/schema/CI 관련 변경은 `validator` profile 후보로 본다.
 - release/deploy 관련 작업은 `release` profile 후보로 본다.
 - secret, credential, permission 관련 작업은 `security` profile 후보로 본다.
+- 여러 후보가 있으면 special profile 우선순위를 적용한다.
 
-## quick
+## profile quick
 
 목적:
 
@@ -50,7 +53,13 @@ secret.no_plaintext_secret
 - runtime code가 없거나 제한적
 - release/deploy 아님
 
-## near
+Decision 후보:
+
+```text
+AUTO_PASS
+```
+
+## profile near
 
 목적:
 
@@ -70,7 +79,14 @@ report.changed_files_match_diff
 - runtime code 변경
 - report와 changed files 일치성이 중요함
 
-## full
+Decision 후보:
+
+```text
+AUTO_PASS
+HUMAN_REVIEW
+```
+
+## profile full
 
 목적:
 
@@ -93,7 +109,15 @@ full.report_artifact_consistency
 - 여러 package 변경
 - provider/router/execution/validation 연동
 
-## security
+Decision 후보:
+
+```text
+HUMAN_REVIEW
+```
+
+단, full profile이라도 단순 대형 문서 정리처럼 approval이 불필요한 경우는 RouterEngine이 `requires_user_approval: false`로 둘 수 있다. 그 경우 routing reason을 반드시 남긴다.
+
+## profile security
 
 목적:
 
@@ -115,8 +139,16 @@ security.dangerous_command_review
 - workflow permission 변경
 - auth/config/security path 변경
 - secret exposure 가능성
+- external account mutation 가능성
 
-## release
+Decision 후보:
+
+```text
+HUMAN_REVIEW
+BLOCK
+```
+
+## profile release
 
 목적:
 
@@ -141,7 +173,13 @@ release.no_unreviewed_risk
 
 현재 repository 단계에서는 release profile은 RESERVED이며 실제 release automation을 추가하지 않는다.
 
-## validator
+Decision 후보:
+
+```text
+HUMAN_REVIEW
+```
+
+## profile validator
 
 목적:
 
@@ -161,11 +199,19 @@ validator.naming_policy_consistency
 사용 기준:
 
 - `scripts/ci/` 변경
+- `specs/schemas/` 변경
 - `builtin-tools/star-sentinel/policies/` 변경
 - `builtin-tools/star-sentinel/schemas/` 변경
 - `builtin-tools/star-sentinel/fixtures/` 변경
 - `builtin-tools/star-sentinel/examples/` 변경
 - naming policy 변경
+
+Decision 후보:
+
+```text
+HUMAN_REVIEW
+BLOCK
+```
 
 ## profile 선택 규칙
 
@@ -182,10 +228,10 @@ LOW/SMALL -> quick
 
 여러 profile 후보가 있으면 더 엄격한 profile을 선택한다.
 
-엄격도 후보:
+Special profile 우선순위:
 
 ```text
-quick < near < full < security < release < validator
+validator > release > security > full > near > quick
 ```
 
 단, `security`, `release`, `validator`는 단순 선형 상하관계가 아니라 목적별 special profile이다. 해당 조건이 있으면 우선 선택한다.
@@ -202,7 +248,18 @@ validator
 
 `full`도 high-risk change가 있으면 approval required로 전환할 수 있다.
 
+예외:
+
+- generated example 정리처럼 risk가 낮고 실제 runtime 영향이 없으면 approval이 필요하지 않을 수 있다.
+- 예외를 적용하면 routing reason에 근거를 남긴다.
+
 ## profile output
+
+RouteSpec에는 다음을 기록할 수 있다.
+
+```text
+policy_profile: validator
+```
 
 ValidationRun에는 선택된 profile을 기록한다.
 
@@ -250,6 +307,8 @@ fixtures/validator/policy-change.case.yaml
 6. policy/schema/CI validation change -> validator
 7. validator profile은 approval required 후보
 8. unknown profile -> error
+9. router decision example이 schema-example-check를 통과
+10. BLOCK 조건이 HUMAN_REVIEW보다 우선
 
 ## Codex 구현 지시
 

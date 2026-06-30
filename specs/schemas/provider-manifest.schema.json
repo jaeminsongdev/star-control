@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://star-control.local/schemas/provider-manifest.schema.json",
-  "title": "Star-Control Provider Manifest",
+  "title": "Star-Control ProviderManifest",
   "type": "object",
   "required": [
     "id",
@@ -19,25 +19,37 @@
       "pattern": "^provider\\.[a-z0-9][a-z0-9.-]*$"
     },
     "name": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "kind": {
-      "$ref": "provider-kind.schema.json"
+      "type": "string",
+      "enum": [
+        "cloud_cli_agent",
+        "cloud_api_model",
+        "local_openai_compatible_server",
+        "local_anthropic_compatible_server",
+        "local_process_model",
+        "remote_self_hosted_model",
+        "fake_provider",
+        "human_handoff"
+      ]
     },
     "transport": {
+      "type": "string",
       "enum": [
         "cli",
         "http",
         "process",
-        "manual"
+        "manual",
+        "stdio",
+        "websocket",
+        "file_handoff"
       ]
     },
     "adapter": {
-      "enum": [
-        "code_agent",
-        "chat_model",
-        "openai_compatible"
-      ]
+      "type": "string",
+      "minLength": 1
     },
     "command": {
       "type": "object"
@@ -45,14 +57,89 @@
     "endpoint": {
       "type": "object"
     },
-    "capabilities": {
+    "handoff": {
       "type": "object"
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "edit_files",
+        "run_shell",
+        "read_repo",
+        "apply_patch",
+        "structured_output",
+        "offline",
+        "requires_login_session"
+      ],
+      "properties": {
+        "edit_files": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "run_shell": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "read_repo": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "apply_patch": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "structured_output": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "offline": {
+          "type": "boolean"
+        },
+        "requires_login_session": {
+          "type": "boolean"
+        }
+      }
     },
     "risk": {
-      "type": "object"
+      "type": "object",
+      "required": [
+        "can_modify_workspace",
+        "can_run_commands",
+        "requires_sandbox"
+      ],
+      "properties": {
+        "can_modify_workspace": {
+          "type": "boolean"
+        },
+        "can_run_commands": {
+          "type": "boolean"
+        },
+        "requires_sandbox": {
+          "type": "boolean"
+        }
+      }
     },
     "outputs": {
-      "type": "object"
+      "type": "object",
+      "required": [
+        "parser"
+      ],
+      "properties": {
+        "parser": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }

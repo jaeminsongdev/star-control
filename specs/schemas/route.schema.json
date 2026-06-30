@@ -11,19 +11,22 @@
     "risk",
     "stages",
     "assignments",
-    "requires_user_approval"
+    "requires_user_approval",
+    "approval_reasons"
   ],
   "properties": {
     "schema_version": {
       "const": "1.0.0"
     },
     "job_id": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^J-[0-9]{4,}$"
     },
     "summary": {
       "type": "string"
     },
     "size": {
+      "type": "string",
       "enum": [
         "SMALL",
         "MEDIUM",
@@ -32,12 +35,44 @@
       ]
     },
     "risk": {
+      "type": "string",
       "enum": [
         "LOW",
         "MEDIUM",
         "HIGH",
         "CRITICAL"
       ]
+    },
+    "policy_profile": {
+      "type": "string",
+      "enum": [
+        "quick",
+        "near",
+        "full",
+        "security",
+        "release",
+        "validator"
+      ]
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "AUTO_PASS",
+        "HUMAN_REVIEW",
+        "BLOCK"
+      ]
+    },
+    "change_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "routing_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "stages": {
       "type": "array",
@@ -85,7 +120,10 @@
       }
     },
     "workspecs": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   }
 }

@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "job_id": "J-0001",
+  "title": "Core schema contract update",
+  "state": "WAITING_APPROVAL",
+  "current_stage": "validate",
+  "approval_required": true,
+  "next_action": "approve",
+  "latest_event": "evt-0003",
+  "artifacts": []
+}

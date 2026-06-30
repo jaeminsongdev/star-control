@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "release_id": "release-0001",
+  "target": "star-control",
+  "version": "0.0.0-dev",
+  "status": "reserved",
+  "checks": [
+    {
+      "name": "required-ci-passed",
+      "status": "reserved",
+      "evidence_paths": []
+    },
+    {
+      "name": "release-profile-passed",
+      "status": "reserved",
+      "evidence_paths": []
+    },
+    {
+      "name": "changelog-updated",
+      "status": "reserved",
+      "evidence_paths": []
+    },
+    {
+      "name": "version-consistent",
+      "status": "reserved",
+      "evidence_paths": []
+    }
+  ],
+  "blockers": [
+    "release automation is not implemented yet"
+  ],
+  "approvals": [],
+  "generated_at": "2026-06-28T00:00:00Z"
+}

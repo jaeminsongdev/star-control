@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/ui-job-view.schema.json",
+  "title": "Star-Control UI Job View",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "job_id",
+    "title",
+    "state",
+    "current_stage",
+    "approval_required",
+    "next_action"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^J-[0-9]{4,}$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "current_stage": {
+      "type": "string"
+    },
+    "approval_required": {
+      "type": "boolean"
+    },
+    "next_action": {
+      "type": "string"
+    },
+    "latest_event": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

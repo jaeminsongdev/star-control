@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/role.schema.json",
+  "title": "Star-Control RoleSpec",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "role_id",
+    "description",
+    "allowed_stages",
+    "required_capabilities",
+    "default_policy_profiles"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "role_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "allowed_stages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "required_capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "default_policy_profiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

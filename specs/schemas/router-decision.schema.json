@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/router-decision.schema.json",
+  "title": "Star-Control RouterDecision",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "decision_id",
+    "size",
+    "risk",
+    "policy_profile",
+    "decision",
+    "requires_user_approval",
+    "approval_reasons",
+    "change_types",
+    "routing_reasons"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "decision_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$"
+    },
+    "size": {
+      "type": "string",
+      "enum": [
+        "SMALL",
+        "MEDIUM",
+        "LARGE",
+        "CRITICAL"
+      ]
+    },
+    "risk": {
+      "type": "string",
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ]
+    },
+    "policy_profile": {
+      "type": "string",
+      "enum": [
+        "quick",
+        "near",
+        "full",
+        "security",
+        "release",
+        "validator"
+      ]
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "AUTO_PASS",
+        "HUMAN_REVIEW",
+        "BLOCK"
+      ]
+    },
+    "requires_user_approval": {
+      "type": "boolean"
+    },
+    "approval_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "change_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "routing_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recommended_stages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/config.schema.json",
+  "title": "Star-Control ConfigSpec",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "config_id",
+    "scope",
+    "merge",
+    "providers",
+    "policies",
+    "hooks",
+    "roles",
+    "renderers",
+    "skills"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "config_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "repository",
+        "project",
+        "user",
+        "run"
+      ]
+    },
+    "extends": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "merge": {
+      "type": "object",
+      "required": [
+        "strategy",
+        "order"
+      ],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "deep_override",
+            "replace"
+          ]
+        },
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "policies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "hooks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "renderers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

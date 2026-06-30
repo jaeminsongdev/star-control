@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "command": "run",
+  "status": "waiting_approval",
+  "exit_code": 0,
+  "data": {
+    "job_id": "J-0001",
+    "state": "WAITING_APPROVAL",
+    "current_stage": "validate",
+    "run_dir": ".ai-runs/J-0001",
+    "next_action": "approve"
+  },
+  "warnings": [],
+  "artifacts": [
+    ".ai-runs/J-0001/job.json",
+    ".ai-runs/J-0001/route.json",
+    ".ai-runs/J-0001/run-state.json",
+    ".ai-runs/J-0001/approvals/approval-request.json"
+  ]
+}

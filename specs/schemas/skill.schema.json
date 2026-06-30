@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/skill.schema.json",
+  "title": "Star-Control SkillSpec",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "skill_id",
+    "description",
+    "inputs",
+    "outputs",
+    "safety"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "skill_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "safety": {
+      "type": "object",
+      "required": [
+        "requires_approval",
+        "allowed_paths_only"
+      ],
+      "properties": {
+        "requires_approval": {
+          "type": "boolean"
+        },
+        "allowed_paths_only": {
+          "type": "boolean"
+        }
+      }
+    },
+    "implementation": {
+      "type": "object"
+    }
+  }
+}

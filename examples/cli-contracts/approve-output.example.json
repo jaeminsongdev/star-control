@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "command": "approve",
+  "status": "success",
+  "exit_code": 0,
+  "data": {
+    "job_id": "J-0001",
+    "state": "WAITING_APPROVAL",
+    "approval_response": "approved",
+    "allowed_next_stage": "report"
+  },
+  "warnings": [],
+  "artifacts": [
+    ".ai-runs/J-0001/approvals/approval-response.json"
+  ]
+}

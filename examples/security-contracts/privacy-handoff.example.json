@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "job_id": "J-0001",
+  "destination": "provider.fake",
+  "context_paths": [
+    "workspecs/implement.json",
+    "provider-output/fake-default/request.json"
+  ],
+  "redaction_required": true,
+  "approved": true,
+  "notes": "Fake provider handoff uses local deterministic output only."
+}

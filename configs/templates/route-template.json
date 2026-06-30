@@ -7,5 +7,6 @@
   "stages": [],
   "assignments": {},
   "requires_user_approval": false,
-  "approval_reasons": []
+  "approval_reasons": [],
+  "workspecs": {}
 }

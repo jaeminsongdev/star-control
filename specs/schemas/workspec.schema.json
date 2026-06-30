@@ -20,9 +20,11 @@
       "const": "1.0.0"
     },
     "job_id": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^J-[0-9]{4,}$"
     },
     "stage": {
+      "type": "string",
       "enum": [
         "route",
         "plan",
@@ -40,11 +42,15 @@
     "provider": {
       "type": "string"
     },
+    "provider_instance": {
+      "type": "string"
+    },
     "project_root": {
       "type": "string"
     },
     "goal": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "allowed_scope": {
       "type": "array",

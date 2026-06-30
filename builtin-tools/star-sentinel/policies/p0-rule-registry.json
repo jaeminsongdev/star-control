@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "profile": "quick",
+  "rules": [
+    {
+      "rule_id": "task.scope.allowed_paths",
+      "severity": "block",
+      "description": "Changed files must be inside allowed_paths.",
+      "inputs": [
+        "sentinel-task",
+        "changed-lines"
+      ],
+      "outputs": [
+        "diagnostic"
+      ],
+      "decision_effect": "BLOCK"
+    },
+    {
+      "rule_id": "test.no_deletion",
+      "severity": "block",
+      "description": "Test files must not be deleted to pass validation.",
+      "inputs": [
+        "changed-lines"
+      ],
+      "outputs": [
+        "diagnostic"
+      ],
+      "decision_effect": "BLOCK"
+    },
+    {
+      "rule_id": "dependency.requires_approval",
+      "severity": "warn",
+      "description": "Dependency changes require human review.",
+      "inputs": [
+        "changed-lines",
+        "approval"
+      ],
+      "outputs": [
+        "diagnostic"
+      ],
+      "decision_effect": "HUMAN_REVIEW"
+    },
+    {
+      "rule_id": "secret.no_plaintext_secret",
+      "severity": "block",
+      "description": "Plaintext secret candidates must block automatic progress.",
+      "inputs": [
+        "changed-lines"
+      ],
+      "outputs": [
+        "diagnostic"
+      ],
+      "decision_effect": "BLOCK"
+    },
+    {
+      "rule_id": "validator.no_self_bypass",
+      "severity": "block",
+      "description": "Validator policy changes must not bypass validation.",
+      "inputs": [
+        "changed-lines"
+      ],
+      "outputs": [
+        "diagnostic"
+      ],
+      "decision_effect": "BLOCK"
+    }
+  ]
+}

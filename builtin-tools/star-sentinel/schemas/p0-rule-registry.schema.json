@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Star Sentinel P0 Rule Registry",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "profile",
+    "rules"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "profile": {
+      "type": "string",
+      "enum": [
+        "quick",
+        "near",
+        "full",
+        "security",
+        "release",
+        "validator"
+      ]
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "rule_id",
+          "severity",
+          "description",
+          "inputs",
+          "outputs"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warn",
+              "block"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "decision_effect": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/capability-profile.schema.json",
+  "title": "Star-Control CapabilityProfile",
+  "type": "object",
+  "required": [
+    "provider",
+    "capability_profile"
+  ],
+  "properties": {
+    "provider": {
+      "type": "string",
+      "pattern": "^provider\\.[a-z0-9][a-z0-9.-]*$"
+    },
+    "capability_profile": {
+      "type": "object",
+      "required": [
+        "can",
+        "routing_tags"
+      ],
+      "properties": {
+        "can": {
+          "type": "object",
+          "required": [
+            "edit_files",
+            "run_shell",
+            "read_repo",
+            "apply_patch",
+            "return_json",
+            "work_offline",
+            "use_tools"
+          ],
+          "properties": {
+            "edit_files": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "run_shell": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "read_repo": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "apply_patch": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "return_json": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "work_offline": {
+              "type": "boolean"
+            },
+            "use_tools": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            }
+          }
+        },
+        "routing_tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

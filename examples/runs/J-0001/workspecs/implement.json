@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "job_id": "J-0001",
+  "stage": "implement",
+  "role": "worker-impl",
+  "provider": "my-fake-provider",
+  "provider_instance": "my-fake-provider",
+  "project_root": "examples/projects/node-sample",
+  "goal": "스톱워치 기능을 구현한다.",
+  "allowed_scope": [
+    "src/**",
+    "tests/**"
+  ],
+  "forbidden_actions": [
+    "dependency_install",
+    "file_delete",
+    "test_weakening"
+  ],
+  "context_pack": {
+    "files": []
+  },
+  "required_outputs": [
+    "provider-output/my-fake-provider/response.json",
+    "reports/implement-report.json"
+  ],
+  "validation_requirements": [
+    "policy:p0"
+  ]
+}

@@ -1,17 +1,66 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "HookSpec",
+  "$id": "https://star-control.local/schemas/hook.schema.json",
+  "title": "Star-Control HookSpec",
   "type": "object",
   "required": [
+    "schema_version",
+    "hook_id",
     "event",
+    "enabled",
     "steps"
   ],
   "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "hook_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$"
+    },
     "event": {
-      "type": "string"
+      "type": "string",
+      "enum": [
+        "before_route",
+        "after_route",
+        "before_provider_run",
+        "after_provider_run",
+        "before_validation",
+        "after_validation",
+        "before_report",
+        "after_report"
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
     },
     "steps": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "validate_schema",
+              "render_template",
+              "append_event",
+              "write_report",
+              "call_tool"
+            ]
+          },
+          "config": {
+            "type": "object"
+          }
+        }
+      }
     }
   }
 }

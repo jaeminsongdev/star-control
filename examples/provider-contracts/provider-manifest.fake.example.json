@@ -1,0 +1,28 @@
+{
+  "id": "provider.fake",
+  "name": "Fake Provider",
+  "kind": "fake_provider",
+  "transport": "manual",
+  "adapter": "code_agent",
+  "handoff": {
+    "mode": "manual",
+    "expected_report": "normalized-provider-result.json"
+  },
+  "capabilities": {
+    "edit_files": false,
+    "run_shell": false,
+    "read_repo": true,
+    "apply_patch": false,
+    "structured_output": true,
+    "offline": true,
+    "requires_login_session": false
+  },
+  "risk": {
+    "can_modify_workspace": false,
+    "can_run_commands": false,
+    "requires_sandbox": false
+  },
+  "outputs": {
+    "parser": "fake-provider-json"
+  }
+}

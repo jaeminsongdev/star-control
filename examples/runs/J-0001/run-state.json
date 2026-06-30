@@ -1,7 +1,9 @@
 {
+  "schema_version": "1.0.0",
   "job_id": "J-0001",
   "state": "ROUTED",
   "current_stage": "implement",
+  "updated_at": "2026-06-28T00:00:00Z",
   "threads": {},
   "workers": {
     "implement": {
@@ -11,7 +13,11 @@
       "status": "PENDING"
     }
   },
-  "artifacts": {},
+  "artifacts": {
+    "route": "route.json"
+  },
+  "latest_event_id": "evt-0002",
+  "active_provider": null,
   "next_action": "start implement worker",
   "budget": {
     "max_iterations": 5
