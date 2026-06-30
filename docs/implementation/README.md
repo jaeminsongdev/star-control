@@ -6,7 +6,7 @@
 
 실제 구현 착수 순서는 `codex-work-queue-current.md`를 우선한다. `codex-work-queue.md`는 장기 backlog이며, 두 문서가 다르게 보이면 현재 착수 큐인 `codex-work-queue-current.md`를 기준으로 한다.
 
-구현자는 package 경계와 장기 구조를 이해할 때는 `repository-layout.md`를 보되, 지금 당장 어느 EPIC/TASK를 시작할지는 `codex-work-queue-current.md`에서 확인한다.
+구현자는 package 경계와 장기 구조를 이해할 때는 `repository-layout.md`를 보고, runtime stack 결정은 `docs/decisions/0002-runtime-stack.md`를 따른다. 지금 당장 어느 EPIC/TASK를 시작할지는 `codex-work-queue-current.md`에서 확인한다.
 
 ## 읽는 순서
 
@@ -15,35 +15,36 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 1. `target-architecture.md`
 2. `current-repository-map.md`
 3. `repository-layout.md`
-4. `data-contracts.md`
-5. `handoff-vocabularies.md`
-6. `run-lifecycle.md`
-7. `artifact-layout.md`
-8. `artifact-naming.md`
-9. `state-store.md`
-10. `state-store-recovery.md`
-11. `schema-validator.md`
-12. `provider-system.md`
-13. `config-system.md`
-14. `router-decision-matrix.md`
-15. `router-engine.md`
-16. `execution-engine.md`
-17. `validation-engine.md`
-18. `star-sentinel-p0-contracts.md`
-19. `star-sentinel-full-spec.md`
-20. `approval-review-flow.md`
-21. `policy-profiles.md`
-22. `cli-command-reference.md`
-23. `cli-daemon-api-ui.md`
-24. `security-cost-observability.md`
-25. `security-privacy-observability-contracts.md`
-26. `testing-ci-release.md`
-27. `ci-contract-validation.md`
-28. `codex-long-run-workflow.md`
-29. `codex-work-queue-current.md`
-30. `codex-work-queue.md`
-31. `codex-pr-template.md`
-32. `codex-validation-report.md`
+4. `../decisions/0002-runtime-stack.md`
+5. `data-contracts.md`
+6. `handoff-vocabularies.md`
+7. `run-lifecycle.md`
+8. `artifact-layout.md`
+9. `artifact-naming.md`
+10. `state-store.md`
+11. `state-store-recovery.md`
+12. `schema-validator.md`
+13. `provider-system.md`
+14. `config-system.md`
+15. `router-decision-matrix.md`
+16. `router-engine.md`
+17. `execution-engine.md`
+18. `validation-engine.md`
+19. `star-sentinel-p0-contracts.md`
+20. `star-sentinel-full-spec.md`
+21. `approval-review-flow.md`
+22. `policy-profiles.md`
+23. `cli-command-reference.md`
+24. `cli-daemon-api-ui.md`
+25. `security-cost-observability.md`
+26. `security-privacy-observability-contracts.md`
+27. `testing-ci-release.md`
+28. `ci-contract-validation.md`
+29. `codex-long-run-workflow.md`
+30. `codex-work-queue-current.md`
+31. `codex-work-queue.md`
+32. `codex-pr-template.md`
+33. `codex-validation-report.md`
 
 ## 경로 해석 기준
 
@@ -51,6 +52,13 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 - `repository-layout.md`는 목표 package 경계와 장기 구조를 설명한다.
 - 현재 경로와 목표 경계가 다르게 보이면 `current-repository-map.md`로 현재 상태를 먼저 확인하고, 실제 구현은 `repository-layout.md`의 package 책임을 따른다.
 - 구현 순서가 다르게 보이면 `codex-work-queue-current.md`를 우선한다.
+
+## runtime stack 기준
+
+- `docs/decisions/0002-runtime-stack.md`: Star-Control v0 구현 언어를 Rust, package manager를 Cargo, workspace model을 Cargo workspace로 고정한다.
+- 이 결정은 구현 언어와 package manager 미정 상태를 해소한다.
+- 실제 Cargo workspace 파일, crate, lockfile은 구현 PR에서 추가한다.
+- Cargo 외 package manager나 새 production dependency는 별도 승인이 필요하다.
 
 ## handoff / vocabulary 기준
 
