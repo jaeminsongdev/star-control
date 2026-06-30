@@ -57,14 +57,21 @@ Merge commit:
 
 - 
 
-### 검증 결과
+### GitHub Actions 결과
 
 - repository-policy-check:
 - data-format-check:
 - manifest-contract-check:
 - naming-policy-check:
 - schema-example-check:
+- implementation-documentation-check:
 - package-specific tests:
+
+### 직접 실행한 검증
+
+```text
+
+```
 
 ### 계약 준수 확인
 
@@ -74,6 +81,7 @@ Merge commit:
 - [ ] tests/CI/policy 약화 없음
 - [ ] artifact layout 준수
 - [ ] provider-neutral naming 준수
+- [ ] secret raw value 출력/저장 없음
 
 ### 남은 TODO
 
@@ -152,6 +160,7 @@ Run:
 - [ ] 실패 검사를 삭제하지 않음
 - [ ] test/assertion을 약화하지 않음
 - [ ] schema-example-check case를 삭제하지 않음
+- [ ] implementation-documentation-check required path를 이유 없이 제거하지 않음
 - [ ] policy를 우회하지 않음
 ```
 
@@ -184,6 +193,38 @@ PR:
 ### 승인 전까지 멈출 작업
 
 - 
+```
+
+## Release readiness 보고
+
+```markdown
+## Release readiness 보고
+
+Release:
+Target:
+Version:
+Status:
+
+### Checks
+
+- required-ci-passed:
+- release-profile-passed:
+- changelog-updated:
+- version-consistent:
+
+### Blockers
+
+- 
+
+### Approvals
+
+- 
+
+### 금지 사항 확인
+
+- [ ] release/deploy/publish 자동 실행 없음
+- [ ] repository settings 자동 변경 없음
+- [ ] approval 없이 외부 계정 변경 없음
 ```
 
 ## 보고 원칙
@@ -220,3 +261,4 @@ not_run
 - release/deploy 관련 변경
 - secret/credential 관련 변경
 - test deletion 또는 weakening 의심
+- implementation-documentation-check required path 변경
