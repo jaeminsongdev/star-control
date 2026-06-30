@@ -12,6 +12,7 @@
 - v0 runtime 구현 스택은 Rust + Cargo workspace로 결정했다.
 - v0 fake provider instance id는 `fake-default`로 결정했다.
 - v0 Star Sentinel P0 rule set은 5개 핵심 rule로 결정했다.
+- Codex 구현 착수용 EPIC brief는 `docs/implementation/briefs/`를 기준으로 한다.
 - `PLANS.md`는 현재 상태만 남기는 bounded snapshot으로 유지한다.
 
 ### 반드시 지켜야 할 제약
@@ -29,12 +30,13 @@
 - v0 fake provider instance id를 `fake-default`로 통일했다.
 - Star Sentinel v0 P0 scope와 E09a~E09d 구현 분할을 정리했다.
 - 로컬 contract check entrypoint를 `python scripts/ci/run_all.py`로 추가했다.
+- E01~E11 Codex 구현 착수용 brief를 추가했다.
 
 ### 아직 남은 것
 
 - Cargo workspace와 최소 runtime crate 생성은 구현 PR에서 시작한다.
 - provider host, transport, adapter, Star Sentinel runtime 구현.
-- Codex EPIC별 brief와 work queue 최종 정리.
+- Codex가 E01부터 순차 구현을 시작한다.
 
 ### 건드리면 안 되는 것
 
@@ -46,11 +48,10 @@
 
 - `README.md`
 - `docs/implementation/README.md`
-- `docs/decisions/0002-runtime-stack.md`
-- `docs/decisions/0003-fake-provider-instance.md`
-- `docs/decisions/0004-star-sentinel-p0-scope.md`
+- `docs/implementation/codex-long-run-workflow.md`
 - `docs/implementation/codex-work-queue-current.md`
-- `docs/implementation/ci-contract-validation.md`
+- `docs/implementation/briefs/README.md`
+- 해당 EPIC의 `docs/implementation/briefs/E*.md`
 
 ### 먼저 실행할 명령
 
@@ -83,6 +84,7 @@ python scripts/ci/run_all.py
 | runtime stack 결정 | `docs/decisions/0002-runtime-stack.md` |
 | fake provider instance 결정 | `docs/decisions/0003-fake-provider-instance.md` |
 | Star Sentinel P0 scope 결정 | `docs/decisions/0004-star-sentinel-p0-scope.md` |
+| EPIC별 brief | `docs/implementation/briefs/` |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -96,3 +98,4 @@ python scripts/ci/run_all.py
 | P-0005 | 2026-07-01 | v0 fake provider instance id를 `fake-default`로 통일 | `docs/decisions/0003-fake-provider-instance.md` |
 | P-0006 | 2026-07-01 | Star Sentinel v0 P0 scope와 E09 분할 기준 정리 | `docs/decisions/0004-star-sentinel-p0-scope.md` |
 | P-0007 | 2026-07-01 | 로컬 contract check runner 추가 | `scripts/ci/run_all.py` |
+| P-0008 | 2026-07-01 | E01~E11 Codex 구현 착수용 brief 추가 | `docs/implementation/briefs/` |
