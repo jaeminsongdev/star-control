@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CURRENT_QUEUE = "docs/implementation/codex-work-queue-current.md"
-LONG_QUEUE = "docs/implementation/codex-work-queue.md"
+LONG_QUEUE_NAME = "codex-work-queue.md"
 
 DOCUMENT_AUTHORITY_CHECKS = (
     ("README.md", CURRENT_QUEUE),
@@ -86,7 +86,7 @@ def check_document_authority(errors: list[str]) -> None:
 def check_current_queue(errors: list[str]) -> None:
     text = read_text(CURRENT_QUEUE)
     require_contains(text, "현재 구현 착수 순서의 최상위 기준", CURRENT_QUEUE, errors)
-    require_contains(text, LONG_QUEUE, CURRENT_QUEUE, errors)
+    require_contains(text, LONG_QUEUE_NAME, CURRENT_QUEUE, errors)
 
     for epic in EPICS:
         require_contains(text, f"## {epic}", CURRENT_QUEUE, errors)
