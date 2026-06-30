@@ -12,6 +12,16 @@
 - CI workflow 변경은 high-risk이며 review와 approval 대상이다.
 - release/deploy는 별도 승인 전까지 RESERVED다.
 
+## local validation entrypoint
+
+로컬에서 우선 실행할 기본 명령은 다음이다.
+
+```text
+python scripts/ci/run_all.py
+```
+
+이 명령은 현재 contract validator를 순서대로 실행한다. 개별 실패를 조사할 때만 job별 명령을 따로 실행한다.
+
 ## 현재 CI
 
 현재 CI job:
@@ -22,6 +32,8 @@ data-format-check
 manifest-contract-check
 naming-policy-check
 schema-example-check
+implementation-documentation-check
+work-queue-consistency-check
 ```
 
 이 job들은 설계/계약 repo 단계의 최소 안전선이다.
@@ -99,13 +111,29 @@ examples/
 - run artifact fixture 검증
 - review pack / approval / ledger corpus 검증
 
+## implementation-documentation-check
+
+목적:
+
+- 구현자가 반드시 읽어야 하는 문서와 결정 기록 존재 확인
+- canonical example directory 존재 확인
+- GitHub workflow와 local runner가 핵심 validator를 참조하는지 확인
+
+## work-queue-consistency-check
+
+목적:
+
+- `codex-work-queue-current.md`가 현재 구현 착수 순서의 최상위 기준임을 확인
+- E01~E11 EPIC heading과 handoff marker 확인
+- E08/E09 split guidance와 RESERVED section 확인
+
 ## package별 CI
 
 ### Rust package 후보
 
 도입 조건:
 
-- Rust package manager 도입 승인
+- Cargo workspace 도입 PR
 - package 경계 확정
 
 검사 후보:
@@ -121,7 +149,7 @@ cargo check --workspace
 
 도입 조건:
 
-- package manager 도입 승인
+- 별도 승인으로 TypeScript package manager 도입
 - lockfile 정책 확정
 
 검사 후보:
@@ -280,6 +308,8 @@ manifest-contract-check
 data-format-check
 naming-policy-check
 schema-example-check
+implementation-documentation-check
+work-queue-consistency-check
 ```
 
 Branch protection은 CI 안정화 후 GitHub settings에서 수동 적용한다. 이 작업은 외부 계정/저장소 설정 변경이므로 별도 승인 없이 자동으로 하지 않는다.
