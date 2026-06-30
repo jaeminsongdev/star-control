@@ -4,7 +4,7 @@
 
 Star Sentinel은 Star-Control 기본 탑재 검증 도구다. AI 또는 provider가 만든 변경사항을 diff, policy, evidence, validation 기준으로 검증하고, diagnostics, approval gate, review pack, ledger를 생성한다.
 
-이 문서는 Star Sentinel의 전체 목표 기능을 정의한다. P0는 현재 기준선이며, P1/P2는 장기 확장 profile이다.
+이 문서는 Star Sentinel의 전체 목표 기능을 정의한다. v0 P0 범위는 `docs/decisions/0004-star-sentinel-p0-scope.md`와 `star-sentinel-p0-contracts.md`를 우선한다. P1/P2는 장기 확장 profile이다.
 
 ## 경계
 
@@ -248,19 +248,28 @@ ARTIFACT_WRITTEN
 ERROR_RECORDED
 ```
 
-## P0 rule set
+## v0 P0 rule set
 
-P0 최소 rule:
+v0 P0 핵심 rule은 다음 5개로 고정한다.
 
 ```text
 task.scope.allowed_paths
 test.no_deletion
-test.no_skip_only_ignore
 dependency.requires_approval
 secret.no_plaintext_secret
+validator.no_self_bypass
+```
+
+이 5개 rule은 `quick` profile의 최소 검증선이다. E09a 구현은 이 rule만 포함한다.
+
+## P1 rule candidates
+
+아래 rule은 v0 P0가 아니라 P1 이후 확장 후보다.
+
+```text
+test.no_skip_only_ignore
 claim.validation_evidence_required
 report.changed_files_match_diff
-validator.no_self_bypass
 validator.policy_change_requires_approval
 ```
 
@@ -274,10 +283,6 @@ allowed_paths 밖 변경이 있으면 block diagnostic을 만든다.
 
 test file 삭제 또는 test directory 대량 삭제를 block 후보로 본다.
 
-### `test.no_skip_only_ignore`
-
-테스트를 통과시키기 위한 skip/only/ignore 추가를 block 또는 human review 후보로 본다.
-
 ### `dependency.requires_approval`
 
 dependency file 변경은 explicit approval required로 처리한다.
@@ -286,21 +291,16 @@ dependency file 변경은 explicit approval required로 처리한다.
 
 plaintext secret 후보가 changed lines에 있으면 block 처리한다.
 
-### `claim.validation_evidence_required`
-
-report가 검증했다고 주장하지만 validation_runs evidence가 없으면 human review 또는 block 후보로 본다.
-
-### `report.changed_files_match_diff`
-
-report의 changed_files와 changed_lines가 맞지 않으면 human review 후보로 본다.
-
 ### `validator.no_self_bypass`
 
 검증기 자체를 우회하는 변경은 block 또는 approval required로 본다.
 
-### `validator.policy_change_requires_approval`
+### P1 후보 behavior
 
-policy/schema/fixture/CI validation 변경은 approval required 후보로 본다.
+- `test.no_skip_only_ignore`: 테스트를 통과시키기 위한 skip/only/ignore 추가를 block 또는 human review 후보로 본다.
+- `claim.validation_evidence_required`: report가 검증했다고 주장하지만 validation_runs evidence가 없으면 human review 또는 block 후보로 본다.
+- `report.changed_files_match_diff`: report의 changed_files와 changed_lines가 맞지 않으면 human review 후보로 본다.
+- `validator.policy_change_requires_approval`: policy/schema/fixture/CI validation 변경은 approval required 후보로 본다.
 
 ## profile 확장
 
@@ -315,10 +315,10 @@ release
 validator
 ```
 
-- `quick`: P0 핵심 rule
-- `near`: quick + evidence/report 일치성
+- `quick`: v0 P0 핵심 rule
+- `near`: quick + P1 evidence/report 일치성 후보
 - `full`: 더 넓은 파일/semantic 검사
-- `security`: secret, risky command, permission 중심
+- `security`: sensitive data, risky command, permission 중심
 - `release`: 배포 전 gate
 - `validator`: Star Sentinel 자기검증
 
@@ -397,15 +397,12 @@ Star Sentinel은 다음을 하면 안 된다.
 
 Star Sentinel 구현은 다음 순서로 진행한다.
 
-1. schema model과 loader
-2. task input reader
-3. changed lines reader
-4. P0 rule evaluator
-5. diagnostics writer
-6. gate decision writer
-7. review pack writer
-8. ledger writer
-9. selfcheck
-10. integration smoke with ValidationEngine
+```text
+E09a P0 input reader + rule registry loader + evaluator
+E09b diagnostics writer + gate decision writer
+E09c review-pack writer
+E09d ledger writer + selfcheck
+E10 integration smoke with ValidationEngine
+```
 
-각 단계는 별도 PR로 진행한다. 전체 rule engine을 한 PR에 몰아넣지 않는다.
+각 단계는 별도 PR로 진행한다. 전체 rule engine을 한 PR에 몰아넣지 않는다. 세부 분리는 `star-sentinel-p0-implementation-split.md`를 따른다.

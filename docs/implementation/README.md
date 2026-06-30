@@ -16,35 +16,38 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 2. `current-repository-map.md`
 3. `repository-layout.md`
 4. `../decisions/0002-runtime-stack.md`
-5. `data-contracts.md`
-6. `handoff-vocabularies.md`
-7. `run-lifecycle.md`
-8. `artifact-layout.md`
-9. `artifact-naming.md`
-10. `state-store.md`
-11. `state-store-recovery.md`
-12. `schema-validator.md`
-13. `provider-system.md`
-14. `config-system.md`
-15. `router-decision-matrix.md`
-16. `router-engine.md`
-17. `execution-engine.md`
-18. `validation-engine.md`
-19. `star-sentinel-p0-contracts.md`
-20. `star-sentinel-full-spec.md`
-21. `approval-review-flow.md`
-22. `policy-profiles.md`
-23. `cli-command-reference.md`
-24. `cli-daemon-api-ui.md`
-25. `security-cost-observability.md`
-26. `security-privacy-observability-contracts.md`
-27. `testing-ci-release.md`
-28. `ci-contract-validation.md`
-29. `codex-long-run-workflow.md`
-30. `codex-work-queue-current.md`
-31. `codex-work-queue.md`
-32. `codex-pr-template.md`
-33. `codex-validation-report.md`
+5. `../decisions/0003-fake-provider-instance.md`
+6. `../decisions/0004-star-sentinel-p0-scope.md`
+7. `data-contracts.md`
+8. `handoff-vocabularies.md`
+9. `run-lifecycle.md`
+10. `artifact-layout.md`
+11. `artifact-naming.md`
+12. `state-store.md`
+13. `state-store-recovery.md`
+14. `schema-validator.md`
+15. `provider-system.md`
+16. `config-system.md`
+17. `router-decision-matrix.md`
+18. `router-engine.md`
+19. `execution-engine.md`
+20. `validation-engine.md`
+21. `star-sentinel-p0-contracts.md`
+22. `star-sentinel-p0-implementation-split.md`
+23. `star-sentinel-full-spec.md`
+24. `approval-review-flow.md`
+25. `policy-profiles.md`
+26. `cli-command-reference.md`
+27. `cli-daemon-api-ui.md`
+28. `security-cost-observability.md`
+29. `security-privacy-observability-contracts.md`
+30. `testing-ci-release.md`
+31. `ci-contract-validation.md`
+32. `codex-long-run-workflow.md`
+33. `codex-work-queue-current.md`
+34. `codex-work-queue.md`
+35. `codex-pr-template.md`
+36. `codex-validation-report.md`
 
 ## 경로 해석 기준
 
@@ -59,6 +62,11 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 - 이 결정은 구현 언어와 package manager 미정 상태를 해소한다.
 - 실제 Cargo workspace 파일, crate, lockfile은 구현 PR에서 추가한다.
 - Cargo 외 package manager나 새 production dependency는 별도 승인이 필요하다.
+
+## fake provider 기준
+
+- `docs/decisions/0003-fake-provider-instance.md`: v0 fake flow의 provider instance id를 `fake-default`로 고정한다.
+- RouteSpec assignment, WorkSpec, ExecutionRequest, ProviderRunResult, provider output path는 이 기준을 따른다.
 
 ## handoff / vocabulary 기준
 
@@ -81,7 +89,9 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 
 ## Star Sentinel 기준
 
+- `docs/decisions/0004-star-sentinel-p0-scope.md`: v0 P0 rule 범위와 P1 후보를 고정한다.
 - `star-sentinel-p0-contracts.md`: P0 rule registry, ChangedLines input, fixture outcome 계약.
+- `star-sentinel-p0-implementation-split.md`: E09a~E09d 구현 분할 기준.
 - `star-sentinel-full-spec.md`: Star Sentinel 전체 command, output, profile 확장 목표.
 
 ## Codex 작업 큐 기준

@@ -2,7 +2,9 @@
 
 ## 목적
 
-이 문서는 Star Sentinel P0 구현자가 필요한 rule registry, diff input, fixture outcome 계약을 고정한다. 전체 스펙은 `star-sentinel-full-spec.md`를 따르되, P0 구현 PR은 이 문서를 우선 읽는다.
+이 문서는 Star Sentinel P0 구현자가 필요한 rule registry, diff input, fixture outcome 계약을 고정한다. 전체 목표 스펙은 `star-sentinel-full-spec.md`를 따르되, v0 P0 구현 범위는 이 문서와 `docs/decisions/0004-star-sentinel-p0-scope.md`를 우선한다.
+
+E09 구현 분할은 `star-sentinel-p0-implementation-split.md`를 따른다.
 
 ## machine-readable contracts
 
@@ -20,7 +22,7 @@ builtin-tools/star-sentinel/examples/p0/fixture-outcome-scope-block.example.json
 
 위 schema/example은 `scripts/ci/check_schema_examples.py`에서 검증한다.
 
-## P0 입력
+## v0 P0 입력
 
 P0 evaluator의 최소 입력은 다음이다.
 
@@ -71,11 +73,11 @@ context
 
 P0 rule은 source diff 원문을 직접 파싱하지 않고 ChangedLines를 입력으로 받는다. diff parser는 별도 구현 단위다.
 
-## P0 rule registry
+## v0 P0 rule registry
 
 `p0-rule-registry.json`은 P0 rule id, severity, input, output, decision effect를 선언한다.
 
-초기 rule:
+v0 P0 rule은 다음 5개로 고정한다.
 
 ```text
 task.scope.allowed_paths
@@ -85,7 +87,7 @@ secret.no_plaintext_secret
 validator.no_self_bypass
 ```
 
-후속 rule 후보:
+P1 이후 후보:
 
 ```text
 test.no_skip_only_ignore
@@ -93,6 +95,10 @@ claim.validation_evidence_required
 report.changed_files_match_diff
 validator.policy_change_requires_approval
 ```
+
+P1 후보는 v0 P0 evaluator 구현 PR에 섞지 않는다.
+
+## P0 selfcheck 기준
 
 P0 selfcheck는 최소한 다음을 검사한다.
 
@@ -102,7 +108,7 @@ P0 selfcheck는 최소한 다음을 검사한다.
 4. decision_effect가 review/gate decision과 모순되지 않음
 5. registry가 schema-example-check를 통과함
 
-## rule behavior
+## v0 rule behavior
 
 ### task.scope.allowed_paths
 
@@ -138,6 +144,24 @@ P0 selfcheck는 최소한 다음을 검사한다.
 - 조건: validator/policy/schema/CI가 self bypass 방향으로 변경됨
 - severity: block
 - decision effect: BLOCK
+
+## P1 후보 rule behavior
+
+### test.no_skip_only_ignore
+
+테스트를 통과시키기 위한 skip/only/ignore 추가를 block 또는 human review 후보로 본다.
+
+### claim.validation_evidence_required
+
+report가 검증했다고 주장하지만 validation_runs evidence가 없으면 human review 또는 block 후보로 본다.
+
+### report.changed_files_match_diff
+
+report의 changed_files와 changed_lines가 맞지 않으면 human review 후보로 본다.
+
+### validator.policy_change_requires_approval
+
+policy/schema/fixture/CI validation 변경은 approval required 후보로 본다.
 
 ## Fixture outcome
 
@@ -180,6 +204,19 @@ BLOCK > HUMAN_REVIEW > AUTO_PASS
 - approval required change만 있으면 HUMAN_REVIEW
 - block/review 조건이 없으면 AUTO_PASS
 
+## E09 구현 분할
+
+E09는 다음 순서로 나눈다.
+
+```text
+E09a P0 input reader + rule registry loader + evaluator
+E09b diagnostics writer + gate decision writer
+E09c review-pack writer
+E09d ledger writer + selfcheck
+```
+
+세부 기준은 `star-sentinel-p0-implementation-split.md`를 따른다.
+
 ## 테스트 기준
 
 1. p0 rule registry schema validation
@@ -193,12 +230,12 @@ BLOCK > HUMAN_REVIEW > AUTO_PASS
 
 ## Codex 구현 지시
 
-P0 rule evaluator 구현 PR은 다음만 포함한다.
+E09a P0 rule evaluator 구현 PR은 다음만 포함한다.
 
+- task input reader
 - changed-lines reader
 - rule registry loader
-- P0 rule evaluator
-- diagnostics writer
+- 5개 v0 P0 rule evaluator
 - fixture outcome tests
 
-Gate writer, review pack writer, full profile, security profile, release profile은 별도 PR로 분리한다.
+Gate writer, review pack writer, ledger writer, selfcheck, full/security/release profile은 별도 PR로 분리한다.
