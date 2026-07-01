@@ -55,6 +55,7 @@
 https://developers.openai.com/api/reference/resources/responses/methods/create/
 https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create/
 https://developers.openai.com/api/docs/guides/text
+https://developers.openai.com/api/reference/overview/
 ```
 
 확인한 내용:
@@ -68,6 +69,7 @@ https://developers.openai.com/api/docs/guides/text
 - Chat Completions response는 `choices[].message.content`와 usage token fields를 제공한다.
 - Request builder는 Responses API `model` + `input`, Chat Completions `model` + `messages`를 fixture 기준으로 사용한다.
 - M6f offline fixture integration은 `transport_config.offline_response_fixture`에서 읽은 raw response fixture를 `raw-response.json`으로 복사하고 parser 결과를 normalized `response.json`과 `cost-metric.json` token usage에 반영한다.
+- M6g transport boundary는 bearer credential requirement를 credential reference kind와 deferred Authorization header policy로만 표현하며 raw credential value나 full credential reference string을 materialize하지 않는다.
 - Star-Control manifest의 `transport: http`, `adapter: openai_compatible`, `structured_output: true`는 현재 snapshot에서 타당하다.
 
 보류:

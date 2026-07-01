@@ -1020,6 +1020,10 @@ mod tests {
             .is_file());
         assert!(fixture
             .project
+            .join(".ai-runs/J-0001/provider-output/cloud-default/http-transport-plan.json")
+            .is_file());
+        assert!(fixture
+            .project
             .join(".ai-runs/J-0001/provider-output/cloud-default/raw-response.json")
             .is_file());
         let http_request: Value = serde_json::from_str(
@@ -1036,6 +1040,20 @@ mod tests {
         let http_request_text =
             serde_json::to_string(&http_request).expect("serialize http request");
         assert!(!http_request_text.contains("OPENAI_API_KEY"));
+        let transport_plan: Value =
+            serde_json::from_str(
+                &fs::read_to_string(fixture.project.join(
+                    ".ai-runs/J-0001/provider-output/cloud-default/http-transport-plan.json",
+                ))
+                .expect("read transport plan"),
+            )
+            .expect("parse transport plan");
+        assert_eq!(transport_plan["credential"]["reference_kind"], "env");
+        assert_eq!(transport_plan["credential"]["materialized"], false);
+        assert_eq!(transport_plan["live_api_call"], false);
+        let transport_plan_text =
+            serde_json::to_string(&transport_plan).expect("serialize transport plan");
+        assert!(!transport_plan_text.contains("OPENAI_API_KEY"));
 
         let events = fixture.store.read_events("J-0001").expect("events");
         assert!(events.iter().any(|event| {

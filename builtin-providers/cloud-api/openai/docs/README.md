@@ -24,3 +24,11 @@ Builtin provider manifest for `provider.openai`.
 - adapter는 `http-request.json`, `raw-response.json`, normalized `response.json`, `privacy-handoff.json`, `cost-metric.json`을 provider output에 기록한다.
 - fixture path는 대상 프로젝트 root 기준 상대 path만 허용한다.
 - 이 단계도 HTTP client, live credential lookup, request signing/header construction, paid API call은 실행하지 않는다.
+
+## M6g transport boundary 기준
+
+- 2026-07-01 기준 OpenAI official API overview authentication, Responses API, Chat Completions API reference를 확인했다.
+- adapter는 `http-transport-plan.json`에 method, URL, request API, request body artifact path, raw response artifact path, timeout, header policy를 기록한다.
+- credential은 reference kind와 materialized/value_present 상태만 기록하고 full `credential_ref` 문자열이나 raw value는 기록하지 않는다.
+- `Authorization` header는 `deferred_credential_reference` policy로만 기록하며 header value는 만들지 않는다.
+- `live_api_call=false`, `approval_required_for_live_call=true`를 유지한다.

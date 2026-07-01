@@ -233,3 +233,38 @@ M6f는 다음을 구현하지 않는다.
 - streaming SSE parser
 - paid API call
 - external account mutation
+
+## M6g cloud API transport boundary scope
+
+M6g는 live HTTP transport adapter를 바로 실행하지 않고 future live adapter가 사용할 transport boundary artifact를 고정한다. 이 단계는 M6f offline fixture runtime path에 `http-transport-plan.json`을 추가한다.
+
+Provider doc refresh:
+
+- 2026-07-01 기준 OpenAI official API overview authentication, Responses API, Chat Completions API reference를 확인했다.
+- 확인 URL: `https://developers.openai.com/api/reference/overview/`, `https://developers.openai.com/api/reference/resources/responses/methods/create/`, `https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create/`
+- OpenAI API는 bearer credential을 사용하지만, M6g는 credential raw value를 조회하지 않고 header value를 만들지 않는다.
+
+Transport plan artifact:
+
+```text
+provider-output/{provider_instance_id}/http-transport-plan.json
+```
+
+Transport plan 규칙:
+
+- method, URL, request API, request body artifact path, raw response artifact path를 기록한다.
+- credential은 required/present/reference kind/materialized/value_present 상태만 기록한다.
+- full `credential_ref` 문자열과 credential raw value는 기록하지 않는다.
+- `Content-Type: application/json`은 literal header policy로 기록할 수 있다.
+- `Authorization`은 `deferred_credential_reference` policy로만 기록하고 header value는 만들지 않는다.
+- `live_api_call=false`, `approval_required_for_live_call=true`를 기록한다.
+- timeout은 provider instance `limits.timeout_seconds` policy를 따른다.
+
+M6g는 다음을 구현하지 않는다.
+
+- live HTTP client execution
+- credential raw value lookup
+- Authorization header value construction
+- retry/rate limit policy
+- streaming SSE parser
+- paid API call

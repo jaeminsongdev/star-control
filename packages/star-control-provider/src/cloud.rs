@@ -19,6 +19,7 @@ const CLOUD_API_KIND: &str = "cloud_api_model";
 const CLI_TRANSPORT: &str = "cli";
 const HTTP_TRANSPORT: &str = "http";
 const HTTP_REQUEST_FILE: &str = "http-request.json";
+const HTTP_TRANSPORT_PLAN_FILE: &str = "http-transport-plan.json";
 const RAW_RESPONSE_FILE: &str = "raw-response.json";
 const STDOUT_FILE: &str = "stdout.txt";
 const STDERR_FILE: &str = "stderr.txt";
@@ -230,6 +231,14 @@ impl ProviderAdapter for CloudApiOfflineProviderAdapter {
                     &format!("OpenAI-compatible response parse failed: {}", source),
                 )
             })?;
+        let http_request_value = prepared_request_value(&prepared_request);
+        let http_transport_plan = http_transport_plan_value(
+            request,
+            manifest,
+            instance,
+            &prepared_request,
+            "offline_fixture",
+        )?;
         let wall_time_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
 
         let request_ref = context.state_store().write_provider_json(
@@ -242,7 +251,13 @@ impl ProviderAdapter for CloudApiOfflineProviderAdapter {
             request.job_id(),
             request.provider_instance_id(),
             HTTP_REQUEST_FILE,
-            &prepared_request_value(&prepared_request),
+            &http_request_value,
+        )?;
+        let http_transport_plan_ref = context.state_store().write_provider_json(
+            request.job_id(),
+            request.provider_instance_id(),
+            HTTP_TRANSPORT_PLAN_FILE,
+            &http_transport_plan,
         )?;
         let raw_response_ref = context.state_store().write_provider_json(
             request.job_id(),
@@ -326,6 +341,7 @@ impl ProviderAdapter for CloudApiOfflineProviderAdapter {
         );
         assert_provider_sidecar_refs(&execution, &privacy_ref, &cost_ref);
         debug_assert_eq!(http_request_ref["kind"], "provider_output");
+        debug_assert_eq!(http_transport_plan_ref["kind"], "provider_output");
         debug_assert_eq!(raw_response_ref["kind"], "provider_output");
         Ok(execution)
     }
@@ -760,6 +776,8 @@ fn api_offline_response_value(
 ) -> Value {
     let request_path = provider_output_path(request.provider_instance_id(), "request.json");
     let http_request_path = provider_output_path(request.provider_instance_id(), HTTP_REQUEST_FILE);
+    let http_transport_plan_path =
+        provider_output_path(request.provider_instance_id(), HTTP_TRANSPORT_PLAN_FILE);
     let raw_response_path = provider_output_path(request.provider_instance_id(), RAW_RESPONSE_FILE);
     let response_path = provider_output_path(request.provider_instance_id(), "response.json");
     let stdout_path = provider_output_path(request.provider_instance_id(), STDOUT_FILE);
@@ -783,6 +801,7 @@ fn api_offline_response_value(
             response_path,
             request_path,
             http_request_path,
+            http_transport_plan_path,
             raw_response_path,
             stdout_path,
             stderr_path,
@@ -816,6 +835,67 @@ fn prepared_request_value(prepared_request: &OpenAiCompatiblePreparedRequest) ->
         "url": prepared_request.url(),
         "body": prepared_request.body()
     })
+}
+
+fn http_transport_plan_value(
+    request: &ExecutionRequest,
+    manifest: &ProviderManifest,
+    instance: &ProviderInstance,
+    prepared_request: &OpenAiCompatiblePreparedRequest,
+    execution_mode: &str,
+) -> Result<Value, ProviderAdapterError> {
+    let credential_ref = string_field(instance.value(), "credential_ref").ok_or_else(|| {
+        cloud_policy_denied(
+            instance.id(),
+            "cloud API transport plan requires a credential_ref declaration",
+        )
+    })?;
+    Ok(json!({
+        "schema_version": "1.0.0",
+        "provider_instance_id": request.provider_instance_id(),
+        "job_id": request.job_id(),
+        "stage": request.stage(),
+        "provider_id": manifest.id(),
+        "provider_kind": manifest.kind(),
+        "adapter": manifest.adapter(),
+        "transport": HTTP_TRANSPORT,
+        "execution_mode": execution_mode,
+        "method": prepared_request.method(),
+        "url": prepared_request.url(),
+        "request_api": request_api_name(prepared_request.api()),
+        "request_body_path": provider_output_path(request.provider_instance_id(), HTTP_REQUEST_FILE),
+        "raw_response_path": provider_output_path(request.provider_instance_id(), RAW_RESPONSE_FILE),
+        "credential": {
+            "required": true,
+            "reference_present": true,
+            "reference_kind": credential_reference_kind(credential_ref),
+            "materialized": false,
+            "value_present": false
+        },
+        "header_policy": [
+            {
+                "name": "Content-Type",
+                "value_policy": "literal",
+                "value": "application/json"
+            },
+            {
+                "name": "Authorization",
+                "value_policy": "deferred_credential_reference",
+                "scheme": "Bearer",
+                "materialized": false
+            }
+        ],
+        "timeout_seconds": timeout_seconds(instance.value(), instance.id())?,
+        "live_api_call": false,
+        "approval_required_for_live_call": true
+    }))
+}
+
+fn credential_reference_kind(credential_ref: &str) -> &str {
+    credential_ref
+        .split_once(':')
+        .map(|(kind, _)| kind)
+        .unwrap_or("unknown")
 }
 
 fn request_api_name(api: OpenAiCompatibleRequestApi) -> &'static str {
@@ -941,6 +1021,7 @@ fn planned_output_files(provider_instance_id: &str) -> Vec<String> {
         provider_output_path(provider_instance_id, "request.json"),
         provider_output_path(provider_instance_id, "response.json"),
         provider_output_path(provider_instance_id, HTTP_REQUEST_FILE),
+        provider_output_path(provider_instance_id, HTTP_TRANSPORT_PLAN_FILE),
         provider_output_path(provider_instance_id, RAW_RESPONSE_FILE),
         provider_output_path(provider_instance_id, STDOUT_FILE),
         provider_output_path(provider_instance_id, STDERR_FILE),
@@ -1558,6 +1639,7 @@ mod tests {
                 "provider-output/cloud-default/response.json",
                 "provider-output/cloud-default/request.json",
                 "provider-output/cloud-default/http-request.json",
+                "provider-output/cloud-default/http-transport-plan.json",
                 "provider-output/cloud-default/raw-response.json",
                 "provider-output/cloud-default/stdout.txt",
                 "provider-output/cloud-default/stderr.txt",
@@ -1577,6 +1659,26 @@ mod tests {
             serde_json::to_string(&http_request).expect("serialize http request");
         assert!(!http_request_text.contains("STAR_CONTROL_TEST_TOKEN"));
         assert!(!http_request_text.contains("credential_ref"));
+
+        let transport_plan = read_json(
+            &project.join(".ai-runs/J-0001/provider-output/cloud-default/http-transport-plan.json"),
+        );
+        assert_eq!(transport_plan["method"], "POST");
+        assert_eq!(transport_plan["url"], "https://api.openai.com/v1/responses");
+        assert_eq!(transport_plan["execution_mode"], "offline_fixture");
+        assert_eq!(transport_plan["credential"]["reference_kind"], "env");
+        assert_eq!(transport_plan["credential"]["materialized"], false);
+        assert_eq!(transport_plan["credential"]["value_present"], false);
+        assert_eq!(transport_plan["live_api_call"], false);
+        assert_eq!(transport_plan["approval_required_for_live_call"], true);
+        assert_eq!(
+            transport_plan["header_policy"][1]["value_policy"],
+            "deferred_credential_reference"
+        );
+        let transport_plan_text =
+            serde_json::to_string(&transport_plan).expect("serialize transport plan");
+        assert!(!transport_plan_text.contains("STAR_CONTROL_TEST_TOKEN"));
+        assert!(!transport_plan_text.contains("env:STAR_CONTROL_TEST_TOKEN"));
 
         let raw_response = read_json(
             &project.join(".ai-runs/J-0001/provider-output/cloud-default/raw-response.json"),
@@ -1599,6 +1701,9 @@ mod tests {
         assert!(conformance
             .checked_artifacts()
             .contains(&"provider-output/cloud-default/http-request.json".to_string()));
+        assert!(conformance
+            .checked_artifacts()
+            .contains(&"provider-output/cloud-default/http-transport-plan.json".to_string()));
         assert!(conformance
             .checked_artifacts()
             .contains(&"provider-output/cloud-default/raw-response.json".to_string()));

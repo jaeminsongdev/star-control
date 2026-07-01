@@ -41,6 +41,7 @@ E14-cloud-provider-conformance.md
 E15-openai-compatible-parser.md
 E16-openai-compatible-request-builder.md
 E17-cloud-api-offline-fixture.md
+E18-cloud-api-transport-boundary.md
 ```
 
 ## 사용 방법

@@ -62,9 +62,10 @@ E14 Cloud Provider Conformance
 E15 OpenAI-Compatible API Parser
 E16 OpenAI-Compatible Request Builder
 E17 Cloud API Offline Fixture Integration
+E18 Cloud API Transport Boundary
 ```
 
-E17 이후 M6g cloud API transport boundary, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E18 이후 M6h approval-gated live HTTP transport adapter, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1351,6 +1352,86 @@ no live call / no credential raw value assertions
 
 ```text
 M6g cloud API transport boundary를 별도 PR로 설계한다. 실제 credential lookup, request signing/header construction, live API call, streaming SSE, paid usage는 별도 승인 전까지 실행하지 않는다.
+```
+
+## E18 Cloud API Transport Boundary
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cloud-provider-policy.md
+provider-system.md
+docs/providers/provider-reference-snapshots.md
+testing-ci-release.md
+E15-openai-compatible-parser.md
+E16-openai-compatible-request-builder.md
+E17-cloud-api-offline-fixture.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+packages/star-control-execution/**
+docs/implementation/**
+docs/providers/**
+builtin-providers/cloud-api/openai/docs/**
+PLANS.md
+```
+
+금지 파일:
+
+```text
+Cargo 외 package manager
+새 dependency
+GitHub workflow
+schema field 변경
+release/deploy/publish automation
+실제 paid CLI/API 호출 검증
+credential raw value 저장
+live credential lookup
+Authorization header value construction
+live HTTP transport 실행
+```
+
+입력 artifact:
+
+```text
+OpenAiCompatiblePreparedRequest
+ProviderManifest kind/transport/adapter
+ProviderInstance.credential_ref prefix only
+ProviderInstance.limits.timeout_seconds
+provider-output/{provider_instance_id}/http-request.json
+```
+
+출력 artifact:
+
+```text
+provider-output/{provider_instance_id}/http-transport-plan.json
+```
+
+핵심 TASK:
+
+```text
+transport plan artifact
+method/url/request API capture
+request body artifact path capture
+credential reference kind classification without raw value lookup
+header policy declaration without Authorization value construction
+timeout capture
+live_api_call=false assertion
+approval_required_for_live_call=true assertion
+offline fixture path integration
+docs handoff to live transport approval gate
+```
+
+완료 기준: cloud API offline runtime path가 `http-transport-plan.json`을 provider output에 기록하고, credential raw value와 full credential reference를 materialize하지 않으며, live API call과 Authorization header value construction이 approval-gated로 남아 있어야 한다.
+
+다음 EPIC handoff:
+
+```text
+M6h approval-gated live HTTP transport adapter를 별도 PR로 설계한다. 실제 credential lookup, Authorization header value construction, HTTP client dependency, paid usage, streaming SSE는 별도 승인 전까지 실행하지 않는다.
 ```
 
 ## RESERVED
