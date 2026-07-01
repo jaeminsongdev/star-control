@@ -13,6 +13,24 @@ const RELEASE_READINESS_SCHEMA: &str = "release-readiness.schema.json";
 pub const RELEASE_READINESS_PATH: &str = "release/release-readiness.json";
 pub const RELEASE_REVIEW_PACK_MARKDOWN_FILE: &str = "release-review-pack.md";
 pub const RELEASE_REVIEW_PACK_PATH: &str = "review-packs/release-review-pack.md";
+pub const M9_REQUIRED_READINESS_CHECKS: &[&str] = &[
+    "security-redaction",
+    "audit-event-writer",
+    "cost-budget-guard",
+    "provider-conformance-hardening",
+    "state-recovery-inspection",
+    "release-readiness-writer",
+    "release-readiness-api-read",
+    "release-version-consistency",
+    "release-evidence-file-checker",
+    "release-profile-readiness",
+    "release-readiness-ui-read",
+    "release-readiness-cli-read",
+    "release-review-pack",
+    "recovery-command-surface",
+    "destructive-actions-reserved",
+    "release-automation-reserved",
+];
 
 #[derive(Debug)]
 pub enum ReleaseReadinessError {
@@ -321,6 +339,129 @@ impl ReleaseProfileReadinessBuilder {
         if blockers.is_empty() {
             blockers.push(
                 "release approval/signing/publish/deploy automation remains reserved".to_string(),
+            );
+            writer.readiness(release_id, target, version, "reserved", checks, blockers)
+        } else {
+            writer.not_ready(release_id, target, version, checks, blockers)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct M9ReadinessCheck {
+    name: String,
+    passed: bool,
+    evidence_paths: Vec<String>,
+    blockers: Vec<String>,
+}
+
+impl M9ReadinessCheck {
+    pub fn passed(
+        name: impl Into<String>,
+        evidence_paths: Vec<String>,
+    ) -> Result<Self, ReleaseReadinessError> {
+        Ok(Self {
+            name: normalized_m9_readiness_check_name(name)?,
+            passed: true,
+            evidence_paths: normalize_evidence_paths(evidence_paths)?,
+            blockers: Vec::new(),
+        })
+    }
+
+    pub fn failed(
+        name: impl Into<String>,
+        evidence_paths: Vec<String>,
+        blockers: Vec<String>,
+    ) -> Result<Self, ReleaseReadinessError> {
+        let blockers = normalize_m9_readiness_blockers(blockers)?;
+        if blockers.is_empty() {
+            return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+                message: "failed M9 readiness check requires at least one blocker".to_string(),
+            });
+        }
+        Ok(Self {
+            name: normalized_m9_readiness_check_name(name)?,
+            passed: false,
+            evidence_paths: normalize_evidence_paths(evidence_paths)?,
+            blockers,
+        })
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn is_passed(&self) -> bool {
+        self.passed
+    }
+
+    pub fn evidence_paths(&self) -> &[String] {
+        &self.evidence_paths
+    }
+
+    pub fn blockers(&self) -> &[String] {
+        &self.blockers
+    }
+
+    fn to_check(&self) -> Value {
+        release_check(
+            &self.name,
+            check_status(self.passed),
+            self.evidence_paths.clone(),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct M9ReadinessAuditBuilder;
+
+impl M9ReadinessAuditBuilder {
+    pub fn build(
+        &self,
+        writer: &ReleaseReadinessWriter,
+        release_id: impl Into<String>,
+        target: impl Into<String>,
+        version: impl Into<String>,
+        readiness_checks: Vec<M9ReadinessCheck>,
+    ) -> Value {
+        let release_id = release_id.into();
+        let target = target.into();
+        let version = version.into();
+        let mut checks = Vec::with_capacity(readiness_checks.len());
+        let mut blockers = Vec::new();
+        let mut seen = Vec::with_capacity(readiness_checks.len());
+
+        for readiness_check in &readiness_checks {
+            if seen
+                .iter()
+                .any(|seen_name: &String| seen_name == readiness_check.name())
+            {
+                blockers.push(format!(
+                    "duplicate M9 readiness check: {}",
+                    readiness_check.name()
+                ));
+            } else {
+                seen.push(readiness_check.name().to_string());
+            }
+
+            checks.push(readiness_check.to_check());
+
+            if !readiness_check.is_passed() {
+                for blocker in readiness_check.blockers() {
+                    blockers.push(format!("{}: {}", readiness_check.name(), blocker));
+                }
+            }
+        }
+
+        for required_check in M9_REQUIRED_READINESS_CHECKS {
+            if !seen.iter().any(|seen_name| seen_name == required_check) {
+                blockers.push(format!("missing M9 readiness check: {}", required_check));
+            }
+        }
+
+        if blockers.is_empty() {
+            blockers.push(
+                "final release/deploy/publish remains reserved until explicit approval".to_string(),
             );
             writer.readiness(release_id, target, version, "reserved", checks, blockers)
         } else {
@@ -821,6 +962,40 @@ fn normalized_profile_name(
     } else {
         Ok(profile_name.to_string())
     }
+}
+
+fn normalized_m9_readiness_check_name(
+    name: impl Into<String>,
+) -> Result<String, ReleaseReadinessError> {
+    let name = name.into();
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+            message: "M9 readiness check name is required".to_string(),
+        });
+    }
+    if !M9_REQUIRED_READINESS_CHECKS.contains(&name) {
+        return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+            message: format!("unknown M9 readiness check: {}", name),
+        });
+    }
+    Ok(name.to_string())
+}
+
+fn normalize_m9_readiness_blockers(
+    blockers: Vec<String>,
+) -> Result<Vec<String>, ReleaseReadinessError> {
+    let mut normalized = Vec::with_capacity(blockers.len());
+    for blocker in blockers {
+        let blocker = blocker.trim();
+        if blocker.is_empty() {
+            return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+                message: "M9 readiness blocker must not be empty".to_string(),
+            });
+        }
+        normalized.push(blocker.to_string());
+    }
+    Ok(normalized)
 }
 
 fn normalize_profile_blockers(blockers: Vec<String>) -> Result<Vec<String>, ReleaseReadinessError> {
@@ -1365,6 +1540,97 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn m9_readiness_audit_builder_reserves_complete_audit() {
+        let writer = ReleaseReadinessWriter::new(schema_root());
+        let readiness = M9ReadinessAuditBuilder.build(
+            &writer,
+            "m9-audit-0001",
+            "star-control",
+            "m9",
+            all_m9_readiness_checks_passed(),
+        );
+
+        writer
+            .validate_readiness(&readiness)
+            .expect("schema-valid reserved M9 readiness");
+        assert_eq!(readiness["status"], "reserved");
+        assert_eq!(
+            readiness["checks"].as_array().expect("checks").len(),
+            M9_REQUIRED_READINESS_CHECKS.len()
+        );
+        assert_eq!(
+            readiness["checks"][0]["name"],
+            M9_REQUIRED_READINESS_CHECKS[0]
+        );
+        assert_eq!(readiness["checks"][0]["status"], "pass");
+        assert!(readiness["blockers"]
+            .as_array()
+            .expect("blockers")
+            .contains(&json!(
+                "final release/deploy/publish remains reserved until explicit approval"
+            )));
+    }
+
+    #[test]
+    fn m9_readiness_audit_builder_blocks_missing_failed_and_duplicate_checks() {
+        let writer = ReleaseReadinessWriter::new(schema_root());
+        let mut checks = all_m9_readiness_checks_passed();
+        checks.retain(|check| check.name() != "release-automation-reserved");
+        checks.push(
+            M9ReadinessCheck::failed(
+                "cost-budget-guard",
+                vec!["docs/implementation/briefs/E28-cost-metric-budget-guard.md".to_string()],
+                vec!["cost budget acceptance evidence is missing".to_string()],
+            )
+            .expect("failed M9 check"),
+        );
+
+        let readiness =
+            M9ReadinessAuditBuilder.build(&writer, "m9-audit-0002", "star-control", "m9", checks);
+
+        writer
+            .validate_readiness(&readiness)
+            .expect("schema-valid not_ready M9 readiness");
+        assert_eq!(readiness["status"], "not_ready");
+        let blockers = readiness["blockers"].as_array().expect("blockers");
+        assert!(blockers.contains(&json!(
+            "missing M9 readiness check: release-automation-reserved"
+        )));
+        assert!(blockers.contains(&json!("duplicate M9 readiness check: cost-budget-guard")));
+        assert!(blockers.contains(&json!(
+            "cost-budget-guard: cost budget acceptance evidence is missing"
+        )));
+    }
+
+    #[test]
+    fn m9_readiness_check_rejects_unknown_or_unsafe_inputs() {
+        let unknown_check =
+            M9ReadinessCheck::passed("unknown-check", Vec::new()).expect_err("unknown check");
+        assert!(matches!(
+            unknown_check,
+            ReleaseReadinessError::InvalidReleaseReadiness { .. }
+        ));
+
+        let unsafe_evidence = M9ReadinessCheck::passed(
+            "security-redaction",
+            vec!["../security-redaction.json".to_string()],
+        )
+        .expect_err("unsafe evidence");
+        assert!(matches!(
+            unsafe_evidence,
+            ReleaseReadinessError::InvalidReleaseEvidence { .. }
+        ));
+
+        let empty_blocker =
+            M9ReadinessCheck::failed("cost-budget-guard", Vec::new(), vec![" ".to_string()])
+                .expect_err("empty blocker");
+        assert!(matches!(
+            empty_blocker,
+            ReleaseReadinessError::InvalidReleaseReadiness { .. }
+        ));
+    }
+
     fn create_job(store: &StateStore) {
         store
             .create_job("request", "cli", Vec::new())
@@ -1395,5 +1661,18 @@ mod tests {
         ));
         fs::create_dir_all(&path).expect("create temp project");
         path
+    }
+
+    fn all_m9_readiness_checks_passed() -> Vec<M9ReadinessCheck> {
+        M9_REQUIRED_READINESS_CHECKS
+            .iter()
+            .map(|check_name| {
+                M9ReadinessCheck::passed(
+                    *check_name,
+                    vec![format!("docs/implementation/briefs/{}.md", check_name)],
+                )
+                .expect("M9 readiness check")
+            })
+            .collect()
     }
 }

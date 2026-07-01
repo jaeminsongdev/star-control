@@ -307,6 +307,8 @@ M9m release review pack foundation은 `packages/star-control-release`의 `Releas
 
 M9n recovery command surface는 `packages/star-control-cli`의 `recover --list`로 구현한다. 이 slice는 `StateStore::inspect_recovery` 결과를 schema-valid CLI envelope으로 표시하되, tmp file 삭제, event log trim, recovered copy 생성, artifact 교체, retention cleanup은 별도 승인 전까지 RESERVED로 둔다.
 
+M9o final M9 readiness audit은 `packages/star-control-release`의 `M9ReadinessAuditBuilder`로 구현한다. 이 slice는 M9 필수 hardening/recovery/release-readiness check를 `release-readiness.schema.json` value로 조립하고 missing/duplicate/failed check를 blocker로 표시하되, all-pass 결과도 `ready`가 아니라 final release/deploy/publish reserved blocker가 있는 `reserved` status로 둔다.
+
 Validation:
 
 ```text
@@ -325,6 +327,7 @@ recovery command surface tests
 release readiness checks
 release readiness writer tests
 release review pack writer tests
+final M9 readiness audit tests
 ```
 
 ## 다음 작업 선택 규칙
