@@ -1,6 +1,9 @@
 use serde_json::{json, Value};
 use star_control_execution::{ExecutionEngine, ExecutionError};
-use star_control_provider::{ProviderRegistry, ProviderRegistryError, ProviderRegistryLoader};
+use star_control_provider::{
+    CapabilityProfile, ProviderManifest, ProviderRegistry, ProviderRegistryError,
+    ProviderRegistryLoader,
+};
 use star_control_release::{ReleaseReadinessError, ReleaseReadinessWriter, RELEASE_READINESS_PATH};
 use star_control_router::{JobSpec, RouterEngine, RouterError};
 use star_control_schema::{load_schema, validate_json};
@@ -18,6 +21,7 @@ const APPROVAL_RESPONSE_SCHEMA: &str = "approval-response.schema.json";
 const SCHEMA_VERSION: &str = "1.0.0";
 const DEFAULT_PROVIDER: &str = "fake-default";
 const DEFAULT_ENTRYPOINT: &str = "star-control";
+const BUILTIN_PROVIDER_REGISTRY: &str = "configs/registries/builtin-provider-registry.yaml";
 const TERMINAL_STATES: &[&str] = &["DONE", "FAILED", "BLOCKED", "CANCELLED"];
 
 #[derive(Debug, Clone)]
@@ -173,6 +177,8 @@ impl Error for CliError {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ParsedArgs {
     command: String,
+    subcommand: Option<String>,
+    subject: Option<String>,
     project: Option<PathBuf>,
     job_id: Option<String>,
     request: Option<String>,
@@ -221,6 +227,7 @@ where
         "cancel" => cancel_command(&parsed, config),
         "resume" => resume_command(&parsed, config),
         "recover" => recover_command(&parsed, config),
+        "providers" => providers_command(&parsed, config),
         _ => Err(CliError::InvalidInput {
             command,
             message: "unsupported command".to_string(),
@@ -243,6 +250,8 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
 
     let mut parsed = ParsedArgs {
         command: command.clone(),
+        subcommand: None,
+        subject: None,
         project: None,
         job_id: None,
         request: None,
@@ -337,6 +346,18 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
             "--list" => parsed.recovery_list = true,
             "--json" => parsed.json = true,
             "--markdown" => parsed.markdown = true,
+            positional if is_command_group_position(&command, positional) => {
+                if parsed.subcommand.is_none() {
+                    parsed.subcommand = Some(positional.to_string());
+                } else if parsed.subject.is_none() {
+                    parsed.subject = Some(positional.to_string());
+                } else {
+                    return Err(CliError::InvalidInput {
+                        command,
+                        message: format!("unsupported argument {}", positional),
+                    });
+                }
+            }
             unknown => {
                 return Err(CliError::InvalidInput {
                     command,
@@ -348,6 +369,10 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
     }
 
     Ok(parsed)
+}
+
+fn is_command_group_position(command: &str, argument: &str) -> bool {
+    matches!(command, "providers" | "sentinel") && !argument.starts_with("--")
 }
 
 fn require_option_value(
@@ -557,6 +582,181 @@ fn load_run_registry(
             message: format!("provider instance {} is not loaded", provider),
         })?;
     Ok(registry)
+}
+
+fn providers_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    reject_provider_command_options(parsed)?;
+    let subcommand = parsed
+        .subcommand
+        .as_deref()
+        .ok_or_else(|| CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "providers requires subcommand list or show".to_string(),
+        })?;
+    match subcommand {
+        "list" => providers_list_command(parsed, config),
+        "show" => providers_show_command(parsed, config),
+        "healthcheck" => Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "providers healthcheck is reserved until provider smoke checks are enabled"
+                .to_string(),
+        }),
+        other => Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: format!("unsupported providers subcommand {}", other),
+        }),
+    }
+}
+
+fn providers_list_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    if parsed.provider.is_some() || parsed.subject.is_some() {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "providers list does not accept provider id arguments".to_string(),
+        });
+    }
+    let registry = load_builtin_provider_registry(parsed, config)?;
+    let providers: Vec<Value> = registry
+        .providers()
+        .into_iter()
+        .map(|manifest| {
+            let profile = registry.capability_profile(manifest.id());
+            provider_summary_value(manifest, profile, config)
+        })
+        .collect();
+
+    Ok(success_envelope(
+        "providers",
+        "success",
+        json!({
+            "subcommand": "list",
+            "registry_path": BUILTIN_PROVIDER_REGISTRY,
+            "provider_count": providers.len(),
+            "providers": providers,
+            "healthcheck_enabled": false,
+            "actions_enabled": false
+        }),
+        Vec::new(),
+    ))
+}
+
+fn providers_show_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    let provider_id = match (parsed.subject.as_deref(), parsed.provider.as_deref()) {
+        (Some(subject), Some(provider)) if subject != provider => {
+            return Err(CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!(
+                    "providers show provider id mismatch: argument {}, --provider {}",
+                    subject, provider
+                ),
+            });
+        }
+        (Some(subject), _) => subject.to_string(),
+        (_, Some(provider)) => provider.to_string(),
+        (None, None) => {
+            return Err(CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: "providers show requires a provider id".to_string(),
+            });
+        }
+    };
+
+    let registry = load_builtin_provider_registry(parsed, config)?;
+    let manifest = registry
+        .manifest(&provider_id)
+        .ok_or_else(|| CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: format!("provider {} is not registered", provider_id),
+        })?;
+    let profile =
+        registry
+            .capability_profile(&provider_id)
+            .ok_or_else(|| CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!("provider {} has no capability profile", provider_id),
+            })?;
+
+    Ok(success_envelope(
+        "providers",
+        "success",
+        json!({
+            "subcommand": "show",
+            "registry_path": BUILTIN_PROVIDER_REGISTRY,
+            "provider": provider_summary_value(manifest, Some(profile), config),
+            "manifest": manifest.value(),
+            "capability_profile": profile.value(),
+            "healthcheck_enabled": false,
+            "actions_enabled": false
+        }),
+        Vec::new(),
+    ))
+}
+
+fn load_builtin_provider_registry(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+) -> Result<ProviderRegistry, CliError> {
+    let loader = ProviderRegistryLoader::new(config.repo_root());
+    loader
+        .load_registry(BUILTIN_PROVIDER_REGISTRY, &[])
+        .map_err(|source| CliError::ProviderRegistry {
+            command: parsed.command.clone(),
+            source,
+        })
+}
+
+fn provider_summary_value(
+    manifest: &ProviderManifest,
+    profile: Option<&CapabilityProfile>,
+    config: &CliConfig,
+) -> Value {
+    json!({
+        "id": manifest.id(),
+        "kind": manifest.kind(),
+        "transport": manifest.transport(),
+        "adapter": manifest.adapter(),
+        "manifest_path": repo_relative_path(config.repo_root(), manifest.path()),
+        "capabilities_path": profile
+            .map(|profile| repo_relative_path(config.repo_root(), profile.path()))
+            .unwrap_or_default(),
+        "routing_tags": profile
+            .map(|profile| profile.routing_tags().to_vec())
+            .unwrap_or_default()
+    })
+}
+
+fn reject_provider_command_options(parsed: &ParsedArgs) -> Result<(), CliError> {
+    let unsupported = [
+        (parsed.project.is_some(), "--project"),
+        (parsed.job_id.is_some(), "--job"),
+        (parsed.request.is_some(), "--request"),
+        (parsed.entrypoint.is_some(), "--entrypoint"),
+        (!parsed.provider_instances.is_empty(), "--provider-instance"),
+        (parsed.stage.is_some(), "--stage"),
+        (parsed.response.is_some(), "--response"),
+        (parsed.reason.is_some(), "--reason"),
+        (!parsed.constraints.is_empty(), "--constraint"),
+        (parsed.release_readiness, "--release-readiness"),
+        (parsed.recovery_list, "--list"),
+        (parsed.dry_run, "--dry-run"),
+        (parsed.markdown, "--markdown"),
+    ];
+    for (is_set, option) in unsupported {
+        if is_set {
+            return Err(CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!("providers does not accept {}", option),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn repo_relative_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
 }
 
 fn route_value_for_provider(route: &Value, provider_instance_id: &str) -> Value {
@@ -1678,6 +1878,94 @@ mod tests {
             .join(".ai-runs/J-0001/provider-output/fake-default/response.json")
             .exists());
         fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn providers_list_and_show_are_schema_valid_and_read_only() {
+        let config = CliConfig::new(repo_root());
+
+        let list = run_cli(["providers", "list", "--json"], &config);
+        assert_eq!(list.exit_code, 0, "{}", list.stderr);
+        let list_json: Value = serde_json::from_str(&list.stdout).expect("providers list json");
+        assert_eq!(list_json["command"], "providers");
+        assert_eq!(list_json["data"]["subcommand"], "list");
+        assert_eq!(list_json["data"]["actions_enabled"], false);
+        assert_eq!(list_json["data"]["healthcheck_enabled"], false);
+        assert_eq!(
+            list_json["artifacts"].as_array().expect("artifacts").len(),
+            0
+        );
+        let providers = list_json["data"]["providers"]
+            .as_array()
+            .expect("providers array");
+        assert!(providers.len() >= 20);
+        let fake = providers
+            .iter()
+            .find(|provider| provider["id"] == "provider.fake")
+            .expect("provider.fake listed");
+        assert_eq!(fake["kind"], "fake_provider");
+        assert_eq!(
+            fake["manifest_path"],
+            "builtin-providers/test/fake-provider/provider.yaml"
+        );
+
+        let show = run_cli(["providers", "show", "provider.fake", "--json"], &config);
+        assert_eq!(show.exit_code, 0, "{}", show.stderr);
+        let show_json: Value = serde_json::from_str(&show.stdout).expect("providers show json");
+        assert_eq!(show_json["command"], "providers");
+        assert_eq!(show_json["data"]["subcommand"], "show");
+        assert_eq!(show_json["data"]["provider"]["id"], "provider.fake");
+        assert_eq!(
+            show_json["data"]["capability_profile"]["provider"],
+            "provider.fake"
+        );
+        assert_eq!(show_json["data"]["actions_enabled"], false);
+        assert_eq!(show_json["data"]["healthcheck_enabled"], false);
+
+        let show_with_option = run_cli(
+            ["providers", "show", "--provider", "provider.fake", "--json"],
+            &config,
+        );
+        assert_eq!(show_with_option.exit_code, 0, "{}", show_with_option.stderr);
+        let show_with_option_json: Value =
+            serde_json::from_str(&show_with_option.stdout).expect("providers show option json");
+        assert_eq!(
+            show_with_option_json["data"]["provider"]["id"],
+            "provider.fake"
+        );
+    }
+
+    #[test]
+    fn providers_rejects_mutating_or_reserved_options() {
+        let config = CliConfig::new(repo_root());
+
+        let missing = run_cli(["providers", "show", "--json"], &config);
+        assert_eq!(missing.exit_code, 2);
+        let missing_json: Value =
+            serde_json::from_str(&missing.stdout).expect("missing provider error");
+        assert_eq!(missing_json["error"]["code"], "InvalidInput");
+
+        let reserved = run_cli(["providers", "healthcheck", "--json"], &config);
+        assert_eq!(reserved.exit_code, 2);
+        let reserved_json: Value =
+            serde_json::from_str(&reserved.stdout).expect("reserved provider error");
+        assert_eq!(reserved_json["error"]["code"], "InvalidInput");
+        assert!(reserved_json["error"]["message"]
+            .as_str()
+            .expect("message")
+            .contains("reserved"));
+
+        let invalid_option = run_cli(
+            [
+                "providers",
+                "list",
+                "--project",
+                "target/not-used",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(invalid_option.exit_code, 2);
     }
 
     #[test]

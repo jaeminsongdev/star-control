@@ -67,6 +67,7 @@ E40-final-m9-readiness-audit.md
 E41-final-completion-audit.md
 E42-final-audit-evidence.md
 E43-stacked-pr-readiness-coordination.md
+E44-cli-providers-read-only.md
 ```
 
 ## 사용 방법

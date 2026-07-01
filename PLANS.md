@@ -88,6 +88,7 @@
 - M9p final completion audit을 `packages/star-control-release`에 추가했다. CompleteImplementationAuditBuilder는 M0~M9 필수 check를 schema-valid readiness value로 조립하고 all-pass도 `ready`가 아니라 `reserved`로 둔다.
 - M9q final audit evidence를 추가했다. `complete-implementation-readiness.example.json`은 schema 검증 대상이며, `final-completion-audit.md`는 M0~M9 evidence, local validation, remote CI, stacked PR clean state를 정리한다.
 - M9r stacked PR readiness evidence를 추가했다. `stacked-pr-readiness.example.json`은 schema 검증 대상이며, `stacked-pr-readiness.md`는 contiguous stack, clean merge state, draft review gate, main merge not performed 상태를 정리한다.
+- M9s CLI providers read-only surface를 추가했다. `star-control providers list/show`는 builtin provider registry를 schema-valid CLI envelope으로 읽고, healthcheck/action/live call은 reserved로 둔다.
 - `star-control-cli` test helper temp project path에 counter를 추가해 병렬 workspace test의 임시 directory 충돌 가능성을 줄였다.
 - 병렬 Rust 테스트에서 provider/state/validation temp project 경로가 충돌하지 않도록 test helper에 per-process counter를 추가했다.
 - Cargo incremental finalize 경고가 나오면 경고 package만 `cargo clean -p`로 정리하고 Cargo 검증은 순차 실행한다.
@@ -96,7 +97,7 @@
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
-- M5 local provider, M6 cloud provider approval gate, M7a CLI control commands, M7b daemon queue skeleton, M7c/M7d API service, M8 UI library model, M9a~M9r observability/security/conformance/recovery/release-readiness/completion-audit/evidence/readiness foundation은 현재 exit criteria가 코드/fixture/example로 커버되었고, 현재 구현 축은 stacked PR review/merge approval 또는 승인된 destructive recovery/release action surface 순서다.
+- M5 local provider, M6 cloud provider approval gate, M7a CLI control commands/providers read-only discovery, M7b daemon queue skeleton, M7c/M7d API service, M8 UI library model, M9a~M9s observability/security/conformance/recovery/release-readiness/completion-audit/evidence/readiness foundation은 현재 exit criteria가 코드/fixture/example로 커버되었고, 현재 구현 축은 public CLI `sentinel` command group, stacked PR review/merge approval, 또는 승인된 destructive recovery/release action surface 순서다.
 
 ### 건드리면 안 되는 것
 
@@ -232,6 +233,8 @@ cargo test --workspace
 | M9q dependency record | 새 external dependency 없음; 목적: final completion audit evidence를 schema-valid example과 human-readable audit 문서로 고정; 검증: contract runner + workspace checks |
 | M9r handoff | `examples/release-contracts/stacked-pr-readiness.example.json`과 `docs/implementation/audit/stacked-pr-readiness.md`가 stacked PR review/merge coordination evidence를 고정한다. 새 example은 `check_schema_examples.py` validation case에 포함되며 status는 `reserved`다. main update, PR merge, ready status, schema field, workflow, dependency, CLI/API/UI surface, signing, publish, deploy, destructive recovery action은 추가하지 않는다 |
 | M9r dependency record | 새 external dependency 없음; 목적: stacked PR chain readiness를 schema-valid example과 human-readable audit 문서로 고정; 검증: contract runner + workspace checks |
+| M9s handoff | `packages/star-control-cli`의 `providers list/show`는 builtin provider registry와 manifest/capability profile을 read-only로 표시한다. `providers healthcheck`는 reserved invalid input으로 남긴다. provider live call, provider execution, `.ai-runs/` mutation, schema field, workflow, dependency, release/deploy/publish, destructive recovery action은 추가하지 않는다 |
+| M9s dependency record | 새 external dependency 없음; 기존 local `star-control-provider` dependency 재사용; 목적: public CLI provider discovery surface gap 해소; 검증: targeted provider/CLI tests + workspace checks |
 | Cargo incremental cleanup | finalize 경고 package는 `_`를 `-`로 바꾼 Cargo package명에 대해 `cargo clean -p <package>`만 실행한다. 이후 `cargo check --workspace --all-targets --locked`, `cargo test --workspace --all-targets --locked`를 순차 실행한다. 반복되면 현재 PowerShell 명령 범위에서만 `CARGO_INCREMENTAL=0`을 사용하고 장기 기본값으로 남기지 않는다 |
 | 이전 완료 이력 | git history |
 
@@ -302,3 +305,4 @@ cargo test --workspace
 | P-0061 | 2026-07-02 | M9p final completion audit 추가 | `packages/star-control-release/src/lib.rs`, `docs/implementation/briefs/E41-final-completion-audit.md` |
 | P-0062 | 2026-07-02 | M9q final audit evidence 추가 | `examples/release-contracts/complete-implementation-readiness.example.json`, `docs/implementation/audit/final-completion-audit.md` |
 | P-0063 | 2026-07-02 | M9r stacked PR readiness evidence 추가 | `examples/release-contracts/stacked-pr-readiness.example.json`, `docs/implementation/audit/stacked-pr-readiness.md` |
+| P-0064 | 2026-07-02 | M9s CLI providers read-only surface 추가 | `packages/star-control-cli/src/lib.rs`, `packages/star-control-provider/src/lib.rs`, `docs/implementation/briefs/E44-cli-providers-read-only.md` |

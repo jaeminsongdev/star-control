@@ -315,6 +315,8 @@ M9q final audit evidence는 `examples/release-contracts/complete-implementation-
 
 M9r stacked PR readiness coordination은 `examples/release-contracts/stacked-pr-readiness.example.json`과 `docs/implementation/audit/stacked-pr-readiness.md`로 구현한다. 이 slice는 stacked PR chain의 contiguous base/head, clean merge state, draft review gate, main merge not performed, final audit evidence link를 schema-valid ReleaseReadiness example과 human-readable audit 문서로 고정하되, main update나 PR merge는 별도 승인 전까지 수행하지 않는다.
 
+M9s CLI providers read-only surface는 `packages/star-control-cli`의 `providers list/show`와 `packages/star-control-provider`의 read-only listing accessor로 구현한다. 이 slice는 public CLI surface에 남아 있던 provider discovery gap을 채우되, provider healthcheck, provider execution, live call, credential raw value 출력, schema field 변경, workflow 변경, release/deploy/publish는 수행하지 않는다.
+
 Validation:
 
 ```text
@@ -337,6 +339,7 @@ final M9 readiness audit tests
 final completion audit tests
 final completion readiness example validation
 stacked PR readiness example validation
+CLI providers list/show tests
 ```
 
 ## 다음 작업 선택 규칙

@@ -262,6 +262,18 @@ healthcheck
 
 초기 구현은 `list`와 `show`를 read-only로 시작한다. `healthcheck`는 provider adapter smoke가 준비된 뒤 구현한다.
 
+M9s 기준 구현:
+
+```text
+star-control providers list --json
+star-control providers show <provider-id> --json
+star-control providers show --provider <provider-id> --json
+```
+
+`list`와 `show`는 `configs/registries/builtin-provider-registry.yaml`과 builtin provider manifest/capability profile만 읽는다. output은 schema-valid CLI envelope이며 `healthcheck_enabled=false`, `actions_enabled=false`를 포함한다. 이 command group은 `.ai-runs/`, provider output, daemon state, release artifact를 생성하거나 수정하지 않는다.
+
+`providers healthcheck`는 provider smoke가 준비되기 전까지 reserved invalid input으로 남긴다.
+
 ## star-control sentinel
 
 Star Sentinel builtin tool을 CLI에서 직접 실행하는 command group이다.
@@ -303,6 +315,7 @@ examples/cli-contracts/error-output.example.json
 6. missing job은 non-zero exit
 7. approval request 없이는 approve 실패
 8. terminal job은 cancel 실패
+9. `providers list/show --json` output이 schema를 만족하고 provider healthcheck/action을 실행하지 않음
 
 ## Codex 구현 지시
 
