@@ -48,6 +48,10 @@ pub enum ProviderAdapterError {
     ProviderOutputAlreadyExists {
         path: PathBuf,
     },
+    CommandPolicyDenied {
+        provider_instance_id: String,
+        reason: String,
+    },
 }
 
 impl fmt::Display for ProviderAdapterError {
@@ -104,7 +108,7 @@ impl fmt::Display for ProviderAdapterError {
                 provider_id,
             } => write!(
                 formatter,
-                "provider instance {} resolves to unsupported fake adapter provider {}",
+                "provider instance {} resolves to unsupported provider adapter provider {}",
                 provider_instance_id, provider_id
             ),
             Self::ProviderOutputAlreadyExists { path } => {
@@ -114,6 +118,14 @@ impl fmt::Display for ProviderAdapterError {
                     path.display()
                 )
             }
+            Self::CommandPolicyDenied {
+                provider_instance_id,
+                reason,
+            } => write!(
+                formatter,
+                "provider instance {} command policy denied: {}",
+                provider_instance_id, reason
+            ),
         }
     }
 }
@@ -424,6 +436,22 @@ pub struct ProviderExecution {
 }
 
 impl ProviderExecution {
+    pub(crate) fn new(
+        result: ProviderRunResult,
+        request_ref: Value,
+        response_ref: Value,
+        stdout_ref: Value,
+        stderr_ref: Option<Value>,
+    ) -> Self {
+        Self {
+            result,
+            request_ref,
+            response_ref,
+            stdout_ref,
+            stderr_ref,
+        }
+    }
+
     pub fn result(&self) -> &ProviderRunResult {
         &self.result
     }
@@ -507,13 +535,13 @@ impl ProviderAdapter for FakeProviderAdapter {
             &response_value,
         )?;
 
-        Ok(ProviderExecution {
+        Ok(ProviderExecution::new(
             result,
             request_ref,
             response_ref,
             stdout_ref,
             stderr_ref,
-        })
+        ))
     }
 }
 
@@ -565,11 +593,11 @@ fn planned_output_files(provider_instance_id: &str, include_stderr: bool) -> Vec
     files
 }
 
-fn provider_output_path(provider_instance_id: &str, file_name: &str) -> String {
+pub(crate) fn provider_output_path(provider_instance_id: &str, file_name: &str) -> String {
     format!("provider-output/{}/{}", provider_instance_id, file_name)
 }
 
-fn ensure_output_files_absent(
+pub(crate) fn ensure_output_files_absent(
     state_store: &StateStore,
     job_id: &str,
     relative_paths: &[String],

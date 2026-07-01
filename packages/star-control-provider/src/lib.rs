@@ -7,12 +7,14 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 mod fake;
+mod local_process;
 
 pub use fake::{
     load_execution_request, ExecutionRequest, FakeProviderAdapter, FakeProviderSimulation,
     ProviderAdapter, ProviderAdapterError, ProviderExecution, ProviderRunContext,
     ProviderRunResult,
 };
+pub use local_process::{LocalProcessCommandPolicy, LocalProcessProviderAdapter};
 
 const PROVIDER_MANIFEST_SCHEMA: &str = "provider-manifest.schema.json";
 const PROVIDER_INSTANCE_SCHEMA: &str = "provider-instance.schema.json";

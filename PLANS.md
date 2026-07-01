@@ -50,11 +50,13 @@
 - E10 `packages/star-control-validation` ValidationEngine을 추가했다.
 - E11 `packages/star-control-cli/tests/v0_fake_flow.rs` integration smoke를 추가했다.
 - M5 local process provider command/sandbox/timeout/cancel 정책 문서를 추가했다.
+- M5b `LocalProcessProviderAdapter` 기본 command policy, stdout/stderr capture, timeout result를 추가했다.
 
 ### 아직 남은 것
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
+- M5 local provider는 ExecutionEngine/CLI provider selection 연결, cancel state model, forbidden action evidence -> BLOCKED/FAILED mapping이 남아 있다.
 - 다음 구현 축은 complete roadmap의 M5 local provider, M6 cloud provider, M7 daemon/API, M8 UI, M9 hardening 순서다.
 
 ### 건드리면 안 되는 것
@@ -127,6 +129,7 @@ cargo test --workspace
 | E10 handoff | `ValidationEngine::evaluate_star_sentinel_gate`, `write_outcome`, `ensure_provider_response`, `ensure_approval_response_allows_next_stage`; Star Sentinel `approval.json`을 `validation/validation-decision.json`으로 정규화하고 `tool-output/star-sentinel/validation_runs.json`, `approvals/approval-request.json`, `review-packs/handoff.json`, RunState 전이를 기록한다 |
 | E11 handoff | `packages/star-control-cli/tests/v0_fake_flow.rs`; CLI `run`으로 fake provider output을 만든 뒤 Star Sentinel P0 evaluator/gate/review-pack writer와 ValidationEngine을 연결해 AUTO_PASS -> DONE smoke, HUMAN_REVIEW -> WAITING_APPROVAL -> approved -> DONE smoke, BLOCK -> BLOCKED smoke를 검증한다 |
 | M5a handoff | `docs/implementation/local-process-provider-policy.md`; local process provider는 shell 없이 executable/args vector만 실행하고, env allowlist, network deny, workspace write deny, timeout/cancel 기록, approval-required/forbidden action guard를 따른다 |
+| M5b handoff | `LocalProcessProviderAdapter`, `LocalProcessCommandPolicy`; 실행은 shell 없이 executable/args vector만 사용하고, allowlist 밖 executable/shell wrapper/forbidden executable category를 거부하며, stdout/stderr는 `provider-output/{instance}/`에 capture한다. ExecutionEngine provider selection 연결은 다음 PR 범위다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -158,3 +161,4 @@ cargo test --workspace
 | P-0023 | 2026-07-01 | E10 ValidationEngine 추가 | `packages/star-control-validation`, `packages/star-control-state` |
 | P-0024 | 2026-07-01 | E11 v0 fake integration smoke 추가 | `packages/star-control-cli/tests/v0_fake_flow.rs` |
 | P-0025 | 2026-07-01 | M5 local process provider policy 추가 | `docs/implementation/local-process-provider-policy.md`, `configs/policies/provider-policy.yaml` |
+| P-0026 | 2026-07-01 | M5b local process provider adapter 추가 | `packages/star-control-provider/src/local_process.rs` |
