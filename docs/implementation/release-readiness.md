@@ -112,6 +112,14 @@ packages/star-control-release
 
 M9o는 `M9_REQUIRED_READINESS_CHECKS`, `M9ReadinessCheck`, `M9ReadinessAuditBuilder`를 제공한다. audit builder는 M9 hardening/recovery/release-readiness foundation의 pass/fail evidence를 `release-readiness.schema.json` value로 조립한다. 모든 필수 check가 통과해도 `ready` status를 만들지 않고 final release/deploy/publish reserved blocker가 있는 `reserved` status를 사용한다. missing, duplicate, failed check는 `not_ready` blocker로 표시한다. 이 slice는 release/deploy/publish/signing action, destructive recovery action, CLI/API/UI surface, schema field 변경을 구현하지 않는다.
 
+M9p 구현 위치:
+
+```text
+packages/star-control-release
+```
+
+M9p는 `COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS`, `CompleteImplementationAuditCheck`, `CompleteImplementationAuditBuilder`를 제공한다. audit builder는 M0~M9 milestone, full local validation, remote CI evidence, stacked PR clean state, reserved action confirmation을 `release-readiness.schema.json` value로 조립한다. 모든 필수 check가 통과해도 `ready` status를 만들지 않고 release/deploy/publish 및 external repository settings reserved blocker가 있는 `reserved` status를 사용한다. missing, duplicate, failed check는 `not_ready` blocker로 표시한다. 이 slice는 release/deploy/publish/signing action, destructive recovery action, CLI/API/UI surface, schema field 변경을 구현하지 않는다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -142,6 +150,20 @@ recovery-command-surface
 release-review-pack
 destructive-actions-reserved
 release-automation-reserved
+m0-docs-decisions
+m1-runtime-foundation
+m2-provider-neutral-execution
+m3-validation-gate
+m4-v0-fake-e2e
+m5-local-provider
+m6-cloud-provider
+m7-daemon-api-control-plane
+m8-ui-shell
+m9-hardening-release-readiness
+full-local-validation
+remote-ci-evidence
+stacked-prs-clean
+reserved-actions-confirmed
 ```
 
 각 check는 `pass`, `fail`, `warn`, `not_applicable`, `reserved` 중 하나를 사용한다.
@@ -173,6 +195,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 - M9g API endpoint는 readiness artifact를 읽기만 하고 release action을 실행하지 않는다.
 - M9m review pack은 approval record가 아니며 release action을 실행하거나 활성화하지 않는다.
 - M9o final readiness audit은 all-pass 결과도 `ready`로 표시하지 않는다.
+- M9p final completion audit은 all-pass 결과도 `ready`로 표시하지 않는다.
 
 ## 테스트 기준
 
@@ -189,6 +212,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 11. CLI `report --release-readiness`는 existing readiness artifact를 읽고 release action을 실행하지 않음
 12. release review pack writer는 readiness validation을 재사용하고 `review-packs/release-review-pack.md`를 overwrite 없이 쓰며 approval/release action을 만들지 않음
 13. final M9 readiness audit은 all-pass 결과를 `reserved`로 두고 missing/duplicate/failed check를 `not_ready` blocker로 표시함
+14. final completion audit은 M0~M9 all-pass 결과를 `reserved`로 두고 missing/duplicate/failed check를 `not_ready` blocker로 표시함
 
 ## Codex 구현 지시
 
@@ -201,8 +225,9 @@ Release 관련 구현은 다음 순서로 분리한다.
 5. release profile validation integration
 6. release review pack 생성
 7. final M9 readiness audit
-8. manual approval flow
-9. artifact signing policy
-10. publish/deploy automation
+8. final completion audit
+9. manual approval flow
+10. artifact signing policy
+11. publish/deploy automation
 
-8~10은 별도 승인 전까지 구현하지 않는다.
+9~11은 별도 승인 전까지 구현하지 않는다.

@@ -53,7 +53,7 @@ work-queue-consistency-check
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
 | M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, in-process API approve/cancel/resume mutation tests |
 | M8 UI Shell | `star-control-ui` view model contract tests, read-only no-write smoke, approval path smoke, browser control shell smoke |
-| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, provider conformance hardening tests, state recovery inspection tests, recovery command surface tests, release readiness writer/API/UI/CLI tests, release review pack writer tests, final M9 readiness audit tests, audit/cost integration, recovery, retention, release readiness checks |
+| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, provider conformance hardening tests, state recovery inspection tests, recovery command surface tests, release readiness writer/API/UI/CLI tests, release review pack writer tests, final M9 readiness audit tests, final completion audit tests, audit/cost integration, recovery, retention, release readiness checks |
 
 Milestone validation은 누적된다. 뒤 단계로 갈수록 앞 단계 검증을 삭제하지 않고, 필요하면 quick/full profile로 분리한다.
 
@@ -506,6 +506,17 @@ M9o final M9 readiness audit은 release crate 수준에서 검증한다.
 - `M9ReadinessAuditBuilder`가 all-pass M9 audit을 schema-valid `reserved` readiness로 조립함
 - all-pass 결과도 `ready` status를 만들지 않고 final release/deploy/publish reserved blocker를 포함함
 - missing, duplicate, failed M9 check가 schema-valid `not_ready` readiness와 blocker로 표시됨
+- unknown check name, unsafe evidence path, empty blocker가 explicit error로 반환됨
+- schema field, workflow, dependency, CLI/API/UI surface, release/deploy/publish, repository settings mutation, destructive recovery action이 없음
+
+M9p final completion audit은 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- `COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS`가 M0~M9 milestone, validation, CI, stacked PR, reserved action 필수 항목을 public contract로 제공함
+- `CompleteImplementationAuditBuilder`가 all-pass completion audit을 schema-valid `reserved` readiness로 조립함
+- all-pass 결과도 `ready` status를 만들지 않고 release/deploy/publish 및 external repository settings reserved blocker를 포함함
+- missing, duplicate, failed completion check가 schema-valid `not_ready` readiness와 blocker로 표시됨
 - unknown check name, unsafe evidence path, empty blocker가 explicit error로 반환됨
 - schema field, workflow, dependency, CLI/API/UI surface, release/deploy/publish, repository settings mutation, destructive recovery action이 없음
 
