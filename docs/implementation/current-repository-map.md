@@ -42,8 +42,8 @@
 |---|---|---|
 | `apps/starctl/` | `SCAFFOLD` | 최종 CLI entrypoint 후보. 초기 구현 전에는 문서 골격만 둔다. |
 | `apps/star-daemon/` | `RESERVED` | 장시간 local daemon app entrypoint 후보. M7b는 package-level queue skeleton만 구현하며 app daemon process는 아직 구현하지 않는다. |
-| `apps/star-control-ui/` | `RESERVED` | browser UI shell 후보. M8a library-level view model은 `packages/star-control-ui/`에 둔다. |
-| `packages/` | `CANONICAL` / `SCAFFOLD` | `star-control-*` Cargo workspace crate와 `star-sentinel` 구현 코드를 둔다. `star-control-api`는 read-only service와 in-process control mutation service까지 구현하며 HTTP server/auth/remote exposure는 아직 reserved다. `star-control-ui`는 read-only view model까지만 구현한다. 기존 provider/transport/adapter scaffold는 post-core 확장 후보로 남긴다. |
+| `apps/star-control-ui/` | `RESERVED` | browser UI app 후보. M8a/M8b library-level view/control shell model은 `packages/star-control-ui/`에 둔다. |
+| `packages/` | `CANONICAL` / `SCAFFOLD` | `star-control-*` Cargo workspace crate와 `star-sentinel` 구현 코드를 둔다. `star-control-api`는 read-only service와 in-process control mutation service까지 구현하며 HTTP server/auth/remote exposure는 아직 reserved다. `star-control-ui`는 read-only view model과 browser-oriented control shell model까지 구현한다. 기존 provider/transport/adapter scaffold는 post-core 확장 후보로 남긴다. |
 | `integrations/` | `RESERVED` | GitHub ruleset, workflow, 외부 연동 산출물 후보. 실제 연동 작업은 별도 승인 후 처리한다. |
 
 ## apps와 packages의 관계
@@ -132,5 +132,5 @@ star.sentinel
 | E08 CLI 세부 분할 | 현재 큐 또는 후속 consistency PR에서 명시한다. |
 | E09 Star Sentinel P0 세부 분할 | P0 evaluator/gate/review/selfcheck 단위로 정리한다. |
 | local/cloud provider | fake flow 안정화 전까지 `RESERVED`다. |
-| daemon process/HTTP API server/browser UI | daemon queue skeleton, API read-only/control mutation service, UI read-only view model 이후에도 process, HTTP server/auth/remote exposure, browser UI app은 별도 slice까지 `RESERVED`다. |
+| daemon process/HTTP API server/browser UI app | daemon queue skeleton, API read-only/control mutation service, UI read-only/control shell model 이후에도 process, HTTP server/auth/remote exposure, 실제 browser UI app은 별도 slice까지 `RESERVED`다. |
 | release automation | 별도 승인 전까지 `RESERVED`다. |

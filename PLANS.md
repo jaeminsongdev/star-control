@@ -67,8 +67,9 @@
 - M7a CLI approve/cancel/resume control commands를 추가해 daemon/API 전제 조건을 file-based StateStore에서 검증한다.
 - M7b daemon queue skeleton을 추가해 config root 아래 daemon state와 StateStore job 참조 queue를 검증한다.
 - M7c API read-only service를 추가해 daemon state와 StateStore job/events/report를 schema-valid API envelope으로 조회한다.
-- M8a UI read-only view model을 `packages/star-control-ui`의 `UiReadOnlyShell`로 추가했다. browser UI app, HTTP API server, provider process 실행은 다음 slice까지 제외한다.
+- M8a UI read-only view model을 `packages/star-control-ui`의 `UiReadOnlyShell`로 추가했다. browser UI app, HTTP API server, provider process 실행은 RESERVED로 남긴다.
 - M7d API control mutation service를 추가해 HTTP server 없이 `approve`, `cancel`, `resume` mutation을 in-process API로 검증한다.
+- M8b UI browser control shell model을 `packages/star-control-ui`의 `UiBrowserShell`로 추가했다. 실제 browser UI app, HTTP server, package manager는 아직 추가하지 않는다.
 - 병렬 Rust 테스트에서 provider/state temp project 경로가 충돌하지 않도록 test helper에 per-process counter를 추가했다.
 - Cargo incremental finalize 경고가 나오면 경고 package만 `cargo clean -p`로 정리하고 Cargo 검증은 순차 실행한다.
 
@@ -76,7 +77,7 @@
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
-- M5 local provider, M6 cloud provider approval gate, M7a CLI control commands, M7b daemon queue skeleton, M7c API read-only service는 현재 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M8 UI, M9 hardening 순서다.
+- M5 local provider, M6 cloud provider approval gate, M7a CLI control commands, M7b daemon queue skeleton, M7c/M7d API service, M8 UI library model은 현재 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M9 hardening 순서다.
 
 ### 건드리면 안 되는 것
 
@@ -174,6 +175,8 @@ cargo test --workspace
 | M8a dependency record | direct dependency `serde_json = "1"`, local dependency `star-control-api`, `star-control-schema`; dev-only local dependency `star-control-state`; 목적: API response projection, UI job view schema validation, fixture-backed no-write tests; 검증: Cargo targeted/workspace checks + contract runner |
 | M7d handoff | `packages/star-control-api`의 `ApiControlService`는 `ApiReadOnlyService`를 감싸 GET read-only endpoint와 POST approve/cancel/resume mutation을 in-process로 처리한다. `approve`는 approval request를 요구하고 `approval-response.json`을 쓰며, `cancel`은 non-terminal만 `CANCELLED`, `resume`은 matching approved response만 `VALIDATED`로 전이한다. HTTP server/socket/auth/remote exposure/provider scheduling은 아직 구현하지 않았다 |
 | M7d dependency record | 새 external dependency 없음; 기존 direct dependency `serde_json = "1"`와 local `star-control-state`, `star-control-daemon`, `star-control-schema`만 사용; 목적: API request body projection, StateStore control mutation, schema validation; 검증: Cargo targeted/workspace checks + contract runner |
+| M8b handoff | `packages/star-control-ui`의 `UiBrowserShell`은 `ApiControlService`를 소비해 browser-oriented action panel과 approve/cancel/resume result view를 만든다. action enable/disable reason, approved 이후 resume enabled, terminal cancel disabled/failure surface를 검증한다. 실제 browser UI app, HTTP server, package manager, remote exposure는 아직 구현하지 않았다 |
+| M8b dependency record | 새 external dependency 없음; 기존 direct dependency `serde_json = "1"`와 local `star-control-api`, `star-control-schema`, dev-only `star-control-state`만 사용; 목적: control API response projection, UI job view schema validation, fixture-backed mutation smoke; 검증: Cargo targeted/workspace checks + contract runner |
 | Cargo incremental cleanup | finalize 경고 package는 `_`를 `-`로 바꾼 Cargo package명에 대해 `cargo clean -p <package>`만 실행한다. 이후 `cargo check --workspace --all-targets --locked`, `cargo test --workspace --all-targets --locked`를 순차 실행한다. 반복되면 현재 PowerShell 명령 범위에서만 `CARGO_INCREMENTAL=0`을 사용하고 장기 기본값으로 남기지 않는다 |
 | 이전 완료 이력 | git history |
 
@@ -225,3 +228,4 @@ cargo test --workspace
 | P-0042 | 2026-07-01 | M7c API read-only service 추가 | `packages/star-control-api/src/lib.rs`, `docs/implementation/briefs/E22-api-read-only.md` |
 | P-0043 | 2026-07-01 | M8a UI read-only view model 추가 | `packages/star-control-ui/src/lib.rs`, `docs/implementation/briefs/E23-ui-read-only-view.md` |
 | P-0044 | 2026-07-02 | M7d API control mutation service 추가 | `packages/star-control-api/src/lib.rs`, `docs/implementation/briefs/E24-api-control-mutations.md` |
+| P-0045 | 2026-07-02 | M8b UI browser control shell model 추가 | `packages/star-control-ui/src/lib.rs`, `docs/implementation/briefs/E25-ui-browser-control-shell.md` |

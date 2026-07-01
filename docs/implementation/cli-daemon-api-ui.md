@@ -309,7 +309,7 @@ Review pack viewer
 Settings / provider registry
 ```
 
-초기 UI는 `packages/star-control-ui`의 read-only view model부터 시작한다. 승인/취소/재개 mutation은 API와 CLI 안정화 이후 추가한다.
+초기 UI는 `packages/star-control-ui`의 read-only view model부터 시작한다. 승인/취소/재개 mutation은 API와 CLI 안정화 이후 `UiBrowserShell`이 `ApiControlService`를 통해 수행한다.
 
 M8a 구현 범위:
 
@@ -325,6 +325,20 @@ review pack viewer data
 ```
 
 M8a는 browser UI app, TypeScript/Node package manager, HTTP API server, browser mutation wiring을 구현하지 않는다.
+
+M8b 구현 범위:
+
+```text
+UiBrowserShell
+browser_control_shell action panel
+approve/cancel/resume action surface
+ApiControlService consumer wiring
+control mutation result view
+terminal cancel disabled surface
+approved response 이후 resume enabled surface
+```
+
+M8b는 browser-oriented library model이며, browser UI app, TypeScript/Node package manager, HTTP server, socket listener, auth/session, remote exposure는 구현하지 않는다.
 
 ## UI 금지 사항
 
@@ -380,6 +394,6 @@ Codex는 CLI를 먼저 구현한다. Daemon, API, UI는 문서 계약만 보고 
 7. UI shell read-only view model
 8. API approve/cancel/resume control mutation service
 
-M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. M7b 기준으로 daemon queue skeleton은 config root 아래 `daemon/state.json`을 만들고 StateStore job을 참조 등록한다. M7c 기준으로 API read-only service는 daemon state와 StateStore artifact를 schema-valid envelope으로 읽는다. M8a 기준으로 UI read-only view model은 이 API service를 소비하고 StateStore artifact를 직접 수정하지 않는다. M7d 기준으로 API control mutation service는 HTTP server 없이 approval/cancel/resume mutation을 in-process로 제공한다. API server, auth/session, remote exposure, browser UI shell은 별도 slice에서 구현한다.
+M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. M7b 기준으로 daemon queue skeleton은 config root 아래 `daemon/state.json`을 만들고 StateStore job을 참조 등록한다. M7c 기준으로 API read-only service는 daemon state와 StateStore artifact를 schema-valid envelope으로 읽는다. M8a 기준으로 UI read-only view model은 이 API service를 소비하고 StateStore artifact를 직접 수정하지 않는다. M7d 기준으로 API control mutation service는 HTTP server 없이 approval/cancel/resume mutation을 in-process로 제공한다. M8b 기준으로 browser-oriented UI control shell은 `ApiControlService`를 소비해 action panel과 mutation result view를 만든다. API server, auth/session, remote exposure, 실제 browser UI app은 별도 승인 전까지 구현하지 않는다.
 
 각 단계는 별도 PR로 진행한다.

@@ -253,7 +253,7 @@ Exit criteria:
 
 M8a read-only view model은 `packages/star-control-ui`의 `UiReadOnlyShell`로 구현한다. 이 slice는 browser app이 아니라 API read-only service를 소비하는 library-level view model이며, job list/detail/timeline/provider output/validation/approval/review pack 데이터를 만들고 StateStore artifact를 직접 수정하지 않는다.
 
-M8b browser UI shell은 `ApiReadOnlyService`와 `ApiControlService`를 함께 소비하도록 설계한다. Browser package manager, network server, remote exposure는 별도 승인 전까지 구현하지 않는다.
+M8b browser UI shell은 `packages/star-control-ui`의 `UiBrowserShell`로 구현한다. 이 slice는 browser app이 아니라 browser-oriented library model이며 `ApiControlService`를 소비해 action panel, approve/cancel/resume result view, enable/disable reason을 만든다. Browser package manager, network server, remote exposure는 별도 승인 전까지 구현하지 않는다.
 
 Validation:
 
@@ -263,6 +263,7 @@ cargo test -p star-control-ui -- --nocapture
 UI contract tests
 read-only view smoke
 approval flow smoke
+browser control shell smoke
 ```
 
 ## M9 Hardening / Conformance / Release Readiness

@@ -454,7 +454,7 @@ Milestone: M8 UI Shell.
 
 - job list, job detail, run timeline, approval/review 화면을 제공한다.
 
-초기 read-only UI부터 시작한다.
+초기 read-only UI부터 시작한다. 현재 착수 큐에서는 `UiReadOnlyShell` read-only view model과 `UiBrowserShell` browser-oriented control shell model을 package layer에서 먼저 구현하고, 실제 browser UI app/runtime은 별도 승인 전까지 RESERVED로 둔다.
 
 ## EPIC 19: Security / Cost / Observability Hardening
 

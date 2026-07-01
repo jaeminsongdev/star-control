@@ -69,9 +69,10 @@ E21 Daemon Queue Skeleton
 E22 API Read-Only
 E23 UI Read-Only View
 E24 API Control Mutations
+E25 UI Browser Control Shell
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1941,7 +1942,96 @@ ApiReadOnlyService non-GET rejection 유지
 다음 EPIC handoff:
 
 ```text
-M8b browser UI shell은 ApiReadOnlyService와 ApiControlService를 함께 소비하도록 설계한다. browser UI package manager, network server, remote API exposure는 별도 승인 전까지 구현하지 않는다.
+E25 UI browser control shell은 UiBrowserShell이 ApiControlService를 소비하도록 설계한다. browser UI package manager, network server, remote API exposure는 별도 승인 전까지 구현하지 않는다.
+```
+
+## E25 UI Browser Control Shell
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cli-daemon-api-ui.md
+ui-shell-contract.md
+api-contract.md
+approval-review-flow.md
+state-store.md
+security-privacy-observability-contracts.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-ui/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+browser UI app 구현
+TypeScript/Node package manager 도입
+HTTP server 구현
+socket listener 구현
+remote API exposure
+auth/session 시스템 구현
+daemon background worker 변경
+provider process 실행 구현
+Star Sentinel rule 직접 구현
+StateStore file 직접 mutation 구현
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+release/deploy/publish automation
+외부 provider live call
+credential raw value lookup/materialization
+```
+
+입력 artifact:
+
+```text
+ApiControlService GET read-only endpoint
+ApiControlService POST approve/cancel/resume endpoint
+대상 project .ai-runs/{job_id}/job.json
+대상 project .ai-runs/{job_id}/run-state.json
+대상 project .ai-runs/{job_id}/events.jsonl
+대상 project .ai-runs/{job_id}/approvals/approval-request.json
+대상 project .ai-runs/{job_id}/approvals/approval-response.json
+specs/schemas/ui-job-view.schema.json
+specs/schemas/api-response.schema.json
+```
+
+출력 artifact:
+
+```text
+없음
+```
+
+핵심 TASK:
+
+```text
+UiBrowserShell 추가
+browser_control_shell action panel 추가
+approve/cancel/resume action surface 추가
+ApiControlService handle_get/handle_post 소비
+approval response body builder
+control mutation result view
+terminal cancel disabled surface
+approved response 이후 resume enabled surface
+secret-like result redaction 유지
+HTTP/server/package-manager 미도입 regression test
+```
+
+완료 기준: `UiBrowserShell`이 `ApiControlService`를 소비해 browser-oriented action panel과 approve/cancel/resume result view를 만들고, mutation은 API control service를 통해서만 수행해야 한다. TypeScript/Node package manager, HTTP server, socket, auth/session, remote exposure는 구현하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9 hardening은 security, cost, observability, conformance, release readiness 검증을 작은 PR로 확장한다. 실제 browser app, HTTP server, auth/session, remote exposure, package manager 도입은 별도 승인 전까지 RESERVED다.
 ```
 
 ## RESERVED
@@ -1956,7 +2046,7 @@ Cloud API Provider transport execution
 Cloud provider-specific parser / conformance
 Daemon
 HTTP server / remote API exposure
-Browser UI Shell / UI mutation flow
+Browser UI Shell app / remote UI runtime
 Security / Cost / Observability Hardening
 Release Readiness Automation
 ```

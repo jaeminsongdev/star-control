@@ -119,6 +119,7 @@ approval-response artifact writer
 run-state update
 events.jsonl audit event append
 structured mutation error envelope
+M8b `UiBrowserShell` consumer 지원
 ```
 
 아직 구현하지 않음:

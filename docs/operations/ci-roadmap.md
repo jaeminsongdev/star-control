@@ -36,7 +36,7 @@ python scripts/ci/run_all.py
 | M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture test를 추가한다. |
 | M6 Cloud Provider | provider conformance, artifact path/ref/file existence, provider request/response fixture, cloud API offline fixture runtime, transport plan artifact, live approval gate artifact/state, credential reference, budget/cost, privacy handoff test를 추가한다. |
 | M7 Daemon / API | CLI approve/cancel/resume regression, daemon queue skeleton test, API read-only service test, in-process API approve/cancel/resume mutation test, daemon/API smoke와 resume/cancel/approval regression test를 추가한다. |
-| M8 UI Shell | `star-control-ui` view model contract, read-only no-write smoke, approval path smoke를 추가한다. |
+| M8 UI Shell | `star-control-ui` view model contract, read-only no-write smoke, approval path smoke, browser control shell smoke를 추가한다. |
 | M9 Hardening / Release Readiness | security guard, provider conformance suite, release readiness checks를 추가한다. |
 
 각 단계의 CI 추가는 실패 검사를 삭제하거나 약화하지 않는 별도 PR로 진행한다.
