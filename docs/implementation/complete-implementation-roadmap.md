@@ -311,6 +311,8 @@ M9o final M9 readiness audit은 `packages/star-control-release`의 `M9ReadinessA
 
 M9p final completion audit은 `packages/star-control-release`의 `CompleteImplementationAuditBuilder`로 구현한다. 이 slice는 M0~M9 milestone, full local validation, remote CI evidence, stacked PR clean state, reserved action confirmation을 `release-readiness.schema.json` value로 조립하고 missing/duplicate/failed check를 blocker로 표시하되, all-pass 결과도 `ready`가 아니라 release/deploy/publish와 external repository settings reserved blocker가 있는 `reserved` status로 둔다.
 
+M9q final audit evidence는 `examples/release-contracts/complete-implementation-readiness.example.json`과 `docs/implementation/audit/final-completion-audit.md`로 구현한다. 이 slice는 M0~M9 completion audit evidence를 schema-valid ReleaseReadiness example과 human-readable audit 문서로 고정하되, all-pass evidence도 `ready`가 아니라 release/deploy/publish와 external repository settings reserved blocker가 있는 `reserved` status로 둔다.
+
 Validation:
 
 ```text
@@ -331,6 +333,7 @@ release readiness writer tests
 release review pack writer tests
 final M9 readiness audit tests
 final completion audit tests
+final completion readiness example validation
 ```
 
 ## 다음 작업 선택 규칙

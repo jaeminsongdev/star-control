@@ -120,6 +120,15 @@ packages/star-control-release
 
 M9p는 `COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS`, `CompleteImplementationAuditCheck`, `CompleteImplementationAuditBuilder`를 제공한다. audit builder는 M0~M9 milestone, full local validation, remote CI evidence, stacked PR clean state, reserved action confirmation을 `release-readiness.schema.json` value로 조립한다. 모든 필수 check가 통과해도 `ready` status를 만들지 않고 release/deploy/publish 및 external repository settings reserved blocker가 있는 `reserved` status를 사용한다. missing, duplicate, failed check는 `not_ready` blocker로 표시한다. 이 slice는 release/deploy/publish/signing action, destructive recovery action, CLI/API/UI surface, schema field 변경을 구현하지 않는다.
 
+M9q 구현 위치:
+
+```text
+examples/release-contracts
+docs/implementation/audit
+```
+
+M9q는 `complete-implementation-readiness.example.json`과 `final-completion-audit.md`를 제공한다. example은 `COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS` 전체를 포함하는 schema-valid ReleaseReadiness이며, status는 `reserved`이고 release/deploy/publish 및 external repository settings reserved blocker를 포함한다. audit 문서는 M0~M9 evidence path, local validation command set, remote CI evidence, stacked PR clean state, reserved blockers를 사람이 검토할 수 있게 정리한다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -196,6 +205,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 - M9m review pack은 approval record가 아니며 release action을 실행하거나 활성화하지 않는다.
 - M9o final readiness audit은 all-pass 결과도 `ready`로 표시하지 않는다.
 - M9p final completion audit은 all-pass 결과도 `ready`로 표시하지 않는다.
+- M9q final audit evidence example은 all-pass 결과도 `ready`로 표시하지 않는다.
 
 ## 테스트 기준
 
@@ -213,6 +223,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 12. release review pack writer는 readiness validation을 재사용하고 `review-packs/release-review-pack.md`를 overwrite 없이 쓰며 approval/release action을 만들지 않음
 13. final M9 readiness audit은 all-pass 결과를 `reserved`로 두고 missing/duplicate/failed check를 `not_ready` blocker로 표시함
 14. final completion audit은 M0~M9 all-pass 결과를 `reserved`로 두고 missing/duplicate/failed check를 `not_ready` blocker로 표시함
+15. final audit evidence example은 schema validation에 포함되고 all-pass evidence도 `reserved`로 둠
 
 ## Codex 구현 지시
 
@@ -226,8 +237,9 @@ Release 관련 구현은 다음 순서로 분리한다.
 6. release review pack 생성
 7. final M9 readiness audit
 8. final completion audit
-9. manual approval flow
-10. artifact signing policy
-11. publish/deploy automation
+9. final audit evidence
+10. manual approval flow
+11. artifact signing policy
+12. publish/deploy automation
 
-9~11은 별도 승인 전까지 구현하지 않는다.
+10~12는 별도 승인 전까지 구현하지 않는다.

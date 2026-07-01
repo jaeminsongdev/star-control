@@ -65,6 +65,7 @@ E38-release-review-pack-foundation.md
 E39-recovery-command-surface.md
 E40-final-m9-readiness-audit.md
 E41-final-completion-audit.md
+E42-final-audit-evidence.md
 ```
 
 ## 사용 방법

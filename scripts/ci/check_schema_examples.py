@@ -10,6 +10,26 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
+COMPLETE_IMPLEMENTATION_EXAMPLE = "examples/release-contracts/complete-implementation-readiness.example.json"
+COMPLETE_IMPLEMENTATION_RESERVED_BLOCKER = (
+    "release/deploy/publish and external repository settings remain reserved until explicit approval"
+)
+COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS = [
+    "m0-docs-decisions",
+    "m1-runtime-foundation",
+    "m2-provider-neutral-execution",
+    "m3-validation-gate",
+    "m4-v0-fake-e2e",
+    "m5-local-provider",
+    "m6-cloud-provider",
+    "m7-daemon-api-control-plane",
+    "m8-ui-shell",
+    "m9-hardening-release-readiness",
+    "full-local-validation",
+    "remote-ci-evidence",
+    "stacked-prs-clean",
+    "reserved-actions-confirmed",
+]
 
 VALIDATION_CASES = [
     ("specs/schemas/job.schema.json", "examples/runs/J-0001/job.json"),
@@ -37,6 +57,7 @@ VALIDATION_CASES = [
     ("specs/schemas/cost-metric.schema.json", "examples/security-contracts/cost-metric.fake.example.json"),
     ("specs/schemas/privacy-handoff.schema.json", "examples/security-contracts/privacy-handoff.example.json"),
     ("specs/schemas/release-readiness.schema.json", "examples/release-contracts/release-readiness.example.json"),
+    ("specs/schemas/release-readiness.schema.json", "examples/release-contracts/complete-implementation-readiness.example.json"),
     ("specs/schemas/workspec.schema.json", "examples/runs/J-0001/workspecs/implement.json"),
     ("specs/schemas/report.schema.json", "configs/templates/report-template.json"),
     ("specs/schemas/report.schema.json", "examples/fake/impl-report-done.json"),
@@ -143,12 +164,73 @@ def validate_value(value: Any, schema: dict[str, Any], location: str, errors: li
             validate_value(item, schema["items"], f"{location}[{index}]", errors)
 
 
+def validate_complete_implementation_example(errors: list[str]) -> None:
+    document = load_json(COMPLETE_IMPLEMENTATION_EXAMPLE)
+    if document.get("status") != "reserved":
+        errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: status must remain reserved")
+
+    blockers = document.get("blockers")
+    if not isinstance(blockers, list) or COMPLETE_IMPLEMENTATION_RESERVED_BLOCKER not in blockers:
+        errors.append(
+            f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: missing reserved blocker "
+            f"{COMPLETE_IMPLEMENTATION_RESERVED_BLOCKER!r}"
+        )
+
+    checks = document.get("checks")
+    if not isinstance(checks, list):
+        errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: checks must be an array")
+        return
+
+    observed: dict[str, dict[str, Any]] = {}
+    duplicate_names: list[str] = []
+    for check in checks:
+        if not isinstance(check, dict):
+            continue
+        name = check.get("name")
+        if not isinstance(name, str):
+            continue
+        if name in observed:
+            duplicate_names.append(name)
+        observed[name] = check
+
+    for name in duplicate_names:
+        errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: duplicate check {name!r}")
+
+    for required_check in COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS:
+        check = observed.get(required_check)
+        if check is None:
+            errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: missing check {required_check!r}")
+            continue
+        if check.get("status") != "pass":
+            errors.append(
+                f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: check {required_check!r} must have status pass"
+            )
+        evidence_paths = check.get("evidence_paths")
+        if not isinstance(evidence_paths, list) or not evidence_paths:
+            errors.append(
+                f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: check {required_check!r} must include evidence_paths"
+            )
+            continue
+        for evidence_path in evidence_paths:
+            if not isinstance(evidence_path, str) or not (ROOT / evidence_path).exists():
+                errors.append(
+                    f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: evidence path for "
+                    f"{required_check!r} does not exist: {evidence_path!r}"
+                )
+
+    unexpected_checks = sorted(set(observed) - set(COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS))
+    for unexpected_check in unexpected_checks:
+        errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: unexpected check {unexpected_check!r}")
+
+
 def main() -> int:
     errors: list[str] = []
     for schema_path, document_path in VALIDATION_CASES:
         case_errors: list[str] = []
         validate_value(load_json(document_path), load_json(schema_path), document_path, case_errors)
         errors.extend(f"{document_path} against {schema_path}: {error}" for error in case_errors)
+
+    validate_complete_implementation_example(errors)
 
     if errors:
         print("ERROR: schema example check failed", file=sys.stderr)

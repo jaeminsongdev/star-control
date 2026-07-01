@@ -53,7 +53,7 @@ work-queue-consistency-check
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
 | M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, in-process API approve/cancel/resume mutation tests |
 | M8 UI Shell | `star-control-ui` view model contract tests, read-only no-write smoke, approval path smoke, browser control shell smoke |
-| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, provider conformance hardening tests, state recovery inspection tests, recovery command surface tests, release readiness writer/API/UI/CLI tests, release review pack writer tests, final M9 readiness audit tests, final completion audit tests, audit/cost integration, recovery, retention, release readiness checks |
+| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, provider conformance hardening tests, state recovery inspection tests, recovery command surface tests, release readiness writer/API/UI/CLI tests, release review pack writer tests, final M9 readiness audit tests, final completion audit tests, final completion readiness example validation, audit/cost integration, recovery, retention, release readiness checks |
 
 Milestone validation은 누적된다. 뒤 단계로 갈수록 앞 단계 검증을 삭제하지 않고, 필요하면 quick/full profile로 분리한다.
 
@@ -518,6 +518,16 @@ M9p final completion audit은 release crate 수준에서 검증한다.
 - all-pass 결과도 `ready` status를 만들지 않고 release/deploy/publish 및 external repository settings reserved blocker를 포함함
 - missing, duplicate, failed completion check가 schema-valid `not_ready` readiness와 blocker로 표시됨
 - unknown check name, unsafe evidence path, empty blocker가 explicit error로 반환됨
+- schema field, workflow, dependency, CLI/API/UI surface, release/deploy/publish, repository settings mutation, destructive recovery action이 없음
+
+M9q final audit evidence는 schema/example와 documentation 수준에서 검증한다.
+
+검증 항목:
+
+- `examples/release-contracts/complete-implementation-readiness.example.json`이 `release-readiness.schema.json`을 만족함
+- final completion readiness example이 M0~M9, full local validation, remote CI evidence, stacked PR clean state, reserved action confirmation check를 포함함
+- example status가 `reserved`이고 release/deploy/publish 및 external repository settings reserved blocker를 포함함
+- `docs/implementation/audit/final-completion-audit.md`가 M0~M9 evidence path, local validation command set, remote CI evidence, stacked PR clean state, reserved blockers를 설명함
 - schema field, workflow, dependency, CLI/API/UI surface, release/deploy/publish, repository settings mutation, destructive recovery action이 없음
 
 ## CI 변경 policy
