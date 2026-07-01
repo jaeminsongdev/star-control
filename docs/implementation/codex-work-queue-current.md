@@ -76,9 +76,10 @@ E28 Cost Metric Budget Guard
 E29 Provider Conformance Hardening
 E30 State Recovery Inspection
 E31 Release Readiness Writer
+E32 Release Readiness API Read
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening, E30은 StateStore recovery inspect-only, E31은 ReleaseReadinessWriter slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening, E30은 StateStore recovery inspect-only, E31은 ReleaseReadinessWriter, E32는 release readiness API read-only surface slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -2525,7 +2526,83 @@ path traversal job id rejection test
 다음 EPIC handoff:
 
 ```text
-M9g는 release readiness read surface 또는 recovery command surface로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+M9g는 release readiness API read surface 또는 recovery command surface로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E32 Release Readiness API Read
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+api-contract.md
+testing-ci-release.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+Cargo.lock
+packages/star-control-api/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+CLI command 추가
+artifact signing 구현
+package registry 설정
+repository branch protection/settings 변경
+```
+
+입력 artifact:
+
+```text
+.ai-runs/{job_id}/release/release-readiness.json
+specs/schemas/release-readiness.schema.json
+specs/schemas/api-response.schema.json
+```
+
+출력 surface:
+
+```text
+GET /projects/{project_id}/jobs/{job_id}/release-readiness
+ApiReadOnlyService response envelope
+```
+
+핵심 TASK:
+
+```text
+star-control-api -> star-control-release local dependency 추가
+ApiReadOnlyService release-readiness GET path 추가
+ReleaseReadinessWriter::read 기반 readback
+missing readiness structured error 추가
+read-only no mutation regression test
+API response schema validation
+release/deploy/publish automation 미구현 유지
+```
+
+완료 기준: `ApiReadOnlyService`가 existing release readiness artifact를 `GET /projects/{project_id}/jobs/{job_id}/release-readiness`에서 schema-valid API envelope으로 반환하고, missing artifact를 structured error로 반환해야 한다. endpoint는 StateStore artifact를 수정하지 않아야 하며, HTTP server, CLI command, browser UI app, release/deploy/publish, repository settings, workflow, schema field 변경은 하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9h는 release readiness CLI/UI read surface, release profile/version checker, 또는 recovery command surface 중 하나로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
 ```
 
 ## RESERVED

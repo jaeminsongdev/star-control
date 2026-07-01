@@ -80,6 +80,7 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "star-control-daemon",
+ "star-control-release",
  "star-control-schema",
  "star-control-security",
  "star-control-state",

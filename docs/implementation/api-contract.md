@@ -31,9 +31,10 @@ GET /projects/{project_id}/jobs
 GET /projects/{project_id}/jobs/{job_id}
 GET /projects/{project_id}/jobs/{job_id}/events
 GET /projects/{project_id}/jobs/{job_id}/report?stage={stage}
+GET /projects/{project_id}/jobs/{job_id}/release-readiness
 ```
 
-M7c 구현은 위 endpoint를 in-process `ApiReadOnlyService` path dispatch로 제공한다. HTTP server, socket listener, remote exposure는 아직 구현하지 않는다.
+M7c 구현은 기본 endpoint를 in-process `ApiReadOnlyService` path dispatch로 제공하고, M9g는 release readiness read-only endpoint를 같은 방식으로 추가한다. HTTP server, socket listener, remote exposure는 아직 구현하지 않는다.
 
 ## mutation endpoint 후보
 
@@ -96,6 +97,7 @@ waiting_approval
 - mutation method rejection
 - secret-like string/key redaction
 - M8a `UiReadOnlyShell` consumer 지원
+- M9g `release-readiness` read-only endpoint
 
 아직 구현하지 않음:
 
@@ -142,3 +144,4 @@ provider execution scheduling
 5. missing artifact는 structured error로 반환
 6. mutation method는 read-only API에서 거부
 7. control mutation은 approval/cancel/resume precondition을 지킴
+8. release readiness endpoint는 artifact를 읽기만 하고 StateStore를 수정하지 않음

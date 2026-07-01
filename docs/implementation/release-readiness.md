@@ -48,6 +48,14 @@ packages/star-control-release
 
 M9f는 `ReleaseReadinessWriter`를 제공한다. writer는 schema-valid ReleaseReadiness JSON을 `.ai-runs/{job_id}/release/release-readiness.json`에 한 번만 쓰고, ArtifactRef는 `kind=other`, `producer=star-control-release`, `schema_path=specs/schemas/release-readiness.schema.json`을 사용한다. 현재 slice에서는 `ready` status를 거부하고, `reserved` status에는 blocker explanation을 요구한다.
 
+M9g 구현 위치:
+
+```text
+packages/star-control-api
+```
+
+M9g는 `ApiReadOnlyService`에 `GET /projects/{project_id}/jobs/{job_id}/release-readiness`를 추가한다. endpoint는 existing ReleaseReadiness artifact를 읽고 `api-response.schema.json` envelope으로 반환하며, missing artifact는 `release_readiness_not_found` structured error로 반환한다. 이 endpoint는 StateStore artifact를 수정하지 않고, HTTP server나 release/deploy/publish automation을 추가하지 않는다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -90,6 +98,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 - approval 없이 release/deploy/publish를 실행하지 않는다.
 - readiness status를 증거 없이 `ready`로 표시하지 않는다.
 - M9f writer는 기존 readiness artifact를 조용히 덮어쓰지 않는다.
+- M9g API endpoint는 readiness artifact를 읽기만 하고 release action을 실행하지 않는다.
 
 ## 테스트 기준
 
@@ -98,17 +107,19 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 3. `ready` 상태는 blockers가 비어 있고 approvals가 있어야 함
 4. release profile failure는 blocked로 mapping 가능
 5. version/changelog mismatch는 blocker로 기록
+6. API read-only endpoint는 missing readiness를 structured error로 반환하고 artifact를 수정하지 않음
 
 ## Codex 구현 지시
 
 Release 관련 구현은 다음 순서로 분리한다.
 
 1. release readiness artifact writer
-2. changelog/version consistency checker
-3. release profile validation integration
-4. release review pack 생성
-5. manual approval flow
-6. artifact signing policy
-7. publish/deploy automation
+2. API read-only release readiness surface
+3. changelog/version consistency checker
+4. release profile validation integration
+5. release review pack 생성
+6. manual approval flow
+7. artifact signing policy
+8. publish/deploy automation
 
-6~7은 별도 승인 전까지 구현하지 않는다.
+7~8은 별도 승인 전까지 구현하지 않는다.

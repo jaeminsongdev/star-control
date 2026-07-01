@@ -291,6 +291,8 @@ M9e state recovery inspection은 `packages/star-control-state`의 `StateStore::i
 
 M9f release readiness writer는 `packages/star-control-release`의 ReleaseReadinessWriter로 구현한다. 이 slice는 `.ai-runs/{job_id}/release/release-readiness.json` artifact를 생성/검증하되, `ready` status, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
 
+M9g release readiness API read는 `packages/star-control-api`의 `ApiReadOnlyService`에 `GET /projects/{project_id}/jobs/{job_id}/release-readiness` path를 추가한다. 이 slice는 existing readiness artifact를 schema-valid API envelope으로 읽어 반환하되, HTTP server, CLI command, UI app, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
 Validation:
 
 ```text

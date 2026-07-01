@@ -415,6 +415,16 @@ M9f release readiness writer는 release crate 수준에서 검증한다.
 - 기존 readiness artifact를 조용히 overwrite하지 않음
 - release/deploy/publish, repository settings, package registry mutation이 없음
 
+M9g release readiness API read는 API crate 수준에서 검증한다.
+
+검증 항목:
+
+- `ApiReadOnlyService`가 `GET /projects/{project_id}/jobs/{job_id}/release-readiness`를 지원함
+- response envelope이 `api-response.schema.json`을 만족함
+- missing readiness artifact가 `release_readiness_not_found` structured error로 반환됨
+- endpoint가 job state나 artifact를 수정하지 않음
+- HTTP server, CLI command, browser UI app, release/deploy/publish, repository settings mutation이 없음
+
 ## CI 변경 policy
 
 CI workflow 변경은 다음을 PR 본문에 명시해야 한다.
