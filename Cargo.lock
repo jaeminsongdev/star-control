@@ -84,6 +84,8 @@ dependencies = [
  "star-control-router",
  "star-control-schema",
  "star-control-state",
+ "star-control-validation",
+ "star-sentinel",
 ]
 
 [[package]]

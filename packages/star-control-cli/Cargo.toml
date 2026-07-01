@@ -11,6 +11,10 @@ star-control-router = { path = "../star-control-router" }
 star-control-schema = { path = "../star-control-schema" }
 star-control-state = { path = "../star-control-state" }
 
+[dev-dependencies]
+star-control-validation = { path = "../star-control-validation" }
+star-sentinel = { path = "../star-sentinel" }
+
 [[bin]]
 name = "star-control"
 path = "src/main.rs"

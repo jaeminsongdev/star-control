@@ -48,12 +48,13 @@
 - E09c Star Sentinel review-pack writer를 추가했다.
 - E09d Star Sentinel ledger writer와 selfcheck를 추가했다.
 - E10 `packages/star-control-validation` ValidationEngine을 추가했다.
+- E11 `packages/star-control-cli/tests/v0_fake_flow.rs` integration smoke를 추가했다.
 
 ### 아직 남은 것
 
-- E11 integration smoke부터 현재 큐 순서대로 진행한다.
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
-- v0 fake flow는 E11 integration smoke까지 완료해야 첫 검증 milestone으로 인정한다.
+- v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
+- 다음 구현 축은 complete roadmap의 M5 local provider, M6 cloud provider, M7 daemon/API, M8 UI, M9 hardening 순서다.
 
 ### 건드리면 안 되는 것
 
@@ -95,7 +96,7 @@ cargo test --workspace
 
 | ID | 내용 | 영향 | 다음 조치 |
 |---|---|---|---|
-| R-0001 | v0 fake flow 미완성 | API/UI 동작 검증은 아직 불가 | E11을 현재 큐 순서대로 구현 |
+| R-0001 | v0 fake smoke의 final report/DONE 전이는 integration test harness에서 확인됨 | production CLI의 validate/approve/final report orchestration은 아직 별도 명령으로 노출되지 않음 | M5 이후 provider 확장 전 CLI surface backlog로 정리 |
 | R-0002 | runtime validator pattern 지원 범위 제한 | 현재 repository schema pattern만 지원하고 범용 regex는 지원하지 않음 | 새 pattern 추가 시 schema-validator test와 dependency 승인 여부 검토 |
 | R-0003 | StateStore 초기 단일 process 기준 | daemon 동시 실행 lock은 아직 없음 | daemon milestone에서 lock policy 추가 |
 
@@ -123,6 +124,7 @@ cargo test --workspace
 | E09c handoff | `build_review_pack_artifact`, `validate_review_pack_artifact`, `write_review_pack_artifacts`; 원본은 `tool-output/star-sentinel/review_pack.json`, `tool-output/star-sentinel/review_pack.md`, 사용자용 copy는 `review-packs/review_pack.json`, `review-packs/review_pack.md`; StateStore에 `write_tool_text`를 추가했다 |
 | E09d handoff | `build_gate_ledger_event`, `validate_ledger_events`, `write_ledger_artifact`, `run_selfcheck`; ledger output은 `tool-output/star-sentinel/ledger.jsonl`; selfcheck는 manifest outputs, P0 registry/schema/fixture parse, rule id duplicate, legacy alias 위치를 확인한다 |
 | E10 handoff | `ValidationEngine::evaluate_star_sentinel_gate`, `write_outcome`, `ensure_provider_response`, `ensure_approval_response_allows_next_stage`; Star Sentinel `approval.json`을 `validation/validation-decision.json`으로 정규화하고 `tool-output/star-sentinel/validation_runs.json`, `approvals/approval-request.json`, `review-packs/handoff.json`, RunState 전이를 기록한다 |
+| E11 handoff | `packages/star-control-cli/tests/v0_fake_flow.rs`; CLI `run`으로 fake provider output을 만든 뒤 Star Sentinel P0 evaluator/gate/review-pack writer와 ValidationEngine을 연결해 AUTO_PASS -> DONE smoke, HUMAN_REVIEW -> WAITING_APPROVAL -> approved -> DONE smoke, BLOCK -> BLOCKED smoke를 검증한다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -152,3 +154,4 @@ cargo test --workspace
 | P-0021 | 2026-07-01 | E09c Star Sentinel review-pack writer 추가 | `packages/star-sentinel`, `packages/star-control-state` |
 | P-0022 | 2026-07-01 | E09d Star Sentinel ledger/selfcheck 추가 | `packages/star-sentinel`, `builtin-tools/star-sentinel/tool.yaml` |
 | P-0023 | 2026-07-01 | E10 ValidationEngine 추가 | `packages/star-control-validation`, `packages/star-control-state` |
+| P-0024 | 2026-07-01 | E11 v0 fake integration smoke 추가 | `packages/star-control-cli/tests/v0_fake_flow.rs` |

@@ -264,6 +264,14 @@ workflow-permission-change.case.yaml
 
 초기에는 fake provider만 사용한다. cloud/local provider smoke는 뒤로 미룬다.
 
+현재 E11 smoke test 위치:
+
+```text
+packages/star-control-cli/tests/v0_fake_flow.rs
+```
+
+이 테스트는 `star-control run`으로 fake provider output을 만든 뒤 Star Sentinel P0 gate와 ValidationEngine을 연결해 `AUTO_PASS`, `HUMAN_REVIEW`, `BLOCK` 경로를 검증한다. `HUMAN_REVIEW`는 approval response 없이는 다음 단계로 진행하지 않는 것을 확인하고, approved response 후 final report smoke를 완료한다.
+
 ## CLI tests
 
 CLI test 후보:
