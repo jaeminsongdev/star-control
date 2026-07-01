@@ -139,6 +139,7 @@ packages/star-adapter-openai-compatible
 ### `star-control-cli`
 
 - `run`, `status`, `report`, `approve`, `cancel`, `resume` 명령
+- `report --release-readiness` read-only release readiness surface
 - stdout/stderr/exit code 계약
 - daemon 없이도 file-based flow 실행 가능해야 함
 

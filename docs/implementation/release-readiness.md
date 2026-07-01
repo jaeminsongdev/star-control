@@ -88,6 +88,14 @@ packages/star-control-ui
 
 M9k는 `UiReadOnlyShell`에 release readiness viewer를 추가한다. UI는 M9g `GET /projects/{project_id}/jobs/{job_id}/release-readiness` endpoint를 소비해 readiness status, checks, blockers, approvals를 read-only model로 표시한다. missing readiness artifact는 job detail 전체 실패가 아니라 optional error surface로 보여준다. 이 slice는 browser app, HTTP server, CLI command, release/deploy/publish action, StateStore 직접 mutation을 구현하지 않는다.
 
+M9l 구현 위치:
+
+```text
+packages/star-control-cli
+```
+
+M9l는 `star-control report --release-readiness` option을 제공한다. CLI는 existing `.ai-runs/{job_id}/release/release-readiness.json` artifact를 `ReleaseReadinessWriter::read`로 검증해 schema-valid CLI output envelope에 담고, missing artifact는 schema-valid CLI error envelope로 반환한다. 이 slice는 새 top-level command, release/deploy/publish action, StateStore mutation, schema field 변경을 구현하지 않는다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -144,6 +152,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 8. version/changelog evidence file reader는 project root 밖 path를 거부하고 read-only로 동작함
 9. release profile validation result는 version/changelog result와 같은 readiness artifact에 병합되며 `ready` status를 만들지 않음
 10. UI release readiness viewer는 existing artifact를 읽고 missing artifact를 optional read-only error로 표시함
+11. CLI `report --release-readiness`는 existing readiness artifact를 읽고 release action을 실행하지 않음
 
 ## Codex 구현 지시
 

@@ -1,6 +1,7 @@
 use serde_json::{json, Value};
 use star_control_execution::{ExecutionEngine, ExecutionError};
 use star_control_provider::{ProviderRegistry, ProviderRegistryError, ProviderRegistryLoader};
+use star_control_release::{ReleaseReadinessError, ReleaseReadinessWriter, RELEASE_READINESS_PATH};
 use star_control_router::{JobSpec, RouterEngine, RouterError};
 use star_control_schema::{load_schema, validate_json};
 use star_control_state::{StateStore, StateStoreError};
@@ -74,6 +75,10 @@ pub enum CliError {
         command: String,
         source: ProviderRegistryError,
     },
+    ReleaseReadiness {
+        command: String,
+        source: ReleaseReadinessError,
+    },
     Execution {
         command: String,
         source: ExecutionError,
@@ -93,6 +98,7 @@ impl CliError {
             | Self::State { command, .. }
             | Self::Router { command, .. }
             | Self::ProviderRegistry { command, .. }
+            | Self::ReleaseReadiness { command, .. }
             | Self::Execution { command, .. }
             | Self::Internal { command, .. } => command,
         }
@@ -104,6 +110,7 @@ impl CliError {
             Self::MissingArtifact { .. } | Self::State { .. } => 3,
             Self::ProviderExecution { .. } | Self::Execution { .. } => 4,
             Self::Router { .. } | Self::ProviderRegistry { .. } | Self::Internal { .. } => 5,
+            Self::ReleaseReadiness { .. } => 5,
         }
     }
 
@@ -115,6 +122,7 @@ impl CliError {
             Self::State { .. } => "StateReadFailed",
             Self::Router { .. } => "RouteFailed",
             Self::ProviderRegistry { .. } => "ProviderRegistryFailed",
+            Self::ReleaseReadiness { .. } => "ReleaseReadinessReadFailed",
             Self::Execution { .. } => "ExecutionFailed",
             Self::Internal { .. } => "InternalError",
         }
@@ -127,6 +135,7 @@ impl CliError {
             Self::ProviderExecution { .. } | Self::Execution { .. } => "provider-execution",
             Self::Router { .. } => "router",
             Self::ProviderRegistry { .. } => "provider-registry",
+            Self::ReleaseReadiness { .. } => "release-readiness",
             Self::Internal { .. } => "internal",
         }
     }
@@ -140,6 +149,7 @@ impl CliError {
             Self::State { source, .. } => source.to_string(),
             Self::Router { source, .. } => source.to_string(),
             Self::ProviderRegistry { source, .. } => source.to_string(),
+            Self::ReleaseReadiness { source, .. } => source.to_string(),
             Self::Execution { source, .. } => source.to_string(),
         }
     }
@@ -173,6 +183,7 @@ struct ParsedArgs {
     response: Option<String>,
     reason: Option<String>,
     constraints: Vec<String>,
+    release_readiness: bool,
     dry_run: bool,
     json: bool,
     markdown: bool,
@@ -240,6 +251,7 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
         response: None,
         reason: None,
         constraints: Vec::new(),
+        release_readiness: false,
         dry_run: false,
         json: false,
         markdown: false,
@@ -318,6 +330,7 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
                 )?);
             }
             "--dry-run" => parsed.dry_run = true,
+            "--release-readiness" => parsed.release_readiness = true,
             "--json" => parsed.json = true,
             "--markdown" => parsed.markdown = true,
             unknown => {
@@ -646,6 +659,9 @@ fn status_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliE
 fn report_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
     let project = required_project(parsed)?;
     let job_id = required_job(parsed)?;
+    if parsed.release_readiness {
+        return release_readiness_report_command(parsed, config, project, job_id);
+    }
     let stage = parsed.stage.as_deref().unwrap_or("implement");
     let store =
         StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
@@ -681,6 +697,54 @@ fn report_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliE
             "report": report
         }),
         vec![format!(".ai-runs/{}/reports/{}.json", job_id, report_name)],
+    ))
+}
+
+fn release_readiness_report_command(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+    project: PathBuf,
+    job_id: String,
+) -> Result<Value, CliError> {
+    if parsed.stage.is_some() {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "--stage cannot be combined with --release-readiness".to_string(),
+        });
+    }
+    let store =
+        StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    store.load_job(&job_id).map_err(|source| CliError::State {
+        command: parsed.command.clone(),
+        source,
+    })?;
+    let writer = ReleaseReadinessWriter::new(config.schema_root());
+    let readiness = writer
+        .read(&store, &job_id)
+        .map_err(|source| CliError::ReleaseReadiness {
+            command: parsed.command.clone(),
+            source,
+        })?
+        .ok_or_else(|| CliError::MissingArtifact {
+            command: parsed.command.clone(),
+            message: "release readiness artifact not found".to_string(),
+            artifact_paths: vec![format!(".ai-runs/{}/{}", job_id, RELEASE_READINESS_PATH)],
+        })?;
+
+    Ok(success_envelope(
+        "report",
+        "success",
+        json!({
+            "job_id": job_id,
+            "report_kind": "release_readiness",
+            "release_readiness_path": format!(".ai-runs/{}/{}", job_id, RELEASE_READINESS_PATH),
+            "release_actions_enabled": false,
+            "readiness": readiness
+        }),
+        vec![format!(".ai-runs/{}/{}", job_id, RELEASE_READINESS_PATH)],
     ))
 }
 
@@ -1547,6 +1611,97 @@ mod tests {
     }
 
     #[test]
+    fn report_release_readiness_reads_existing_artifact_without_mutation() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        write_release_readiness_job(&project, true);
+        let readiness_path = project.join(".ai-runs/J-0001/release/release-readiness.json");
+        let before_readiness = fs::read_to_string(&readiness_path).expect("read readiness before");
+
+        let report = run_cli(
+            [
+                "report",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--release-readiness",
+                "--json",
+            ],
+            &config,
+        );
+
+        assert_eq!(report.exit_code, 0, "{}", report.stderr);
+        let report_json: Value = serde_json::from_str(&report.stdout).expect("report json");
+        assert_eq!(report_json["command"], "report");
+        assert_eq!(report_json["data"]["report_kind"], "release_readiness");
+        assert_eq!(report_json["data"]["release_actions_enabled"], false);
+        assert_eq!(
+            report_json["data"]["release_readiness_path"],
+            ".ai-runs/J-0001/release/release-readiness.json"
+        );
+        assert_eq!(report_json["data"]["readiness"]["status"], "reserved");
+        assert_eq!(
+            report_json["artifacts"][0],
+            ".ai-runs/J-0001/release/release-readiness.json"
+        );
+        let after_readiness = fs::read_to_string(&readiness_path).expect("read readiness after");
+        assert_eq!(after_readiness, before_readiness);
+        assert!(!project
+            .join(".ai-runs/J-0001/release/release-action.json")
+            .exists());
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn report_release_readiness_requires_existing_artifact_and_rejects_stage() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        write_release_readiness_job(&project, false);
+
+        let missing = run_cli(
+            [
+                "report",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--release-readiness",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(missing.exit_code, 3);
+        let missing_json: Value = serde_json::from_str(&missing.stdout).expect("missing json");
+        assert_eq!(missing_json["error"]["code"], "MissingArtifact");
+        assert_eq!(
+            missing_json["error"]["artifact_paths"][0],
+            ".ai-runs/J-0001/release/release-readiness.json"
+        );
+
+        let invalid = run_cli(
+            [
+                "report",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--release-readiness",
+                "--stage",
+                "implement",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(invalid.exit_code, 2);
+        let invalid_json: Value = serde_json::from_str(&invalid.stdout).expect("invalid json");
+        assert_eq!(invalid_json["error"]["code"], "InvalidInput");
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
     fn run_with_local_process_provider_instance_executes_process() {
         let project = temp_project();
         let provider_instance = write_local_process_instance(&project, vec!["--help".to_string()]);
@@ -1967,6 +2122,42 @@ mod tests {
                     }),
                 )
                 .expect("write approval request");
+        }
+    }
+
+    fn write_release_readiness_job(project: &Path, include_readiness: bool) {
+        let store =
+            StateStore::open(project, repo_root().join("specs/schemas")).expect("open store");
+        store
+            .create_job("release readiness", "codex", vec![])
+            .expect("create job");
+        if include_readiness {
+            let path = project.join(".ai-runs/J-0001/release/release-readiness.json");
+            fs::create_dir_all(path.parent().expect("release dir")).expect("create release dir");
+            fs::write(
+                &path,
+                serde_json::to_vec_pretty(&json!({
+                    "schema_version": "1.0.0",
+                    "release_id": "release-0008",
+                    "target": "star-control",
+                    "version": "1.2.3",
+                    "status": "reserved",
+                    "checks": [
+                        {
+                            "name": "release-profile-passed",
+                            "status": "pass",
+                            "evidence_paths": ["review-packs/release-profile.json"]
+                        }
+                    ],
+                    "blockers": [
+                        "release approval/signing/publish/deploy automation remains reserved"
+                    ],
+                    "approvals": [],
+                    "generated_at": "unix:8"
+                }))
+                .expect("release readiness JSON"),
+            )
+            .expect("write release readiness");
         }
     }
 

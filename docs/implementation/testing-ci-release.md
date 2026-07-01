@@ -465,6 +465,17 @@ M9k release readiness UI read는 UI crate 수준에서 검증한다.
 - readiness artifact와 StateStore를 수정하지 않고 release action을 활성화하지 않음
 - browser app, HTTP server, CLI command, schema field, release/deploy/publish, repository settings mutation이 없음
 
+M9l release readiness CLI read는 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control report --release-readiness --json`이 existing ReleaseReadiness artifact를 읽음
+- output이 `cli-output.schema.json`을 만족하고 `report_kind=release_readiness`를 포함함
+- missing readiness artifact가 `cli-error.schema.json` error와 expected artifact path를 반환함
+- `--stage`와 `--release-readiness` 조합을 invalid input으로 거부함
+- readiness artifact와 StateStore를 수정하지 않고 release action을 활성화하지 않음
+- new top-level CLI command, browser app, HTTP server, schema field, release/deploy/publish, repository settings mutation이 없음
+
 ## CI 변경 policy
 
 CI workflow 변경은 다음을 PR 본문에 명시해야 한다.

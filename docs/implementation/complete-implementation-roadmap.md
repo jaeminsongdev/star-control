@@ -301,6 +301,8 @@ M9j release profile readiness integration은 `packages/star-control-release`의 
 
 M9k release readiness UI read는 `packages/star-control-ui`의 `UiReadOnlyShell`에 release readiness viewer를 추가한다. 이 slice는 existing ReleaseReadiness artifact를 API read-only endpoint를 통해 표시하고 missing artifact를 optional read-only error로 처리하되, browser app, HTTP server, CLI command, StateStore 직접 mutation, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
 
+M9l release readiness CLI read는 `packages/star-control-cli`의 `report --release-readiness` option으로 구현한다. 이 slice는 existing ReleaseReadiness artifact를 schema-valid CLI output envelope으로 읽고 missing artifact를 schema-valid error로 반환하되, 새 top-level command, StateStore mutation, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
 Validation:
 
 ```text

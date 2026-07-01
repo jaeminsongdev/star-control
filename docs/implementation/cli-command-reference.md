@@ -156,11 +156,14 @@ examples/cli-contracts/status-output.example.json
 --project <path>
 --job <job-id>
 --stage <stage>
+--release-readiness
 --json
 --markdown
 ```
 
 초기 구현은 existing report artifact를 읽는 read-only command로 시작한다.
+
+`--release-readiness`를 사용하면 stage report 대신 `.ai-runs/{job_id}/release/release-readiness.json`을 read-only로 읽는다. 이 옵션은 `--stage`와 함께 사용할 수 없다. CLI는 readiness artifact를 표시할 뿐이며 signing, publish, deploy, release action을 실행하지 않는다.
 
 ## star-control approve
 

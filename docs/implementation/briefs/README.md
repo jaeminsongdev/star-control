@@ -60,6 +60,7 @@ E33-release-version-consistency-checker.md
 E34-release-evidence-file-discovery.md
 E35-release-profile-readiness-integration.md
 E36-release-readiness-ui-read.md
+E37-release-readiness-cli-read.md
 ```
 
 ## 사용 방법
