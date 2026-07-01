@@ -70,6 +70,7 @@ E43-stacked-pr-readiness-coordination.md
 E44-cli-providers-read-only.md
 E45-cli-sentinel-command-group.md
 E46-final-evidence-refresh.md
+E47-stacked-merge-procedure.md
 ```
 
 ## 사용 방법

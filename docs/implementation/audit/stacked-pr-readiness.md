@@ -104,6 +104,14 @@ The stack remains `reserved`, not `ready`, until these actions are explicitly ap
 - repository settings changes
 - destructive recovery actions
 
+## merge procedure
+
+The non-destructive merge procedure is documented in:
+
+```text
+docs/implementation/audit/stacked-pr-merge-procedure.md
+```
+
 ## next handoff
 
-The next non-destructive step is to decide the merge procedure and review order. Any action that updates `main`, changes repository settings, publishes packages, deploys services, or performs destructive recovery remains approval-gated.
+The next action is an explicit user decision: approve the ready/merge procedure, choose a different merge method, or keep the stack as draft for review. Any action that updates `main`, changes repository settings, publishes packages, deploys services, or performs destructive recovery remains approval-gated.
