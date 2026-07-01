@@ -14,9 +14,12 @@ pub const P0_RULE_REGISTRY_SCHEMA: &str = "p0-rule-registry.schema.json";
 pub const FIXTURE_OUTCOME_SCHEMA: &str = "fixture-outcome.schema.json";
 pub const DIAGNOSTIC_SCHEMA: &str = "diagnostic.schema.json";
 pub const APPROVAL_SCHEMA: &str = "approval.schema.json";
+pub const REVIEW_PACK_SCHEMA: &str = "review-pack.schema.json";
 pub const STAR_SENTINEL_TOOL_OUTPUT_DIR: &str = "star-sentinel";
 pub const DIAGNOSTICS_FILE: &str = "diagnostics.json";
 pub const APPROVAL_FILE: &str = "approval.json";
+pub const REVIEW_PACK_JSON_FILE: &str = "review_pack.json";
+pub const REVIEW_PACK_MARKDOWN_FILE: &str = "review_pack.md";
 
 pub const RULE_SCOPE_ALLOWED_PATHS: &str = "task.scope.allowed_paths";
 pub const RULE_TEST_NO_DELETION: &str = "test.no_deletion";
@@ -469,6 +472,29 @@ pub struct GateArtifactRefs {
     pub approval_ref: Value,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewValidation {
+    pub command: String,
+    pub result: String,
+}
+
+impl ReviewValidation {
+    pub fn new(command: impl Into<String>, result: impl Into<String>) -> Self {
+        Self {
+            command: command.into(),
+            result: result.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewPackArtifactRefs {
+    pub tool_json_ref: Value,
+    pub tool_markdown_ref: Value,
+    pub review_json_ref: Value,
+    pub review_markdown_ref: Value,
+}
+
 #[derive(Debug, Clone)]
 pub struct P0Evaluator {
     registry: P0RuleRegistry,
@@ -665,6 +691,114 @@ pub fn write_gate_artifacts(
     Ok(GateArtifactRefs {
         diagnostics_ref,
         approval_ref,
+    })
+}
+
+pub fn build_review_pack_artifact(
+    task: &SentinelTask,
+    changed_lines: &ChangedLines,
+    result: &EvaluationResult,
+    validations: &[ReviewValidation],
+) -> Value {
+    let changed_files = changed_file_paths(changed_lines);
+    let risks = review_risks(result);
+    let validations = review_validations(result, validations);
+    let unverified_claims: Vec<String> = Vec::new();
+    let questions_for_human = review_questions(result);
+    let generated_artifacts = vec![
+        format!(
+            "tool-output/{}/{}",
+            STAR_SENTINEL_TOOL_OUTPUT_DIR, REVIEW_PACK_JSON_FILE
+        ),
+        format!(
+            "tool-output/{}/{}",
+            STAR_SENTINEL_TOOL_OUTPUT_DIR, REVIEW_PACK_MARKDOWN_FILE
+        ),
+        format!("review-packs/{}", REVIEW_PACK_JSON_FILE),
+        format!("review-packs/{}", REVIEW_PACK_MARKDOWN_FILE),
+    ];
+    let summary = review_summary(result.decision);
+    let markdown = render_review_pack_markdown(
+        result.decision,
+        &summary,
+        &changed_files,
+        &risks,
+        &validations,
+        &questions_for_human,
+    );
+
+    json!({
+        "schema_version": "1.0.0",
+        "task_id": task.task_id,
+        "decision": result.decision.as_str(),
+        "summary": summary,
+        "changed_files": changed_files,
+        "risks": risks,
+        "validations": validations.iter().map(|validation| {
+            json!({
+                "command": validation.command,
+                "result": validation.result
+            })
+        }).collect::<Vec<_>>(),
+        "unverified_claims": unverified_claims,
+        "questions_for_human": questions_for_human,
+        "generated_artifacts": generated_artifacts,
+        "review_pack_markdown": markdown
+    })
+}
+
+pub fn validate_review_pack_artifact(
+    review_pack: &Value,
+    schema_root: impl AsRef<Path>,
+) -> Result<(), SentinelError> {
+    validate_against_schema(
+        review_pack,
+        schema_root.as_ref(),
+        REVIEW_PACK_SCHEMA,
+        REVIEW_PACK_JSON_FILE,
+    )
+}
+
+pub fn write_review_pack_artifacts(
+    store: &StateStore,
+    job_id: &str,
+    review_pack: &Value,
+    schema_root: impl AsRef<Path>,
+) -> Result<ReviewPackArtifactRefs, SentinelError> {
+    validate_review_pack_artifact(review_pack, schema_root.as_ref())?;
+    let markdown = review_pack
+        .get("review_pack_markdown")
+        .and_then(Value::as_str)
+        .ok_or_else(|| missing_field(REVIEW_PACK_JSON_FILE, "review_pack_markdown"))?;
+
+    let tool_json_ref = store
+        .write_tool_json(
+            job_id,
+            STAR_SENTINEL_TOOL_OUTPUT_DIR,
+            REVIEW_PACK_JSON_FILE,
+            review_pack,
+        )
+        .map_err(|source| SentinelError::State { source })?;
+    let tool_markdown_ref = store
+        .write_tool_text(
+            job_id,
+            STAR_SENTINEL_TOOL_OUTPUT_DIR,
+            REVIEW_PACK_MARKDOWN_FILE,
+            markdown,
+        )
+        .map_err(|source| SentinelError::State { source })?;
+    let review_json_ref = store
+        .write_review_pack_json(job_id, REVIEW_PACK_JSON_FILE, review_pack)
+        .map_err(|source| SentinelError::State { source })?;
+    let review_markdown_ref = store
+        .write_review_pack_markdown(job_id, REVIEW_PACK_MARKDOWN_FILE, markdown)
+        .map_err(|source| SentinelError::State { source })?;
+
+    Ok(ReviewPackArtifactRefs {
+        tool_json_ref,
+        tool_markdown_ref,
+        review_json_ref,
+        review_markdown_ref,
     })
 }
 
@@ -1278,6 +1412,135 @@ fn required_human_actions(decision: Decision) -> Vec<String> {
     }
 }
 
+fn changed_file_paths(changed_lines: &ChangedLines) -> Vec<String> {
+    let mut paths = BTreeSet::new();
+    for file in &changed_lines.files {
+        for path in file.changed_paths() {
+            paths.insert(normalize_path(path));
+        }
+    }
+    paths.into_iter().collect()
+}
+
+fn review_summary(decision: Decision) -> String {
+    match decision {
+        Decision::AutoPass => "P0 review passed with no diagnostics.".to_string(),
+        Decision::HumanReview => {
+            "P0 diagnostics require human review before proceeding.".to_string()
+        }
+        Decision::Block => "P0 diagnostics block automatic progress.".to_string(),
+    }
+}
+
+fn review_risks(result: &EvaluationResult) -> Vec<String> {
+    let mut risks = BTreeSet::new();
+    for diagnostic in &result.diagnostics {
+        risks.insert(risk_for_rule(&diagnostic.rule_id).to_string());
+    }
+    risks.into_iter().collect()
+}
+
+fn risk_for_rule(rule_id: &str) -> &'static str {
+    match rule_id {
+        RULE_SCOPE_ALLOWED_PATHS => "scope_violation",
+        RULE_TEST_NO_DELETION => "test_deletion",
+        RULE_DEPENDENCY_REQUIRES_APPROVAL => "dependency_addition",
+        RULE_SECRET_NO_PLAINTEXT_SECRET => "secret_exposure",
+        RULE_VALIDATOR_NO_SELF_BYPASS => "validator_bypass",
+        _ => "unknown_p0_risk",
+    }
+}
+
+fn review_validations(
+    result: &EvaluationResult,
+    validations: &[ReviewValidation],
+) -> Vec<ReviewValidation> {
+    if !validations.is_empty() {
+        return validations.to_vec();
+    }
+
+    let status = match result.decision {
+        Decision::AutoPass => "passed",
+        Decision::HumanReview => "requires_human_review",
+        Decision::Block => "blocked",
+    };
+    vec![ReviewValidation::new("policy:p0", status)]
+}
+
+fn review_questions(result: &EvaluationResult) -> Vec<String> {
+    if result.decision == Decision::AutoPass {
+        return Vec::new();
+    }
+
+    let mut questions = BTreeSet::new();
+    for diagnostic in &result.diagnostics {
+        let question = match diagnostic.rule_id.as_str() {
+            RULE_SCOPE_ALLOWED_PATHS => {
+                "Should the task scope be expanded, or should the out-of-scope change be removed?"
+            }
+            RULE_TEST_NO_DELETION => {
+                "What replacement validation covers the deleted test behavior?"
+            }
+            RULE_DEPENDENCY_REQUIRES_APPROVAL => "Was this dependency change explicitly approved?",
+            RULE_SECRET_NO_PLAINTEXT_SECRET => {
+                "Has the plaintext secret candidate been removed and rotated if needed?"
+            }
+            RULE_VALIDATOR_NO_SELF_BYPASS => {
+                "Does this validator-related change preserve enforcement?"
+            }
+            _ => "Does a human approve continuing with this diagnostic?",
+        };
+        questions.insert(question.to_string());
+    }
+    questions.into_iter().collect()
+}
+
+fn render_review_pack_markdown(
+    decision: Decision,
+    summary: &str,
+    changed_files: &[String],
+    risks: &[String],
+    validations: &[ReviewValidation],
+    questions: &[String],
+) -> String {
+    let mut markdown = String::new();
+    markdown.push_str("# Review Pack\n\n");
+    markdown.push_str("## Decision\n");
+    markdown.push_str(decision.as_str());
+    markdown.push_str("\n\n## Summary\n");
+    markdown.push_str(summary);
+    markdown.push_str("\n\n## Changed Files\n");
+    push_markdown_list(&mut markdown, changed_files);
+    markdown.push_str("\n## Risks\n");
+    push_markdown_list(&mut markdown, risks);
+    markdown.push_str("\n## Validations\n");
+    if validations.is_empty() {
+        markdown.push_str("- none\n");
+    } else {
+        for validation in validations {
+            markdown.push_str(&format!(
+                "- {}: {}\n",
+                validation.command, validation.result
+            ));
+        }
+    }
+    markdown.push_str("\n## Questions For Human\n");
+    push_markdown_list(&mut markdown, questions);
+    markdown
+}
+
+fn push_markdown_list(markdown: &mut String, items: &[String]) {
+    if items.is_empty() {
+        markdown.push_str("- none\n");
+        return;
+    }
+    for item in items {
+        markdown.push_str("- ");
+        markdown.push_str(item);
+        markdown.push('\n');
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1517,6 +1780,117 @@ mod tests {
 
         write_gate_artifacts(&store, job_id, &task, &result, schema_root()).expect("first write");
         let overwrite = write_gate_artifacts(&store, job_id, &task, &result, schema_root());
+
+        assert!(matches!(overwrite, Err(SentinelError::State { .. })));
+        fs::remove_dir_all(temp_project).ok();
+    }
+
+    #[test]
+    fn builds_schema_valid_review_pack_for_block() {
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let changed_lines = changed_lines(json!([
+            file("src/allowed/index.ts", "modified", json!([])),
+            file("src/other/hidden.ts", "modified", json!([]))
+        ]));
+        let result = scope_block_result();
+
+        let review_pack = build_review_pack_artifact(&task, &changed_lines, &result, &[]);
+
+        validate_review_pack_artifact(&review_pack, schema_root()).expect("review pack schema");
+        assert_eq!(review_pack["decision"], "BLOCK");
+        assert_eq!(review_pack["risks"][0], "scope_violation");
+        assert!(review_pack["review_pack_markdown"]
+            .as_str()
+            .expect("markdown")
+            .contains("## Questions For Human"));
+    }
+
+    #[test]
+    fn review_pack_for_dependency_contains_human_question() {
+        let evaluator = P0Evaluator::new(builtin_registry());
+        let task = task_with_allowed_paths(["**"]);
+        let changed_lines = changed_lines(json!([file("Cargo.toml", "modified", json!([]))]));
+        let result = evaluator.evaluate(&task, &changed_lines).expect("evaluate");
+
+        let review_pack = build_review_pack_artifact(&task, &changed_lines, &result, &[]);
+
+        assert_eq!(review_pack["decision"], "HUMAN_REVIEW");
+        assert_eq!(review_pack["risks"][0], "dependency_addition");
+        assert_eq!(
+            review_pack["questions_for_human"][0],
+            "Was this dependency change explicitly approved?"
+        );
+    }
+
+    #[test]
+    fn writes_review_pack_artifacts_to_tool_output_and_review_packs() {
+        let temp_project = temp_dir();
+        let store =
+            StateStore::open(&temp_project, repo_root().join("specs/schemas")).expect("store");
+        let job = store
+            .create_job("review p0 output", "star-sentinel", Vec::new())
+            .expect("job");
+        let job_id = job["job_id"].as_str().expect("job_id");
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let changed_lines = changed_lines(json!([
+            file("src/allowed/index.ts", "modified", json!([])),
+            file("src/other/hidden.ts", "modified", json!([]))
+        ]));
+        let result = scope_block_result();
+        let review_pack = build_review_pack_artifact(&task, &changed_lines, &result, &[]);
+
+        let refs = write_review_pack_artifacts(&store, job_id, &review_pack, schema_root())
+            .expect("write");
+
+        assert_eq!(
+            refs.tool_json_ref["path"],
+            "tool-output/star-sentinel/review_pack.json"
+        );
+        assert_eq!(
+            refs.tool_markdown_ref["path"],
+            "tool-output/star-sentinel/review_pack.md"
+        );
+        assert_eq!(
+            refs.review_json_ref["path"],
+            "review-packs/review_pack.json"
+        );
+        assert_eq!(
+            refs.review_markdown_ref["path"],
+            "review-packs/review_pack.md"
+        );
+        assert!(temp_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/review_pack.json")
+            .is_file());
+        assert!(temp_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/review_pack.md")
+            .is_file());
+        assert!(temp_project
+            .join(".ai-runs/J-0001/review-packs/review_pack.json")
+            .is_file());
+        assert!(temp_project
+            .join(".ai-runs/J-0001/review-packs/review_pack.md")
+            .is_file());
+        fs::remove_dir_all(temp_project).ok();
+    }
+
+    #[test]
+    fn review_pack_writer_refuses_to_overwrite_existing_artifacts() {
+        let temp_project = temp_dir();
+        let store =
+            StateStore::open(&temp_project, repo_root().join("specs/schemas")).expect("store");
+        let job = store
+            .create_job("review p0 output", "star-sentinel", Vec::new())
+            .expect("job");
+        let job_id = job["job_id"].as_str().expect("job_id");
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let changed_lines =
+            changed_lines(json!([file("src/other/hidden.ts", "modified", json!([]))]));
+        let result = scope_block_result();
+        let review_pack = build_review_pack_artifact(&task, &changed_lines, &result, &[]);
+
+        write_review_pack_artifacts(&store, job_id, &review_pack, schema_root())
+            .expect("first write");
+        let overwrite = write_review_pack_artifacts(&store, job_id, &review_pack, schema_root());
 
         assert!(matches!(overwrite, Err(SentinelError::State { .. })));
         fs::remove_dir_all(temp_project).ok();

@@ -727,6 +727,27 @@ impl StateStore {
         )
     }
 
+    pub fn write_tool_text(
+        &self,
+        job_id: &str,
+        tool_output_dir: &str,
+        file_name: &str,
+        content: &str,
+    ) -> Result<Value, StateStoreError> {
+        validate_safe_name(tool_output_dir)?;
+        validate_safe_name(file_name)?;
+        let relative_path = format!("tool-output/{}/{}", tool_output_dir, file_name);
+        self.write_new_text_artifact(job_id, &relative_path, content)?;
+        self.artifact_ref(
+            job_id,
+            &relative_path,
+            ArtifactKind::ToolOutput,
+            tool_output_dir,
+            None,
+            Some("tool text output"),
+        )
+    }
+
     pub fn write_approval_json(
         &self,
         job_id: &str,
@@ -1524,6 +1545,9 @@ mod tests {
         let tool_ref = store
             .write_tool_json("J-0001", "star-sentinel", "diagnostics.json", &json!([]))
             .expect("write tool json");
+        let tool_markdown_ref = store
+            .write_tool_text("J-0001", "star-sentinel", "review_pack.md", "# Review\n")
+            .expect("write tool markdown");
         let approval_ref = store
             .write_approval_json("J-0001", "approval-request.json", &json!({ "ok": true }))
             .expect("write approval");
@@ -1547,6 +1571,10 @@ mod tests {
             tool_ref["path"],
             "tool-output/star-sentinel/diagnostics.json"
         );
+        assert_eq!(
+            tool_markdown_ref["path"],
+            "tool-output/star-sentinel/review_pack.md"
+        );
         assert_eq!(approval_ref["kind"], "approval");
         assert_eq!(review_json_ref["kind"], "review_pack");
         assert_eq!(review_md_ref["path"], "review-packs/review_pack.md");
@@ -1556,6 +1584,9 @@ mod tests {
             .is_file());
         assert!(project
             .join(".ai-runs/J-0001/tool-output/star-sentinel/diagnostics.json")
+            .is_file());
+        assert!(project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/review_pack.md")
             .is_file());
         assert!(project
             .join(".ai-runs/J-0001/approvals/approval-request.json")
