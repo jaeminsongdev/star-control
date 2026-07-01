@@ -36,6 +36,7 @@ E09-star-sentinel-p0.md
 E10-validation-engine.md
 E11-integration-smoke.md
 E12-cloud-provider-preflight.md
+E13-cloud-cli-transport.md
 ```
 
 ## 사용 방법

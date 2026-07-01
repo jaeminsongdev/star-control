@@ -88,6 +88,30 @@ M6a는 다음을 구현하지 않는다.
 
 Preflight가 통과해도 M6a에서는 `cloud_provider_transport_not_implemented`로 `BLOCKED` 처리한다. 실제 transport 실행은 다음 M6 slice에서 별도 conformance fixture와 함께 구현한다.
 
+## M6b cloud CLI transport scope
+
+M6b는 `cloud_cli_agent` + `cli` provider만 실행한다.
+
+실행 규칙:
+
+- M6a preflight를 통과하지 못하면 transport를 시작하지 않고 기존 `BLOCKED` response를 쓴다.
+- command는 shell 없이 `command.executable`과 `command.args` vector로만 실행한다.
+- `cmd`, `powershell`, `pwsh`, `sh`, `bash`, `zsh` 같은 shell wrapper executable은 거부한다.
+- cwd는 대상 프로젝트 root다.
+- stdout/stderr는 provider output directory의 `stdout.txt`, `stderr.txt`에 capture한다.
+- timeout은 `limits.timeout_seconds`를 사용하며, 최대값은 adapter가 제한한다.
+- `credential_ref: env:NAME`의 raw value를 `command_policy.env_allowlist`로 그대로 넘기지 않는다.
+- `command.args`는 `{{request_path}}`, `{{job_id}}`, `{{stage}}`, `{{goal}}` placeholder를 지원할 수 있다.
+
+M6b 검증은 local test executable fixture만 사용한다. 실제 Codex CLI, Claude Code, Gemini CLI 같은 외부 CLI 호출 검증은 사용자가 승인한 별도 환경에서만 수행한다.
+
+Provider doc refresh:
+
+- 2026-07-01 기준 OpenAI Codex CLI docs를 확인했다.
+- 확인 URL: `https://developers.openai.com/codex/cli/reference`, `https://developers.openai.com/codex/cli/features`, `https://developers.openai.com/codex/concepts/sandboxing`
+- Codex CLI는 prompt를 command line 인자로 받을 수 있고, sandbox/approval 경계가 별도 설정으로 존재한다.
+- Star-Control은 provider-specific flag를 core에 하드코딩하지 않고 provider instance `command` 설정으로 격리한다.
+
 ## conformance 방향
 
 M6 전체 exit criteria에는 다음 fixture가 필요하다.
@@ -98,4 +122,3 @@ M6 전체 exit criteria에는 다음 fixture가 필요하다.
 - raw credential field -> `BLOCKED` and no raw value echo
 - unapproved privacy handoff -> `BLOCKED`
 - cost/rate/budget metric report mapping
-

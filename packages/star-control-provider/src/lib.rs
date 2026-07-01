@@ -10,7 +10,10 @@ mod cloud;
 mod fake;
 mod local_process;
 
-pub use cloud::{is_cloud_provider_manifest, CloudProviderPreflightAdapter};
+pub use cloud::{
+    is_cloud_cli_manifest, is_cloud_provider_manifest, CloudCliProviderAdapter,
+    CloudProviderPreflightAdapter,
+};
 pub use fake::{
     load_execution_request, ExecutionRequest, FakeProviderAdapter, FakeProviderSimulation,
     ProviderAdapter, ProviderAdapterError, ProviderExecution, ProviderRunContext,

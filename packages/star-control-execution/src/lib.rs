@@ -1,8 +1,9 @@
 use serde_json::{json, Value};
 use star_control_provider::{
-    is_cloud_provider_manifest, CloudProviderPreflightAdapter, ExecutionRequest,
-    FakeProviderAdapter, LocalProcessProviderAdapter, ProviderAdapter, ProviderAdapterError,
-    ProviderExecution, ProviderRegistry, ProviderRegistryError, ProviderRunContext,
+    is_cloud_cli_manifest, is_cloud_provider_manifest, CloudCliProviderAdapter,
+    CloudProviderPreflightAdapter, ExecutionRequest, FakeProviderAdapter,
+    LocalProcessProviderAdapter, ProviderAdapter, ProviderAdapterError, ProviderExecution,
+    ProviderRegistry, ProviderRegistryError, ProviderRunContext,
 };
 use star_control_schema::{load_schema, validate_json, ValidationError};
 use star_control_state::{StateStore, StateStoreError};
@@ -170,6 +171,7 @@ pub struct ExecutionEngine<'a> {
     schema_root: PathBuf,
     fake_adapter: FakeProviderAdapter,
     local_process_adapter: LocalProcessProviderAdapter,
+    cloud_cli_adapter: CloudCliProviderAdapter,
     cloud_provider_adapter: CloudProviderPreflightAdapter,
 }
 
@@ -185,6 +187,7 @@ impl<'a> ExecutionEngine<'a> {
             schema_root: schema_root.into(),
             fake_adapter: FakeProviderAdapter::success(),
             local_process_adapter: LocalProcessProviderAdapter,
+            cloud_cli_adapter: CloudCliProviderAdapter,
             cloud_provider_adapter: CloudProviderPreflightAdapter,
         }
     }
@@ -289,6 +292,9 @@ impl<'a> ExecutionEngine<'a> {
         }
         if manifest.kind() == LOCAL_PROCESS_KIND && manifest.transport() == PROCESS_TRANSPORT {
             return Ok(self.local_process_adapter.execute(request, context)?);
+        }
+        if is_cloud_cli_manifest(manifest) {
+            return Ok(self.cloud_cli_adapter.execute(request, context)?);
         }
         if is_cloud_provider_manifest(manifest) {
             return Ok(self.cloud_provider_adapter.execute(request, context)?);
@@ -890,21 +896,30 @@ mod tests {
     }
 
     #[test]
-    fn cloud_provider_preflight_records_handoff_and_blocks_transport_execution() {
+    fn cloud_cli_transport_records_handoff_and_updates_state() {
         let mut fixture = Fixture::new();
-        fixture.use_cloud_cli_registry();
+        let _env = EnvVarGuard::set("STAR_CONTROL_EXECUTION_CLOUD_CLI_HELPER", "1");
+        fixture.use_cloud_cli_registry(
+            vec![
+                "--exact".to_string(),
+                "tests::execution_cloud_cli_success_helper".to_string(),
+                "--nocapture".to_string(),
+            ],
+            vec!["STAR_CONTROL_EXECUTION_CLOUD_CLI_HELPER".to_string()],
+            10,
+        );
         fixture.assign_implement_stage_to_cloud_provider();
 
         let outcome = ExecutionEngine::new(&fixture.store, &fixture.registry, &fixture.schemas)
             .execute_stage("J-0001", "implement")
-            .expect("execute cloud preflight stage");
+            .expect("execute cloud CLI stage");
 
         assert_eq!(outcome.request().provider_instance_id(), "cloud-default");
-        assert_eq!(outcome.provider_execution().result().status(), "blocked");
-        assert_eq!(outcome.state()["state"], "BLOCKED");
+        assert_eq!(outcome.provider_execution().result().status(), "success");
+        assert_eq!(outcome.state()["state"], "IMPLEMENTED");
         assert_eq!(
-            outcome.provider_execution().result().value()["error"]["kind"],
-            "cloud_provider_transport_not_implemented"
+            outcome.provider_execution().result().value()["error"],
+            Value::Null
         );
         assert_eq!(
             outcome.state()["artifacts"]["implement_provider_request"]["path"],
@@ -939,7 +954,7 @@ mod tests {
             .any(|path| path == "provider-output/cloud-default/privacy-handoff.json"));
         let events = fixture.store.read_events("J-0001").expect("events");
         assert!(events.iter().any(|event| {
-            event["type"] == "PROVIDER_FINISHED" && event["details"]["status"] == "blocked"
+            event["type"] == "PROVIDER_FINISHED" && event["details"]["status"] == "success"
         }));
     }
 
@@ -1019,6 +1034,16 @@ mod tests {
             println!(
                 "STAR_CONTROL_FORBIDDEN_ACTION_EVIDENCE:dependency_install from execution helper"
             );
+        }
+    }
+
+    #[test]
+    fn execution_cloud_cli_success_helper() {
+        let is_child_helper = std::env::args().collect::<Vec<_>>().windows(2).any(|args| {
+            args[0] == "--exact" && args[1] == "tests::execution_cloud_cli_success_helper"
+        });
+        if is_child_helper && std::env::var("STAR_CONTROL_EXECUTION_CLOUD_CLI_HELPER").is_ok() {
+            println!("cloud cli execution helper completed");
         }
     }
 
@@ -1350,7 +1375,12 @@ mod tests {
                 .expect("save local process workspec");
         }
 
-        fn use_cloud_cli_registry(&mut self) {
+        fn use_cloud_cli_registry(
+            &mut self,
+            args: Vec<String>,
+            env_allowlist: Vec<String>,
+            timeout_seconds: u64,
+        ) {
             let instance_path = self.project.join("cloud-cli-instance.json");
             fs::write(
                 &instance_path,
@@ -1359,7 +1389,7 @@ mod tests {
                     "provider": "provider.codex-cli",
                     "enabled": true,
                     "limits": {
-                        "timeout_seconds": 300,
+                        "timeout_seconds": timeout_seconds,
                         "max_parallel_jobs": 1
                     },
                     "routing_tags": ["cloud", "cli"],
@@ -1371,8 +1401,13 @@ mod tests {
                         "estimated_cost": 0,
                         "currency": "USD"
                     },
+                    "command_policy": {
+                        "shell": false,
+                        "env_allowlist": env_allowlist
+                    },
                     "command": {
-                        "executable": "codex"
+                        "executable": current_test_executable(),
+                        "args": args
                     }
                 }))
                 .expect("serialize cloud CLI instance"),

@@ -57,6 +57,7 @@
 - M5f local process forbidden action evidence marker와 RunState `BLOCKED` 전이를 추가했다.
 - M5g local provider conformance fixture를 추가해 M5 runtime exit criteria를 묶어 검증한다.
 - M6a cloud provider preflight를 추가해 credential/privacy/cost artifact 계약을 runtime 경로에 연결했다.
+- M6b cloud CLI transport를 추가해 preflight 통과 CLI provider가 command vector로 실행되게 했다.
 
 ### 아직 남은 것
 
@@ -142,6 +143,7 @@ cargo test --workspace
 | M5f handoff | local process child stdout/stderr의 `STAR_CONTROL_FORBIDDEN_ACTION_EVIDENCE:<action>` marker가 WorkSpec `forbidden_actions` 또는 기본 금지 action과 일치하면 `blocked` provider result와 RunState `BLOCKED`로 정규화한다. raw stdout/stderr는 복사하지 않고 action/source만 error evidence에 남긴다 |
 | M5g handoff | `local_process_provider_conformance_fixture_covers_m5_runtime_contract`가 success/timeout/cancel/forbidden evidence를 `ExecutionEngine` + `StateStore` 경로로 실행하고 provider result status, RunState, output artifact, artifact ref, provider finished event를 검증한다 |
 | M6a handoff | `CloudProviderPreflightAdapter`는 `cloud_cli_agent`+`cli`, `cloud_api_model`+`http` provider를 실제 외부 호출 없이 preflight 처리한다. raw credential field, missing API `credential_ref`, missing CLI auth declaration, unapproved privacy handoff는 `blocked` result로 정규화하고 `privacy-handoff.json`, `cost-metric.json`을 provider-output에 쓴다 |
+| M6b handoff | `CloudCliProviderAdapter`는 M6a preflight 통과 후 shell 없이 `command.executable` + `command.args` vector를 대상 프로젝트 root에서 실행하고 stdout/stderr/cost/response artifact를 provider-output에 쓴다. unsafe preflight는 기존 `BLOCKED` path를 재사용하고, test fixture는 외부 CLI 대신 current test executable을 사용한다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -180,3 +182,4 @@ cargo test --workspace
 | P-0030 | 2026-07-01 | M5f local process forbidden action evidence mapping 추가 | `packages/star-control-provider/src/local_process.rs`, `packages/star-control-execution/src/lib.rs`, `docs/implementation/local-process-provider-policy.md` |
 | P-0031 | 2026-07-01 | M5g local provider conformance fixture 추가 | `packages/star-control-execution/src/lib.rs`, `docs/implementation/local-process-provider-policy.md` |
 | P-0032 | 2026-07-01 | M6a cloud provider preflight 추가 | `packages/star-control-provider/src/cloud.rs`, `docs/implementation/cloud-provider-policy.md` |
+| P-0033 | 2026-07-01 | M6b cloud CLI transport 추가 | `packages/star-control-provider/src/cloud.rs`, `packages/star-control-execution/src/lib.rs` |

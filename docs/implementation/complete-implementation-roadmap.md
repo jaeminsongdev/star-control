@@ -200,7 +200,7 @@ Exit criteria:
 - provider별 parser와 conformance fixture가 있다.
 - budget, cost, rate limit, privacy handoff가 report에 반영된다.
 
-M6a preflight는 실제 외부 호출 전에 credential/privacy/cost artifact 계약을 적용한다. Cloud CLI/API 실제 transport 실행은 별도 M6 slice에서 provider 공식 문서 refresh와 승인 조건을 확인한 뒤 구현한다.
+M6a preflight는 실제 외부 호출 전에 credential/privacy/cost artifact 계약을 적용한다. M6b cloud CLI transport는 provider instance command vector를 local fixture로 검증하고, Cloud API 실제 transport 실행은 별도 M6 slice에서 provider 공식 문서 refresh와 승인 조건을 확인한 뒤 구현한다.
 
 Validation:
 
