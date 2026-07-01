@@ -1,0 +1,16 @@
+[package]
+name = "star-control-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json = "1"
+star-control-execution = { path = "../star-control-execution" }
+star-control-provider = { path = "../star-control-provider" }
+star-control-router = { path = "../star-control-router" }
+star-control-schema = { path = "../star-control-schema" }
+star-control-state = { path = "../star-control-state" }
+
+[[bin]]
+name = "star-control"
+path = "src/main.rs"

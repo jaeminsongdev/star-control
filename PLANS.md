@@ -42,10 +42,11 @@
 - E05 `FakeProviderAdapter`와 provider output writer 연결을 추가했다.
 - E06 `packages/star-control-router` RouterEngine을 추가했다.
 - E07 `packages/star-control-execution` ExecutionEngine을 추가했다.
+- E08 `packages/star-control-cli` CLI fake flow를 추가했다.
 
 ### 아직 남은 것
 
-- E08 CLI read-only + fake run부터 현재 큐 순서대로 진행한다.
+- E09 Star Sentinel P0부터 현재 큐 순서대로 진행한다.
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke까지 완료해야 첫 검증 milestone으로 인정한다.
 
@@ -111,6 +112,7 @@ cargo test --workspace
 | E05 handoff | `ProviderAdapter` trait, `ProviderRunContext`, `ExecutionRequest`, `ProviderRunResult`, `FakeProviderAdapter::{success,failed,blocked}`; output shape는 `provider-output/{provider_instance_id}/{request.json,response.json,stdout.txt,stderr.txt}`이며 기존 artifact overwrite는 오류 |
 | E06 handoff | `RouterEngine::route`, `JobSpec`, `RouterOutput::{route,decision,workspecs}`; WorkSpec path는 `workspecs/{stage}.json`, 초기 assignment는 enabled `fake-default`와 `policy_profile`을 stage별로 기록 |
 | E07 handoff | `ExecutionEngine::execute_stage(job_id, stage)`; precondition은 StateStore에 `job.json`과 `workspecs/{stage}.json`이 있고 registry에 `provider_instance`가 존재하는 것; output은 `provider-output/{provider_instance}/request.json`, `response.json`, `stdout.txt`, optional `stderr.txt`, RunState update, provider start/finish events |
+| E08 handoff | `star-control run --project <path> --request <text> --provider fake-default --json`, `status --project <path> --job <job-id> --json`, `report --project <path> --job <job-id> --stage <stage> --json`; command는 schema/config root로 current directory 또는 `STAR_CONTROL_HOME`을 사용하며, fake run은 target project `.ai-runs/`에 job, route, workspec, provider output, report, run-state를 기록 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -134,3 +136,4 @@ cargo test --workspace
 | P-0015 | 2026-07-01 | E05 deterministic FakeProviderAdapter 추가 | `packages/star-control-provider` |
 | P-0016 | 2026-07-01 | E06 deterministic RouterEngine 추가 | `packages/star-control-router` |
 | P-0017 | 2026-07-01 | E07 fake provider ExecutionEngine 추가 | `packages/star-control-execution` |
+| P-0018 | 2026-07-01 | E08 CLI read-only + fake run 추가 | `packages/star-control-cli` |
