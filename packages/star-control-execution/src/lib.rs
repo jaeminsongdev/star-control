@@ -1,9 +1,10 @@
 use serde_json::{json, Value};
 use star_control_provider::{
-    is_cloud_cli_manifest, is_cloud_provider_manifest, CloudCliProviderAdapter,
-    CloudProviderPreflightAdapter, ExecutionRequest, FakeProviderAdapter,
-    LocalProcessProviderAdapter, ProviderAdapter, ProviderAdapterError, ProviderExecution,
-    ProviderRegistry, ProviderRegistryError, ProviderRunContext,
+    is_cloud_api_manifest, is_cloud_cli_manifest, is_cloud_provider_manifest,
+    CloudApiOfflineProviderAdapter, CloudCliProviderAdapter, CloudProviderPreflightAdapter,
+    ExecutionRequest, FakeProviderAdapter, LocalProcessProviderAdapter, ProviderAdapter,
+    ProviderAdapterError, ProviderExecution, ProviderRegistry, ProviderRegistryError,
+    ProviderRunContext,
 };
 use star_control_schema::{load_schema, validate_json, ValidationError};
 use star_control_state::{StateStore, StateStoreError};
@@ -172,6 +173,7 @@ pub struct ExecutionEngine<'a> {
     fake_adapter: FakeProviderAdapter,
     local_process_adapter: LocalProcessProviderAdapter,
     cloud_cli_adapter: CloudCliProviderAdapter,
+    cloud_api_adapter: CloudApiOfflineProviderAdapter,
     cloud_provider_adapter: CloudProviderPreflightAdapter,
 }
 
@@ -188,6 +190,7 @@ impl<'a> ExecutionEngine<'a> {
             fake_adapter: FakeProviderAdapter::success(),
             local_process_adapter: LocalProcessProviderAdapter,
             cloud_cli_adapter: CloudCliProviderAdapter,
+            cloud_api_adapter: CloudApiOfflineProviderAdapter,
             cloud_provider_adapter: CloudProviderPreflightAdapter,
         }
     }
@@ -295,6 +298,9 @@ impl<'a> ExecutionEngine<'a> {
         }
         if is_cloud_cli_manifest(manifest) {
             return Ok(self.cloud_cli_adapter.execute(request, context)?);
+        }
+        if is_cloud_api_manifest(manifest) {
+            return Ok(self.cloud_api_adapter.execute(request, context)?);
         }
         if is_cloud_provider_manifest(manifest) {
             return Ok(self.cloud_provider_adapter.execute(request, context)?);
@@ -693,10 +699,12 @@ mod tests {
     use star_control_provider::{FakeProviderAdapter, ProviderRegistryLoader};
     use star_control_router::{JobSpec, RouterEngine};
     use std::fs;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Mutex, MutexGuard};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+    static TEMP_PROJECT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn fake_provider_workspec_execution_writes_artifacts_and_state() {
@@ -952,6 +960,83 @@ mod tests {
             .expect("artifacts")
             .iter()
             .any(|path| path == "provider-output/cloud-default/privacy-handoff.json"));
+        let events = fixture.store.read_events("J-0001").expect("events");
+        assert!(events.iter().any(|event| {
+            event["type"] == "PROVIDER_FINISHED" && event["details"]["status"] == "success"
+        }));
+    }
+
+    #[test]
+    fn cloud_api_offline_fixture_updates_state_without_live_call() {
+        let mut fixture = Fixture::new();
+        fixture.write_openai_response_fixture(
+            "fixtures/openai-response.json",
+            &json!({
+                "id": "resp_execution_fixture",
+                "model": "gpt-example",
+                "status": "completed",
+                "output_text": "execution offline answer",
+                "usage": {
+                    "input_tokens": 8,
+                    "output_tokens": 13,
+                    "total_tokens": 21
+                }
+            }),
+        );
+        fixture.use_cloud_api_offline_registry("fixtures/openai-response.json");
+        fixture.assign_implement_stage_to_cloud_provider();
+
+        let outcome = ExecutionEngine::new(&fixture.store, &fixture.registry, &fixture.schemas)
+            .execute_stage("J-0001", "implement")
+            .expect("execute cloud API offline stage");
+
+        assert_eq!(outcome.request().provider_instance_id(), "cloud-default");
+        assert_eq!(outcome.provider_execution().result().status(), "success");
+        assert_eq!(outcome.attempt()["status"], "success");
+        assert_eq!(outcome.state()["state"], "IMPLEMENTED");
+        assert_eq!(
+            outcome.provider_execution().result().value()["summary"],
+            "execution offline answer"
+        );
+        assert_eq!(
+            outcome.provider_execution().result().value()["metrics"]["transport_execution"],
+            "offline_fixture"
+        );
+        assert_eq!(
+            outcome.provider_execution().result().value()["metrics"]["input_tokens"],
+            8
+        );
+        assert_eq!(
+            outcome.state()["artifacts"]["implement_provider_request"]["path"],
+            "provider-output/cloud-default/request.json"
+        );
+        assert_eq!(
+            outcome.state()["artifacts"]["implement_provider_response"]["path"],
+            "provider-output/cloud-default/response.json"
+        );
+        assert!(fixture
+            .project
+            .join(".ai-runs/J-0001/provider-output/cloud-default/http-request.json")
+            .is_file());
+        assert!(fixture
+            .project
+            .join(".ai-runs/J-0001/provider-output/cloud-default/raw-response.json")
+            .is_file());
+        let http_request: Value = serde_json::from_str(
+            &fs::read_to_string(
+                fixture
+                    .project
+                    .join(".ai-runs/J-0001/provider-output/cloud-default/http-request.json"),
+            )
+            .expect("read http request"),
+        )
+        .expect("parse http request");
+        assert_eq!(http_request["url"], "https://api.openai.com/v1/responses");
+        assert_eq!(http_request["body"]["input"], "runtime code 구현");
+        let http_request_text =
+            serde_json::to_string(&http_request).expect("serialize http request");
+        assert!(!http_request_text.contains("OPENAI_API_KEY"));
+
         let events = fixture.store.read_events("J-0001").expect("events");
         assert!(events.iter().any(|event| {
             event["type"] == "PROVIDER_FINISHED" && event["details"]["status"] == "success"
@@ -1421,6 +1506,56 @@ mod tests {
                 .expect("load cloud CLI registry");
         }
 
+        fn write_openai_response_fixture(&self, relative_path: &str, value: &Value) {
+            let path = self.project.join(relative_path);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("create response fixture parent");
+            }
+            fs::write(
+                path,
+                serde_json::to_string_pretty(value).expect("serialize response fixture"),
+            )
+            .expect("write response fixture");
+        }
+
+        fn use_cloud_api_offline_registry(&mut self, fixture_relative_path: &str) {
+            let instance_path = self.project.join("cloud-api-instance.json");
+            fs::write(
+                &instance_path,
+                serde_json::to_string_pretty(&json!({
+                    "id": "cloud-default",
+                    "provider": "provider.openai",
+                    "enabled": true,
+                    "credential_ref": "env:OPENAI_API_KEY",
+                    "limits": {
+                        "timeout_seconds": 300,
+                        "max_parallel_jobs": 1
+                    },
+                    "routing_tags": ["cloud", "api"],
+                    "transport_config": {
+                        "privacy_handoff_approved": true,
+                        "offline_response_fixture": fixture_relative_path
+                    },
+                    "budget": {
+                        "estimated_cost": 0,
+                        "currency": "USD"
+                    },
+                    "endpoint": {
+                        "base_url": "https://api.openai.com/v1",
+                        "model": "gpt-example"
+                    }
+                }))
+                .expect("serialize cloud API instance"),
+            )
+            .expect("write cloud API instance");
+            self.registry = ProviderRegistryLoader::new(repo_root())
+                .load_registry(
+                    "configs/registries/builtin-provider-registry.yaml",
+                    &[instance_path],
+                )
+                .expect("load cloud API registry");
+        }
+
         fn assign_implement_stage_to_cloud_provider(&self) {
             let mut workspec = self
                 .store
@@ -1465,10 +1600,12 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
+        let counter = TEMP_PROJECT_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "star-control-execution-{}-{}",
+            "star-control-execution-{}-{}-{}",
             std::process::id(),
-            nanos
+            nanos,
+            counter
         ));
         fs::create_dir_all(&path).expect("create temp project");
         path

@@ -1,13 +1,15 @@
 use crate::fake::{ensure_output_files_absent, provider_output_path};
 use crate::{
-    ExecutionRequest, ProviderAdapter, ProviderAdapterError, ProviderExecution, ProviderInstance,
-    ProviderManifest, ProviderRunContext, ProviderRunResult,
+    ExecutionRequest, OpenAiCompatibleParsedResponse, OpenAiCompatiblePreparedRequest,
+    OpenAiCompatibleRequestApi, OpenAiCompatibleRequestBuilder, OpenAiCompatibleResponseKind,
+    OpenAiCompatibleResponseParser, ProviderAdapter, ProviderAdapterError, ProviderExecution,
+    ProviderInstance, ProviderManifest, ProviderRunContext, ProviderRunResult,
 };
 use serde_json::{json, Value};
 use star_control_schema::{load_schema, validate_json};
 use star_control_state::ArtifactKind;
-use std::fs::{File, OpenOptions};
-use std::path::Path;
+use std::fs::{self, File, OpenOptions};
+use std::path::{Component, Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -16,6 +18,8 @@ const CLOUD_CLI_KIND: &str = "cloud_cli_agent";
 const CLOUD_API_KIND: &str = "cloud_api_model";
 const CLI_TRANSPORT: &str = "cli";
 const HTTP_TRANSPORT: &str = "http";
+const HTTP_REQUEST_FILE: &str = "http-request.json";
+const RAW_RESPONSE_FILE: &str = "raw-response.json";
 const STDOUT_FILE: &str = "stdout.txt";
 const STDERR_FILE: &str = "stderr.txt";
 const PRIVACY_HANDOFF_FILE: &str = "privacy-handoff.json";
@@ -29,6 +33,9 @@ const MAX_TIMEOUT_SECONDS: u64 = 1800;
 pub struct CloudCliProviderAdapter;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CloudApiOfflineProviderAdapter;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CloudProviderPreflightAdapter;
 
 pub fn is_cloud_provider_manifest(manifest: &ProviderManifest) -> bool {
@@ -38,6 +45,10 @@ pub fn is_cloud_provider_manifest(manifest: &ProviderManifest) -> bool {
 
 pub fn is_cloud_cli_manifest(manifest: &ProviderManifest) -> bool {
     manifest.kind() == CLOUD_CLI_KIND && manifest.transport() == CLI_TRANSPORT
+}
+
+pub fn is_cloud_api_manifest(manifest: &ProviderManifest) -> bool {
+    manifest.kind() == CLOUD_API_KIND && manifest.transport() == HTTP_TRANSPORT
 }
 
 impl ProviderAdapter for CloudCliProviderAdapter {
@@ -156,6 +167,166 @@ impl ProviderAdapter for CloudCliProviderAdapter {
             Some(stderr_ref),
         );
         assert_provider_sidecar_refs(&execution, &privacy_ref, &cost_ref);
+        Ok(execution)
+    }
+}
+
+impl ProviderAdapter for CloudApiOfflineProviderAdapter {
+    fn execute(
+        &self,
+        request: &ExecutionRequest,
+        context: &ProviderRunContext<'_>,
+    ) -> Result<ProviderExecution, ProviderAdapterError> {
+        let manifest = context
+            .registry()
+            .manifest_for_instance(request.provider_instance_id())?;
+        if !is_cloud_api_manifest(manifest) {
+            return Err(ProviderAdapterError::UnsupportedProvider {
+                provider_instance_id: request.provider_instance_id().to_string(),
+                provider_id: manifest.id().to_string(),
+            });
+        }
+
+        let instance = context
+            .registry()
+            .instance(request.provider_instance_id())
+            .ok_or_else(|| crate::ProviderRegistryError::InstanceNotFound {
+                instance_id: request.provider_instance_id().to_string(),
+            })?;
+        let decision = CloudProviderPolicyDecision::evaluate(manifest, instance);
+        if !decision.allows_transport_execution() {
+            return CloudProviderPreflightAdapter.execute(request, context);
+        }
+        let Some(fixture_relative_path) = offline_response_fixture_path(instance)? else {
+            return CloudProviderPreflightAdapter.execute(request, context);
+        };
+
+        ensure_output_files_absent(
+            context.state_store(),
+            request.job_id(),
+            &planned_output_files(request.provider_instance_id()),
+        )?;
+
+        let started_at = Instant::now();
+        let prepared_request = OpenAiCompatibleRequestBuilder
+            .build(request, instance)
+            .map_err(|source| {
+                cloud_policy_denied(
+                    instance.id(),
+                    &format!("OpenAI-compatible request build failed: {}", source),
+                )
+            })?;
+        let fixture_path = resolve_project_relative_path(
+            context.state_store().project_root(),
+            &fixture_relative_path,
+            instance.id(),
+        )?;
+        let raw_response = read_json_file(&fixture_path)?;
+        let parsed_response = OpenAiCompatibleResponseParser
+            .parse(&raw_response)
+            .map_err(|source| {
+                cloud_policy_denied(
+                    instance.id(),
+                    &format!("OpenAI-compatible response parse failed: {}", source),
+                )
+            })?;
+        let wall_time_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+
+        let request_ref = context.state_store().write_provider_json(
+            request.job_id(),
+            request.provider_instance_id(),
+            "request.json",
+            request.value(),
+        )?;
+        let http_request_ref = context.state_store().write_provider_json(
+            request.job_id(),
+            request.provider_instance_id(),
+            HTTP_REQUEST_FILE,
+            &prepared_request_value(&prepared_request),
+        )?;
+        let raw_response_ref = context.state_store().write_provider_json(
+            request.job_id(),
+            request.provider_instance_id(),
+            RAW_RESPONSE_FILE,
+            &raw_response,
+        )?;
+
+        let privacy_handoff = privacy_handoff_value(request, manifest, true);
+        validate_contract(
+            &privacy_handoff,
+            Path::new(PRIVACY_HANDOFF_FILE),
+            context.schema_root(),
+            PRIVACY_HANDOFF_SCHEMA,
+        )?;
+        let privacy_ref = context.state_store().write_provider_json(
+            request.job_id(),
+            request.provider_instance_id(),
+            PRIVACY_HANDOFF_FILE,
+            &privacy_handoff,
+        )?;
+
+        let cost_metric = cost_metric_value_with_response_usage(
+            request,
+            instance,
+            &parsed_response,
+            wall_time_ms,
+        );
+        validate_contract(
+            &cost_metric,
+            Path::new(COST_METRIC_FILE),
+            context.schema_root(),
+            COST_METRIC_SCHEMA,
+        )?;
+        let cost_ref = context.state_store().write_provider_json(
+            request.job_id(),
+            request.provider_instance_id(),
+            COST_METRIC_FILE,
+            &cost_metric,
+        )?;
+
+        let stdout_ref = context.state_store().write_provider_text(
+            request.job_id(),
+            request.provider_instance_id(),
+            STDOUT_FILE,
+            &api_offline_stdout_value(manifest, &prepared_request, &fixture_relative_path),
+        )?;
+        let stderr_ref = context.state_store().write_provider_text(
+            request.job_id(),
+            request.provider_instance_id(),
+            STDERR_FILE,
+            "cloud API offline fixture completed without live API call\n",
+        )?;
+
+        let response_value = api_offline_response_value(
+            request,
+            manifest,
+            instance,
+            &prepared_request,
+            &parsed_response,
+            wall_time_ms,
+        );
+        let result = ProviderRunResult::from_value(
+            response_value.clone(),
+            provider_output_path(request.provider_instance_id(), "response.json"),
+            context.schema_root(),
+        )?;
+        let response_ref = context.state_store().write_provider_json(
+            request.job_id(),
+            request.provider_instance_id(),
+            "response.json",
+            &response_value,
+        )?;
+
+        let execution = ProviderExecution::new(
+            result,
+            request_ref,
+            response_ref,
+            stdout_ref,
+            Some(stderr_ref),
+        );
+        assert_provider_sidecar_refs(&execution, &privacy_ref, &cost_ref);
+        debug_assert_eq!(http_request_ref["kind"], "provider_output");
+        debug_assert_eq!(raw_response_ref["kind"], "provider_output");
         Ok(execution)
     }
 }
@@ -579,6 +750,88 @@ fn cli_response_value(
     })
 }
 
+fn api_offline_response_value(
+    request: &ExecutionRequest,
+    manifest: &ProviderManifest,
+    instance: &ProviderInstance,
+    prepared_request: &OpenAiCompatiblePreparedRequest,
+    parsed_response: &OpenAiCompatibleParsedResponse,
+    wall_time_ms: u64,
+) -> Value {
+    let request_path = provider_output_path(request.provider_instance_id(), "request.json");
+    let http_request_path = provider_output_path(request.provider_instance_id(), HTTP_REQUEST_FILE);
+    let raw_response_path = provider_output_path(request.provider_instance_id(), RAW_RESPONSE_FILE);
+    let response_path = provider_output_path(request.provider_instance_id(), "response.json");
+    let stdout_path = provider_output_path(request.provider_instance_id(), STDOUT_FILE);
+    let stderr_path = provider_output_path(request.provider_instance_id(), STDERR_FILE);
+    let privacy_path = provider_output_path(request.provider_instance_id(), PRIVACY_HANDOFF_FILE);
+    let cost_path = provider_output_path(request.provider_instance_id(), COST_METRIC_FILE);
+
+    json!({
+        "schema_version": "1.0.0",
+        "provider_instance_id": request.provider_instance_id(),
+        "job_id": request.job_id(),
+        "stage": request.stage(),
+        "status": "success",
+        "started_at": request.created_at(),
+        "finished_at": request.created_at(),
+        "stdout_path": stdout_path,
+        "stderr_path": stderr_path,
+        "summary": parsed_response.text(),
+        "changed_files": [],
+        "artifacts": [
+            response_path,
+            request_path,
+            http_request_path,
+            raw_response_path,
+            stdout_path,
+            stderr_path,
+            privacy_path,
+            cost_path
+        ],
+        "metrics": {
+            "estimated_cost": estimated_cost(instance),
+            "currency": currency(instance),
+            "input_tokens": parsed_response.input_tokens(),
+            "output_tokens": parsed_response.output_tokens(),
+            "total_tokens": parsed_response.total_tokens(),
+            "wall_time_ms": wall_time_ms,
+            "transport": HTTP_TRANSPORT,
+            "transport_execution": "offline_fixture",
+            "request_api": request_api_name(prepared_request.api()),
+            "response_kind": response_kind_name(parsed_response.kind()),
+            "response_id": parsed_response.response_id(),
+            "model": parsed_response.model(),
+            "provider_id": manifest.id()
+        },
+        "error": Value::Null
+    })
+}
+
+fn prepared_request_value(prepared_request: &OpenAiCompatiblePreparedRequest) -> Value {
+    json!({
+        "schema_version": "1.0.0",
+        "api": request_api_name(prepared_request.api()),
+        "method": prepared_request.method(),
+        "url": prepared_request.url(),
+        "body": prepared_request.body()
+    })
+}
+
+fn request_api_name(api: OpenAiCompatibleRequestApi) -> &'static str {
+    match api {
+        OpenAiCompatibleRequestApi::Responses => "responses",
+        OpenAiCompatibleRequestApi::ChatCompletions => "chat_completions",
+    }
+}
+
+fn response_kind_name(kind: OpenAiCompatibleResponseKind) -> &'static str {
+    match kind {
+        OpenAiCompatibleResponseKind::Responses => "responses",
+        OpenAiCompatibleResponseKind::ChatCompletions => "chat_completions",
+    }
+}
+
 fn privacy_handoff_value(
     request: &ExecutionRequest,
     manifest: &ProviderManifest,
@@ -607,13 +860,38 @@ fn cost_metric_value_with_wall_time(
     instance: &ProviderInstance,
     wall_time_ms: u64,
 ) -> Value {
+    cost_metric_value_with_usage(request, instance, 0, 0, wall_time_ms)
+}
+
+fn cost_metric_value_with_response_usage(
+    request: &ExecutionRequest,
+    instance: &ProviderInstance,
+    parsed_response: &OpenAiCompatibleParsedResponse,
+    wall_time_ms: u64,
+) -> Value {
+    cost_metric_value_with_usage(
+        request,
+        instance,
+        parsed_response.input_tokens(),
+        parsed_response.output_tokens(),
+        wall_time_ms,
+    )
+}
+
+fn cost_metric_value_with_usage(
+    request: &ExecutionRequest,
+    instance: &ProviderInstance,
+    input_tokens: u64,
+    output_tokens: u64,
+    wall_time_ms: u64,
+) -> Value {
     json!({
         "schema_version": "1.0.0",
         "job_id": request.job_id(),
         "stage": request.stage(),
         "provider_instance_id": request.provider_instance_id(),
-        "input_tokens": 0,
-        "output_tokens": 0,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
         "estimated_cost": estimated_cost(instance),
         "currency": currency(instance),
         "wall_time_ms": wall_time_ms,
@@ -642,10 +920,28 @@ fn stderr_value(decision: &CloudProviderPolicyDecision) -> String {
     )
 }
 
+fn api_offline_stdout_value(
+    manifest: &ProviderManifest,
+    prepared_request: &OpenAiCompatiblePreparedRequest,
+    fixture_relative_path: &str,
+) -> String {
+    format!(
+        "cloud API offline fixture\nprovider_id={}\nkind={}\ntransport={}\nrequest_method={}\nrequest_url={}\nfixture_path={}\ntransport_execution=offline_fixture\nlive_api_call=false\n",
+        manifest.id(),
+        manifest.kind(),
+        manifest.transport(),
+        prepared_request.method(),
+        prepared_request.url(),
+        fixture_relative_path,
+    )
+}
+
 fn planned_output_files(provider_instance_id: &str) -> Vec<String> {
     vec![
         provider_output_path(provider_instance_id, "request.json"),
         provider_output_path(provider_instance_id, "response.json"),
+        provider_output_path(provider_instance_id, HTTP_REQUEST_FILE),
+        provider_output_path(provider_instance_id, RAW_RESPONSE_FILE),
         provider_output_path(provider_instance_id, STDOUT_FILE),
         provider_output_path(provider_instance_id, STDERR_FILE),
         provider_output_path(provider_instance_id, PRIVACY_HANDOFF_FILE),
@@ -822,6 +1118,92 @@ fn bool_pointer(value: &Value, pointer: &str) -> Option<bool> {
 
 fn number_pointer(value: &Value, pointer: &str) -> Option<f64> {
     value.pointer(pointer).and_then(Value::as_f64)
+}
+
+fn offline_response_fixture_path(
+    instance: &ProviderInstance,
+) -> Result<Option<String>, ProviderAdapterError> {
+    let Some(item) = instance
+        .value()
+        .pointer("/transport_config/offline_response_fixture")
+    else {
+        return Ok(None);
+    };
+    let Some(path) = item.as_str() else {
+        return Err(cloud_policy_denied(
+            instance.id(),
+            "transport_config.offline_response_fixture must be a string",
+        ));
+    };
+    if path.trim().is_empty() {
+        return Err(cloud_policy_denied(
+            instance.id(),
+            "transport_config.offline_response_fixture must not be empty",
+        ));
+    }
+    Ok(Some(path.to_string()))
+}
+
+fn resolve_project_relative_path(
+    project_root: &Path,
+    relative_path: &str,
+    provider_instance_id: &str,
+) -> Result<PathBuf, ProviderAdapterError> {
+    if relative_path.is_empty()
+        || relative_path.contains('\0')
+        || relative_path.contains(':')
+        || Path::new(relative_path).is_absolute()
+    {
+        return Err(cloud_policy_denied(
+            provider_instance_id,
+            "offline response fixture path must be a project-relative path",
+        ));
+    }
+
+    let mut normalized = PathBuf::new();
+    for component in Path::new(relative_path).components() {
+        match component {
+            Component::Normal(segment) if segment == ".git" => {
+                return Err(cloud_policy_denied(
+                    provider_instance_id,
+                    "offline response fixture path must not reference .git",
+                ));
+            }
+            Component::Normal(segment) => normalized.push(segment),
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err(cloud_policy_denied(
+                    provider_instance_id,
+                    "offline response fixture path must not traverse outside the project",
+                ));
+            }
+        }
+    }
+    if normalized.as_os_str().is_empty() {
+        return Err(cloud_policy_denied(
+            provider_instance_id,
+            "offline response fixture path must not be empty",
+        ));
+    }
+    let resolved = project_root.join(normalized);
+    if !resolved.starts_with(project_root) {
+        return Err(cloud_policy_denied(
+            provider_instance_id,
+            "offline response fixture path must stay inside the project",
+        ));
+    }
+    Ok(resolved)
+}
+
+fn read_json_file(path: &Path) -> Result<Value, ProviderAdapterError> {
+    let content = fs::read_to_string(path).map_err(|source| ProviderAdapterError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    serde_json::from_str(&content).map_err(|source| ProviderAdapterError::InvalidJson {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 fn required_string(
@@ -1115,6 +1497,152 @@ mod tests {
     }
 
     #[test]
+    fn cloud_api_offline_fixture_builds_request_and_parses_response_contract() {
+        let fixture_relative_path = "fixtures/openai-response.json";
+        let instance_value = json!({
+            "id": "cloud-default",
+            "provider": "provider.cloud",
+            "enabled": true,
+            "credential_ref": "env:STAR_CONTROL_TEST_TOKEN",
+            "limits": {
+                "timeout_seconds": 300,
+                "max_parallel_jobs": 1
+            },
+            "routing_tags": ["cloud", "api"],
+            "transport_config": {
+                "privacy_handoff_approved": true,
+                "offline_response_fixture": fixture_relative_path
+            },
+            "budget": {
+                "estimated_cost": 0.03,
+                "currency": "USD"
+            },
+            "endpoint": {
+                "base_url": "https://api.openai.com/v1/",
+                "model": "gpt-example"
+            }
+        });
+        let fixture_value = json!({
+            "id": "resp_fixture",
+            "model": "gpt-example",
+            "status": "completed",
+            "output_text": "offline fixture answer",
+            "usage": {
+                "input_tokens": 5,
+                "output_tokens": 7,
+                "total_tokens": 12
+            }
+        });
+        let (execution, project) = execute_cloud_api_offline(
+            instance_value.clone(),
+            fixture_relative_path,
+            &fixture_value,
+        )
+        .expect("execute cloud API offline fixture");
+
+        assert_eq!(execution.result().status(), "success");
+        assert_eq!(
+            execution.result().value()["summary"],
+            "offline fixture answer"
+        );
+        assert_eq!(
+            execution.result().value()["metrics"]["transport_execution"],
+            "offline_fixture"
+        );
+        assert_eq!(execution.result().value()["metrics"]["input_tokens"], 5);
+        assert_eq!(execution.result().value()["metrics"]["output_tokens"], 7);
+        assert_eq!(execution.result().value()["metrics"]["total_tokens"], 12);
+        assert_eq!(
+            execution.result().value()["artifacts"],
+            json!([
+                "provider-output/cloud-default/response.json",
+                "provider-output/cloud-default/request.json",
+                "provider-output/cloud-default/http-request.json",
+                "provider-output/cloud-default/raw-response.json",
+                "provider-output/cloud-default/stdout.txt",
+                "provider-output/cloud-default/stderr.txt",
+                "provider-output/cloud-default/privacy-handoff.json",
+                "provider-output/cloud-default/cost-metric.json"
+            ])
+        );
+
+        let http_request = read_json(
+            &project.join(".ai-runs/J-0001/provider-output/cloud-default/http-request.json"),
+        );
+        assert_eq!(http_request["method"], "POST");
+        assert_eq!(http_request["url"], "https://api.openai.com/v1/responses");
+        assert_eq!(http_request["body"]["model"], "gpt-example");
+        assert_eq!(http_request["body"]["input"], "run cloud provider");
+        let http_request_text =
+            serde_json::to_string(&http_request).expect("serialize http request");
+        assert!(!http_request_text.contains("STAR_CONTROL_TEST_TOKEN"));
+        assert!(!http_request_text.contains("credential_ref"));
+
+        let raw_response = read_json(
+            &project.join(".ai-runs/J-0001/provider-output/cloud-default/raw-response.json"),
+        );
+        assert_eq!(raw_response, fixture_value);
+        let cost_metric = read_json(
+            &project.join(".ai-runs/J-0001/provider-output/cloud-default/cost-metric.json"),
+        );
+        assert_eq!(cost_metric["input_tokens"], 5);
+        assert_eq!(cost_metric["output_tokens"], 7);
+
+        let schemas = schema_root();
+        let store = StateStore::open(&project, &schemas).expect("open executed project");
+        let registry = registry_with_instance(CLOUD_API_KIND, HTTP_TRANSPORT, instance_value)
+            .expect("reload cloud API registry");
+        let context = ProviderRunContext::new(&registry, &store, &schemas);
+        let conformance = ProviderConformanceChecker
+            .check_execution(&execution, &context, ProviderConformanceProfile::Cloud)
+            .expect("cloud API offline provider conformance");
+        assert!(conformance
+            .checked_artifacts()
+            .contains(&"provider-output/cloud-default/http-request.json".to_string()));
+        assert!(conformance
+            .checked_artifacts()
+            .contains(&"provider-output/cloud-default/raw-response.json".to_string()));
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn cloud_api_offline_fixture_rejects_unsafe_fixture_path() {
+        let error = execute_cloud_api_offline(
+            json!({
+                "id": "cloud-default",
+                "provider": "provider.cloud",
+                "enabled": true,
+                "credential_ref": "env:STAR_CONTROL_TEST_TOKEN",
+                "limits": {
+                    "timeout_seconds": 300,
+                    "max_parallel_jobs": 1
+                },
+                "routing_tags": ["cloud", "api"],
+                "transport_config": {
+                    "privacy_handoff_approved": true,
+                    "offline_response_fixture": "../outside.json"
+                },
+                "endpoint": {
+                    "base_url": "https://api.openai.com/v1",
+                    "model": "gpt-example"
+                }
+            }),
+            "fixtures/openai-response.json",
+            &json!({
+                "id": "resp_fixture",
+                "output_text": "unused"
+            }),
+        )
+        .expect_err("unsafe fixture path should fail");
+
+        assert!(matches!(
+            error,
+            ProviderAdapterError::CommandPolicyDenied { reason, .. }
+                if reason.contains("must not traverse outside the project")
+        ));
+    }
+
+    #[test]
     fn cloud_cli_transport_executes_command_and_writes_contract() {
         let _env = EnvVarGuard::set("STAR_CONTROL_CLOUD_CLI_SUCCESS_HELPER", "1");
         let instance_value = json!({
@@ -1283,6 +1811,40 @@ mod tests {
             .expect("request");
         let context = ProviderRunContext::new(&registry, &store, &schemas);
         match CloudCliProviderAdapter.execute(&request, &context) {
+            Ok(execution) => Ok((execution, project)),
+            Err(error) => {
+                fs::remove_dir_all(project).ok();
+                Err(error)
+            }
+        }
+    }
+
+    fn execute_cloud_api_offline(
+        instance_value: Value,
+        fixture_relative_path: &str,
+        fixture_value: &Value,
+    ) -> Result<(ProviderExecution, PathBuf), ProviderAdapterError> {
+        let project = temp_project();
+        let fixture_path = project.join(fixture_relative_path);
+        if let Some(parent) = fixture_path.parent() {
+            fs::create_dir_all(parent).expect("create fixture parent");
+        }
+        fs::write(
+            &fixture_path,
+            serde_json::to_string_pretty(fixture_value).expect("serialize response fixture"),
+        )
+        .expect("write response fixture");
+        let schemas = schema_root();
+        let store = StateStore::open(&project, &schemas).expect("open store");
+        store
+            .create_job("use cloud API provider", "codex", vec![])
+            .expect("create job");
+        let registry = registry_with_instance(CLOUD_API_KIND, HTTP_TRANSPORT, instance_value)
+            .expect("register cloud API provider");
+        let request = ExecutionRequest::from_value(request_value(), "request.json", &schemas)
+            .expect("request");
+        let context = ProviderRunContext::new(&registry, &store, &schemas);
+        match CloudApiOfflineProviderAdapter.execute(&request, &context) {
             Ok(execution) => Ok((execution, project)),
             Err(error) => {
                 fs::remove_dir_all(project).ok();

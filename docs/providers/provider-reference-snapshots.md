@@ -67,12 +67,13 @@ https://developers.openai.com/api/docs/guides/text
 - Responses API text output은 SDK convenience field인 `output_text`로 집계될 수 있지만, `output[]`는 여러 item을 포함할 수 있으므로 first item에 text가 있다고 가정하지 않는다.
 - Chat Completions response는 `choices[].message.content`와 usage token fields를 제공한다.
 - Request builder는 Responses API `model` + `input`, Chat Completions `model` + `messages`를 fixture 기준으로 사용한다.
+- M6f offline fixture integration은 `transport_config.offline_response_fixture`에서 읽은 raw response fixture를 `raw-response.json`으로 복사하고 parser 결과를 normalized `response.json`과 `cost-metric.json` token usage에 반영한다.
 - Star-Control manifest의 `transport: http`, `adapter: openai_compatible`, `structured_output: true`는 현재 snapshot에서 타당하다.
 
 보류:
 
 - 실제 model list, price, rate limit, background response, cancel behavior는 adapter 구현 직전 재확인한다.
-- 실제 HTTP transport, credential lookup, streaming SSE parser는 별도 M6 slice로 구현한다.
+- 실제 HTTP transport, credential lookup, request signing/header construction, streaming SSE parser는 별도 M6 slice로 구현한다.
 
 ### Anthropic API
 

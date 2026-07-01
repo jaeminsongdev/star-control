@@ -81,4 +81,4 @@ official doc refresh notes
 
 ## 다음 handoff
 
-M6f는 cloud API transport boundary 또는 offline HTTP response fixture integration을 별도 PR로 구현한다. 실제 cloud API call, paid usage, credential raw value access는 별도 승인 전까지 실행하지 않는다.
+M6f는 cloud API offline HTTP response fixture integration을 별도 PR로 구현한다. 실제 cloud API call, paid usage, credential raw value access는 별도 승인 전까지 실행하지 않는다.

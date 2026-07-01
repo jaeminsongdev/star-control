@@ -61,9 +61,10 @@ E13 Cloud CLI Transport
 E14 Cloud Provider Conformance
 E15 OpenAI-Compatible API Parser
 E16 OpenAI-Compatible Request Builder
+E17 Cloud API Offline Fixture Integration
 ```
 
-E16 이후 M6f cloud API transport boundary 또는 offline HTTP response fixture integration, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E17 이후 M6g cloud API transport boundary, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1266,7 +1267,90 @@ official doc refresh notes
 다음 EPIC handoff:
 
 ```text
-M6f cloud API transport boundary 또는 offline HTTP response fixture integration을 별도 PR로 구현한다.
+M6f cloud API offline HTTP response fixture integration을 별도 PR로 구현한다.
+```
+
+## E17 Cloud API Offline Fixture Integration
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cloud-provider-policy.md
+provider-system.md
+docs/providers/provider-reference-snapshots.md
+testing-ci-release.md
+E15-openai-compatible-parser.md
+E16-openai-compatible-request-builder.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+packages/star-control-execution/**
+docs/implementation/**
+docs/providers/**
+builtin-providers/cloud-api/openai/docs/**
+PLANS.md
+```
+
+금지 파일:
+
+```text
+Cargo 외 package manager
+새 dependency
+GitHub workflow
+schema field 변경
+release/deploy/publish automation
+실제 paid CLI/API 호출 검증
+credential raw value 저장
+live credential lookup
+live HTTP transport 실행
+```
+
+입력 artifact:
+
+```text
+ExecutionRequest.goal
+ProviderInstance.endpoint.base_url
+ProviderInstance.endpoint.model
+ProviderInstance.endpoint.api optional responses/chat_completions selector
+ProviderInstance.transport_config.offline_response_fixture project-relative JSON path
+OpenAI-compatible response fixture JSON
+```
+
+출력 artifact:
+
+```text
+CloudApiOfflineProviderAdapter
+provider-output/{provider_instance_id}/http-request.json
+provider-output/{provider_instance_id}/raw-response.json
+normalized response.json
+privacy-handoff.json
+cost-metric.json with parsed usage tokens
+execution engine cloud API offline fixture path
+provider conformance fixture
+```
+
+핵심 TASK:
+
+```text
+cloud API preflight reuse
+offline_response_fixture project-relative path guard
+OpenAI-compatible request builder integration
+OpenAI-compatible parser integration
+provider output artifact writes
+ExecutionEngine cloud API provider selection
+no live call / no credential raw value assertions
+```
+
+완료 기준: cloud API provider가 `transport_config.offline_response_fixture`가 있을 때 live HTTP 호출 없이 prepared request와 fixture response parse를 같은 runtime path에서 검증하고, fixture가 없으면 기존 preflight `BLOCKED` 흐름을 유지해야 한다.
+
+다음 EPIC handoff:
+
+```text
+M6g cloud API transport boundary를 별도 PR로 설계한다. 실제 credential lookup, request signing/header construction, live API call, streaming SSE, paid usage는 별도 승인 전까지 실행하지 않는다.
 ```
 
 ## RESERVED

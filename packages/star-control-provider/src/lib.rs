@@ -13,8 +13,8 @@ mod local_process;
 mod openai_compatible;
 
 pub use cloud::{
-    is_cloud_cli_manifest, is_cloud_provider_manifest, CloudCliProviderAdapter,
-    CloudProviderPreflightAdapter,
+    is_cloud_api_manifest, is_cloud_cli_manifest, is_cloud_provider_manifest,
+    CloudApiOfflineProviderAdapter, CloudCliProviderAdapter, CloudProviderPreflightAdapter,
 };
 pub use conformance::{
     ProviderConformanceChecker, ProviderConformanceError, ProviderConformanceProfile,

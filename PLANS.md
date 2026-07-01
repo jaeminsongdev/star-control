@@ -61,13 +61,14 @@
 - M6c provider output conformance checker를 추가해 cloud provider artifact path/ref/file existence와 privacy/cost sidecar를 검증한다.
 - M6d OpenAI-compatible API response parser를 추가해 Responses API와 Chat Completions JSON fixture를 정규화한다.
 - M6e OpenAI-compatible request builder를 추가해 Responses API와 Chat Completions request URL/body fixture를 credential 없이 생성한다.
+- M6f cloud API offline fixture integration을 추가해 prepared request와 raw response fixture parse를 같은 runtime path에서 검증한다.
 - 병렬 Rust 테스트에서 provider/state temp project 경로가 충돌하지 않도록 test helper에 per-process counter를 추가했다.
 
 ### 아직 남은 것
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
-- M5 local provider는 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M6f cloud API transport boundary 또는 offline HTTP response fixture integration, 이후 M7 daemon/API, M8 UI, M9 hardening 순서다.
+- M5 local provider는 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M6g cloud API transport boundary, 이후 M7 daemon/API, M8 UI, M9 hardening 순서다.
 
 ### 건드리면 안 되는 것
 
@@ -151,6 +152,7 @@ cargo test --workspace
 | M6c handoff | `ProviderConformanceChecker`는 `ProviderExecution`의 request/response/stdout/stderr refs, `response.json` artifact paths, 실제 `.ai-runs/{job_id}/provider-output/{provider_instance_id}/` 파일 존재를 검증한다. `ProviderConformanceProfile::Cloud`는 `privacy-handoff.json`과 `cost-metric.json` sidecar 누락을 실패로 처리한다 |
 | M6d handoff | `OpenAiCompatibleResponseParser`는 Responses API `output_text` 우선, `output[]` 전체 순회 fallback, Chat Completions `choices[].message.content`, usage token field mapping을 지원한다. 실제 HTTP transport, live credential lookup, paid API call, streaming SSE parser는 아직 구현하지 않았다 |
 | M6e handoff | `OpenAiCompatibleRequestBuilder`는 `ExecutionRequest.goal`과 `ProviderInstance.endpoint`에서 Responses API 또는 Chat Completions `POST` URL/body를 만든다. body에는 `model`, prompt input/messages, `stream=false`만 넣고 credential reference/raw value는 제외한다. 실제 HTTP transport와 live API call은 아직 구현하지 않았다 |
+| M6f handoff | `CloudApiOfflineProviderAdapter`는 `transport_config.offline_response_fixture`가 있을 때 project-relative fixture JSON을 `raw-response.json`으로 복사하고 `OpenAiCompatibleRequestBuilder`/`OpenAiCompatibleResponseParser`를 runtime path에서 실행한다. `http-request.json`, normalized `response.json`, `cost-metric.json` usage token mapping을 남기며 live API call과 credential raw value 접근은 아직 구현하지 않았다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -193,3 +195,4 @@ cargo test --workspace
 | P-0034 | 2026-07-01 | M6c provider output conformance checker 추가 | `packages/star-control-provider/src/conformance.rs`, `docs/implementation/briefs/E14-cloud-provider-conformance.md` |
 | P-0035 | 2026-07-01 | M6d OpenAI-compatible API response parser 추가 | `packages/star-control-provider/src/openai_compatible.rs`, `docs/implementation/briefs/E15-openai-compatible-parser.md` |
 | P-0036 | 2026-07-01 | M6e OpenAI-compatible request builder 및 병렬 테스트 temp path 안정화 추가 | `packages/star-control-provider/src/openai_compatible.rs`, `packages/star-control-provider/src/cloud.rs`, `packages/star-control-state/src/lib.rs`, `docs/implementation/briefs/E16-openai-compatible-request-builder.md` |
+| P-0037 | 2026-07-01 | M6f cloud API offline fixture integration 추가 | `packages/star-control-provider/src/cloud.rs`, `packages/star-control-execution/src/lib.rs`, `docs/implementation/briefs/E17-cloud-api-offline-fixture.md` |

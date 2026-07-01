@@ -17,3 +17,10 @@ Builtin provider manifest for `provider.openai`.
 - `endpoint.api=chat_completions` 또는 `chat-completions`이면 `POST {base_url}/chat/completions` body를 만든다.
 - request body는 `model`, prompt input/messages, `stream=false`만 포함하고 credential reference/raw credential 값은 포함하지 않는다.
 - 이 단계는 URL/body fixture만 만들며 HTTP transport와 live API call은 실행하지 않는다.
+
+## M6f offline fixture 기준
+
+- `transport_config.offline_response_fixture`가 있는 provider instance는 live API call 없이 prepared request와 fixture response parse를 같은 runtime path에서 검증한다.
+- adapter는 `http-request.json`, `raw-response.json`, normalized `response.json`, `privacy-handoff.json`, `cost-metric.json`을 provider output에 기록한다.
+- fixture path는 대상 프로젝트 root 기준 상대 path만 허용한다.
+- 이 단계도 HTTP client, live credential lookup, request signing/header construction, paid API call은 실행하지 않는다.

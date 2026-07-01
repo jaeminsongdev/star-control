@@ -117,7 +117,7 @@ Provider doc refresh:
 M6 전체 exit criteria에는 다음 fixture가 필요하다.
 
 - cloud CLI preflight success + transport execution fixture
-- cloud API preflight success + parser fixture
+- cloud API preflight success + offline request/response parser fixture
 - missing credential_ref -> `BLOCKED`
 - raw credential field -> `BLOCKED` and no raw value echo
 - unapproved privacy handoff -> `BLOCKED`
@@ -197,3 +197,39 @@ M6e는 다음을 구현하지 않는다.
 - live API call
 - streaming SSE parser
 - price/cost calculation
+
+## M6f cloud API offline fixture integration scope
+
+M6f는 `cloud_api_model` + `http` provider가 실제 외부 HTTP 호출 없이 request builder와 response parser를 같은 runtime path에서 검증하게 한다. 이 단계는 `transport_config.offline_response_fixture`가 있는 provider instance에서만 실행된다. fixture가 없으면 기존 M6a preflight `cloud_provider_transport_not_implemented` `BLOCKED` 흐름을 유지한다.
+
+실행 규칙:
+
+- `CloudApiOfflineProviderAdapter`는 M6a credential/privacy/cost preflight를 먼저 재사용한다.
+- `transport_config.offline_response_fixture`는 대상 프로젝트 root 기준 상대 JSON path만 허용한다.
+- absolute path, `..`, `.git`, drive prefix, 빈 path는 거부한다.
+- adapter는 `OpenAiCompatibleRequestBuilder`로 prepared request를 만들고 `provider-output/{provider_instance_id}/http-request.json`에 쓴다.
+- adapter는 fixture JSON을 `provider-output/{provider_instance_id}/raw-response.json`에 복사하고 `OpenAiCompatibleResponseParser`로 normalized provider `response.json`을 만든다.
+- request body, stdout/stderr, response, cost metric에는 credential raw value나 `credential_ref` 값을 포함하지 않는다.
+- parsed usage token은 `cost-metric.json`과 provider result metrics에 매핑한다.
+
+M6f output artifact:
+
+```text
+provider-output/{provider_instance_id}/request.json
+provider-output/{provider_instance_id}/http-request.json
+provider-output/{provider_instance_id}/raw-response.json
+provider-output/{provider_instance_id}/response.json
+provider-output/{provider_instance_id}/stdout.txt
+provider-output/{provider_instance_id}/stderr.txt
+provider-output/{provider_instance_id}/privacy-handoff.json
+provider-output/{provider_instance_id}/cost-metric.json
+```
+
+M6f는 다음을 구현하지 않는다.
+
+- live HTTP client execution
+- request signing/header construction
+- live credential lookup
+- streaming SSE parser
+- paid API call
+- external account mutation
