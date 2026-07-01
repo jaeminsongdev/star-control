@@ -222,6 +222,34 @@ examples/cli-contracts/approve-output.example.json
 - approval required 상태라면 approval-response.json이 존재한다.
 - M7a 기준 구현은 `WAITING_APPROVAL` job의 approval response가 request와 일치하고 `approved`일 때 `VALIDATED`, `next_action=report`로 전이한다. daemon/API orchestration은 다음 M7 slice에서 다룬다.
 
+## star-control recover
+
+목적:
+
+- 손상되었거나 불완전할 수 있는 job artifact를 inspect-only로 점검한다.
+
+옵션:
+
+```text
+--project <path>
+--job <job-id>
+--list
+--json
+```
+
+M9n 기준 구현은 `--list`만 지원한다. CLI는 `StateStore::inspect_recovery(job_id)` 결과를 `cli-output.schema.json` envelope으로 표시하고, `mode=inspect_only`, `recovery_actions_enabled=false`를 반환한다.
+
+금지:
+
+- tmp file 삭제
+- event log trim
+- recovered copy 생성
+- artifact 교체
+- retention cleanup
+- provider/tool output 수정
+
+`--list` 없는 `recover`와 non-recovery option 조합은 invalid input으로 거부한다.
+
 ## star-control providers
 
 초기 하위 명령:

@@ -305,6 +305,8 @@ M9l release readiness CLI read는 `packages/star-control-cli`의 `report --relea
 
 M9m release review pack foundation은 `packages/star-control-release`의 `ReleaseReviewPackWriter`로 구현한다. 이 slice는 existing ReleaseReadiness value를 검증한 뒤 `.ai-runs/{job_id}/review-packs/release-review-pack.md` Markdown artifact를 한 번만 쓰되, approval record, CLI/API/UI surface, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
 
+M9n recovery command surface는 `packages/star-control-cli`의 `recover --list`로 구현한다. 이 slice는 `StateStore::inspect_recovery` 결과를 schema-valid CLI envelope으로 표시하되, tmp file 삭제, event log trim, recovered copy 생성, artifact 교체, retention cleanup은 별도 승인 전까지 RESERVED로 둔다.
+
 Validation:
 
 ```text
@@ -319,6 +321,7 @@ audit event writer tests
 cost metric budget guard tests
 provider conformance hardening tests
 state recovery inspection tests
+recovery command surface tests
 release readiness checks
 release readiness writer tests
 release review pack writer tests

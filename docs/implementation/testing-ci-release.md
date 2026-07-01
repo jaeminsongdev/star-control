@@ -487,6 +487,17 @@ M9m release review pack foundation은 release crate 수준에서 검증한다.
 - review pack이 approval record, release action, deploy/publish/signing action, repository settings mutation을 만들지 않음
 - new CLI/API/UI surface, schema field, workflow, dependency 변경이 없음
 
+M9n recovery command surface는 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control recover --list --json`이 `StateStore::inspect_recovery` 결과를 CLI output envelope으로 반환함
+- output이 `mode=inspect_only`, `recovery_actions_enabled=false`, `destructive_actions_performed=false`를 포함함
+- `tmp/**` file은 warning issue로 표시하지만 삭제하지 않음
+- `run-state.json`과 `events.jsonl`을 수정하지 않음
+- `--list` 없는 recover와 non-recovery option 조합을 invalid input으로 거부함
+- destructive recovery action, schema field, workflow, dependency, HTTP server, browser UI app 변경이 없음
+
 ## CI 변경 policy
 
 CI workflow 변경은 다음을 PR 본문에 명시해야 한다.

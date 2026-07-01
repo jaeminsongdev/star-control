@@ -95,4 +95,4 @@ git diff --check
 
 ## 다음 handoff
 
-M9n는 recovery command surface 또는 final M9 conformance/readiness audit 중 하나로 이어간다. signing, publish, deploy automation은 별도 승인 전까지 RESERVED다.
+M9n는 recovery command surface로 이어간다. signing, publish, deploy automation은 별도 승인 전까지 RESERVED다.
