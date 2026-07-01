@@ -43,6 +43,12 @@ pub enum StateStoreError {
     ArtifactNotFound {
         path: PathBuf,
     },
+    ArtifactAlreadyExists {
+        path: PathBuf,
+    },
+    InvalidArtifactShape {
+        message: String,
+    },
     InvalidJson {
         path: PathBuf,
         source: serde_json::Error,
@@ -113,6 +119,12 @@ impl fmt::Display for StateStoreError {
             }
             Self::ArtifactNotFound { path } => {
                 write!(formatter, "artifact not found: {}", path.display())
+            }
+            Self::ArtifactAlreadyExists { path } => {
+                write!(formatter, "artifact already exists: {}", path.display())
+            }
+            Self::InvalidArtifactShape { message } => {
+                write!(formatter, "invalid artifact shape: {}", message)
             }
             Self::InvalidJson { path, source } => {
                 write!(formatter, "invalid JSON at {}: {}", path.display(), source)
@@ -199,6 +211,41 @@ pub struct JobSummary {
     pub summary: Option<String>,
     pub corrupt: bool,
     pub corrupt_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArtifactKind {
+    Job,
+    State,
+    EventLog,
+    Route,
+    WorkSpec,
+    Report,
+    ProviderOutput,
+    ToolOutput,
+    Approval,
+    ReviewPack,
+    Log,
+    Other,
+}
+
+impl ArtifactKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Job => "job",
+            Self::State => "state",
+            Self::EventLog => "event_log",
+            Self::Route => "route",
+            Self::WorkSpec => "workspec",
+            Self::Report => "report",
+            Self::ProviderOutput => "provider_output",
+            Self::ToolOutput => "tool_output",
+            Self::Approval => "approval",
+            Self::ReviewPack => "review_pack",
+            Self::Log => "log",
+            Self::Other => "other",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -561,6 +608,199 @@ impl StateStore {
         self.resolve_job_path(job_id, &format!("tool-output/{}", tool_output_dir))
     }
 
+    pub fn artifact_ref(
+        &self,
+        job_id: &str,
+        relative_path: &str,
+        kind: ArtifactKind,
+        producer: &str,
+        schema_path: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<Value, StateStoreError> {
+        let normalized_path = normalized_relative_path(relative_path)?;
+        self.resolve_job_path(job_id, &normalized_path)?;
+        let artifact_ref = json!({
+            "schema_version": SCHEMA_VERSION,
+            "path": normalized_path,
+            "kind": kind.as_str(),
+            "producer": producer,
+            "schema_path": schema_path,
+            "description": description.unwrap_or("")
+        });
+        self.validate_artifact(
+            CoreSchema::ArtifactRef,
+            self.job_dir(job_id)?.join("artifact-ref.json"),
+            &artifact_ref,
+        )?;
+        Ok(artifact_ref)
+    }
+
+    pub fn register_artifact_ref(
+        &self,
+        state: &mut Value,
+        key: &str,
+        artifact_ref: &Value,
+    ) -> Result<(), StateStoreError> {
+        validate_safe_name(key)?;
+        self.validate_artifact(
+            CoreSchema::ArtifactRef,
+            PathBuf::from("artifact-ref.json"),
+            artifact_ref,
+        )?;
+        let Some(state_object) = state.as_object_mut() else {
+            return Err(StateStoreError::InvalidArtifactShape {
+                message: "RunState must be a JSON object".to_string(),
+            });
+        };
+        let artifacts = state_object
+            .entry("artifacts")
+            .or_insert_with(|| Value::Object(Default::default()));
+        let Some(artifacts_object) = artifacts.as_object_mut() else {
+            return Err(StateStoreError::InvalidArtifactShape {
+                message: "RunState artifacts must be a JSON object".to_string(),
+            });
+        };
+        artifacts_object.insert(key.to_string(), artifact_ref.clone());
+        Ok(())
+    }
+
+    pub fn write_provider_json(
+        &self,
+        job_id: &str,
+        provider_instance_id: &str,
+        file_name: &str,
+        value: &Value,
+    ) -> Result<Value, StateStoreError> {
+        validate_safe_name(provider_instance_id)?;
+        validate_safe_name(file_name)?;
+        let relative_path = format!("provider-output/{}/{}", provider_instance_id, file_name);
+        self.write_new_json_artifact(job_id, &relative_path, value)?;
+        self.artifact_ref(
+            job_id,
+            &relative_path,
+            ArtifactKind::ProviderOutput,
+            provider_instance_id,
+            None,
+            Some("provider JSON output"),
+        )
+    }
+
+    pub fn write_provider_text(
+        &self,
+        job_id: &str,
+        provider_instance_id: &str,
+        file_name: &str,
+        content: &str,
+    ) -> Result<Value, StateStoreError> {
+        validate_safe_name(provider_instance_id)?;
+        validate_safe_name(file_name)?;
+        let relative_path = format!("provider-output/{}/{}", provider_instance_id, file_name);
+        self.write_new_text_artifact(job_id, &relative_path, content)?;
+        self.artifact_ref(
+            job_id,
+            &relative_path,
+            ArtifactKind::Log,
+            provider_instance_id,
+            None,
+            Some("provider text output"),
+        )
+    }
+
+    pub fn write_tool_json(
+        &self,
+        job_id: &str,
+        tool_output_dir: &str,
+        file_name: &str,
+        value: &Value,
+    ) -> Result<Value, StateStoreError> {
+        validate_safe_name(tool_output_dir)?;
+        validate_safe_name(file_name)?;
+        let relative_path = format!("tool-output/{}/{}", tool_output_dir, file_name);
+        self.write_new_json_artifact(job_id, &relative_path, value)?;
+        self.artifact_ref(
+            job_id,
+            &relative_path,
+            ArtifactKind::ToolOutput,
+            tool_output_dir,
+            None,
+            Some("tool JSON output"),
+        )
+    }
+
+    pub fn write_approval_json(
+        &self,
+        job_id: &str,
+        file_name: &str,
+        value: &Value,
+    ) -> Result<Value, StateStoreError> {
+        validate_safe_name(file_name)?;
+        let relative_path = format!("approvals/{}", file_name);
+        self.write_new_json_artifact(job_id, &relative_path, value)?;
+        self.artifact_ref(
+            job_id,
+            &relative_path,
+            ArtifactKind::Approval,
+            "state-store",
+            None,
+            Some("approval artifact"),
+        )
+    }
+
+    pub fn write_review_pack_json(
+        &self,
+        job_id: &str,
+        file_name: &str,
+        value: &Value,
+    ) -> Result<Value, StateStoreError> {
+        validate_safe_name(file_name)?;
+        let relative_path = format!("review-packs/{}", file_name);
+        self.write_new_json_artifact(job_id, &relative_path, value)?;
+        self.artifact_ref(
+            job_id,
+            &relative_path,
+            ArtifactKind::ReviewPack,
+            "state-store",
+            None,
+            Some("review pack JSON artifact"),
+        )
+    }
+
+    pub fn write_review_pack_markdown(
+        &self,
+        job_id: &str,
+        file_name: &str,
+        content: &str,
+    ) -> Result<Value, StateStoreError> {
+        validate_safe_name(file_name)?;
+        let relative_path = format!("review-packs/{}", file_name);
+        self.write_new_text_artifact(job_id, &relative_path, content)?;
+        self.artifact_ref(
+            job_id,
+            &relative_path,
+            ArtifactKind::ReviewPack,
+            "state-store",
+            None,
+            Some("review pack Markdown artifact"),
+        )
+    }
+
+    pub fn write_tmp_json(
+        &self,
+        job_id: &str,
+        target_name: &str,
+        value: &Value,
+    ) -> Result<String, StateStoreError> {
+        validate_safe_name(target_name)?;
+        let relative_path = format!(
+            "tmp/{}.tmp-{}-{}",
+            target_name,
+            std::process::id(),
+            timestamp_nanos()
+        );
+        self.write_new_json_artifact(job_id, &relative_path, value)?;
+        Ok(relative_path)
+    }
+
     fn job_summary(&self, job_id: &str) -> JobSummary {
         match self.load_job(job_id) {
             Ok(job) => {
@@ -641,7 +881,57 @@ impl StateStore {
     ) -> Result<(), StateStoreError> {
         let target_path = self.resolve_job_path(job_id, relative_path)?;
         self.validate_artifact(schema, target_path.clone(), value)?;
+        self.write_json_value_atomic(job_id, relative_path, value)
+    }
 
+    fn write_new_json_artifact(
+        &self,
+        job_id: &str,
+        relative_path: &str,
+        value: &Value,
+    ) -> Result<(), StateStoreError> {
+        let target_path = self.resolve_job_path(job_id, relative_path)?;
+        if target_path.exists() {
+            return Err(StateStoreError::ArtifactAlreadyExists { path: target_path });
+        }
+        self.write_json_value_atomic(job_id, relative_path, value)
+    }
+
+    fn write_json_value_atomic(
+        &self,
+        job_id: &str,
+        relative_path: &str,
+        value: &Value,
+    ) -> Result<(), StateStoreError> {
+        let target_path = self.resolve_job_path(job_id, relative_path)?;
+        let mut bytes =
+            serde_json::to_vec_pretty(value).map_err(|source| StateStoreError::InvalidJson {
+                path: target_path.clone(),
+                source,
+            })?;
+        bytes.push(b'\n');
+        self.write_bytes_atomic(job_id, &target_path, &bytes)
+    }
+
+    fn write_new_text_artifact(
+        &self,
+        job_id: &str,
+        relative_path: &str,
+        content: &str,
+    ) -> Result<(), StateStoreError> {
+        let target_path = self.resolve_job_path(job_id, relative_path)?;
+        if target_path.exists() {
+            return Err(StateStoreError::ArtifactAlreadyExists { path: target_path });
+        }
+        self.write_bytes_atomic(job_id, &target_path, content.as_bytes())
+    }
+
+    fn write_bytes_atomic(
+        &self,
+        job_id: &str,
+        target_path: &Path,
+        bytes: &[u8],
+    ) -> Result<(), StateStoreError> {
         let job_dir = self.job_dir(job_id)?;
         let tmp_dir = job_dir.join("tmp");
         fs::create_dir_all(&tmp_dir).map_err(|source| StateStoreError::AtomicWriteFailed {
@@ -671,14 +961,7 @@ impl StateStore {
                     path: tmp_path.clone(),
                     source,
                 })?;
-            let mut bytes = serde_json::to_vec_pretty(value).map_err(|source| {
-                StateStoreError::InvalidJson {
-                    path: target_path.clone(),
-                    source,
-                }
-            })?;
-            bytes.push(b'\n');
-            file.write_all(&bytes)
+            file.write_all(bytes)
                 .and_then(|_| file.flush())
                 .and_then(|_| file.sync_all())
                 .map_err(|source| StateStoreError::AtomicWriteFailed {
@@ -687,8 +970,8 @@ impl StateStore {
                 })?;
         }
 
-        replace_file(&tmp_path, &target_path).map_err(|source| StateStoreError::AtomicWriteFailed {
-            path: target_path,
+        replace_file(&tmp_path, target_path).map_err(|source| StateStoreError::AtomicWriteFailed {
+            path: target_path.to_path_buf(),
             source,
         })
     }
@@ -725,6 +1008,7 @@ enum CoreSchema {
     WorkSpec,
     Report,
     Event,
+    ArtifactRef,
 }
 
 impl CoreSchema {
@@ -736,6 +1020,7 @@ impl CoreSchema {
             Self::WorkSpec => "workspec.schema.json",
             Self::Report => "report.schema.json",
             Self::Event => "event.schema.json",
+            Self::ArtifactRef => "artifact-ref.schema.json",
         }
     }
 }
@@ -758,6 +1043,20 @@ fn ensure_standard_dirs(job_dir: &Path) -> Result<(), StateStoreError> {
 }
 
 fn resolve_inside_job(job_dir: &Path, relative_path: &str) -> Result<PathBuf, StateStoreError> {
+    let (normalized, _) = normalize_relative_path(relative_path)?;
+    let resolved = job_dir.join(normalized);
+    if !resolved.starts_with(job_dir) {
+        return Err(StateStoreError::PathOutsideJobDirectory { path: resolved });
+    }
+    Ok(resolved)
+}
+
+fn normalized_relative_path(relative_path: &str) -> Result<String, StateStoreError> {
+    let (_, normalized) = normalize_relative_path(relative_path)?;
+    Ok(normalized)
+}
+
+fn normalize_relative_path(relative_path: &str) -> Result<(PathBuf, String), StateStoreError> {
     if relative_path.is_empty()
         || relative_path.contains('\0')
         || relative_path.contains(':')
@@ -769,6 +1068,7 @@ fn resolve_inside_job(job_dir: &Path, relative_path: &str) -> Result<PathBuf, St
     }
 
     let mut normalized = PathBuf::new();
+    let mut normalized_segments = Vec::new();
     for component in Path::new(relative_path).components() {
         match component {
             Component::Normal(segment) if segment == ".git" => {
@@ -776,7 +1076,10 @@ fn resolve_inside_job(job_dir: &Path, relative_path: &str) -> Result<PathBuf, St
                     path: relative_path.to_string(),
                 });
             }
-            Component::Normal(segment) => normalized.push(segment),
+            Component::Normal(segment) => {
+                normalized.push(segment);
+                normalized_segments.push(segment.to_string_lossy().to_string());
+            }
             Component::CurDir => {}
             Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
                 return Err(StateStoreError::PathTraversalBlocked {
@@ -792,11 +1095,7 @@ fn resolve_inside_job(job_dir: &Path, relative_path: &str) -> Result<PathBuf, St
         });
     }
 
-    let resolved = job_dir.join(normalized);
-    if !resolved.starts_with(job_dir) {
-        return Err(StateStoreError::PathOutsideJobDirectory { path: resolved });
-    }
-    Ok(resolved)
+    Ok((normalized, normalized_segments.join("/")))
 }
 
 fn ensure_artifact_job_id(value: &Value, expected: &str) -> Result<(), StateStoreError> {
@@ -1201,6 +1500,137 @@ mod tests {
             .resolve_tool_output_dir("J-0001", "star-sentinel")
             .expect("tool output dir")
             .ends_with("tool-output/star-sentinel"));
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn writes_output_artifacts_and_artifact_refs_inside_job() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store);
+
+        let provider_ref = store
+            .write_provider_json(
+                "J-0001",
+                "fake-default",
+                "request.json",
+                &json!({ "goal": "test" }),
+            )
+            .expect("write provider json");
+        let stdout_ref = store
+            .write_provider_text("J-0001", "fake-default", "stdout.txt", "ok\n")
+            .expect("write provider stdout");
+        let tool_ref = store
+            .write_tool_json("J-0001", "star-sentinel", "diagnostics.json", &json!([]))
+            .expect("write tool json");
+        let approval_ref = store
+            .write_approval_json("J-0001", "approval-request.json", &json!({ "ok": true }))
+            .expect("write approval");
+        let review_json_ref = store
+            .write_review_pack_json("J-0001", "review_pack.json", &json!({ "items": [] }))
+            .expect("write review json");
+        let review_md_ref = store
+            .write_review_pack_markdown("J-0001", "review_pack.md", "# Review\n")
+            .expect("write review markdown");
+        let tmp_path = store
+            .write_tmp_json("J-0001", "run-state.json", &json!({ "tmp": true }))
+            .expect("write tmp json");
+
+        assert_eq!(
+            provider_ref["path"],
+            "provider-output/fake-default/request.json"
+        );
+        assert_eq!(provider_ref["kind"], "provider_output");
+        assert_eq!(stdout_ref["kind"], "log");
+        assert_eq!(
+            tool_ref["path"],
+            "tool-output/star-sentinel/diagnostics.json"
+        );
+        assert_eq!(approval_ref["kind"], "approval");
+        assert_eq!(review_json_ref["kind"], "review_pack");
+        assert_eq!(review_md_ref["path"], "review-packs/review_pack.md");
+        assert!(tmp_path.starts_with("tmp/run-state.json.tmp-"));
+        assert!(project
+            .join(".ai-runs/J-0001/provider-output/fake-default/request.json")
+            .is_file());
+        assert!(project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/diagnostics.json")
+            .is_file());
+        assert!(project
+            .join(".ai-runs/J-0001/approvals/approval-request.json")
+            .is_file());
+        assert!(project
+            .join(".ai-runs/J-0001/review-packs/review_pack.md")
+            .is_file());
+
+        assert!(matches!(
+            store.write_provider_json(
+                "J-0001",
+                "fake-default",
+                "request.json",
+                &json!({ "goal": "overwrite" }),
+            ),
+            Err(StateStoreError::ArtifactAlreadyExists { .. })
+        ));
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn registers_artifact_ref_in_run_state() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store);
+
+        let mut state = state("J-0001", "REQUESTED");
+        let route_ref = store
+            .artifact_ref(
+                "J-0001",
+                "route.json",
+                ArtifactKind::Route,
+                "router",
+                Some("specs/schemas/route.schema.json"),
+                Some("RouteSpec artifact"),
+            )
+            .expect("artifact ref");
+        store
+            .register_artifact_ref(&mut state, "route", &route_ref)
+            .expect("register artifact ref");
+        store.save_state("J-0001", &state).expect("save state");
+
+        let loaded = store.load_state("J-0001").expect("load state");
+        assert_eq!(loaded["artifacts"]["route"]["path"], "route.json");
+        assert_eq!(loaded["artifacts"]["route"]["kind"], "route");
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn artifact_writers_reject_unsafe_names() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store);
+
+        assert!(matches!(
+            store.write_provider_json("J-0001", "../fake", "request.json", &json!({})),
+            Err(StateStoreError::PathTraversalBlocked { .. })
+        ));
+        assert!(matches!(
+            store.write_tool_json("J-0001", "star-sentinel", "../diagnostics.json", &json!({})),
+            Err(StateStoreError::PathTraversalBlocked { .. })
+        ));
+        assert!(matches!(
+            store.artifact_ref(
+                "J-0001",
+                "/absolute/path.json",
+                ArtifactKind::Other,
+                "test",
+                None,
+                None,
+            ),
+            Err(StateStoreError::PathTraversalBlocked { .. })
+        ));
 
         fs::remove_dir_all(project).ok();
     }
