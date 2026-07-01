@@ -289,6 +289,8 @@ M9d provider conformance hardening은 `packages/star-control-provider`의 Provid
 
 M9e state recovery inspection은 `packages/star-control-state`의 `StateStore::inspect_recovery`로 구현한다. 이 slice는 missing/invalid/schema/corrupt/tmp issue를 inspect-only report로 분류하되, tmp file 삭제, event log trim, recovered copy 생성, artifact 교체, retention cleanup은 수행하지 않는다.
 
+M9f release readiness writer는 `packages/star-control-release`의 ReleaseReadinessWriter로 구현한다. 이 slice는 `.ai-runs/{job_id}/release/release-readiness.json` artifact를 생성/검증하되, `ready` status, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
 Validation:
 
 ```text
@@ -304,6 +306,7 @@ cost metric budget guard tests
 provider conformance hardening tests
 state recovery inspection tests
 release readiness checks
+release readiness writer tests
 ```
 
 ## 다음 작업 선택 규칙

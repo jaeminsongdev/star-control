@@ -40,6 +40,14 @@ blocked
 
 현재 repository 단계에서는 `reserved` 또는 `not_ready`만 사용한다. `ready`는 실제 release process, signing, changelog, rollback, publish policy가 구현된 뒤에만 사용한다.
 
+M9f 구현 위치:
+
+```text
+packages/star-control-release
+```
+
+M9f는 `ReleaseReadinessWriter`를 제공한다. writer는 schema-valid ReleaseReadiness JSON을 `.ai-runs/{job_id}/release/release-readiness.json`에 한 번만 쓰고, ArtifactRef는 `kind=other`, `producer=star-control-release`, `schema_path=specs/schemas/release-readiness.schema.json`을 사용한다. 현재 slice에서는 `ready` status를 거부하고, `reserved` status에는 blocker explanation을 요구한다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -81,6 +89,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 - branch protection, repository settings, package registry 설정을 자동 변경하지 않는다.
 - approval 없이 release/deploy/publish를 실행하지 않는다.
 - readiness status를 증거 없이 `ready`로 표시하지 않는다.
+- M9f writer는 기존 readiness artifact를 조용히 덮어쓰지 않는다.
 
 ## 테스트 기준
 

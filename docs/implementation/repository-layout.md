@@ -52,6 +52,7 @@ packages/
   star-control-api/
   star-control-ui/
   star-control-security/
+  star-control-release/
   star-sentinel/
 ```
 
@@ -181,6 +182,13 @@ packages/star-adapter-openai-compatible
 - schema-valid provider output `cost-metric.json` write/readback helper
 - warning-only CostBudgetThresholds evaluation
 - RESERVED: API/CLI/daemon/provider automatic audit/cost integration, hard budget enforcement, retention/recovery command, release readiness automation
+
+### `star-control-release`
+
+- ReleaseReadinessWriter
+- schema-valid `release/release-readiness.json` write/readback helper
+- reserved/not_ready readiness artifact generation
+- RESERVED: signing, publish, deploy automation, repository/package registry settings changes
 
 ### `star-sentinel`
 

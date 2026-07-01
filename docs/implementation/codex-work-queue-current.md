@@ -75,9 +75,10 @@ E27 Observability Audit Event Writer
 E28 Cost Metric Budget Guard
 E29 Provider Conformance Hardening
 E30 State Recovery Inspection
+E31 Release Readiness Writer
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening, E30은 StateStore recovery inspect-only slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening, E30은 StateStore recovery inspect-only, E31은 ReleaseReadinessWriter slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -2444,6 +2445,87 @@ path traversal/unsafe job id rejection test
 
 ```text
 M9f는 release readiness writer 또는 recovery command surface 중 하나로 이어간다. recovery command가 파일 삭제, log trim, copy-to-recovered-file, artifact 교체를 수행하려면 별도 승인과 더 강한 audit/report 연결이 필요하다.
+```
+
+## E31 Release Readiness Writer
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+testing-ci-release.md
+artifact-layout.md
+state-store.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+Cargo.toml
+Cargo.lock
+packages/star-control-release/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+artifact signing 구현
+package registry 설정
+repository branch protection/settings 변경
+```
+
+입력 artifact:
+
+```text
+specs/schemas/release-readiness.schema.json
+examples/release-contracts/release-readiness.example.json
+StateStore job directory
+```
+
+출력 artifact:
+
+```text
+release/release-readiness.json
+ArtifactRef(kind=other, producer=star-control-release)
+ReleaseReadinessWriter tests
+```
+
+핵심 TASK:
+
+```text
+star-control-release crate 추가
+ReleaseReadinessWriter 추가
+reserved readiness builder 추가
+not_ready readiness builder 추가
+release-readiness.schema.json validation
+ready status reserved rejection
+reserved status blocker explanation check
+release/release-readiness.json write/readback helper
+overwrite rejection test
+path traversal job id rejection test
+```
+
+완료 기준: ReleaseReadinessWriter가 schema-valid readiness artifact를 `.ai-runs/{job_id}/release/release-readiness.json`에 쓰고, `ready` status와 overwrite를 거부해야 한다. release/deploy/publish, repository settings, workflow, schema field 변경은 하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9g는 release readiness read surface 또는 recovery command surface로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
 ```
 
 ## RESERVED

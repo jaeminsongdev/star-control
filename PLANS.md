@@ -75,15 +75,16 @@
 - M9c cost metric budget guard를 `packages/star-control-observability`에 추가했다. CostMetricWriter는 provider output sidecar를 검증/저장/읽기하고 Budget evaluation은 `warn_only`로 둔다.
 - M9d provider conformance hardening을 `packages/star-control-provider`에 추가했다. ProviderConformanceChecker는 provider result/ref/file/schema 일치를 검증하고 cloud sidecar schema를 확인한다.
 - M9e state recovery inspection을 `packages/star-control-state`에 추가했다. StateStore는 missing/corrupt/tmp artifact를 inspect-only report로 분류하고 삭제/trim/교체는 하지 않는다.
+- M9f release readiness writer를 `packages/star-control-release`에 추가했다. ReleaseReadinessWriter는 `release/release-readiness.json`을 schema-valid artifact로 쓰고, `ready` status와 overwrite를 거부한다.
 - `star-control-cli` test helper temp project path에 counter를 추가해 병렬 workspace test의 임시 directory 충돌 가능성을 줄였다.
-- 병렬 Rust 테스트에서 provider/state temp project 경로가 충돌하지 않도록 test helper에 per-process counter를 추가했다.
+- 병렬 Rust 테스트에서 provider/state/validation temp project 경로가 충돌하지 않도록 test helper에 per-process counter를 추가했다.
 - Cargo incremental finalize 경고가 나오면 경고 package만 `cargo clean -p`로 정리하고 Cargo 검증은 순차 실행한다.
 
 ### 아직 남은 것
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
-- M5 local provider, M6 cloud provider approval gate, M7a CLI control commands, M7b daemon queue skeleton, M7c/M7d API service, M8 UI library model, M9a~M9e observability/security/conformance/recovery foundation은 현재 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 release-readiness writer 또는 명시적 recovery command surface 순서다.
+- M5 local provider, M6 cloud provider approval gate, M7a CLI control commands, M7b daemon queue skeleton, M7c/M7d API service, M8 UI library model, M9a~M9f observability/security/conformance/recovery/release-readiness foundation은 현재 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 release readiness read/control-plane surface 또는 명시적 recovery command surface 순서다.
 
 ### 건드리면 안 되는 것
 
@@ -193,6 +194,8 @@ cargo test --workspace
 | M9d dependency record | 새 external dependency 없음; 기존 direct dependency `serde_json = "1"`와 local `star-control-schema`, `star-control-state`만 사용; 목적: ProviderConformanceChecker hardening과 schema-backed artifact verification; 검증: Cargo targeted/workspace checks + contract runner |
 | M9e handoff | `packages/star-control-state`의 `StateStore::inspect_recovery`는 `RecoveryInspection`/`RecoveryIssue`를 반환하며 missing required file, invalid JSON, schema mismatch, corrupt event log, partial tmp file을 구분한다. inspect 중 tmp 삭제, event log trim, recovered copy 생성, artifact 교체는 하지 않는다. release readiness writer 또는 recovery command surface는 후속 slice로 남긴다 |
 | M9e dependency record | 새 external dependency 없음; 기존 direct dependency `serde_json = "1"`와 local `star-control-schema`만 사용; 목적: inspect-only recovery report와 no-mutation regression; 검증: Cargo targeted/workspace checks + contract runner |
+| M9f handoff | `packages/star-control-release`의 `ReleaseReadinessWriter`는 `reserved`/`not_ready` ReleaseReadiness artifact를 `.ai-runs/{job_id}/release/release-readiness.json`에 한 번만 쓰고, readback 때 schema validation을 수행한다. 현재 slice에서는 `ready` status, overwrite, signing, publish, deploy, repository settings 변경을 허용하지 않는다. Workspace test 중 재현된 Windows temp path 충돌/permission flake를 줄이기 위해 validation fixture temp path에도 per-process counter를 추가했다 |
+| M9f dependency record | 새 external dependency 없음; 기존 direct dependency `serde_json = "1"`와 local `star-control-schema`, `star-control-state`만 사용; 목적: release readiness artifact validation/write/readback과 reserved release gate 고정, validation fixture temp path 안정화; 검증: Cargo targeted/workspace checks + contract runner |
 | Cargo incremental cleanup | finalize 경고 package는 `_`를 `-`로 바꾼 Cargo package명에 대해 `cargo clean -p <package>`만 실행한다. 이후 `cargo check --workspace --all-targets --locked`, `cargo test --workspace --all-targets --locked`를 순차 실행한다. 반복되면 현재 PowerShell 명령 범위에서만 `CARGO_INCREMENTAL=0`을 사용하고 장기 기본값으로 남기지 않는다 |
 | 이전 완료 이력 | git history |
 
@@ -250,3 +253,4 @@ cargo test --workspace
 | P-0048 | 2026-07-02 | M9c cost metric budget guard 추가 | `packages/star-control-observability/src/lib.rs`, `docs/implementation/briefs/E28-cost-metric-budget-guard.md` |
 | P-0049 | 2026-07-02 | M9d provider conformance hardening 추가 | `packages/star-control-provider/src/conformance.rs`, `docs/implementation/briefs/E29-provider-conformance-hardening.md` |
 | P-0050 | 2026-07-02 | M9e state recovery inspection 추가 | `packages/star-control-state/src/lib.rs`, `docs/implementation/briefs/E30-state-recovery-inspection.md` |
+| P-0051 | 2026-07-02 | M9f release readiness writer와 validation fixture temp path 안정화 추가 | `packages/star-control-release/src/lib.rs`, `packages/star-control-validation/src/lib.rs`, `docs/implementation/briefs/E31-release-readiness-writer.md` |

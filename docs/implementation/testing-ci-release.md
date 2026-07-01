@@ -53,7 +53,7 @@ work-queue-consistency-check
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
 | M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, in-process API approve/cancel/resume mutation tests |
 | M8 UI Shell | `star-control-ui` view model contract tests, read-only no-write smoke, approval path smoke, browser control shell smoke |
-| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, provider conformance hardening tests, state recovery inspection tests, audit/cost integration, recovery, retention, release readiness checks |
+| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, provider conformance hardening tests, state recovery inspection tests, release readiness writer tests, audit/cost integration, recovery, retention, release readiness checks |
 
 Milestone validation은 누적된다. 뒤 단계로 갈수록 앞 단계 검증을 삭제하지 않고, 필요하면 quick/full profile로 분리한다.
 
@@ -403,6 +403,17 @@ M9e state recovery inspection은 state crate 수준에서 검증한다.
 - invalid `run-state.json`과 corrupt `events.jsonl`이 구분되어 보고됨
 - `tmp/**` file은 warning issue로 보고되지만 삭제되지 않음
 - unsafe job id나 path traversal recovery input이 거부됨
+
+M9f release readiness writer는 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control-release`가 schema-valid `release-readiness.json`을 `release/` 아래에 씀
+- returned ArtifactRef가 `kind=other`, `producer=star-control-release`, release-readiness schema path를 사용함
+- `ready` status는 release approval/process 구현 전까지 거부됨
+- `reserved` status는 blocker explanation을 요구함
+- 기존 readiness artifact를 조용히 overwrite하지 않음
+- release/deploy/publish, repository settings, package registry mutation이 없음
 
 ## CI 변경 policy
 

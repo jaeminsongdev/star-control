@@ -54,6 +54,7 @@ E27-observability-audit-event-writer.md
 E28-cost-metric-budget-guard.md
 E29-provider-conformance-hardening.md
 E30-state-recovery-inspection.md
+E31-release-readiness-writer.md
 ```
 
 ## 사용 방법

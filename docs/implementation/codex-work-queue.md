@@ -475,7 +475,7 @@ E19-T05: audit report section
 E19-T06: security profile fixtures
 ```
 
-현재 착수 큐의 M9a는 E19-T01을 `packages/star-control-security`의 shared redaction utility와 RedactionReport builder로 구현한다. M9b는 E19-T05의 기반을 `packages/star-control-observability`의 AuditEventWriter와 `audit/audit-events.jsonl` writer로 구현한다. M9c는 E19-T04의 기반을 같은 crate의 CostMetricWriter와 warning-only budget evaluation으로 구현한다. M9d는 `packages/star-control-provider`의 ProviderConformanceChecker hardening으로 result/ref/file/schema 일치를 검증한다. M9e는 `packages/star-control-state`의 inspect-only recovery report로 missing/corrupt/tmp artifact를 분류한다. API/CLI/daemon/provider audit/cost integration, hard budget enforcement, destructive recovery command, release readiness는 후속 M9 slice로 남긴다.
+현재 착수 큐의 M9a는 E19-T01을 `packages/star-control-security`의 shared redaction utility와 RedactionReport builder로 구현한다. M9b는 E19-T05의 기반을 `packages/star-control-observability`의 AuditEventWriter와 `audit/audit-events.jsonl` writer로 구현한다. M9c는 E19-T04의 기반을 같은 crate의 CostMetricWriter와 warning-only budget evaluation으로 구현한다. M9d는 `packages/star-control-provider`의 ProviderConformanceChecker hardening으로 result/ref/file/schema 일치를 검증한다. M9e는 `packages/star-control-state`의 inspect-only recovery report로 missing/corrupt/tmp artifact를 분류한다. M9f는 `packages/star-control-release`의 ReleaseReadinessWriter로 `release/release-readiness.json` writer를 추가한다. API/CLI/daemon/provider audit/cost integration, hard budget enforcement, destructive recovery command, release readiness read/control-plane surface, signing/publish/deploy automation은 후속 M9 slice로 남긴다.
 
 ## EPIC 20: Release Readiness
 
