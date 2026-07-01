@@ -2,7 +2,8 @@ use serde_json::{json, Value};
 use star_control_schema::{
     load_document, load_schema, validate_json, DocumentLoadError, SchemaLoadError,
 };
-use std::collections::{HashMap, HashSet};
+use star_control_state::{StateStore, StateStoreError};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -11,6 +12,11 @@ pub const SENTINEL_TASK_SCHEMA: &str = "sentinel-task.schema.json";
 pub const CHANGED_LINES_SCHEMA: &str = "changed-lines.schema.json";
 pub const P0_RULE_REGISTRY_SCHEMA: &str = "p0-rule-registry.schema.json";
 pub const FIXTURE_OUTCOME_SCHEMA: &str = "fixture-outcome.schema.json";
+pub const DIAGNOSTIC_SCHEMA: &str = "diagnostic.schema.json";
+pub const APPROVAL_SCHEMA: &str = "approval.schema.json";
+pub const STAR_SENTINEL_TOOL_OUTPUT_DIR: &str = "star-sentinel";
+pub const DIAGNOSTICS_FILE: &str = "diagnostics.json";
+pub const APPROVAL_FILE: &str = "approval.json";
 
 pub const RULE_SCOPE_ALLOWED_PATHS: &str = "task.scope.allowed_paths";
 pub const RULE_TEST_NO_DELETION: &str = "test.no_deletion";
@@ -37,6 +43,9 @@ pub enum SentinelError {
     },
     DocumentLoad {
         source: DocumentLoadError,
+    },
+    State {
+        source: StateStoreError,
     },
     SchemaValidation {
         artifact: String,
@@ -65,6 +74,7 @@ impl fmt::Display for SentinelError {
             }
             Self::SchemaLoad { source } => write!(formatter, "schema load failed: {}", source),
             Self::DocumentLoad { source } => write!(formatter, "document load failed: {}", source),
+            Self::State { source } => write!(formatter, "state store operation failed: {}", source),
             Self::SchemaValidation {
                 artifact,
                 schema,
@@ -99,6 +109,7 @@ impl Error for SentinelError {
             Self::Io { source, .. } => Some(source),
             Self::SchemaLoad { source } => Some(source),
             Self::DocumentLoad { source } => Some(source),
+            Self::State { source } => Some(source),
             _ => None,
         }
     }
@@ -452,6 +463,12 @@ pub struct EvaluationResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GateArtifactRefs {
+    pub diagnostics_ref: Value,
+    pub approval_ref: Value,
+}
+
 #[derive(Debug, Clone)]
 pub struct P0Evaluator {
     registry: P0RuleRegistry,
@@ -557,6 +574,98 @@ impl FixtureOutcome {
                 .any(|diagnostic| diagnostic_matches_expected(diagnostic, expected))
         })
     }
+}
+
+pub fn build_diagnostics_artifact(result: &EvaluationResult) -> Value {
+    Value::Array(
+        result
+            .diagnostics
+            .iter()
+            .map(Diagnostic::to_value)
+            .collect(),
+    )
+}
+
+pub fn build_approval_artifact(task: &SentinelTask, result: &EvaluationResult) -> Value {
+    json!({
+        "schema_version": "1.0.0",
+        "task_id": task.task_id,
+        "decision": result.decision.as_str(),
+        "reasons": approval_reasons(result),
+        "diagnostics": build_diagnostics_artifact(result),
+        "required_human_actions": required_human_actions(result.decision)
+    })
+}
+
+pub fn validate_diagnostics_artifact(
+    diagnostics: &Value,
+    schema_root: impl AsRef<Path>,
+) -> Result<(), SentinelError> {
+    let Value::Array(items) = diagnostics else {
+        return Err(SentinelError::InvalidField {
+            artifact: DIAGNOSTICS_FILE.to_string(),
+            field: "$".to_string(),
+            message: "expected array of diagnostic objects".to_string(),
+        });
+    };
+
+    for (index, diagnostic) in items.iter().enumerate() {
+        validate_against_schema(
+            diagnostic,
+            schema_root.as_ref(),
+            DIAGNOSTIC_SCHEMA,
+            &format!("{}[{}]", DIAGNOSTICS_FILE, index),
+        )?;
+    }
+
+    Ok(())
+}
+
+pub fn validate_approval_artifact(
+    approval: &Value,
+    schema_root: impl AsRef<Path>,
+) -> Result<(), SentinelError> {
+    validate_against_schema(
+        approval,
+        schema_root.as_ref(),
+        APPROVAL_SCHEMA,
+        APPROVAL_FILE,
+    )
+}
+
+pub fn write_gate_artifacts(
+    store: &StateStore,
+    job_id: &str,
+    task: &SentinelTask,
+    result: &EvaluationResult,
+    schema_root: impl AsRef<Path>,
+) -> Result<GateArtifactRefs, SentinelError> {
+    let diagnostics = build_diagnostics_artifact(result);
+    validate_diagnostics_artifact(&diagnostics, schema_root.as_ref())?;
+    let approval = build_approval_artifact(task, result);
+    validate_approval_artifact(&approval, schema_root.as_ref())?;
+
+    let diagnostics_ref = store
+        .write_tool_json(
+            job_id,
+            STAR_SENTINEL_TOOL_OUTPUT_DIR,
+            DIAGNOSTICS_FILE,
+            &diagnostics,
+        )
+        .map_err(|source| SentinelError::State { source })?;
+    let approval_ref = store
+        .write_tool_json(
+            job_id,
+            STAR_SENTINEL_TOOL_OUTPUT_DIR,
+            APPROVAL_FILE,
+            &approval,
+        )
+        .map_err(|source| SentinelError::State { source })?;
+
+    Ok(GateArtifactRefs {
+        diagnostics_ref,
+        approval_ref,
+    })
 }
 
 pub fn read_task(
@@ -780,24 +889,43 @@ fn read_validated_json(
     schema_root: &Path,
     schema_name: &str,
 ) -> Result<Value, SentinelError> {
+    let value = load_document(path).map_err(|source| SentinelError::DocumentLoad { source })?;
+    validate_against_schema(
+        &value,
+        schema_root,
+        schema_name,
+        &path.display().to_string(),
+    )?;
+    Ok(value)
+}
+
+fn validate_against_schema(
+    value: &Value,
+    schema_root: &Path,
+    schema_name: &str,
+    artifact: &str,
+) -> Result<(), SentinelError> {
     let schema_path = schema_root.join(schema_name);
     let schema =
         load_schema(&schema_path).map_err(|source| SentinelError::SchemaLoad { source })?;
-    let value = load_document(path).map_err(|source| SentinelError::DocumentLoad { source })?;
-    let validation = validate_json(&value, &schema);
+    let validation = validate_json(value, &schema);
     if validation.is_ok() {
-        Ok(value)
+        Ok(())
     } else {
         Err(SentinelError::SchemaValidation {
-            artifact: path.display().to_string(),
+            artifact: artifact.to_string(),
             schema: schema_name.to_string(),
-            errors: validation
-                .errors
-                .iter()
-                .map(|error| format!("{}: {}", error.location, error.message))
-                .collect(),
+            errors: schema_errors(&validation),
         })
     }
+}
+
+fn schema_errors(validation: &star_control_schema::ValidationResult) -> Vec<String> {
+    validation
+        .errors
+        .iter()
+        .map(|error| format!("{}: {}", error.location, error.message))
+        .collect()
 }
 
 fn required_string(value: &Value, field: &str, artifact: &str) -> Result<String, SentinelError> {
@@ -1122,9 +1250,38 @@ fn diagnostic_matches_expected(diagnostic: &Diagnostic, expected: &Value) -> boo
     true
 }
 
+fn approval_reasons(result: &EvaluationResult) -> Vec<String> {
+    if result.diagnostics.is_empty() {
+        return vec!["No P0 diagnostics were produced.".to_string()];
+    }
+
+    let mut rules = BTreeSet::new();
+    for diagnostic in &result.diagnostics {
+        rules.insert((diagnostic.severity.as_str(), diagnostic.rule_id.as_str()));
+    }
+
+    rules
+        .into_iter()
+        .map(|(severity, rule_id)| format!("{} diagnostic from {}", severity, rule_id))
+        .collect()
+}
+
+fn required_human_actions(decision: Decision) -> Vec<String> {
+    match decision {
+        Decision::AutoPass => Vec::new(),
+        Decision::HumanReview => vec![
+            "Review HUMAN_REVIEW diagnostics and record approval before continuing.".to_string(),
+        ],
+        Decision::Block => {
+            vec!["Resolve BLOCK diagnostics before continuing automatically.".to_string()]
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use star_control_state::StateStore;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1281,12 +1438,106 @@ mod tests {
         assert!(outcome.matches_result(&result));
     }
 
+    #[test]
+    fn builds_schema_valid_gate_artifacts_for_block() {
+        let result = scope_block_result();
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let diagnostics = build_diagnostics_artifact(&result);
+        let approval = build_approval_artifact(&task, &result);
+
+        validate_diagnostics_artifact(&diagnostics, schema_root()).expect("diagnostics schema");
+        validate_approval_artifact(&approval, schema_root()).expect("approval schema");
+        assert_eq!(approval["decision"], "BLOCK");
+        assert_eq!(
+            approval["diagnostics"][0]["rule_id"],
+            RULE_SCOPE_ALLOWED_PATHS
+        );
+    }
+
+    #[test]
+    fn builds_human_review_gate_for_dependency_change() {
+        let evaluator = P0Evaluator::new(builtin_registry());
+        let task = task_with_allowed_paths(["**"]);
+        let changed_lines = changed_lines(json!([file("Cargo.toml", "modified", json!([]))]));
+        let result = evaluator.evaluate(&task, &changed_lines).expect("evaluate");
+        let approval = build_approval_artifact(&task, &result);
+
+        validate_approval_artifact(&approval, schema_root()).expect("approval schema");
+        assert_eq!(approval["decision"], "HUMAN_REVIEW");
+        assert_eq!(
+            approval["required_human_actions"][0],
+            "Review HUMAN_REVIEW diagnostics and record approval before continuing."
+        );
+    }
+
+    #[test]
+    fn writes_gate_artifacts_to_state_store_tool_output() {
+        let temp_project = temp_dir();
+        let store =
+            StateStore::open(&temp_project, repo_root().join("specs/schemas")).expect("store");
+        let job = store
+            .create_job("validate p0 output", "star-sentinel", Vec::new())
+            .expect("job");
+        let job_id = job["job_id"].as_str().expect("job_id");
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let result = scope_block_result();
+
+        let refs =
+            write_gate_artifacts(&store, job_id, &task, &result, schema_root()).expect("write");
+
+        assert_eq!(refs.diagnostics_ref["kind"], "tool_output");
+        assert_eq!(
+            refs.diagnostics_ref["path"],
+            "tool-output/star-sentinel/diagnostics.json"
+        );
+        assert_eq!(
+            refs.approval_ref["path"],
+            "tool-output/star-sentinel/approval.json"
+        );
+        assert!(temp_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/diagnostics.json")
+            .is_file());
+        assert!(temp_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/approval.json")
+            .is_file());
+        fs::remove_dir_all(temp_project).ok();
+    }
+
+    #[test]
+    fn gate_writer_refuses_to_overwrite_existing_artifacts() {
+        let temp_project = temp_dir();
+        let store =
+            StateStore::open(&temp_project, repo_root().join("specs/schemas")).expect("store");
+        let job = store
+            .create_job("validate p0 output", "star-sentinel", Vec::new())
+            .expect("job");
+        let job_id = job["job_id"].as_str().expect("job_id");
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let result = scope_block_result();
+
+        write_gate_artifacts(&store, job_id, &task, &result, schema_root()).expect("first write");
+        let overwrite = write_gate_artifacts(&store, job_id, &task, &result, schema_root());
+
+        assert!(matches!(overwrite, Err(SentinelError::State { .. })));
+        fs::remove_dir_all(temp_project).ok();
+    }
+
     fn builtin_registry() -> P0RuleRegistry {
         read_p0_rule_registry(
             repo_root().join("builtin-tools/star-sentinel/policies/p0-rule-registry.json"),
             schema_root(),
         )
         .expect("builtin registry")
+    }
+
+    fn scope_block_result() -> EvaluationResult {
+        let evaluator = P0Evaluator::new(builtin_registry());
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let changed_lines = changed_lines(json!([
+            file("src/allowed/index.ts", "modified", json!([])),
+            file("src/other/hidden.ts", "modified", json!([]))
+        ]));
+        evaluator.evaluate(&task, &changed_lines).expect("evaluate")
     }
 
     fn assert_diagnostics_schema_valid(diagnostics: &[Diagnostic]) {

@@ -44,10 +44,11 @@
 - E07 `packages/star-control-execution` ExecutionEngine을 추가했다.
 - E08 `packages/star-control-cli` CLI fake flow를 추가했다.
 - E09a `packages/star-sentinel` P0 evaluator를 추가했다.
+- E09b Star Sentinel diagnostics/gate artifact writer를 추가했다.
 
 ### 아직 남은 것
 
-- E09b Star Sentinel diagnostics + gate writer부터 현재 큐 순서대로 진행한다.
+- E09c Star Sentinel review-pack writer부터 현재 큐 순서대로 진행한다.
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke까지 완료해야 첫 검증 milestone으로 인정한다.
 
@@ -91,7 +92,7 @@ cargo test --workspace
 
 | ID | 내용 | 영향 | 다음 조치 |
 |---|---|---|---|
-| R-0001 | v0 fake flow 미완성 | validation gate/API/UI 동작 검증은 아직 불가 | E09b~E11을 현재 큐 순서대로 구현 |
+| R-0001 | v0 fake flow 미완성 | review pack/API/UI 동작 검증은 아직 불가 | E09c~E11을 현재 큐 순서대로 구현 |
 | R-0002 | runtime validator pattern 지원 범위 제한 | 현재 repository schema pattern만 지원하고 범용 regex는 지원하지 않음 | 새 pattern 추가 시 schema-validator test와 dependency 승인 여부 검토 |
 | R-0003 | StateStore 초기 단일 process 기준 | daemon 동시 실행 lock은 아직 없음 | daemon milestone에서 lock policy 추가 |
 
@@ -115,6 +116,7 @@ cargo test --workspace
 | E07 handoff | `ExecutionEngine::execute_stage(job_id, stage)`; precondition은 StateStore에 `job.json`과 `workspecs/{stage}.json`이 있고 registry에 `provider_instance`가 존재하는 것; output은 `provider-output/{provider_instance}/request.json`, `response.json`, `stdout.txt`, optional `stderr.txt`, RunState update, provider start/finish events |
 | E08 handoff | `star-control run --project <path> --request <text> --provider fake-default --json`, `status --project <path> --job <job-id> --json`, `report --project <path> --job <job-id> --stage <stage> --json`; command는 schema/config root로 current directory 또는 `STAR_CONTROL_HOME`을 사용하며, fake run은 target project `.ai-runs/`에 job, route, workspec, provider output, report, run-state를 기록 |
 | E09a handoff | `read_task`, `read_changed_lines`, `read_p0_rule_registry`, `P0Evaluator::evaluate`; 입력은 `SentinelTask`, `ChangedLines`, `P0RuleRegistry`, 출력은 in-memory `EvaluationResult { decision, diagnostics }`; P0 rule은 scope/test deletion/dependency approval/plaintext secret/validator self-bypass 5개이며 writer, gate file, review pack, ledger/selfcheck는 E09b~E09d 범위 |
+| E09b handoff | `build_diagnostics_artifact`, `build_approval_artifact`, `validate_diagnostics_artifact`, `validate_approval_artifact`, `write_gate_artifacts`; output path는 `tool-output/star-sentinel/diagnostics.json`와 `tool-output/star-sentinel/approval.json`; approval request artifact가 아니라 Star Sentinel gate decision만 쓴다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -140,3 +142,4 @@ cargo test --workspace
 | P-0017 | 2026-07-01 | E07 fake provider ExecutionEngine 추가 | `packages/star-control-execution` |
 | P-0018 | 2026-07-01 | E08 CLI read-only + fake run 추가 | `packages/star-control-cli` |
 | P-0019 | 2026-07-01 | E09a Star Sentinel P0 evaluator 추가 | `packages/star-sentinel` |
+| P-0020 | 2026-07-01 | E09b Star Sentinel diagnostics/gate writer 추가 | `packages/star-sentinel` |
