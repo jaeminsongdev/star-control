@@ -75,6 +75,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "star-control-execution"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-provider",
+ "star-control-router",
+ "star-control-schema",
+ "star-control-state",
+]
+
+[[package]]
 name = "star-control-provider"
 version = "0.1.0"
 dependencies = [
