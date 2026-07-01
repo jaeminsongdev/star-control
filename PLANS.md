@@ -54,12 +54,13 @@
 - M5c `ExecutionEngine` provider selection에 local process adapter 연결을 추가했다.
 - M5d CLI `run --provider <id> --provider-instance <path>` local process 실행 경로를 추가했다.
 - M5e local process cancel state model과 RunState `CANCELLED` 전이를 추가했다.
+- M5f local process forbidden action evidence marker와 RunState `BLOCKED` 전이를 추가했다.
 
 ### 아직 남은 것
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
-- M5 local provider는 forbidden action evidence -> BLOCKED/FAILED mapping, provider conformance fixture가 남아 있다.
+- M5 local provider는 provider conformance fixture가 남아 있다.
 - 다음 구현 축은 complete roadmap의 M5 local provider, M6 cloud provider, M7 daemon/API, M8 UI, M9 hardening 순서다.
 
 ### 건드리면 안 되는 것
@@ -136,6 +137,7 @@ cargo test --workspace
 | M5c handoff | `ExecutionEngine::execute_provider`; manifest가 `provider.fake`이면 fake adapter, `kind=local_process_model` + `transport=process`이면 local process adapter를 실행한다. local timeout은 기존 status mapping에 따라 RunState `FAILED`로 기록된다 |
 | M5d handoff | CLI `run --provider <instance-id> --provider-instance <path>`; non-default provider는 instance file을 명시해야 하며, route/workspec provider assignment를 선택 provider로 override한 뒤 `ExecutionEngine`이 실행한다 |
 | M5e handoff | `LocalProcessProviderAdapter`는 `run-state.json`의 `state=CANCELLED`를 실행 전/실행 중 확인한다. 실행 전 cancel은 command launch 없이 `cancelled` result를 쓰고, 실행 중 cancel은 process termination 후 `cancelled` result와 RunState `CANCELLED` 전이를 기록한다 |
+| M5f handoff | local process child stdout/stderr의 `STAR_CONTROL_FORBIDDEN_ACTION_EVIDENCE:<action>` marker가 WorkSpec `forbidden_actions` 또는 기본 금지 action과 일치하면 `blocked` provider result와 RunState `BLOCKED`로 정규화한다. raw stdout/stderr는 복사하지 않고 action/source만 error evidence에 남긴다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -171,3 +173,4 @@ cargo test --workspace
 | P-0027 | 2026-07-01 | M5c ExecutionEngine local provider selection 추가 | `packages/star-control-execution/src/lib.rs` |
 | P-0028 | 2026-07-01 | M5d CLI local process provider run path 추가 | `packages/star-control-cli/src/lib.rs`, `docs/implementation/cli-command-reference.md` |
 | P-0029 | 2026-07-01 | M5e local process cancel state model 추가 | `packages/star-control-provider/src/local_process.rs`, `packages/star-control-execution/src/lib.rs` |
+| P-0030 | 2026-07-01 | M5f local process forbidden action evidence mapping 추가 | `packages/star-control-provider/src/local_process.rs`, `packages/star-control-execution/src/lib.rs`, `docs/implementation/local-process-provider-policy.md` |

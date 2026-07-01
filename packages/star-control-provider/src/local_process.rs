@@ -5,6 +5,7 @@ use crate::{
 };
 use serde_json::{json, Value};
 use star_control_state::{ArtifactKind, StateStoreError};
+use std::collections::BTreeSet;
 use std::fs::{self, File, OpenOptions};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
@@ -17,6 +18,23 @@ const DEFAULT_TIMEOUT_SECONDS: u64 = 300;
 const MAX_TIMEOUT_SECONDS: u64 = 600;
 const STDOUT_FILE: &str = "stdout.txt";
 const STDERR_FILE: &str = "stderr.txt";
+const FORBIDDEN_ACTION_EVIDENCE_PREFIX: &str = "STAR_CONTROL_FORBIDDEN_ACTION_EVIDENCE:";
+const LOCAL_PROCESS_FORBIDDEN_ACTIONS: &[&str] = &[
+    "dependency_install",
+    "dependency_change",
+    "workflow_change",
+    "release_publish",
+    "deploy",
+    "credential_change",
+    "external_account_change",
+    "file_delete",
+    "bulk_move",
+    "test_delete",
+    "test_skip_only_ignore",
+    "assertion_weakening",
+    "validator_self_bypass",
+    "sensitive_data_output",
+];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalProcessProviderAdapter;
@@ -141,7 +159,13 @@ impl ProviderAdapter for LocalProcessProviderAdapter {
         let stdout_file = create_new_output_file(&stdout_path)?;
         let stderr_file = create_new_output_file(&stderr_path)?;
 
-        let process_result = run_process(&policy, request, context, stdout_file, stderr_file)?;
+        let mut process_result = run_process(&policy, request, context, stdout_file, stderr_file)?;
+        if matches!(process_result, LocalProcessRunResult::Exited { .. }) {
+            if let Some(evidence) = forbidden_action_evidence(request, &stdout_path, &stderr_path)?
+            {
+                process_result = LocalProcessRunResult::BlockedForbiddenAction { evidence };
+            }
+        }
         let response_value = response_value(request, &policy, &process_result);
         let result = ProviderRunResult::from_value(
             response_value.clone(),
@@ -181,8 +205,15 @@ enum LocalProcessRunResult {
     Exited { status: ExitStatus },
     TimedOut,
     Cancelled { phase: &'static str },
+    BlockedForbiddenAction { evidence: ForbiddenActionEvidence },
     LaunchFailed { message: String },
     WaitFailed { source: std::io::Error },
+}
+
+#[derive(Debug)]
+struct ForbiddenActionEvidence {
+    action: String,
+    source: &'static str,
 }
 
 fn run_process(
@@ -309,6 +340,19 @@ fn response_value(
                 "phase": phase
             }),
         ),
+        LocalProcessRunResult::BlockedForbiddenAction { evidence } => (
+            "blocked",
+            format!(
+                "local process reported forbidden action evidence: {}",
+                evidence.action
+            ),
+            json!({
+                "kind": "local_process_forbidden_action",
+                "action": evidence.action,
+                "source": evidence.source,
+                "evidence_prefix": FORBIDDEN_ACTION_EVIDENCE_PREFIX
+            }),
+        ),
         LocalProcessRunResult::LaunchFailed { message } => (
             "error",
             "local process failed to launch".to_string(),
@@ -350,6 +394,74 @@ fn response_value(
             "output_tokens": 0
         },
         "error": error
+    })
+}
+
+fn forbidden_action_evidence(
+    request: &ExecutionRequest,
+    stdout_path: &Path,
+    stderr_path: &Path,
+) -> Result<Option<ForbiddenActionEvidence>, ProviderAdapterError> {
+    let forbidden_actions = forbidden_action_names(request);
+    if forbidden_actions.is_empty() {
+        return Ok(None);
+    }
+
+    if let Some(evidence) =
+        forbidden_action_evidence_from_file(stdout_path, STDOUT_FILE, &forbidden_actions)?
+    {
+        return Ok(Some(evidence));
+    }
+
+    forbidden_action_evidence_from_file(stderr_path, STDERR_FILE, &forbidden_actions)
+}
+
+fn forbidden_action_names(request: &ExecutionRequest) -> BTreeSet<String> {
+    let mut names = LOCAL_PROCESS_FORBIDDEN_ACTIONS
+        .iter()
+        .map(|action| action.to_string())
+        .collect::<BTreeSet<_>>();
+    if let Some(actions) = request
+        .value()
+        .get("forbidden_actions")
+        .and_then(Value::as_array)
+    {
+        for action in actions.iter().filter_map(Value::as_str) {
+            names.insert(action.to_ascii_lowercase());
+        }
+    }
+    names
+}
+
+fn forbidden_action_evidence_from_file(
+    path: &Path,
+    source: &'static str,
+    forbidden_actions: &BTreeSet<String>,
+) -> Result<Option<ForbiddenActionEvidence>, ProviderAdapterError> {
+    let content = fs::read_to_string(path).map_err(|io_source| ProviderAdapterError::Io {
+        path: path.to_path_buf(),
+        source: io_source,
+    })?;
+    Ok(forbidden_action_evidence_from_text(
+        &content,
+        source,
+        forbidden_actions,
+    ))
+}
+
+fn forbidden_action_evidence_from_text(
+    content: &str,
+    source: &'static str,
+    forbidden_actions: &BTreeSet<String>,
+) -> Option<ForbiddenActionEvidence> {
+    content.lines().find_map(|line| {
+        let marker = line.trim().strip_prefix(FORBIDDEN_ACTION_EVIDENCE_PREFIX)?;
+        let action = marker.split_whitespace().next()?.to_ascii_lowercase();
+        if forbidden_actions.contains(&action) {
+            Some(ForbiddenActionEvidence { action, source })
+        } else {
+            None
+        }
     })
 }
 
@@ -663,7 +775,10 @@ mod tests {
     use star_control_state::StateStore;
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::{Mutex, MutexGuard};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn local_process_executes_allowlisted_command_and_captures_output() {
@@ -741,7 +856,7 @@ mod tests {
     #[test]
     fn local_process_timeout_writes_timeout_result() {
         let executable = current_test_executable();
-        std::env::set_var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER", "1");
+        let _env = EnvVarGuard::set("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER", "1");
         let (execution, project) = execute_with_command(
             &executable,
             vec![
@@ -754,7 +869,6 @@ mod tests {
             1,
         )
         .expect("execute timeout helper");
-        std::env::remove_var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER");
 
         assert_eq!(execution.result().status(), "timeout");
         assert_eq!(
@@ -824,6 +938,7 @@ mod tests {
             .expect("request");
         let schemas = schema_root();
         let context = ProviderRunContext::new(&registry, &store, &schemas);
+        let _env = EnvVarGuard::set("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER", "1");
         let cancel_project = project.clone();
         let cancel_schemas = schema_root();
         let cancel_thread = thread::spawn(move || {
@@ -835,15 +950,46 @@ mod tests {
                 .expect("save cancelled state");
         });
 
-        std::env::set_var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER", "1");
         let execution = LocalProcessProviderAdapter
             .execute(&request, &context)
             .expect("execute running cancel");
-        std::env::remove_var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER");
         cancel_thread.join().expect("cancel thread");
 
         assert_eq!(execution.result().status(), "cancelled");
         assert_eq!(execution.result().value()["error"]["phase"], "running");
+        assert!(project
+            .join(".ai-runs/J-0001/provider-output/local-default/response.json")
+            .is_file());
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn local_process_forbidden_action_evidence_blocks_result() {
+        let executable = current_test_executable();
+        let _env = EnvVarGuard::set("STAR_CONTROL_LOCAL_PROCESS_FORBIDDEN_EVIDENCE_HELPER", "1");
+        let (execution, project) = execute_with_command(
+            &executable,
+            vec![
+                "--exact".to_string(),
+                "local_process::tests::local_process_forbidden_evidence_helper".to_string(),
+                "--nocapture".to_string(),
+            ],
+            vec![executable.clone()],
+            vec!["STAR_CONTROL_LOCAL_PROCESS_FORBIDDEN_EVIDENCE_HELPER".to_string()],
+            10,
+        )
+        .expect("execute forbidden evidence local process");
+
+        assert_eq!(execution.result().status(), "blocked");
+        assert_eq!(
+            execution.result().value()["error"]["kind"],
+            "local_process_forbidden_action"
+        );
+        assert_eq!(
+            execution.result().value()["error"]["action"],
+            "dependency_install"
+        );
+        assert_eq!(execution.result().value()["error"]["source"], STDOUT_FILE);
         assert!(project
             .join(".ai-runs/J-0001/provider-output/local-default/response.json")
             .is_file());
@@ -857,6 +1003,22 @@ mod tests {
         });
         if is_child_helper && std::env::var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER").is_ok() {
             thread::sleep(Duration::from_secs(5));
+        }
+    }
+
+    #[test]
+    fn local_process_forbidden_evidence_helper() {
+        let is_child_helper = std::env::args().collect::<Vec<_>>().windows(2).any(|args| {
+            args[0] == "--exact"
+                && args[1] == "local_process::tests::local_process_forbidden_evidence_helper"
+        });
+        if is_child_helper
+            && std::env::var("STAR_CONTROL_LOCAL_PROCESS_FORBIDDEN_EVIDENCE_HELPER").is_ok()
+        {
+            println!(
+                "{}dependency_install attempted by local provider",
+                FORBIDDEN_ACTION_EVIDENCE_PREFIX
+            );
         }
     }
 
@@ -1028,6 +1190,25 @@ mod tests {
 
     fn schema_root() -> PathBuf {
         repo_root().join("specs").join("schemas")
+    }
+
+    struct EnvVarGuard<'a> {
+        key: &'static str,
+        _lock: MutexGuard<'a, ()>,
+    }
+
+    impl EnvVarGuard<'_> {
+        fn set(key: &'static str, value: &'static str) -> Self {
+            let lock = ENV_LOCK.lock().expect("env lock");
+            std::env::set_var(key, value);
+            Self { key, _lock: lock }
+        }
+    }
+
+    impl Drop for EnvVarGuard<'_> {
+        fn drop(&mut self) {
+            std::env::remove_var(self.key);
+        }
     }
 
     fn temp_project() -> PathBuf {
