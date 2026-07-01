@@ -112,7 +112,8 @@
       "name": "stacked-prs-clean",
       "status": "pass",
       "evidence_paths": [
-        "docs/implementation/audit/final-completion-audit.md"
+        "docs/implementation/audit/final-completion-audit.md",
+        "docs/implementation/audit/stacked-pr-readiness.md"
       ]
     },
     {

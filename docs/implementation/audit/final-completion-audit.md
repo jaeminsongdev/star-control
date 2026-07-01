@@ -15,10 +15,10 @@ examples/release-contracts/complete-implementation-readiness.example.json
 ```text
 top branch: work/m9q-final-audit-evidence
 base branch: work/m9p-final-completion-audit
-open stacked PR range checked: #33 through #83
+open stacked PR range checked: #33 through #84
 stack merge state checked with: gh pr list --state open --limit 100 --json number,title,baseRefName,headRefName,isDraft,mergeStateStatus,url
-observed stack status: every listed PR in #33 through #83 had mergeStateStatus=CLEAN
-latest remote CI evidence before this slice: https://github.com/jaeminsongdev/star-control/actions/runs/28538489928
+observed stack status: every listed PR in #33 through #84 had mergeStateStatus=CLEAN
+latest remote CI evidence before stacked PR readiness slice: https://github.com/jaeminsongdev/star-control/actions/runs/28539021845
 ```
 
 This snapshot is evidence for review readiness, not a main-branch merge claim.
@@ -38,8 +38,8 @@ This snapshot is evidence for review readiness, not a main-branch merge claim.
 | `m8-ui-shell` | pass | `packages/star-control-ui/src/lib.rs` |
 | `m9-hardening-release-readiness` | pass | `packages/star-control-security/src/lib.rs`, `packages/star-control-observability/src/lib.rs`, `packages/star-control-provider/src/conformance.rs`, `packages/star-control-state/src/lib.rs`, `packages/star-control-release/src/lib.rs`, `packages/star-control-cli/src/lib.rs` |
 | `full-local-validation` | pass | local validation command set listed below |
-| `remote-ci-evidence` | pass | Star-Control CI workflow_dispatch run `28538489928` completed with conclusion `success` |
-| `stacked-prs-clean` | pass | open PR stack #33 through #83 reported `mergeStateStatus=CLEAN` |
+| `remote-ci-evidence` | pass | Star-Control CI workflow_dispatch run `28539021845` completed with conclusion `success` |
+| `stacked-prs-clean` | pass | open PR stack #33 through #84 reported `mergeStateStatus=CLEAN`; detailed review/merge coordination evidence is in `docs/implementation/audit/stacked-pr-readiness.md` |
 | `reserved-actions-confirmed` | pass | `docs/implementation/release-readiness.md`, `docs/decisions/0005-full-implementation-defaults.md` |
 
 ## local validation command set
@@ -70,4 +70,4 @@ The completion audit remains `reserved`, not `ready`, until the following are ex
 
 ## next handoff
 
-After this evidence slice, the next non-destructive step is stacked PR merge/readiness coordination. Actual release/deploy/publish or destructive recovery work remains approval-gated.
+After this evidence slice, the next non-destructive step is stacked PR review/merge coordination. The M9r companion evidence is `docs/implementation/audit/stacked-pr-readiness.md`. Actual main merge, release/deploy/publish, or destructive recovery work remains approval-gated.

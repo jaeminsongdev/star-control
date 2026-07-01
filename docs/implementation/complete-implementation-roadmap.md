@@ -313,6 +313,8 @@ M9p final completion audit은 `packages/star-control-release`의 `CompleteImplem
 
 M9q final audit evidence는 `examples/release-contracts/complete-implementation-readiness.example.json`과 `docs/implementation/audit/final-completion-audit.md`로 구현한다. 이 slice는 M0~M9 completion audit evidence를 schema-valid ReleaseReadiness example과 human-readable audit 문서로 고정하되, all-pass evidence도 `ready`가 아니라 release/deploy/publish와 external repository settings reserved blocker가 있는 `reserved` status로 둔다.
 
+M9r stacked PR readiness coordination은 `examples/release-contracts/stacked-pr-readiness.example.json`과 `docs/implementation/audit/stacked-pr-readiness.md`로 구현한다. 이 slice는 stacked PR chain의 contiguous base/head, clean merge state, draft review gate, main merge not performed, final audit evidence link를 schema-valid ReleaseReadiness example과 human-readable audit 문서로 고정하되, main update나 PR merge는 별도 승인 전까지 수행하지 않는다.
+
 Validation:
 
 ```text
@@ -334,6 +336,7 @@ release review pack writer tests
 final M9 readiness audit tests
 final completion audit tests
 final completion readiness example validation
+stacked PR readiness example validation
 ```
 
 ## 다음 작업 선택 규칙
