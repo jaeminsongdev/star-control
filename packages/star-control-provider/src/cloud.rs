@@ -985,7 +985,10 @@ fn assert_provider_sidecar_refs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ProviderRegistry, ProviderRegistryError};
+    use crate::{
+        ProviderConformanceChecker, ProviderConformanceProfile, ProviderRegistry,
+        ProviderRegistryError,
+    };
     use serde_json::json;
     use star_control_state::StateStore;
     use std::fs;
@@ -1112,7 +1115,7 @@ mod tests {
     #[test]
     fn cloud_cli_transport_executes_command_and_writes_contract() {
         let _env = EnvVarGuard::set("STAR_CONTROL_CLOUD_CLI_SUCCESS_HELPER", "1");
-        let (execution, project) = execute_cloud_cli_transport(json!({
+        let instance_value = json!({
             "id": "cloud-default",
             "provider": "provider.cloud",
             "enabled": true,
@@ -1137,8 +1140,9 @@ mod tests {
                     "--nocapture"
                 ]
             }
-        }))
-        .expect("execute cloud CLI transport");
+        });
+        let (execution, project) = execute_cloud_cli_transport(instance_value.clone())
+            .expect("execute cloud CLI transport");
 
         assert_eq!(execution.result().status(), "success");
         assert_eq!(execution.result().value()["error"], Value::Null);
@@ -1152,6 +1156,21 @@ mod tests {
                 "provider-output/cloud-default/cost-metric.json"
             ])
         );
+        let schemas = schema_root();
+        let store = StateStore::open(&project, &schemas).expect("open executed project");
+        let registry = registry_with_instance(CLOUD_CLI_KIND, CLI_TRANSPORT, instance_value)
+            .expect("reload cloud registry");
+        let context = ProviderRunContext::new(&registry, &store, &schemas);
+        let conformance = ProviderConformanceChecker
+            .check_execution(&execution, &context, ProviderConformanceProfile::Cloud)
+            .expect("cloud CLI provider conformance");
+        assert_eq!(conformance.provider_instance_id(), "cloud-default");
+        assert!(conformance
+            .checked_artifacts()
+            .contains(&"provider-output/cloud-default/privacy-handoff.json".to_string()));
+        assert!(conformance
+            .checked_artifacts()
+            .contains(&"provider-output/cloud-default/cost-metric.json".to_string()));
         let stdout = fs::read_to_string(
             project.join(".ai-runs/J-0001/provider-output/cloud-default/stdout.txt"),
         )

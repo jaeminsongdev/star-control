@@ -122,3 +122,23 @@ M6 전체 exit criteria에는 다음 fixture가 필요하다.
 - raw credential field -> `BLOCKED` and no raw value echo
 - unapproved privacy handoff -> `BLOCKED`
 - cost/rate/budget metric report mapping
+
+## M6c provider output conformance scope
+
+M6c는 외부 provider 호출을 늘리지 않고 provider output 계약을 runtime fixture로 검증한다.
+
+검증 규칙:
+
+- `ProviderExecution`의 `request_ref`, `response_ref`, `stdout_ref`, optional `stderr_ref`가 `provider-output/{provider_instance_id}/` 아래 canonical `/` path를 가리킨다.
+- `response.json`의 `stdout_path`, `stderr_path`, `artifacts[]`는 같은 provider instance output directory 안에 있어야 한다.
+- backslash, `..`, absolute path, 다른 provider instance path, `tool-output/` 같은 provider-output 밖 경로는 거부한다.
+- cloud profile은 `privacy-handoff.json`과 `cost-metric.json` artifact가 누락되면 실패한다.
+- checker는 `StateStore`를 통해 대상 프로젝트 `.ai-runs/{job_id}/` 안의 실제 파일 존재를 확인한다.
+
+M6c는 다음을 구현하지 않는다.
+
+- 실제 cloud API 호출
+- provider별 stdout/stderr semantic parser
+- token usage parser
+- live credential lookup
+- paid usage validation

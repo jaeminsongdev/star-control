@@ -37,6 +37,7 @@ E10-validation-engine.md
 E11-integration-smoke.md
 E12-cloud-provider-preflight.md
 E13-cloud-cli-transport.md
+E14-cloud-provider-conformance.md
 ```
 
 ## 사용 방법

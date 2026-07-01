@@ -58,9 +58,10 @@ E11 Integration Smoke
 ```text
 E12 Cloud Provider Preflight
 E13 Cloud CLI Transport
+E14 Cloud Provider Conformance
 ```
 
-E13 이후 M6c cloud API transport, M6d provider parser/conformance, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E14 이후 M6d cloud API transport 또는 provider-specific parser, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1038,7 +1039,83 @@ provider and execution fixture tests
 다음 EPIC handoff:
 
 ```text
-M6c cloud API transport/parser 또는 cloud CLI provider-specific parser를 별도 PR로 구현한다.
+M6c cloud provider output conformance를 별도 PR로 구현한다.
+```
+
+## E14 Cloud Provider Conformance
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cloud-provider-policy.md
+provider-system.md
+testing-ci-release.md
+artifact-layout.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+필요한 최소 docs 업데이트
+PLANS.md
+```
+
+금지 파일:
+
+```text
+Cargo 외 package manager
+새 dependency
+GitHub workflow
+release/deploy/publish automation
+실제 paid CLI/API 호출 검증
+credential raw value 저장
+schema field 변경
+```
+
+입력 artifact:
+
+```text
+M6a CloudProviderPreflightAdapter
+M6b CloudCliProviderAdapter
+specs/schemas/provider-run-result.schema.json
+specs/schemas/privacy-handoff.schema.json
+specs/schemas/cost-metric.schema.json
+provider-output/{provider_instance_id}/response.json
+provider-output/{provider_instance_id}/stdout.txt
+provider-output/{provider_instance_id}/stderr.txt
+provider-output/{provider_instance_id}/privacy-handoff.json
+provider-output/{provider_instance_id}/cost-metric.json
+```
+
+출력 artifact:
+
+```text
+ProviderConformanceChecker
+ProviderConformanceProfile::Basic
+ProviderConformanceProfile::Cloud
+cloud CLI provider conformance fixture
+artifact path boundary tests
+```
+
+핵심 TASK:
+
+```text
+provider output path boundary check
+request/response/stdout/stderr artifact ref consistency check
+provider-output/{provider_instance_id}/ scope enforcement
+cloud privacy-handoff/cost-metric sidecar requirement
+artifact file existence check via StateStore
+cloud CLI execution fixture conformance assertion
+```
+
+완료 기준: conformance checker가 cloud provider output의 path/ref/file existence와 privacy/cost sidecar 존재를 검증해야 한다.
+
+다음 EPIC handoff:
+
+```text
+M6d cloud API transport 또는 provider-specific parser를 별도 PR로 구현한다.
 ```
 
 ## RESERVED

@@ -58,12 +58,13 @@
 - M5g local provider conformance fixture를 추가해 M5 runtime exit criteria를 묶어 검증한다.
 - M6a cloud provider preflight를 추가해 credential/privacy/cost artifact 계약을 runtime 경로에 연결했다.
 - M6b cloud CLI transport를 추가해 preflight 통과 CLI provider가 command vector로 실행되게 했다.
+- M6c provider output conformance checker를 추가해 cloud provider artifact path/ref/file existence와 privacy/cost sidecar를 검증한다.
 
 ### 아직 남은 것
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
-- M5 local provider는 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M6 cloud provider preflight, 이후 M6 cloud transport, M7 daemon/API, M8 UI, M9 hardening 순서다.
+- M5 local provider는 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M6d cloud API transport 또는 provider-specific parser, 이후 M7 daemon/API, M8 UI, M9 hardening 순서다.
 
 ### 건드리면 안 되는 것
 
@@ -144,6 +145,7 @@ cargo test --workspace
 | M5g handoff | `local_process_provider_conformance_fixture_covers_m5_runtime_contract`가 success/timeout/cancel/forbidden evidence를 `ExecutionEngine` + `StateStore` 경로로 실행하고 provider result status, RunState, output artifact, artifact ref, provider finished event를 검증한다 |
 | M6a handoff | `CloudProviderPreflightAdapter`는 `cloud_cli_agent`+`cli`, `cloud_api_model`+`http` provider를 실제 외부 호출 없이 preflight 처리한다. raw credential field, missing API `credential_ref`, missing CLI auth declaration, unapproved privacy handoff는 `blocked` result로 정규화하고 `privacy-handoff.json`, `cost-metric.json`을 provider-output에 쓴다 |
 | M6b handoff | `CloudCliProviderAdapter`는 M6a preflight 통과 후 shell 없이 `command.executable` + `command.args` vector를 대상 프로젝트 root에서 실행하고 stdout/stderr/cost/response artifact를 provider-output에 쓴다. unsafe preflight는 기존 `BLOCKED` path를 재사용하고, test fixture는 외부 CLI 대신 current test executable을 사용한다 |
+| M6c handoff | `ProviderConformanceChecker`는 `ProviderExecution`의 request/response/stdout/stderr refs, `response.json` artifact paths, 실제 `.ai-runs/{job_id}/provider-output/{provider_instance_id}/` 파일 존재를 검증한다. `ProviderConformanceProfile::Cloud`는 `privacy-handoff.json`과 `cost-metric.json` sidecar 누락을 실패로 처리한다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -183,3 +185,4 @@ cargo test --workspace
 | P-0031 | 2026-07-01 | M5g local provider conformance fixture 추가 | `packages/star-control-execution/src/lib.rs`, `docs/implementation/local-process-provider-policy.md` |
 | P-0032 | 2026-07-01 | M6a cloud provider preflight 추가 | `packages/star-control-provider/src/cloud.rs`, `docs/implementation/cloud-provider-policy.md` |
 | P-0033 | 2026-07-01 | M6b cloud CLI transport 추가 | `packages/star-control-provider/src/cloud.rs`, `packages/star-control-execution/src/lib.rs` |
+| P-0034 | 2026-07-01 | M6c provider output conformance checker 추가 | `packages/star-control-provider/src/conformance.rs`, `docs/implementation/briefs/E14-cloud-provider-conformance.md` |

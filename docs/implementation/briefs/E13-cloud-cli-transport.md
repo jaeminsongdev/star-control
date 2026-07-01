@@ -87,5 +87,4 @@ provider and execution fixture tests
 
 ## 다음 handoff
 
-M6c는 cloud API transport/parser 또는 cloud CLI provider-specific parser를 별도 PR로 구현한다. 실제 provider 호출, paid usage, external account mutation은 별도 승인 전까지 실행하지 않는다.
-
+M6c는 cloud provider output conformance를 별도 PR로 구현한다. 실제 provider 호출, paid usage, external account mutation은 별도 승인 전까지 실행하지 않는다.
