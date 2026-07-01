@@ -1,7 +1,8 @@
 use serde_json::{json, Value};
 use star_control_provider::{
-    ExecutionRequest, FakeProviderAdapter, ProviderAdapter, ProviderAdapterError,
-    ProviderExecution, ProviderRegistry, ProviderRegistryError, ProviderRunContext,
+    ExecutionRequest, FakeProviderAdapter, LocalProcessProviderAdapter, ProviderAdapter,
+    ProviderAdapterError, ProviderExecution, ProviderRegistry, ProviderRegistryError,
+    ProviderRunContext,
 };
 use star_control_schema::{load_schema, validate_json, ValidationError};
 use star_control_state::{StateStore, StateStoreError};
@@ -11,6 +12,9 @@ use std::path::{Path, PathBuf};
 
 const EXECUTION_ATTEMPT_SCHEMA: &str = "execution-attempt.schema.json";
 const SCHEMA_VERSION: &str = "1.0.0";
+const FAKE_PROVIDER_ID: &str = "provider.fake";
+const LOCAL_PROCESS_KIND: &str = "local_process_model";
+const PROCESS_TRANSPORT: &str = "process";
 
 #[derive(Debug)]
 pub enum ExecutionError {
@@ -164,7 +168,8 @@ pub struct ExecutionEngine<'a> {
     state_store: &'a StateStore,
     registry: &'a ProviderRegistry,
     schema_root: PathBuf,
-    adapter: FakeProviderAdapter,
+    fake_adapter: FakeProviderAdapter,
+    local_process_adapter: LocalProcessProviderAdapter,
 }
 
 impl<'a> ExecutionEngine<'a> {
@@ -177,12 +182,13 @@ impl<'a> ExecutionEngine<'a> {
             state_store,
             registry,
             schema_root: schema_root.into(),
-            adapter: FakeProviderAdapter::success(),
+            fake_adapter: FakeProviderAdapter::success(),
+            local_process_adapter: LocalProcessProviderAdapter,
         }
     }
 
     pub fn with_fake_adapter(mut self, adapter: FakeProviderAdapter) -> Self {
-        self.adapter = adapter;
+        self.fake_adapter = adapter;
         self
     }
 
@@ -226,7 +232,7 @@ impl<'a> ExecutionEngine<'a> {
         )?;
 
         let context = ProviderRunContext::new(self.registry, self.state_store, &self.schema_root);
-        let provider_execution = self.adapter.execute(&request, &context)?;
+        let provider_execution = self.execute_provider(&request, &context)?;
         verify_provider_result(&request, &provider_execution)?;
 
         let completed_attempt = execution_attempt(&request, provider_execution.result().status());
@@ -266,6 +272,28 @@ impl<'a> ExecutionEngine<'a> {
             attempt: completed_attempt,
             state,
         })
+    }
+
+    fn execute_provider(
+        &self,
+        request: &ExecutionRequest,
+        context: &ProviderRunContext<'_>,
+    ) -> Result<ProviderExecution, ExecutionError> {
+        let manifest = self
+            .registry
+            .manifest_for_instance(request.provider_instance_id())?;
+        if manifest.id() == FAKE_PROVIDER_ID {
+            return Ok(self.fake_adapter.execute(request, context)?);
+        }
+        if manifest.kind() == LOCAL_PROCESS_KIND && manifest.transport() == PROCESS_TRANSPORT {
+            return Ok(self.local_process_adapter.execute(request, context)?);
+        }
+
+        Err(ProviderAdapterError::UnsupportedProvider {
+            provider_instance_id: request.provider_instance_id().to_string(),
+            provider_id: manifest.id().to_string(),
+        }
+        .into())
     }
 
     fn execution_request(
@@ -381,6 +409,11 @@ impl<'a> ExecutionEngine<'a> {
             &mut state,
             &format!("{}_provider_response", stage),
             provider_execution.response_ref(),
+        )?;
+        self.state_store.register_artifact_ref(
+            &mut state,
+            &format!("{}_provider_stdout", stage),
+            provider_execution.stdout_ref(),
         )?;
         if let Some(stderr_ref) = provider_execution.stderr_ref() {
             self.state_store.register_artifact_ref(
@@ -721,6 +754,76 @@ mod tests {
     }
 
     #[test]
+    fn local_process_provider_executes_by_manifest_kind() {
+        let mut fixture = Fixture::new();
+        fixture.use_local_process_registry(vec!["--help".to_string()], Vec::new(), 10);
+        fixture.assign_implement_stage_to_local_process();
+
+        let outcome = ExecutionEngine::new(&fixture.store, &fixture.registry, &fixture.schemas)
+            .execute_stage("J-0001", "implement")
+            .expect("execute local process stage");
+
+        assert_eq!(outcome.request().provider_instance_id(), "local-default");
+        assert_eq!(outcome.provider_execution().result().status(), "success");
+        assert_eq!(outcome.state()["state"], "IMPLEMENTED");
+        assert_eq!(
+            outcome.state()["artifacts"]["implement_provider_stdout"]["path"],
+            "provider-output/local-default/stdout.txt"
+        );
+        assert!(fixture
+            .project
+            .join(".ai-runs/J-0001/provider-output/local-default/request.json")
+            .is_file());
+        assert!(fixture
+            .project
+            .join(".ai-runs/J-0001/provider-output/local-default/stdout.txt")
+            .is_file());
+        assert!(fixture
+            .project
+            .join(".ai-runs/J-0001/provider-output/local-default/stderr.txt")
+            .is_file());
+        assert!(fixture
+            .project
+            .join(".ai-runs/J-0001/provider-output/local-default/response.json")
+            .is_file());
+    }
+
+    #[test]
+    fn local_process_timeout_updates_run_state_to_failed() {
+        let mut fixture = Fixture::new();
+        std::env::set_var("STAR_CONTROL_EXECUTION_SLEEP_HELPER", "1");
+        fixture.use_local_process_registry(
+            vec![
+                "--exact".to_string(),
+                "tests::execution_sleep_helper".to_string(),
+                "--nocapture".to_string(),
+            ],
+            vec!["STAR_CONTROL_EXECUTION_SLEEP_HELPER".to_string()],
+            1,
+        );
+        fixture.assign_implement_stage_to_local_process();
+
+        let outcome = ExecutionEngine::new(&fixture.store, &fixture.registry, &fixture.schemas)
+            .execute_stage("J-0001", "implement")
+            .expect("execute timeout stage");
+        std::env::remove_var("STAR_CONTROL_EXECUTION_SLEEP_HELPER");
+
+        assert_eq!(outcome.provider_execution().result().status(), "timeout");
+        assert_eq!(outcome.state()["state"], "FAILED");
+    }
+
+    #[test]
+    fn execution_sleep_helper() {
+        let is_child_helper = std::env::args()
+            .collect::<Vec<_>>()
+            .windows(2)
+            .any(|args| args[0] == "--exact" && args[1] == "tests::execution_sleep_helper");
+        if is_child_helper && std::env::var("STAR_CONTROL_EXECUTION_SLEEP_HELPER").is_ok() {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+        }
+    }
+
+    #[test]
     fn unknown_provider_instance_fails_before_writing_output() {
         let fixture = Fixture::new();
         let mut workspec = fixture
@@ -801,6 +904,61 @@ mod tests {
             ExecutionEngine::new(&self.store, &self.registry, &self.schemas)
                 .with_fake_adapter(adapter)
         }
+
+        fn use_local_process_registry(
+            &mut self,
+            args: Vec<String>,
+            env_allowlist: Vec<String>,
+            timeout_seconds: u64,
+        ) {
+            let instance_path = self.project.join("local-process-instance.json");
+            fs::write(
+                &instance_path,
+                serde_json::to_string_pretty(&json!({
+                    "id": "local-default",
+                    "provider": "provider.local-process",
+                    "enabled": true,
+                    "limits": {
+                        "timeout_seconds": timeout_seconds,
+                        "max_parallel_jobs": 1
+                    },
+                    "routing_tags": ["local", "process"],
+                    "command_policy": {
+                        "shell": false,
+                        "allowed_executables": [current_test_executable()],
+                        "env_allowlist": env_allowlist,
+                        "cwd_policy": "project_root",
+                        "network": "deny",
+                        "workspace_write": "deny"
+                    },
+                    "command": {
+                        "executable": current_test_executable(),
+                        "args": args
+                    }
+                }))
+                .expect("serialize local process instance"),
+            )
+            .expect("write local process instance");
+            self.registry = ProviderRegistryLoader::new(repo_root())
+                .load_registry(
+                    "configs/registries/builtin-provider-registry.yaml",
+                    &[instance_path],
+                )
+                .expect("load local process registry");
+        }
+
+        fn assign_implement_stage_to_local_process(&self) {
+            let mut workspec = self
+                .store
+                .load_workspec("J-0001", "implement")
+                .expect("load workspec");
+            workspec["provider"] = json!("local-default");
+            workspec["provider_instance"] = json!("local-default");
+            workspec["required_outputs"] = json!(["provider-output/local-default/response.json"]);
+            self.store
+                .save_workspec("J-0001", "implement", &workspec)
+                .expect("save local process workspec");
+        }
     }
 
     impl Drop for Fixture {
@@ -834,5 +992,12 @@ mod tests {
 
     fn schema_root() -> PathBuf {
         repo_root().join("specs").join("schemas")
+    }
+
+    fn current_test_executable() -> String {
+        std::env::current_exe()
+            .expect("current test executable")
+            .display()
+            .to_string()
     }
 }
