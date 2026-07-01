@@ -191,6 +191,7 @@ Entry condition:
 
 - M5 local provider와 provider conformance fixture가 안정화되어 있다.
 - credential reference policy와 budget/cost metric 계약이 적용되어 있다.
+- 기준 문서: `docs/implementation/cloud-provider-policy.md`
 
 Exit criteria:
 
@@ -198,6 +199,8 @@ Exit criteria:
 - cloud API provider는 credential raw value 없이 `credential_ref`로만 동작한다.
 - provider별 parser와 conformance fixture가 있다.
 - budget, cost, rate limit, privacy handoff가 report에 반영된다.
+
+M6a preflight는 실제 외부 호출 전에 credential/privacy/cost artifact 계약을 적용한다. Cloud CLI/API 실제 transport 실행은 별도 M6 slice에서 provider 공식 문서 refresh와 승인 조건을 확인한 뒤 구현한다.
 
 Validation:
 

@@ -1,8 +1,8 @@
 use serde_json::{json, Value};
 use star_control_provider::{
-    ExecutionRequest, FakeProviderAdapter, LocalProcessProviderAdapter, ProviderAdapter,
-    ProviderAdapterError, ProviderExecution, ProviderRegistry, ProviderRegistryError,
-    ProviderRunContext,
+    is_cloud_provider_manifest, CloudProviderPreflightAdapter, ExecutionRequest,
+    FakeProviderAdapter, LocalProcessProviderAdapter, ProviderAdapter, ProviderAdapterError,
+    ProviderExecution, ProviderRegistry, ProviderRegistryError, ProviderRunContext,
 };
 use star_control_schema::{load_schema, validate_json, ValidationError};
 use star_control_state::{StateStore, StateStoreError};
@@ -170,6 +170,7 @@ pub struct ExecutionEngine<'a> {
     schema_root: PathBuf,
     fake_adapter: FakeProviderAdapter,
     local_process_adapter: LocalProcessProviderAdapter,
+    cloud_provider_adapter: CloudProviderPreflightAdapter,
 }
 
 impl<'a> ExecutionEngine<'a> {
@@ -184,6 +185,7 @@ impl<'a> ExecutionEngine<'a> {
             schema_root: schema_root.into(),
             fake_adapter: FakeProviderAdapter::success(),
             local_process_adapter: LocalProcessProviderAdapter,
+            cloud_provider_adapter: CloudProviderPreflightAdapter,
         }
     }
 
@@ -287,6 +289,9 @@ impl<'a> ExecutionEngine<'a> {
         }
         if manifest.kind() == LOCAL_PROCESS_KIND && manifest.transport() == PROCESS_TRANSPORT {
             return Ok(self.local_process_adapter.execute(request, context)?);
+        }
+        if is_cloud_provider_manifest(manifest) {
+            return Ok(self.cloud_provider_adapter.execute(request, context)?);
         }
 
         Err(ProviderAdapterError::UnsupportedProvider {
@@ -885,6 +890,60 @@ mod tests {
     }
 
     #[test]
+    fn cloud_provider_preflight_records_handoff_and_blocks_transport_execution() {
+        let mut fixture = Fixture::new();
+        fixture.use_cloud_cli_registry();
+        fixture.assign_implement_stage_to_cloud_provider();
+
+        let outcome = ExecutionEngine::new(&fixture.store, &fixture.registry, &fixture.schemas)
+            .execute_stage("J-0001", "implement")
+            .expect("execute cloud preflight stage");
+
+        assert_eq!(outcome.request().provider_instance_id(), "cloud-default");
+        assert_eq!(outcome.provider_execution().result().status(), "blocked");
+        assert_eq!(outcome.state()["state"], "BLOCKED");
+        assert_eq!(
+            outcome.provider_execution().result().value()["error"]["kind"],
+            "cloud_provider_transport_not_implemented"
+        );
+        assert_eq!(
+            outcome.state()["artifacts"]["implement_provider_request"]["path"],
+            "provider-output/cloud-default/request.json"
+        );
+        assert_eq!(
+            outcome.state()["artifacts"]["implement_provider_response"]["path"],
+            "provider-output/cloud-default/response.json"
+        );
+        assert_eq!(
+            outcome.state()["artifacts"]["implement_provider_stdout"]["path"],
+            "provider-output/cloud-default/stdout.txt"
+        );
+        assert_eq!(
+            outcome.state()["artifacts"]["implement_provider_stderr"]["path"],
+            "provider-output/cloud-default/stderr.txt"
+        );
+        assert!(fixture
+            .project
+            .join(".ai-runs/J-0001/provider-output/cloud-default/privacy-handoff.json")
+            .is_file());
+        assert!(fixture
+            .project
+            .join(".ai-runs/J-0001/provider-output/cloud-default/cost-metric.json")
+            .is_file());
+
+        let result = outcome.provider_execution().result().value();
+        assert!(result["artifacts"]
+            .as_array()
+            .expect("artifacts")
+            .iter()
+            .any(|path| path == "provider-output/cloud-default/privacy-handoff.json"));
+        let events = fixture.store.read_events("J-0001").expect("events");
+        assert!(events.iter().any(|event| {
+            event["type"] == "PROVIDER_FINISHED" && event["details"]["status"] == "blocked"
+        }));
+    }
+
+    #[test]
     fn local_process_provider_conformance_fixture_covers_m5_runtime_contract() {
         let cases = vec![
             LocalProcessConformanceCase {
@@ -1289,6 +1348,55 @@ mod tests {
             self.store
                 .save_workspec("J-0001", "implement", &workspec)
                 .expect("save local process workspec");
+        }
+
+        fn use_cloud_cli_registry(&mut self) {
+            let instance_path = self.project.join("cloud-cli-instance.json");
+            fs::write(
+                &instance_path,
+                serde_json::to_string_pretty(&json!({
+                    "id": "cloud-default",
+                    "provider": "provider.codex-cli",
+                    "enabled": true,
+                    "limits": {
+                        "timeout_seconds": 300,
+                        "max_parallel_jobs": 1
+                    },
+                    "routing_tags": ["cloud", "cli"],
+                    "transport_config": {
+                        "auth_mode": "login_session",
+                        "privacy_handoff_approved": true
+                    },
+                    "budget": {
+                        "estimated_cost": 0,
+                        "currency": "USD"
+                    },
+                    "command": {
+                        "executable": "codex"
+                    }
+                }))
+                .expect("serialize cloud CLI instance"),
+            )
+            .expect("write cloud CLI instance");
+            self.registry = ProviderRegistryLoader::new(repo_root())
+                .load_registry(
+                    "configs/registries/builtin-provider-registry.yaml",
+                    &[instance_path],
+                )
+                .expect("load cloud CLI registry");
+        }
+
+        fn assign_implement_stage_to_cloud_provider(&self) {
+            let mut workspec = self
+                .store
+                .load_workspec("J-0001", "implement")
+                .expect("load workspec");
+            workspec["provider"] = json!("cloud-default");
+            workspec["provider_instance"] = json!("cloud-default");
+            workspec["required_outputs"] = json!(["provider-output/cloud-default/response.json"]);
+            self.store
+                .save_workspec("J-0001", "implement", &workspec)
+                .expect("save cloud workspec");
         }
     }
 

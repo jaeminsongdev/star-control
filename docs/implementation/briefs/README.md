@@ -2,7 +2,7 @@
 
 ## 목적
 
-이 디렉터리는 Codex가 E01~E11 구현을 시작할 때 먼저 읽는 짧은 작업 brief 모음이다. 상세 계약은 기존 구현 문서가 기준이고, brief는 각 EPIC의 착수 범위와 검증 명령을 빠르게 고정한다.
+이 디렉터리는 Codex가 E01 이후 구현을 시작할 때 먼저 읽는 짧은 작업 brief 모음이다. 상세 계약은 기존 구현 문서가 기준이고, brief는 각 EPIC의 착수 범위와 검증 명령을 빠르게 고정한다.
 
 ## 권한 관계
 
@@ -35,6 +35,7 @@ E08-cli-fake-flow.md
 E09-star-sentinel-p0.md
 E10-validation-engine.md
 E11-integration-smoke.md
+E12-cloud-provider-preflight.md
 ```
 
 ## 사용 방법

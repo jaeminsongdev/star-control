@@ -6,9 +6,11 @@ use std::fmt;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
+mod cloud;
 mod fake;
 mod local_process;
 
+pub use cloud::{is_cloud_provider_manifest, CloudProviderPreflightAdapter};
 pub use fake::{
     load_execution_request, ExecutionRequest, FakeProviderAdapter, FakeProviderSimulation,
     ProviderAdapter, ProviderAdapterError, ProviderExecution, ProviderRunContext,

@@ -53,6 +53,14 @@ E10 ValidationEngine
 E11 Integration Smoke
 ```
 
+## post-v0 현재 구현 순서
+
+```text
+E12 Cloud Provider Preflight
+```
+
+E12 이후 M6b cloud CLI transport, M6c cloud API transport, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+
 ## E01 Schema / Runtime Validator
 
 선행 문서:
@@ -875,15 +883,92 @@ CLI JSON smoke
 v0 fake flow 완료 보고를 남기고, local/cloud provider 확장 전 approval 필요 항목과 남은 위험을 정리한다.
 ```
 
-## RESERVED
+## E12 Cloud Provider Preflight
 
-아래는 fake flow 안정화 전까지 구현하지 않는다.
+선행 문서:
 
 ```text
-Local Process Provider
+complete-implementation-roadmap.md
+cloud-provider-policy.md
+provider-system.md
+security-cost-observability.md
+security-privacy-observability-contracts.md
+artifact-layout.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+packages/star-control-execution/**
+configs/provider-instances/*.example.yaml
+필요한 최소 docs 업데이트
+PLANS.md
+```
+
+금지 파일:
+
+```text
+Cargo 외 package manager
+새 dependency
+GitHub workflow
+release/deploy/publish automation
+실제 cloud API 호출
+실제 paid CLI/API 실행
+credential raw value 저장
+```
+
+입력 artifact:
+
+```text
+specs/schemas/provider-instance.schema.json
+specs/schemas/provider-run-result.schema.json
+specs/schemas/privacy-handoff.schema.json
+specs/schemas/cost-metric.schema.json
+configs/provider-instances/*api.example.yaml
+configs/provider-instances/*cli.example.yaml
+```
+
+출력 artifact:
+
+```text
+CloudProviderPreflightAdapter
+privacy-handoff.json
+cost-metric.json
+cloud provider BLOCKED response for unsafe/preflight-only states
+execution-level preflight fixture
+```
+
+핵심 TASK:
+
+```text
+cloud manifest kind/transport detection
+raw credential field guard
+cloud API credential_ref required check
+cloud CLI credential_ref or login_session check
+privacy handoff approval check
+provider-output sidecar artifact writer
+ExecutionEngine cloud provider selection
+unit and execution fixture tests
+```
+
+완료 기준: cloud provider preflight가 credential/privacy/cost 계약을 artifact로 남기고, 실제 transport 실행 전 안전하지 않은 상태를 `BLOCKED`로 정규화해야 한다.
+
+다음 EPIC handoff:
+
+```text
+M6b cloud CLI transport implementation은 provider 공식 문서 최신 확인과 실제 외부 호출 승인 조건을 보고에 남긴다.
+```
+
+## RESERVED
+
+아래는 E12 이후 별도 작은 PR로 구현한다.
+
+```text
+Local Process Provider hardening / conformance extension
 Local Model Provider
-Cloud CLI Provider
-Cloud API Provider
+Cloud CLI Provider transport execution
+Cloud API Provider transport execution
 Daemon
 API
 UI Shell
