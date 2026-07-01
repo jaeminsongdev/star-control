@@ -3,5 +3,6 @@ members = [
     "packages/star-control-schema",
     "packages/star-control-state",
     "packages/star-control-provider",
+    "packages/star-control-router",
 ]
 resolver = "2"
