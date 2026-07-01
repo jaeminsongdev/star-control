@@ -35,7 +35,7 @@ python scripts/ci/run_all.py
 | M4 v0 Fake E2E | fake provider integration smoke를 추가한다. |
 | M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture test를 추가한다. |
 | M6 Cloud Provider | provider conformance, artifact path/ref/file existence, provider request/response fixture, cloud API offline fixture runtime, transport plan artifact, live approval gate artifact/state, credential reference, budget/cost, privacy handoff test를 추가한다. |
-| M7 Daemon / API | CLI approve/cancel/resume regression, daemon/API smoke와 resume/cancel/approval regression test를 추가한다. |
+| M7 Daemon / API | CLI approve/cancel/resume regression, daemon queue skeleton test, daemon/API smoke와 resume/cancel/approval regression test를 추가한다. |
 | M8 UI Shell | UI view model contract와 read-only smoke를 추가한다. |
 | M9 Hardening / Release Readiness | security guard, provider conformance suite, release readiness checks를 추가한다. |
 

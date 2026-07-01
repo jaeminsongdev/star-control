@@ -225,7 +225,7 @@ Exit criteria:
 - API는 read-only endpoint부터 시작하고, mutation은 approval/cancel/resume 계약을 따른다.
 - daemon state는 repository root가 아니라 user config/cache 영역에 둔다.
 
-M7a CLI control commands는 daemon/API 구현 전에 `approve`, `cancel`, `resume`의 file-based StateStore mutation과 schema-valid CLI output/error envelope을 고정한다. 이후 M7b daemon queue skeleton, M7c API read-only endpoint 순서로 진행한다.
+M7a CLI control commands는 daemon/API 구현 전에 `approve`, `cancel`, `resume`의 file-based StateStore mutation과 schema-valid CLI output/error envelope을 고정한다. M7b daemon queue skeleton은 daemon process 없이 `{config_root}/daemon/state.json`과 StateStore job 참조 등록, terminal/approval guard를 고정한다. 이후 M7c API read-only endpoint 순서로 진행한다.
 
 Validation:
 

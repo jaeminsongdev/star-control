@@ -41,9 +41,9 @@
 | 경로 | 상태 | 책임 |
 |---|---|---|
 | `apps/starctl/` | `SCAFFOLD` | 최종 CLI entrypoint 후보. 초기 구현 전에는 문서 골격만 둔다. |
-| `apps/star-daemon/` | `RESERVED` | 장시간 local daemon 후보. CLI file-based flow가 안정화된 뒤 구현한다. |
+| `apps/star-daemon/` | `RESERVED` | 장시간 local daemon app entrypoint 후보. M7b는 package-level queue skeleton만 구현하며 app daemon process는 아직 구현하지 않는다. |
 | `apps/star-control-ui/` | `RESERVED` | UI shell 후보. API와 read-only state view가 안정화된 뒤 구현한다. |
-| `packages/` | `SCAFFOLD` | 목표 implementation package 경계. package manager 도입 전에는 실제 runtime package를 추가하지 않는다. |
+| `packages/` | `CANONICAL` / `SCAFFOLD` | `star-control-*` Cargo workspace crate와 `star-sentinel` 구현 코드를 둔다. 기존 provider/transport/adapter scaffold는 post-core 확장 후보로 남긴다. |
 | `integrations/` | `RESERVED` | GitHub ruleset, workflow, 외부 연동 산출물 후보. 실제 연동 작업은 별도 승인 후 처리한다. |
 
 ## apps와 packages의 관계
@@ -54,8 +54,9 @@
 
 1. 구현 코어는 목표상 `packages/` 아래 package 경계로 나눈다.
 2. `apps/starctl`은 CLI entrypoint 후보이며 core logic을 직접 소유하지 않는다.
-3. `apps/star-daemon`과 `apps/star-control-ui`는 초기 구현 대상이 아니다.
-4. package manager와 runtime dependency는 별도 승인 전까지 추가하지 않는다.
+3. `packages/star-control-daemon`은 M7b에서 file-based queue skeleton만 구현한다.
+4. `apps/star-daemon`과 `apps/star-control-ui`는 초기 구현 대상이 아니다.
+5. 새 runtime dependency와 Cargo 외 package manager는 별도 승인 전까지 추가하지 않는다.
 
 ## builtin 경계
 
@@ -114,7 +115,7 @@ star.sentinel
 | execution 계약 | `execution-engine.md`, `examples/execution-contracts/` | `CANONICAL` |
 | Star Sentinel P0 계약 | `star-sentinel-p0-contracts.md`, `builtin-tools/star-sentinel/` | `CANONICAL` |
 | validation handoff 계약 | `validation-engine.md`, `validation-handoff.md`, `examples/validation-contracts/` | `CANONICAL` |
-| CLI / reserved surfaces | `cli-command-reference.md`, `daemon-contract.md`, `api-contract.md`, `ui-shell-contract.md` | `CANONICAL` / `RESERVED` |
+| CLI / daemon queue / reserved surfaces | `cli-command-reference.md`, `daemon-contract.md`, `api-contract.md`, `ui-shell-contract.md` | `CANONICAL` / `RESERVED` |
 | CI 계약 검증 | `scripts/ci/`, `.github/workflows/ci.yml`, `ci-contract-validation.md` | `CANONICAL` |
 | 현재 구현 큐 | `codex-work-queue-current.md` | `CANONICAL` |
 | 장기 backlog | `codex-work-queue.md` | `BACKLOG` |
@@ -131,5 +132,5 @@ star.sentinel
 | E08 CLI 세부 분할 | 현재 큐 또는 후속 consistency PR에서 명시한다. |
 | E09 Star Sentinel P0 세부 분할 | P0 evaluator/gate/review/selfcheck 단위로 정리한다. |
 | local/cloud provider | fake flow 안정화 전까지 `RESERVED`다. |
-| daemon/API/UI | CLI file-based flow 안정화 전까지 `RESERVED`다. |
+| daemon process/API/UI | daemon queue skeleton 이후에도 process, API server, UI는 별도 slice까지 `RESERVED`다. |
 | release automation | 별도 승인 전까지 `RESERVED`다. |

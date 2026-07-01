@@ -65,9 +65,10 @@ E17 Cloud API Offline Fixture Integration
 E18 Cloud API Transport Boundary
 E19 Cloud API Live Approval Gate
 E20 CLI Control Commands
+E21 Daemon Queue Skeleton
 ```
 
-E20 이후 M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E21 이후 M7 API read-only, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1595,6 +1596,82 @@ schema-valid CLI output/error envelope tests
 
 ```text
 M7 daemon queue skeleton을 별도 PR로 설계한다. daemon runtime state는 repository root가 아니라 user config/cache 영역에 둔다.
+```
+
+## E21 Daemon Queue Skeleton
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cli-daemon-api-ui.md
+daemon-contract.md
+api-contract.md
+state-store.md
+approval-review-flow.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+Cargo.toml
+packages/star-control-daemon/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+```
+
+금지 파일:
+
+```text
+daemon background process 구현
+socket 또는 HTTP API server 구현
+UI 구현
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+release/deploy/publish automation
+외부 provider live call
+credential raw value lookup/materialization
+```
+
+입력 artifact:
+
+```text
+대상 project .ai-runs/{job_id}/run-state.json
+대상 project .ai-runs/{job_id}/approvals/approval-response.json
+specs/schemas/daemon-state.schema.json
+specs/schemas/run-state.schema.json
+specs/schemas/approval-response.schema.json
+```
+
+출력 artifact:
+
+```text
+{config_root}/daemon/state.json
+```
+
+핵심 TASK:
+
+```text
+star-control-daemon crate 추가
+DaemonConfig와 DaemonQueue 추가
+config_root/daemon/state.json 생성 및 schema validation
+non-terminal job queue entry 등록
+terminal state queue 거부
+WAITING_APPROVAL approval-response precondition
+non-approved approval-response queue 거부
+duplicate queue entry guard
+project artifact 미복사 regression test
+```
+
+완료 기준: daemon state가 Star-Control repository root나 대상 project root가 아니라 caller가 넘긴 config root 아래에 생성되고, queue entry가 project `.ai-runs/{job_id}`를 참조하되 artifact를 복사하지 않아야 한다. terminal job과 approved response 없는 `WAITING_APPROVAL` job은 queue에 등록되지 않아야 한다.
+
+다음 EPIC handoff:
+
+```text
+M7c API read-only endpoint를 별도 PR로 설계한다. API는 daemon queue state와 StateStore artifact를 read-only로 노출하고 mutation endpoint는 이후 slice까지 구현하지 않는다.
 ```
 
 ## RESERVED

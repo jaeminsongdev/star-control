@@ -140,10 +140,10 @@ packages/star-adapter-openai-compatible
 
 ### `star-control-daemon`
 
-- 장시간 queue 처리
-- background runner
-- provider session 관리
-- RESERVED: 초기 구현 전 문서 계약만 둔다
+- file-based daemon queue state
+- StateStore job queue reference 등록
+- terminal/approval/duplicate queue guard
+- RESERVED: background runner, socket, API server, provider session scheduling
 
 ### `star-control-api`
 

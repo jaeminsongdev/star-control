@@ -4,7 +4,7 @@
 
 이 문서는 Star-Control의 사용자 표면을 정의한다. Star-Control은 장시간 작업 관제 시스템이므로, 최종적으로 CLI, daemon, API, UI shell이 같은 데이터 계약과 StateStore를 공유해야 한다.
 
-초기 구현은 CLI와 file-based StateStore를 우선한다. Daemon, API, UI는 전체 목표 구조를 먼저 고정하고 실제 구현은 후속 단계에서 진행한다.
+초기 구현은 CLI와 file-based StateStore를 우선한다. M7b에서는 daemon process 없이 file-based queue skeleton만 구현한다. API, UI는 전체 목표 구조를 먼저 고정하고 실제 구현은 후속 단계에서 진행한다.
 
 ## 공통 원칙
 
@@ -231,20 +231,21 @@ Daemon은 장시간 작업과 provider session을 관리한다.
 - status watch
 - API server host 후보
 
-초기에는 RESERVED다. CLI file-based flow가 안정화된 뒤 구현한다.
+M7b에서는 `packages/star-control-daemon`의 file-based queue skeleton만 구현한다. daemon process, socket, HTTP API server, provider scheduling worker는 아직 RESERVED다.
 
 ## daemon state
 
 Daemon은 Star-Control repository가 아니라 사용자 machine의 config/cache 영역을 사용해야 한다. job artifact는 여전히 대상 프로젝트 `.ai-runs/`에 둔다.
 
-후보:
+M7b queue skeleton:
 
 ```text
-~/.star-control/daemon/state.json
-~/.star-control/daemon/logs/
+{config_root}/daemon/state.json
 ```
 
-이 위치는 OS별 config policy 문서가 생긴 뒤 확정한다.
+OS별 기본 위치와 logs directory는 OS별 config policy 문서가 생긴 뒤 확정한다.
+
+M7b queue entry는 대상 project root와 `.ai-runs/{job_id}` 상대 경로를 참조한다. daemon directory로 job artifact를 복사하지 않는다.
 
 ## API 목표
 
@@ -350,6 +351,6 @@ Codex는 CLI를 먼저 구현한다. Daemon, API, UI는 문서 계약만 보고 
 6. API read-only
 7. UI shell read-only
 
-M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. Daemon queue, API server, UI shell은 이 계약을 재사용하며 별도 slice에서 구현한다.
+M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. M7b 기준으로 daemon queue skeleton은 config root 아래 `daemon/state.json`을 만들고 StateStore job을 참조 등록한다. API server와 UI shell은 이 계약을 재사용하며 별도 slice에서 구현한다.
 
 각 단계는 별도 PR로 진행한다.

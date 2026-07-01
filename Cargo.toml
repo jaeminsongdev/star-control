@@ -6,6 +6,7 @@ members = [
     "packages/star-control-router",
     "packages/star-control-execution",
     "packages/star-control-validation",
+    "packages/star-control-daemon",
     "packages/star-control-cli",
     "packages/star-sentinel",
 ]
