@@ -63,9 +63,10 @@ E15 OpenAI-Compatible API Parser
 E16 OpenAI-Compatible Request Builder
 E17 Cloud API Offline Fixture Integration
 E18 Cloud API Transport Boundary
+E19 Cloud API Live Approval Gate
 ```
 
-E18 이후 M6h approval-gated live HTTP transport adapter, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E19 이후 M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1431,7 +1432,88 @@ docs handoff to live transport approval gate
 다음 EPIC handoff:
 
 ```text
-M6h approval-gated live HTTP transport adapter를 별도 PR로 설계한다. 실제 credential lookup, Authorization header value construction, HTTP client dependency, paid usage, streaming SSE는 별도 승인 전까지 실행하지 않는다.
+M6h cloud API live approval gate를 별도 PR로 설계한다. 실제 credential lookup, Authorization header value construction, HTTP client dependency, paid usage, streaming SSE는 별도 승인 전까지 실행하지 않는다.
+```
+
+## E19 Cloud API Live Approval Gate
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cloud-provider-policy.md
+provider-system.md
+docs/providers/provider-reference-snapshots.md
+testing-ci-release.md
+E16-openai-compatible-request-builder.md
+E17-cloud-api-offline-fixture.md
+E18-cloud-api-transport-boundary.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+packages/star-control-execution/**
+docs/implementation/**
+docs/providers/**
+builtin-providers/cloud-api/openai/docs/**
+PLANS.md
+```
+
+금지 파일:
+
+```text
+Cargo 외 package manager
+새 dependency
+GitHub workflow
+schema field 변경
+release/deploy/publish automation
+실제 paid CLI/API 호출 검증
+credential raw value 저장
+live credential lookup
+Authorization header value construction
+live HTTP transport 실행
+```
+
+입력 artifact:
+
+```text
+ProviderInstance.transport_config.live_api_call_requested=true
+OpenAiCompatiblePreparedRequest
+ProviderManifest kind/transport/adapter
+ProviderInstance.credential_ref prefix only
+provider-output/{provider_instance_id}/http-request.json
+provider-output/{provider_instance_id}/http-transport-plan.json
+```
+
+출력 artifact:
+
+```text
+provider-output/{provider_instance_id}/live-transport-approval.json
+provider-output/{provider_instance_id}/response.json
+```
+
+핵심 TASK:
+
+```text
+explicit live request flag parsing
+approval-required provider result
+RunState BLOCKED transition through ExecutionEngine
+live-transport-approval artifact
+live_api_call=false assertion
+credential materialized/value_present=false assertion
+raw-response artifact absence assertion
+provider conformance coverage
+docs handoff to daemon/API control plane
+```
+
+완료 기준: cloud API provider가 `transport_config.live_api_call_requested=true`이고 offline fixture가 없을 때 live HTTP 호출 없이 `http-request.json`, `http-transport-plan.json`, `live-transport-approval.json`, privacy/cost sidecar를 기록하고 `BLOCKED`로 전이해야 한다. full credential reference, raw credential value, `Authorization` header value, `raw-response.json`은 생성하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M7 daemon/API control plane을 별도 PR로 설계한다. 실제 credential lookup, Authorization header value construction, HTTP client dependency, paid usage, streaming SSE는 별도 승인 전까지 계속 보류한다.
 ```
 
 ## RESERVED

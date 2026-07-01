@@ -42,6 +42,7 @@ E15-openai-compatible-parser.md
 E16-openai-compatible-request-builder.md
 E17-cloud-api-offline-fixture.md
 E18-cloud-api-transport-boundary.md
+E19-cloud-api-live-approval-gate.md
 ```
 
 ## 사용 방법
