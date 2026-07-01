@@ -6,13 +6,18 @@ use star_control_schema::{load_schema, validate_json};
 use star_control_state::{StateStore, StateStoreError};
 use std::error::Error;
 use std::fmt;
+use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const CLI_OUTPUT_SCHEMA: &str = "cli-output.schema.json";
 const CLI_ERROR_SCHEMA: &str = "cli-error.schema.json";
+const APPROVAL_REQUEST_SCHEMA: &str = "approval-request.schema.json";
+const APPROVAL_RESPONSE_SCHEMA: &str = "approval-response.schema.json";
 const SCHEMA_VERSION: &str = "1.0.0";
 const DEFAULT_PROVIDER: &str = "fake-default";
 const DEFAULT_ENTRYPOINT: &str = "star-control";
+const TERMINAL_STATES: &[&str] = &["DONE", "FAILED", "BLOCKED", "CANCELLED"];
 
 #[derive(Debug, Clone)]
 pub struct CliConfig {
@@ -165,9 +170,23 @@ struct ParsedArgs {
     provider: Option<String>,
     provider_instances: Vec<PathBuf>,
     stage: Option<String>,
+    response: Option<String>,
+    reason: Option<String>,
+    constraints: Vec<String>,
     dry_run: bool,
     json: bool,
     markdown: bool,
+}
+
+#[derive(Debug, Clone)]
+struct CliEvent {
+    event_id: String,
+    event_type: &'static str,
+    state: String,
+    stage: String,
+    message: &'static str,
+    artifact_paths: Vec<String>,
+    details: Value,
 }
 
 pub fn run_cli<I, S>(args: I, config: &CliConfig) -> CliRunResult
@@ -186,6 +205,9 @@ where
         "run" => run_command(&parsed, config),
         "status" => status_command(&parsed, config),
         "report" => report_command(&parsed, config),
+        "approve" => approve_command(&parsed, config),
+        "cancel" => cancel_command(&parsed, config),
+        "resume" => resume_command(&parsed, config),
         _ => Err(CliError::InvalidInput {
             command,
             message: "unsupported command".to_string(),
@@ -215,6 +237,9 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
         provider: None,
         provider_instances: Vec::new(),
         stage: None,
+        response: None,
+        reason: None,
+        constraints: Vec::new(),
         dry_run: false,
         json: false,
         markdown: false,
@@ -270,6 +295,27 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
             }
             "--stage" => {
                 parsed.stage = Some(require_option_value(args, &mut index, "--stage", &command)?);
+            }
+            "--response" => {
+                parsed.response = Some(require_option_value(
+                    args,
+                    &mut index,
+                    "--response",
+                    &command,
+                )?);
+            }
+            "--reason" => {
+                parsed.reason = Some(require_option_value(
+                    args, &mut index, "--reason", &command,
+                )?);
+            }
+            "--constraint" => {
+                parsed.constraints.push(require_option_value(
+                    args,
+                    &mut index,
+                    "--constraint",
+                    &command,
+                )?);
             }
             "--dry-run" => parsed.dry_run = true,
             "--json" => parsed.json = true,
@@ -638,6 +684,334 @@ fn report_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliE
     ))
 }
 
+fn approve_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    let project = required_project(parsed)?;
+    let job_id = required_job(parsed)?;
+    let response = required_response(parsed)?;
+    let reason = parsed
+        .reason
+        .clone()
+        .ok_or_else(|| CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "--reason is required for approve".to_string(),
+        })?;
+    validate_approval_response_value(&response, &parsed.command)?;
+
+    let store =
+        StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let mut state = store
+        .load_state(&job_id)
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let current_state = state_string(&state);
+    if current_state != "WAITING_APPROVAL" {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: format!(
+                "approve requires WAITING_APPROVAL state, got {}",
+                current_state
+            ),
+        });
+    }
+
+    let approval_request = load_job_json(
+        &store,
+        &job_id,
+        "approvals/approval-request.json",
+        APPROVAL_REQUEST_SCHEMA,
+        &parsed.command,
+        &config.schema_root(),
+    )?;
+    let stage = string_field(&approval_request, "stage", &parsed.command)?;
+    let task_id = string_field(&approval_request, "task_id", &parsed.command)?;
+    let allowed_next_stage = (response == "approved")
+        .then(|| allowed_next_stage_for(&stage))
+        .flatten();
+    let approval_response = json!({
+        "schema_version": SCHEMA_VERSION,
+        "job_id": job_id.clone(),
+        "stage": stage.clone(),
+        "task_id": task_id.clone(),
+        "response": response.clone(),
+        "reviewer": "star-control-cli",
+        "responded_at": timestamp_string(),
+        "reason": reason,
+        "allowed_next_stage": allowed_next_stage,
+        "constraints": parsed.constraints.clone()
+    });
+    validate_schema_value(
+        &approval_response,
+        &config.schema_root(),
+        APPROVAL_RESPONSE_SCHEMA,
+        "approvals/approval-response.json",
+    )
+    .map_err(|message| CliError::Internal {
+        command: parsed.command.clone(),
+        message,
+    })?;
+
+    let approval_ref = store
+        .write_approval_json(&job_id, "approval-response.json", &approval_response)
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let next_state = state_after_approval_response(&response);
+    let next_action = next_action_after_approval_response(&response);
+    let event_id = format!("{}-cli-approval-recorded", job_id.to_lowercase());
+    update_state_for_control_command(
+        &mut state,
+        &store,
+        next_state,
+        &stage,
+        next_action,
+        &event_id,
+        Some(("approval_response", &approval_ref)),
+    )?;
+    store
+        .save_state(&job_id, &state)
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    append_cli_event(
+        &store,
+        &job_id,
+        CliEvent {
+            event_id,
+            event_type: "APPROVAL_RECORDED",
+            state: next_state.to_string(),
+            stage: stage.clone(),
+            message: "Approval response recorded",
+            artifact_paths: vec!["approvals/approval-response.json".to_string()],
+            details: json!({
+                "response": approval_response["response"],
+                "allowed_next_stage": approval_response["allowed_next_stage"]
+            }),
+        },
+    )
+    .map_err(|source| CliError::State {
+        command: parsed.command.clone(),
+        source,
+    })?;
+
+    Ok(success_envelope(
+        "approve",
+        "success",
+        json!({
+            "job_id": job_id,
+            "state": state["state"],
+            "approval_response": approval_response["response"],
+            "allowed_next_stage": approval_response["allowed_next_stage"]
+        }),
+        vec![format!(
+            ".ai-runs/{}/approvals/approval-response.json",
+            job_id
+        )],
+    ))
+}
+
+fn cancel_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    let project = required_project(parsed)?;
+    let job_id = required_job(parsed)?;
+    let store =
+        StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let mut state = store
+        .load_state(&job_id)
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let current_state = state_string(&state);
+    if TERMINAL_STATES.contains(&current_state.as_str()) {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: format!("cannot cancel terminal job state {}", current_state),
+        });
+    }
+    let current_stage = state
+        .get("current_stage")
+        .and_then(Value::as_str)
+        .unwrap_or("implement")
+        .to_string();
+    let event_id = format!("{}-cli-cancelled", job_id.to_lowercase());
+    update_state_for_control_command(
+        &mut state,
+        &store,
+        "CANCELLED",
+        &current_stage,
+        "stop",
+        &event_id,
+        None,
+    )?;
+    if let Some(state_object) = state.as_object_mut() {
+        state_object.insert("active_provider".to_string(), Value::Null);
+    }
+    store
+        .save_state(&job_id, &state)
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    append_cli_event(
+        &store,
+        &job_id,
+        CliEvent {
+            event_id,
+            event_type: "STATE_CHANGED",
+            state: "CANCELLED".to_string(),
+            stage: current_stage.clone(),
+            message: "Job cancelled by CLI",
+            artifact_paths: vec!["run-state.json".to_string()],
+            details: json!({ "previous_state": current_state }),
+        },
+    )
+    .map_err(|source| CliError::State {
+        command: parsed.command.clone(),
+        source,
+    })?;
+
+    Ok(success_envelope(
+        "cancel",
+        "success",
+        json!({
+            "job_id": job_id,
+            "state": "CANCELLED",
+            "previous_state": current_state,
+            "next_action": "stop"
+        }),
+        vec![format!(".ai-runs/{}/run-state.json", job_id)],
+    ))
+}
+
+fn resume_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    let project = required_project(parsed)?;
+    let job_id = required_job(parsed)?;
+    let store =
+        StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    store
+        .ensure_resume_allowed(&job_id)
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let mut state = store
+        .load_state(&job_id)
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let current_state = state_string(&state);
+    let current_stage = state
+        .get("current_stage")
+        .and_then(Value::as_str)
+        .unwrap_or("implement")
+        .to_string();
+
+    if current_state == "WAITING_APPROVAL" {
+        let approval_request = load_job_json(
+            &store,
+            &job_id,
+            "approvals/approval-request.json",
+            APPROVAL_REQUEST_SCHEMA,
+            &parsed.command,
+            &config.schema_root(),
+        )?;
+        let approval_response = load_job_json(
+            &store,
+            &job_id,
+            "approvals/approval-response.json",
+            APPROVAL_RESPONSE_SCHEMA,
+            &parsed.command,
+            &config.schema_root(),
+        )?;
+        ensure_approval_response_matches_request(
+            &approval_request,
+            &approval_response,
+            &parsed.command,
+        )?;
+        let event_id = format!("{}-cli-resumed", job_id.to_lowercase());
+        let next_action = approval_response
+            .get("allowed_next_stage")
+            .and_then(Value::as_str)
+            .unwrap_or("report");
+        update_state_for_control_command(
+            &mut state,
+            &store,
+            "VALIDATED",
+            &current_stage,
+            next_action,
+            &event_id,
+            None,
+        )?;
+        store
+            .save_state(&job_id, &state)
+            .map_err(|source| CliError::State {
+                command: parsed.command.clone(),
+                source,
+            })?;
+        append_cli_event(
+            &store,
+            &job_id,
+            CliEvent {
+                event_id,
+                event_type: "STATE_CHANGED",
+                state: "VALIDATED".to_string(),
+                stage: current_stage.clone(),
+                message: "Approval accepted; job is ready to continue",
+                artifact_paths: vec![
+                    "run-state.json".to_string(),
+                    "approvals/approval-response.json".to_string(),
+                ],
+                details: json!({ "previous_state": current_state, "next_action": next_action }),
+            },
+        )
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+        return Ok(success_envelope(
+            "resume",
+            "success",
+            json!({
+                "job_id": job_id,
+                "state": "VALIDATED",
+                "previous_state": current_state,
+                "next_action": next_action,
+                "resumed": true
+            }),
+            vec![
+                format!(".ai-runs/{}/run-state.json", job_id),
+                format!(".ai-runs/{}/approvals/approval-response.json", job_id),
+            ],
+        ));
+    }
+
+    Ok(success_envelope(
+        "resume",
+        "success",
+        json!({
+            "job_id": job_id,
+            "state": current_state,
+            "current_stage": current_stage,
+            "next_action": state.get("next_action").cloned().unwrap_or_else(|| json!("")),
+            "resumed": false
+        }),
+        vec![format!(".ai-runs/{}/run-state.json", job_id)],
+    ))
+}
+
 fn required_project(parsed: &ParsedArgs) -> Result<PathBuf, CliError> {
     parsed
         .project
@@ -655,6 +1029,16 @@ fn required_job(parsed: &ParsedArgs) -> Result<String, CliError> {
     })
 }
 
+fn required_response(parsed: &ParsedArgs) -> Result<String, CliError> {
+    parsed
+        .response
+        .clone()
+        .ok_or_else(|| CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "--response is required for approve".to_string(),
+        })
+}
+
 fn string_field(value: &Value, field: &str, command: &str) -> Result<String, CliError> {
     value
         .get(field)
@@ -664,6 +1048,231 @@ fn string_field(value: &Value, field: &str, command: &str) -> Result<String, Cli
             command: command.to_string(),
             message: format!("missing string field {}", field),
         })
+}
+
+fn load_job_json(
+    store: &StateStore,
+    job_id: &str,
+    relative_path: &str,
+    schema_file: &str,
+    command: &str,
+    schema_root: &Path,
+) -> Result<Value, CliError> {
+    let path = store
+        .resolve_job_path(job_id, relative_path)
+        .map_err(|source| CliError::State {
+            command: command.to_string(),
+            source,
+        })?;
+    if !path.is_file() {
+        return Err(CliError::MissingArtifact {
+            command: command.to_string(),
+            message: format!("required artifact not found: {}", relative_path),
+            artifact_paths: vec![format!(".ai-runs/{}/{}", job_id, relative_path)],
+        });
+    }
+    let value: Value =
+        serde_json::from_str(
+            &fs::read_to_string(&path).map_err(|source| CliError::Internal {
+                command: command.to_string(),
+                message: format!("failed to read {}: {}", path.display(), source),
+            })?,
+        )
+        .map_err(|source| CliError::Internal {
+            command: command.to_string(),
+            message: format!("invalid JSON at {}: {}", path.display(), source),
+        })?;
+    validate_schema_value(&value, schema_root, schema_file, relative_path).map_err(|message| {
+        CliError::Internal {
+            command: command.to_string(),
+            message,
+        }
+    })?;
+    Ok(value)
+}
+
+fn validate_schema_value(
+    value: &Value,
+    schema_root: &Path,
+    schema_file: &str,
+    logical_path: &str,
+) -> Result<(), String> {
+    let schema_path = schema_root.join(schema_file);
+    let schema = load_schema(&schema_path).map_err(|source| source.to_string())?;
+    let result = validate_json(value, &schema);
+    if result.is_ok() {
+        Ok(())
+    } else {
+        Err(format!(
+            "{} failed schema validation against {} with {} error(s)",
+            logical_path,
+            schema_file,
+            result.errors.len()
+        ))
+    }
+}
+
+fn validate_approval_response_value(response: &str, command: &str) -> Result<(), CliError> {
+    match response {
+        "approved" | "rejected" | "needs_changes" | "cancelled" => Ok(()),
+        _ => Err(CliError::InvalidInput {
+            command: command.to_string(),
+            message: format!("unsupported approval response {}", response),
+        }),
+    }
+}
+
+fn ensure_approval_response_matches_request(
+    approval_request: &Value,
+    approval_response: &Value,
+    command: &str,
+) -> Result<(), CliError> {
+    for field in ["job_id", "stage", "task_id"] {
+        let expected = string_field(approval_request, field, command)?;
+        let actual = string_field(approval_response, field, command)?;
+        if expected != actual {
+            return Err(CliError::InvalidInput {
+                command: command.to_string(),
+                message: format!(
+                    "approval response {} mismatch: expected {}, got {}",
+                    field, expected, actual
+                ),
+            });
+        }
+    }
+    let response = string_field(approval_response, "response", command)?;
+    if response != "approved" {
+        return Err(CliError::InvalidInput {
+            command: command.to_string(),
+            message: format!("resume requires approved response, got {}", response),
+        });
+    }
+    Ok(())
+}
+
+fn state_string(state: &Value) -> String {
+    state
+        .get("state")
+        .and_then(Value::as_str)
+        .unwrap_or("FAILED")
+        .to_string()
+}
+
+fn state_after_approval_response(response: &str) -> &'static str {
+    match response {
+        "approved" => "WAITING_APPROVAL",
+        "cancelled" => "CANCELLED",
+        _ => "BLOCKED",
+    }
+}
+
+fn next_action_after_approval_response(response: &str) -> &'static str {
+    match response {
+        "approved" => "resume",
+        "cancelled" => "stop",
+        "needs_changes" => "revise",
+        _ => "stop",
+    }
+}
+
+fn allowed_next_stage_for(stage: &str) -> Option<&'static str> {
+    match stage {
+        "route" => Some("plan"),
+        "plan" => Some("design"),
+        "design" => Some("implement"),
+        "implement" => Some("validate"),
+        "validate" => Some("report"),
+        "review" => Some("polish"),
+        "polish" => Some("report"),
+        _ => None,
+    }
+}
+
+fn update_state_for_control_command(
+    state: &mut Value,
+    store: &StateStore,
+    next_state: &str,
+    current_stage: &str,
+    next_action: &str,
+    latest_event_id: &str,
+    artifact_ref: Option<(&str, &Value)>,
+) -> Result<(), CliError> {
+    {
+        let Some(state_object) = state.as_object_mut() else {
+            return Err(CliError::Internal {
+                command: "control".to_string(),
+                message: "RunState must be a JSON object".to_string(),
+            });
+        };
+        state_object.insert("state".to_string(), Value::String(next_state.to_string()));
+        state_object.insert(
+            "current_stage".to_string(),
+            Value::String(current_stage.to_string()),
+        );
+        state_object.insert("updated_at".to_string(), Value::String(timestamp_string()));
+        state_object.insert(
+            "latest_event_id".to_string(),
+            Value::String(latest_event_id.to_string()),
+        );
+        state_object.insert(
+            "next_action".to_string(),
+            Value::String(next_action.to_string()),
+        );
+        let history = state_object
+            .entry("history")
+            .or_insert_with(|| Value::Array(Vec::new()));
+        let Some(history) = history.as_array_mut() else {
+            return Err(CliError::Internal {
+                command: "control".to_string(),
+                message: "RunState history must be an array".to_string(),
+            });
+        };
+        history.push(json!({
+            "stage": current_stage,
+            "state": next_state,
+            "next_action": next_action,
+            "event_id": latest_event_id
+        }));
+    }
+    if let Some((key, artifact_ref)) = artifact_ref {
+        store
+            .register_artifact_ref(state, key, artifact_ref)
+            .map_err(|source| CliError::State {
+                command: "control".to_string(),
+                source,
+            })?;
+    }
+    Ok(())
+}
+
+fn append_cli_event(
+    store: &StateStore,
+    job_id: &str,
+    event: CliEvent,
+) -> Result<(), StateStoreError> {
+    store.append_event(
+        job_id,
+        &json!({
+            "schema_version": SCHEMA_VERSION,
+            "event_id": event.event_id,
+            "job_id": job_id,
+            "type": event.event_type,
+            "created_at": timestamp_string(),
+            "stage": event.stage,
+            "state": event.state,
+            "message": event.message,
+            "artifact_paths": event.artifact_paths,
+            "details": event.details
+        }),
+    )
+}
+
+fn timestamp_string() -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    format!("unix:{}", nanos)
 }
 
 fn routed_state(job_id: &str) -> Value {
@@ -990,6 +1599,199 @@ mod tests {
     }
 
     #[test]
+    fn approve_writes_response_and_resume_advances_waiting_approval_gate() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        write_waiting_approval_job(&project, true);
+
+        let approve = run_cli(
+            [
+                "approve",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--response",
+                "approved",
+                "--reason",
+                "approved by CLI test",
+                "--constraint",
+                "keep validation strict",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(approve.exit_code, 0, "{}", approve.stderr);
+        let approve_json: Value = serde_json::from_str(&approve.stdout).expect("approve json");
+        assert_eq!(approve_json["command"], "approve");
+        assert_eq!(approve_json["status"], "success");
+        assert_eq!(approve_json["data"]["state"], "WAITING_APPROVAL");
+        assert_eq!(approve_json["data"]["approval_response"], "approved");
+        assert_eq!(approve_json["data"]["allowed_next_stage"], "report");
+        assert!(project
+            .join(".ai-runs/J-0001/approvals/approval-response.json")
+            .is_file());
+
+        let store = StateStore::open(&project, repo_root().join("specs/schemas")).expect("store");
+        let approved_state = store.load_state("J-0001").expect("state after approve");
+        assert_eq!(approved_state["state"], "WAITING_APPROVAL");
+        assert_eq!(approved_state["next_action"], "resume");
+        assert_eq!(
+            approved_state["artifacts"]["approval_response"]["path"],
+            "approvals/approval-response.json"
+        );
+
+        let resume = run_cli(
+            [
+                "resume",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(resume.exit_code, 0, "{}", resume.stderr);
+        let resume_json: Value = serde_json::from_str(&resume.stdout).expect("resume json");
+        assert_eq!(resume_json["command"], "resume");
+        assert_eq!(resume_json["data"]["previous_state"], "WAITING_APPROVAL");
+        assert_eq!(resume_json["data"]["state"], "VALIDATED");
+        assert_eq!(resume_json["data"]["next_action"], "report");
+        let resumed_state = store.load_state("J-0001").expect("state after resume");
+        assert_eq!(resumed_state["state"], "VALIDATED");
+        assert_eq!(resumed_state["next_action"], "report");
+        let events = store.read_events("J-0001").expect("events");
+        assert!(events
+            .iter()
+            .any(|event| event["type"] == "APPROVAL_RECORDED"));
+        assert!(events
+            .iter()
+            .any(|event| { event["type"] == "STATE_CHANGED" && event["state"] == "VALIDATED" }));
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn approve_requires_approval_request_artifact() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        write_waiting_approval_job(&project, false);
+
+        let approve = run_cli(
+            [
+                "approve",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--response",
+                "approved",
+                "--reason",
+                "approved by CLI test",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(approve.exit_code, 3);
+        let error_json: Value = serde_json::from_str(&approve.stdout).expect("approve error json");
+        assert_eq!(error_json["error"]["code"], "MissingArtifact");
+        assert_eq!(
+            error_json["error"]["artifact_paths"][0],
+            ".ai-runs/J-0001/approvals/approval-request.json"
+        );
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn resume_waiting_approval_requires_approved_response() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        write_waiting_approval_job(&project, true);
+
+        let resume = run_cli(
+            [
+                "resume",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(resume.exit_code, 3);
+        let error_json: Value = serde_json::from_str(&resume.stdout).expect("resume error json");
+        assert_eq!(error_json["error"]["code"], "MissingArtifact");
+        assert_eq!(
+            error_json["error"]["artifact_paths"][0],
+            ".ai-runs/J-0001/approvals/approval-response.json"
+        );
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn cancel_updates_nonterminal_state_and_rejects_terminal_cancel() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        let run = run_cli(
+            [
+                "run",
+                "--project",
+                project.to_str().expect("project path"),
+                "--request",
+                "README 문서 수정",
+                "--dry-run",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(run.exit_code, 0, "{}", run.stderr);
+
+        let cancel = run_cli(
+            [
+                "cancel",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(cancel.exit_code, 0, "{}", cancel.stderr);
+        let cancel_json: Value = serde_json::from_str(&cancel.stdout).expect("cancel json");
+        assert_eq!(cancel_json["command"], "cancel");
+        assert_eq!(cancel_json["data"]["previous_state"], "ROUTED");
+        assert_eq!(cancel_json["data"]["state"], "CANCELLED");
+        let store = StateStore::open(&project, repo_root().join("specs/schemas")).expect("store");
+        assert_eq!(
+            store.load_state("J-0001").expect("state")["state"],
+            "CANCELLED"
+        );
+
+        let second_cancel = run_cli(
+            [
+                "cancel",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(second_cancel.exit_code, 2);
+        let error_json: Value =
+            serde_json::from_str(&second_cancel.stdout).expect("cancel error json");
+        assert_eq!(error_json["error"]["code"], "InvalidInput");
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
     fn missing_job_returns_schema_valid_error() {
         let project = temp_project();
         let config = CliConfig::new(repo_root());
@@ -1102,6 +1904,62 @@ mod tests {
         )
         .expect("write local process instance");
         path
+    }
+
+    fn write_waiting_approval_job(project: &Path, include_request: bool) {
+        let store =
+            StateStore::open(project, repo_root().join("specs/schemas")).expect("open store");
+        store
+            .create_job("needs approval", "codex", vec![])
+            .expect("create job");
+        store
+            .save_state(
+                "J-0001",
+                &json!({
+                    "schema_version": "1.0.0",
+                    "job_id": "J-0001",
+                    "state": "WAITING_APPROVAL",
+                    "current_stage": "validate",
+                    "updated_at": "test:waiting-approval",
+                    "threads": {},
+                    "workers": {},
+                    "artifacts": {},
+                    "latest_event_id": "",
+                    "active_provider": null,
+                    "next_action": "await_approval",
+                    "budget": {},
+                    "history": []
+                }),
+            )
+            .expect("save waiting approval state");
+        if include_request {
+            store
+                .write_approval_json(
+                    "J-0001",
+                    "approval-request.json",
+                    &json!({
+                        "schema_version": "1.0.0",
+                        "job_id": "J-0001",
+                        "stage": "validate",
+                        "task_id": "p0-human-review",
+                        "decision": "HUMAN_REVIEW",
+                        "reasons": ["dependency_change_requires_approval"],
+                        "changed_files": ["Cargo.toml"],
+                        "risks": ["dependency update"],
+                        "diagnostics": [
+                            {
+                                "rule_id": "dependency.requires_approval",
+                                "severity": "human_review",
+                                "message": "Review dependency change before continuing."
+                            }
+                        ],
+                        "review_pack_path": "review-packs/review_pack.md",
+                        "requested_at": "2026-07-01T00:00:00Z",
+                        "requested_by": "star-sentinel"
+                    }),
+                )
+                .expect("write approval request");
+        }
     }
 
     fn current_test_executable() -> String {

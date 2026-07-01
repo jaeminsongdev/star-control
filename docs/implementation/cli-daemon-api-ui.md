@@ -350,4 +350,6 @@ Codex는 CLI를 먼저 구현한다. Daemon, API, UI는 문서 계약만 보고 
 6. API read-only
 7. UI shell read-only
 
+M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. Daemon queue, API server, UI shell은 이 계약을 재사용하며 별도 slice에서 구현한다.
+
 각 단계는 별도 PR로 진행한다.

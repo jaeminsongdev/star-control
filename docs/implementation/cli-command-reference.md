@@ -184,6 +184,8 @@ examples/cli-contracts/status-output.example.json
 - `approvals/approval-request.json`이 없으면 실패한다.
 - response는 `approvals/approval-response.json`에 저장한다.
 - 승인 이후 즉시 실행하지 않고 `resume`에서 이어가는 것을 기본으로 한다.
+- M7a 기준 구현은 `approved` response를 쓰면 RunState는 `WAITING_APPROVAL`을 유지하고 `next_action=resume`을 기록한다.
+- `rejected` 또는 `needs_changes`는 `BLOCKED`, `cancelled`는 `CANCELLED`로 기록한다.
 
 `--json` example:
 
@@ -202,6 +204,7 @@ examples/cli-contracts/approve-output.example.json
 - terminal state job은 cancel하지 않는다.
 - provider cancel 지원 여부를 확인한다.
 - 취소 event를 events.jsonl에 기록한다.
+- M7a 기준 구현은 non-terminal RunState를 `CANCELLED`로 전이하고 `next_action=stop`을 기록한다.
 
 ## star-control resume
 
@@ -214,6 +217,7 @@ examples/cli-contracts/approve-output.example.json
 - RunState가 terminal state가 아니다.
 - 필요한 artifact가 존재한다.
 - approval required 상태라면 approval-response.json이 존재한다.
+- M7a 기준 구현은 `WAITING_APPROVAL` job의 approval response가 request와 일치하고 `approved`일 때 `VALIDATED`, `next_action=report`로 전이한다. daemon/API orchestration은 다음 M7 slice에서 다룬다.
 
 ## star-control providers
 

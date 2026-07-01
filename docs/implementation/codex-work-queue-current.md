@@ -64,9 +64,10 @@ E16 OpenAI-Compatible Request Builder
 E17 Cloud API Offline Fixture Integration
 E18 Cloud API Transport Boundary
 E19 Cloud API Live Approval Gate
+E20 CLI Control Commands
 ```
 
-E19 이후 M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E20 이후 M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1513,7 +1514,87 @@ docs handoff to daemon/API control plane
 다음 EPIC handoff:
 
 ```text
-M7 daemon/API control plane을 별도 PR로 설계한다. 실제 credential lookup, Authorization header value construction, HTTP client dependency, paid usage, streaming SSE는 별도 승인 전까지 계속 보류한다.
+M7a CLI control commands를 별도 PR로 설계한다. daemon process, API server, UI shell은 다음 M7 slice까지 구현하지 않는다.
+```
+
+## E20 CLI Control Commands
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cli-command-reference.md
+cli-daemon-api-ui.md
+approval-review-flow.md
+validation-engine.md
+state-store.md
+daemon-contract.md
+api-contract.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-cli/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+```
+
+금지 파일:
+
+```text
+daemon process 구현
+API server 구현
+UI 구현
+새 dependency
+Cargo 외 package manager
+GitHub workflow
+schema field 변경
+release/deploy/publish automation
+```
+
+입력 artifact:
+
+```text
+.ai-runs/{job_id}/run-state.json
+.ai-runs/{job_id}/events.jsonl
+.ai-runs/{job_id}/approvals/approval-request.json
+specs/schemas/approval-request.schema.json
+specs/schemas/approval-response.schema.json
+specs/schemas/cli-output.schema.json
+specs/schemas/cli-error.schema.json
+```
+
+출력 artifact:
+
+```text
+.ai-runs/{job_id}/approvals/approval-response.json
+.ai-runs/{job_id}/run-state.json
+.ai-runs/{job_id}/events.jsonl
+```
+
+핵심 TASK:
+
+```text
+CLI approve dispatch
+approval request presence check
+approval response schema validation
+approval response artifact writer
+CLI cancel dispatch
+terminal state cancel guard
+CLI resume dispatch
+approval response precondition check
+WAITING_APPROVAL -> VALIDATED state transition
+schema-valid CLI output/error envelope tests
+```
+
+완료 기준: CLI `approve`, `cancel`, `resume`이 StateStore `.ai-runs/` artifact만 변경하며 schema-valid JSON output/error envelope을 반환해야 한다. approval request 누락, terminal cancel, missing approval response를 regression test로 고정한다.
+
+다음 EPIC handoff:
+
+```text
+M7 daemon queue skeleton을 별도 PR로 설계한다. daemon runtime state는 repository root가 아니라 user config/cache 영역에 둔다.
 ```
 
 ## RESERVED

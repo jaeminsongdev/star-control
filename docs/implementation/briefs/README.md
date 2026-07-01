@@ -43,6 +43,7 @@ E16-openai-compatible-request-builder.md
 E17-cloud-api-offline-fixture.md
 E18-cloud-api-transport-boundary.md
 E19-cloud-api-live-approval-gate.md
+E20-cli-control-commands.md
 ```
 
 ## 사용 방법

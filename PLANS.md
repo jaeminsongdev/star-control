@@ -64,13 +64,14 @@
 - M6f cloud API offline fixture integration을 추가해 prepared request와 raw response fixture parse를 같은 runtime path에서 검증한다.
 - M6g cloud API transport boundary를 추가해 `http-transport-plan.json`에 method/url/header policy/credential reference kind를 live call 없이 기록한다.
 - M6h cloud API live approval gate를 추가해 explicit live request를 `live-transport-approval.json`과 RunState `BLOCKED`로 정규화한다.
+- M7a CLI approve/cancel/resume control commands를 추가해 daemon/API 전제 조건을 file-based StateStore에서 검증한다.
 - 병렬 Rust 테스트에서 provider/state temp project 경로가 충돌하지 않도록 test helper에 per-process counter를 추가했다.
 
 ### 아직 남은 것
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
-- M5 local provider와 M6 cloud provider approval gate는 현재 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M7 daemon/API, M8 UI, M9 hardening 순서다.
+- M5 local provider, M6 cloud provider approval gate, M7a CLI control commands는 현재 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M7 daemon queue skeleton, M7 API read-only, M8 UI, M9 hardening 순서다.
 
 ### 건드리면 안 되는 것
 
@@ -89,6 +90,7 @@
 - `docs/implementation/briefs/README.md`
 - 해당 EPIC의 `docs/implementation/briefs/E*.md`
 - M6 작업은 `docs/implementation/cloud-provider-policy.md`를 함께 확인한다.
+- M7 작업은 `docs/implementation/daemon-contract.md`, `docs/implementation/api-contract.md`, `docs/implementation/cli-daemon-api-ui.md`를 함께 확인한다.
 
 ### 먼저 실행할 명령
 
@@ -157,6 +159,7 @@ cargo test --workspace
 | M6f handoff | `CloudApiOfflineProviderAdapter`는 `transport_config.offline_response_fixture`가 있을 때 project-relative fixture JSON을 `raw-response.json`으로 복사하고 `OpenAiCompatibleRequestBuilder`/`OpenAiCompatibleResponseParser`를 runtime path에서 실행한다. `http-request.json`, normalized `response.json`, `cost-metric.json` usage token mapping을 남기며 live API call과 credential raw value 접근은 아직 구현하지 않았다 |
 | M6g handoff | `http-transport-plan.json`은 cloud API method, URL, request API, body/raw response artifact path, timeout, header policy를 기록한다. credential은 reference kind와 materialized/value_present=false만 남기고 full reference/raw value는 기록하지 않는다. Authorization header value construction, credential lookup, live HTTP client execution은 아직 구현하지 않았다 |
 | M6h handoff | `transport_config.live_api_call_requested=true`는 실제 호출이 아니라 approval-required flow 입력이다. `CloudApiOfflineProviderAdapter`는 `http-request.json`, `http-transport-plan.json`, `live-transport-approval.json`, privacy/cost sidecar를 쓰고 `blocked` result를 반환하며 ExecutionEngine은 RunState `BLOCKED`로 전이한다. `raw-response.json`, credential raw value, full credential reference, Authorization header value, live HTTP client execution은 생성/실행하지 않는다 |
+| M7a handoff | CLI `approve`는 `WAITING_APPROVAL` job의 `approval-request.json`을 확인한 뒤 `approval-response.json`을 쓰고 `next_action=resume`을 기록한다. CLI `cancel`은 non-terminal state만 `CANCELLED`로 전이한다. CLI `resume`은 approved response가 있을 때 `WAITING_APPROVAL -> VALIDATED`, `next_action=report`를 기록한다. daemon process/API server/UI는 아직 구현하지 않았다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -202,3 +205,4 @@ cargo test --workspace
 | P-0037 | 2026-07-01 | M6f cloud API offline fixture integration 추가 | `packages/star-control-provider/src/cloud.rs`, `packages/star-control-execution/src/lib.rs`, `docs/implementation/briefs/E17-cloud-api-offline-fixture.md` |
 | P-0038 | 2026-07-01 | M6g cloud API transport boundary artifact 추가 | `packages/star-control-provider/src/cloud.rs`, `packages/star-control-execution/src/lib.rs`, `docs/implementation/briefs/E18-cloud-api-transport-boundary.md` |
 | P-0039 | 2026-07-01 | M6h cloud API live approval gate 추가 | `packages/star-control-provider/src/cloud.rs`, `packages/star-control-execution/src/lib.rs`, `docs/implementation/briefs/E19-cloud-api-live-approval-gate.md` |
+| P-0040 | 2026-07-01 | M7a CLI control commands 추가 | `packages/star-control-cli/src/lib.rs`, `docs/implementation/briefs/E20-cli-control-commands.md` |
