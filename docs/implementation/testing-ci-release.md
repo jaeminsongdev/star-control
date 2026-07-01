@@ -444,6 +444,16 @@ M9i release evidence file discovery는 release crate 수준에서 검증한다.
 - missing version declaration을 explicit error로 반환함
 - automatic repository-wide scan, changelog parser, release/deploy/publish, repository settings mutation이 없음
 
+M9j release profile readiness integration은 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- release profile pass/fail result가 `release-profile-passed` check로 들어감
+- profile blocker와 version/changelog blocker가 같은 ReleaseReadiness blockers에 병합됨
+- profile/version/changelog가 모두 통과해도 `ready` status를 만들지 않고 release automation reserved blocker를 둠
+- unsafe profile evidence path, empty profile name, empty blocker를 explicit error로 반환함
+- Star Sentinel profile evaluator, CLI/API/UI surface, schema field 변경, release/deploy/publish, repository settings mutation이 없음
+
 ## CI 변경 policy
 
 CI workflow 변경은 다음을 PR 본문에 명시해야 한다.

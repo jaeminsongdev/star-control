@@ -189,6 +189,7 @@ packages/star-adapter-openai-compatible
 - schema-valid `release/release-readiness.json` write/readback helper
 - ReleaseConsistencyChecker for version/changelog checks
 - ReleaseEvidenceFileChecker for read-only version/changelog evidence files
+- ReleaseProfileReadinessBuilder for profile/version/changelog readiness assembly
 - reserved/not_ready readiness artifact generation
 - RESERVED: signing, publish, deploy automation, repository/package registry settings changes
 

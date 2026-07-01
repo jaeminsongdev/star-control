@@ -224,6 +224,109 @@ impl ReleaseEvidenceFileChecker {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseProfileValidation {
+    profile_name: String,
+    passed: bool,
+    evidence_paths: Vec<String>,
+    blockers: Vec<String>,
+}
+
+impl ReleaseProfileValidation {
+    pub fn passed(
+        profile_name: impl Into<String>,
+        evidence_paths: Vec<String>,
+    ) -> Result<Self, ReleaseReadinessError> {
+        Ok(Self {
+            profile_name: normalized_profile_name(profile_name)?,
+            passed: true,
+            evidence_paths: normalize_evidence_paths(evidence_paths)?,
+            blockers: Vec::new(),
+        })
+    }
+
+    pub fn failed(
+        profile_name: impl Into<String>,
+        evidence_paths: Vec<String>,
+        blockers: Vec<String>,
+    ) -> Result<Self, ReleaseReadinessError> {
+        let blockers = normalize_profile_blockers(blockers)?;
+        if blockers.is_empty() {
+            return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+                message: "failed release profile validation requires at least one blocker"
+                    .to_string(),
+            });
+        }
+        Ok(Self {
+            profile_name: normalized_profile_name(profile_name)?,
+            passed: false,
+            evidence_paths: normalize_evidence_paths(evidence_paths)?,
+            blockers,
+        })
+    }
+
+    pub fn profile_name(&self) -> &str {
+        &self.profile_name
+    }
+
+    pub fn is_passed(&self) -> bool {
+        self.passed
+    }
+
+    pub fn evidence_paths(&self) -> &[String] {
+        &self.evidence_paths
+    }
+
+    pub fn blockers(&self) -> &[String] {
+        &self.blockers
+    }
+
+    fn to_check(&self) -> Value {
+        release_check(
+            "release-profile-passed",
+            check_status(self.passed),
+            self.evidence_paths.clone(),
+        )
+    }
+
+    fn into_blockers(self) -> Vec<String> {
+        self.blockers
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReleaseProfileReadinessBuilder;
+
+impl ReleaseProfileReadinessBuilder {
+    pub fn build(
+        &self,
+        writer: &ReleaseReadinessWriter,
+        release_id: impl Into<String>,
+        target: impl Into<String>,
+        version: impl Into<String>,
+        profile: ReleaseProfileValidation,
+        consistency: ReleaseConsistencyResult,
+    ) -> Value {
+        let release_id = release_id.into();
+        let target = target.into();
+        let version = version.into();
+        let mut checks = vec![profile.to_check()];
+        let (mut consistency_checks, consistency_blockers) = consistency.into_parts();
+        checks.append(&mut consistency_checks);
+        let mut blockers = profile.into_blockers();
+        blockers.extend(consistency_blockers);
+
+        if blockers.is_empty() {
+            blockers.push(
+                "release approval/signing/publish/deploy automation remains reserved".to_string(),
+            );
+            writer.readiness(release_id, target, version, "reserved", checks, blockers)
+        } else {
+            writer.not_ready(release_id, target, version, checks, blockers)
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ReleaseReadinessWriter {
     schema_root: PathBuf,
@@ -511,6 +614,41 @@ fn normalized_evidence_path(path: &str) -> Result<String, ReleaseReadinessError>
         });
     }
     Ok(path)
+}
+
+fn normalize_evidence_paths(paths: Vec<String>) -> Result<Vec<String>, ReleaseReadinessError> {
+    paths
+        .into_iter()
+        .map(|path| normalized_evidence_path(&path))
+        .collect()
+}
+
+fn normalized_profile_name(
+    profile_name: impl Into<String>,
+) -> Result<String, ReleaseReadinessError> {
+    let profile_name = profile_name.into();
+    let profile_name = profile_name.trim();
+    if profile_name.is_empty() {
+        Err(ReleaseReadinessError::InvalidReleaseReadiness {
+            message: "release profile name is required".to_string(),
+        })
+    } else {
+        Ok(profile_name.to_string())
+    }
+}
+
+fn normalize_profile_blockers(blockers: Vec<String>) -> Result<Vec<String>, ReleaseReadinessError> {
+    let mut normalized = Vec::with_capacity(blockers.len());
+    for blocker in blockers {
+        let blocker = blocker.trim();
+        if blocker.is_empty() {
+            return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+                message: "release profile blocker must not be empty".to_string(),
+            });
+        }
+        normalized.push(blocker.to_string());
+    }
+    Ok(normalized)
 }
 
 fn read_release_text(path: &Path) -> Result<String, ReleaseReadinessError> {
@@ -836,6 +974,115 @@ mod tests {
             ReleaseReadinessError::InvalidReleaseEvidence { .. }
         ));
         fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn release_profile_readiness_builder_reserves_status_after_all_checks_pass() {
+        let writer = ReleaseReadinessWriter::new(schema_root());
+        let profile = ReleaseProfileValidation::passed(
+            "star-sentinel-release",
+            vec![".ai-runs/J-0001/review-packs/release-profile.json".to_string()],
+        )
+        .expect("profile validation");
+        let consistency = ReleaseConsistencyChecker::check(
+            "1.2.3",
+            "1.2.3",
+            "## 1.2.3\n- release notes\n",
+            "VERSION",
+            "CHANGELOG.md",
+        );
+
+        let readiness = ReleaseProfileReadinessBuilder.build(
+            &writer,
+            "release-0005",
+            "star-control",
+            "1.2.3",
+            profile,
+            consistency,
+        );
+
+        writer
+            .validate_readiness(&readiness)
+            .expect("schema-valid reserved readiness");
+        assert_eq!(readiness["status"], "reserved");
+        assert_eq!(readiness["checks"][0]["name"], "release-profile-passed");
+        assert_eq!(readiness["checks"][0]["status"], "pass");
+        assert!(readiness["blockers"]
+            .as_array()
+            .expect("blockers")
+            .contains(&json!(
+                "release approval/signing/publish/deploy automation remains reserved"
+            )));
+    }
+
+    #[test]
+    fn release_profile_readiness_builder_blocks_profile_and_consistency_failures() {
+        let writer = ReleaseReadinessWriter::new(schema_root());
+        let profile = ReleaseProfileValidation::failed(
+            "star-sentinel-release",
+            vec![".ai-runs/J-0001/tool-output/star-sentinel/gate.json".to_string()],
+            vec!["release profile blocked unresolved BLOCK diagnostic".to_string()],
+        )
+        .expect("profile validation");
+        let consistency = ReleaseConsistencyChecker::check(
+            "1.2.3",
+            "1.2.2",
+            "## 1.2.2\n- previous release\n",
+            "VERSION",
+            "CHANGELOG.md",
+        );
+
+        let readiness = ReleaseProfileReadinessBuilder.build(
+            &writer,
+            "release-0006",
+            "star-control",
+            "1.2.3",
+            profile,
+            consistency,
+        );
+
+        writer
+            .validate_readiness(&readiness)
+            .expect("schema-valid not_ready readiness");
+        assert_eq!(readiness["status"], "not_ready");
+        assert_eq!(readiness["checks"][0]["status"], "fail");
+        let blockers = readiness["blockers"].as_array().expect("blockers");
+        assert!(blockers.contains(&json!(
+            "release profile blocked unresolved BLOCK diagnostic"
+        )));
+        assert!(blockers.contains(&json!("version mismatch: expected 1.2.3, found 1.2.2")));
+        assert!(blockers.contains(&json!("changelog does not mention version 1.2.3")));
+    }
+
+    #[test]
+    fn release_profile_validation_rejects_unsafe_evidence_and_empty_failure() {
+        let unsafe_error = ReleaseProfileValidation::passed(
+            "star-sentinel-release",
+            vec!["../release-profile.json".to_string()],
+        )
+        .expect_err("unsafe release profile evidence");
+        assert!(matches!(
+            unsafe_error,
+            ReleaseReadinessError::InvalidReleaseEvidence { .. }
+        ));
+
+        let empty_blocker_error = ReleaseProfileValidation::failed(
+            "star-sentinel-release",
+            Vec::new(),
+            vec![" ".to_string()],
+        )
+        .expect_err("empty blocker");
+        assert!(matches!(
+            empty_blocker_error,
+            ReleaseReadinessError::InvalidReleaseReadiness { .. }
+        ));
+
+        let empty_profile_error =
+            ReleaseProfileValidation::passed(" ", Vec::new()).expect_err("empty profile name");
+        assert!(matches!(
+            empty_profile_error,
+            ReleaseReadinessError::InvalidReleaseReadiness { .. }
+        ));
     }
 
     fn create_job(store: &StateStore) {

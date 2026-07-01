@@ -72,6 +72,14 @@ packages/star-control-release
 
 M9i는 `ReleaseEvidenceFileChecker`를 제공한다. checker는 caller가 지정한 project root 내부의 version/changelog evidence file을 read-only로 읽고 `ReleaseConsistencyChecker`에 연결한다. 이 slice는 unsafe relative path를 거부하고, plain version file 또는 `version = "x.y.z"` declaration만 처리한다. automatic repository-wide scan, changelog format parser, release profile integration, release/deploy/publish action은 구현하지 않는다.
 
+M9j 구현 위치:
+
+```text
+packages/star-control-release
+```
+
+M9j는 `ReleaseProfileValidation`과 `ReleaseProfileReadinessBuilder`를 제공한다. builder는 caller가 제공한 release profile pass/fail evidence를 `release-profile-passed` check로 만들고, `ReleaseConsistencyResult`의 version/changelog checks와 blockers를 같은 ReleaseReadiness JSON에 병합한다. profile/version/changelog가 모두 통과해도 `ready` status를 만들지 않고 release automation reserved blocker를 둔다. 이 slice는 Star Sentinel profile evaluator, release/deploy/publish action, CLI/API/UI surface, schema field 변경을 구현하지 않는다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -126,6 +134,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 6. API read-only endpoint는 missing readiness를 structured error로 반환하고 artifact를 수정하지 않음
 7. version/changelog checker output은 schema-valid `not_ready` readiness에 연결 가능함
 8. version/changelog evidence file reader는 project root 밖 path를 거부하고 read-only로 동작함
+9. release profile validation result는 version/changelog result와 같은 readiness artifact에 병합되며 `ready` status를 만들지 않음
 
 ## Codex 구현 지시
 

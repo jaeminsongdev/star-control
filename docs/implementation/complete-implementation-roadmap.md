@@ -297,6 +297,8 @@ M9h release version consistency checker는 `packages/star-control-release`의 `R
 
 M9i release evidence file discovery는 `packages/star-control-release`의 `ReleaseEvidenceFileChecker`로 구현한다. 이 slice는 caller-provided project root와 relative evidence path에서 version/changelog text를 read-only로 읽어 `ReleaseConsistencyChecker`에 연결하되, automatic repository-wide scan, changelog parser, release profile integration, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
 
+M9j release profile readiness integration은 `packages/star-control-release`의 `ReleaseProfileValidation`과 `ReleaseProfileReadinessBuilder`로 구현한다. 이 slice는 caller-provided release profile pass/fail result를 `release-profile-passed` check로 만들고 version/changelog consistency checks와 병합하되, Star Sentinel profile evaluator, CLI/API/UI surface, schema field 변경, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
 Validation:
 
 ```text

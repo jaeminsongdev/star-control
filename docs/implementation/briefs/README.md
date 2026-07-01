@@ -58,6 +58,7 @@ E31-release-readiness-writer.md
 E32-release-readiness-api-read.md
 E33-release-version-consistency-checker.md
 E34-release-evidence-file-discovery.md
+E35-release-profile-readiness-integration.md
 ```
 
 ## 사용 방법
