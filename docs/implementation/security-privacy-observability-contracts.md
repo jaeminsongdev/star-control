@@ -23,6 +23,14 @@ examples/security-contracts/cost-metric.fake.example.json
 
 RedactionReport는 artifact나 report를 생성할 때 민감정보 후보가 어떻게 처리됐는지 기록한다.
 
+M9a 구현 위치:
+
+```text
+packages/star-control-security
+```
+
+M9a는 `redact_value`, `redact_value_with_report`, RedactionReport builder를 제공하고 API/UI redaction helper가 이를 소비한다. RedactionReport artifact를 StateStore에 저장하는 작업은 audit/report hardening slice에서 별도로 연결한다.
+
 필수 필드:
 
 ```text

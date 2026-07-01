@@ -51,6 +51,7 @@ packages/
   star-control-daemon/
   star-control-api/
   star-control-ui/
+  star-control-security/
   star-sentinel/
 ```
 
@@ -160,6 +161,13 @@ packages/star-adapter-openai-compatible
 - job list, job detail, timeline, provider output, validation, approval, review pack viewer data
 - approve/cancel/resume action panel과 mutation result view
 - RESERVED: browser UI app, TypeScript/Node package manager, HTTP server, remote UI runtime
+
+### `star-control-security`
+
+- shared redaction utility
+- RedactionReport builder
+- secret-like key/string detection without storing raw values
+- RESERVED: audit event writer, retention/recovery command, release readiness automation
 
 ### `star-sentinel`
 

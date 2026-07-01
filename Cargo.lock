@@ -81,6 +81,7 @@ dependencies = [
  "serde_json",
  "star-control-daemon",
  "star-control-schema",
+ "star-control-security",
  "star-control-state",
 ]
 
@@ -144,6 +145,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "star-control-security"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-schema",
+]
+
+[[package]]
 name = "star-control-state"
 version = "0.1.0"
 dependencies = [
@@ -158,6 +167,7 @@ dependencies = [
  "serde_json",
  "star-control-api",
  "star-control-schema",
+ "star-control-security",
  "star-control-state",
 ]
 

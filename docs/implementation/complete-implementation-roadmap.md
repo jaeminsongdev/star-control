@@ -279,6 +279,8 @@ Exit criteria:
 - release readiness artifact가 생성된다.
 - release/deploy/publish 자동화는 별도 approval 뒤에만 진행한다.
 
+M9a redaction utility는 `packages/star-control-security`의 shared redaction utility와 schema-valid RedactionReport builder로 구현한다. 이 slice는 API/UI redaction helper를 통합하지만 RedactionReport artifact 저장, audit event writer, cost/budget guard, retention/recovery command, release readiness automation은 후속 slice로 남긴다.
+
 Validation:
 
 ```text
@@ -288,6 +290,7 @@ cargo check --workspace
 cargo test --workspace
 provider conformance suite
 security guard tests
+redaction report tests
 release readiness checks
 ```
 

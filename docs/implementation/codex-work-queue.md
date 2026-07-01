@@ -475,6 +475,8 @@ E19-T05: audit report section
 E19-T06: security profile fixtures
 ```
 
+현재 착수 큐의 M9a는 E19-T01을 `packages/star-control-security`의 shared redaction utility와 RedactionReport builder로 구현한다. audit log, cost/budget guard, retention/recovery, release readiness는 후속 M9 slice로 남긴다.
+
 ## EPIC 20: Release Readiness
 
 상태: RESERVED.

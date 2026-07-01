@@ -1,6 +1,7 @@
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use star_control_api::{ApiControlService, ApiError, ApiReadOnlyService};
 use star_control_schema::{load_schema, validate_json, ValidationError};
+use star_control_security::redact_value;
 use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
@@ -674,50 +675,6 @@ fn approval_summary(job_view: &Value, sections: &[Value]) -> Value {
         "mutations_enabled": false,
         "actions": ["approved", "rejected", "needs_changes", "cancelled"]
     })
-}
-
-fn redact_value(value: Value) -> Value {
-    match value {
-        Value::Object(object) => Value::Object(redact_object(object)),
-        Value::Array(items) => Value::Array(items.into_iter().map(redact_value).collect()),
-        Value::String(text) if looks_sensitive_string(&text) => json!("[REDACTED]"),
-        other => other,
-    }
-}
-
-fn redact_object(object: Map<String, Value>) -> Map<String, Value> {
-    object
-        .into_iter()
-        .map(|(key, value)| {
-            if is_sensitive_key(&key) {
-                (key, json!("[REDACTED]"))
-            } else {
-                (key, redact_value(value))
-            }
-        })
-        .collect()
-}
-
-fn is_sensitive_key(key: &str) -> bool {
-    let key = key.to_ascii_lowercase();
-    key.contains("credential")
-        || key.contains("secret")
-        || key.contains("password")
-        || key.contains("api_key")
-        || key.contains("apikey")
-        || key.contains("authorization")
-        || key == "token"
-        || key.ends_with("_token")
-}
-
-fn looks_sensitive_string(value: &str) -> bool {
-    let lower = value.to_ascii_lowercase();
-    lower.contains("bearer ")
-        || lower.contains("api_key=")
-        || lower.contains("apikey=")
-        || lower.contains("password=")
-        || lower.contains("token=")
-        || value.contains("sk-")
 }
 
 #[cfg(test)]

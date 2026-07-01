@@ -70,9 +70,10 @@ E22 API Read-Only
 E23 UI Read-Only View
 E24 API Control Mutations
 E25 UI Browser Control Shell
+E26 Security Redaction Utility
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -2032,6 +2033,90 @@ HTTP/server/package-manager 미도입 regression test
 
 ```text
 M9 hardening은 security, cost, observability, conformance, release readiness 검증을 작은 PR로 확장한다. 실제 browser app, HTTP server, auth/session, remote exposure, package manager 도입은 별도 승인 전까지 RESERVED다.
+```
+
+## E26 Security Redaction Utility
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+security-privacy-observability-contracts.md
+security-cost-observability.md
+api-contract.md
+ui-shell-contract.md
+testing-ci-release.md
+release-readiness.md
+```
+
+허용 파일:
+
+```text
+Cargo.toml
+Cargo.lock
+packages/star-control-security/**
+packages/star-control-api/**
+packages/star-control-ui/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+release/deploy/publish automation
+external account/repository settings 변경
+credential raw value lookup/materialization
+provider live call
+HTTP server 구현
+browser UI app 구현
+audit/cost/retention/recovery/release automation 구현
+```
+
+입력 artifact:
+
+```text
+specs/schemas/redaction-report.schema.json
+examples/security-contracts/redaction-report.example.json
+API response data/error envelope
+UI read-only/control result view
+```
+
+출력 artifact:
+
+```text
+RedactionReport JSON value
+redacted API/UI JSON value
+```
+
+핵심 TASK:
+
+```text
+star-control-security crate 추가
+redact_value utility 추가
+redact_value_with_report utility 추가
+RedactionFinding model 추가
+RedactionReport builder 추가
+credential-like key redaction
+secret-like string redaction
+private key marker redaction
+raw value 없는 finding/report test
+redaction-report schema validation test
+ApiReadOnlyService/ApiControlService redaction utility migration
+UiReadOnlyShell/UiBrowserShell redaction utility migration
+```
+
+완료 기준: API/UI가 중복 redaction helper 대신 `star-control-security`를 사용하고, RedactionReport builder가 `redaction-report.schema.json`을 만족해야 한다. finding/report에는 raw secret value를 넣지 않으며, schema field, workflow, package manager, release/deploy/publish automation은 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9b는 audit event writer 또는 provider conformance hardening으로 이어간다. RedactionReport를 StateStore artifact로 저장하거나 user-facing report에 연결하는 작업은 별도 작은 PR에서 처리한다.
 ```
 
 ## RESERVED

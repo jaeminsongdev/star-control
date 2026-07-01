@@ -9,4 +9,5 @@ license = "MIT"
 serde_json = "1"
 star-control-daemon = { path = "../star-control-daemon" }
 star-control-schema = { path = "../star-control-schema" }
+star-control-security = { path = "../star-control-security" }
 star-control-state = { path = "../star-control-state" }
