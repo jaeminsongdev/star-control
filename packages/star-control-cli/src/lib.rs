@@ -8,6 +8,13 @@ use star_control_release::{ReleaseReadinessError, ReleaseReadinessWriter, RELEAS
 use star_control_router::{JobSpec, RouterEngine, RouterError};
 use star_control_schema::{load_schema, validate_json};
 use star_control_state::{StateStore, StateStoreError};
+use star_sentinel::{
+    build_diagnostics_artifact, build_review_pack_artifact, read_changed_lines,
+    read_p0_rule_registry, read_task, run_selfcheck, validate_diagnostics_artifact,
+    write_gate_artifacts, write_review_pack_artifacts, ChangedLines, Decision, EvaluationResult,
+    P0Evaluator, ReviewValidation, SentinelError, SentinelTask, CHANGED_LINES_SCHEMA,
+    DIAGNOSTICS_FILE, SENTINEL_TASK_SCHEMA, STAR_SENTINEL_TOOL_OUTPUT_DIR,
+};
 use std::error::Error;
 use std::fmt;
 use std::fs;
@@ -79,6 +86,10 @@ pub enum CliError {
         command: String,
         source: ProviderRegistryError,
     },
+    Sentinel {
+        command: String,
+        source: SentinelError,
+    },
     ReleaseReadiness {
         command: String,
         source: ReleaseReadinessError,
@@ -102,6 +113,7 @@ impl CliError {
             | Self::State { command, .. }
             | Self::Router { command, .. }
             | Self::ProviderRegistry { command, .. }
+            | Self::Sentinel { command, .. }
             | Self::ReleaseReadiness { command, .. }
             | Self::Execution { command, .. }
             | Self::Internal { command, .. } => command,
@@ -113,7 +125,10 @@ impl CliError {
             Self::InvalidInput { .. } => 2,
             Self::MissingArtifact { .. } | Self::State { .. } => 3,
             Self::ProviderExecution { .. } | Self::Execution { .. } => 4,
-            Self::Router { .. } | Self::ProviderRegistry { .. } | Self::Internal { .. } => 5,
+            Self::Router { .. }
+            | Self::ProviderRegistry { .. }
+            | Self::Sentinel { .. }
+            | Self::Internal { .. } => 5,
             Self::ReleaseReadiness { .. } => 5,
         }
     }
@@ -126,6 +141,7 @@ impl CliError {
             Self::State { .. } => "StateReadFailed",
             Self::Router { .. } => "RouteFailed",
             Self::ProviderRegistry { .. } => "ProviderRegistryFailed",
+            Self::Sentinel { .. } => "StarSentinelFailed",
             Self::ReleaseReadiness { .. } => "ReleaseReadinessReadFailed",
             Self::Execution { .. } => "ExecutionFailed",
             Self::Internal { .. } => "InternalError",
@@ -139,6 +155,7 @@ impl CliError {
             Self::ProviderExecution { .. } | Self::Execution { .. } => "provider-execution",
             Self::Router { .. } => "router",
             Self::ProviderRegistry { .. } => "provider-registry",
+            Self::Sentinel { .. } => "star-sentinel",
             Self::ReleaseReadiness { .. } => "release-readiness",
             Self::Internal { .. } => "internal",
         }
@@ -153,6 +170,7 @@ impl CliError {
             Self::State { source, .. } => source.to_string(),
             Self::Router { source, .. } => source.to_string(),
             Self::ProviderRegistry { source, .. } => source.to_string(),
+            Self::Sentinel { source, .. } => source.to_string(),
             Self::ReleaseReadiness { source, .. } => source.to_string(),
             Self::Execution { source, .. } => source.to_string(),
         }
@@ -228,6 +246,7 @@ where
         "resume" => resume_command(&parsed, config),
         "recover" => recover_command(&parsed, config),
         "providers" => providers_command(&parsed, config),
+        "sentinel" => sentinel_command(&parsed, config),
         _ => Err(CliError::InvalidInput {
             command,
             message: "unsupported command".to_string(),
@@ -757,6 +776,327 @@ fn repo_relative_path(root: &Path, path: &Path) -> String {
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/")
+}
+
+fn sentinel_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    let subcommand = parsed
+        .subcommand
+        .as_deref()
+        .ok_or_else(|| CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "sentinel requires subcommand check, gate, review-pack, or selfcheck"
+                .to_string(),
+        })?;
+    match subcommand {
+        "check" => sentinel_check_command(parsed, config),
+        "gate" => sentinel_gate_command(parsed, config),
+        "review-pack" => sentinel_review_pack_command(parsed, config),
+        "selfcheck" => sentinel_selfcheck_command(parsed, config),
+        other => Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: format!("unsupported sentinel subcommand {}", other),
+        }),
+    }
+}
+
+fn sentinel_check_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    reject_sentinel_command_options(parsed, true)?;
+    let job_id = required_job(parsed)?;
+    let (store, task, _changed_lines, result) = evaluate_sentinel_job(parsed, config, &job_id)?;
+    let diagnostics = build_diagnostics_artifact(&result);
+    let sentinel_schema_root = sentinel_schema_root(config);
+    validate_diagnostics_artifact(&diagnostics, &sentinel_schema_root).map_err(|source| {
+        CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        }
+    })?;
+    store
+        .write_tool_json(
+            &job_id,
+            STAR_SENTINEL_TOOL_OUTPUT_DIR,
+            DIAGNOSTICS_FILE,
+            &diagnostics,
+        )
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let diagnostics_path = sentinel_artifact_path(&job_id, DIAGNOSTICS_FILE);
+
+    Ok(success_envelope(
+        "sentinel",
+        "success",
+        json!({
+            "subcommand": "check",
+            "job_id": job_id,
+            "task_id": task.task_id,
+            "decision": result.decision.as_str(),
+            "diagnostic_count": result.diagnostics.len(),
+            "diagnostics": diagnostics,
+            "diagnostics_path": diagnostics_path,
+            "actions_enabled": false
+        }),
+        vec![diagnostics_path],
+    ))
+}
+
+fn sentinel_gate_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    reject_sentinel_command_options(parsed, true)?;
+    let job_id = required_job(parsed)?;
+    let (store, task, _changed_lines, result) = evaluate_sentinel_job(parsed, config, &job_id)?;
+    write_gate_artifacts(
+        &store,
+        &job_id,
+        &task,
+        &result,
+        sentinel_schema_root(config),
+    )
+    .map_err(|source| CliError::Sentinel {
+        command: parsed.command.clone(),
+        source,
+    })?;
+    let diagnostics_path = sentinel_artifact_path(&job_id, DIAGNOSTICS_FILE);
+    let approval_path = sentinel_artifact_path(&job_id, star_sentinel::APPROVAL_FILE);
+
+    Ok(success_envelope(
+        "sentinel",
+        status_for_sentinel_decision(result.decision),
+        json!({
+            "subcommand": "gate",
+            "job_id": job_id,
+            "task_id": task.task_id,
+            "decision": result.decision.as_str(),
+            "diagnostic_count": result.diagnostics.len(),
+            "diagnostics_path": diagnostics_path,
+            "approval_path": approval_path,
+            "actions_enabled": false
+        }),
+        vec![diagnostics_path, approval_path],
+    ))
+}
+
+fn sentinel_review_pack_command(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+) -> Result<Value, CliError> {
+    reject_sentinel_command_options(parsed, true)?;
+    let job_id = required_job(parsed)?;
+    let (store, task, changed_lines, result) = evaluate_sentinel_job(parsed, config, &job_id)?;
+    let review_pack = build_review_pack_artifact(
+        &task,
+        &changed_lines,
+        &result,
+        &[ReviewValidation::new(
+            "star-control sentinel check",
+            validation_result_for_sentinel_decision(result.decision),
+        )],
+    );
+    write_review_pack_artifacts(&store, &job_id, &review_pack, sentinel_schema_root(config))
+        .map_err(|source| CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let tool_json_path = sentinel_artifact_path(&job_id, star_sentinel::REVIEW_PACK_JSON_FILE);
+    let tool_markdown_path =
+        sentinel_artifact_path(&job_id, star_sentinel::REVIEW_PACK_MARKDOWN_FILE);
+    let review_json_path = format!(
+        ".ai-runs/{}/review-packs/{}",
+        job_id,
+        star_sentinel::REVIEW_PACK_JSON_FILE
+    );
+    let review_markdown_path = format!(
+        ".ai-runs/{}/review-packs/{}",
+        job_id,
+        star_sentinel::REVIEW_PACK_MARKDOWN_FILE
+    );
+
+    Ok(success_envelope(
+        "sentinel",
+        status_for_sentinel_decision(result.decision),
+        json!({
+            "subcommand": "review-pack",
+            "job_id": job_id,
+            "task_id": task.task_id,
+            "decision": result.decision.as_str(),
+            "review_pack_path": review_markdown_path,
+            "tool_review_pack_path": tool_markdown_path,
+            "actions_enabled": false
+        }),
+        vec![
+            tool_json_path,
+            tool_markdown_path,
+            review_json_path,
+            review_markdown_path,
+        ],
+    ))
+}
+
+fn sentinel_selfcheck_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    reject_sentinel_command_options(parsed, false)?;
+    let report = run_selfcheck(config.repo_root());
+    Ok(success_envelope(
+        "sentinel",
+        if report.ok { "success" } else { "failed" },
+        json!({
+            "subcommand": "selfcheck",
+            "ok": report.ok,
+            "diagnostic_count": report.diagnostics.len(),
+            "diagnostics": report.diagnostics,
+            "actions_enabled": false
+        }),
+        Vec::new(),
+    ))
+}
+
+fn evaluate_sentinel_job(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+    job_id: &str,
+) -> Result<(StateStore, SentinelTask, ChangedLines, EvaluationResult), CliError> {
+    let project = required_project(parsed)?;
+    let store =
+        StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let task_path = require_sentinel_input(&store, job_id, "task.json", SENTINEL_TASK_SCHEMA)?;
+    let changed_lines_path =
+        require_sentinel_input(&store, job_id, "changed_lines.json", CHANGED_LINES_SCHEMA)?;
+    let sentinel_schema_root = sentinel_schema_root(config);
+    let task =
+        read_task(&task_path, &sentinel_schema_root).map_err(|source| CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let changed_lines =
+        read_changed_lines(&changed_lines_path, &sentinel_schema_root).map_err(|source| {
+            CliError::Sentinel {
+                command: parsed.command.clone(),
+                source,
+            }
+        })?;
+    let registry = read_p0_rule_registry(sentinel_registry_path(config), &sentinel_schema_root)
+        .map_err(|source| CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let result = P0Evaluator::new(registry)
+        .evaluate(&task, &changed_lines)
+        .map_err(|source| CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    Ok((store, task, changed_lines, result))
+}
+
+fn require_sentinel_input(
+    store: &StateStore,
+    job_id: &str,
+    file_name: &str,
+    schema_name: &str,
+) -> Result<PathBuf, CliError> {
+    let relative_path = format!(
+        "tool-output/{}/{}",
+        STAR_SENTINEL_TOOL_OUTPUT_DIR, file_name
+    );
+    let path = store
+        .resolve_job_path(job_id, &relative_path)
+        .map_err(|source| CliError::State {
+            command: "sentinel".to_string(),
+            source,
+        })?;
+    if path.is_file() {
+        Ok(path)
+    } else {
+        Err(CliError::MissingArtifact {
+            command: "sentinel".to_string(),
+            message: format!(
+                "required Star Sentinel input not found: {} ({})",
+                relative_path, schema_name
+            ),
+            artifact_paths: vec![format!(".ai-runs/{}/{}", job_id, relative_path)],
+        })
+    }
+}
+
+fn reject_sentinel_command_options(
+    parsed: &ParsedArgs,
+    requires_project_job: bool,
+) -> Result<(), CliError> {
+    let unsupported = [
+        (parsed.subject.is_some(), "extra positional argument"),
+        (parsed.request.is_some(), "--request"),
+        (parsed.entrypoint.is_some(), "--entrypoint"),
+        (parsed.provider.is_some(), "--provider"),
+        (!parsed.provider_instances.is_empty(), "--provider-instance"),
+        (parsed.stage.is_some(), "--stage"),
+        (parsed.response.is_some(), "--response"),
+        (parsed.reason.is_some(), "--reason"),
+        (!parsed.constraints.is_empty(), "--constraint"),
+        (parsed.release_readiness, "--release-readiness"),
+        (parsed.recovery_list, "--list"),
+        (parsed.dry_run, "--dry-run"),
+        (parsed.markdown, "--markdown"),
+    ];
+    for (is_set, option) in unsupported {
+        if is_set {
+            return Err(CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!("sentinel does not accept {}", option),
+            });
+        }
+    }
+    if requires_project_job {
+        let _ = required_project(parsed)?;
+        let _ = required_job(parsed)?;
+    } else if parsed.project.is_some() || parsed.job_id.is_some() {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "sentinel selfcheck does not accept --project or --job".to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn sentinel_schema_root(config: &CliConfig) -> PathBuf {
+    config
+        .repo_root()
+        .join("builtin-tools")
+        .join("star-sentinel")
+        .join("schemas")
+}
+
+fn sentinel_registry_path(config: &CliConfig) -> PathBuf {
+    config
+        .repo_root()
+        .join("builtin-tools")
+        .join("star-sentinel")
+        .join("policies")
+        .join("p0-rule-registry.json")
+}
+
+fn sentinel_artifact_path(job_id: &str, file_name: &str) -> String {
+    format!(
+        ".ai-runs/{}/tool-output/{}/{}",
+        job_id, STAR_SENTINEL_TOOL_OUTPUT_DIR, file_name
+    )
+}
+
+fn status_for_sentinel_decision(decision: Decision) -> &'static str {
+    match decision {
+        Decision::AutoPass => "success",
+        Decision::HumanReview => "waiting_approval",
+        Decision::Block => "blocked",
+    }
+}
+
+fn validation_result_for_sentinel_decision(decision: Decision) -> &'static str {
+    match decision {
+        Decision::AutoPass => "PASS",
+        Decision::HumanReview => "HUMAN_REVIEW",
+        Decision::Block => "BLOCK",
+    }
 }
 
 fn route_value_for_provider(route: &Value, provider_instance_id: &str) -> Value {
@@ -1969,6 +2309,160 @@ mod tests {
     }
 
     #[test]
+    fn sentinel_commands_wrap_star_sentinel_artifacts() {
+        let config = CliConfig::new(repo_root());
+
+        let selfcheck = run_cli(["sentinel", "selfcheck", "--json"], &config);
+        assert_eq!(selfcheck.exit_code, 0, "{}", selfcheck.stderr);
+        let selfcheck_json: Value =
+            serde_json::from_str(&selfcheck.stdout).expect("selfcheck json");
+        assert_eq!(selfcheck_json["command"], "sentinel");
+        assert_eq!(selfcheck_json["data"]["subcommand"], "selfcheck");
+        assert_eq!(selfcheck_json["data"]["ok"], true);
+        assert_eq!(selfcheck_json["data"]["actions_enabled"], false);
+
+        let check_project = temp_project();
+        write_sentinel_input_job(&check_project, "p0-auto-pass", vec!["src/**"], "src/lib.rs");
+        let check = run_cli(
+            [
+                "sentinel",
+                "check",
+                "--project",
+                check_project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(check.exit_code, 0, "{}", check.stderr);
+        let check_json: Value = serde_json::from_str(&check.stdout).expect("check json");
+        assert_eq!(check_json["data"]["subcommand"], "check");
+        assert_eq!(check_json["data"]["decision"], "AUTO_PASS");
+        assert_eq!(check_json["data"]["actions_enabled"], false);
+        assert!(check_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/diagnostics.json")
+            .is_file());
+        assert!(!check_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/approval.json")
+            .exists());
+
+        let gate_project = temp_project();
+        write_sentinel_input_job(&gate_project, "p0-human-review", vec!["**"], "Cargo.toml");
+        let gate = run_cli(
+            [
+                "sentinel",
+                "gate",
+                "--project",
+                gate_project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(gate.exit_code, 0, "{}", gate.stderr);
+        let gate_json: Value = serde_json::from_str(&gate.stdout).expect("gate json");
+        assert_eq!(gate_json["status"], "waiting_approval");
+        assert_eq!(gate_json["data"]["decision"], "HUMAN_REVIEW");
+        assert!(gate_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/approval.json")
+            .is_file());
+
+        let review_project = temp_project();
+        write_sentinel_input_job(
+            &review_project,
+            "p0-block",
+            vec!["src/allowed/**"],
+            "src/other.rs",
+        );
+        let review = run_cli(
+            [
+                "sentinel",
+                "review-pack",
+                "--project",
+                review_project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(review.exit_code, 0, "{}", review.stderr);
+        let review_json: Value = serde_json::from_str(&review.stdout).expect("review json");
+        assert_eq!(review_json["status"], "blocked");
+        assert_eq!(review_json["data"]["decision"], "BLOCK");
+        assert!(review_project
+            .join(".ai-runs/J-0001/review-packs/review_pack.md")
+            .is_file());
+
+        fs::remove_dir_all(check_project).ok();
+        fs::remove_dir_all(gate_project).ok();
+        fs::remove_dir_all(review_project).ok();
+    }
+
+    #[test]
+    fn sentinel_rejects_missing_inputs_and_reserved_options() {
+        let config = CliConfig::new(repo_root());
+        let project = temp_project();
+        let store =
+            StateStore::open(&project, repo_root().join("specs/schemas")).expect("open store");
+        store
+            .create_job("missing sentinel inputs", "codex", vec![])
+            .expect("create job");
+
+        let missing = run_cli(
+            [
+                "sentinel",
+                "check",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(missing.exit_code, 3);
+        let missing_json: Value = serde_json::from_str(&missing.stdout).expect("missing json");
+        assert_eq!(missing_json["error"]["code"], "MissingArtifact");
+        assert_eq!(
+            missing_json["error"]["artifact_paths"][0],
+            ".ai-runs/J-0001/tool-output/star-sentinel/task.json"
+        );
+
+        let invalid_selfcheck = run_cli(
+            [
+                "sentinel",
+                "selfcheck",
+                "--project",
+                project.to_str().expect("project path"),
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(invalid_selfcheck.exit_code, 2);
+
+        let invalid_option = run_cli(
+            [
+                "sentinel",
+                "gate",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--provider",
+                "fake-default",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(invalid_option.exit_code, 2);
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
     fn report_release_readiness_reads_existing_artifact_without_mutation() {
         let project = temp_project();
         let config = CliConfig::new(repo_root());
@@ -2530,6 +3024,100 @@ mod tests {
         )
         .expect("write local process instance");
         path
+    }
+
+    fn write_sentinel_input_job(
+        project: &Path,
+        task_id: &str,
+        allowed_paths: Vec<&str>,
+        changed_path: &str,
+    ) {
+        let store =
+            StateStore::open(project, repo_root().join("specs/schemas")).expect("open store");
+        store
+            .create_job("sentinel input", "codex", vec![])
+            .expect("create job");
+        store
+            .write_tool_json(
+                "J-0001",
+                "star-sentinel",
+                "task.json",
+                &sentinel_task_value(task_id, allowed_paths),
+            )
+            .expect("write sentinel task");
+        store
+            .write_tool_json(
+                "J-0001",
+                "star-sentinel",
+                "changed_lines.json",
+                &changed_lines_value(task_id, changed_path),
+            )
+            .expect("write changed lines");
+    }
+
+    fn sentinel_task_value(task_id: &str, allowed_paths: Vec<&str>) -> Value {
+        json!({
+            "schema_version": "1.0.0",
+            "task_id": task_id,
+            "goal": "Validate a scoped CLI sentinel fixture.",
+            "allowed_paths": allowed_paths,
+            "forbidden_paths": [
+                ".github/workflows/**",
+                "package.json",
+                "package-lock.json"
+            ],
+            "forbidden_change_types": [
+                "test_deletion",
+                "assertion_weakening",
+                "validator_bypass",
+                "secret_exposure"
+            ],
+            "required_validation": [
+                "policy:p0"
+            ],
+            "approval_required_changes": [
+                "public_api_change",
+                "schema_change",
+                "dependency_addition"
+            ],
+            "notes": "CLI sentinel command fixture."
+        })
+    }
+
+    fn changed_lines_value(task_id: &str, path: &str) -> Value {
+        json!({
+            "schema_version": "1.0.0",
+            "task_id": task_id,
+            "files": [
+                {
+                    "path": path,
+                    "change_type": "modified",
+                    "old_path": null,
+                    "hunks": [
+                        {
+                            "old_start": 1,
+                            "old_lines": 2,
+                            "new_start": 1,
+                            "new_lines": 3,
+                            "lines": [
+                                {
+                                    "kind": "context",
+                                    "old_line": 1,
+                                    "new_line": 1,
+                                    "content": "fn existing() {}"
+                                },
+                                {
+                                    "kind": "added",
+                                    "old_line": null,
+                                    "new_line": 2,
+                                    "content": "fn added() {}"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        })
     }
 
     fn write_waiting_approval_job(project: &Path, include_request: bool) {
