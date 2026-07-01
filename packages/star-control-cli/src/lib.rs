@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 use star_control_execution::{ExecutionEngine, ExecutionError};
-use star_control_provider::{ProviderRegistryError, ProviderRegistryLoader};
+use star_control_provider::{ProviderRegistry, ProviderRegistryError, ProviderRegistryLoader};
 use star_control_router::{JobSpec, RouterEngine, RouterError};
 use star_control_schema::{load_schema, validate_json};
 use star_control_state::{StateStore, StateStoreError};
@@ -163,6 +163,7 @@ struct ParsedArgs {
     request: Option<String>,
     entrypoint: Option<String>,
     provider: Option<String>,
+    provider_instances: Vec<PathBuf>,
     stage: Option<String>,
     dry_run: bool,
     json: bool,
@@ -212,6 +213,7 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
         request: None,
         entrypoint: None,
         provider: None,
+        provider_instances: Vec::new(),
         stage: None,
         dry_run: false,
         json: false,
@@ -255,6 +257,16 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
                     "--provider",
                     &command,
                 )?);
+            }
+            "--provider-instance" => {
+                parsed
+                    .provider_instances
+                    .push(PathBuf::from(require_option_value(
+                        args,
+                        &mut index,
+                        "--provider-instance",
+                        &command,
+                    )?));
             }
             "--stage" => {
                 parsed.stage = Some(require_option_value(args, &mut index, "--stage", &command)?);
@@ -300,24 +312,14 @@ fn run_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliErro
             message: "--request is required for run".to_string(),
         })?;
     let provider = parsed.provider.as_deref().unwrap_or(DEFAULT_PROVIDER);
-    if provider != DEFAULT_PROVIDER {
-        return Err(CliError::InvalidInput {
-            command: parsed.command.clone(),
-            message: "v0 fake flow supports only --provider fake-default".to_string(),
-        });
-    }
+    let provider_instance_id = provider.to_string();
 
     let schemas = config.schema_root();
     let store = StateStore::open(&project, &schemas).map_err(|source| CliError::State {
         command: parsed.command.clone(),
         source,
     })?;
-    let registry = ProviderRegistryLoader::new(config.repo_root())
-        .load_fake_default_registry()
-        .map_err(|source| CliError::ProviderRegistry {
-            command: parsed.command.clone(),
-            source,
-        })?;
+    let registry = load_run_registry(parsed, config, provider)?;
     let job = store
         .create_job(
             request,
@@ -343,15 +345,17 @@ fn run_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliErro
         command: parsed.command.clone(),
         source,
     })?;
+    let route_value = route_value_for_provider(route_output.route().value(), &provider_instance_id);
     store
-        .save_route(&job_id, route_output.route().value())
+        .save_route(&job_id, &route_value)
         .map_err(|source| CliError::State {
             command: parsed.command.clone(),
             source,
         })?;
     for (stage, workspec) in route_output.workspecs() {
+        let workspec_value = workspec_value_for_provider(workspec.value(), &provider_instance_id);
         store
-            .save_workspec(&job_id, stage, workspec.value())
+            .save_workspec(&job_id, stage, &workspec_value)
             .map_err(|source| CliError::State {
                 command: parsed.command.clone(),
                 source,
@@ -390,25 +394,21 @@ fn run_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliErro
                     command: parsed.command.clone(),
                     source,
                 })?;
-        let report = report_from_provider_result(outcome.provider_execution().result().value());
+        let provider_result = outcome.provider_execution().result().value();
+        let report = report_from_provider_result(provider_result);
         store
             .save_report(&job_id, &format!("{}-report", stage), &report)
             .map_err(|source| CliError::State {
                 command: parsed.command.clone(),
                 source,
             })?;
-        artifacts.extend([
-            format!(".ai-runs/{}/run-state.json", job_id),
-            format!(
-                ".ai-runs/{}/provider-output/{}/request.json",
-                job_id, DEFAULT_PROVIDER
-            ),
-            format!(
-                ".ai-runs/{}/provider-output/{}/response.json",
-                job_id, DEFAULT_PROVIDER
-            ),
-            format!(".ai-runs/{}/reports/{}-report.json", job_id, stage),
-        ]);
+        artifacts.push(format!(".ai-runs/{}/run-state.json", job_id));
+        artifacts.push(format!(
+            ".ai-runs/{}/provider-output/{}/request.json",
+            job_id, provider_instance_id
+        ));
+        artifacts.extend(provider_result_artifacts(provider_result, &job_id));
+        artifacts.push(format!(".ai-runs/{}/reports/{}-report.json", job_id, stage));
         (outcome.state().clone(), Some(stage))
     };
 
@@ -431,6 +431,121 @@ fn run_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliErro
         }),
         artifacts,
     ))
+}
+
+fn provider_result_artifacts(result: &Value, job_id: &str) -> Vec<String> {
+    result
+        .get("artifacts")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(|path| format!(".ai-runs/{}/{}", job_id, path))
+        .collect()
+}
+
+fn load_run_registry(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+    provider: &str,
+) -> Result<ProviderRegistry, CliError> {
+    if parsed.provider.is_none() && !parsed.provider_instances.is_empty() {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "--provider is required when --provider-instance is set".to_string(),
+        });
+    }
+    if provider != DEFAULT_PROVIDER && parsed.provider_instances.is_empty() {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "--provider-instance is required when --provider is not fake-default"
+                .to_string(),
+        });
+    }
+
+    let loader = ProviderRegistryLoader::new(config.repo_root());
+    let registry = if provider == DEFAULT_PROVIDER && parsed.provider_instances.is_empty() {
+        loader
+            .load_fake_default_registry()
+            .map_err(|source| CliError::ProviderRegistry {
+                command: parsed.command.clone(),
+                source,
+            })?
+    } else {
+        let mut instance_paths = vec![PathBuf::from(
+            "configs/provider-instances/fake-provider.example.yaml",
+        )];
+        instance_paths.extend(parsed.provider_instances.iter().cloned());
+        loader
+            .load_registry(
+                "configs/registries/builtin-provider-registry.yaml",
+                &instance_paths,
+            )
+            .map_err(|source| CliError::ProviderRegistry {
+                command: parsed.command.clone(),
+                source,
+            })?
+    };
+
+    registry
+        .instance(provider)
+        .ok_or_else(|| CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: format!("provider instance {} is not loaded", provider),
+        })?;
+    Ok(registry)
+}
+
+fn route_value_for_provider(route: &Value, provider_instance_id: &str) -> Value {
+    let mut route = route.clone();
+    if provider_instance_id == DEFAULT_PROVIDER {
+        return route;
+    }
+    if let Some(assignments) = route.get_mut("assignments").and_then(Value::as_object_mut) {
+        for assignment in assignments.values_mut() {
+            if let Some(assignment) = assignment.as_object_mut() {
+                assignment.insert(
+                    "provider".to_string(),
+                    Value::String(provider_instance_id.to_string()),
+                );
+            }
+        }
+    }
+    if let Some(reasons) = route
+        .get_mut("routing_reasons")
+        .and_then(Value::as_array_mut)
+    {
+        reasons.push(Value::String(format!(
+            "cli provider override: {}",
+            provider_instance_id
+        )));
+    }
+    route
+}
+
+fn workspec_value_for_provider(workspec: &Value, provider_instance_id: &str) -> Value {
+    let mut workspec = workspec.clone();
+    if provider_instance_id == DEFAULT_PROVIDER {
+        return workspec;
+    }
+    if let Some(workspec) = workspec.as_object_mut() {
+        workspec.insert(
+            "provider".to_string(),
+            Value::String(provider_instance_id.to_string()),
+        );
+        workspec.insert(
+            "provider_instance".to_string(),
+            Value::String(provider_instance_id.to_string()),
+        );
+        workspec.insert(
+            "required_outputs".to_string(),
+            json!([format!(
+                "provider-output/{}/response.json",
+                provider_instance_id
+            )]),
+        );
+    }
+    workspec
 }
 
 fn status_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
@@ -820,6 +935,61 @@ mod tests {
     }
 
     #[test]
+    fn run_with_local_process_provider_instance_executes_process() {
+        let project = temp_project();
+        let provider_instance = write_local_process_instance(&project, vec!["--help".to_string()]);
+        let config = CliConfig::new(repo_root());
+
+        let run = run_cli(
+            [
+                "run",
+                "--project",
+                project.to_str().expect("project path"),
+                "--request",
+                "runtime code 구현",
+                "--provider",
+                "local-default",
+                "--provider-instance",
+                provider_instance.to_str().expect("provider instance path"),
+                "--json",
+            ],
+            &config,
+        );
+
+        assert_eq!(run.exit_code, 0, "{}", run.stderr);
+        let run_json: Value = serde_json::from_str(&run.stdout).expect("run json");
+        assert_eq!(run_json["command"], "run");
+        assert_eq!(run_json["status"], "success");
+        assert_eq!(run_json["data"]["state"], "IMPLEMENTED");
+        assert!(project
+            .join(".ai-runs/J-0001/provider-output/local-default/response.json")
+            .is_file());
+        assert!(project
+            .join(".ai-runs/J-0001/provider-output/local-default/stdout.txt")
+            .is_file());
+        assert!(!project
+            .join(".ai-runs/J-0001/provider-output/fake-default/response.json")
+            .exists());
+
+        let route: Value = serde_json::from_str(
+            &fs::read_to_string(project.join(".ai-runs/J-0001/route.json")).expect("route"),
+        )
+        .expect("route json");
+        assert_eq!(
+            route["assignments"]["implement"]["provider"],
+            "local-default"
+        );
+        let workspec: Value = serde_json::from_str(
+            &fs::read_to_string(project.join(".ai-runs/J-0001/workspecs/implement.json"))
+                .expect("workspec"),
+        )
+        .expect("workspec json");
+        assert_eq!(workspec["provider_instance"], "local-default");
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
     fn missing_job_returns_schema_valid_error() {
         let project = temp_project();
         let config = CliConfig::new(repo_root());
@@ -843,7 +1013,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_provider_is_invalid_input() {
+    fn non_default_provider_requires_provider_instance_path() {
         let project = temp_project();
         let config = CliConfig::new(repo_root());
         let result = run_cli(
@@ -854,7 +1024,32 @@ mod tests {
                 "--request",
                 "runtime code 구현",
                 "--provider",
-                "codex",
+                "local-default",
+                "--json",
+            ],
+            &config,
+        );
+
+        assert_eq!(result.exit_code, 2);
+        let error_json: Value = serde_json::from_str(&result.stdout).expect("error json");
+        assert_eq!(error_json["error"]["code"], "InvalidInput");
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn provider_instance_path_requires_explicit_provider() {
+        let project = temp_project();
+        let provider_instance = write_local_process_instance(&project, vec!["--help".to_string()]);
+        let config = CliConfig::new(repo_root());
+        let result = run_cli(
+            [
+                "run",
+                "--project",
+                project.to_str().expect("project path"),
+                "--request",
+                "runtime code 구현",
+                "--provider-instance",
+                provider_instance.to_str().expect("provider instance path"),
                 "--json",
             ],
             &config,
@@ -875,6 +1070,45 @@ mod tests {
             std::env::temp_dir().join(format!("star-control-cli-{}-{}", std::process::id(), nanos));
         fs::create_dir_all(&path).expect("create temp project");
         path
+    }
+
+    fn write_local_process_instance(project: &Path, args: Vec<String>) -> PathBuf {
+        let path = project.join("local-process-instance.json");
+        fs::write(
+            &path,
+            serde_json::to_string_pretty(&json!({
+                "id": "local-default",
+                "provider": "provider.local-process",
+                "enabled": true,
+                "limits": {
+                    "timeout_seconds": 10,
+                    "max_parallel_jobs": 1
+                },
+                "routing_tags": ["local", "process"],
+                "command_policy": {
+                    "shell": false,
+                    "allowed_executables": [current_test_executable()],
+                    "env_allowlist": [],
+                    "cwd_policy": "project_root",
+                    "network": "deny",
+                    "workspace_write": "deny"
+                },
+                "command": {
+                    "executable": current_test_executable(),
+                    "args": args
+                }
+            }))
+            .expect("serialize local process instance"),
+        )
+        .expect("write local process instance");
+        path
+    }
+
+    fn current_test_executable() -> String {
+        std::env::current_exe()
+            .expect("current test executable")
+            .display()
+            .to_string()
     }
 
     fn repo_root() -> PathBuf {

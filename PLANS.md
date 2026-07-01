@@ -52,12 +52,13 @@
 - M5 local process provider command/sandbox/timeout/cancel 정책 문서를 추가했다.
 - M5b `LocalProcessProviderAdapter` 기본 command policy, stdout/stderr capture, timeout result를 추가했다.
 - M5c `ExecutionEngine` provider selection에 local process adapter 연결을 추가했다.
+- M5d CLI `run --provider <id> --provider-instance <path>` local process 실행 경로를 추가했다.
 
 ### 아직 남은 것
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
-- M5 local provider는 CLI provider selection 연결, cancel state model, forbidden action evidence -> BLOCKED/FAILED mapping이 남아 있다.
+- M5 local provider는 cancel state model, forbidden action evidence -> BLOCKED/FAILED mapping, provider conformance fixture가 남아 있다.
 - 다음 구현 축은 complete roadmap의 M5 local provider, M6 cloud provider, M7 daemon/API, M8 UI, M9 hardening 순서다.
 
 ### 건드리면 안 되는 것
@@ -132,6 +133,7 @@ cargo test --workspace
 | M5a handoff | `docs/implementation/local-process-provider-policy.md`; local process provider는 shell 없이 executable/args vector만 실행하고, env allowlist, network deny, workspace write deny, timeout/cancel 기록, approval-required/forbidden action guard를 따른다 |
 | M5b handoff | `LocalProcessProviderAdapter`, `LocalProcessCommandPolicy`; 실행은 shell 없이 executable/args vector만 사용하고, allowlist 밖 executable/shell wrapper/forbidden executable category를 거부하며, stdout/stderr는 `provider-output/{instance}/`에 capture한다 |
 | M5c handoff | `ExecutionEngine::execute_provider`; manifest가 `provider.fake`이면 fake adapter, `kind=local_process_model` + `transport=process`이면 local process adapter를 실행한다. local timeout은 기존 status mapping에 따라 RunState `FAILED`로 기록된다 |
+| M5d handoff | CLI `run --provider <instance-id> --provider-instance <path>`; non-default provider는 instance file을 명시해야 하며, route/workspec provider assignment를 선택 provider로 override한 뒤 `ExecutionEngine`이 실행한다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -165,3 +167,4 @@ cargo test --workspace
 | P-0025 | 2026-07-01 | M5 local process provider policy 추가 | `docs/implementation/local-process-provider-policy.md`, `configs/policies/provider-policy.yaml` |
 | P-0026 | 2026-07-01 | M5b local process provider adapter 추가 | `packages/star-control-provider/src/local_process.rs` |
 | P-0027 | 2026-07-01 | M5c ExecutionEngine local provider selection 추가 | `packages/star-control-execution/src/lib.rs` |
+| P-0028 | 2026-07-01 | M5d CLI local process provider run path 추가 | `packages/star-control-cli/src/lib.rs`, `docs/implementation/cli-command-reference.md` |

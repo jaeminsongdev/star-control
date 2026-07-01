@@ -110,10 +110,13 @@ CLI error envelope는 core `ErrorEnvelope`와 호환되는 정보를 담되, com
 ```text
 --entrypoint <path-or-command>
 --provider <instance-id>
+--provider-instance <path>
 --profile <profile>
 --dry-run
 --json
 ```
+
+`--provider` 기본값은 `fake-default`다. `fake-default`가 아닌 provider instance를 실행하려면 해당 instance contract 파일을 `--provider-instance <path>`로 명시해야 한다. 초기 M5 local process flow는 shell을 호출하지 않는 `local_process_model` + `process` instance만 대상으로 한다.
 
 `--json` example:
 
