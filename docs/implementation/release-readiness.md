@@ -64,6 +64,14 @@ packages/star-control-release
 
 M9h는 `ReleaseConsistencyChecker`와 `ReleaseConsistencyResult`를 제공한다. checker는 caller가 제공한 expected version, declared version text, changelog text를 비교해 `version-consistent`와 `changelog-updated` checks, blocker 목록을 만든다. 이 slice는 filesystem discovery나 changelog parser를 구현하지 않고, release/deploy/publish action을 실행하지 않는다.
 
+M9i 구현 위치:
+
+```text
+packages/star-control-release
+```
+
+M9i는 `ReleaseEvidenceFileChecker`를 제공한다. checker는 caller가 지정한 project root 내부의 version/changelog evidence file을 read-only로 읽고 `ReleaseConsistencyChecker`에 연결한다. 이 slice는 unsafe relative path를 거부하고, plain version file 또는 `version = "x.y.z"` declaration만 처리한다. automatic repository-wide scan, changelog format parser, release profile integration, release/deploy/publish action은 구현하지 않는다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -117,6 +125,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 5. version/changelog mismatch는 blocker로 기록
 6. API read-only endpoint는 missing readiness를 structured error로 반환하고 artifact를 수정하지 않음
 7. version/changelog checker output은 schema-valid `not_ready` readiness에 연결 가능함
+8. version/changelog evidence file reader는 project root 밖 path를 거부하고 read-only로 동작함
 
 ## Codex 구현 지시
 

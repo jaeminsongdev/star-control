@@ -434,6 +434,16 @@ M9h release version consistency checker는 release crate 수준에서 검증한�
 - checker output이 `ReleaseReadinessWriter::not_ready`에 들어가 schema-valid readiness를 만들 수 있음
 - filesystem discovery, changelog parser, release/deploy/publish, repository settings mutation이 없음
 
+M9i release evidence file discovery는 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- project root 내부 version/changelog file을 read-only로 읽음
+- plain `VERSION` file과 `version = "x.y.z"` declaration을 version evidence로 처리함
+- unsafe relative path, absolute path, drive-prefixed path를 거부함
+- missing version declaration을 explicit error로 반환함
+- automatic repository-wide scan, changelog parser, release/deploy/publish, repository settings mutation이 없음
+
 ## CI 변경 policy
 
 CI workflow 변경은 다음을 PR 본문에 명시해야 한다.

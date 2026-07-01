@@ -78,9 +78,10 @@ E30 State Recovery Inspection
 E31 Release Readiness Writer
 E32 Release Readiness API Read
 E33 Release Version Consistency Checker
+E34 Release Evidence File Discovery
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening, E30은 StateStore recovery inspect-only, E31은 ReleaseReadinessWriter, E32는 release readiness API read-only surface, E33은 release version consistency checker slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening, E30은 StateStore recovery inspect-only, E31은 ReleaseReadinessWriter, E32는 release readiness API read-only surface, E33은 release version consistency checker, E34는 release evidence file discovery slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -2684,6 +2685,87 @@ schema field 변경 없이 release-readiness.schema.json validation 유지
 
 ```text
 M9i는 release profile validation integration, release readiness CLI/UI read surface, changelog/version file discovery, or recovery command surface 중 하나로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E34 Release Evidence File Discovery
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+testing-ci-release.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-release/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+CLI command 추가
+artifact signing 구현
+package registry 설정
+repository branch protection/settings 변경
+automatic repository-wide scan
+changelog format parser
+release profile integration
+```
+
+입력:
+
+```text
+project_root
+expected release version
+relative version evidence path
+relative changelog evidence path
+```
+
+출력:
+
+```text
+ReleaseConsistencyResult
+version-consistent check with version evidence path
+changelog-updated check with changelog evidence path
+blockers for unsafe path, missing version, version/changelog mismatch
+```
+
+핵심 TASK:
+
+```text
+ReleaseEvidenceFileChecker 추가
+project root containment check
+unsafe relative path rejection
+version file read-only loading
+changelog file read-only loading
+simple version declaration extraction
+ReleaseConsistencyChecker 연결
+no mutation regression test
+```
+
+완료 기준: `ReleaseEvidenceFileChecker`가 project root 내부 version/changelog file을 read-only로 읽고 `ReleaseConsistencyResult`를 반환해야 한다. `VERSION` 같은 plain version file과 `version = "x.y.z"` declaration을 처리하고, unsafe path나 missing version declaration은 explicit error로 반환해야 한다. automatic repository-wide scan, changelog parser, release profile integration, CLI/API/UI surface, release/deploy/publish, repository settings, workflow, schema field 변경은 하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9j는 release profile validation integration, release readiness CLI/UI read surface, or recovery command surface 중 하나로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
 ```
 
 ## RESERVED

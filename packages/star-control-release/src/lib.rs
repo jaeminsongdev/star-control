@@ -28,6 +28,9 @@ pub enum ReleaseReadinessError {
     InvalidReleaseReadiness {
         message: String,
     },
+    InvalidReleaseEvidence {
+        message: String,
+    },
     WriteFailed {
         path: PathBuf,
         source: std::io::Error,
@@ -60,6 +63,9 @@ impl fmt::Display for ReleaseReadinessError {
             ),
             Self::InvalidReleaseReadiness { message } => {
                 write!(formatter, "invalid release readiness: {}", message)
+            }
+            Self::InvalidReleaseEvidence { message } => {
+                write!(formatter, "invalid release evidence: {}", message)
             }
             Self::WriteFailed { path, source } => write!(
                 formatter,
@@ -179,6 +185,42 @@ impl ReleaseConsistencyChecker {
             ],
             blockers,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReleaseEvidenceFileChecker;
+
+impl ReleaseEvidenceFileChecker {
+    pub fn check(
+        project_root: impl AsRef<Path>,
+        expected_version: impl Into<String>,
+        version_file: impl AsRef<str>,
+        changelog_file: impl AsRef<str>,
+    ) -> Result<ReleaseConsistencyResult, ReleaseReadinessError> {
+        let project_root = project_root.as_ref();
+        let version_file = version_file.as_ref();
+        let changelog_file = changelog_file.as_ref();
+        let version_path = resolve_project_file(project_root, version_file)?;
+        let changelog_path = resolve_project_file(project_root, changelog_file)?;
+        let version_text = read_release_text(&version_path)?;
+        let changelog_text = read_release_text(&changelog_path)?;
+        let declared_version = declared_version_from_text(&version_text).ok_or_else(|| {
+            ReleaseReadinessError::InvalidReleaseEvidence {
+                message: format!(
+                    "declared version not found in release evidence {}",
+                    version_file
+                ),
+            }
+        })?;
+
+        Ok(ReleaseConsistencyChecker::check(
+            expected_version,
+            declared_version,
+            changelog_text,
+            normalized_evidence_path(version_file)?,
+            normalized_evidence_path(changelog_file)?,
+        ))
     }
 }
 
@@ -423,6 +465,93 @@ fn display_or_empty(value: &str) -> &str {
     }
 }
 
+fn resolve_project_file(
+    project_root: &Path,
+    relative_path: &str,
+) -> Result<PathBuf, ReleaseReadinessError> {
+    let normalized = normalized_evidence_path(relative_path)?;
+    let root =
+        fs::canonicalize(project_root).map_err(|source| ReleaseReadinessError::ReadFailed {
+            path: project_root.to_path_buf(),
+            source,
+        })?;
+    let path = root.join(normalized.replace('/', std::path::MAIN_SEPARATOR_STR));
+    let canonical =
+        fs::canonicalize(&path).map_err(|source| ReleaseReadinessError::ReadFailed {
+            path: path.clone(),
+            source,
+        })?;
+    if !canonical.starts_with(&root) {
+        return Err(ReleaseReadinessError::InvalidReleaseEvidence {
+            message: format!(
+                "release evidence path escapes project root: {}",
+                relative_path
+            ),
+        });
+    }
+    if !canonical.is_file() {
+        return Err(ReleaseReadinessError::InvalidReleaseEvidence {
+            message: format!("release evidence path is not a file: {}", relative_path),
+        });
+    }
+    Ok(canonical)
+}
+
+fn normalized_evidence_path(path: &str) -> Result<String, ReleaseReadinessError> {
+    let path = path.trim().replace('\\', "/");
+    if path.is_empty()
+        || path.starts_with('/')
+        || path.contains(':')
+        || path
+            .split('/')
+            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+    {
+        return Err(ReleaseReadinessError::InvalidReleaseEvidence {
+            message: format!("unsafe release evidence path: {}", display_or_empty(&path)),
+        });
+    }
+    Ok(path)
+}
+
+fn read_release_text(path: &Path) -> Result<String, ReleaseReadinessError> {
+    fs::read_to_string(path).map_err(|source| ReleaseReadinessError::ReadFailed {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+fn declared_version_from_text(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if !trimmed.is_empty()
+        && !trimmed.contains('\n')
+        && trimmed
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || ".-_+".contains(character))
+    {
+        return Some(trimmed.to_string());
+    }
+
+    text.lines().filter_map(version_assignment_value).next()
+}
+
+fn version_assignment_value(line: &str) -> Option<String> {
+    let line = line.trim();
+    if line.starts_with('#') || !line.starts_with("version") {
+        return None;
+    }
+    let (key, value) = line.split_once('=')?;
+    if key.trim() != "version" {
+        return None;
+    }
+    let value = value.trim();
+    let value = value.strip_prefix('"')?.strip_suffix('"')?;
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
 fn timestamp_string() -> String {
     format!("unix:{}", timestamp_nanos())
 }
@@ -618,6 +747,95 @@ mod tests {
             .as_array()
             .expect("blockers")
             .is_empty());
+    }
+
+    #[test]
+    fn release_evidence_file_checker_reads_version_and_changelog_inside_project() {
+        let project = temp_project("evidence-pass");
+        fs::write(
+            project.join("Cargo.toml"),
+            "[package]\nname = \"demo\"\nversion = \"1.2.3\"\n",
+        )
+        .expect("write Cargo.toml");
+        fs::write(
+            project.join("CHANGELOG.md"),
+            "# Changelog\n\n## 1.2.3\n- release notes\n",
+        )
+        .expect("write changelog");
+
+        let result =
+            ReleaseEvidenceFileChecker::check(&project, "1.2.3", "Cargo.toml", "CHANGELOG.md")
+                .expect("file evidence result");
+
+        assert!(result.is_consistent());
+        assert_eq!(result.checks()[0]["status"], "pass");
+        assert_eq!(result.checks()[0]["evidence_paths"][0], "Cargo.toml");
+        assert_eq!(result.checks()[1]["status"], "pass");
+        assert_eq!(result.checks()[1]["evidence_paths"][0], "CHANGELOG.md");
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn release_evidence_file_checker_blocks_mismatch_from_files() {
+        let project = temp_project("evidence-mismatch");
+        fs::write(project.join("VERSION"), "1.2.2\n").expect("write VERSION");
+        fs::write(project.join("CHANGELOG.md"), "## 1.2.2\n").expect("write changelog");
+
+        let result =
+            ReleaseEvidenceFileChecker::check(&project, "1.2.3", "VERSION", "CHANGELOG.md")
+                .expect("file evidence result");
+
+        assert!(!result.is_consistent());
+        assert_eq!(result.checks()[0]["status"], "fail");
+        assert_eq!(result.checks()[1]["status"], "fail");
+        assert!(result
+            .blockers()
+            .contains(&"version mismatch: expected 1.2.3, found 1.2.2".to_string()));
+        assert!(result
+            .blockers()
+            .contains(&"changelog does not mention version 1.2.3".to_string()));
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn release_evidence_file_checker_rejects_unsafe_paths_and_missing_version() {
+        let project = temp_project("evidence-invalid");
+        fs::write(project.join("Cargo.toml"), "[package]\nname = \"demo\"\n")
+            .expect("write Cargo.toml");
+        fs::write(project.join("VERSION"), "1.2.3\n").expect("write VERSION");
+        fs::write(project.join("CHANGELOG.md"), "## 1.2.3\n").expect("write changelog");
+
+        for unsafe_path in [
+            "../Cargo.toml",
+            "/Cargo.toml",
+            "C:/Cargo.toml",
+            "nested/../Cargo.toml",
+        ] {
+            let unsafe_error =
+                ReleaseEvidenceFileChecker::check(&project, "1.2.3", unsafe_path, "CHANGELOG.md")
+                    .expect_err("unsafe version evidence path");
+            assert!(matches!(
+                unsafe_error,
+                ReleaseReadinessError::InvalidReleaseEvidence { .. }
+            ));
+        }
+
+        let unsafe_changelog_error =
+            ReleaseEvidenceFileChecker::check(&project, "1.2.3", "VERSION", "../CHANGELOG.md")
+                .expect_err("unsafe changelog evidence path");
+        assert!(matches!(
+            unsafe_changelog_error,
+            ReleaseReadinessError::InvalidReleaseEvidence { .. }
+        ));
+
+        let missing_version_error =
+            ReleaseEvidenceFileChecker::check(&project, "1.2.3", "Cargo.toml", "CHANGELOG.md")
+                .expect_err("missing version declaration");
+        assert!(matches!(
+            missing_version_error,
+            ReleaseReadinessError::InvalidReleaseEvidence { .. }
+        ));
+        fs::remove_dir_all(project).ok();
     }
 
     fn create_job(store: &StateStore) {
