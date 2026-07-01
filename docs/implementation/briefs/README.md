@@ -46,6 +46,7 @@ E19-cloud-api-live-approval-gate.md
 E20-cli-control-commands.md
 E21-daemon-queue-skeleton.md
 E22-api-read-only.md
+E23-ui-read-only-view.md
 ```
 
 ## 사용 방법

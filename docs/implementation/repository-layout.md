@@ -154,8 +154,9 @@ packages/star-adapter-openai-compatible
 
 ### `star-control-ui`
 
-- 작업 생성, 진행 상태, 승인, 리뷰 확인 UI
-- RESERVED: 초기 구현 전 문서 계약만 둔다
+- API read-only service를 소비하는 UI read-only view model
+- job list, job detail, timeline, provider output, validation, approval, review pack viewer data
+- RESERVED: browser UI app, TypeScript/Node package manager, mutation flow
 
 ### `star-sentinel`
 
@@ -174,7 +175,7 @@ apps/
 
 - `apps/starctl/`은 CLI entrypoint 후보다.
 - `apps/star-daemon/`은 daemon entrypoint 후보이며 초기 구현 대상이 아니다.
-- `apps/star-control-ui/`는 UI shell 후보이며 초기 구현 대상이 아니다.
+- `apps/star-control-ui/`는 browser UI shell 후보이며 초기 구현 대상이 아니다. M8a의 library-level view model은 `packages/star-control-ui/`에 둔다.
 - app layer는 core logic을 직접 소유하지 않고, 안정화된 package API를 호출하는 얇은 표면이어야 한다.
 
 ## builtin 경계

@@ -52,7 +52,7 @@ work-queue-consistency-check
 | M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture tests |
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
 | M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, approval/cancel/resume mutation tests |
-| M8 UI Shell | UI view model contract tests, read-only smoke, approval flow smoke |
+| M8 UI Shell | `star-control-ui` view model contract tests, read-only no-write smoke, approval path smoke |
 | M9 Hardening / Release Readiness | redaction, audit, recovery, retention, release readiness checks |
 
 Milestone validation은 누적된다. 뒤 단계로 갈수록 앞 단계 검증을 삭제하지 않고, 필요하면 quick/full profile로 분리한다.
@@ -316,6 +316,25 @@ M7c API read-only service는 HTTP server 없이 library-level test로 검증한�
 - read-only endpoint가 `.ai-runs/` artifact를 수정하지 않음
 - read-only endpoint가 daemon state artifact를 수정하지 않음
 - secret-like raw value redaction
+
+## UI tests
+
+M8a UI read-only view model은 browser app 없이 library-level test로 검증한다.
+
+검증 항목:
+
+- `ui-job-view.schema.json` validation
+- job list view model
+- job detail view model
+- timeline event view
+- provider output path viewer data
+- validation result path viewer data
+- approval request viewer data
+- review pack viewer data
+- approval-required job이 API/CLI mutation surface를 노출하지만 직접 mutation하지 않음
+- read-only view model이 StateStore artifact를 수정하지 않음
+- secret-like raw value redaction
+- missing report 같은 선택 artifact를 read-only error surface로 표시
 
 ## CI 변경 policy
 

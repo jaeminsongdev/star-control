@@ -225,7 +225,7 @@ Exit criteria:
 - API는 read-only endpoint부터 시작하고, mutation은 approval/cancel/resume 계약을 따른다.
 - daemon state는 repository root가 아니라 user config/cache 영역에 둔다.
 
-M7a CLI control commands는 daemon/API 구현 전에 `approve`, `cancel`, `resume`의 file-based StateStore mutation과 schema-valid CLI output/error envelope을 고정한다. M7b daemon queue skeleton은 daemon process 없이 `{config_root}/daemon/state.json`과 StateStore job 참조 등록, terminal/approval guard를 고정한다. M7c API read-only service는 HTTP server 없이 daemon state와 StateStore job/events/report를 `api-response` envelope으로 조회한다. 이후 M8 UI shell read-only view 순서로 진행한다.
+M7a CLI control commands는 daemon/API 구현 전에 `approve`, `cancel`, `resume`의 file-based StateStore mutation과 schema-valid CLI output/error envelope을 고정한다. M7b daemon queue skeleton은 daemon process 없이 `{config_root}/daemon/state.json`과 StateStore job 참조 등록, terminal/approval guard를 고정한다. M7c API read-only service는 HTTP server 없이 daemon state와 StateStore job/events/report를 `api-response` envelope으로 조회한다. 이후 M8 UI shell read-only view model 순서로 진행한다.
 
 Validation:
 
@@ -250,10 +250,13 @@ Exit criteria:
 - UI는 provider process나 Star Sentinel rule을 직접 실행하지 않는다.
 - approval mutation은 API/CLI 계약을 통해서만 수행한다.
 
+M8a read-only view model은 `packages/star-control-ui`의 `UiReadOnlyShell`로 구현한다. 이 slice는 browser app이 아니라 API read-only service를 소비하는 library-level view model이며, job list/detail/timeline/provider output/validation/approval/review pack 데이터를 만들고 StateStore artifact를 직접 수정하지 않는다.
+
 Validation:
 
 ```text
 python scripts/ci/run_all.py
+cargo test -p star-control-ui -- --nocapture
 UI contract tests
 read-only view smoke
 approval flow smoke

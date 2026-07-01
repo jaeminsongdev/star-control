@@ -21,8 +21,8 @@
 2. CLI approve/cancel/resume
 3. daemon queue skeleton
 4. API read-only service
-5. API mutation endpoints
-6. UI shell read-only view
+5. UI shell read-only view model
+6. API mutation endpoints
 7. UI approval/review flow
 8. provider session dashboard
 ```
@@ -299,7 +299,22 @@ Review pack viewer
 Settings / provider registry
 ```
 
-초기 UI는 read-only view부터 시작한다. 승인/취소/재개 mutation은 API와 CLI 안정화 이후 추가한다.
+초기 UI는 `packages/star-control-ui`의 read-only view model부터 시작한다. 승인/취소/재개 mutation은 API와 CLI 안정화 이후 추가한다.
+
+M8a 구현 범위:
+
+```text
+UiReadOnlyShell
+job_list view model
+job_detail view model
+timeline event view
+provider output viewer data
+validation result viewer data
+approval request viewer data
+review pack viewer data
+```
+
+M8a는 browser UI app, TypeScript/Node package manager, API server/mutation endpoint를 구현하지 않는다.
 
 ## UI 금지 사항
 
@@ -352,8 +367,8 @@ Codex는 CLI를 먼저 구현한다. Daemon, API, UI는 문서 계약만 보고 
 4. CLI approve/cancel/resume
 5. daemon skeleton
 6. API read-only
-7. UI shell read-only
+7. UI shell read-only view model
 
-M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. M7b 기준으로 daemon queue skeleton은 config root 아래 `daemon/state.json`을 만들고 StateStore job을 참조 등록한다. M7c 기준으로 API read-only service는 daemon state와 StateStore artifact를 schema-valid envelope으로 읽는다. API server와 UI shell은 이 계약을 재사용하며 별도 slice에서 구현한다.
+M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. M7b 기준으로 daemon queue skeleton은 config root 아래 `daemon/state.json`을 만들고 StateStore job을 참조 등록한다. M7c 기준으로 API read-only service는 daemon state와 StateStore artifact를 schema-valid envelope으로 읽는다. M8a 기준으로 UI read-only view model은 이 API service를 소비하고 StateStore artifact를 직접 수정하지 않는다. API server, mutation endpoint, browser UI shell은 별도 slice에서 구현한다.
 
 각 단계는 별도 PR로 진행한다.

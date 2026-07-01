@@ -67,9 +67,10 @@ E19 Cloud API Live Approval Gate
 E20 CLI Control Commands
 E21 Daemon Queue Skeleton
 E22 API Read-Only
+E23 UI Read-Only View
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1763,6 +1764,94 @@ secret-like response redaction test
 M8 UI shell read-only view를 별도 PR로 설계한다. UI는 API read-only service 계약을 소비하고 provider process, Star Sentinel rule, StateStore file mutation을 직접 구현하지 않는다.
 ```
 
+## E23 UI Read-Only View
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cli-daemon-api-ui.md
+ui-shell-contract.md
+api-contract.md
+daemon-contract.md
+state-store.md
+security-privacy-observability-contracts.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+Cargo.toml
+Cargo.lock
+packages/star-control-ui/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+browser UI app 구현
+TypeScript/Node package manager 도입
+HTTP server 구현
+API mutation endpoint 구현
+provider process 실행 구현
+Star Sentinel rule 직접 구현
+StateStore file mutation 구현
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+release/deploy/publish automation
+외부 provider live call
+credential raw value lookup/materialization
+```
+
+입력 artifact:
+
+```text
+ApiReadOnlyService response envelope
+대상 project .ai-runs/{job_id}/job.json
+대상 project .ai-runs/{job_id}/run-state.json
+대상 project .ai-runs/{job_id}/events.jsonl
+대상 project .ai-runs/{job_id}/reports/{stage}-report.json
+specs/schemas/ui-job-view.schema.json
+```
+
+출력 artifact:
+
+```text
+없음
+```
+
+핵심 TASK:
+
+```text
+star-control-ui crate 추가
+UiReadOnlyShell 추가
+job_list view model
+job_detail view model
+UI job view schema validation
+timeline event view
+provider output path viewer data
+validation result path viewer data
+approval request viewer data
+review pack viewer data
+read-only no-write regression test
+secret-like view redaction test
+missing report read-only error surface test
+```
+
+완료 기준: `UiReadOnlyShell`이 `ApiReadOnlyService`를 소비해 schema-valid job list/detail view model을 만들고, StateStore artifact를 직접 수정하지 않아야 한다. approval-required job은 approval path와 API/CLI mutation surface를 노출하지만 UI view model은 mutation을 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M8b browser UI shell 또는 API mutation slice를 별도 PR로 설계한다. browser UI package manager, network server, approval/cancel/resume mutation endpoint는 별도 승인과 보안 계약을 확인한 뒤 진행한다.
+```
+
 ## RESERVED
 
 아래는 E12 이후 별도 작은 PR로 구현한다.
@@ -1775,7 +1864,7 @@ Cloud API Provider transport execution
 Cloud provider-specific parser / conformance
 Daemon
 API mutation / HTTP server
-UI Shell
+Browser UI Shell / UI mutation flow
 Security / Cost / Observability Hardening
 Release Readiness Automation
 ```

@@ -8,6 +8,7 @@ members = [
     "packages/star-control-validation",
     "packages/star-control-daemon",
     "packages/star-control-api",
+    "packages/star-control-ui",
     "packages/star-control-cli",
     "packages/star-sentinel",
 ]

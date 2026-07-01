@@ -44,7 +44,7 @@ POST /projects/{project_id}/jobs/{job_id}/cancel
 POST /projects/{project_id}/jobs/{job_id}/resume
 ```
 
-Mutation endpoint는 CLI approve/cancel/resume과 read-only UI가 안정화된 뒤 별도 slice에서 구현한다.
+Mutation endpoint는 CLI approve/cancel/resume과 M8a read-only UI view model이 안정화된 뒤 별도 slice에서 구현한다.
 
 ## API response envelope
 
@@ -95,6 +95,7 @@ waiting_approval
 - missing project/job/report structured error
 - mutation method rejection
 - secret-like string/key redaction
+- M8a `UiReadOnlyShell` consumer 지원
 
 아직 구현하지 않음:
 
@@ -104,7 +105,7 @@ waiting_approval
 - auth/session
 - mutation endpoint
 - daemon background worker와의 live scheduling integration
-- UI shell
+- browser UI shell
 
 ## 테스트 기준
 

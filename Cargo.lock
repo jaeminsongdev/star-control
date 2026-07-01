@@ -152,6 +152,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "star-control-ui"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-api",
+ "star-control-schema",
+ "star-control-state",
+]
+
+[[package]]
 name = "star-control-validation"
 version = "0.1.0"
 dependencies = [

@@ -67,6 +67,7 @@
 - M7a CLI approve/cancel/resume control commands를 추가해 daemon/API 전제 조건을 file-based StateStore에서 검증한다.
 - M7b daemon queue skeleton을 추가해 config root 아래 daemon state와 StateStore job 참조 queue를 검증한다.
 - M7c API read-only service를 추가해 daemon state와 StateStore job/events/report를 schema-valid API envelope으로 조회한다.
+- M8a UI read-only view model을 `packages/star-control-ui`의 `UiReadOnlyShell`로 추가했다. browser UI app, API mutation, provider process 실행은 다음 slice까지 제외한다.
 - 병렬 Rust 테스트에서 provider/state temp project 경로가 충돌하지 않도록 test helper에 per-process counter를 추가했다.
 - Cargo incremental finalize 경고가 나오면 경고 package만 `cargo clean -p`로 정리하고 Cargo 검증은 순차 실행한다.
 
@@ -80,7 +81,7 @@
 
 - 사용자 승인 없는 의존성 설치, 파일 삭제, 테스트 약화.
 - schema, manifest, registry의 공개 필드명은 변경 전 영향 범위를 확인한다.
-- fake flow 안정화 전 local/cloud provider, daemon, API, UI, release automation을 앞당기지 않는다.
+- current queue와 milestone 순서 밖의 provider, daemon process, API server/mutation, browser UI app, release automation을 앞당기지 않는다.
 
 ### 먼저 확인할 파일
 
@@ -94,6 +95,7 @@
 - 해당 EPIC의 `docs/implementation/briefs/E*.md`
 - M6 작업은 `docs/implementation/cloud-provider-policy.md`를 함께 확인한다.
 - M7 작업은 `docs/implementation/daemon-contract.md`, `docs/implementation/api-contract.md`, `docs/implementation/cli-daemon-api-ui.md`를 함께 확인한다.
+- M8 작업은 `docs/implementation/ui-shell-contract.md`, `docs/implementation/api-contract.md`, `docs/implementation/cli-daemon-api-ui.md`를 함께 확인한다.
 
 ### 먼저 실행할 명령
 
@@ -167,7 +169,9 @@ cargo test --workspace
 | M7b dependency record | direct dependency `serde_json = "1"`; 목적: daemon-state JSON read/write와 approval-response parse; 대안: std-only JSON parser 재구현은 안정성 낮음; 검증: Cargo targeted/workspace checks + contract runner |
 | M7c handoff | `packages/star-control-api`의 `ApiReadOnlyService`는 registered `DaemonQueue`와 in-memory project registry를 통해 daemon state, projects/jobs/job/events/report를 읽고 `api-response.schema.json` envelope을 반환한다. missing artifact는 structured error, mutation method/path는 rejection, secret-like raw value는 redaction한다. HTTP server/socket/auth/mutation/UI는 아직 구현하지 않았다 |
 | M7c dependency record | direct dependency `serde_json = "1"`, local dependency `star-control-daemon`; 목적: API response JSON envelope, daemon state read, StateStore artifact projection; 대안: std-only JSON builder는 안정성 낮음; 검증: Cargo targeted/workspace checks + contract runner |
-| Cargo incremental cleanup | finalize 경고 package는 `_`를 `-`로 바꾼 Cargo package명에 대해 `cargo clean -p <package>`만 실행한다. 이후 `cargo check --workspace --all-targets --locked`, `cargo test --workspace --all-targets --locked`를 순차 실행한다 |
+| M8a handoff | `packages/star-control-ui`의 `UiReadOnlyShell`은 `ApiReadOnlyService`를 소비해 job list/detail/timeline/provider output/validation/approval/review pack view model을 만든다. `ui-job-view.schema.json` 검증, secret-like redaction, no-write regression을 포함한다. browser UI app, TypeScript/Node package manager, API mutation, provider process 실행은 아직 구현하지 않았다 |
+| M8a dependency record | direct dependency `serde_json = "1"`, local dependency `star-control-api`, `star-control-schema`; dev-only local dependency `star-control-state`; 목적: API response projection, UI job view schema validation, fixture-backed no-write tests; 검증: Cargo targeted/workspace checks + contract runner |
+| Cargo incremental cleanup | finalize 경고 package는 `_`를 `-`로 바꾼 Cargo package명에 대해 `cargo clean -p <package>`만 실행한다. 이후 `cargo check --workspace --all-targets --locked`, `cargo test --workspace --all-targets --locked`를 순차 실행한다. 반복되면 현재 PowerShell 명령 범위에서만 `CARGO_INCREMENTAL=0`을 사용하고 장기 기본값으로 남기지 않는다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -216,3 +220,4 @@ cargo test --workspace
 | P-0040 | 2026-07-01 | M7a CLI control commands 추가 | `packages/star-control-cli/src/lib.rs`, `docs/implementation/briefs/E20-cli-control-commands.md` |
 | P-0041 | 2026-07-01 | M7b daemon queue skeleton 추가 | `packages/star-control-daemon/src/lib.rs`, `docs/implementation/briefs/E21-daemon-queue-skeleton.md` |
 | P-0042 | 2026-07-01 | M7c API read-only service 추가 | `packages/star-control-api/src/lib.rs`, `docs/implementation/briefs/E22-api-read-only.md` |
+| P-0043 | 2026-07-01 | M8a UI read-only view model 추가 | `packages/star-control-ui/src/lib.rs`, `docs/implementation/briefs/E23-ui-read-only-view.md` |
