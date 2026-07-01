@@ -61,6 +61,7 @@ E34-release-evidence-file-discovery.md
 E35-release-profile-readiness-integration.md
 E36-release-readiness-ui-read.md
 E37-release-readiness-cli-read.md
+E38-release-review-pack-foundation.md
 ```
 
 ## 사용 방법

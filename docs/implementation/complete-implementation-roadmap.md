@@ -303,6 +303,8 @@ M9k release readiness UI read는 `packages/star-control-ui`의 `UiReadOnlyShell`
 
 M9l release readiness CLI read는 `packages/star-control-cli`의 `report --release-readiness` option으로 구현한다. 이 slice는 existing ReleaseReadiness artifact를 schema-valid CLI output envelope으로 읽고 missing artifact를 schema-valid error로 반환하되, 새 top-level command, StateStore mutation, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
 
+M9m release review pack foundation은 `packages/star-control-release`의 `ReleaseReviewPackWriter`로 구현한다. 이 slice는 existing ReleaseReadiness value를 검증한 뒤 `.ai-runs/{job_id}/review-packs/release-review-pack.md` Markdown artifact를 한 번만 쓰되, approval record, CLI/API/UI surface, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
 Validation:
 
 ```text
@@ -319,6 +321,7 @@ provider conformance hardening tests
 state recovery inspection tests
 release readiness checks
 release readiness writer tests
+release review pack writer tests
 ```
 
 ## 다음 작업 선택 규칙

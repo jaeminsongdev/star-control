@@ -11,6 +11,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const SCHEMA_VERSION: &str = "1.0.0";
 const RELEASE_READINESS_SCHEMA: &str = "release-readiness.schema.json";
 pub const RELEASE_READINESS_PATH: &str = "release/release-readiness.json";
+pub const RELEASE_REVIEW_PACK_MARKDOWN_FILE: &str = "release-review-pack.md";
+pub const RELEASE_REVIEW_PACK_PATH: &str = "review-packs/release-review-pack.md";
 
 #[derive(Debug)]
 pub enum ReleaseReadinessError {
@@ -69,7 +71,7 @@ impl fmt::Display for ReleaseReadinessError {
             }
             Self::WriteFailed { path, source } => write!(
                 formatter,
-                "failed to write release readiness artifact {}: {}",
+                "failed to write release artifact {}: {}",
                 path.display(),
                 source
             ),
@@ -505,6 +507,45 @@ impl ReleaseReadinessWriter {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ReleaseReviewPackWriter {
+    readiness_writer: ReleaseReadinessWriter,
+}
+
+impl ReleaseReviewPackWriter {
+    pub fn new(schema_root: impl Into<PathBuf>) -> Self {
+        Self {
+            readiness_writer: ReleaseReadinessWriter::new(schema_root),
+        }
+    }
+
+    pub fn build_markdown(&self, readiness: &Value) -> Result<String, ReleaseReadinessError> {
+        self.readiness_writer.validate_readiness(readiness)?;
+        Ok(render_release_review_pack_markdown(readiness))
+    }
+
+    pub fn write(
+        &self,
+        store: &StateStore,
+        job_id: &str,
+        readiness: &Value,
+    ) -> Result<Value, ReleaseReadinessError> {
+        let markdown = self.build_markdown(readiness)?;
+        let path = store.resolve_job_path(job_id, RELEASE_REVIEW_PACK_PATH)?;
+        write_new_text(&path, &markdown)?;
+        store
+            .artifact_ref(
+                job_id,
+                RELEASE_REVIEW_PACK_PATH,
+                ArtifactKind::ReviewPack,
+                "star-control-release",
+                None,
+                Some("release review pack Markdown artifact"),
+            )
+            .map_err(ReleaseReadinessError::from)
+    }
+}
+
 fn write_new_json(path: &Path, value: &Value) -> Result<(), ReleaseReadinessError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|source| ReleaseReadinessError::WriteFailed {
@@ -533,6 +574,151 @@ fn write_new_json(path: &Path, value: &Value) -> Result<(), ReleaseReadinessErro
             path: path.to_path_buf(),
             source,
         })
+}
+
+fn write_new_text(path: &Path, content: &str) -> Result<(), ReleaseReadinessError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|source| ReleaseReadinessError::WriteFailed {
+            path: parent.to_path_buf(),
+            source,
+        })?;
+    }
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|source| ReleaseReadinessError::WriteFailed {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    file.write_all(content.as_bytes())
+        .and_then(|_| file.flush())
+        .and_then(|_| file.sync_all())
+        .map_err(|source| ReleaseReadinessError::WriteFailed {
+            path: path.to_path_buf(),
+            source,
+        })
+}
+
+fn render_release_review_pack_markdown(readiness: &Value) -> String {
+    let mut markdown = String::new();
+    markdown.push_str("# Release Review Pack\n\n");
+    markdown.push_str("## Summary\n\n");
+    markdown.push_str(&format!(
+        "- release_id: `{}`\n",
+        markdown_inline(release_field(readiness, "release_id"))
+    ));
+    markdown.push_str(&format!(
+        "- target: `{}`\n",
+        markdown_inline(release_field(readiness, "target"))
+    ));
+    markdown.push_str(&format!(
+        "- version: `{}`\n",
+        markdown_inline(release_field(readiness, "version"))
+    ));
+    markdown.push_str(&format!(
+        "- status: `{}`\n",
+        markdown_inline(release_field(readiness, "status"))
+    ));
+    markdown.push_str(&format!(
+        "- generated_at: `{}`\n\n",
+        markdown_inline(release_field(readiness, "generated_at"))
+    ));
+
+    markdown.push_str("## Checks\n\n");
+    let checks = readiness
+        .get("checks")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    if checks.is_empty() {
+        markdown.push_str("- none recorded\n\n");
+    } else {
+        for check in checks {
+            let name = markdown_inline(release_field(check, "name"));
+            let status = markdown_inline(release_field(check, "status"));
+            let evidence_paths = release_string_array(check, "evidence_paths");
+            markdown.push_str(&format!("- `{}`: `{}`", name, status));
+            if !evidence_paths.is_empty() {
+                markdown.push_str(&format!(
+                    " (evidence: {})",
+                    markdown_code_list(&evidence_paths)
+                ));
+            }
+            markdown.push('\n');
+        }
+        markdown.push('\n');
+    }
+
+    markdown.push_str("## Blockers\n\n");
+    push_markdown_bullets(
+        &mut markdown,
+        &release_string_array(readiness, "blockers"),
+        "none recorded",
+    );
+
+    markdown.push_str("## Approvals\n\n");
+    push_markdown_bullets(
+        &mut markdown,
+        &release_string_array(readiness, "approvals"),
+        "none recorded",
+    );
+
+    markdown.push_str("## Guardrails\n\n");
+    markdown.push_str("- This artifact is for human review only.\n");
+    markdown.push_str(
+        "- Release, deploy, publish, signing, repository settings, and external account actions remain reserved.\n",
+    );
+    markdown.push_str(
+        "- A review pack is not an approval record and must not trigger release automation.\n",
+    );
+    markdown
+}
+
+fn release_field<'a>(value: &'a Value, field: &str) -> &'a str {
+    value.get(field).and_then(Value::as_str).unwrap_or("")
+}
+
+fn release_string_array(value: &Value, field: &str) -> Vec<String> {
+    value
+        .get(field)
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(markdown_inline)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn push_markdown_bullets(markdown: &mut String, values: &[String], empty_label: &str) {
+    if values.is_empty() {
+        markdown.push_str(&format!("- {}\n\n", empty_label));
+        return;
+    }
+    for value in values {
+        markdown.push_str(&format!("- {}\n", value));
+    }
+    markdown.push('\n');
+}
+
+fn markdown_code_list(values: &[String]) -> String {
+    values
+        .iter()
+        .map(|value| format!("`{}`", value))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn markdown_inline(value: &str) -> String {
+    let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.is_empty() {
+        "<empty>".to_string()
+    } else {
+        collapsed.replace('`', "'")
+    }
 }
 
 fn release_check(name: &str, status: &str, evidence_paths: Vec<String>) -> Value {
@@ -823,6 +1009,100 @@ mod tests {
         assert!(!project
             .join(".ai-runs/release/release-readiness.json")
             .exists());
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn release_review_pack_writer_writes_markdown_without_release_action() {
+        let project = temp_project("review-pack");
+        let store = open_store(&project);
+        create_job(&store);
+        let readiness_writer = ReleaseReadinessWriter::new(schema_root());
+        let readiness = readiness_writer.not_ready(
+            "release-0007",
+            "star-control",
+            "1.2.3",
+            vec![
+                readiness_writer.check(
+                    "required-ci-passed",
+                    "pass",
+                    vec![".github/workflows/ci.yml".to_string()],
+                ),
+                readiness_writer.check(
+                    "version-consistent",
+                    "fail",
+                    vec!["Cargo.toml".to_string()],
+                ),
+            ],
+            vec!["version mismatch: expected 1.2.3, found 1.2.2".to_string()],
+        );
+        let review_pack_writer = ReleaseReviewPackWriter::new(schema_root());
+
+        let artifact_ref = review_pack_writer
+            .write(&store, "J-0001", &readiness)
+            .expect("write release review pack");
+
+        assert_eq!(artifact_ref["path"], RELEASE_REVIEW_PACK_PATH);
+        assert_eq!(artifact_ref["kind"], "review_pack");
+        assert_eq!(artifact_ref["producer"], "star-control-release");
+        let path = project
+            .join(".ai-runs")
+            .join("J-0001")
+            .join("review-packs")
+            .join(RELEASE_REVIEW_PACK_MARKDOWN_FILE);
+        let markdown = fs::read_to_string(&path).expect("read release review pack");
+        assert!(markdown.contains("# Release Review Pack"));
+        assert!(markdown.contains("release-0007"));
+        assert!(markdown.contains("version-consistent"));
+        assert!(markdown.contains("version mismatch: expected 1.2.3, found 1.2.2"));
+        assert!(markdown.contains("release automation"));
+        assert!(!project
+            .join(".ai-runs")
+            .join("J-0001")
+            .join("release")
+            .join("release-action.json")
+            .exists());
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn release_review_pack_rejects_ready_status_and_overwrite() {
+        let project = temp_project("review-pack-overwrite");
+        let store = open_store(&project);
+        create_job(&store);
+        let readiness_writer = ReleaseReadinessWriter::new(schema_root());
+        let review_pack_writer = ReleaseReviewPackWriter::new(schema_root());
+        let mut ready = readiness_writer.readiness(
+            "release-0008",
+            "star-control",
+            "1.2.3",
+            "ready",
+            vec![readiness_writer.check("required-ci-passed", "pass", Vec::new())],
+            Vec::new(),
+        );
+        ready["approvals"] = json!(["release approval recorded"]);
+
+        let ready_error = review_pack_writer
+            .build_markdown(&ready)
+            .expect_err("ready status remains reserved");
+        assert!(matches!(
+            ready_error,
+            ReleaseReadinessError::InvalidReleaseReadiness { .. }
+        ));
+
+        let reserved = readiness_writer.reserved("release-0009", "star-control", "0.0.0-dev");
+        review_pack_writer
+            .write(&store, "J-0001", &reserved)
+            .expect("first review pack write");
+        let overwrite_error = review_pack_writer
+            .write(&store, "J-0001", &reserved)
+            .expect_err("second review pack write must not overwrite");
+        assert!(matches!(
+            overwrite_error,
+            ReleaseReadinessError::WriteFailed { .. }
+        ));
+
         fs::remove_dir_all(project).ok();
     }
 

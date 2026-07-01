@@ -192,6 +192,7 @@ packages/star-adapter-openai-compatible
 - ReleaseConsistencyChecker for version/changelog checks
 - ReleaseEvidenceFileChecker for read-only version/changelog evidence files
 - ReleaseProfileReadinessBuilder for profile/version/changelog readiness assembly
+- ReleaseReviewPackWriter for `review-packs/release-review-pack.md`
 - reserved/not_ready readiness artifact generation
 - RESERVED: signing, publish, deploy automation, repository/package registry settings changes
 

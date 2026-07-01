@@ -96,6 +96,14 @@ packages/star-control-cli
 
 M9l는 `star-control report --release-readiness` option을 제공한다. CLI는 existing `.ai-runs/{job_id}/release/release-readiness.json` artifact를 `ReleaseReadinessWriter::read`로 검증해 schema-valid CLI output envelope에 담고, missing artifact는 schema-valid CLI error envelope로 반환한다. 이 slice는 새 top-level command, release/deploy/publish action, StateStore mutation, schema field 변경을 구현하지 않는다.
 
+M9m 구현 위치:
+
+```text
+packages/star-control-release
+```
+
+M9m은 `ReleaseReviewPackWriter`를 제공한다. writer는 existing ReleaseReadiness value를 `ReleaseReadinessWriter` validation으로 검증한 뒤 `.ai-runs/{job_id}/review-packs/release-review-pack.md` Markdown artifact를 한 번만 쓴다. 반환 ArtifactRef는 `kind=review_pack`, `producer=star-control-release`를 사용한다. 이 slice는 approval record, CLI/API/UI surface, release/deploy/publish/signing action, schema field 변경을 구현하지 않는다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -139,6 +147,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 - readiness status를 증거 없이 `ready`로 표시하지 않는다.
 - M9f writer는 기존 readiness artifact를 조용히 덮어쓰지 않는다.
 - M9g API endpoint는 readiness artifact를 읽기만 하고 release action을 실행하지 않는다.
+- M9m review pack은 approval record가 아니며 release action을 실행하거나 활성화하지 않는다.
 
 ## 테스트 기준
 
@@ -153,6 +162,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 9. release profile validation result는 version/changelog result와 같은 readiness artifact에 병합되며 `ready` status를 만들지 않음
 10. UI release readiness viewer는 existing artifact를 읽고 missing artifact를 optional read-only error로 표시함
 11. CLI `report --release-readiness`는 existing readiness artifact를 읽고 release action을 실행하지 않음
+12. release review pack writer는 readiness validation을 재사용하고 `review-packs/release-review-pack.md`를 overwrite 없이 쓰며 approval/release action을 만들지 않음
 
 ## Codex 구현 지시
 

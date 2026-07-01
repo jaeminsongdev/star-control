@@ -476,6 +476,17 @@ M9l release readiness CLI read는 CLI crate 수준에서 검증한다.
 - readiness artifact와 StateStore를 수정하지 않고 release action을 활성화하지 않음
 - new top-level CLI command, browser app, HTTP server, schema field, release/deploy/publish, repository settings mutation이 없음
 
+M9m release review pack foundation은 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- `ReleaseReviewPackWriter`가 ReleaseReadiness validation을 재사용함
+- `.ai-runs/{job_id}/review-packs/release-review-pack.md`를 새 파일로만 씀
+- 반환 ArtifactRef가 `kind=review_pack`, `producer=star-control-release`를 사용함
+- `ready` status와 overwrite를 거부함
+- review pack이 approval record, release action, deploy/publish/signing action, repository settings mutation을 만들지 않음
+- new CLI/API/UI surface, schema field, workflow, dependency 변경이 없음
+
 ## CI 변경 policy
 
 CI workflow 변경은 다음을 PR 본문에 명시해야 한다.
