@@ -71,9 +71,12 @@ E23 UI Read-Only View
 E24 API Control Mutations
 E25 UI Browser Control Shell
 E26 Security Redaction Utility
+E27 Observability Audit Event Writer
+E28 Cost Metric Budget Guard
+E29 Provider Conformance Hardening
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -2276,6 +2279,90 @@ CLI test temp project path collision hardening if workspace validation exposes f
 
 ```text
 M9d는 provider conformance hardening, retention/recovery, release readiness 중 하나로 이어간다. provider execution path가 CostMetricWriter/Budget evaluation을 자동 호출하는 작업은 별도 작은 PR에서 처리한다.
+```
+
+## E29 Provider Conformance Hardening
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+provider-system.md
+security-privacy-observability-contracts.md
+security-cost-observability.md
+testing-ci-release.md
+release-readiness.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+credential raw value lookup/materialization
+provider live call
+HTTP server 구현
+browser UI app 구현
+retention/recovery/release automation 구현
+```
+
+입력 artifact:
+
+```text
+specs/schemas/provider-run-result.schema.json
+specs/schemas/privacy-handoff.schema.json
+specs/schemas/cost-metric.schema.json
+provider-output/{provider_instance_id}/request.json
+provider-output/{provider_instance_id}/response.json
+provider-output/{provider_instance_id}/stdout.txt
+provider-output/{provider_instance_id}/stderr.txt
+provider-output/{provider_instance_id}/privacy-handoff.json
+provider-output/{provider_instance_id}/cost-metric.json
+```
+
+출력 artifact:
+
+```text
+ProviderConformanceChecker hardening
+ProviderConformanceReport checked_artifacts
+conformance regression tests
+```
+
+핵심 TASK:
+
+```text
+provider_instance_id safe segment check
+ArtifactRef path/kind/producer consistency check
+stored response.json schema validation
+stored response.json equals ProviderRunResult value check
+cloud privacy-handoff schema validation
+cloud cost-metric schema validation
+cloud sidecar job/provider/stage consistency check
+unsafe provider id regression test
+stored response mismatch regression test
+schema-invalid cloud sidecar regression test
+```
+
+완료 기준: ProviderConformanceChecker가 provider result/ref/file/schema를 함께 검증하고, stored response mismatch나 schema-invalid cloud sidecar를 실패로 처리해야 한다. 실제 provider live call, schema field 변경, workflow 변경, release/deploy/publish automation은 하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9e는 retention/recovery 또는 release readiness writer 중 하나로 이어간다. provider execution path가 conformance checker를 모든 provider run마다 자동 호출하는 작업은 별도 작은 PR에서 처리한다.
 ```
 
 ## RESERVED

@@ -285,6 +285,8 @@ M9b audit event writer는 `packages/star-control-observability`의 AuditEventWri
 
 M9c cost metric budget guard는 `packages/star-control-observability`의 CostMetricWriter와 CostBudgetThresholds로 구현한다. 이 slice는 provider output sidecar `cost-metric.json` validation/write/readback, 저장 전 redaction, missing metric non-fatal path, warning-only budget evaluation을 고정한다. provider execution 자동 연결, hard enforcement, 외부 billing/quota 조회, retention/recovery command, release readiness automation은 후속 slice로 남긴다.
 
+M9d provider conformance hardening은 `packages/star-control-provider`의 ProviderConformanceChecker를 강화한다. 이 slice는 ArtifactRef path/kind/producer, stored `response.json` schema/value 일치, cloud privacy/cost sidecar schema와 job/provider/stage 일치를 검증한다. provider live call, schema field 변경, workflow/release/deploy/publish automation은 구현하지 않는다.
+
 Validation:
 
 ```text
@@ -297,6 +299,7 @@ security guard tests
 redaction report tests
 audit event writer tests
 cost metric budget guard tests
+provider conformance hardening tests
 release readiness checks
 ```
 

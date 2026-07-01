@@ -52,6 +52,7 @@ E25-ui-browser-control-shell.md
 E26-security-redaction-utility.md
 E27-observability-audit-event-writer.md
 E28-cost-metric-budget-guard.md
+E29-provider-conformance-hardening.md
 ```
 
 ## 사용 방법

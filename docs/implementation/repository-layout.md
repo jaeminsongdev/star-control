@@ -118,6 +118,7 @@ packages/star-adapter-openai-compatible
 - provider instance loading
 - ProviderAdapter interface
 - fake, human, local, cloud provider adapter 경계
+- ProviderConformanceChecker result/ref/file/schema consistency hardening
 
 ### `star-control-validation`
 

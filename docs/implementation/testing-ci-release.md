@@ -53,7 +53,7 @@ work-queue-consistency-check
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
 | M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, in-process API approve/cancel/resume mutation tests |
 | M8 UI Shell | `star-control-ui` view model contract tests, read-only no-write smoke, approval path smoke, browser control shell smoke |
-| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, audit/cost integration, recovery, retention, release readiness checks |
+| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, provider conformance hardening tests, audit/cost integration, recovery, retention, release readiness checks |
 
 Milestone validation은 누적된다. 뒤 단계로 갈수록 앞 단계 검증을 삭제하지 않고, 필요하면 quick/full profile로 분리한다.
 
@@ -383,6 +383,16 @@ M9c cost metric budget guard는 observability crate 수준에서 검증한다.
 - unexpected secret-like field가 저장 전 `[REDACTED]`로 치환됨
 - missing cost metric이 non-fatal `Ok(None)`으로 표현됨
 - budget threshold 초과가 hard failure가 아니라 `warn_only` evaluation으로 표현됨
+
+M9d provider conformance hardening은 provider crate 수준에서 검증한다.
+
+검증 항목:
+
+- ArtifactRef path/kind/producer가 provider output 계약과 일치함
+- stored `response.json`이 `provider-run-result.schema.json`을 만족하고 in-memory result와 일치함
+- unsafe provider instance id와 provider output boundary 우회가 실패함
+- cloud profile sidecar인 `privacy-handoff.json`과 `cost-metric.json`이 schema를 만족함
+- cloud cost metric의 job/provider/stage가 provider result와 일치함
 
 ## CI 변경 policy
 
