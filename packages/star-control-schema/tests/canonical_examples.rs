@@ -1,0 +1,251 @@
+use star_control_schema::validate_file;
+use std::path::{Path, PathBuf};
+
+const VALIDATION_CASES: &[(&str, &str)] = &[
+    (
+        "specs/schemas/job.schema.json",
+        "examples/runs/J-0001/job.json",
+    ),
+    (
+        "specs/schemas/run-state.schema.json",
+        "examples/runs/J-0001/run-state.json",
+    ),
+    (
+        "specs/schemas/route.schema.json",
+        "configs/templates/route-template.json",
+    ),
+    (
+        "specs/schemas/route.schema.json",
+        "examples/fake/route-done.json",
+    ),
+    (
+        "specs/schemas/route.schema.json",
+        "examples/runs/J-0001/route.json",
+    ),
+    (
+        "specs/schemas/route.schema.json",
+        "examples/router-contracts/route-approval-required.example.json",
+    ),
+    (
+        "specs/schemas/router-decision.schema.json",
+        "examples/router-contracts/router-decision.schema-change.example.json",
+    ),
+    (
+        "specs/schemas/execution-request.schema.json",
+        "examples/execution-contracts/execution-request.fake.example.json",
+    ),
+    (
+        "specs/schemas/execution-attempt.schema.json",
+        "examples/execution-contracts/execution-attempt.success.example.json",
+    ),
+    (
+        "specs/schemas/validation-decision.schema.json",
+        "examples/validation-contracts/validation-decision.human-review.example.json",
+    ),
+    (
+        "specs/schemas/approval-request.schema.json",
+        "examples/validation-contracts/approval-request.example.json",
+    ),
+    (
+        "specs/schemas/approval-response.schema.json",
+        "examples/validation-contracts/approval-response.example.json",
+    ),
+    (
+        "specs/schemas/review-pack-handoff.schema.json",
+        "examples/validation-contracts/review-pack-handoff.example.json",
+    ),
+    (
+        "specs/schemas/cli-output.schema.json",
+        "examples/cli-contracts/run-output.example.json",
+    ),
+    (
+        "specs/schemas/cli-output.schema.json",
+        "examples/cli-contracts/status-output.example.json",
+    ),
+    (
+        "specs/schemas/cli-output.schema.json",
+        "examples/cli-contracts/approve-output.example.json",
+    ),
+    (
+        "specs/schemas/cli-error.schema.json",
+        "examples/cli-contracts/error-output.example.json",
+    ),
+    (
+        "specs/schemas/daemon-state.schema.json",
+        "examples/surface-contracts/daemon-state.example.json",
+    ),
+    (
+        "specs/schemas/api-response.schema.json",
+        "examples/surface-contracts/api-job-response.example.json",
+    ),
+    (
+        "specs/schemas/ui-job-view.schema.json",
+        "examples/surface-contracts/ui-job-view.example.json",
+    ),
+    (
+        "specs/schemas/redaction-report.schema.json",
+        "examples/security-contracts/redaction-report.example.json",
+    ),
+    (
+        "specs/schemas/audit-event.schema.json",
+        "examples/security-contracts/audit-event.example.json",
+    ),
+    (
+        "specs/schemas/cost-metric.schema.json",
+        "examples/security-contracts/cost-metric.fake.example.json",
+    ),
+    (
+        "specs/schemas/privacy-handoff.schema.json",
+        "examples/security-contracts/privacy-handoff.example.json",
+    ),
+    (
+        "specs/schemas/release-readiness.schema.json",
+        "examples/release-contracts/release-readiness.example.json",
+    ),
+    (
+        "specs/schemas/workspec.schema.json",
+        "examples/runs/J-0001/workspecs/implement.json",
+    ),
+    (
+        "specs/schemas/report.schema.json",
+        "configs/templates/report-template.json",
+    ),
+    (
+        "specs/schemas/report.schema.json",
+        "examples/fake/impl-report-done.json",
+    ),
+    (
+        "specs/schemas/event.schema.json",
+        "examples/core/event.example.json",
+    ),
+    (
+        "specs/schemas/artifact-ref.schema.json",
+        "examples/core/artifact-ref.example.json",
+    ),
+    (
+        "specs/schemas/error.schema.json",
+        "examples/core/error.example.json",
+    ),
+    (
+        "specs/schemas/provider-manifest.schema.json",
+        "examples/provider-contracts/provider-manifest.fake.example.json",
+    ),
+    (
+        "specs/schemas/provider-instance.schema.json",
+        "examples/provider-contracts/provider-instance.fake.example.json",
+    ),
+    (
+        "specs/schemas/capability-profile.schema.json",
+        "examples/provider-contracts/capability-profile.fake.example.json",
+    ),
+    (
+        "specs/schemas/provider-registry.schema.json",
+        "examples/provider-contracts/provider-registry.example.json",
+    ),
+    (
+        "specs/schemas/provider-run-result.schema.json",
+        "examples/provider-contracts/provider-run-result.success.example.json",
+    ),
+    (
+        "specs/schemas/provider-run-result.schema.json",
+        "examples/execution-contracts/fake-provider-response.success.example.json",
+    ),
+    (
+        "specs/schemas/config.schema.json",
+        "examples/config-contracts/config.example.json",
+    ),
+    (
+        "specs/schemas/policy.schema.json",
+        "examples/config-contracts/policy.example.json",
+    ),
+    (
+        "specs/schemas/hook.schema.json",
+        "examples/config-contracts/hook.example.json",
+    ),
+    (
+        "specs/schemas/role.schema.json",
+        "examples/config-contracts/role.example.json",
+    ),
+    (
+        "specs/schemas/renderer.schema.json",
+        "examples/config-contracts/renderer.example.json",
+    ),
+    (
+        "specs/schemas/skill.schema.json",
+        "examples/config-contracts/skill.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/approval.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/approval-block.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/sentinel-task.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/sentinel-task.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/diagnostic.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/diagnostic-block.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/ledger-event.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/ledger-event.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/validation-run.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/validation-run.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/review-pack.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/review-pack-human-review.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/repo-map.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/repo-map.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/changed-lines.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/changed-lines.example.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/p0-rule-registry.schema.json",
+        "builtin-tools/star-sentinel/policies/p0-rule-registry.json",
+    ),
+    (
+        "builtin-tools/star-sentinel/schemas/fixture-outcome.schema.json",
+        "builtin-tools/star-sentinel/examples/p0/fixture-outcome-scope-block.example.json",
+    ),
+];
+
+#[test]
+fn canonical_examples_validate_with_runtime_validator() {
+    let root = repo_root();
+    let mut errors = Vec::new();
+
+    for (schema_path, document_path) in VALIDATION_CASES {
+        match validate_file(root.join(document_path), root.join(schema_path)) {
+            Ok(result) if result.is_ok() => {}
+            Ok(result) => {
+                for error in result.errors {
+                    errors.push(format!(
+                        "{} against {}: {} {}",
+                        document_path, schema_path, error.location, error.message
+                    ));
+                }
+            }
+            Err(error) => errors.push(format!(
+                "{} against {}: {}",
+                document_path, schema_path, error
+            )),
+        }
+    }
+
+    assert!(
+        errors.is_empty(),
+        "runtime validator failed canonical examples:\n{}",
+        errors.join("\n")
+    );
+}
+
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}

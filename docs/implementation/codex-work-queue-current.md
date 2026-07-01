@@ -80,7 +80,7 @@ RouterEngine 구현 파일
 ExecutionEngine 구현 파일
 ValidationEngine 구현 파일
 CLI 구현 파일
-package manager / lockfile
+Cargo 외 package manager / E01 baseline 밖의 lockfile
 ```
 
 입력 artifact:

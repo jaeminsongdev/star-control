@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "packages/star-control-schema",
+]
+resolver = "2"

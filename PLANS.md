@@ -35,12 +35,13 @@
 - E01~E11 Codex 구현 착수용 brief를 추가했다.
 - 완전 구현 기본값과 M0~M9 milestone 기준을 문서화했다.
 - 검증/AGENTS 효율 병목을 정리하고, `scripts/test.ps1`을 정본 contract runner로 연결했다.
+- E01 최소 Cargo workspace와 `packages/star-control-schema` runtime validator를 추가했다.
 
 ### 아직 남은 것
 
-- Cargo workspace와 최소 runtime crate 생성은 구현 PR에서 시작한다.
+- E02 File-based StateStore부터 현재 큐 순서대로 진행한다.
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
-- Codex가 E01부터 순차 구현을 시작한다.
+- v0 fake flow는 E11 integration smoke까지 완료해야 첫 검증 milestone으로 인정한다.
 
 ### 건드리면 안 되는 것
 
@@ -64,6 +65,9 @@
 ```text
 python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
+cargo fmt --check
+cargo check --workspace
+cargo test --workspace
 ```
 
 ### 현재 차단 요소
@@ -79,9 +83,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 
 | ID | 내용 | 영향 | 다음 조치 |
 |---|---|---|---|
-| R-0001 | runtime 구현 전 상태 | CLI/API/UI 동작 검증은 아직 불가 | 구현 스택 결정에 따라 E01부터 순차 구현 |
-| R-0002 | Cargo workspace 파일 미생성 | Cargo build/test 명령은 구현 PR 전까지 제한됨 | E01 구현 PR에서 최소 workspace 생성 |
-| R-0003 | runtime 구현 전 상태 | Cargo build/test와 CLI/API/UI 동작 검증은 구현 PR 전까지 제한됨 | E01 구현 PR에서 Cargo workspace 생성 후 package 검증 추가 |
+| R-0001 | v0 fake flow 미완성 | CLI/API/UI 동작 검증은 아직 불가 | E02~E11을 현재 큐 순서대로 구현 |
+| R-0002 | runtime validator pattern 지원 범위 제한 | 현재 repository schema pattern만 지원하고 범용 regex는 지원하지 않음 | 새 pattern 추가 시 schema-validator test와 dependency 승인 여부 검토 |
+| R-0003 | Cargo workspace 초기 상태 | 아직 `star-control-schema` 외 runtime crate는 없음 | E02에서 `star-control-state` 추가 |
 
 ## Archive References
 
@@ -94,6 +98,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 | 완전 구현 기본값 결정 | `docs/decisions/0005-full-implementation-defaults.md` |
 | 완전 구현 milestone | `docs/implementation/complete-implementation-roadmap.md` |
 | EPIC별 brief | `docs/implementation/briefs/` |
+| E01 dependency record | direct dependency `serde_json = "1"`; 목적: JSON schema/document parse; 대안: std-only JSON parser 재구현은 안정성 낮음; 검증: Cargo + contract checks |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -110,3 +115,4 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 | P-0008 | 2026-07-01 | E01~E11 Codex 구현 착수용 brief 추가 | `docs/implementation/briefs/` |
 | P-0009 | 2026-07-01 | 완전 구현 기본값과 M0~M9 milestone 문서 정렬 | `docs/decisions/0005-full-implementation-defaults.md`, `docs/implementation/complete-implementation-roadmap.md` |
 | P-0010 | 2026-07-01 | 검증/AGENTS 효율 병목 정리 | `AGENTS.md`, `scripts/test.ps1`, `scripts/ci/check_implementation_docs.py` |
+| P-0011 | 2026-07-01 | E01 runtime schema validator 추가 | `packages/star-control-schema`, `Cargo.toml` |
