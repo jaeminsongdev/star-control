@@ -2139,6 +2139,7 @@ release-readiness.md
 Cargo.toml
 Cargo.lock
 packages/star-control-observability/**
+packages/star-control-cli/src/lib.rs
 docs/implementation/**
 docs/operations/**
 PLANS.md
@@ -2196,7 +2197,85 @@ schema-valid audit event append test
 다음 EPIC handoff:
 
 ```text
-M9c는 cost/budget guard, provider conformance hardening, retention/recovery, release readiness 중 하나로 이어간다. API/CLI/daemon/provider event를 AuditEventWriter에 연결하는 작업은 별도 작은 PR에서 처리한다.
+M9c는 cost metric budget guard로 이어간다. API/CLI/daemon/provider event를 AuditEventWriter에 연결하는 작업은 별도 작은 PR에서 처리한다.
+```
+
+## E28 Cost Metric Budget Guard
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+security-privacy-observability-contracts.md
+security-cost-observability.md
+provider-system.md
+testing-ci-release.md
+release-readiness.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-observability/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+release/deploy/publish automation
+external account/repository settings 변경
+credential raw value lookup/materialization
+provider live call
+HTTP server 구현
+browser UI app 구현
+hard budget enforcement
+retention/recovery/release automation 구현
+```
+
+입력 artifact:
+
+```text
+specs/schemas/cost-metric.schema.json
+examples/security-contracts/cost-metric.fake.example.json
+provider-output/{provider_instance_id}/cost-metric.json
+```
+
+출력 artifact:
+
+```text
+provider-output/{provider_instance_id}/cost-metric.json
+Budget evaluation JSON value
+```
+
+핵심 TASK:
+
+```text
+CostMetricWriter 추가
+CostMetric schema validation
+provider-output/{provider_instance_id}/cost-metric.json writer/readback helper
+secret-like unexpected field redaction before persist
+safe provider instance path containment
+CostBudgetThresholds 추가
+warning-only budget evaluation
+missing cost metric non-fatal read path
+fake/default cost=0 regression test
+budget threshold warning test
+CLI test temp project path collision hardening if workspace validation exposes flake
+```
+
+완료 기준: CostMetricWriter가 schema-valid CostMetric만 provider output sidecar로 저장하고, missing metric은 core flow 실패가 아닌 `Ok(None)`으로 표현해야 한다. Budget evaluation은 `warn_only`이며 hard enforcement, billing/quota 외부 조회, provider execution 자동 연결은 후속 slice로 남긴다.
+
+다음 EPIC handoff:
+
+```text
+M9d는 provider conformance hardening, retention/recovery, release readiness 중 하나로 이어간다. provider execution path가 CostMetricWriter/Budget evaluation을 자동 호출하는 작업은 별도 작은 PR에서 처리한다.
 ```
 
 ## RESERVED
@@ -2212,7 +2291,7 @@ Cloud provider-specific parser / conformance
 Daemon
 HTTP server / remote API exposure
 Browser UI Shell app / remote UI runtime
-Cost / Observability Integration / Conformance Hardening
+Observability Integration / Conformance Hardening
 Release Readiness Automation
 ```
 

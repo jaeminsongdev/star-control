@@ -283,6 +283,8 @@ M9a redaction utility는 `packages/star-control-security`의 shared redaction ut
 
 M9b audit event writer는 `packages/star-control-observability`의 AuditEventWriter로 구현한다. 이 slice는 `.ai-runs/{job_id}/audit/audit-events.jsonl` append-only writer/readback helper, schema validation, 저장 전 redaction, job directory containment를 고정한다. API/CLI/daemon/provider event 자동 연결, cost/budget guard, retention/recovery command, release readiness automation은 후속 slice로 남긴다.
 
+M9c cost metric budget guard는 `packages/star-control-observability`의 CostMetricWriter와 CostBudgetThresholds로 구현한다. 이 slice는 provider output sidecar `cost-metric.json` validation/write/readback, 저장 전 redaction, missing metric non-fatal path, warning-only budget evaluation을 고정한다. provider execution 자동 연결, hard enforcement, 외부 billing/quota 조회, retention/recovery command, release readiness automation은 후속 slice로 남긴다.
+
 Validation:
 
 ```text
@@ -294,6 +296,7 @@ provider conformance suite
 security guard tests
 redaction report tests
 audit event writer tests
+cost metric budget guard tests
 release readiness checks
 ```
 

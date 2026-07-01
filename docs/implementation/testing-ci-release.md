@@ -53,7 +53,7 @@ work-queue-consistency-check
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
 | M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, in-process API approve/cancel/resume mutation tests |
 | M8 UI Shell | `star-control-ui` view model contract tests, read-only no-write smoke, approval path smoke, browser control shell smoke |
-| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, audit integration, recovery, retention, release readiness checks |
+| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, audit/cost integration, recovery, retention, release readiness checks |
 
 Milestone validation은 누적된다. 뒤 단계로 갈수록 앞 단계 검증을 삭제하지 않고, 필요하면 quick/full profile로 분리한다.
 
@@ -373,6 +373,16 @@ M9b audit event writer는 observability crate 수준에서 검증한다.
 - secret-like summary/body가 저장 전 `[REDACTED]`로 치환됨
 - path traversal job/path 입력을 거부
 - 반환 ArtifactRef가 audit log contract를 만족
+
+M9c cost metric budget guard는 observability crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control-observability`가 schema-valid CostMetric을 provider output sidecar로 저장
+- cost metric path가 provider output directory 내부로 제한됨
+- unexpected secret-like field가 저장 전 `[REDACTED]`로 치환됨
+- missing cost metric이 non-fatal `Ok(None)`으로 표현됨
+- budget threshold 초과가 hard failure가 아니라 `warn_only` evaluation으로 표현됨
 
 ## CI 변경 policy
 

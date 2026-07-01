@@ -175,7 +175,10 @@ packages/star-adapter-openai-compatible
 - schema-valid `audit/audit-events.jsonl` append/readback helper
 - StateStore job directory containment for audit log paths
 - shared redaction utility application before audit persistence
-- RESERVED: API/CLI/daemon/provider automatic audit integration, cost/budget guard, retention/recovery command, release readiness automation
+- CostMetricWriter
+- schema-valid provider output `cost-metric.json` write/readback helper
+- warning-only CostBudgetThresholds evaluation
+- RESERVED: API/CLI/daemon/provider automatic audit/cost integration, hard budget enforcement, retention/recovery command, release readiness automation
 
 ### `star-sentinel`
 

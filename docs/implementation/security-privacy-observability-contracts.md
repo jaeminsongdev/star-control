@@ -133,6 +133,14 @@ quota_remaining
 
 FakeProvider는 estimated_cost 0, token 0을 기록한다.
 
+M9c 구현 위치:
+
+```text
+packages/star-control-observability
+```
+
+M9c는 `CostMetricWriter`와 `CostBudgetThresholds`를 제공한다. writer는 CostMetric을 저장 전 redaction한 뒤 `cost-metric.schema.json`으로 검증하고, provider output sidecar `provider-output/{provider_instance_id}/cost-metric.json`에 기록한다. Budget evaluation은 `warn_only`로 시작하며, hard enforcement나 외부 billing/quota 조회는 후속 slice에서 처리한다.
+
 ## 금지 사항
 
 - credential raw value를 artifact, report, log에 저장하지 않는다.

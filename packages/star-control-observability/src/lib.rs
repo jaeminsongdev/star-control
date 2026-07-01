@@ -11,7 +11,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const SCHEMA_VERSION: &str = "1.0.0";
 const AUDIT_EVENT_SCHEMA: &str = "audit-event.schema.json";
+const COST_METRIC_SCHEMA: &str = "cost-metric.schema.json";
 pub const AUDIT_LOG_PATH: &str = "audit/audit-events.jsonl";
+pub const COST_METRIC_FILE: &str = "cost-metric.json";
 
 #[derive(Debug)]
 pub enum ObservabilityError {
@@ -29,7 +31,14 @@ pub enum ObservabilityError {
     InvalidAuditEvent {
         message: String,
     },
+    InvalidCostMetric {
+        message: String,
+    },
     AppendFailed {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    ReadFailed {
         path: PathBuf,
         source: std::io::Error,
     },
@@ -67,10 +76,21 @@ impl fmt::Display for ObservabilityError {
             Self::InvalidAuditEvent { message } => {
                 write!(formatter, "invalid audit event: {}", message)
             }
+            Self::InvalidCostMetric { message } => {
+                write!(formatter, "invalid cost metric: {}", message)
+            }
             Self::AppendFailed { path, source } => {
                 write!(
                     formatter,
                     "failed to append audit log {}: {}",
+                    path.display(),
+                    source
+                )
+            }
+            Self::ReadFailed { path, source } => {
+                write!(
+                    formatter,
+                    "failed to read observability artifact {}: {}",
                     path.display(),
                     source
                 )
@@ -103,6 +123,7 @@ impl Error for ObservabilityError {
         match self {
             Self::State { source } => Some(source),
             Self::AppendFailed { source, .. } => Some(source),
+            Self::ReadFailed { source, .. } => Some(source),
             Self::InvalidJson { source, .. } => Some(source),
             _ => None,
         }
@@ -219,6 +240,186 @@ impl AuditEventWriter {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct CostBudgetThresholds {
+    max_estimated_cost: Option<f64>,
+    max_wall_time_ms: Option<u64>,
+    max_total_tokens: Option<u64>,
+}
+
+impl CostBudgetThresholds {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_max_estimated_cost(mut self, value: f64) -> Self {
+        self.max_estimated_cost = Some(value);
+        self
+    }
+
+    pub fn with_max_wall_time_ms(mut self, value: u64) -> Self {
+        self.max_wall_time_ms = Some(value);
+        self
+    }
+
+    pub fn with_max_total_tokens(mut self, value: u64) -> Self {
+        self.max_total_tokens = Some(value);
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CostMetricWriter {
+    schema_root: PathBuf,
+}
+
+impl CostMetricWriter {
+    pub fn new(schema_root: impl Into<PathBuf>) -> Self {
+        Self {
+            schema_root: schema_root.into(),
+        }
+    }
+
+    pub fn metric(
+        &self,
+        job_id: &str,
+        stage: impl Into<String>,
+        provider_instance_id: impl Into<String>,
+        estimated_cost: f64,
+        currency: impl Into<String>,
+        wall_time_ms: u64,
+    ) -> Value {
+        json!({
+            "schema_version": SCHEMA_VERSION,
+            "job_id": job_id,
+            "stage": stage.into(),
+            "provider_instance_id": provider_instance_id.into(),
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "estimated_cost": estimated_cost,
+            "currency": currency.into(),
+            "wall_time_ms": wall_time_ms,
+            "quota_remaining": Value::Null
+        })
+    }
+
+    pub fn write_provider_metric(
+        &self,
+        store: &StateStore,
+        metric: &Value,
+    ) -> Result<Value, ObservabilityError> {
+        let metric = redact_value(metric.clone());
+        self.validate_metric(&metric)?;
+        let job_id = required_string(&metric, "job_id", "cost metric")?;
+        let provider_instance_id = required_string(&metric, "provider_instance_id", "cost metric")?;
+        store
+            .write_provider_json(&job_id, &provider_instance_id, COST_METRIC_FILE, &metric)
+            .map_err(ObservabilityError::from)
+    }
+
+    pub fn read_provider_metric(
+        &self,
+        store: &StateStore,
+        job_id: &str,
+        provider_instance_id: &str,
+    ) -> Result<Option<Value>, ObservabilityError> {
+        let provider_dir = store.resolve_provider_output_dir(job_id, provider_instance_id)?;
+        let path = provider_dir.join(COST_METRIC_FILE);
+        if !path.is_file() {
+            return Ok(None);
+        }
+        let content =
+            fs::read_to_string(&path).map_err(|source| ObservabilityError::ReadFailed {
+                path: path.clone(),
+                source,
+            })?;
+        let metric: Value =
+            serde_json::from_str(&content).map_err(|source| ObservabilityError::InvalidJson {
+                path: path.clone(),
+                source,
+            })?;
+        self.validate_metric(&metric)?;
+        Ok(Some(metric))
+    }
+
+    pub fn evaluate_budget(
+        &self,
+        metric: &Value,
+        thresholds: &CostBudgetThresholds,
+    ) -> Result<Value, ObservabilityError> {
+        let metric = redact_value(metric.clone());
+        self.validate_metric(&metric)?;
+        let job_id = required_string(&metric, "job_id", "cost metric")?;
+        let stage = required_string(&metric, "stage", "cost metric")?;
+        let provider_instance_id = required_string(&metric, "provider_instance_id", "cost metric")?;
+        let metric_path = provider_cost_metric_path(&provider_instance_id)?;
+        let estimated_cost = required_f64(&metric, "estimated_cost")?;
+        let wall_time_ms = required_u64(&metric, "wall_time_ms")?;
+        let total_tokens =
+            optional_u64(&metric, "input_tokens")? + optional_u64(&metric, "output_tokens")?;
+
+        let mut reasons = Vec::new();
+        if let Some(limit) = thresholds.max_estimated_cost {
+            if estimated_cost > limit {
+                reasons.push(json!({
+                    "kind": "estimated_cost_exceeded",
+                    "actual": estimated_cost,
+                    "limit": limit
+                }));
+            }
+        }
+        if let Some(limit) = thresholds.max_wall_time_ms {
+            if wall_time_ms > limit {
+                reasons.push(json!({
+                    "kind": "wall_time_exceeded",
+                    "actual": wall_time_ms,
+                    "limit": limit
+                }));
+            }
+        }
+        if let Some(limit) = thresholds.max_total_tokens {
+            if total_tokens > limit {
+                reasons.push(json!({
+                    "kind": "total_tokens_exceeded",
+                    "actual": total_tokens,
+                    "limit": limit
+                }));
+            }
+        }
+
+        let status = if reasons.is_empty() { "ok" } else { "warning" };
+        Ok(json!({
+            "schema_version": SCHEMA_VERSION,
+            "job_id": job_id,
+            "stage": stage,
+            "provider_instance_id": provider_instance_id,
+            "status": status,
+            "enforcement": "warn_only",
+            "metric_path": metric_path,
+            "reasons": reasons,
+            "thresholds": thresholds_value(thresholds)
+        }))
+    }
+
+    pub fn validate_metric(&self, metric: &Value) -> Result<(), ObservabilityError> {
+        let schema_path = self.schema_root.join(COST_METRIC_SCHEMA);
+        let schema =
+            load_schema(&schema_path).map_err(|source| ObservabilityError::SchemaLoadFailed {
+                path: schema_path.clone(),
+                message: source.to_string(),
+            })?;
+        let result = validate_json(metric, &schema);
+        if result.is_ok() {
+            validate_cost_metric_semantics(metric)
+        } else {
+            Err(ObservabilityError::SchemaValidationFailed {
+                path: PathBuf::from(COST_METRIC_SCHEMA),
+                errors: result.errors,
+            })
+        }
+    }
+}
+
 fn append_jsonl(path: &Path, value: &Value) -> Result<(), ObservabilityError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|source| ObservabilityError::AppendFailed {
@@ -253,6 +454,91 @@ fn timestamp_string() -> String {
         .unwrap_or_default()
         .as_secs();
     format!("unix:{}", seconds)
+}
+
+fn provider_cost_metric_path(provider_instance_id: &str) -> Result<String, ObservabilityError> {
+    validate_safe_segment(provider_instance_id, "provider_instance_id")?;
+    Ok(format!(
+        "provider-output/{}/{}",
+        provider_instance_id, COST_METRIC_FILE
+    ))
+}
+
+fn validate_safe_segment(value: &str, field: &str) -> Result<(), ObservabilityError> {
+    if value.is_empty()
+        || value.contains('\0')
+        || value.contains(':')
+        || value.contains('/')
+        || value.contains('\\')
+        || value == "."
+        || value == ".."
+        || value == ".git"
+    {
+        return Err(ObservabilityError::InvalidCostMetric {
+            message: format!("{} must be a safe path segment", field),
+        });
+    }
+    Ok(())
+}
+
+fn validate_cost_metric_semantics(metric: &Value) -> Result<(), ObservabilityError> {
+    let estimated_cost = required_f64(metric, "estimated_cost")?;
+    if estimated_cost < 0.0 {
+        return Err(ObservabilityError::InvalidCostMetric {
+            message: "estimated_cost must be non-negative".to_string(),
+        });
+    }
+    required_u64(metric, "wall_time_ms")?;
+    optional_u64(metric, "input_tokens")?;
+    optional_u64(metric, "output_tokens")?;
+    Ok(())
+}
+
+fn required_string(value: &Value, field: &str, label: &str) -> Result<String, ObservabilityError> {
+    value
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| ObservabilityError::InvalidCostMetric {
+            message: format!("{} requires string field {}", label, field),
+        })
+}
+
+fn required_f64(value: &Value, field: &str) -> Result<f64, ObservabilityError> {
+    value
+        .get(field)
+        .and_then(Value::as_f64)
+        .ok_or_else(|| ObservabilityError::InvalidCostMetric {
+            message: format!("cost metric requires numeric field {}", field),
+        })
+}
+
+fn required_u64(value: &Value, field: &str) -> Result<u64, ObservabilityError> {
+    value
+        .get(field)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| ObservabilityError::InvalidCostMetric {
+            message: format!("cost metric requires non-negative integer field {}", field),
+        })
+}
+
+fn optional_u64(value: &Value, field: &str) -> Result<u64, ObservabilityError> {
+    match value.get(field) {
+        Some(Value::Null) | None => Ok(0),
+        Some(item) => item
+            .as_u64()
+            .ok_or_else(|| ObservabilityError::InvalidCostMetric {
+                message: format!("cost metric field {} must be a non-negative integer", field),
+            }),
+    }
+}
+
+fn thresholds_value(thresholds: &CostBudgetThresholds) -> Value {
+    json!({
+        "max_estimated_cost": thresholds.max_estimated_cost,
+        "max_wall_time_ms": thresholds.max_wall_time_ms,
+        "max_total_tokens": thresholds.max_total_tokens
+    })
 }
 
 #[cfg(test)]
@@ -369,6 +655,109 @@ mod tests {
         let result = writer.append(&store, &event);
         assert!(result.is_err());
         assert!(!project.join(".ai-runs/audit/audit-events.jsonl").exists());
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn writes_schema_valid_cost_metric_inside_provider_output() {
+        let project = temp_project("cost-write");
+        let store = open_store(&project);
+        create_job(&store);
+        let writer = CostMetricWriter::new(schema_root());
+        let metric = writer.metric("J-0001", "implement", "fake-default", 0.0, "USD", 1);
+
+        let artifact_ref = writer
+            .write_provider_metric(&store, &metric)
+            .expect("write cost metric");
+        assert_eq!(
+            artifact_ref["path"],
+            "provider-output/fake-default/cost-metric.json"
+        );
+        assert_eq!(artifact_ref["kind"], "provider_output");
+
+        let read = writer
+            .read_provider_metric(&store, "J-0001", "fake-default")
+            .expect("read cost metric")
+            .expect("cost metric exists");
+        assert_eq!(read["estimated_cost"], 0.0);
+        assert_eq!(read["wall_time_ms"], 1);
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn cost_metric_writer_redacts_unexpected_secret_fields() {
+        let project = temp_project("cost-redact");
+        let store = open_store(&project);
+        create_job(&store);
+        let writer = CostMetricWriter::new(schema_root());
+        let api_key = format!("{}{}", "sk-test", "-secret");
+        let mut metric = writer.metric("J-0001", "implement", "cloud-default", 1.0, "USD", 20);
+        metric["debug"] = json!(format!("Authorization: Bearer {}", api_key));
+
+        writer
+            .write_provider_metric(&store, &metric)
+            .expect("write redacted cost metric");
+        let text = fs::read_to_string(
+            project.join(".ai-runs/J-0001/provider-output/cloud-default/cost-metric.json"),
+        )
+        .expect("read cost metric");
+        assert!(!text.contains(&api_key));
+        assert!(!text.contains("Bearer"));
+        assert!(text.contains("[REDACTED]"));
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn budget_guard_warns_without_requiring_metric_to_exist() {
+        let project = temp_project("budget");
+        let store = open_store(&project);
+        create_job(&store);
+        let writer = CostMetricWriter::new(schema_root());
+        assert!(writer
+            .read_provider_metric(&store, "J-0001", "fake-default")
+            .expect("missing cost metric is not fatal")
+            .is_none());
+
+        let mut metric = writer.metric("J-0001", "implement", "cloud-default", 1.25, "USD", 50);
+        metric["input_tokens"] = json!(25);
+        metric["output_tokens"] = json!(30);
+        let evaluation = writer
+            .evaluate_budget(
+                &metric,
+                &CostBudgetThresholds::new()
+                    .with_max_estimated_cost(1.0)
+                    .with_max_wall_time_ms(25)
+                    .with_max_total_tokens(50),
+            )
+            .expect("evaluate budget");
+
+        assert_eq!(evaluation["status"], "warning");
+        assert_eq!(evaluation["enforcement"], "warn_only");
+        assert_eq!(evaluation["reasons"].as_array().expect("reasons").len(), 3);
+        assert_eq!(
+            evaluation["metric_path"],
+            "provider-output/cloud-default/cost-metric.json"
+        );
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn cost_metric_writer_rejects_unsafe_provider_path() {
+        let project = temp_project("cost-traversal");
+        let store = open_store(&project);
+        create_job(&store);
+        let writer = CostMetricWriter::new(schema_root());
+        let metric = writer.metric("J-0001", "implement", "../cloud-default", 0.0, "USD", 1);
+
+        let result = writer.write_provider_metric(&store, &metric);
+        assert!(result.is_err());
+        assert!(!project
+            .join(".ai-runs/J-0001/provider-output/cost-metric.json")
+            .exists());
 
         fs::remove_dir_all(project).ok();
     }

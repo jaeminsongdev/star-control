@@ -1449,7 +1449,10 @@ fn human_summary(envelope: &Value) -> String {
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEMP_PROJECT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn run_status_and_report_json_work_for_fake_project() {
@@ -1868,8 +1871,13 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("star-control-cli-{}-{}", std::process::id(), nanos));
+        let counter = TEMP_PROJECT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "star-control-cli-{}-{}-{}",
+            std::process::id(),
+            nanos,
+            counter
+        ));
         fs::create_dir_all(&path).expect("create temp project");
         path
     }
