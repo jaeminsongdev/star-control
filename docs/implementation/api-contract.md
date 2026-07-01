@@ -44,7 +44,7 @@ POST /projects/{project_id}/jobs/{job_id}/cancel
 POST /projects/{project_id}/jobs/{job_id}/resume
 ```
 
-Mutation endpoint는 CLI approve/cancel/resume과 M8a read-only UI view model이 안정화된 뒤 별도 slice에서 구현한다.
+M7d 구현은 HTTP server 없이 `packages/star-control-api`의 in-process `ApiControlService`로 mutation path dispatch를 제공한다. HTTP server, socket listener, auth/session, remote exposure는 아직 구현하지 않는다.
 
 ## API response envelope
 
@@ -103,9 +103,34 @@ waiting_approval
 - socket listener
 - remote exposure
 - auth/session
-- mutation endpoint
 - daemon background worker와의 live scheduling integration
 - browser UI shell
+
+## M7d 구현 범위
+
+구현함:
+
+```text
+ApiControlService
+POST /projects/{project_id}/jobs/{job_id}/approve
+POST /projects/{project_id}/jobs/{job_id}/cancel
+POST /projects/{project_id}/jobs/{job_id}/resume
+approval-response artifact writer
+run-state update
+events.jsonl audit event append
+structured mutation error envelope
+```
+
+아직 구현하지 않음:
+
+```text
+HTTP server
+socket listener
+remote exposure
+auth/session
+daemon background worker integration
+provider execution scheduling
+```
 
 ## 테스트 기준
 
@@ -115,3 +140,4 @@ waiting_approval
 4. secret raw value가 response에 포함되지 않음
 5. missing artifact는 structured error로 반환
 6. mutation method는 read-only API에서 거부
+7. control mutation은 approval/cancel/resume precondition을 지킴

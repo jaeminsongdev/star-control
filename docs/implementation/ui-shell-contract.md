@@ -53,7 +53,7 @@ read-only no-write regression test
 browser UI app
 TypeScript/Node package manager
 HTTP server
-API mutation endpoint
+browser UI mutation wiring
 provider process 실행
 Star Sentinel rule 직접 구현
 StateStore file mutation

@@ -273,6 +273,16 @@ POST /projects/{project_id}/jobs/{job_id}/resume
 
 M7c는 HTTP server가 아니라 `packages/star-control-api`의 in-process read-only service로 구현한다. API는 daemon queue state와 StateStore artifact를 read-only로 조회한다. API는 local-first를 기본으로 하고, HTTP server, socket listener, auth, remote exposure는 별도 보안 문서와 승인 이후 구현한다.
 
+M7d control mutation endpoint:
+
+```text
+POST /projects/{project_id}/jobs/{job_id}/approve
+POST /projects/{project_id}/jobs/{job_id}/cancel
+POST /projects/{project_id}/jobs/{job_id}/resume
+```
+
+M7d는 HTTP server가 아니라 `packages/star-control-api`의 in-process `ApiControlService`로 구현한다. `approve`, `cancel`, `resume`은 CLI control command와 같은 StateStore `.ai-runs/` artifact를 수정하고 `api-response.schema.json` envelope을 반환한다. HTTP server, socket listener, auth/session, remote exposure는 아직 구현하지 않는다.
+
 ## API 응답 규칙
 
 - JSON만 반환한다.
@@ -314,7 +324,7 @@ approval request viewer data
 review pack viewer data
 ```
 
-M8a는 browser UI app, TypeScript/Node package manager, API server/mutation endpoint를 구현하지 않는다.
+M8a는 browser UI app, TypeScript/Node package manager, HTTP API server, browser mutation wiring을 구현하지 않는다.
 
 ## UI 금지 사항
 
@@ -368,7 +378,8 @@ Codex는 CLI를 먼저 구현한다. Daemon, API, UI는 문서 계약만 보고 
 5. daemon skeleton
 6. API read-only
 7. UI shell read-only view model
+8. API approve/cancel/resume control mutation service
 
-M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. M7b 기준으로 daemon queue skeleton은 config root 아래 `daemon/state.json`을 만들고 StateStore job을 참조 등록한다. M7c 기준으로 API read-only service는 daemon state와 StateStore artifact를 schema-valid envelope으로 읽는다. M8a 기준으로 UI read-only view model은 이 API service를 소비하고 StateStore artifact를 직접 수정하지 않는다. API server, mutation endpoint, browser UI shell은 별도 slice에서 구현한다.
+M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. M7b 기준으로 daemon queue skeleton은 config root 아래 `daemon/state.json`을 만들고 StateStore job을 참조 등록한다. M7c 기준으로 API read-only service는 daemon state와 StateStore artifact를 schema-valid envelope으로 읽는다. M8a 기준으로 UI read-only view model은 이 API service를 소비하고 StateStore artifact를 직접 수정하지 않는다. M7d 기준으로 API control mutation service는 HTTP server 없이 approval/cancel/resume mutation을 in-process로 제공한다. API server, auth/session, remote exposure, browser UI shell은 별도 slice에서 구현한다.
 
 각 단계는 별도 PR로 진행한다.

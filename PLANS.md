@@ -67,7 +67,8 @@
 - M7a CLI approve/cancel/resume control commands를 추가해 daemon/API 전제 조건을 file-based StateStore에서 검증한다.
 - M7b daemon queue skeleton을 추가해 config root 아래 daemon state와 StateStore job 참조 queue를 검증한다.
 - M7c API read-only service를 추가해 daemon state와 StateStore job/events/report를 schema-valid API envelope으로 조회한다.
-- M8a UI read-only view model을 `packages/star-control-ui`의 `UiReadOnlyShell`로 추가했다. browser UI app, API mutation, provider process 실행은 다음 slice까지 제외한다.
+- M8a UI read-only view model을 `packages/star-control-ui`의 `UiReadOnlyShell`로 추가했다. browser UI app, HTTP API server, provider process 실행은 다음 slice까지 제외한다.
+- M7d API control mutation service를 추가해 HTTP server 없이 `approve`, `cancel`, `resume` mutation을 in-process API로 검증한다.
 - 병렬 Rust 테스트에서 provider/state temp project 경로가 충돌하지 않도록 test helper에 per-process counter를 추가했다.
 - Cargo incremental finalize 경고가 나오면 경고 package만 `cargo clean -p`로 정리하고 Cargo 검증은 순차 실행한다.
 
@@ -81,7 +82,7 @@
 
 - 사용자 승인 없는 의존성 설치, 파일 삭제, 테스트 약화.
 - schema, manifest, registry의 공개 필드명은 변경 전 영향 범위를 확인한다.
-- current queue와 milestone 순서 밖의 provider, daemon process, API server/mutation, browser UI app, release automation을 앞당기지 않는다.
+- current queue와 milestone 순서 밖의 provider, daemon process, HTTP API server/auth/remote exposure, browser UI app, release automation을 앞당기지 않는다.
 
 ### 먼저 확인할 파일
 
@@ -167,10 +168,12 @@ cargo test --workspace
 | M7a handoff | CLI `approve`는 `WAITING_APPROVAL` job의 `approval-request.json`을 확인한 뒤 `approval-response.json`을 쓰고 `next_action=resume`을 기록한다. CLI `cancel`은 non-terminal state만 `CANCELLED`로 전이한다. CLI `resume`은 approved response가 있을 때 `WAITING_APPROVAL -> VALIDATED`, `next_action=report`를 기록한다. daemon process/API server/UI는 아직 구현하지 않았다 |
 | M7b handoff | `packages/star-control-daemon`의 `DaemonQueue`는 `{config_root}/daemon/state.json`을 생성/검증하고 StateStore job을 queue entry로 참조 등록한다. terminal state, approved response 없는 `WAITING_APPROVAL`, non-approved response, duplicate queue entry는 거부한다. daemon process/socket/API server/UI는 아직 구현하지 않았다 |
 | M7b dependency record | direct dependency `serde_json = "1"`; 목적: daemon-state JSON read/write와 approval-response parse; 대안: std-only JSON parser 재구현은 안정성 낮음; 검증: Cargo targeted/workspace checks + contract runner |
-| M7c handoff | `packages/star-control-api`의 `ApiReadOnlyService`는 registered `DaemonQueue`와 in-memory project registry를 통해 daemon state, projects/jobs/job/events/report를 읽고 `api-response.schema.json` envelope을 반환한다. missing artifact는 structured error, mutation method/path는 rejection, secret-like raw value는 redaction한다. HTTP server/socket/auth/mutation/UI는 아직 구현하지 않았다 |
+| M7c handoff | `packages/star-control-api`의 `ApiReadOnlyService`는 registered `DaemonQueue`와 in-memory project registry를 통해 daemon state, projects/jobs/job/events/report를 읽고 `api-response.schema.json` envelope을 반환한다. missing artifact는 structured error, mutation method/path는 rejection, secret-like raw value는 redaction한다. HTTP server/socket/auth/UI는 아직 구현하지 않았다 |
 | M7c dependency record | direct dependency `serde_json = "1"`, local dependency `star-control-daemon`; 목적: API response JSON envelope, daemon state read, StateStore artifact projection; 대안: std-only JSON builder는 안정성 낮음; 검증: Cargo targeted/workspace checks + contract runner |
-| M8a handoff | `packages/star-control-ui`의 `UiReadOnlyShell`은 `ApiReadOnlyService`를 소비해 job list/detail/timeline/provider output/validation/approval/review pack view model을 만든다. `ui-job-view.schema.json` 검증, secret-like redaction, no-write regression을 포함한다. browser UI app, TypeScript/Node package manager, API mutation, provider process 실행은 아직 구현하지 않았다 |
+| M8a handoff | `packages/star-control-ui`의 `UiReadOnlyShell`은 `ApiReadOnlyService`를 소비해 job list/detail/timeline/provider output/validation/approval/review pack view model을 만든다. `ui-job-view.schema.json` 검증, secret-like redaction, no-write regression을 포함한다. browser UI app, TypeScript/Node package manager, HTTP API server, provider process 실행은 아직 구현하지 않았다 |
 | M8a dependency record | direct dependency `serde_json = "1"`, local dependency `star-control-api`, `star-control-schema`; dev-only local dependency `star-control-state`; 목적: API response projection, UI job view schema validation, fixture-backed no-write tests; 검증: Cargo targeted/workspace checks + contract runner |
+| M7d handoff | `packages/star-control-api`의 `ApiControlService`는 `ApiReadOnlyService`를 감싸 GET read-only endpoint와 POST approve/cancel/resume mutation을 in-process로 처리한다. `approve`는 approval request를 요구하고 `approval-response.json`을 쓰며, `cancel`은 non-terminal만 `CANCELLED`, `resume`은 matching approved response만 `VALIDATED`로 전이한다. HTTP server/socket/auth/remote exposure/provider scheduling은 아직 구현하지 않았다 |
+| M7d dependency record | 새 external dependency 없음; 기존 direct dependency `serde_json = "1"`와 local `star-control-state`, `star-control-daemon`, `star-control-schema`만 사용; 목적: API request body projection, StateStore control mutation, schema validation; 검증: Cargo targeted/workspace checks + contract runner |
 | Cargo incremental cleanup | finalize 경고 package는 `_`를 `-`로 바꾼 Cargo package명에 대해 `cargo clean -p <package>`만 실행한다. 이후 `cargo check --workspace --all-targets --locked`, `cargo test --workspace --all-targets --locked`를 순차 실행한다. 반복되면 현재 PowerShell 명령 범위에서만 `CARGO_INCREMENTAL=0`을 사용하고 장기 기본값으로 남기지 않는다 |
 | 이전 완료 이력 | git history |
 
@@ -221,3 +224,4 @@ cargo test --workspace
 | P-0041 | 2026-07-01 | M7b daemon queue skeleton 추가 | `packages/star-control-daemon/src/lib.rs`, `docs/implementation/briefs/E21-daemon-queue-skeleton.md` |
 | P-0042 | 2026-07-01 | M7c API read-only service 추가 | `packages/star-control-api/src/lib.rs`, `docs/implementation/briefs/E22-api-read-only.md` |
 | P-0043 | 2026-07-01 | M8a UI read-only view model 추가 | `packages/star-control-ui/src/lib.rs`, `docs/implementation/briefs/E23-ui-read-only-view.md` |
+| P-0044 | 2026-07-02 | M7d API control mutation service 추가 | `packages/star-control-api/src/lib.rs`, `docs/implementation/briefs/E24-api-control-mutations.md` |

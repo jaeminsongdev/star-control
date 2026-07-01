@@ -225,7 +225,7 @@ Exit criteria:
 - API는 read-only endpoint부터 시작하고, mutation은 approval/cancel/resume 계약을 따른다.
 - daemon state는 repository root가 아니라 user config/cache 영역에 둔다.
 
-M7a CLI control commands는 daemon/API 구현 전에 `approve`, `cancel`, `resume`의 file-based StateStore mutation과 schema-valid CLI output/error envelope을 고정한다. M7b daemon queue skeleton은 daemon process 없이 `{config_root}/daemon/state.json`과 StateStore job 참조 등록, terminal/approval guard를 고정한다. M7c API read-only service는 HTTP server 없이 daemon state와 StateStore job/events/report를 `api-response` envelope으로 조회한다. 이후 M8 UI shell read-only view model 순서로 진행한다.
+M7a CLI control commands는 daemon/API 구현 전에 `approve`, `cancel`, `resume`의 file-based StateStore mutation과 schema-valid CLI output/error envelope을 고정한다. M7b daemon queue skeleton은 daemon process 없이 `{config_root}/daemon/state.json`과 StateStore job 참조 등록, terminal/approval guard를 고정한다. M7c API read-only service는 HTTP server 없이 daemon state와 StateStore job/events/report를 `api-response` envelope으로 조회한다. M8a UI read-only view model은 이 read-only API를 소비한다. M7d API control mutation service는 HTTP server 없이 `approve`, `cancel`, `resume` mutation을 `api-response` envelope과 StateStore `.ai-runs/` artifact로 고정한다.
 
 Validation:
 
@@ -235,6 +235,7 @@ cargo fmt --check
 cargo check --workspace
 cargo test --workspace
 daemon/API smoke tests
+API control mutation tests
 ```
 
 ## M8 UI Shell
@@ -251,6 +252,8 @@ Exit criteria:
 - approval mutation은 API/CLI 계약을 통해서만 수행한다.
 
 M8a read-only view model은 `packages/star-control-ui`의 `UiReadOnlyShell`로 구현한다. 이 slice는 browser app이 아니라 API read-only service를 소비하는 library-level view model이며, job list/detail/timeline/provider output/validation/approval/review pack 데이터를 만들고 StateStore artifact를 직접 수정하지 않는다.
+
+M8b browser UI shell은 `ApiReadOnlyService`와 `ApiControlService`를 함께 소비하도록 설계한다. Browser package manager, network server, remote exposure는 별도 승인 전까지 구현하지 않는다.
 
 Validation:
 

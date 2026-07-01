@@ -51,7 +51,7 @@ work-queue-consistency-check
 | M4 v0 Fake E2E | fake project integration smoke with AUTO_PASS/HUMAN_REVIEW/BLOCK |
 | M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture tests |
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
-| M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, approval/cancel/resume mutation tests |
+| M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, in-process API approve/cancel/resume mutation tests |
 | M8 UI Shell | `star-control-ui` view model contract tests, read-only no-write smoke, approval path smoke |
 | M9 Hardening / Release Readiness | redaction, audit, recovery, retention, release readiness checks |
 
@@ -316,6 +316,11 @@ M7c API read-only service는 HTTP server 없이 library-level test로 검증한�
 - read-only endpoint가 `.ai-runs/` artifact를 수정하지 않음
 - read-only endpoint가 daemon state artifact를 수정하지 않음
 - secret-like raw value redaction
+- `ApiControlService` approve writes schema-valid `approval-response.json`
+- `ApiControlService` cancel rejects terminal state and updates non-terminal state
+- `ApiControlService` resume requires matching approved response
+- API control mutation appends audit events
+- `ApiReadOnlyService` continues to reject non-GET mutation methods
 
 ## UI tests
 

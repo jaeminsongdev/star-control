@@ -5,11 +5,16 @@ use star_control_state::{JobSummary, StateStore, StateStoreError};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const SCHEMA_VERSION: &str = "1.0.0";
 const API_RESPONSE_SCHEMA: &str = "api-response.schema.json";
+const APPROVAL_REQUEST_SCHEMA: &str = "approval-request.schema.json";
+const APPROVAL_RESPONSE_SCHEMA: &str = "approval-response.schema.json";
 const DEFAULT_REPORT_STAGE: &str = "implement";
+const TERMINAL_STATES: &[&str] = &["DONE", "FAILED", "BLOCKED", "CANCELLED"];
 const CANONICAL_STAGES: &[&str] = &[
     "route",
     "plan",
@@ -46,18 +51,28 @@ impl ApiMethod {
 pub struct ApiRequest {
     method: ApiMethod,
     path: String,
+    body: Value,
 }
 
 impl ApiRequest {
     pub fn new(method: ApiMethod, path: impl Into<String>) -> Self {
+        Self::with_body(method, path, Value::Null)
+    }
+
+    pub fn with_body(method: ApiMethod, path: impl Into<String>, body: Value) -> Self {
         Self {
             method,
             path: path.into(),
+            body,
         }
     }
 
     pub fn get(path: impl Into<String>) -> Self {
         Self::new(ApiMethod::Get, path)
+    }
+
+    pub fn post(path: impl Into<String>, body: Value) -> Self {
+        Self::with_body(ApiMethod::Post, path, body)
     }
 
     pub fn method(&self) -> ApiMethod {
@@ -66,6 +81,10 @@ impl ApiRequest {
 
     pub fn path(&self) -> &str {
         &self.path
+    }
+
+    pub fn body(&self) -> &Value {
+        &self.body
     }
 }
 
@@ -418,6 +437,469 @@ impl ApiReadOnlyService {
 }
 
 #[derive(Debug, Clone)]
+pub struct ApiControlService {
+    read_only: ApiReadOnlyService,
+}
+
+impl ApiControlService {
+    pub fn new(schema_root: impl Into<PathBuf>) -> Self {
+        Self {
+            read_only: ApiReadOnlyService::new(schema_root),
+        }
+    }
+
+    pub fn from_read_only(read_only: ApiReadOnlyService) -> Self {
+        Self { read_only }
+    }
+
+    pub fn register_daemon_queue(&mut self, daemon_queue: DaemonQueue) {
+        self.read_only.register_daemon_queue(daemon_queue);
+    }
+
+    pub fn register_project_store(
+        &mut self,
+        project_id: impl Into<String>,
+        store: StateStore,
+    ) -> Result<(), ApiError> {
+        self.read_only.register_project_store(project_id, store)
+    }
+
+    pub fn handle_get(&self, path: &str) -> Result<Value, ApiError> {
+        self.read_only.handle_get(path)
+    }
+
+    pub fn handle_post(&self, path: &str, body: Value) -> Result<Value, ApiError> {
+        self.handle(ApiRequest::post(path, body))
+    }
+
+    pub fn handle(&self, request: ApiRequest) -> Result<Value, ApiError> {
+        if request.method() == ApiMethod::Get {
+            return self.read_only.handle(request);
+        }
+        if request.method() != ApiMethod::Post {
+            return self.read_only.error_envelope(
+                "method_not_allowed",
+                &format!(
+                    "control API supports GET and POST, got {}",
+                    request.method().as_str()
+                ),
+                json!({ "method": request.method().as_str(), "path": request.path() }),
+            );
+        }
+
+        let parsed = ParsedPath::parse(request.path());
+        let segments = parsed.segments();
+        match segments.as_slice() {
+            ["projects", project_id, "jobs", job_id, "approve"] => {
+                self.approve_response(project_id, job_id, request.body())
+            }
+            ["projects", project_id, "jobs", job_id, "cancel"] => {
+                self.cancel_response(project_id, job_id)
+            }
+            ["projects", project_id, "jobs", job_id, "resume"] => {
+                self.resume_response(project_id, job_id)
+            }
+            _ => self.read_only.error_envelope(
+                "endpoint_not_found",
+                "control API endpoint not found",
+                json!({ "method": request.method().as_str(), "path": request.path() }),
+            ),
+        }
+    }
+
+    fn approve_response(
+        &self,
+        project_id: &str,
+        job_id: &str,
+        body: &Value,
+    ) -> Result<Value, ApiError> {
+        let Some(store) = self.read_only.projects.get(project_id) else {
+            return self.read_only.project_not_found(project_id);
+        };
+        let mut state = match store.load_state(job_id) {
+            Ok(value) => value,
+            Err(source) => {
+                return self
+                    .read_only
+                    .state_error_envelope("state_read_failed", source)
+            }
+        };
+        let current_state = state_string(&state);
+        if current_state != "WAITING_APPROVAL" {
+            return self.read_only.error_envelope(
+                "invalid_control_state",
+                "approve requires WAITING_APPROVAL state",
+                json!({ "job_id": job_id, "state": current_state }),
+            );
+        }
+
+        let response = match body_string(body, "response") {
+            Ok(value) => value,
+            Err(message) => return self.invalid_control_request(&message),
+        };
+        if !matches!(
+            response.as_str(),
+            "approved" | "rejected" | "needs_changes" | "cancelled"
+        ) {
+            return self
+                .invalid_control_request(&format!("unsupported approval response {}", response));
+        }
+        let reason = match body_string(body, "reason") {
+            Ok(value) => value,
+            Err(message) => return self.invalid_control_request(&message),
+        };
+        let reviewer =
+            body_string(body, "reviewer").unwrap_or_else(|_| "star-control-api".to_string());
+        let constraints = match body_string_array(body, "constraints") {
+            Ok(value) => value,
+            Err(message) => return self.invalid_control_request(&message),
+        };
+
+        let approval_request = match load_job_json(
+            store,
+            job_id,
+            "approvals/approval-request.json",
+            APPROVAL_REQUEST_SCHEMA,
+            &self.read_only.schema_root,
+        ) {
+            Ok(value) => value,
+            Err(ControlArtifactError::Missing { path }) => {
+                return self.read_only.error_envelope(
+                    "approval_request_missing",
+                    "approval request artifact is required before approve",
+                    json!({ "path": path }),
+                )
+            }
+            Err(error) => {
+                return self.read_only.error_envelope(
+                    "approval_request_invalid",
+                    &error.to_string(),
+                    json!({ "job_id": job_id }),
+                )
+            }
+        };
+        let stage = string_field(&approval_request, "stage").unwrap_or("validate");
+        let task_id = string_field(&approval_request, "task_id").unwrap_or("approval");
+        let allowed_next_stage = (response == "approved")
+            .then(|| allowed_next_stage_for(stage))
+            .flatten();
+        let approval_response = json!({
+            "schema_version": SCHEMA_VERSION,
+            "job_id": job_id,
+            "stage": stage,
+            "task_id": task_id,
+            "response": response,
+            "reviewer": reviewer,
+            "responded_at": timestamp_string(),
+            "reason": reason,
+            "allowed_next_stage": allowed_next_stage,
+            "constraints": constraints
+        });
+        if let Err(errors) = validate_schema_value(
+            &approval_response,
+            &self.read_only.schema_root,
+            APPROVAL_RESPONSE_SCHEMA,
+        ) {
+            let message = format!(
+                "approval response failed schema validation with {} error(s)",
+                errors
+            );
+            return self.read_only.error_envelope(
+                "approval_response_invalid",
+                &message,
+                json!({ "job_id": job_id }),
+            );
+        }
+
+        let approval_ref =
+            match store.write_approval_json(job_id, "approval-response.json", &approval_response) {
+                Ok(value) => value,
+                Err(source) => {
+                    return self
+                        .read_only
+                        .state_error_envelope("approval_response_write_failed", source)
+                }
+            };
+        let next_state = state_after_approval_response(&response);
+        let next_action = next_action_after_approval_response(&response);
+        let event_id = format!("{}-api-approval-recorded", job_id.to_ascii_lowercase());
+        if let Err(source) = update_state_for_control_command(
+            &mut state,
+            store,
+            next_state,
+            stage,
+            next_action,
+            &event_id,
+            Some(("approval_response", &approval_ref)),
+        ) {
+            return self
+                .read_only
+                .state_error_envelope("state_update_failed", source);
+        }
+        if let Err(source) = store.save_state(job_id, &state) {
+            return self
+                .read_only
+                .state_error_envelope("state_write_failed", source);
+        }
+        if let Err(source) = append_api_event(
+            store,
+            job_id,
+            ApiControlEvent {
+                event_id,
+                event_type: "APPROVAL_RECORDED",
+                state: next_state,
+                stage,
+                message: "Approval response recorded by API",
+                artifact_paths: vec!["approvals/approval-response.json".to_string()],
+                details: json!({
+                    "response": approval_response["response"],
+                    "allowed_next_stage": approval_response["allowed_next_stage"]
+                }),
+            },
+        ) {
+            return self
+                .read_only
+                .state_error_envelope("event_write_failed", source);
+        }
+
+        self.read_only.success_envelope(json!({
+            "command": "approve",
+            "job_id": job_id,
+            "state": state["state"],
+            "approval_response": approval_response["response"],
+            "allowed_next_stage": approval_response["allowed_next_stage"],
+            "artifacts": [format!(".ai-runs/{}/approvals/approval-response.json", job_id)]
+        }))
+    }
+
+    fn cancel_response(&self, project_id: &str, job_id: &str) -> Result<Value, ApiError> {
+        let Some(store) = self.read_only.projects.get(project_id) else {
+            return self.read_only.project_not_found(project_id);
+        };
+        let mut state = match store.load_state(job_id) {
+            Ok(value) => value,
+            Err(source) => {
+                return self
+                    .read_only
+                    .state_error_envelope("state_read_failed", source)
+            }
+        };
+        let current_state = state_string(&state);
+        if TERMINAL_STATES.contains(&current_state.as_str()) {
+            return self.read_only.error_envelope(
+                "invalid_control_state",
+                "cannot cancel terminal job state",
+                json!({ "job_id": job_id, "state": current_state }),
+            );
+        }
+        let current_stage = string_field(&state, "current_stage")
+            .unwrap_or("implement")
+            .to_string();
+        let event_id = format!("{}-api-cancelled", job_id.to_ascii_lowercase());
+        if let Err(source) = update_state_for_control_command(
+            &mut state,
+            store,
+            "CANCELLED",
+            &current_stage,
+            "stop",
+            &event_id,
+            None,
+        ) {
+            return self
+                .read_only
+                .state_error_envelope("state_update_failed", source);
+        }
+        if let Some(state_object) = state.as_object_mut() {
+            state_object.insert("active_provider".to_string(), Value::Null);
+        }
+        if let Err(source) = store.save_state(job_id, &state) {
+            return self
+                .read_only
+                .state_error_envelope("state_write_failed", source);
+        }
+        if let Err(source) = append_api_event(
+            store,
+            job_id,
+            ApiControlEvent {
+                event_id,
+                event_type: "STATE_CHANGED",
+                state: "CANCELLED",
+                stage: &current_stage,
+                message: "Job cancelled by API",
+                artifact_paths: vec!["run-state.json".to_string()],
+                details: json!({ "previous_state": current_state }),
+            },
+        ) {
+            return self
+                .read_only
+                .state_error_envelope("event_write_failed", source);
+        }
+
+        self.read_only.success_envelope(json!({
+            "command": "cancel",
+            "job_id": job_id,
+            "state": "CANCELLED",
+            "previous_state": current_state,
+            "next_action": "stop",
+            "artifacts": [format!(".ai-runs/{}/run-state.json", job_id)]
+        }))
+    }
+
+    fn resume_response(&self, project_id: &str, job_id: &str) -> Result<Value, ApiError> {
+        let Some(store) = self.read_only.projects.get(project_id) else {
+            return self.read_only.project_not_found(project_id);
+        };
+        if let Err(source) = store.ensure_resume_allowed(job_id) {
+            return self
+                .read_only
+                .state_error_envelope("resume_precondition_failed", source);
+        }
+        let mut state = match store.load_state(job_id) {
+            Ok(value) => value,
+            Err(source) => {
+                return self
+                    .read_only
+                    .state_error_envelope("state_read_failed", source)
+            }
+        };
+        let current_state = state_string(&state);
+        let current_stage = string_field(&state, "current_stage")
+            .unwrap_or("implement")
+            .to_string();
+
+        if current_state != "WAITING_APPROVAL" {
+            return self.read_only.success_envelope(json!({
+                "command": "resume",
+                "job_id": job_id,
+                "state": current_state,
+                "current_stage": current_stage,
+                "next_action": state.get("next_action").cloned().unwrap_or_else(|| json!("")),
+                "resumed": false,
+                "artifacts": [format!(".ai-runs/{}/run-state.json", job_id)]
+            }));
+        }
+
+        let approval_request = match load_job_json(
+            store,
+            job_id,
+            "approvals/approval-request.json",
+            APPROVAL_REQUEST_SCHEMA,
+            &self.read_only.schema_root,
+        ) {
+            Ok(value) => value,
+            Err(ControlArtifactError::Missing { path }) => {
+                return self.read_only.error_envelope(
+                    "approval_request_missing",
+                    "approval request artifact is required before resume",
+                    json!({ "path": path }),
+                )
+            }
+            Err(error) => {
+                return self.read_only.error_envelope(
+                    "approval_request_invalid",
+                    &error.to_string(),
+                    json!({ "job_id": job_id }),
+                )
+            }
+        };
+        let approval_response = match load_job_json(
+            store,
+            job_id,
+            "approvals/approval-response.json",
+            APPROVAL_RESPONSE_SCHEMA,
+            &self.read_only.schema_root,
+        ) {
+            Ok(value) => value,
+            Err(ControlArtifactError::Missing { path }) => {
+                return self.read_only.error_envelope(
+                    "approval_response_missing",
+                    "approval response artifact is required before resume",
+                    json!({ "path": path }),
+                )
+            }
+            Err(error) => {
+                return self.read_only.error_envelope(
+                    "approval_response_invalid",
+                    &error.to_string(),
+                    json!({ "job_id": job_id }),
+                )
+            }
+        };
+        if let Err(message) =
+            ensure_approval_response_matches_request(&approval_request, &approval_response)
+        {
+            return self.read_only.error_envelope(
+                "invalid_control_state",
+                &message,
+                json!({ "job_id": job_id }),
+            );
+        }
+
+        let event_id = format!("{}-api-resumed", job_id.to_ascii_lowercase());
+        let next_action = approval_response
+            .get("allowed_next_stage")
+            .and_then(Value::as_str)
+            .unwrap_or("report");
+        if let Err(source) = update_state_for_control_command(
+            &mut state,
+            store,
+            "VALIDATED",
+            &current_stage,
+            next_action,
+            &event_id,
+            None,
+        ) {
+            return self
+                .read_only
+                .state_error_envelope("state_update_failed", source);
+        }
+        if let Err(source) = store.save_state(job_id, &state) {
+            return self
+                .read_only
+                .state_error_envelope("state_write_failed", source);
+        }
+        if let Err(source) = append_api_event(
+            store,
+            job_id,
+            ApiControlEvent {
+                event_id,
+                event_type: "STATE_CHANGED",
+                state: "VALIDATED",
+                stage: &current_stage,
+                message: "Approval accepted; job is ready to continue",
+                artifact_paths: vec![
+                    "run-state.json".to_string(),
+                    "approvals/approval-response.json".to_string(),
+                ],
+                details: json!({ "previous_state": current_state, "next_action": next_action }),
+            },
+        ) {
+            return self
+                .read_only
+                .state_error_envelope("event_write_failed", source);
+        }
+
+        self.read_only.success_envelope(json!({
+            "command": "resume",
+            "job_id": job_id,
+            "state": "VALIDATED",
+            "previous_state": current_state,
+            "next_action": next_action,
+            "resumed": true,
+            "artifacts": [
+                format!(".ai-runs/{}/run-state.json", job_id),
+                format!(".ai-runs/{}/approvals/approval-response.json", job_id)
+            ]
+        }))
+    }
+
+    fn invalid_control_request(&self, message: &str) -> Result<Value, ApiError> {
+        self.read_only
+            .error_envelope("invalid_control_request", message, json!({}))
+    }
+}
+
+#[derive(Debug, Clone)]
 struct ParsedPath {
     path: String,
     query: BTreeMap<String, String>,
@@ -541,6 +1023,274 @@ fn looks_sensitive_string(value: &str) -> bool {
         || value.contains("-----BEGIN PRIVATE KEY-----")
 }
 
+#[derive(Debug)]
+enum ControlArtifactError {
+    Missing { path: String },
+    ReadFailed { path: PathBuf, message: String },
+    InvalidJson { path: PathBuf, message: String },
+    SchemaInvalid { schema: String, errors: usize },
+    State { source: StateStoreError },
+}
+
+impl fmt::Display for ControlArtifactError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Missing { path } => write!(formatter, "required artifact not found: {}", path),
+            Self::ReadFailed { path, message } => {
+                write!(formatter, "failed to read {}: {}", path.display(), message)
+            }
+            Self::InvalidJson { path, message } => {
+                write!(formatter, "invalid JSON at {}: {}", path.display(), message)
+            }
+            Self::SchemaInvalid { schema, errors } => {
+                write!(
+                    formatter,
+                    "artifact failed schema validation against {} with {} error(s)",
+                    schema, errors
+                )
+            }
+            Self::State { source } => write!(formatter, "state store error: {}", source),
+        }
+    }
+}
+
+fn load_job_json(
+    store: &StateStore,
+    job_id: &str,
+    relative_path: &str,
+    schema_file: &str,
+    schema_root: &Path,
+) -> Result<Value, ControlArtifactError> {
+    let path = store
+        .resolve_job_path(job_id, relative_path)
+        .map_err(|source| ControlArtifactError::State { source })?;
+    if !path.is_file() {
+        return Err(ControlArtifactError::Missing {
+            path: format!(".ai-runs/{}/{}", job_id, relative_path),
+        });
+    }
+    let text = fs::read_to_string(&path).map_err(|source| ControlArtifactError::ReadFailed {
+        path: path.clone(),
+        message: source.to_string(),
+    })?;
+    let value: Value =
+        serde_json::from_str(&text).map_err(|source| ControlArtifactError::InvalidJson {
+            path,
+            message: source.to_string(),
+        })?;
+    validate_schema_value(&value, schema_root, schema_file).map_err(|errors| {
+        ControlArtifactError::SchemaInvalid {
+            schema: schema_file.to_string(),
+            errors,
+        }
+    })?;
+    Ok(value)
+}
+
+fn validate_schema_value(
+    value: &Value,
+    schema_root: &Path,
+    schema_file: &str,
+) -> Result<(), usize> {
+    let schema_path = schema_root.join(schema_file);
+    let schema = match load_schema(&schema_path) {
+        Ok(value) => value,
+        Err(_) => return Err(1),
+    };
+    let result = validate_json(value, &schema);
+    if result.is_ok() {
+        Ok(())
+    } else {
+        Err(result.errors.len())
+    }
+}
+
+fn body_string(body: &Value, field: &str) -> Result<String, String> {
+    body.get(field)
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| format!("{} string field is required", field))
+}
+
+fn body_string_array(body: &Value, field: &str) -> Result<Vec<String>, String> {
+    let Some(value) = body.get(field) else {
+        return Ok(Vec::new());
+    };
+    let Some(items) = value.as_array() else {
+        return Err(format!("{} must be an array of strings", field));
+    };
+    let mut output = Vec::with_capacity(items.len());
+    for item in items {
+        let Some(text) = item.as_str() else {
+            return Err(format!("{} must be an array of strings", field));
+        };
+        output.push(text.to_string());
+    }
+    Ok(output)
+}
+
+fn string_field<'a>(value: &'a Value, field: &str) -> Option<&'a str> {
+    value.get(field).and_then(Value::as_str)
+}
+
+fn state_string(state: &Value) -> String {
+    string_field(state, "state").unwrap_or("FAILED").to_string()
+}
+
+fn state_after_approval_response(response: &str) -> &'static str {
+    match response {
+        "approved" => "WAITING_APPROVAL",
+        "cancelled" => "CANCELLED",
+        _ => "BLOCKED",
+    }
+}
+
+fn next_action_after_approval_response(response: &str) -> &'static str {
+    match response {
+        "approved" => "resume",
+        "cancelled" => "stop",
+        "needs_changes" => "revise",
+        _ => "stop",
+    }
+}
+
+fn allowed_next_stage_for(stage: &str) -> Option<&'static str> {
+    match stage {
+        "route" => Some("plan"),
+        "plan" => Some("design"),
+        "design" => Some("implement"),
+        "implement" => Some("validate"),
+        "validate" => Some("report"),
+        "review" => Some("polish"),
+        "polish" => Some("report"),
+        _ => None,
+    }
+}
+
+fn ensure_approval_response_matches_request(
+    approval_request: &Value,
+    approval_response: &Value,
+) -> Result<(), String> {
+    for field in ["job_id", "stage", "task_id"] {
+        let expected = string_field(approval_request, field)
+            .ok_or_else(|| format!("approval request missing {}", field))?;
+        let actual = string_field(approval_response, field)
+            .ok_or_else(|| format!("approval response missing {}", field))?;
+        if expected != actual {
+            return Err(format!(
+                "approval response {} mismatch: expected {}, got {}",
+                field, expected, actual
+            ));
+        }
+    }
+    let response = string_field(approval_response, "response")
+        .ok_or_else(|| "approval response missing response".to_string())?;
+    if response != "approved" {
+        return Err(format!(
+            "resume requires approved response, got {}",
+            response
+        ));
+    }
+    Ok(())
+}
+
+fn update_state_for_control_command(
+    state: &mut Value,
+    store: &StateStore,
+    next_state: &str,
+    current_stage: &str,
+    next_action: &str,
+    latest_event_id: &str,
+    artifact_ref: Option<(&str, &Value)>,
+) -> Result<(), StateStoreError> {
+    if let Some(state_object) = state.as_object_mut() {
+        state_object.insert("state".to_string(), Value::String(next_state.to_string()));
+        state_object.insert(
+            "current_stage".to_string(),
+            Value::String(current_stage.to_string()),
+        );
+        state_object.insert("updated_at".to_string(), Value::String(timestamp_string()));
+        state_object.insert(
+            "latest_event_id".to_string(),
+            Value::String(latest_event_id.to_string()),
+        );
+        state_object.insert(
+            "next_action".to_string(),
+            Value::String(next_action.to_string()),
+        );
+        let history = state_object
+            .entry("history")
+            .or_insert_with(|| Value::Array(Vec::new()));
+        if let Some(history) = history.as_array_mut() {
+            history.push(json!({
+                "stage": current_stage,
+                "state": next_state,
+                "next_action": next_action,
+                "event_id": latest_event_id
+            }));
+        } else {
+            state_object.insert(
+                "history".to_string(),
+                json!([{
+                    "stage": current_stage,
+                    "state": next_state,
+                    "next_action": next_action,
+                    "event_id": latest_event_id
+                }]),
+            );
+        }
+    } else {
+        return Err(StateStoreError::InvalidArtifactShape {
+            message: "RunState must be a JSON object".to_string(),
+        });
+    }
+    if let Some((key, artifact_ref)) = artifact_ref {
+        store.register_artifact_ref(state, key, artifact_ref)?;
+    }
+    Ok(())
+}
+
+struct ApiControlEvent<'a> {
+    event_id: String,
+    event_type: &'a str,
+    state: &'a str,
+    stage: &'a str,
+    message: &'a str,
+    artifact_paths: Vec<String>,
+    details: Value,
+}
+
+fn append_api_event(
+    store: &StateStore,
+    job_id: &str,
+    event: ApiControlEvent<'_>,
+) -> Result<(), StateStoreError> {
+    store.append_event(
+        job_id,
+        &json!({
+            "schema_version": SCHEMA_VERSION,
+            "event_id": event.event_id,
+            "job_id": job_id,
+            "type": event.event_type,
+            "created_at": timestamp_string(),
+            "stage": event.stage,
+            "state": event.state,
+            "message": event.message,
+            "artifact_paths": event.artifact_paths,
+            "details": event.details
+        }),
+    )
+}
+
+fn timestamp_string() -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    format!("unix:{}", nanos)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -586,6 +1336,14 @@ mod tests {
 
     fn api_with_store(store: StateStore) -> ApiReadOnlyService {
         let mut service = ApiReadOnlyService::new(schema_root());
+        service
+            .register_project_store("local", store)
+            .expect("register project");
+        service
+    }
+
+    fn control_with_store(store: StateStore) -> ApiControlService {
+        let mut service = ApiControlService::new(schema_root());
         service
             .register_project_store("local", store)
             .expect("register project");
@@ -648,6 +1406,23 @@ mod tests {
             "blocked_reason": null,
             "next_step": "done",
             "artifacts": []
+        })
+    }
+
+    fn approval_request(job_id: &str, stage: &str) -> Value {
+        json!({
+            "schema_version": SCHEMA_VERSION,
+            "job_id": job_id,
+            "stage": stage,
+            "task_id": "approval-1",
+            "decision": "HUMAN_REVIEW",
+            "reasons": ["test approval"],
+            "changed_files": ["src/lib.rs"],
+            "risks": ["requires human review"],
+            "diagnostics": [],
+            "review_pack_path": "review-packs/review_pack.md",
+            "requested_at": "unix:1",
+            "requested_by": "star-control-test"
         })
     }
 
@@ -789,6 +1564,136 @@ mod tests {
         let unknown = unknown.expect("unknown response");
         assert_eq!(unknown["status"], "failed");
         assert_eq!(unknown["error"]["code"], "endpoint_not_found");
+    }
+
+    #[test]
+    fn control_approve_and_resume_match_cli_gate() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store, "WAITING_APPROVAL", "validate");
+        store
+            .write_approval_json(
+                "J-0001",
+                "approval-request.json",
+                &approval_request("J-0001", "validate"),
+            )
+            .expect("write approval request");
+        let service = control_with_store(store.clone());
+
+        let approve = service
+            .handle_post(
+                "/projects/local/jobs/J-0001/approve",
+                json!({
+                    "response": "approved",
+                    "reason": "approved by API test",
+                    "constraints": ["keep schema stable"]
+                }),
+            )
+            .expect("approve response");
+        assert_eq!(approve["status"], "success");
+        assert_eq!(approve["data"]["command"], "approve");
+        assert_eq!(approve["data"]["state"], "WAITING_APPROVAL");
+        assert_eq!(approve["data"]["approval_response"], "approved");
+        assert_eq!(approve["data"]["allowed_next_stage"], "report");
+        assert!(project
+            .join(".ai-runs/J-0001/approvals/approval-response.json")
+            .is_file());
+
+        let approved_state = store.load_state("J-0001").expect("state after approve");
+        assert_eq!(approved_state["state"], "WAITING_APPROVAL");
+        assert_eq!(approved_state["next_action"], "resume");
+        assert_eq!(
+            approved_state["artifacts"]["approval_response"]["path"],
+            "approvals/approval-response.json"
+        );
+
+        let resume = service
+            .handle_post("/projects/local/jobs/J-0001/resume", json!({}))
+            .expect("resume response");
+        assert_eq!(resume["status"], "success");
+        assert_eq!(resume["data"]["command"], "resume");
+        assert_eq!(resume["data"]["previous_state"], "WAITING_APPROVAL");
+        assert_eq!(resume["data"]["state"], "VALIDATED");
+        assert_eq!(resume["data"]["next_action"], "report");
+
+        let resumed_state = store.load_state("J-0001").expect("state after resume");
+        assert_eq!(resumed_state["state"], "VALIDATED");
+        assert_eq!(resumed_state["next_action"], "report");
+        let events = store.read_events("J-0001").expect("events");
+        assert!(events.iter().any(|event| {
+            event["type"] == "APPROVAL_RECORDED" && event["state"] == "WAITING_APPROVAL"
+        }));
+        assert!(events
+            .iter()
+            .any(|event| { event["type"] == "STATE_CHANGED" && event["state"] == "VALIDATED" }));
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn control_cancel_updates_nonterminal_and_rejects_terminal() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store, "ROUTED", "implement");
+        let service = control_with_store(store.clone());
+
+        let cancel = service
+            .handle_post("/projects/local/jobs/J-0001/cancel", json!({}))
+            .expect("cancel response");
+        assert_eq!(cancel["status"], "success");
+        assert_eq!(cancel["data"]["command"], "cancel");
+        assert_eq!(cancel["data"]["previous_state"], "ROUTED");
+        assert_eq!(cancel["data"]["state"], "CANCELLED");
+        assert_eq!(
+            store.load_state("J-0001").expect("cancelled state")["state"],
+            "CANCELLED"
+        );
+
+        let second_cancel = service
+            .handle_post("/projects/local/jobs/J-0001/cancel", json!({}))
+            .expect("second cancel response");
+        assert_eq!(second_cancel["status"], "failed");
+        assert_eq!(second_cancel["error"]["code"], "invalid_control_state");
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn control_requires_approval_request_and_approved_response() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store, "WAITING_APPROVAL", "validate");
+        let service = control_with_store(store.clone());
+
+        let missing_request = service
+            .handle_post(
+                "/projects/local/jobs/J-0001/approve",
+                json!({
+                    "response": "approved",
+                    "reason": "missing request"
+                }),
+            )
+            .expect("missing request response");
+        assert_eq!(missing_request["status"], "failed");
+        assert_eq!(missing_request["error"]["code"], "approval_request_missing");
+
+        store
+            .write_approval_json(
+                "J-0001",
+                "approval-request.json",
+                &approval_request("J-0001", "validate"),
+            )
+            .expect("write approval request");
+        let missing_response = service
+            .handle_post("/projects/local/jobs/J-0001/resume", json!({}))
+            .expect("missing response");
+        assert_eq!(missing_response["status"], "failed");
+        assert_eq!(
+            missing_response["error"]["code"],
+            "approval_response_missing"
+        );
+
+        fs::remove_dir_all(project).ok();
     }
 
     #[test]

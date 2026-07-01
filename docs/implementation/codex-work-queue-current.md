@@ -68,9 +68,10 @@ E20 CLI Control Commands
 E21 Daemon Queue Skeleton
 E22 API Read-Only
 E23 UI Read-Only View
+E24 API Control Mutations
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1849,7 +1850,98 @@ missing report read-only error surface test
 다음 EPIC handoff:
 
 ```text
-M8b browser UI shell 또는 API mutation slice를 별도 PR로 설계한다. browser UI package manager, network server, approval/cancel/resume mutation endpoint는 별도 승인과 보안 계약을 확인한 뒤 진행한다.
+E24 API control mutation slice를 별도 PR로 설계한다. 그 이후 M8b browser UI shell은 read-only view model과 API control service를 함께 소비하도록 설계한다.
+```
+
+## E24 API Control Mutations
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cli-daemon-api-ui.md
+api-contract.md
+approval-review-flow.md
+daemon-contract.md
+state-store.md
+security-privacy-observability-contracts.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+Cargo.toml
+Cargo.lock
+packages/star-control-api/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+HTTP server 구현
+socket listener 구현
+remote API exposure
+auth/session 시스템 구현
+daemon background worker 변경
+provider process 실행 구현
+UI browser app 구현
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+release/deploy/publish automation
+외부 provider live call
+credential raw value lookup/materialization
+```
+
+입력 artifact:
+
+```text
+대상 project .ai-runs/{job_id}/run-state.json
+대상 project .ai-runs/{job_id}/approvals/approval-request.json
+대상 project .ai-runs/{job_id}/approvals/approval-response.json
+specs/schemas/api-response.schema.json
+specs/schemas/approval-request.schema.json
+specs/schemas/approval-response.schema.json
+```
+
+출력 artifact:
+
+```text
+대상 project .ai-runs/{job_id}/approvals/approval-response.json
+대상 project .ai-runs/{job_id}/run-state.json
+대상 project .ai-runs/{job_id}/events.jsonl
+```
+
+핵심 TASK:
+
+```text
+ApiControlService 추가
+POST /projects/{project_id}/jobs/{job_id}/approve
+POST /projects/{project_id}/jobs/{job_id}/cancel
+POST /projects/{project_id}/jobs/{job_id}/resume
+approval request presence check
+approval response schema validation
+approval response artifact writer
+approved response resume precondition
+terminal cancel guard
+StateStore run-state update
+events.jsonl audit event append
+structured error envelope tests
+secret-like response redaction 유지
+ApiReadOnlyService non-GET rejection 유지
+```
+
+완료 기준: `ApiControlService`가 GET read-only endpoint와 POST approve/cancel/resume control endpoint를 in-process로 처리하고, 모든 response가 `api-response.schema.json` envelope을 만족해야 한다. HTTP server, socket, auth/session, remote exposure는 구현하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M8b browser UI shell은 ApiReadOnlyService와 ApiControlService를 함께 소비하도록 설계한다. browser UI package manager, network server, remote API exposure는 별도 승인 전까지 구현하지 않는다.
 ```
 
 ## RESERVED
@@ -1863,7 +1955,7 @@ Cloud CLI Provider parser / conformance extension
 Cloud API Provider transport execution
 Cloud provider-specific parser / conformance
 Daemon
-API mutation / HTTP server
+HTTP server / remote API exposure
 Browser UI Shell / UI mutation flow
 Security / Cost / Observability Hardening
 Release Readiness Automation

@@ -149,8 +149,9 @@ packages/star-adapter-openai-compatible
 
 - UI와 외부 도구가 사용하는 API
 - read-only request/router service
+- approve/cancel/resume in-process control mutation service
 - api-response envelope validation
-- RESERVED: HTTP server, remote exposure, auth, mutation endpoint
+- RESERVED: HTTP server, remote exposure, auth/session, provider scheduling
 
 ### `star-control-ui`
 
