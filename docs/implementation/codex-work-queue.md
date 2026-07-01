@@ -272,38 +272,7 @@ E08-T08: resume command
 - `run`, `status`, `report`가 fake project에서 동작한다.
 - `--json` 출력이 parse 가능하다.
 
-## EPIC 09: ValidationEngine
-
-목표:
-
-- provider output을 Star Sentinel tool contract와 연결한다.
-
-선행 문서:
-
-```text
-validation-engine.md
-star-sentinel-full-spec.md
-approval-review-flow.md
-policy-profiles.md
-```
-
-TASK 후보:
-
-```text
-E09-T01: ValidationEngine scaffold
-E09-T02: SentinelTask writer
-E09-T03: validation_runs writer
-E09-T04: approval decision reader
-E09-T05: decision -> RunState mapping
-E09-T06: review pack handoff
-E09-T07: validation report section
-```
-
-완료 기준:
-
-- AUTO_PASS/HUMAN_REVIEW/BLOCK decision이 RunState에 반영된다.
-
-## EPIC 10: Star Sentinel P0 Implementation
+## EPIC 09: Star Sentinel P0 Implementation
 
 목표:
 
@@ -313,32 +282,62 @@ E09-T07: validation report section
 
 ```text
 star-sentinel-full-spec.md
-policy-profiles.md
+star-sentinel-p0-contracts.md
+star-sentinel-p0-implementation-split.md
+docs/decisions/0004-star-sentinel-p0-scope.md
 approval-review-flow.md
-security-cost-observability.md
+policy-profiles.md
 ```
 
 TASK 후보:
 
 ```text
-E10-T01: star-sentinel package scaffold
-E10-T02: task input reader
-E10-T03: changed lines reader
-E10-T04: P0 scope rule
-E10-T05: dependency approval rule
-E10-T06: test deletion / skip-only-ignore rule
-E10-T07: secret candidate rule
-E10-T08: diagnostics writer
-E10-T09: gate writer
-E10-T10: review pack writer
-E10-T11: ledger writer
-E10-T12: selfcheck
+E09a-T01: task input reader
+E09a-T02: changed lines reader
+E09a-T03: P0 rule registry loader
+E09a-T04: 5개 P0 rule evaluator
+E09b-T01: diagnostics writer
+E09b-T02: gate decision writer
+E09c-T01: review pack writer
+E09d-T01: ledger writer
+E09d-T02: selfcheck
 ```
 
 완료 기준:
 
 - P0 fixtures produce expected decision.
 - Star Sentinel outputs validate against schemas.
+
+## EPIC 10: ValidationEngine
+
+목표:
+
+- provider output을 Star Sentinel tool contract와 연결한다.
+
+선행 문서:
+
+```text
+validation-engine.md
+validation-handoff.md
+star-sentinel-p0-contracts.md
+approval-review-flow.md
+```
+
+TASK 후보:
+
+```text
+E10-T01: ValidationEngine scaffold
+E10-T02: SentinelTask writer
+E10-T03: validation_runs writer
+E10-T04: approval decision reader
+E10-T05: decision -> RunState mapping
+E10-T06: review pack handoff
+E10-T07: validation report section
+```
+
+완료 기준:
+
+- AUTO_PASS/HUMAN_REVIEW/BLOCK decision이 RunState에 반영된다.
 
 ## EPIC 11: Integration Smoke
 
@@ -365,6 +364,8 @@ E11-T06: final report smoke
 
 상태: RESERVED until fake flow stable.
 
+Milestone: M5 Local Provider.
+
 목표:
 
 - 허용된 로컬 명령만 실행하는 provider를 구현한다.
@@ -379,6 +380,8 @@ E11-T06: final report smoke
 
 상태: RESERVED.
 
+Milestone: M5 Local Provider.
+
 목표:
 
 - 로컬 모델 서버 provider를 provider-neutral interface로 연결한다.
@@ -386,6 +389,8 @@ E11-T06: final report smoke
 ## EPIC 14: Cloud CLI Provider
 
 상태: RESERVED.
+
+Milestone: M6 Cloud CLI / Cloud API Provider.
 
 목표:
 
@@ -400,6 +405,8 @@ E11-T06: final report smoke
 
 상태: RESERVED.
 
+Milestone: M6 Cloud CLI / Cloud API Provider.
+
 목표:
 
 - Codex CLI 또는 Codex-like provider adapter를 smoke 수준으로 연결한다.
@@ -412,6 +419,8 @@ E11-T06: final report smoke
 ## EPIC 16: Daemon
 
 상태: RESERVED.
+
+Milestone: M7 Daemon / API Control Plane.
 
 목표:
 
@@ -427,6 +436,8 @@ E11-T06: final report smoke
 
 상태: RESERVED.
 
+Milestone: M7 Daemon / API Control Plane.
+
 목표:
 
 - UI와 외부 도구가 상태를 읽고 제한된 mutation을 수행하게 한다.
@@ -437,6 +448,8 @@ E11-T06: final report smoke
 
 상태: RESERVED.
 
+Milestone: M8 UI Shell.
+
 목표:
 
 - job list, job detail, run timeline, approval/review 화면을 제공한다.
@@ -446,6 +459,8 @@ E11-T06: final report smoke
 ## EPIC 19: Security / Cost / Observability Hardening
 
 목표:
+
+Milestone: M9 Hardening / Conformance / Release Readiness.
 
 - secret redaction, budget warning, audit log, metrics를 강화한다.
 
@@ -463,6 +478,8 @@ E19-T06: security profile fixtures
 ## EPIC 20: Release Readiness
 
 상태: RESERVED.
+
+Milestone: M9 Hardening / Conformance / Release Readiness.
 
 목표:
 

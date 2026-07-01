@@ -54,7 +54,24 @@ packages/
   star-sentinel/
 ```
 
-위 구조는 목표 구조다. package manager 도입 전에는 문서와 스캐폴드만 둘 수 있다.
+위 구조는 목표 core 구조다. package manager 도입 전에는 문서와 스캐폴드만 둘 수 있다. Core runtime crate namespace는 `docs/decisions/0005-full-implementation-defaults.md`에 따라 `star-control-*`로 통일한다.
+
+## provider / transport / adapter extension 경계
+
+기존 scaffold 중 아래 계열은 core namespace가 아니라 core 안정화 이후 확장 package 후보로 분류한다.
+
+```text
+packages/star-provider-api
+packages/star-provider-host
+packages/star-transport-cli
+packages/star-transport-http
+packages/star-transport-process
+packages/star-adapter-code-agent
+packages/star-adapter-chat-model
+packages/star-adapter-openai-compatible
+```
+
+해당 package는 provider manifest, provider instance, capability profile, ProviderAdapter interface가 안정화된 뒤 실제 구현 대상으로 삼는다. E01~E11 core fake flow를 구현할 때 `star-control-provider`를 대체하지 않는다.
 
 ## package 책임
 
@@ -262,7 +279,7 @@ E10 ValidationEngine
 E11 Integration Smoke
 ```
 
-장기 구현 흐름은 아래 원칙을 따른다.
+장기 구현 흐름은 아래 원칙을 따른다. 전체 milestone은 `complete-implementation-roadmap.md`를 기준으로 한다.
 
 1. schema/runtime validator를 먼저 안정화한다.
 2. file-based StateStore와 artifact layout을 안정화한다.
@@ -271,7 +288,10 @@ E11 Integration Smoke
 5. CLI read-only와 fake run을 안정화한다.
 6. Star Sentinel P0와 ValidationEngine을 연결한다.
 7. fake provider 기반 integration smoke를 만든다.
-8. local/cloud provider, daemon/API/UI, release automation은 fake flow 안정화 후 별도 승인과 별도 PR에서 확장한다.
+8. local process provider를 먼저 붙인다.
+9. local model/server provider와 cloud CLI/API provider를 순차 확장한다.
+10. daemon, API, UI는 CLI file-based flow와 approval flow가 안정화된 뒤 확장한다.
+11. release automation은 release readiness와 approval flow가 안정화된 뒤 별도 승인으로만 구현한다.
 
 ## PR 경계 원칙
 

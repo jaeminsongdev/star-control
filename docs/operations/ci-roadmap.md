@@ -22,6 +22,27 @@ python scripts/ci/run_all.py
 
 현재 단계의 목적은 AI 작업 PR에 대해 낮은 비용의 자동 검증선을 제공하면서, schema/example/doc/work queue drift를 조기에 잡는 것이다.
 
+## 완전 구현 milestone별 CI 확장
+
+완전 구현 milestone은 `docs/implementation/complete-implementation-roadmap.md`를 따른다.
+
+| milestone | CI 확장 기준 |
+|---|---|
+| M0 문서와 결정 정렬 | 현재 contract checks와 `git diff --check`를 유지한다. |
+| M1 Runtime Foundation | Cargo workspace가 생기면 Rust fmt/check/test를 추가한다. |
+| M2 Provider-neutral Execution | provider registry, fake provider, router, execution unit/contract test를 추가한다. |
+| M3 Validation / Gate | Star Sentinel P0 fixture와 ValidationEngine decision mapping test를 추가한다. |
+| M4 v0 Fake E2E | fake provider integration smoke를 추가한다. |
+| M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture test를 추가한다. |
+| M6 Cloud Provider | provider conformance, credential reference, budget/cost, privacy handoff test를 추가한다. |
+| M7 Daemon / API | daemon/API smoke와 resume/cancel/approval regression test를 추가한다. |
+| M8 UI Shell | UI view model contract와 read-only smoke를 추가한다. |
+| M9 Hardening / Release Readiness | security guard, provider conformance suite, release readiness checks를 추가한다. |
+
+각 단계의 CI 추가는 실패 검사를 삭제하거나 약화하지 않는 별도 PR로 진행한다.
+
+현재 M0/M1 진입 전 검증은 문서, schema, manifest, work queue drift를 잡는 낮은 비용의 계약 검사로 유지한다. Rust package, provider smoke, daemon/API/UI, 보안 guard처럼 시간이 커지는 검사는 해당 milestone의 구현물이 생긴 뒤 추가하고, 누적 비용이 커지면 quick/full profile로 분리한다.
+
 ## 1단계: 데이터 형식 검사
 
 정본 경로 기준으로 데이터 파일 파싱 검사를 유지한다.
@@ -81,6 +102,8 @@ Rust + Cargo workspace가 생기면 다음 검사를 추가한다.
 - `cargo clippy --workspace --all-targets`
 - `cargo test --workspace`
 - `cargo check --workspace`
+
+초기 Cargo workspace는 `star-control-*` core crate와 `packages/star-sentinel`을 기준으로 한다. `star-provider-*`, `star-transport-*`, `star-adapter-*` extension package 검사는 provider 확장 milestone에서 추가한다.
 
 TypeScript 또는 Python package는 별도 승인으로 package manager와 dependency policy가 확정된 뒤 추가한다.
 

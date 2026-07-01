@@ -38,6 +38,27 @@ work-queue-consistency-check
 
 이 job들은 설계/계약 repo 단계의 최소 안전선이다.
 
+## complete implementation milestone validation
+
+완전 구현 milestone은 `complete-implementation-roadmap.md`를 기준으로 하고, CI는 milestone이 진행될 때마다 작은 PR로 확장한다.
+
+| milestone | validation baseline |
+|---|---|
+| M0 문서와 결정 정렬 | `python scripts/ci/run_all.py`, `git diff --check` |
+| M1 Runtime Foundation | Rust fmt/check/test, schema validator tests, StateStore path/atomic write tests |
+| M2 Provider-neutral Execution | provider registry tests, FakeProviderAdapter tests, RouterEngine deterministic tests, ExecutionEngine artifact tests |
+| M3 Validation / Gate | Star Sentinel P0 fixture tests, gate decision tests, ValidationEngine state mapping tests |
+| M4 v0 Fake E2E | fake project integration smoke with AUTO_PASS/HUMAN_REVIEW/BLOCK |
+| M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture tests |
+| M6 Cloud Provider | provider conformance tests, credential reference tests, budget/cost/privacy handoff tests |
+| M7 Daemon / API | daemon queue smoke, API read-only contract tests, approval/cancel/resume mutation tests |
+| M8 UI Shell | UI view model contract tests, read-only smoke, approval flow smoke |
+| M9 Hardening / Release Readiness | redaction, audit, recovery, retention, release readiness checks |
+
+Milestone validation은 누적된다. 뒤 단계로 갈수록 앞 단계 검증을 삭제하지 않고, 필요하면 quick/full profile로 분리한다.
+
+검증 비용은 milestone에 맞춰 늘린다. 현재 구현 전 단계에서는 `python scripts/ci/run_all.py`와 필요한 경우 `git diff --check`를 기본선으로 두고, package build/test나 provider smoke는 해당 구현물이 생긴 뒤에만 CI에 추가한다.
+
 ## repository-policy-check
 
 목적:

@@ -12,12 +12,14 @@
 - v0 runtime 구현 스택은 Rust + Cargo workspace로 결정했다.
 - v0 fake provider instance id는 `fake-default`로 결정했다.
 - v0 Star Sentinel P0 rule set은 5개 핵심 rule로 결정했다.
+- 완전 구현 기본값은 `docs/decisions/0005-full-implementation-defaults.md`를 기준으로 한다.
+- 전체 milestone은 `docs/implementation/complete-implementation-roadmap.md`를 기준으로 한다.
 - Codex 구현 착수용 EPIC brief는 `docs/implementation/briefs/`를 기준으로 한다.
 - `PLANS.md`는 현재 상태만 남기는 bounded snapshot으로 유지한다.
 
 ### 반드시 지켜야 할 제약
 
-- 의존성 추가, Cargo 외 package manager 도입, 원격 공개 작업은 명시 요청이 있을 때만 한다.
+- `docs/decisions/0005-full-implementation-defaults.md`의 기본 Rust dependency set 밖의 의존성 추가, Cargo 외 package manager 도입, 원격 공개 작업은 명시 요청이 있을 때만 한다.
 - 실행 결과는 Star-Control repo가 아니라 대상 프로젝트 `.ai-runs/`에 둔다.
 - 외부 보조 자료를 다시 붙이지 않고 이 repository 안의 정본 파일을 기준으로 작업한다.
 
@@ -31,11 +33,13 @@
 - Star Sentinel v0 P0 scope와 E09a~E09d 구현 분할을 정리했다.
 - 로컬 contract check entrypoint를 `python scripts/ci/run_all.py`로 추가했다.
 - E01~E11 Codex 구현 착수용 brief를 추가했다.
+- 완전 구현 기본값과 M0~M9 milestone 기준을 문서화했다.
+- 검증/AGENTS 효율 병목을 정리하고, `scripts/test.ps1`을 정본 contract runner로 연결했다.
 
 ### 아직 남은 것
 
 - Cargo workspace와 최소 runtime crate 생성은 구현 PR에서 시작한다.
-- provider host, transport, adapter, Star Sentinel runtime 구현.
+- provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - Codex가 E01부터 순차 구현을 시작한다.
 
 ### 건드리면 안 되는 것
@@ -48,6 +52,8 @@
 
 - `README.md`
 - `docs/implementation/README.md`
+- `docs/decisions/0005-full-implementation-defaults.md`
+- `docs/implementation/complete-implementation-roadmap.md`
 - `docs/implementation/codex-long-run-workflow.md`
 - `docs/implementation/codex-work-queue-current.md`
 - `docs/implementation/briefs/README.md`
@@ -57,6 +63,7 @@
 
 ```text
 python scripts/ci/run_all.py
+powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 ```
 
 ### 현재 차단 요소
@@ -74,7 +81,7 @@ python scripts/ci/run_all.py
 |---|---|---|---|
 | R-0001 | runtime 구현 전 상태 | CLI/API/UI 동작 검증은 아직 불가 | 구현 스택 결정에 따라 E01부터 순차 구현 |
 | R-0002 | Cargo workspace 파일 미생성 | Cargo build/test 명령은 구현 PR 전까지 제한됨 | E01 구현 PR에서 최소 workspace 생성 |
-| R-0003 | 로컬 CI 미실행 상태 | 현재 세션에서 full local validation evidence 없음 | Codex 또는 로컬 checkout에서 `python scripts/ci/run_all.py` 실행 |
+| R-0003 | runtime 구현 전 상태 | Cargo build/test와 CLI/API/UI 동작 검증은 구현 PR 전까지 제한됨 | E01 구현 PR에서 Cargo workspace 생성 후 package 검증 추가 |
 
 ## Archive References
 
@@ -84,6 +91,8 @@ python scripts/ci/run_all.py
 | runtime stack 결정 | `docs/decisions/0002-runtime-stack.md` |
 | fake provider instance 결정 | `docs/decisions/0003-fake-provider-instance.md` |
 | Star Sentinel P0 scope 결정 | `docs/decisions/0004-star-sentinel-p0-scope.md` |
+| 완전 구현 기본값 결정 | `docs/decisions/0005-full-implementation-defaults.md` |
+| 완전 구현 milestone | `docs/implementation/complete-implementation-roadmap.md` |
 | EPIC별 brief | `docs/implementation/briefs/` |
 | 이전 완료 이력 | git history |
 
@@ -99,3 +108,5 @@ python scripts/ci/run_all.py
 | P-0006 | 2026-07-01 | Star Sentinel v0 P0 scope와 E09 분할 기준 정리 | `docs/decisions/0004-star-sentinel-p0-scope.md` |
 | P-0007 | 2026-07-01 | 로컬 contract check runner 추가 | `scripts/ci/run_all.py` |
 | P-0008 | 2026-07-01 | E01~E11 Codex 구현 착수용 brief 추가 | `docs/implementation/briefs/` |
+| P-0009 | 2026-07-01 | 완전 구현 기본값과 M0~M9 milestone 문서 정렬 | `docs/decisions/0005-full-implementation-defaults.md`, `docs/implementation/complete-implementation-roadmap.md` |
+| P-0010 | 2026-07-01 | 검증/AGENTS 효율 병목 정리 | `AGENTS.md`, `scripts/test.ps1`, `scripts/ci/check_implementation_docs.py` |

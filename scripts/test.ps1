@@ -1,5 +1,10 @@
 $ErrorActionPreference = "Stop"
-Get-ChildItem -Recurse -Filter *.json | ForEach-Object {
-  Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null
+
+$Root = Split-Path -Parent $PSScriptRoot
+
+Push-Location $Root
+try {
+  python scripts\ci\run_all.py
+} finally {
+  Pop-Location
 }
-Write-Host "JSON files parsed successfully."
