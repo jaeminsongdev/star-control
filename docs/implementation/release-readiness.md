@@ -56,6 +56,14 @@ packages/star-control-api
 
 M9g는 `ApiReadOnlyService`에 `GET /projects/{project_id}/jobs/{job_id}/release-readiness`를 추가한다. endpoint는 existing ReleaseReadiness artifact를 읽고 `api-response.schema.json` envelope으로 반환하며, missing artifact는 `release_readiness_not_found` structured error로 반환한다. 이 endpoint는 StateStore artifact를 수정하지 않고, HTTP server나 release/deploy/publish automation을 추가하지 않는다.
 
+M9h 구현 위치:
+
+```text
+packages/star-control-release
+```
+
+M9h는 `ReleaseConsistencyChecker`와 `ReleaseConsistencyResult`를 제공한다. checker는 caller가 제공한 expected version, declared version text, changelog text를 비교해 `version-consistent`와 `changelog-updated` checks, blocker 목록을 만든다. 이 slice는 filesystem discovery나 changelog parser를 구현하지 않고, release/deploy/publish action을 실행하지 않는다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -108,6 +116,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 4. release profile failure는 blocked로 mapping 가능
 5. version/changelog mismatch는 blocker로 기록
 6. API read-only endpoint는 missing readiness를 structured error로 반환하고 artifact를 수정하지 않음
+7. version/changelog checker output은 schema-valid `not_ready` readiness에 연결 가능함
 
 ## Codex 구현 지시
 
@@ -116,10 +125,11 @@ Release 관련 구현은 다음 순서로 분리한다.
 1. release readiness artifact writer
 2. API read-only release readiness surface
 3. changelog/version consistency checker
-4. release profile validation integration
-5. release review pack 생성
-6. manual approval flow
-7. artifact signing policy
-8. publish/deploy automation
+4. changelog/version file discovery
+5. release profile validation integration
+6. release review pack 생성
+7. manual approval flow
+8. artifact signing policy
+9. publish/deploy automation
 
-7~8은 별도 승인 전까지 구현하지 않는다.
+8~9는 별도 승인 전까지 구현하지 않는다.

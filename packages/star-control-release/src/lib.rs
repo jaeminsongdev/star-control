@@ -101,6 +101,87 @@ impl From<StateStoreError> for ReleaseReadinessError {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReleaseConsistencyResult {
+    checks: Vec<Value>,
+    blockers: Vec<String>,
+}
+
+impl ReleaseConsistencyResult {
+    pub fn checks(&self) -> &[Value] {
+        &self.checks
+    }
+
+    pub fn blockers(&self) -> &[String] {
+        &self.blockers
+    }
+
+    pub fn is_consistent(&self) -> bool {
+        self.blockers.is_empty()
+    }
+
+    pub fn into_parts(self) -> (Vec<Value>, Vec<String>) {
+        (self.checks, self.blockers)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReleaseConsistencyChecker;
+
+impl ReleaseConsistencyChecker {
+    pub fn check(
+        expected_version: impl Into<String>,
+        declared_version: impl Into<String>,
+        changelog_text: impl Into<String>,
+        version_evidence_path: impl Into<String>,
+        changelog_evidence_path: impl Into<String>,
+    ) -> ReleaseConsistencyResult {
+        let expected_version = expected_version.into();
+        let declared_version = declared_version.into();
+        let changelog_text = changelog_text.into();
+        let version_evidence_path = version_evidence_path.into();
+        let changelog_evidence_path = changelog_evidence_path.into();
+        let expected = expected_version.trim();
+        let declared = declared_version.trim();
+
+        let mut blockers = Vec::new();
+        let version_matches = !expected.is_empty() && declared == expected;
+        let changelog_mentions_version =
+            !expected.is_empty() && changelog_text.lines().any(|line| line.contains(expected));
+
+        if expected.is_empty() {
+            blockers.push("expected release version is empty".to_string());
+        } else {
+            if !version_matches {
+                blockers.push(format!(
+                    "version mismatch: expected {}, found {}",
+                    expected,
+                    display_or_empty(declared)
+                ));
+            }
+            if !changelog_mentions_version {
+                blockers.push(format!("changelog does not mention version {}", expected));
+            }
+        }
+
+        ReleaseConsistencyResult {
+            checks: vec![
+                release_check(
+                    "version-consistent",
+                    check_status(version_matches),
+                    evidence_paths(version_evidence_path),
+                ),
+                release_check(
+                    "changelog-updated",
+                    check_status(changelog_mentions_version),
+                    evidence_paths(changelog_evidence_path),
+                ),
+            ],
+            blockers,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ReleaseReadinessWriter {
     schema_root: PathBuf,
@@ -309,6 +390,39 @@ fn write_new_json(path: &Path, value: &Value) -> Result<(), ReleaseReadinessErro
         })
 }
 
+fn release_check(name: &str, status: &str, evidence_paths: Vec<String>) -> Value {
+    json!({
+        "name": name,
+        "status": status,
+        "evidence_paths": evidence_paths
+    })
+}
+
+fn check_status(passed: bool) -> &'static str {
+    if passed {
+        "pass"
+    } else {
+        "fail"
+    }
+}
+
+fn evidence_paths(path: String) -> Vec<String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        Vec::new()
+    } else {
+        vec![trimmed.to_string()]
+    }
+}
+
+fn display_or_empty(value: &str) -> &str {
+    if value.is_empty() {
+        "<empty>"
+    } else {
+        value
+    }
+}
+
 fn timestamp_string() -> String {
     format!("unix:{}", timestamp_nanos())
 }
@@ -443,6 +557,67 @@ mod tests {
             .join(".ai-runs/release/release-readiness.json")
             .exists());
         fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn release_consistency_checker_passes_matching_version_and_changelog() {
+        let result = ReleaseConsistencyChecker::check(
+            "1.2.3",
+            "1.2.3\n",
+            "# Changelog\n\n## 1.2.3\n- release notes\n",
+            "Cargo.toml",
+            "CHANGELOG.md",
+        );
+
+        assert!(result.is_consistent());
+        assert!(result.blockers().is_empty());
+        assert_eq!(result.checks()[0]["name"], "version-consistent");
+        assert_eq!(result.checks()[0]["status"], "pass");
+        assert_eq!(result.checks()[0]["evidence_paths"][0], "Cargo.toml");
+        assert_eq!(result.checks()[1]["name"], "changelog-updated");
+        assert_eq!(result.checks()[1]["status"], "pass");
+        assert_eq!(result.checks()[1]["evidence_paths"][0], "CHANGELOG.md");
+    }
+
+    #[test]
+    fn release_consistency_checker_blocks_version_and_changelog_mismatch() {
+        let result = ReleaseConsistencyChecker::check(
+            "1.2.3",
+            "1.2.2",
+            "# Changelog\n\n## 1.2.2\n- previous release\n",
+            "Cargo.toml",
+            "CHANGELOG.md",
+        );
+
+        assert!(!result.is_consistent());
+        assert_eq!(result.checks()[0]["status"], "fail");
+        assert_eq!(result.checks()[1]["status"], "fail");
+        assert!(result
+            .blockers()
+            .contains(&"version mismatch: expected 1.2.3, found 1.2.2".to_string()));
+        assert!(result
+            .blockers()
+            .contains(&"changelog does not mention version 1.2.3".to_string()));
+    }
+
+    #[test]
+    fn release_consistency_result_feeds_schema_valid_not_ready_readiness() {
+        let writer = ReleaseReadinessWriter::new(schema_root());
+        let result =
+            ReleaseConsistencyChecker::check("1.2.3", "", "no version yet", "", "CHANGELOG.md");
+        let (checks, blockers) = result.into_parts();
+        let readiness = writer.not_ready("release-0004", "star-control", "1.2.3", checks, blockers);
+
+        writer
+            .validate_readiness(&readiness)
+            .expect("schema-valid not_ready release readiness");
+        assert_eq!(readiness["status"], "not_ready");
+        assert_eq!(readiness["checks"][0]["name"], "version-consistent");
+        assert_eq!(readiness["checks"][1]["name"], "changelog-updated");
+        assert!(!readiness["blockers"]
+            .as_array()
+            .expect("blockers")
+            .is_empty());
     }
 
     fn create_job(store: &StateStore) {

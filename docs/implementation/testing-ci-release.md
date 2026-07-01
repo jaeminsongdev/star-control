@@ -425,6 +425,15 @@ M9g release readiness API read는 API crate 수준에서 검증한다.
 - endpoint가 job state나 artifact를 수정하지 않음
 - HTTP server, CLI command, browser UI app, release/deploy/publish, repository settings mutation이 없음
 
+M9h release version consistency checker는 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- matching declared version과 changelog text가 `pass` checks를 생성함
+- version mismatch와 changelog gap이 `fail` checks와 blockers를 생성함
+- checker output이 `ReleaseReadinessWriter::not_ready`에 들어가 schema-valid readiness를 만들 수 있음
+- filesystem discovery, changelog parser, release/deploy/publish, repository settings mutation이 없음
+
 ## CI 변경 policy
 
 CI workflow 변경은 다음을 PR 본문에 명시해야 한다.

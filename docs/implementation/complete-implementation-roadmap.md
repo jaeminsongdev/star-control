@@ -293,6 +293,8 @@ M9f release readiness writer는 `packages/star-control-release`의 ReleaseReadin
 
 M9g release readiness API read는 `packages/star-control-api`의 `ApiReadOnlyService`에 `GET /projects/{project_id}/jobs/{job_id}/release-readiness` path를 추가한다. 이 slice는 existing readiness artifact를 schema-valid API envelope으로 읽어 반환하되, HTTP server, CLI command, UI app, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
 
+M9h release version consistency checker는 `packages/star-control-release`의 `ReleaseConsistencyChecker`로 구현한다. 이 slice는 caller-provided expected version, declared version text, changelog text를 평가해 `version-consistent`/`changelog-updated` checks와 blockers를 생성하되, filesystem discovery, changelog parser, release profile integration, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
 Validation:
 
 ```text

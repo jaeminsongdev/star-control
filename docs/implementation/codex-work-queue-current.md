@@ -77,9 +77,10 @@ E29 Provider Conformance Hardening
 E30 State Recovery Inspection
 E31 Release Readiness Writer
 E32 Release Readiness API Read
+E33 Release Version Consistency Checker
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening, E30은 StateStore recovery inspect-only, E31은 ReleaseReadinessWriter, E32는 release readiness API read-only surface slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening, E30은 StateStore recovery inspect-only, E31은 ReleaseReadinessWriter, E32는 release readiness API read-only surface, E33은 release version consistency checker slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -2602,7 +2603,87 @@ release/deploy/publish automation 미구현 유지
 다음 EPIC handoff:
 
 ```text
-M9h는 release readiness CLI/UI read surface, release profile/version checker, 또는 recovery command surface 중 하나로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+M9h는 release profile/version checker 또는 recovery command surface 중 하나로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E33 Release Version Consistency Checker
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+testing-ci-release.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-release/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+CLI command 추가
+artifact signing 구현
+package registry 설정
+repository branch protection/settings 변경
+filesystem changelog discovery
+```
+
+입력:
+
+```text
+expected release version
+declared version text
+changelog text
+version evidence path string
+changelog evidence path string
+```
+
+출력:
+
+```text
+ReleaseConsistencyResult
+version-consistent check
+changelog-updated check
+blockers for version/changelog mismatch
+```
+
+핵심 TASK:
+
+```text
+ReleaseConsistencyChecker 추가
+ReleaseConsistencyResult 추가
+version-consistent pass/fail check 생성
+changelog-updated pass/fail check 생성
+version mismatch blocker 생성
+changelog missing version blocker 생성
+not_ready ReleaseReadiness에 연결 가능한 checks/blockers 검증
+schema field 변경 없이 release-readiness.schema.json validation 유지
+```
+
+완료 기준: `ReleaseConsistencyChecker`가 caller-provided version/changelog evidence text를 평가해 `version-consistent`와 `changelog-updated` checks 및 blockers를 만들고, output이 `ReleaseReadinessWriter::not_ready`에 들어가 schema-valid ReleaseReadiness를 만들 수 있어야 한다. filesystem discovery, changelog parser, release profile integration, CLI/API/UI surface, release/deploy/publish, repository settings, workflow, schema field 변경은 하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9i는 release profile validation integration, release readiness CLI/UI read surface, changelog/version file discovery, or recovery command surface 중 하나로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
 ```
 
 ## RESERVED
