@@ -51,24 +51,25 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 19. `router-decision-matrix.md`
 20. `router-engine.md`
 21. `execution-engine.md`
-22. `validation-engine.md`
-23. `star-sentinel-p0-contracts.md`
-24. `star-sentinel-p0-implementation-split.md`
-25. `star-sentinel-full-spec.md`
-26. `approval-review-flow.md`
-27. `policy-profiles.md`
-28. `cli-command-reference.md`
-29. `cli-daemon-api-ui.md`
-30. `security-cost-observability.md`
-31. `security-privacy-observability-contracts.md`
-32. `testing-ci-release.md`
-33. `ci-contract-validation.md`
-34. `codex-long-run-workflow.md`
-35. `codex-work-queue-current.md`
-36. `briefs/README.md`
-37. `codex-work-queue.md`
-38. `codex-pr-template.md`
-39. `codex-validation-report.md`
+22. `local-process-provider-policy.md`
+23. `validation-engine.md`
+24. `star-sentinel-p0-contracts.md`
+25. `star-sentinel-p0-implementation-split.md`
+26. `star-sentinel-full-spec.md`
+27. `approval-review-flow.md`
+28. `policy-profiles.md`
+29. `cli-command-reference.md`
+30. `cli-daemon-api-ui.md`
+31. `security-cost-observability.md`
+32. `security-privacy-observability-contracts.md`
+33. `testing-ci-release.md`
+34. `ci-contract-validation.md`
+35. `codex-long-run-workflow.md`
+36. `codex-work-queue-current.md`
+37. `briefs/README.md`
+38. `codex-work-queue.md`
+39. `codex-pr-template.md`
+40. `codex-validation-report.md`
 
 ## 경로 해석 기준
 
@@ -112,6 +113,7 @@ Codex 또는 다른 구현자는 아래 순서로 문서를 읽는다.
 ## provider / config / router 기준
 
 - `provider-system.md`: provider manifest, instance, capability, registry, adapter 경계.
+- `local-process-provider-policy.md`: M5 local process provider의 command, sandbox, timeout/cancel 정책.
 - `config-system.md`: config, policy, hook, role, renderer, skill 계약과 병합 기준.
 - `router-decision-matrix.md`: size, risk, policy profile, approval, decision matrix.
 - `router-engine.md`: RouteSpec 생성 책임과 RouterEngine 구현 계약.

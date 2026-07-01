@@ -166,6 +166,7 @@ Entry condition:
 
 - M4 fake flow가 안정화되어 있다.
 - command policy, sandbox policy, timeout/cancel behavior가 문서화되어 있다.
+- 기준 문서: `docs/implementation/local-process-provider-policy.md`
 
 Exit criteria:
 

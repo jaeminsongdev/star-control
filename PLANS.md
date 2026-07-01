@@ -49,6 +49,7 @@
 - E09d Star Sentinel ledger writer와 selfcheck를 추가했다.
 - E10 `packages/star-control-validation` ValidationEngine을 추가했다.
 - E11 `packages/star-control-cli/tests/v0_fake_flow.rs` integration smoke를 추가했다.
+- M5 local process provider command/sandbox/timeout/cancel 정책 문서를 추가했다.
 
 ### 아직 남은 것
 
@@ -125,6 +126,7 @@ cargo test --workspace
 | E09d handoff | `build_gate_ledger_event`, `validate_ledger_events`, `write_ledger_artifact`, `run_selfcheck`; ledger output은 `tool-output/star-sentinel/ledger.jsonl`; selfcheck는 manifest outputs, P0 registry/schema/fixture parse, rule id duplicate, legacy alias 위치를 확인한다 |
 | E10 handoff | `ValidationEngine::evaluate_star_sentinel_gate`, `write_outcome`, `ensure_provider_response`, `ensure_approval_response_allows_next_stage`; Star Sentinel `approval.json`을 `validation/validation-decision.json`으로 정규화하고 `tool-output/star-sentinel/validation_runs.json`, `approvals/approval-request.json`, `review-packs/handoff.json`, RunState 전이를 기록한다 |
 | E11 handoff | `packages/star-control-cli/tests/v0_fake_flow.rs`; CLI `run`으로 fake provider output을 만든 뒤 Star Sentinel P0 evaluator/gate/review-pack writer와 ValidationEngine을 연결해 AUTO_PASS -> DONE smoke, HUMAN_REVIEW -> WAITING_APPROVAL -> approved -> DONE smoke, BLOCK -> BLOCKED smoke를 검증한다 |
+| M5a handoff | `docs/implementation/local-process-provider-policy.md`; local process provider는 shell 없이 executable/args vector만 실행하고, env allowlist, network deny, workspace write deny, timeout/cancel 기록, approval-required/forbidden action guard를 따른다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -155,3 +157,4 @@ cargo test --workspace
 | P-0022 | 2026-07-01 | E09d Star Sentinel ledger/selfcheck 추가 | `packages/star-sentinel`, `builtin-tools/star-sentinel/tool.yaml` |
 | P-0023 | 2026-07-01 | E10 ValidationEngine 추가 | `packages/star-control-validation`, `packages/star-control-state` |
 | P-0024 | 2026-07-01 | E11 v0 fake integration smoke 추가 | `packages/star-control-cli/tests/v0_fake_flow.rs` |
+| P-0025 | 2026-07-01 | M5 local process provider policy 추가 | `docs/implementation/local-process-provider-policy.md`, `configs/policies/provider-policy.yaml` |

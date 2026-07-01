@@ -320,6 +320,14 @@ RESERVED. 장기 구현 대상이다.
 - exit code 기록
 - timeout/cancel 지원
 
+구현 전제:
+
+```text
+docs/implementation/local-process-provider-policy.md
+```
+
+M5 구현은 shell을 직접 호출하지 않고 `process` transport의 executable/args vector만 실행한다. provider output은 `.ai-runs/{job_id}/provider-output/{provider_instance_id}/` 아래에만 저장한다.
+
 ## LocalModelProvider
 
 RESERVED. 장기 구현 대상이다.
