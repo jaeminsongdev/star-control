@@ -10,3 +10,10 @@ Builtin provider manifest for `provider.openai`.
 - `openai_compatible` parser는 Responses API `output_text`를 우선 사용하고, 없으면 `output[]` 전체를 순회해 `type=output_text` content를 집계한다.
 - Chat Completions는 `choices[].message.content`와 usage token fields를 정규화한다.
 - 이 README는 parser 기준만 기록한다. HTTP transport, credential lookup, live API call, streaming parser는 별도 M6 slice에서 다룬다.
+
+## M6e request builder 기준
+
+- request builder는 기본적으로 `POST {base_url}/responses` body를 만든다.
+- `endpoint.api=chat_completions` 또는 `chat-completions`이면 `POST {base_url}/chat/completions` body를 만든다.
+- request body는 `model`, prompt input/messages, `stream=false`만 포함하고 credential reference/raw credential 값은 포함하지 않는다.
+- 이 단계는 URL/body fixture만 만들며 HTTP transport와 live API call은 실행하지 않는다.

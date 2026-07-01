@@ -169,3 +169,31 @@ M6d는 다음을 구현하지 않는다.
 - request signing
 - streaming SSE parser
 - cost price calculation
+
+## M6e OpenAI-compatible request builder scope
+
+M6e는 `openai_compatible` adapter가 사용할 request builder boundary를 구현한다. 이 단계는 HTTP transport를 실행하지 않고, target endpoint URL과 JSON request body만 만든다.
+
+Provider doc refresh:
+
+- 2026-07-01 기준 OpenAI official Responses API와 Chat Completions API reference를 확인했다.
+- 확인 URL: `https://developers.openai.com/api/reference/resources/responses/methods/create/`, `https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create/`
+- Responses API request는 `model`과 `input`을 기준으로 한다.
+- Chat Completions request는 `model`과 `messages`를 기준으로 한다.
+
+Builder 규칙:
+
+- 기본 API는 Responses API이며 `POST {base_url}/responses` body를 만든다.
+- `endpoint.api=chat_completions` 또는 `chat-completions`이면 `POST {base_url}/chat/completions` body를 만든다.
+- request body는 `model`, prompt input/messages, `stream=false`만 포함한다.
+- `credential_ref`, raw credential-like field, environment variable name/value는 request body에 포함하지 않는다.
+- `endpoint.model` 누락과 unknown API selector는 builder error로 처리한다.
+
+M6e는 다음을 구현하지 않는다.
+
+- HTTP client
+- request signing/header construction
+- live credential lookup
+- live API call
+- streaming SSE parser
+- price/cost calculation

@@ -80,4 +80,4 @@ official doc refresh notes
 
 ## 다음 handoff
 
-M6e는 cloud API request builder 또는 HTTP transport boundary를 별도 PR로 구현한다. 실제 cloud API call, paid usage, credential raw value access는 별도 승인 전까지 실행하지 않는다.
+M6e는 OpenAI-compatible request builder를 별도 PR로 구현한다. 실제 cloud API call, paid usage, credential raw value access는 별도 승인 전까지 실행하지 않는다.

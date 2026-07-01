@@ -60,9 +60,10 @@ E12 Cloud Provider Preflight
 E13 Cloud CLI Transport
 E14 Cloud Provider Conformance
 E15 OpenAI-Compatible API Parser
+E16 OpenAI-Compatible Request Builder
 ```
 
-E15 이후 M6e cloud API request builder 또는 HTTP transport boundary, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E16 이후 M6f cloud API transport boundary 또는 offline HTTP response fixture integration, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1190,7 +1191,82 @@ official doc refresh notes
 다음 EPIC handoff:
 
 ```text
-M6e cloud API request builder 또는 HTTP transport boundary를 별도 PR로 구현한다.
+M6e OpenAI-compatible request builder를 별도 PR로 구현한다.
+```
+
+## E16 OpenAI-Compatible Request Builder
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cloud-provider-policy.md
+provider-system.md
+docs/providers/provider-reference-snapshots.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+docs/implementation/**
+docs/providers/**
+builtin-providers/cloud-api/openai/docs/**
+PLANS.md
+```
+
+금지 파일:
+
+```text
+Cargo 외 package manager
+새 dependency
+GitHub workflow
+schema field 변경
+release/deploy/publish automation
+실제 paid CLI/API 호출 검증
+credential raw value 저장
+live credential lookup
+HTTP transport 실행
+```
+
+입력 artifact:
+
+```text
+ExecutionRequest.goal
+ProviderInstance.endpoint.base_url
+ProviderInstance.endpoint.model
+ProviderInstance.endpoint.api optional responses/chat_completions selector
+```
+
+출력 artifact:
+
+```text
+OpenAiCompatibleRequestBuilder
+OpenAiCompatiblePreparedRequest
+Responses API request body fixture
+Chat Completions request body fixture
+credential exclusion fixture
+```
+
+핵심 TASK:
+
+```text
+Responses API request body builder
+Chat Completions request body builder
+base_url + endpoint path normalization
+model required validation
+unsupported API selector failure
+credential_ref/raw credential exclusion from request body
+official doc refresh notes
+```
+
+완료 기준: request builder가 live HTTP 호출 없이 Responses API와 Chat Completions request body/URL을 만들고 credential 값을 포함하지 않아야 한다.
+
+다음 EPIC handoff:
+
+```text
+M6f cloud API transport boundary 또는 offline HTTP response fixture integration을 별도 PR로 구현한다.
 ```
 
 ## RESERVED

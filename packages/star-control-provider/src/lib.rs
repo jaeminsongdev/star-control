@@ -27,8 +27,9 @@ pub use fake::{
 };
 pub use local_process::{LocalProcessCommandPolicy, LocalProcessProviderAdapter};
 pub use openai_compatible::{
-    OpenAiCompatibleParseError, OpenAiCompatibleParsedResponse, OpenAiCompatibleResponseKind,
-    OpenAiCompatibleResponseParser,
+    OpenAiCompatibleParseError, OpenAiCompatibleParsedResponse, OpenAiCompatiblePreparedRequest,
+    OpenAiCompatibleRequestApi, OpenAiCompatibleRequestBuilder, OpenAiCompatibleRequestError,
+    OpenAiCompatibleResponseKind, OpenAiCompatibleResponseParser,
 };
 
 const PROVIDER_MANIFEST_SCHEMA: &str = "provider-manifest.schema.json";

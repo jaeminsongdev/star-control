@@ -50,7 +50,7 @@ work-queue-consistency-check
 | M3 Validation / Gate | Star Sentinel P0 fixture tests, gate decision tests, ValidationEngine state mapping tests |
 | M4 v0 Fake E2E | fake project integration smoke with AUTO_PASS/HUMAN_REVIEW/BLOCK |
 | M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture tests |
-| M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider response parser fixtures, credential reference tests, budget/cost/privacy handoff tests |
+| M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, credential reference tests, budget/cost/privacy handoff tests |
 | M7 Daemon / API | daemon queue smoke, API read-only contract tests, approval/cancel/resume mutation tests |
 | M8 UI Shell | UI view model contract tests, read-only smoke, approval flow smoke |
 | M9 Hardening / Release Readiness | redaction, audit, recovery, retention, release readiness checks |
