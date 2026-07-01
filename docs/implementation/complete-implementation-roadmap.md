@@ -299,6 +299,8 @@ M9i release evidence file discovery는 `packages/star-control-release`의 `Relea
 
 M9j release profile readiness integration은 `packages/star-control-release`의 `ReleaseProfileValidation`과 `ReleaseProfileReadinessBuilder`로 구현한다. 이 slice는 caller-provided release profile pass/fail result를 `release-profile-passed` check로 만들고 version/changelog consistency checks와 병합하되, Star Sentinel profile evaluator, CLI/API/UI surface, schema field 변경, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
 
+M9k release readiness UI read는 `packages/star-control-ui`의 `UiReadOnlyShell`에 release readiness viewer를 추가한다. 이 slice는 existing ReleaseReadiness artifact를 API read-only endpoint를 통해 표시하고 missing artifact를 optional read-only error로 처리하되, browser app, HTTP server, CLI command, StateStore 직접 mutation, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
 Validation:
 
 ```text

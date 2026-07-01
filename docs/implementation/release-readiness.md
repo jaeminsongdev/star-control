@@ -80,6 +80,14 @@ packages/star-control-release
 
 M9j는 `ReleaseProfileValidation`과 `ReleaseProfileReadinessBuilder`를 제공한다. builder는 caller가 제공한 release profile pass/fail evidence를 `release-profile-passed` check로 만들고, `ReleaseConsistencyResult`의 version/changelog checks와 blockers를 같은 ReleaseReadiness JSON에 병합한다. profile/version/changelog가 모두 통과해도 `ready` status를 만들지 않고 release automation reserved blocker를 둔다. 이 slice는 Star Sentinel profile evaluator, release/deploy/publish action, CLI/API/UI surface, schema field 변경을 구현하지 않는다.
 
+M9k 구현 위치:
+
+```text
+packages/star-control-ui
+```
+
+M9k는 `UiReadOnlyShell`에 release readiness viewer를 추가한다. UI는 M9g `GET /projects/{project_id}/jobs/{job_id}/release-readiness` endpoint를 소비해 readiness status, checks, blockers, approvals를 read-only model로 표시한다. missing readiness artifact는 job detail 전체 실패가 아니라 optional error surface로 보여준다. 이 slice는 browser app, HTTP server, CLI command, release/deploy/publish action, StateStore 직접 mutation을 구현하지 않는다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -135,6 +143,7 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 7. version/changelog checker output은 schema-valid `not_ready` readiness에 연결 가능함
 8. version/changelog evidence file reader는 project root 밖 path를 거부하고 read-only로 동작함
 9. release profile validation result는 version/changelog result와 같은 readiness artifact에 병합되며 `ready` status를 만들지 않음
+10. UI release readiness viewer는 existing artifact를 읽고 missing artifact를 optional read-only error로 표시함
 
 ## Codex 구현 지시
 

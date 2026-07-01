@@ -162,6 +162,7 @@ packages/star-adapter-openai-compatible
 - API read-only service를 소비하는 UI read-only view model
 - API control service를 소비하는 browser-oriented control shell model
 - job list, job detail, timeline, provider output, validation, approval, review pack viewer data
+- release readiness viewer data
 - approve/cancel/resume action panel과 mutation result view
 - RESERVED: browser UI app, TypeScript/Node package manager, HTTP server, remote UI runtime
 
