@@ -52,20 +52,26 @@
 확인 URL:
 
 ```text
-https://platform.openai.com/docs/api-reference/responses
+https://developers.openai.com/api/reference/resources/responses/methods/create/
+https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create/
+https://developers.openai.com/api/docs/guides/text
 ```
 
 확인한 내용:
 
+- 2026-07-01 기준 공식 문서를 refresh했다.
 - Responses API는 text/image input과 text/JSON output을 다룬다.
 - `POST /v1/responses` endpoint가 있다.
 - streaming은 `stream: true`로 server-sent events를 사용한다.
 - tools, function calling, structured outputs, conversation state가 문서화되어 있다.
+- Responses API text output은 SDK convenience field인 `output_text`로 집계될 수 있지만, `output[]`는 여러 item을 포함할 수 있으므로 first item에 text가 있다고 가정하지 않는다.
+- Chat Completions response는 `choices[].message.content`와 usage token fields를 제공한다.
 - Star-Control manifest의 `transport: http`, `adapter: openai_compatible`, `structured_output: true`는 현재 snapshot에서 타당하다.
 
 보류:
 
 - 실제 model list, price, rate limit, background response, cancel behavior는 adapter 구현 직전 재확인한다.
+- 실제 HTTP transport, credential lookup, streaming SSE parser는 별도 M6 slice로 구현한다.
 
 ### Anthropic API
 

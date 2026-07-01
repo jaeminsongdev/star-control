@@ -38,6 +38,7 @@ E11-integration-smoke.md
 E12-cloud-provider-preflight.md
 E13-cloud-cli-transport.md
 E14-cloud-provider-conformance.md
+E15-openai-compatible-parser.md
 ```
 
 ## 사용 방법

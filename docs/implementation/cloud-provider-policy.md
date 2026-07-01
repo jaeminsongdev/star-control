@@ -142,3 +142,30 @@ M6c는 다음을 구현하지 않는다.
 - token usage parser
 - live credential lookup
 - paid usage validation
+
+## M6d OpenAI-compatible API parser scope
+
+M6d는 `openai_compatible` adapter가 사용할 response parser를 구현한다. 이 단계는 실제 HTTP request/response transport가 아니라 fixture JSON parsing만 다룬다.
+
+Provider doc refresh:
+
+- 2026-07-01 기준 OpenAI official API docs를 확인했다.
+- 확인 URL: `https://developers.openai.com/api/reference/resources/responses/methods/create/`, `https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create/`, `https://developers.openai.com/api/docs/guides/text`
+- Responses API는 text output shortcut인 `output_text`를 제공하지만, `output[]`는 여러 item을 포함할 수 있으므로 `output[0].content[0].text`를 가정하지 않는다.
+- Chat Completions response는 `choices[].message.content`와 `usage.prompt_tokens`, `usage.completion_tokens`, `usage.total_tokens`를 기준으로 파싱한다.
+
+Parser 규칙:
+
+- Responses API는 `output_text`가 있으면 우선 사용한다.
+- `output_text`가 없으면 `output[]` 전체를 순회해 `type=output_text` content를 집계한다.
+- Chat Completions는 `choices[].message.content`를 집계하고 usage token field를 provider-neutral `input_tokens`, `output_tokens`, `total_tokens`로 매핑한다.
+- supported response shape지만 text output이 없으면 parser error로 처리한다.
+
+M6d는 다음을 구현하지 않는다.
+
+- HTTP client
+- live API call
+- credential lookup
+- request signing
+- streaming SSE parser
+- cost price calculation

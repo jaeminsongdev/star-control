@@ -10,6 +10,7 @@ mod cloud;
 mod conformance;
 mod fake;
 mod local_process;
+mod openai_compatible;
 
 pub use cloud::{
     is_cloud_cli_manifest, is_cloud_provider_manifest, CloudCliProviderAdapter,
@@ -25,6 +26,10 @@ pub use fake::{
     ProviderRunResult,
 };
 pub use local_process::{LocalProcessCommandPolicy, LocalProcessProviderAdapter};
+pub use openai_compatible::{
+    OpenAiCompatibleParseError, OpenAiCompatibleParsedResponse, OpenAiCompatibleResponseKind,
+    OpenAiCompatibleResponseParser,
+};
 
 const PROVIDER_MANIFEST_SCHEMA: &str = "provider-manifest.schema.json";
 const PROVIDER_INSTANCE_SCHEMA: &str = "provider-instance.schema.json";

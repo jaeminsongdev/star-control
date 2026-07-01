@@ -59,9 +59,10 @@ E11 Integration Smoke
 E12 Cloud Provider Preflight
 E13 Cloud CLI Transport
 E14 Cloud Provider Conformance
+E15 OpenAI-Compatible API Parser
 ```
 
-E14 이후 M6d cloud API transport 또는 provider-specific parser, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E15 이후 M6e cloud API request builder 또는 HTTP transport boundary, M7 daemon/API, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1115,7 +1116,81 @@ cloud CLI execution fixture conformance assertion
 다음 EPIC handoff:
 
 ```text
-M6d cloud API transport 또는 provider-specific parser를 별도 PR로 구현한다.
+M6d OpenAI-compatible API response parser를 별도 PR로 구현한다.
+```
+
+## E15 OpenAI-Compatible API Parser
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cloud-provider-policy.md
+provider-system.md
+docs/providers/provider-reference-snapshots.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+docs/implementation/**
+docs/providers/**
+builtin-providers/cloud-api/openai/docs/**
+PLANS.md
+```
+
+금지 파일:
+
+```text
+Cargo 외 package manager
+새 dependency
+GitHub workflow
+schema field 변경
+release/deploy/publish automation
+실제 paid CLI/API 호출 검증
+credential raw value 저장
+live credential lookup
+HTTP transport 실행
+```
+
+입력 artifact:
+
+```text
+builtin-providers/cloud-api/openai/provider.yaml outputs.parser=openai-compatible-chat
+Responses API JSON response fixture
+Chat Completions JSON response fixture
+usage token fields
+```
+
+출력 artifact:
+
+```text
+OpenAiCompatibleResponseParser
+OpenAiCompatibleParsedResponse
+Responses API parser fixture
+Chat Completions parser fixture
+missing text failure fixture
+```
+
+핵심 TASK:
+
+```text
+Responses API output_text shortcut parse
+Responses API output[] message content aggregation without output[0] assumption
+Chat Completions choices[].message.content parse
+token usage mapping
+unsupported/missing text error model
+official doc refresh notes
+```
+
+완료 기준: OpenAI-compatible parser가 Responses API와 Chat Completions JSON response fixture를 live API 호출 없이 정규화해야 한다.
+
+다음 EPIC handoff:
+
+```text
+M6e cloud API request builder 또는 HTTP transport boundary를 별도 PR로 구현한다.
 ```
 
 ## RESERVED

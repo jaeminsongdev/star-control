@@ -80,4 +80,4 @@ cloud CLI execution fixture conformance assertion
 
 ## 다음 handoff
 
-M6d는 cloud API transport 또는 provider-specific parser를 별도 PR로 구현한다. 실제 provider API 호출, paid usage, external account mutation은 별도 승인 전까지 실행하지 않는다.
+M6d는 OpenAI-compatible API response parser를 별도 PR로 구현한다. 실제 provider API 호출, paid usage, external account mutation은 별도 승인 전까지 실행하지 않는다.
