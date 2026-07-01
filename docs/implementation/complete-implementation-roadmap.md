@@ -287,6 +287,8 @@ M9c cost metric budget guard는 `packages/star-control-observability`의 CostMet
 
 M9d provider conformance hardening은 `packages/star-control-provider`의 ProviderConformanceChecker를 강화한다. 이 slice는 ArtifactRef path/kind/producer, stored `response.json` schema/value 일치, cloud privacy/cost sidecar schema와 job/provider/stage 일치를 검증한다. provider live call, schema field 변경, workflow/release/deploy/publish automation은 구현하지 않는다.
 
+M9e state recovery inspection은 `packages/star-control-state`의 `StateStore::inspect_recovery`로 구현한다. 이 slice는 missing/invalid/schema/corrupt/tmp issue를 inspect-only report로 분류하되, tmp file 삭제, event log trim, recovered copy 생성, artifact 교체, retention cleanup은 수행하지 않는다.
+
 Validation:
 
 ```text
@@ -300,6 +302,7 @@ redaction report tests
 audit event writer tests
 cost metric budget guard tests
 provider conformance hardening tests
+state recovery inspection tests
 release readiness checks
 ```
 

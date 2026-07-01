@@ -72,6 +72,12 @@ corrupt_reason
 - tmp file은 자동 제거하지 않는다.
 - terminal state report에 남은 tmp file이 있음을 기록할 수 있다.
 
+M9e 구현:
+
+- `StateStore::inspect_recovery(job_id)`는 남은 `tmp/**` file을 `partial_tmp_file` warning issue로 보고한다.
+- inspect 중 tmp file을 삭제하거나 정상 artifact로 승격하지 않는다.
+- report는 `destructive_actions_performed=false`를 유지한다.
+
 장기 recovery command 후보:
 
 ```text
@@ -82,6 +88,8 @@ star-control recover --project <path> --job <job-id> --discard-tmp
 ## event log recovery 후보
 
 초기 구현에서는 자동 repair를 하지 않는다.
+
+M9e 구현은 corrupt `events.jsonl`을 `corrupt_event_log` issue로만 보고한다. event log를 trim하거나 recovered copy를 만들거나 원본을 교체하지 않는다.
 
 장기적으로 recovery command가 생기면 다음 mode를 둘 수 있다.
 
@@ -142,3 +150,5 @@ manual_followup_required
 5. tmp file을 정상 artifact로 보지 않음
 6. corrupt job이 `list_jobs`에서 숨겨지지 않음
 7. path traversal recovery 입력 차단
+8. inspect-only report가 tmp file을 삭제하지 않음
+9. 정상 job은 recovery issue 없이 `ok`로 보고됨

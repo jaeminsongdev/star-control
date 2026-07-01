@@ -74,9 +74,10 @@ E26 Security Redaction Utility
 E27 Observability Audit Event Writer
 E28 Cost Metric Budget Guard
 E29 Provider Conformance Hardening
+E30 State Recovery Inspection
 ```
 
-E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. E23은 browser app이 아니라 read-only UI view model slice이고, E24는 HTTP server 없는 in-process API control mutation slice다. E25는 browser app이 아니라 ApiControlService를 소비하는 library-level browser control shell slice다. E26은 API/UI가 공유하는 redaction utility와 schema-valid RedactionReport builder slice다. E27은 AuditEventWriter, E28은 CostMetricWriter/warn-only budget evaluation, E29는 ProviderConformanceChecker hardening, E30은 StateStore recovery inspect-only slice다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -2363,6 +2364,86 @@ schema-invalid cloud sidecar regression test
 
 ```text
 M9e는 retention/recovery 또는 release readiness writer 중 하나로 이어간다. provider execution path가 conformance checker를 모든 provider run마다 자동 호출하는 작업은 별도 작은 PR에서 처리한다.
+```
+
+## E30 State Recovery Inspection
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+state-store.md
+state-store-recovery.md
+artifact-layout.md
+artifact-naming.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-state/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+tmp file 삭제
+event log trim 또는 교체
+artifact 자동 복구
+retention cleanup 실행
+```
+
+입력 artifact:
+
+```text
+.ai-runs/{job_id}/job.json
+.ai-runs/{job_id}/run-state.json
+.ai-runs/{job_id}/events.jsonl
+.ai-runs/{job_id}/tmp/**
+```
+
+출력 artifact:
+
+```text
+RecoveryInspection inspect-only JSON value
+RecoveryIssue list
+StateStore recovery regression tests
+```
+
+핵심 TASK:
+
+```text
+RecoveryIssue model 추가
+RecoveryInspection model 추가
+StateStore::inspect_recovery 추가
+job.json missing/invalid/schema mismatch issue classification
+run-state.json missing/invalid/schema mismatch issue classification
+events.jsonl corrupt/missing issue classification
+tmp file warning issue classification
+no-delete/no-mutation regression test
+path traversal/unsafe job id rejection test
+```
+
+완료 기준: StateStore가 inspect-only recovery report를 반환하고, missing/invalid/schema/corrupt/tmp issue를 구분하되 어떤 artifact도 삭제, 승격, trim, 교체하지 않아야 한다. CLI/API recovery command 연결과 실제 retention cleanup은 후속 slice로 남긴다.
+
+다음 EPIC handoff:
+
+```text
+M9f는 release readiness writer 또는 recovery command surface 중 하나로 이어간다. recovery command가 파일 삭제, log trim, copy-to-recovered-file, artifact 교체를 수행하려면 별도 승인과 더 강한 audit/report 연결이 필요하다.
 ```
 
 ## RESERVED

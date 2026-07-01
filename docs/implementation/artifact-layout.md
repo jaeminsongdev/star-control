@@ -234,6 +234,7 @@ StateStore는 JSON 파일을 직접 덮어쓰지 않는다. 다음 순서를 권
 - `.ai-runs/` 내부 cleanup도 명시 command 또는 retention policy가 생기기 전까지 자동 정리하지 않는다.
 - 실패한 run artifact는 debugging을 위해 보존한다.
 - tmp file cleanup은 정상 artifact cleanup과 분리한다.
+- M9e recovery inspection은 tmp file을 retention candidate로 보고만 하고 삭제하지 않는다.
 
 ## Star-Control repository 금지 경로
 

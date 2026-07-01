@@ -89,6 +89,7 @@ packages/star-adapter-openai-compatible
 - job.json, run-state.json, events.jsonl 관리
 - atomic write와 append 규칙
 - Star-Control repository 내부 `.ai-runs` 사용 금지
+- inspect-only recovery report for missing/corrupt/tmp artifacts
 
 ### `star-control-schema`
 
