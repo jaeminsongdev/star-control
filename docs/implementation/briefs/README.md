@@ -45,6 +45,7 @@ E18-cloud-api-transport-boundary.md
 E19-cloud-api-live-approval-gate.md
 E20-cli-control-commands.md
 E21-daemon-queue-skeleton.md
+E22-api-read-only.md
 ```
 
 ## 사용 방법

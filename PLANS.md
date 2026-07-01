@@ -66,13 +66,15 @@
 - M6h cloud API live approval gate를 추가해 explicit live request를 `live-transport-approval.json`과 RunState `BLOCKED`로 정규화한다.
 - M7a CLI approve/cancel/resume control commands를 추가해 daemon/API 전제 조건을 file-based StateStore에서 검증한다.
 - M7b daemon queue skeleton을 추가해 config root 아래 daemon state와 StateStore job 참조 queue를 검증한다.
+- M7c API read-only service를 추가해 daemon state와 StateStore job/events/report를 schema-valid API envelope으로 조회한다.
 - 병렬 Rust 테스트에서 provider/state temp project 경로가 충돌하지 않도록 test helper에 per-process counter를 추가했다.
+- Cargo incremental finalize 경고가 나오면 경고 package만 `cargo clean -p`로 정리하고 Cargo 검증은 순차 실행한다.
 
 ### 아직 남은 것
 
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke로 첫 검증 milestone에 도달했지만, 완전 구현의 끝점은 아니다.
-- M5 local provider, M6 cloud provider approval gate, M7a CLI control commands, M7b daemon queue skeleton은 현재 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M7c API read-only, M8 UI, M9 hardening 순서다.
+- M5 local provider, M6 cloud provider approval gate, M7a CLI control commands, M7b daemon queue skeleton, M7c API read-only service는 현재 exit criteria가 코드/fixture로 커버되었고, 현재 구현 축은 M8 UI, M9 hardening 순서다.
 
 ### 건드리면 안 되는 것
 
@@ -163,6 +165,9 @@ cargo test --workspace
 | M7a handoff | CLI `approve`는 `WAITING_APPROVAL` job의 `approval-request.json`을 확인한 뒤 `approval-response.json`을 쓰고 `next_action=resume`을 기록한다. CLI `cancel`은 non-terminal state만 `CANCELLED`로 전이한다. CLI `resume`은 approved response가 있을 때 `WAITING_APPROVAL -> VALIDATED`, `next_action=report`를 기록한다. daemon process/API server/UI는 아직 구현하지 않았다 |
 | M7b handoff | `packages/star-control-daemon`의 `DaemonQueue`는 `{config_root}/daemon/state.json`을 생성/검증하고 StateStore job을 queue entry로 참조 등록한다. terminal state, approved response 없는 `WAITING_APPROVAL`, non-approved response, duplicate queue entry는 거부한다. daemon process/socket/API server/UI는 아직 구현하지 않았다 |
 | M7b dependency record | direct dependency `serde_json = "1"`; 목적: daemon-state JSON read/write와 approval-response parse; 대안: std-only JSON parser 재구현은 안정성 낮음; 검증: Cargo targeted/workspace checks + contract runner |
+| M7c handoff | `packages/star-control-api`의 `ApiReadOnlyService`는 registered `DaemonQueue`와 in-memory project registry를 통해 daemon state, projects/jobs/job/events/report를 읽고 `api-response.schema.json` envelope을 반환한다. missing artifact는 structured error, mutation method/path는 rejection, secret-like raw value는 redaction한다. HTTP server/socket/auth/mutation/UI는 아직 구현하지 않았다 |
+| M7c dependency record | direct dependency `serde_json = "1"`, local dependency `star-control-daemon`; 목적: API response JSON envelope, daemon state read, StateStore artifact projection; 대안: std-only JSON builder는 안정성 낮음; 검증: Cargo targeted/workspace checks + contract runner |
+| Cargo incremental cleanup | finalize 경고 package는 `_`를 `-`로 바꾼 Cargo package명에 대해 `cargo clean -p <package>`만 실행한다. 이후 `cargo check --workspace --all-targets --locked`, `cargo test --workspace --all-targets --locked`를 순차 실행한다 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -210,3 +215,4 @@ cargo test --workspace
 | P-0039 | 2026-07-01 | M6h cloud API live approval gate 추가 | `packages/star-control-provider/src/cloud.rs`, `packages/star-control-execution/src/lib.rs`, `docs/implementation/briefs/E19-cloud-api-live-approval-gate.md` |
 | P-0040 | 2026-07-01 | M7a CLI control commands 추가 | `packages/star-control-cli/src/lib.rs`, `docs/implementation/briefs/E20-cli-control-commands.md` |
 | P-0041 | 2026-07-01 | M7b daemon queue skeleton 추가 | `packages/star-control-daemon/src/lib.rs`, `docs/implementation/briefs/E21-daemon-queue-skeleton.md` |
+| P-0042 | 2026-07-01 | M7c API read-only service 추가 | `packages/star-control-api/src/lib.rs`, `docs/implementation/briefs/E22-api-read-only.md` |

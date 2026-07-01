@@ -148,7 +148,9 @@ packages/star-adapter-openai-compatible
 ### `star-control-api`
 
 - UI와 외부 도구가 사용하는 API
-- RESERVED: 초기 구현 전 문서 계약만 둔다
+- read-only request/router service
+- api-response envelope validation
+- RESERVED: HTTP server, remote exposure, auth, mutation endpoint
 
 ### `star-control-ui`
 

@@ -66,9 +66,10 @@ E18 Cloud API Transport Boundary
 E19 Cloud API Live Approval Gate
 E20 CLI Control Commands
 E21 Daemon Queue Skeleton
+E22 API Read-Only
 ```
 
-E21 이후 M7 API read-only, M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
+E22 이후 M8 UI, M9 hardening 순서로 작은 PR을 추가한다. 실제 외부 provider 호출, 유료 사용, credential raw value 접근, workflow/release/deploy 변경은 별도 승인 전까지 실행하지 않는다.
 
 ## E01 Schema / Runtime Validator
 
@@ -1674,6 +1675,94 @@ project artifact 미복사 regression test
 M7c API read-only endpoint를 별도 PR로 설계한다. API는 daemon queue state와 StateStore artifact를 read-only로 노출하고 mutation endpoint는 이후 slice까지 구현하지 않는다.
 ```
 
+## E22 API Read-Only
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+cli-daemon-api-ui.md
+api-contract.md
+daemon-contract.md
+state-store.md
+security-cost-observability.md
+security-privacy-observability-contracts.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+Cargo.toml
+Cargo.lock
+packages/star-control-api/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+HTTP server 구현
+socket listener 구현
+remote API exposure
+auth/session 시스템 구현
+mutation endpoint 구현
+daemon background worker 변경
+UI 구현
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+release/deploy/publish automation
+외부 provider live call
+credential raw value lookup/materialization
+```
+
+입력 artifact:
+
+```text
+대상 project .ai-runs/{job_id}/job.json
+대상 project .ai-runs/{job_id}/run-state.json
+대상 project .ai-runs/{job_id}/events.jsonl
+대상 project .ai-runs/{job_id}/reports/{stage}-report.json
+{config_root}/daemon/state.json
+specs/schemas/api-response.schema.json
+```
+
+출력 artifact:
+
+```text
+없음
+```
+
+핵심 TASK:
+
+```text
+star-control-api crate 추가
+ApiReadOnlyService 추가
+GET /daemon/state
+GET /projects
+GET /projects/{project_id}/jobs
+GET /projects/{project_id}/jobs/{job_id}
+GET /projects/{project_id}/jobs/{job_id}/events
+GET /projects/{project_id}/jobs/{job_id}/report?stage={stage}
+api-response schema validation
+missing project/job/report structured error
+mutation method rejection
+read-only no-write regression test
+secret-like response redaction test
+```
+
+완료 기준: 모든 API response가 `api-response.schema.json`을 만족하고, read-only endpoint가 daemon queue state와 StateStore artifact를 변형하지 않아야 한다. missing artifact는 structured error envelope으로 반환하고, mutation method/path, HTTP server, socket, auth, remote exposure는 구현하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M8 UI shell read-only view를 별도 PR로 설계한다. UI는 API read-only service 계약을 소비하고 provider process, Star Sentinel rule, StateStore file mutation을 직접 구현하지 않는다.
+```
+
 ## RESERVED
 
 아래는 E12 이후 별도 작은 PR로 구현한다.
@@ -1685,7 +1774,7 @@ Cloud CLI Provider parser / conformance extension
 Cloud API Provider transport execution
 Cloud provider-specific parser / conformance
 Daemon
-API
+API mutation / HTTP server
 UI Shell
 Security / Cost / Observability Hardening
 Release Readiness Automation

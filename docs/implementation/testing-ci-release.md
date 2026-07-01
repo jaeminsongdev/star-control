@@ -51,7 +51,7 @@ work-queue-consistency-check
 | M4 v0 Fake E2E | fake project integration smoke with AUTO_PASS/HUMAN_REVIEW/BLOCK |
 | M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture tests |
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
-| M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only contract tests, approval/cancel/resume mutation tests |
+| M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, approval/cancel/resume mutation tests |
 | M8 UI Shell | UI view model contract tests, read-only smoke, approval flow smoke |
 | M9 Hardening / Release Readiness | redaction, audit, recovery, retention, release readiness checks |
 
@@ -297,6 +297,25 @@ M7b daemon queue skeleton은 process/socket/API server 없이 library-level test
 - non-approved approval response queue 거부
 - duplicate queue entry 거부
 - 대상 project `.ai-runs/` artifact를 daemon directory로 복사하지 않음
+
+## API tests
+
+M7c API read-only service는 HTTP server 없이 library-level test로 검증한다.
+
+검증 항목:
+
+- `api-response.schema.json` envelope validation
+- `GET /daemon/state`
+- `GET /projects`
+- `GET /projects/{project_id}/jobs`
+- `GET /projects/{project_id}/jobs/{job_id}`
+- `GET /projects/{project_id}/jobs/{job_id}/events`
+- `GET /projects/{project_id}/jobs/{job_id}/report?stage={stage}`
+- missing project/job/report structured error
+- mutation method와 mutation-like path rejection
+- read-only endpoint가 `.ai-runs/` artifact를 수정하지 않음
+- read-only endpoint가 daemon state artifact를 수정하지 않음
+- secret-like raw value redaction
 
 ## CI 변경 policy
 
