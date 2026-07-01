@@ -13,12 +13,12 @@ examples/release-contracts/stacked-pr-readiness.example.json
 ## current snapshot
 
 ```text
-top implemented branch: work/m9q-final-audit-evidence
-current coordination branch: work/m9r-stacked-pr-readiness
-open stacked PR range checked: #33 through #84
+top implemented branch: work/m9t-cli-sentinel-surface
+current evidence refresh branch: work/m9u-final-evidence-refresh
+open stacked PR range checked: #33 through #87
 status command: gh pr list --state open --limit 100 --json number,title,baseRefName,headRefName,isDraft,mergeStateStatus,url --jq "sort_by(.number) | map(select(.number >= 33)) | .[] | [.number, .baseRefName, .headRefName, .mergeStateStatus, .isDraft] | @tsv"
-observed stack status: every listed PR in #33 through #84 had mergeStateStatus=CLEAN and isDraft=true
-latest remote CI evidence before this slice: https://github.com/jaeminsongdev/star-control/actions/runs/28539021845
+observed stack status: every listed PR in #33 through #87 had mergeStateStatus=CLEAN and isDraft=true
+latest remote CI evidence before this evidence refresh: https://github.com/jaeminsongdev/star-control/actions/runs/28541021471
 ```
 
 This snapshot is readiness evidence. It is not proof that the stack has been merged to `main`.
@@ -79,12 +79,15 @@ This snapshot is readiness evidence. It is not proof that the stack has been mer
 | #82 | `work/m9n-recovery-command-surface` | `work/m9o-final-readiness-audit` | CLEAN | true |
 | #83 | `work/m9o-final-readiness-audit` | `work/m9p-final-completion-audit` | CLEAN | true |
 | #84 | `work/m9p-final-completion-audit` | `work/m9q-final-audit-evidence` | CLEAN | true |
+| #85 | `work/m9q-final-audit-evidence` | `work/m9r-stacked-pr-readiness` | CLEAN | true |
+| #86 | `work/m9r-stacked-pr-readiness` | `work/m9s-cli-providers-surface` | CLEAN | true |
+| #87 | `work/m9s-cli-providers-surface` | `work/m9t-cli-sentinel-surface` | CLEAN | true |
 
 ## readiness decision
 
 The stack is ready for human review coordination because:
 
-- PR numbers #33 through #84 are contiguous in the implementation stack.
+- PR numbers #33 through #87 are contiguous in the implementation stack.
 - Each PR base branch equals the previous PR head branch.
 - Every checked PR reported `mergeStateStatus=CLEAN`.
 - Every checked PR remains draft, preserving review/merge gating.

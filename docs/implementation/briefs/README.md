@@ -69,6 +69,7 @@ E42-final-audit-evidence.md
 E43-stacked-pr-readiness-coordination.md
 E44-cli-providers-read-only.md
 E45-cli-sentinel-command-group.md
+E46-final-evidence-refresh.md
 ```
 
 ## 사용 방법
