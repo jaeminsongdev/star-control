@@ -167,7 +167,15 @@ packages/star-adapter-openai-compatible
 - shared redaction utility
 - RedactionReport builder
 - secret-like key/string detection without storing raw values
-- RESERVED: audit event writer, retention/recovery command, release readiness automation
+- RESERVED: RedactionReport artifact storage, retention/recovery command, release readiness automation
+
+### `star-control-observability`
+
+- AuditEventWriter
+- schema-valid `audit/audit-events.jsonl` append/readback helper
+- StateStore job directory containment for audit log paths
+- shared redaction utility application before audit persistence
+- RESERVED: API/CLI/daemon/provider automatic audit integration, cost/budget guard, retention/recovery command, release readiness automation
 
 ### `star-sentinel`
 

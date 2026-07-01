@@ -99,6 +99,14 @@ job_cancelled
 
 CoreEvent는 execution timeline이고, AuditEvent는 감사 목적의 요약 event다. 둘은 중복될 수 있지만 용도가 다르다.
 
+M9b 구현 위치:
+
+```text
+packages/star-control-observability
+```
+
+M9b는 `AuditEventWriter`를 제공한다. writer는 AuditEvent를 저장 전 redaction한 뒤 `audit-event.schema.json`으로 검증하고, 대상 프로젝트 `.ai-runs/{job_id}/audit/audit-events.jsonl`에 append-only로 기록한다. API/CLI/daemon/provider event를 자동 연결하는 작업은 후속 observability integration slice에서 처리한다.
+
 ## CostMetric
 
 CostMetric은 provider-neutral 비용·시간·token 측정값이다.

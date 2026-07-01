@@ -10,6 +10,7 @@ members = [
     "packages/star-control-api",
     "packages/star-control-ui",
     "packages/star-control-security",
+    "packages/star-control-observability",
     "packages/star-control-cli",
     "packages/star-sentinel",
 ]

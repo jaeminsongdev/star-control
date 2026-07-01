@@ -50,6 +50,7 @@ E23-ui-read-only-view.md
 E24-api-control-mutations.md
 E25-ui-browser-control-shell.md
 E26-security-redaction-utility.md
+E27-observability-audit-event-writer.md
 ```
 
 ## 사용 방법

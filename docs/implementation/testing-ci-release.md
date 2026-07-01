@@ -53,7 +53,7 @@ work-queue-consistency-check
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
 | M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, in-process API approve/cancel/resume mutation tests |
 | M8 UI Shell | `star-control-ui` view model contract tests, read-only no-write smoke, approval path smoke, browser control shell smoke |
-| M9 Hardening / Release Readiness | redaction utility/report tests, audit, recovery, retention, release readiness checks |
+| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, audit integration, recovery, retention, release readiness checks |
 
 Milestone validation은 누적된다. 뒤 단계로 갈수록 앞 단계 검증을 삭제하지 않고, 필요하면 quick/full profile로 분리한다.
 
@@ -319,7 +319,7 @@ M7c API read-only service는 HTTP server 없이 library-level test로 검증한�
 - `ApiControlService` approve writes schema-valid `approval-response.json`
 - `ApiControlService` cancel rejects terminal state and updates non-terminal state
 - `ApiControlService` resume requires matching approved response
-- API control mutation appends audit events
+- API control mutation appends CoreEvent entries; AuditEvent integration is tracked under M9 hardening
 - `ApiReadOnlyService` continues to reject non-GET mutation methods
 
 ## UI tests
@@ -363,6 +363,16 @@ M9a redaction utility는 shared crate 수준에서 검증한다.
 - `redaction-report.schema.json` validation
 - RedactionReport finding/report에 raw secret value가 없음
 - API/UI가 shared redaction utility를 소비하며 기존 redaction regression을 유지
+
+M9b audit event writer는 observability crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control-observability`가 schema-valid AuditEvent를 `audit/audit-events.jsonl`에 append
+- audit log path가 StateStore job directory 내부로 제한됨
+- secret-like summary/body가 저장 전 `[REDACTED]`로 치환됨
+- path traversal job/path 입력을 거부
+- 반환 ArtifactRef가 audit log contract를 만족
 
 ## CI 변경 policy
 

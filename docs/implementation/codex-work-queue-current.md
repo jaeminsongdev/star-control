@@ -2116,7 +2116,87 @@ UiReadOnlyShell/UiBrowserShell redaction utility migration
 다음 EPIC handoff:
 
 ```text
-M9b는 audit event writer 또는 provider conformance hardening으로 이어간다. RedactionReport를 StateStore artifact로 저장하거나 user-facing report에 연결하는 작업은 별도 작은 PR에서 처리한다.
+M9b는 audit event writer로 이어간다. RedactionReport를 StateStore artifact로 저장하거나 user-facing report에 연결하는 작업은 별도 작은 PR에서 처리한다.
+```
+
+## E27 Observability Audit Event Writer
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+artifact-layout.md
+state-store.md
+security-privacy-observability-contracts.md
+security-cost-observability.md
+testing-ci-release.md
+release-readiness.md
+```
+
+허용 파일:
+
+```text
+Cargo.toml
+Cargo.lock
+packages/star-control-observability/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+release/deploy/publish automation
+external account/repository settings 변경
+credential raw value lookup/materialization
+provider live call
+HTTP server 구현
+browser UI app 구현
+cost/retention/recovery/release automation 구현
+```
+
+입력 artifact:
+
+```text
+specs/schemas/audit-event.schema.json
+examples/security-contracts/audit-event.example.json
+StateStore job directory
+redacted JSON value
+```
+
+출력 artifact:
+
+```text
+audit/audit-events.jsonl
+ArtifactRef(kind=log, producer=star-control-observability)
+```
+
+핵심 TASK:
+
+```text
+star-control-observability crate 추가
+AuditEventWriter 추가
+AuditEvent schema validation
+StateStore resolve_job_path 기반 job directory containment
+append-only audit/audit-events.jsonl writer
+audit log readback helper
+secret-like value redaction before persist
+path traversal rejection test
+raw secret persistence regression test
+schema-valid audit event append test
+```
+
+완료 기준: AuditEventWriter가 schema-valid AuditEvent만 `.ai-runs/{job_id}/audit/audit-events.jsonl`에 append-only로 저장하고, 저장 전 shared redaction utility를 적용해야 한다. writer가 반환하는 ArtifactRef는 `kind=log`, `producer=star-control-observability`, `schema_path=specs/schemas/audit-event.schema.json`을 사용한다. API/CLI/daemon/provider 흐름 자동 연결, cost/budget guard, retention/recovery command, release readiness automation은 후속 slice로 남긴다.
+
+다음 EPIC handoff:
+
+```text
+M9c는 cost/budget guard, provider conformance hardening, retention/recovery, release readiness 중 하나로 이어간다. API/CLI/daemon/provider event를 AuditEventWriter에 연결하는 작업은 별도 작은 PR에서 처리한다.
 ```
 
 ## RESERVED
@@ -2132,7 +2212,7 @@ Cloud provider-specific parser / conformance
 Daemon
 HTTP server / remote API exposure
 Browser UI Shell app / remote UI runtime
-Security / Cost / Observability Hardening
+Cost / Observability Integration / Conformance Hardening
 Release Readiness Automation
 ```
 
