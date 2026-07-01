@@ -266,7 +266,7 @@ my-project/
         implement.json
         validate.json
       provider-output/
-        my-fake-provider/
+        fake-default/
           request.json
           response.json
       tool-output/

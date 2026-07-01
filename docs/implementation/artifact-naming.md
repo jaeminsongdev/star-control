@@ -79,7 +79,7 @@ provider-output/{provider-instance-id}/artifacts/
 Provider instance id는 다음을 권장한다.
 
 ```text
-my-fake-provider
+fake-default
 local-ollama-default
 codex-cli-personal
 ```
