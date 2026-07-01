@@ -682,7 +682,10 @@ mod tests {
     use star_control_provider::{FakeProviderAdapter, ProviderRegistryLoader};
     use star_control_router::{JobSpec, RouterEngine};
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::{Mutex, MutexGuard};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn fake_provider_workspec_execution_writes_artifacts_and_state() {
@@ -791,7 +794,7 @@ mod tests {
     #[test]
     fn local_process_timeout_updates_run_state_to_failed() {
         let mut fixture = Fixture::new();
-        std::env::set_var("STAR_CONTROL_EXECUTION_SLEEP_HELPER", "1");
+        let _env = EnvVarGuard::set("STAR_CONTROL_EXECUTION_SLEEP_HELPER", "1");
         fixture.use_local_process_registry(
             vec![
                 "--exact".to_string(),
@@ -806,10 +809,48 @@ mod tests {
         let outcome = ExecutionEngine::new(&fixture.store, &fixture.registry, &fixture.schemas)
             .execute_stage("J-0001", "implement")
             .expect("execute timeout stage");
-        std::env::remove_var("STAR_CONTROL_EXECUTION_SLEEP_HELPER");
 
         assert_eq!(outcome.provider_execution().result().status(), "timeout");
         assert_eq!(outcome.state()["state"], "FAILED");
+    }
+
+    #[test]
+    fn local_process_cancelled_updates_run_state_to_cancelled() {
+        let mut fixture = Fixture::new();
+        let _env = EnvVarGuard::set("STAR_CONTROL_EXECUTION_SLEEP_HELPER", "1");
+        fixture.use_local_process_registry(
+            vec![
+                "--exact".to_string(),
+                "tests::execution_sleep_helper".to_string(),
+                "--nocapture".to_string(),
+            ],
+            vec!["STAR_CONTROL_EXECUTION_SLEEP_HELPER".to_string()],
+            10,
+        );
+        fixture.assign_implement_stage_to_local_process();
+
+        let cancel_project = fixture.project.clone();
+        let cancel_schemas = fixture.schemas.clone();
+        let cancel_thread = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            let store =
+                StateStore::open(cancel_project, cancel_schemas).expect("open cancel store");
+            let mut state = store.load_state("J-0001").expect("load state");
+            state["state"] = json!("CANCELLED");
+            state["next_action"] = json!("stop");
+            store
+                .save_state("J-0001", &state)
+                .expect("save cancelled state");
+        });
+
+        let outcome = ExecutionEngine::new(&fixture.store, &fixture.registry, &fixture.schemas)
+            .execute_stage("J-0001", "implement")
+            .expect("execute cancelled stage");
+        cancel_thread.join().expect("cancel thread");
+
+        assert_eq!(outcome.provider_execution().result().status(), "cancelled");
+        assert_eq!(outcome.state()["state"], "CANCELLED");
+        assert_eq!(outcome.state()["next_action"], "stop");
     }
 
     #[test]
@@ -964,6 +1005,25 @@ mod tests {
     impl Drop for Fixture {
         fn drop(&mut self) {
             fs::remove_dir_all(&self.project).ok();
+        }
+    }
+
+    struct EnvVarGuard<'a> {
+        key: &'static str,
+        _lock: MutexGuard<'a, ()>,
+    }
+
+    impl EnvVarGuard<'_> {
+        fn set(key: &'static str, value: &'static str) -> Self {
+            let lock = ENV_LOCK.lock().expect("env lock");
+            std::env::set_var(key, value);
+            Self { key, _lock: lock }
+        }
+    }
+
+    impl Drop for EnvVarGuard<'_> {
+        fn drop(&mut self) {
+            std::env::remove_var(self.key);
         }
     }
 

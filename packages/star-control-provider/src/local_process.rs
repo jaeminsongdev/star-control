@@ -4,10 +4,10 @@ use crate::{
     ProviderRunContext, ProviderRunResult,
 };
 use serde_json::{json, Value};
-use star_control_state::ArtifactKind;
+use star_control_state::{ArtifactKind, StateStoreError};
 use std::fs::{self, File, OpenOptions};
 use std::path::Path;
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -141,7 +141,7 @@ impl ProviderAdapter for LocalProcessProviderAdapter {
         let stdout_file = create_new_output_file(&stdout_path)?;
         let stderr_file = create_new_output_file(&stderr_path)?;
 
-        let process_result = run_process(&policy, context, stdout_file, stderr_file);
+        let process_result = run_process(&policy, request, context, stdout_file, stderr_file)?;
         let response_value = response_value(request, &policy, &process_result);
         let result = ProviderRunResult::from_value(
             response_value.clone(),
@@ -180,16 +180,24 @@ impl ProviderAdapter for LocalProcessProviderAdapter {
 enum LocalProcessRunResult {
     Exited { status: ExitStatus },
     TimedOut,
+    Cancelled { phase: &'static str },
     LaunchFailed { message: String },
     WaitFailed { source: std::io::Error },
 }
 
 fn run_process(
     policy: &LocalProcessCommandPolicy,
+    request: &ExecutionRequest,
     context: &ProviderRunContext<'_>,
     stdout_file: File,
     stderr_file: File,
-) -> LocalProcessRunResult {
+) -> Result<LocalProcessRunResult, ProviderAdapterError> {
+    if is_cancelled(context, request.job_id())? {
+        return Ok(LocalProcessRunResult::Cancelled {
+            phase: "before_start",
+        });
+    }
+
     let mut command = Command::new(policy.executable());
     command
         .args(policy.args())
@@ -207,30 +215,48 @@ fn run_process(
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(source) => {
-            return LocalProcessRunResult::LaunchFailed {
+            return Ok(LocalProcessRunResult::LaunchFailed {
                 message: source.to_string(),
-            };
+            });
         }
     };
 
     let started_at = Instant::now();
     loop {
         match child.try_wait() {
-            Ok(Some(status)) => return LocalProcessRunResult::Exited { status },
+            Ok(Some(status)) => return Ok(LocalProcessRunResult::Exited { status }),
             Ok(None) => {
+                if is_cancelled(context, request.job_id())? {
+                    return Ok(terminate_cancelled_child(&mut child));
+                }
                 if started_at.elapsed() >= Duration::from_secs(policy.timeout_seconds()) {
                     if let Err(source) = child.kill() {
-                        return LocalProcessRunResult::WaitFailed { source };
+                        return Ok(LocalProcessRunResult::WaitFailed { source });
                     }
                     if let Err(source) = child.wait() {
-                        return LocalProcessRunResult::WaitFailed { source };
+                        return Ok(LocalProcessRunResult::WaitFailed { source });
                     }
-                    return LocalProcessRunResult::TimedOut;
+                    return Ok(LocalProcessRunResult::TimedOut);
                 }
                 thread::sleep(Duration::from_millis(25));
             }
-            Err(source) => return LocalProcessRunResult::WaitFailed { source },
+            Err(source) => return Ok(LocalProcessRunResult::WaitFailed { source }),
         }
+    }
+}
+
+fn terminate_cancelled_child(child: &mut Child) -> LocalProcessRunResult {
+    if let Err(source) = child.kill() {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return LocalProcessRunResult::Cancelled { phase: "running" };
+            }
+            Ok(None) | Err(_) => return LocalProcessRunResult::WaitFailed { source },
+        }
+    }
+    match child.wait() {
+        Ok(_) => LocalProcessRunResult::Cancelled { phase: "running" },
+        Err(source) => LocalProcessRunResult::WaitFailed { source },
     }
 }
 
@@ -275,6 +301,14 @@ fn response_value(
                 "timeout_seconds": policy.timeout_seconds()
             }),
         ),
+        LocalProcessRunResult::Cancelled { phase } => (
+            "cancelled",
+            "local process cancelled by RunState".to_string(),
+            json!({
+                "kind": "local_process_cancelled",
+                "phase": phase
+            }),
+        ),
         LocalProcessRunResult::LaunchFailed { message } => (
             "error",
             "local process failed to launch".to_string(),
@@ -317,6 +351,17 @@ fn response_value(
         },
         "error": error
     })
+}
+
+fn is_cancelled(
+    context: &ProviderRunContext<'_>,
+    job_id: &str,
+) -> Result<bool, ProviderAdapterError> {
+    match context.state_store().load_state(job_id) {
+        Ok(state) => Ok(state.get("state").and_then(Value::as_str) == Some("CANCELLED")),
+        Err(StateStoreError::ArtifactNotFound { .. }) => Ok(false),
+        Err(source) => Err(ProviderAdapterError::State(source)),
+    }
 }
 
 fn planned_output_files(provider_instance_id: &str) -> Vec<String> {
@@ -727,6 +772,85 @@ mod tests {
     }
 
     #[test]
+    fn local_process_cancelled_before_start_does_not_launch_command() {
+        let executable = "missing-local-process-runner-for-cancel-test";
+        let (execution, project) = execute_with_command_after_setup(
+            executable,
+            Vec::new(),
+            vec![executable.to_string()],
+            Vec::new(),
+            10,
+            |store, _project| {
+                store
+                    .save_state("J-0001", &run_state("CANCELLED"))
+                    .expect("save cancelled state");
+            },
+        )
+        .expect("execute pre-cancelled local process");
+
+        assert_eq!(execution.result().status(), "cancelled");
+        assert_eq!(
+            execution.result().value()["error"]["kind"],
+            "local_process_cancelled"
+        );
+        assert_eq!(execution.result().value()["error"]["phase"], "before_start");
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn local_process_running_cancel_writes_cancelled_result() {
+        let project = temp_project();
+        let store = open_store(&project);
+        store
+            .create_job("implement local process feature", "codex", vec![])
+            .expect("create job");
+        store
+            .save_state("J-0001", &run_state("IMPLEMENTING"))
+            .expect("save running state");
+        let executable = current_test_executable();
+        let registry = registry_with_instance(
+            &executable,
+            vec![
+                "--exact".to_string(),
+                "local_process::tests::local_process_sleep_helper".to_string(),
+                "--nocapture".to_string(),
+            ],
+            vec![executable.clone()],
+            vec!["STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER".to_string()],
+            10,
+        )
+        .expect("registry");
+        let request = ExecutionRequest::from_value(request_value(), "request.json", schema_root())
+            .expect("request");
+        let schemas = schema_root();
+        let context = ProviderRunContext::new(&registry, &store, &schemas);
+        let cancel_project = project.clone();
+        let cancel_schemas = schema_root();
+        let cancel_thread = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(150));
+            let store =
+                StateStore::open(cancel_project, cancel_schemas).expect("open cancel store");
+            store
+                .save_state("J-0001", &run_state("CANCELLED"))
+                .expect("save cancelled state");
+        });
+
+        std::env::set_var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER", "1");
+        let execution = LocalProcessProviderAdapter
+            .execute(&request, &context)
+            .expect("execute running cancel");
+        std::env::remove_var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER");
+        cancel_thread.join().expect("cancel thread");
+
+        assert_eq!(execution.result().status(), "cancelled");
+        assert_eq!(execution.result().value()["error"]["phase"], "running");
+        assert!(project
+            .join(".ai-runs/J-0001/provider-output/local-default/response.json")
+            .is_file());
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
     fn local_process_sleep_helper() {
         let is_child_helper = std::env::args().collect::<Vec<_>>().windows(2).any(|args| {
             args[0] == "--exact" && args[1] == "local_process::tests::local_process_sleep_helper"
@@ -743,11 +867,30 @@ mod tests {
         env_allowlist: Vec<String>,
         timeout_seconds: u64,
     ) -> Result<(ProviderExecution, PathBuf), ProviderAdapterError> {
+        execute_with_command_after_setup(
+            executable,
+            args,
+            allowed_executables,
+            env_allowlist,
+            timeout_seconds,
+            |_store, _project| {},
+        )
+    }
+
+    fn execute_with_command_after_setup(
+        executable: &str,
+        args: Vec<String>,
+        allowed_executables: Vec<String>,
+        env_allowlist: Vec<String>,
+        timeout_seconds: u64,
+        setup: impl FnOnce(&StateStore, &Path),
+    ) -> Result<(ProviderExecution, PathBuf), ProviderAdapterError> {
         let project = temp_project();
         let store = open_store(&project);
         store
             .create_job("implement local process feature", "codex", vec![])
             .expect("create job");
+        setup(&store, &project);
         let registry = registry_with_instance(
             executable,
             args,
@@ -838,6 +981,24 @@ mod tests {
             "required_outputs": ["provider-output/local-default/response.json"],
             "validation_requirements": ["policy:p0"],
             "context_pack": { "files": [] }
+        })
+    }
+
+    fn run_state(state: &str) -> Value {
+        json!({
+            "schema_version": "1.0.0",
+            "job_id": "J-0001",
+            "state": state,
+            "current_stage": "implement",
+            "updated_at": "test:deterministic",
+            "threads": {},
+            "workers": {},
+            "artifacts": {},
+            "latest_event_id": "",
+            "active_provider": null,
+            "next_action": if state == "CANCELLED" { "stop" } else { "continue" },
+            "budget": {},
+            "history": []
         })
     }
 
