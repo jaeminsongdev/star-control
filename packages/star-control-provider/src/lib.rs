@@ -6,6 +6,14 @@ use std::fmt;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
+mod fake;
+
+pub use fake::{
+    load_execution_request, ExecutionRequest, FakeProviderAdapter, FakeProviderSimulation,
+    ProviderAdapter, ProviderAdapterError, ProviderExecution, ProviderRunContext,
+    ProviderRunResult,
+};
+
 const PROVIDER_MANIFEST_SCHEMA: &str = "provider-manifest.schema.json";
 const PROVIDER_INSTANCE_SCHEMA: &str = "provider-instance.schema.json";
 const CAPABILITY_PROFILE_SCHEMA: &str = "capability-profile.schema.json";

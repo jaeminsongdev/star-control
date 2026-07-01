@@ -39,10 +39,11 @@
 - E02 `packages/star-control-state` file-based StateStore를 추가했다.
 - E03 Artifact Layout Writer helper를 StateStore에 추가했다.
 - E04 `packages/star-control-provider` Provider Registry를 추가했다.
+- E05 `FakeProviderAdapter`와 provider output writer 연결을 추가했다.
 
 ### 아직 남은 것
 
-- E05 FakeProviderAdapter부터 현재 큐 순서대로 진행한다.
+- E06 RouterEngine부터 현재 큐 순서대로 진행한다.
 - provider host, transport, adapter, Star Sentinel runtime 구현은 E01~E11 이후 milestone 순서에 맞춰 진행한다.
 - v0 fake flow는 E11 integration smoke까지 완료해야 첫 검증 milestone으로 인정한다.
 
@@ -105,6 +106,7 @@ cargo test --workspace
 | E02 handoff | `StateStore::open`, `create_job`, `save_state`, `append_event`, `resolve_job_path`, provider/tool output dir helper; recovery는 자동 복구 없이 명확한 오류/`list_jobs` corrupt 표시 |
 | E03 handoff | provider/tool output writer, approval/review/tmp writer, `ArtifactKind`, `artifact_ref`, `register_artifact_ref`; writer는 existing artifact overwrite를 거부 |
 | E04 handoff | `ProviderRegistryLoader::load_registry`, `load_fake_default_registry`, `ProviderRegistry::instance`, `manifest_for_instance`, `capability_for_instance`; fake fixture는 `examples/provider-contracts/provider-instance.fake.example.json`과 `configs/provider-instances/fake-provider.example.yaml`의 `fake-default` |
+| E05 handoff | `ProviderAdapter` trait, `ProviderRunContext`, `ExecutionRequest`, `ProviderRunResult`, `FakeProviderAdapter::{success,failed,blocked}`; output shape는 `provider-output/{provider_instance_id}/{request.json,response.json,stdout.txt,stderr.txt}`이며 기존 artifact overwrite는 오류 |
 | 이전 완료 이력 | git history |
 
 ## 완료 작업
@@ -125,3 +127,4 @@ cargo test --workspace
 | P-0012 | 2026-07-01 | E02 file-based StateStore 추가 | `packages/star-control-state` |
 | P-0013 | 2026-07-01 | E03 artifact layout writer helper 추가 | `packages/star-control-state` |
 | P-0014 | 2026-07-01 | E04 provider registry와 fake-default 조회 API 추가 | `packages/star-control-provider` |
+| P-0015 | 2026-07-01 | E05 deterministic FakeProviderAdapter 추가 | `packages/star-control-provider` |
