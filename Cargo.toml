@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "packages/star-control-schema",
+    "packages/star-control-state",
 ]
 resolver = "2"

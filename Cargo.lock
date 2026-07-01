@@ -82,6 +82,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "star-control-state"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-schema",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
