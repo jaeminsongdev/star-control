@@ -805,6 +805,25 @@ impl StateStore {
         )
     }
 
+    pub fn write_validation_json(
+        &self,
+        job_id: &str,
+        file_name: &str,
+        value: &Value,
+    ) -> Result<Value, StateStoreError> {
+        validate_safe_name(file_name)?;
+        let relative_path = format!("validation/{}", file_name);
+        self.write_new_json_artifact(job_id, &relative_path, value)?;
+        self.artifact_ref(
+            job_id,
+            &relative_path,
+            ArtifactKind::Other,
+            "validation-engine",
+            None,
+            Some("validation JSON artifact"),
+        )
+    }
+
     pub fn write_tmp_json(
         &self,
         job_id: &str,
@@ -1054,6 +1073,7 @@ fn ensure_standard_dirs(job_dir: &Path) -> Result<(), StateStoreError> {
         "tool-output",
         "approvals",
         "review-packs",
+        "validation",
         "tmp",
     ] {
         let path = job_dir.join(name);
@@ -1557,6 +1577,13 @@ mod tests {
         let review_md_ref = store
             .write_review_pack_markdown("J-0001", "review_pack.md", "# Review\n")
             .expect("write review markdown");
+        let validation_ref = store
+            .write_validation_json(
+                "J-0001",
+                "validation-decision.json",
+                &json!({ "decision": "AUTO_PASS" }),
+            )
+            .expect("write validation json");
         let tmp_path = store
             .write_tmp_json("J-0001", "run-state.json", &json!({ "tmp": true }))
             .expect("write tmp json");
@@ -1578,6 +1605,11 @@ mod tests {
         assert_eq!(approval_ref["kind"], "approval");
         assert_eq!(review_json_ref["kind"], "review_pack");
         assert_eq!(review_md_ref["path"], "review-packs/review_pack.md");
+        assert_eq!(
+            validation_ref["path"],
+            "validation/validation-decision.json"
+        );
+        assert_eq!(validation_ref["kind"], "other");
         assert!(tmp_path.starts_with("tmp/run-state.json.tmp-"));
         assert!(project
             .join(".ai-runs/J-0001/provider-output/fake-default/request.json")
@@ -1593,6 +1625,9 @@ mod tests {
             .is_file());
         assert!(project
             .join(".ai-runs/J-0001/review-packs/review_pack.md")
+            .is_file());
+        assert!(project
+            .join(".ai-runs/J-0001/validation/validation-decision.json")
             .is_file());
 
         assert!(matches!(

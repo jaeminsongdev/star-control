@@ -76,14 +76,14 @@ StateStore
 ## 출력
 
 ```text
-validation_runs.json
-approval.json
-validation-decision.json
-approval-request.json
-approval-response.json
-review_pack.json
-review_pack.md
-handoff.json
+tool-output/star-sentinel/validation_runs.json
+tool-output/star-sentinel/approval.json
+validation/validation-decision.json
+approvals/approval-request.json
+approvals/approval-response.json
+tool-output/star-sentinel/review_pack.json
+tool-output/star-sentinel/review_pack.md
+review-packs/handoff.json
 updated RunState
 CoreEvent
 ReportSpec validation section

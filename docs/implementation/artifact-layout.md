@@ -148,12 +148,22 @@ approvals/
 
 `approval-request.json`은 ValidationEngine 또는 control plane이 만든 human-facing request다. `tool-output/star-sentinel/approval.json`은 Star Sentinel gate decision이다. 두 파일은 같은 의미가 아니다.
 
+## validation layout
+
+```text
+validation/
+  validation-decision.json
+```
+
+ValidationEngine이 Star Sentinel gate decision을 core `ValidationDecision`으로 정규화한 결과를 둔다.
+
 ## review packs layout
 
 ```text
 review-packs/
   review_pack.json
   review_pack.md
+  handoff.json
 ```
 
 사람이 확인하는 review 자료를 둔다. `tool-output/star-sentinel/review_pack.*`와 중복될 수 있다.

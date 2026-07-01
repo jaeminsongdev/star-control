@@ -131,6 +131,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "star-control-validation"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-schema",
+ "star-control-state",
+]
+
+[[package]]
 name = "star-sentinel"
 version = "0.1.0"
 dependencies = [

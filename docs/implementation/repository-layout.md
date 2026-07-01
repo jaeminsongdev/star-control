@@ -123,6 +123,7 @@ packages/star-adapter-openai-compatible
 - validation requirement 실행
 - Star Sentinel tool invocation
 - approval gate 반영
+- validation/validation-decision.json 생성
 - validation_runs.json 관리
 
 ### `star-control-report`
