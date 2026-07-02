@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.0",
+  "release_id": "stacked-pr-readiness-0002",
+  "target": "star-control",
+  "version": "m0-m9-stack-through-m9t",
+  "status": "reserved",
+  "checks": [
+    {
+      "name": "stacked-prs-contiguous",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/audit/stacked-pr-readiness.md"
+      ]
+    },
+    {
+      "name": "stacked-prs-clean",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/audit/stacked-pr-readiness.md"
+      ]
+    },
+    {
+      "name": "stacked-prs-draft-review-reserved",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/audit/stacked-pr-readiness.md"
+      ]
+    },
+    {
+      "name": "main-merge-not-performed",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/audit/stacked-pr-readiness.md"
+      ]
+    },
+    {
+      "name": "final-audit-evidence-linked",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/audit/final-completion-audit.md",
+        "examples/release-contracts/complete-implementation-readiness.example.json",
+        "docs/implementation/briefs/E45-cli-sentinel-command-group.md",
+        "packages/star-control-cli/src/lib.rs"
+      ]
+    }
+  ],
+  "blockers": [
+    "stacked PRs remain draft and require explicit review/merge coordination before main changes"
+  ],
+  "approvals": [],
+  "generated_at": "2026-07-02T00:00:00+09:00"
+}
