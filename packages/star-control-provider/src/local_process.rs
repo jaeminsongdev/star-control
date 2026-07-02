@@ -4,10 +4,11 @@ use crate::{
     ProviderRunContext, ProviderRunResult,
 };
 use serde_json::{json, Value};
-use star_control_state::ArtifactKind;
+use star_control_state::{ArtifactKind, StateStoreError};
+use std::collections::BTreeSet;
 use std::fs::{self, File, OpenOptions};
 use std::path::Path;
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -17,6 +18,23 @@ const DEFAULT_TIMEOUT_SECONDS: u64 = 300;
 const MAX_TIMEOUT_SECONDS: u64 = 600;
 const STDOUT_FILE: &str = "stdout.txt";
 const STDERR_FILE: &str = "stderr.txt";
+const FORBIDDEN_ACTION_EVIDENCE_PREFIX: &str = "STAR_CONTROL_FORBIDDEN_ACTION_EVIDENCE:";
+const LOCAL_PROCESS_FORBIDDEN_ACTIONS: &[&str] = &[
+    "dependency_install",
+    "dependency_change",
+    "workflow_change",
+    "release_publish",
+    "deploy",
+    "credential_change",
+    "external_account_change",
+    "file_delete",
+    "bulk_move",
+    "test_delete",
+    "test_skip_only_ignore",
+    "assertion_weakening",
+    "validator_self_bypass",
+    "sensitive_data_output",
+];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalProcessProviderAdapter;
@@ -141,7 +159,13 @@ impl ProviderAdapter for LocalProcessProviderAdapter {
         let stdout_file = create_new_output_file(&stdout_path)?;
         let stderr_file = create_new_output_file(&stderr_path)?;
 
-        let process_result = run_process(&policy, context, stdout_file, stderr_file);
+        let mut process_result = run_process(&policy, request, context, stdout_file, stderr_file)?;
+        if matches!(process_result, LocalProcessRunResult::Exited { .. }) {
+            if let Some(evidence) = forbidden_action_evidence(request, &stdout_path, &stderr_path)?
+            {
+                process_result = LocalProcessRunResult::BlockedForbiddenAction { evidence };
+            }
+        }
         let response_value = response_value(request, &policy, &process_result);
         let result = ProviderRunResult::from_value(
             response_value.clone(),
@@ -180,16 +204,31 @@ impl ProviderAdapter for LocalProcessProviderAdapter {
 enum LocalProcessRunResult {
     Exited { status: ExitStatus },
     TimedOut,
+    Cancelled { phase: &'static str },
+    BlockedForbiddenAction { evidence: ForbiddenActionEvidence },
     LaunchFailed { message: String },
     WaitFailed { source: std::io::Error },
 }
 
+#[derive(Debug)]
+struct ForbiddenActionEvidence {
+    action: String,
+    source: &'static str,
+}
+
 fn run_process(
     policy: &LocalProcessCommandPolicy,
+    request: &ExecutionRequest,
     context: &ProviderRunContext<'_>,
     stdout_file: File,
     stderr_file: File,
-) -> LocalProcessRunResult {
+) -> Result<LocalProcessRunResult, ProviderAdapterError> {
+    if is_cancelled(context, request.job_id())? {
+        return Ok(LocalProcessRunResult::Cancelled {
+            phase: "before_start",
+        });
+    }
+
     let mut command = Command::new(policy.executable());
     command
         .args(policy.args())
@@ -207,30 +246,48 @@ fn run_process(
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(source) => {
-            return LocalProcessRunResult::LaunchFailed {
+            return Ok(LocalProcessRunResult::LaunchFailed {
                 message: source.to_string(),
-            };
+            });
         }
     };
 
     let started_at = Instant::now();
     loop {
         match child.try_wait() {
-            Ok(Some(status)) => return LocalProcessRunResult::Exited { status },
+            Ok(Some(status)) => return Ok(LocalProcessRunResult::Exited { status }),
             Ok(None) => {
+                if is_cancelled(context, request.job_id())? {
+                    return Ok(terminate_cancelled_child(&mut child));
+                }
                 if started_at.elapsed() >= Duration::from_secs(policy.timeout_seconds()) {
                     if let Err(source) = child.kill() {
-                        return LocalProcessRunResult::WaitFailed { source };
+                        return Ok(LocalProcessRunResult::WaitFailed { source });
                     }
                     if let Err(source) = child.wait() {
-                        return LocalProcessRunResult::WaitFailed { source };
+                        return Ok(LocalProcessRunResult::WaitFailed { source });
                     }
-                    return LocalProcessRunResult::TimedOut;
+                    return Ok(LocalProcessRunResult::TimedOut);
                 }
                 thread::sleep(Duration::from_millis(25));
             }
-            Err(source) => return LocalProcessRunResult::WaitFailed { source },
+            Err(source) => return Ok(LocalProcessRunResult::WaitFailed { source }),
         }
+    }
+}
+
+fn terminate_cancelled_child(child: &mut Child) -> LocalProcessRunResult {
+    if let Err(source) = child.kill() {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                return LocalProcessRunResult::Cancelled { phase: "running" };
+            }
+            Ok(None) | Err(_) => return LocalProcessRunResult::WaitFailed { source },
+        }
+    }
+    match child.wait() {
+        Ok(_) => LocalProcessRunResult::Cancelled { phase: "running" },
+        Err(source) => LocalProcessRunResult::WaitFailed { source },
     }
 }
 
@@ -275,6 +332,27 @@ fn response_value(
                 "timeout_seconds": policy.timeout_seconds()
             }),
         ),
+        LocalProcessRunResult::Cancelled { phase } => (
+            "cancelled",
+            "local process cancelled by RunState".to_string(),
+            json!({
+                "kind": "local_process_cancelled",
+                "phase": phase
+            }),
+        ),
+        LocalProcessRunResult::BlockedForbiddenAction { evidence } => (
+            "blocked",
+            format!(
+                "local process reported forbidden action evidence: {}",
+                evidence.action
+            ),
+            json!({
+                "kind": "local_process_forbidden_action",
+                "action": evidence.action,
+                "source": evidence.source,
+                "evidence_prefix": FORBIDDEN_ACTION_EVIDENCE_PREFIX
+            }),
+        ),
         LocalProcessRunResult::LaunchFailed { message } => (
             "error",
             "local process failed to launch".to_string(),
@@ -317,6 +395,85 @@ fn response_value(
         },
         "error": error
     })
+}
+
+fn forbidden_action_evidence(
+    request: &ExecutionRequest,
+    stdout_path: &Path,
+    stderr_path: &Path,
+) -> Result<Option<ForbiddenActionEvidence>, ProviderAdapterError> {
+    let forbidden_actions = forbidden_action_names(request);
+    if forbidden_actions.is_empty() {
+        return Ok(None);
+    }
+
+    if let Some(evidence) =
+        forbidden_action_evidence_from_file(stdout_path, STDOUT_FILE, &forbidden_actions)?
+    {
+        return Ok(Some(evidence));
+    }
+
+    forbidden_action_evidence_from_file(stderr_path, STDERR_FILE, &forbidden_actions)
+}
+
+fn forbidden_action_names(request: &ExecutionRequest) -> BTreeSet<String> {
+    let mut names = LOCAL_PROCESS_FORBIDDEN_ACTIONS
+        .iter()
+        .map(|action| action.to_string())
+        .collect::<BTreeSet<_>>();
+    if let Some(actions) = request
+        .value()
+        .get("forbidden_actions")
+        .and_then(Value::as_array)
+    {
+        for action in actions.iter().filter_map(Value::as_str) {
+            names.insert(action.to_ascii_lowercase());
+        }
+    }
+    names
+}
+
+fn forbidden_action_evidence_from_file(
+    path: &Path,
+    source: &'static str,
+    forbidden_actions: &BTreeSet<String>,
+) -> Result<Option<ForbiddenActionEvidence>, ProviderAdapterError> {
+    let content = fs::read_to_string(path).map_err(|io_source| ProviderAdapterError::Io {
+        path: path.to_path_buf(),
+        source: io_source,
+    })?;
+    Ok(forbidden_action_evidence_from_text(
+        &content,
+        source,
+        forbidden_actions,
+    ))
+}
+
+fn forbidden_action_evidence_from_text(
+    content: &str,
+    source: &'static str,
+    forbidden_actions: &BTreeSet<String>,
+) -> Option<ForbiddenActionEvidence> {
+    content.lines().find_map(|line| {
+        let marker = line.trim().strip_prefix(FORBIDDEN_ACTION_EVIDENCE_PREFIX)?;
+        let action = marker.split_whitespace().next()?.to_ascii_lowercase();
+        if forbidden_actions.contains(&action) {
+            Some(ForbiddenActionEvidence { action, source })
+        } else {
+            None
+        }
+    })
+}
+
+fn is_cancelled(
+    context: &ProviderRunContext<'_>,
+    job_id: &str,
+) -> Result<bool, ProviderAdapterError> {
+    match context.state_store().load_state(job_id) {
+        Ok(state) => Ok(state.get("state").and_then(Value::as_str) == Some("CANCELLED")),
+        Err(StateStoreError::ArtifactNotFound { .. }) => Ok(false),
+        Err(source) => Err(ProviderAdapterError::State(source)),
+    }
 }
 
 fn planned_output_files(provider_instance_id: &str) -> Vec<String> {
@@ -618,7 +775,12 @@ mod tests {
     use star_control_state::StateStore;
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Mutex, MutexGuard};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    static TEMP_PROJECT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn local_process_executes_allowlisted_command_and_captures_output() {
@@ -696,7 +858,7 @@ mod tests {
     #[test]
     fn local_process_timeout_writes_timeout_result() {
         let executable = current_test_executable();
-        std::env::set_var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER", "1");
+        let _env = EnvVarGuard::set("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER", "1");
         let (execution, project) = execute_with_command(
             &executable,
             vec![
@@ -709,7 +871,6 @@ mod tests {
             1,
         )
         .expect("execute timeout helper");
-        std::env::remove_var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER");
 
         assert_eq!(execution.result().status(), "timeout");
         assert_eq!(
@@ -727,12 +888,139 @@ mod tests {
     }
 
     #[test]
+    fn local_process_cancelled_before_start_does_not_launch_command() {
+        let executable = "missing-local-process-runner-for-cancel-test";
+        let (execution, project) = execute_with_command_after_setup(
+            executable,
+            Vec::new(),
+            vec![executable.to_string()],
+            Vec::new(),
+            10,
+            |store, _project| {
+                store
+                    .save_state("J-0001", &run_state("CANCELLED"))
+                    .expect("save cancelled state");
+            },
+        )
+        .expect("execute pre-cancelled local process");
+
+        assert_eq!(execution.result().status(), "cancelled");
+        assert_eq!(
+            execution.result().value()["error"]["kind"],
+            "local_process_cancelled"
+        );
+        assert_eq!(execution.result().value()["error"]["phase"], "before_start");
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn local_process_running_cancel_writes_cancelled_result() {
+        let project = temp_project();
+        let store = open_store(&project);
+        store
+            .create_job("implement local process feature", "codex", vec![])
+            .expect("create job");
+        store
+            .save_state("J-0001", &run_state("IMPLEMENTING"))
+            .expect("save running state");
+        let executable = current_test_executable();
+        let registry = registry_with_instance(
+            &executable,
+            vec![
+                "--exact".to_string(),
+                "local_process::tests::local_process_sleep_helper".to_string(),
+                "--nocapture".to_string(),
+            ],
+            vec![executable.clone()],
+            vec!["STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER".to_string()],
+            10,
+        )
+        .expect("registry");
+        let request = ExecutionRequest::from_value(request_value(), "request.json", schema_root())
+            .expect("request");
+        let schemas = schema_root();
+        let context = ProviderRunContext::new(&registry, &store, &schemas);
+        let _env = EnvVarGuard::set("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER", "1");
+        let cancel_project = project.clone();
+        let cancel_schemas = schema_root();
+        let cancel_thread = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(150));
+            let store =
+                StateStore::open(cancel_project, cancel_schemas).expect("open cancel store");
+            store
+                .save_state("J-0001", &run_state("CANCELLED"))
+                .expect("save cancelled state");
+        });
+
+        let execution = LocalProcessProviderAdapter
+            .execute(&request, &context)
+            .expect("execute running cancel");
+        cancel_thread.join().expect("cancel thread");
+
+        assert_eq!(execution.result().status(), "cancelled");
+        assert_eq!(execution.result().value()["error"]["phase"], "running");
+        assert!(project
+            .join(".ai-runs/J-0001/provider-output/local-default/response.json")
+            .is_file());
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn local_process_forbidden_action_evidence_blocks_result() {
+        let executable = current_test_executable();
+        let _env = EnvVarGuard::set("STAR_CONTROL_LOCAL_PROCESS_FORBIDDEN_EVIDENCE_HELPER", "1");
+        let (execution, project) = execute_with_command(
+            &executable,
+            vec![
+                "--exact".to_string(),
+                "local_process::tests::local_process_forbidden_evidence_helper".to_string(),
+                "--nocapture".to_string(),
+            ],
+            vec![executable.clone()],
+            vec!["STAR_CONTROL_LOCAL_PROCESS_FORBIDDEN_EVIDENCE_HELPER".to_string()],
+            10,
+        )
+        .expect("execute forbidden evidence local process");
+
+        assert_eq!(execution.result().status(), "blocked");
+        assert_eq!(
+            execution.result().value()["error"]["kind"],
+            "local_process_forbidden_action"
+        );
+        assert_eq!(
+            execution.result().value()["error"]["action"],
+            "dependency_install"
+        );
+        assert_eq!(execution.result().value()["error"]["source"], STDOUT_FILE);
+        assert!(project
+            .join(".ai-runs/J-0001/provider-output/local-default/response.json")
+            .is_file());
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
     fn local_process_sleep_helper() {
         let is_child_helper = std::env::args().collect::<Vec<_>>().windows(2).any(|args| {
             args[0] == "--exact" && args[1] == "local_process::tests::local_process_sleep_helper"
         });
         if is_child_helper && std::env::var("STAR_CONTROL_LOCAL_PROCESS_SLEEP_HELPER").is_ok() {
             thread::sleep(Duration::from_secs(5));
+        }
+    }
+
+    #[test]
+    fn local_process_forbidden_evidence_helper() {
+        let is_child_helper = std::env::args().collect::<Vec<_>>().windows(2).any(|args| {
+            args[0] == "--exact"
+                && args[1] == "local_process::tests::local_process_forbidden_evidence_helper"
+        });
+        if is_child_helper
+            && std::env::var("STAR_CONTROL_LOCAL_PROCESS_FORBIDDEN_EVIDENCE_HELPER").is_ok()
+        {
+            println!(
+                "{}dependency_install attempted by local provider",
+                FORBIDDEN_ACTION_EVIDENCE_PREFIX
+            );
         }
     }
 
@@ -743,11 +1031,30 @@ mod tests {
         env_allowlist: Vec<String>,
         timeout_seconds: u64,
     ) -> Result<(ProviderExecution, PathBuf), ProviderAdapterError> {
+        execute_with_command_after_setup(
+            executable,
+            args,
+            allowed_executables,
+            env_allowlist,
+            timeout_seconds,
+            |_store, _project| {},
+        )
+    }
+
+    fn execute_with_command_after_setup(
+        executable: &str,
+        args: Vec<String>,
+        allowed_executables: Vec<String>,
+        env_allowlist: Vec<String>,
+        timeout_seconds: u64,
+        setup: impl FnOnce(&StateStore, &Path),
+    ) -> Result<(ProviderExecution, PathBuf), ProviderAdapterError> {
         let project = temp_project();
         let store = open_store(&project);
         store
             .create_job("implement local process feature", "codex", vec![])
             .expect("create job");
+        setup(&store, &project);
         let registry = registry_with_instance(
             executable,
             args,
@@ -841,6 +1148,24 @@ mod tests {
         })
     }
 
+    fn run_state(state: &str) -> Value {
+        json!({
+            "schema_version": "1.0.0",
+            "job_id": "J-0001",
+            "state": state,
+            "current_stage": "implement",
+            "updated_at": "test:deterministic",
+            "threads": {},
+            "workers": {},
+            "artifacts": {},
+            "latest_event_id": "",
+            "active_provider": null,
+            "next_action": if state == "CANCELLED" { "stop" } else { "continue" },
+            "budget": {},
+            "history": []
+        })
+    }
+
     fn current_test_executable() -> String {
         std::env::current_exe()
             .expect("current test executable")
@@ -869,15 +1194,36 @@ mod tests {
         repo_root().join("specs").join("schemas")
     }
 
+    struct EnvVarGuard<'a> {
+        key: &'static str,
+        _lock: MutexGuard<'a, ()>,
+    }
+
+    impl EnvVarGuard<'_> {
+        fn set(key: &'static str, value: &'static str) -> Self {
+            let lock = ENV_LOCK.lock().expect("env lock");
+            std::env::set_var(key, value);
+            Self { key, _lock: lock }
+        }
+    }
+
+    impl Drop for EnvVarGuard<'_> {
+        fn drop(&mut self) {
+            std::env::remove_var(self.key);
+        }
+    }
+
     fn temp_project() -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
+        let counter = TEMP_PROJECT_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "star-control-provider-local-process-{}-{}",
+            "star-control-provider-local-process-{}-{}-{}",
             std::process::id(),
-            nanos
+            nanos,
+            counter
         ));
         fs::create_dir_all(&path).expect("create temp project");
         path

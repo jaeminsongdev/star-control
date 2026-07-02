@@ -119,6 +119,14 @@ sensitive_data_output
 
 Adapter는 WorkSpec `forbidden_actions`, provider result evidence, command policy를 함께 확인한다. 하나라도 위반하면 다음 stage로 자동 진행하지 않는다.
 
+초기 M5 `local_process` evidence marker:
+
+```text
+STAR_CONTROL_FORBIDDEN_ACTION_EVIDENCE:<action>
+```
+
+Adapter는 child process의 captured stdout/stderr에서 위 marker를 찾는다. `<action>`이 WorkSpec `forbidden_actions` 또는 local process 기본 금지 action 목록과 일치하면 `ProviderRunResult.status=blocked`로 정규화하고, raw stdout/stderr 전문 대신 action과 source path만 error evidence에 남긴다.
+
 ## output contract
 
 필수 output:
@@ -156,3 +164,9 @@ M5 local process provider는 다음을 통과해야 한다.
 - cancel -> `cancelled` result + `CANCELLED` RunState
 - forbidden action evidence -> `BLOCKED` 또는 `FAILED`
 - provider output directory 밖 artifact path 거부
+
+Conformance fixture:
+
+- `packages/star-control-execution/src/lib.rs`의 `local_process_provider_conformance_fixture_covers_m5_runtime_contract`
+- success, timeout, cancel, forbidden action evidence를 실제 `ExecutionEngine` + `StateStore` 경로로 실행한다.
+- provider result status, RunState, provider output artifact, artifact ref, provider finished event를 함께 검증한다.
