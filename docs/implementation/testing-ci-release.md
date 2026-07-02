@@ -51,9 +51,9 @@ work-queue-consistency-check
 | M4 v0 Fake E2E | fake project integration smoke with AUTO_PASS/HUMAN_REVIEW/BLOCK |
 | M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture tests |
 | M6 Cloud Provider | provider conformance tests, artifact path/ref/file existence tests, provider request/response fixture tests, cloud API offline fixture runtime tests, transport plan artifact tests, live approval gate artifact/state tests, credential reference tests, budget/cost/privacy handoff tests |
-| M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue smoke, API read-only contract tests, approval/cancel/resume mutation tests |
-| M8 UI Shell | UI view model contract tests, read-only smoke, approval flow smoke |
-| M9 Hardening / Release Readiness | redaction, audit, recovery, retention, release readiness checks |
+| M7 Daemon / API | CLI approve/cancel/resume regression tests, daemon queue skeleton tests, daemon queue smoke, API read-only service tests, in-process API approve/cancel/resume mutation tests |
+| M8 UI Shell | `star-control-ui` view model contract tests, read-only no-write smoke, approval path smoke, browser control shell smoke |
+| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, provider conformance hardening tests, state recovery inspection tests, recovery command surface tests, release readiness writer/API/UI/CLI tests, release review pack writer tests, final M9 readiness audit tests, final completion audit tests, final completion readiness example validation, stacked PR readiness example validation, CLI providers tests, CLI sentinel command group tests, audit/cost integration, recovery, retention, release readiness checks |
 
 Milestone validation은 누적된다. 뒤 단계로 갈수록 앞 단계 검증을 삭제하지 않고, 필요하면 quick/full profile로 분리한다.
 
@@ -282,6 +282,274 @@ CLI test 후보:
 - `approve` -> approval-response.json 생성
 - `cancel` -> CANCELLED 전이
 - `--json` output parse 가능
+
+## daemon tests
+
+M7b daemon queue skeleton은 process/socket/API server 없이 library-level test로 검증한다.
+
+검증 항목:
+
+- `{config_root}/daemon/state.json` 생성과 schema validation
+- repository root와 대상 project root에 daemon state를 만들지 않음
+- non-terminal job queue entry 등록
+- terminal job queue 거부
+- approved response 없는 `WAITING_APPROVAL` job queue 거부
+- non-approved approval response queue 거부
+- duplicate queue entry 거부
+- 대상 project `.ai-runs/` artifact를 daemon directory로 복사하지 않음
+
+## API tests
+
+M7c API read-only service는 HTTP server 없이 library-level test로 검증한다.
+
+검증 항목:
+
+- `api-response.schema.json` envelope validation
+- `GET /daemon/state`
+- `GET /projects`
+- `GET /projects/{project_id}/jobs`
+- `GET /projects/{project_id}/jobs/{job_id}`
+- `GET /projects/{project_id}/jobs/{job_id}/events`
+- `GET /projects/{project_id}/jobs/{job_id}/report?stage={stage}`
+- missing project/job/report structured error
+- mutation method와 mutation-like path rejection
+- read-only endpoint가 `.ai-runs/` artifact를 수정하지 않음
+- read-only endpoint가 daemon state artifact를 수정하지 않음
+- secret-like raw value redaction
+- `ApiControlService` approve writes schema-valid `approval-response.json`
+- `ApiControlService` cancel rejects terminal state and updates non-terminal state
+- `ApiControlService` resume requires matching approved response
+- API control mutation appends CoreEvent entries; AuditEvent integration is tracked under M9 hardening
+- `ApiReadOnlyService` continues to reject non-GET mutation methods
+
+## UI tests
+
+M8a UI read-only view model은 browser app 없이 library-level test로 검증한다.
+
+검증 항목:
+
+- `ui-job-view.schema.json` validation
+- job list view model
+- job detail view model
+- timeline event view
+- provider output path viewer data
+- validation result path viewer data
+- approval request viewer data
+- review pack viewer data
+- approval-required job이 API/CLI mutation surface를 노출하지만 직접 mutation하지 않음
+- read-only view model이 StateStore artifact를 수정하지 않음
+- secret-like raw value redaction
+- missing report 같은 선택 artifact를 read-only error surface로 표시
+
+M8b UI browser control shell은 browser app 없이 library-level test로 검증한다.
+
+검증 항목:
+
+- `UiBrowserShell` action panel이 approve/cancel/resume endpoint와 body contract를 노출
+- HTTP server, package manager, network runtime 없이 `ApiControlService`를 소비
+- approval response 이후 resume action enabled surface 확인
+- terminal job cancel disabled surface 확인
+- approve/cancel/resume structured result view 확인
+- secret-like result redaction 유지
+
+## security hardening tests
+
+M9a redaction utility는 shared crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control-security`가 sensitive key와 secret-like string을 `[REDACTED]`로 치환
+- private key marker redaction
+- `redaction-report.schema.json` validation
+- RedactionReport finding/report에 raw secret value가 없음
+- API/UI가 shared redaction utility를 소비하며 기존 redaction regression을 유지
+
+M9b audit event writer는 observability crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control-observability`가 schema-valid AuditEvent를 `audit/audit-events.jsonl`에 append
+- audit log path가 StateStore job directory 내부로 제한됨
+- secret-like summary/body가 저장 전 `[REDACTED]`로 치환됨
+- path traversal job/path 입력을 거부
+- 반환 ArtifactRef가 audit log contract를 만족
+
+M9c cost metric budget guard는 observability crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control-observability`가 schema-valid CostMetric을 provider output sidecar로 저장
+- cost metric path가 provider output directory 내부로 제한됨
+- unexpected secret-like field가 저장 전 `[REDACTED]`로 치환됨
+- missing cost metric이 non-fatal `Ok(None)`으로 표현됨
+- budget threshold 초과가 hard failure가 아니라 `warn_only` evaluation으로 표현됨
+
+M9d provider conformance hardening은 provider crate 수준에서 검증한다.
+
+검증 항목:
+
+- ArtifactRef path/kind/producer가 provider output 계약과 일치함
+- stored `response.json`이 `provider-run-result.schema.json`을 만족하고 in-memory result와 일치함
+- unsafe provider instance id와 provider output boundary 우회가 실패함
+- cloud profile sidecar인 `privacy-handoff.json`과 `cost-metric.json`이 schema를 만족함
+- cloud cost metric의 job/provider/stage가 provider result와 일치함
+
+M9e state recovery inspection은 state crate 수준에서 검증한다.
+
+검증 항목:
+
+- complete job은 recovery issue 없이 `ok`로 보고됨
+- missing `job.json`/`run-state.json`/`events.jsonl`이 issue로 보고됨
+- invalid `run-state.json`과 corrupt `events.jsonl`이 구분되어 보고됨
+- `tmp/**` file은 warning issue로 보고되지만 삭제되지 않음
+- unsafe job id나 path traversal recovery input이 거부됨
+
+M9f release readiness writer는 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control-release`가 schema-valid `release-readiness.json`을 `release/` 아래에 씀
+- returned ArtifactRef가 `kind=other`, `producer=star-control-release`, release-readiness schema path를 사용함
+- `ready` status는 release approval/process 구현 전까지 거부됨
+- `reserved` status는 blocker explanation을 요구함
+- 기존 readiness artifact를 조용히 overwrite하지 않음
+- release/deploy/publish, repository settings, package registry mutation이 없음
+
+M9g release readiness API read는 API crate 수준에서 검증한다.
+
+검증 항목:
+
+- `ApiReadOnlyService`가 `GET /projects/{project_id}/jobs/{job_id}/release-readiness`를 지원함
+- response envelope이 `api-response.schema.json`을 만족함
+- missing readiness artifact가 `release_readiness_not_found` structured error로 반환됨
+- endpoint가 job state나 artifact를 수정하지 않음
+- HTTP server, CLI command, browser UI app, release/deploy/publish, repository settings mutation이 없음
+
+M9h release version consistency checker는 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- matching declared version과 changelog text가 `pass` checks를 생성함
+- version mismatch와 changelog gap이 `fail` checks와 blockers를 생성함
+- checker output이 `ReleaseReadinessWriter::not_ready`에 들어가 schema-valid readiness를 만들 수 있음
+- filesystem discovery, changelog parser, release/deploy/publish, repository settings mutation이 없음
+
+M9i release evidence file discovery는 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- project root 내부 version/changelog file을 read-only로 읽음
+- plain `VERSION` file과 `version = "x.y.z"` declaration을 version evidence로 처리함
+- unsafe relative path, absolute path, drive-prefixed path를 거부함
+- missing version declaration을 explicit error로 반환함
+- automatic repository-wide scan, changelog parser, release/deploy/publish, repository settings mutation이 없음
+
+M9j release profile readiness integration은 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- release profile pass/fail result가 `release-profile-passed` check로 들어감
+- profile blocker와 version/changelog blocker가 같은 ReleaseReadiness blockers에 병합됨
+- profile/version/changelog가 모두 통과해도 `ready` status를 만들지 않고 release automation reserved blocker를 둠
+- unsafe profile evidence path, empty profile name, empty blocker를 explicit error로 반환함
+- Star Sentinel profile evaluator, CLI/API/UI surface, schema field 변경, release/deploy/publish, repository settings mutation이 없음
+
+M9k release readiness UI read는 UI crate 수준에서 검증한다.
+
+검증 항목:
+
+- `UiReadOnlyShell`이 release readiness API endpoint를 소비함
+- job detail view에 `release_readiness_viewer`가 포함됨
+- missing readiness artifact는 optional read-only error surface로 표시됨
+- existing readiness artifact는 status/checks/blockers/approvals를 노출함
+- readiness artifact와 StateStore를 수정하지 않고 release action을 활성화하지 않음
+- browser app, HTTP server, CLI command, schema field, release/deploy/publish, repository settings mutation이 없음
+
+M9l release readiness CLI read는 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control report --release-readiness --json`이 existing ReleaseReadiness artifact를 읽음
+- output이 `cli-output.schema.json`을 만족하고 `report_kind=release_readiness`를 포함함
+- missing readiness artifact가 `cli-error.schema.json` error와 expected artifact path를 반환함
+- `--stage`와 `--release-readiness` 조합을 invalid input으로 거부함
+- readiness artifact와 StateStore를 수정하지 않고 release action을 활성화하지 않음
+- new top-level CLI command, browser app, HTTP server, schema field, release/deploy/publish, repository settings mutation이 없음
+
+M9m release review pack foundation은 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- `ReleaseReviewPackWriter`가 ReleaseReadiness validation을 재사용함
+- `.ai-runs/{job_id}/review-packs/release-review-pack.md`를 새 파일로만 씀
+- 반환 ArtifactRef가 `kind=review_pack`, `producer=star-control-release`를 사용함
+- `ready` status와 overwrite를 거부함
+- review pack이 approval record, release action, deploy/publish/signing action, repository settings mutation을 만들지 않음
+- new CLI/API/UI surface, schema field, workflow, dependency 변경이 없음
+
+M9n recovery command surface는 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control recover --list --json`이 `StateStore::inspect_recovery` 결과를 CLI output envelope으로 반환함
+- output이 `mode=inspect_only`, `recovery_actions_enabled=false`, `destructive_actions_performed=false`를 포함함
+- `tmp/**` file은 warning issue로 표시하지만 삭제하지 않음
+- `run-state.json`과 `events.jsonl`을 수정하지 않음
+- `--list` 없는 recover와 non-recovery option 조합을 invalid input으로 거부함
+- destructive recovery action, schema field, workflow, dependency, HTTP server, browser UI app 변경이 없음
+
+M9o final M9 readiness audit은 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- `M9_REQUIRED_READINESS_CHECKS`가 M9 hardening/recovery/release-readiness 필수 항목을 public contract로 제공함
+- `M9ReadinessAuditBuilder`가 all-pass M9 audit을 schema-valid `reserved` readiness로 조립함
+- all-pass 결과도 `ready` status를 만들지 않고 final release/deploy/publish reserved blocker를 포함함
+- missing, duplicate, failed M9 check가 schema-valid `not_ready` readiness와 blocker로 표시됨
+- unknown check name, unsafe evidence path, empty blocker가 explicit error로 반환됨
+- schema field, workflow, dependency, CLI/API/UI surface, release/deploy/publish, repository settings mutation, destructive recovery action이 없음
+
+M9p final completion audit은 release crate 수준에서 검증한다.
+
+검증 항목:
+
+- `COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS`가 M0~M9 milestone, validation, CI, stacked PR, reserved action 필수 항목을 public contract로 제공함
+- `CompleteImplementationAuditBuilder`가 all-pass completion audit을 schema-valid `reserved` readiness로 조립함
+- all-pass 결과도 `ready` status를 만들지 않고 release/deploy/publish 및 external repository settings reserved blocker를 포함함
+- missing, duplicate, failed completion check가 schema-valid `not_ready` readiness와 blocker로 표시됨
+- unknown check name, unsafe evidence path, empty blocker가 explicit error로 반환됨
+- schema field, workflow, dependency, CLI/API/UI surface, release/deploy/publish, repository settings mutation, destructive recovery action이 없음
+
+M9q final audit evidence는 schema/example와 documentation 수준에서 검증한다.
+
+검증 항목:
+
+- `examples/release-contracts/complete-implementation-readiness.example.json`이 `release-readiness.schema.json`을 만족함
+- final completion readiness example이 M0~M9, full local validation, remote CI evidence, stacked PR clean state, reserved action confirmation check를 포함함
+- example status가 `reserved`이고 release/deploy/publish 및 external repository settings reserved blocker를 포함함
+- `docs/implementation/audit/final-completion-audit.md`가 M0~M9 evidence path, local validation command set, remote CI evidence, stacked PR clean state, reserved blockers를 설명함
+- schema field, workflow, dependency, CLI/API/UI surface, release/deploy/publish, repository settings mutation, destructive recovery action이 없음
+
+M9r stacked PR readiness evidence는 schema/example와 documentation 수준에서 검증한다.
+
+검증 항목:
+
+- `examples/release-contracts/stacked-pr-readiness.example.json`이 `release-readiness.schema.json`을 만족함
+- stacked PR readiness example이 contiguous stack, clean merge state, draft review gate, main merge not performed, final audit evidence link check를 포함함
+- example status가 `reserved`이고 review/merge coordination reserved blocker를 포함함
+- `docs/implementation/audit/stacked-pr-readiness.md`가 checked PR range, stack table, clean/draft state, main merge not performed, reserved blockers를 설명함
+- schema field, workflow, dependency, CLI/API/UI surface, PR merge, main update, release/deploy/publish, repository settings mutation, destructive recovery action이 없음
+
+M9t CLI sentinel command group은 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control sentinel selfcheck --json`이 Star Sentinel selfcheck 결과를 CLI output envelope으로 반환함
+- `star-control sentinel check --project <path> --job <job-id> --json`이 existing `task.json`과 `changed_lines.json`을 읽고 diagnostics artifact를 씀
+- `star-control sentinel gate --project <path> --job <job-id> --json`이 diagnostics와 approval artifact를 씀
+- `star-control sentinel review-pack --project <path> --job <job-id> --json`이 tool output review pack과 canonical `review-packs/review_pack.md`를 씀
+- missing input artifact와 reserved options가 schema-valid CLI error envelope을 반환함
+- provider execution, provider live call, release/deploy/publish, repository settings mutation, destructive recovery action이 없음
 
 ## CI 변경 policy
 
