@@ -1,5 +1,6 @@
 use serde_json::{json, Value};
 use star_control_daemon::{DaemonError, DaemonQueue};
+use star_control_release::{ReleaseReadinessError, ReleaseReadinessWriter, RELEASE_READINESS_PATH};
 use star_control_schema::{load_schema, validate_json, ValidationError};
 use star_control_security::redact_value;
 use star_control_state::{JobSummary, StateStore, StateStoreError};
@@ -202,6 +203,9 @@ impl ApiReadOnlyService {
                 let stage = parsed.query_value("stage").unwrap_or(DEFAULT_REPORT_STAGE);
                 self.report_response(project_id, job_id, stage)
             }
+            ["projects", project_id, "jobs", job_id, "release-readiness"] => {
+                self.release_readiness_response(project_id, job_id)
+            }
             _ => self.error_envelope(
                 "endpoint_not_found",
                 "read-only API endpoint not found",
@@ -345,6 +349,38 @@ impl ApiReadOnlyService {
         }
     }
 
+    fn release_readiness_response(
+        &self,
+        project_id: &str,
+        job_id: &str,
+    ) -> Result<Value, ApiError> {
+        let Some(store) = self.projects.get(project_id) else {
+            return self.project_not_found(project_id);
+        };
+        if let Err(source) = store.load_job(job_id) {
+            return self.state_error_envelope("job_read_failed", source);
+        }
+        let writer = ReleaseReadinessWriter::new(&self.schema_root);
+        match writer.read(store, job_id) {
+            Ok(Some(readiness)) => self.success_envelope(json!({
+                "project_id": project_id,
+                "job_id": job_id,
+                "readiness_path": format!(".ai-runs/{}/{}", job_id, RELEASE_READINESS_PATH),
+                "readiness": readiness
+            })),
+            Ok(None) => self.error_envelope(
+                "release_readiness_not_found",
+                "release readiness artifact not found",
+                json!({
+                    "project_id": project_id,
+                    "job_id": job_id,
+                    "artifact_path": format!(".ai-runs/{}/{}", job_id, RELEASE_READINESS_PATH)
+                }),
+            ),
+            Err(source) => self.release_error_envelope("release_readiness_read_failed", source),
+        }
+    }
+
     fn project_not_found(&self, project_id: &str) -> Result<Value, ApiError> {
         self.error_envelope(
             "project_not_found",
@@ -363,6 +399,22 @@ impl ApiReadOnlyService {
         };
         self.envelope(
             status,
+            json!({}),
+            json!({
+                "code": code,
+                "message": source.to_string()
+            }),
+            Vec::new(),
+        )
+    }
+
+    fn release_error_envelope(
+        &self,
+        code: &str,
+        source: ReleaseReadinessError,
+    ) -> Result<Value, ApiError> {
+        self.envelope(
+            "failed",
             json!({}),
             json!({
                 "code": code,
@@ -1252,6 +1304,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     use star_control_daemon::{DaemonConfig, DaemonQueue};
+    use star_control_release::ReleaseReadinessWriter;
     use std::fs;
     use std::path::Path;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -1496,6 +1549,62 @@ mod tests {
             .expect("missing report response");
         assert_eq!(missing_report["status"], "failed");
         assert_eq!(missing_report["error"]["code"], "report_read_failed");
+
+        let missing_readiness = service
+            .handle_get("/projects/local/jobs/J-0001/release-readiness")
+            .expect("missing release readiness response");
+        assert_eq!(missing_readiness["status"], "failed");
+        assert_eq!(
+            missing_readiness["error"]["code"],
+            "release_readiness_not_found"
+        );
+        assert_eq!(
+            missing_readiness["error"]["details"]["artifact_path"],
+            ".ai-runs/J-0001/release/release-readiness.json"
+        );
+
+        let missing_job_readiness = service
+            .handle_get("/projects/local/jobs/J-9999/release-readiness")
+            .expect("missing job release readiness response");
+        assert_eq!(missing_job_readiness["status"], "failed");
+        assert_eq!(missing_job_readiness["error"]["code"], "job_read_failed");
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn release_readiness_endpoint_reads_schema_valid_artifact_without_mutation() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store, "DONE", "report");
+        let writer = ReleaseReadinessWriter::new(schema_root());
+        let readiness = writer.reserved("release-0001", "star-control", "0.0.0-dev");
+        writer
+            .write(&store, "J-0001", &readiness)
+            .expect("write release readiness");
+        let state_path = project.join(".ai-runs/J-0001/run-state.json");
+        let before_state = fs::read_to_string(&state_path).expect("read state before");
+        let service = api_with_store(store);
+
+        let response = service
+            .handle_get("/projects/local/jobs/J-0001/release-readiness")
+            .expect("release readiness response");
+
+        assert_eq!(response["status"], "success");
+        assert_eq!(response["data"]["project_id"], "local");
+        assert_eq!(response["data"]["job_id"], "J-0001");
+        assert_eq!(
+            response["data"]["readiness_path"],
+            ".ai-runs/J-0001/release/release-readiness.json"
+        );
+        assert_eq!(response["data"]["readiness"]["status"], "reserved");
+        assert_eq!(
+            response["data"]["readiness"]["blockers"][0],
+            "release automation is not implemented yet"
+        );
+        let after_state = fs::read_to_string(&state_path).expect("read state after");
+        assert_eq!(after_state, before_state);
+        assert!(!project.join(".ai-runs/J-0001/api-response.json").exists());
 
         fs::remove_dir_all(project).ok();
     }
