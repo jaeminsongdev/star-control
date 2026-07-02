@@ -164,3 +164,9 @@ M5 local process provider는 다음을 통과해야 한다.
 - cancel -> `cancelled` result + `CANCELLED` RunState
 - forbidden action evidence -> `BLOCKED` 또는 `FAILED`
 - provider output directory 밖 artifact path 거부
+
+Conformance fixture:
+
+- `packages/star-control-execution/src/lib.rs`의 `local_process_provider_conformance_fixture_covers_m5_runtime_contract`
+- success, timeout, cancel, forbidden action evidence를 실제 `ExecutionEngine` + `StateStore` 경로로 실행한다.
+- provider result status, RunState, provider output artifact, artifact ref, provider finished event를 함께 검증한다.
