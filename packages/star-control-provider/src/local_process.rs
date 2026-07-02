@@ -775,10 +775,12 @@ mod tests {
     use star_control_state::StateStore;
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Mutex, MutexGuard};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+    static TEMP_PROJECT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn local_process_executes_allowlisted_command_and_captures_output() {
@@ -1216,10 +1218,12 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
+        let counter = TEMP_PROJECT_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "star-control-provider-local-process-{}-{}",
+            "star-control-provider-local-process-{}-{}-{}",
             std::process::id(),
-            nanos
+            nanos,
+            counter
         ));
         fs::create_dir_all(&path).expect("create temp project");
         path
