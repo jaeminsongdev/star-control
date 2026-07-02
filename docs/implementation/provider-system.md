@@ -283,6 +283,20 @@ error
 
 ProviderRunResult는 `provider-output/{provider-instance-id}/response.json`의 최소 계약으로 사용할 수 있다.
 
+## ProviderConformanceChecker
+
+ProviderConformanceChecker는 provider-neutral result와 file artifact가 같은 실행을 가리키는지 검증한다.
+
+M9d 구현 기준:
+
+- `provider_instance_id`는 artifact path segment로 안전해야 한다.
+- request/response/stdout/stderr ArtifactRef는 expected path, kind, producer를 만족해야 한다.
+- stored `provider-output/{provider_instance_id}/response.json`은 `provider-run-result.schema.json`을 만족하고 `ProviderExecution.result().value()`와 일치해야 한다.
+- cloud profile은 `privacy-handoff.json`과 `cost-metric.json`을 schema로 검증한다.
+- cloud cost metric은 job_id, provider_instance_id, stage가 ProviderRunResult와 일치해야 한다.
+
+이 checker는 실제 provider live call을 시작하지 않는다. provider execution path에 자동 연결하는 작업은 별도 hardening slice로 둔다.
+
 ## FakeProviderAdapter
 
 초기 구현 대상이다.

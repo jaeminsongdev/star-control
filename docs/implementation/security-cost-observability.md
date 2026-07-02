@@ -171,6 +171,8 @@ rate_limit_remaining
 
 FakeProvider는 비용을 0으로 기록한다.
 
+M9c 구현은 `packages/star-control-observability`의 CostMetricWriter가 담당한다. writer는 schema-valid CostMetric을 provider output sidecar로 저장/읽기하고, missing metric은 core flow 실패로 취급하지 않는다.
+
 ## budget guard
 
 Budget guard는 다음 레벨에서 적용될 수 있다.
@@ -184,6 +186,8 @@ per user approval session
 ```
 
 초기 구현은 hard enforcement보다 report와 warning 중심으로 시작할 수 있다.
+
+M9c budget evaluation은 `warn_only`다. threshold 초과는 status `warning`과 reasons로 표현하지만 provider execution, validation, report generation을 직접 중단하지 않는다.
 
 초과 후보 상태:
 
