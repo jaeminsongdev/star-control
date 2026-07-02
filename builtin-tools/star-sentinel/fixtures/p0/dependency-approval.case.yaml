@@ -9,7 +9,7 @@ input:
   detected_change_types:
     - "dependency_addition"
 expected:
-  severity: block
-  decision: BLOCK
+  severity: warn
+  decision: HUMAN_REVIEW
   message_contains: "dependency_addition"
-notes: "새 의존성 추가는 P0에서 사람 승인을 요구한다."
+notes: "새 의존성 추가는 P0에서 자동 통과하지 않고 사람 승인을 요구한다."

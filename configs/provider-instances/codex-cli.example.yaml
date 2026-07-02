@@ -8,5 +8,8 @@ routing_tags:
   - cloud
   - coding-agent
   - file-edit
+transport_config:
+  auth_mode: login_session
+  privacy_handoff_approved: false
 command:
   executable: codex
