@@ -213,6 +213,83 @@ pub struct JobSummary {
     pub corrupt_reason: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoveryIssue {
+    pub artifact_path: String,
+    pub kind: String,
+    pub severity: String,
+    pub message: String,
+    pub recommended_action: String,
+}
+
+impl RecoveryIssue {
+    pub fn new(
+        artifact_path: impl Into<String>,
+        kind: impl Into<String>,
+        severity: impl Into<String>,
+        message: impl Into<String>,
+        recommended_action: impl Into<String>,
+    ) -> Self {
+        Self {
+            artifact_path: artifact_path.into(),
+            kind: kind.into(),
+            severity: severity.into(),
+            message: message.into(),
+            recommended_action: recommended_action.into(),
+        }
+    }
+
+    pub fn to_value(&self) -> Value {
+        json!({
+            "artifact_path": self.artifact_path,
+            "kind": self.kind,
+            "severity": self.severity,
+            "message": self.message,
+            "recommended_action": self.recommended_action
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoveryInspection {
+    pub job_id: String,
+    pub mode: String,
+    pub status: String,
+    pub manual_followup_required: bool,
+    pub destructive_actions_performed: bool,
+    pub issues: Vec<RecoveryIssue>,
+}
+
+impl RecoveryInspection {
+    fn inspect_only(job_id: impl Into<String>, issues: Vec<RecoveryIssue>) -> Self {
+        let manual_followup_required = !issues.is_empty();
+        Self {
+            job_id: job_id.into(),
+            mode: "inspect_only".to_string(),
+            status: if manual_followup_required {
+                "needs_recovery".to_string()
+            } else {
+                "ok".to_string()
+            },
+            manual_followup_required,
+            destructive_actions_performed: false,
+            issues,
+        }
+    }
+
+    pub fn to_value(&self) -> Value {
+        json!({
+            "schema_version": SCHEMA_VERSION,
+            "job_id": self.job_id,
+            "mode": self.mode,
+            "status": self.status,
+            "manual_followup_required": self.manual_followup_required,
+            "destructive_actions_performed": self.destructive_actions_performed,
+            "issues": self.issues.iter().map(RecoveryIssue::to_value).collect::<Vec<_>>()
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArtifactKind {
     Job,
@@ -581,6 +658,35 @@ impl StateStore {
         Ok(())
     }
 
+    pub fn inspect_recovery(&self, job_id: &str) -> Result<RecoveryInspection, StateStoreError> {
+        self.job_dir(job_id)?;
+        let mut issues = Vec::new();
+
+        if let Err(error) = self.load_job(job_id) {
+            issues.push(recovery_issue_from_error("job.json", &error));
+        }
+        if let Err(error) = self.load_state(job_id) {
+            issues.push(recovery_issue_from_error("run-state.json", &error));
+        }
+        if let Err(error) = self.read_events(job_id) {
+            issues.push(recovery_issue_from_error("events.jsonl", &error));
+        } else {
+            let events_path = self.resolve_job_path(job_id, "events.jsonl")?;
+            if !events_path.is_file() {
+                issues.push(RecoveryIssue::new(
+                    "events.jsonl",
+                    "missing_required_file",
+                    "block",
+                    "required event log is missing",
+                    "inspect the job and recreate only through an explicit recovery command",
+                ));
+            }
+        }
+
+        issues.extend(self.tmp_file_issues(job_id)?);
+        Ok(RecoveryInspection::inspect_only(job_id, issues))
+    }
+
     pub fn resolve_job_path(
         &self,
         job_id: &str,
@@ -805,6 +911,25 @@ impl StateStore {
         )
     }
 
+    pub fn write_validation_json(
+        &self,
+        job_id: &str,
+        file_name: &str,
+        value: &Value,
+    ) -> Result<Value, StateStoreError> {
+        validate_safe_name(file_name)?;
+        let relative_path = format!("validation/{}", file_name);
+        self.write_new_json_artifact(job_id, &relative_path, value)?;
+        self.artifact_ref(
+            job_id,
+            &relative_path,
+            ArtifactKind::Other,
+            "validation-engine",
+            None,
+            Some("validation JSON artifact"),
+        )
+    }
+
     pub fn write_tmp_json(
         &self,
         job_id: &str,
@@ -867,6 +992,17 @@ impl StateStore {
                 corrupt_reason: Some(error.to_string()),
             },
         }
+    }
+
+    fn tmp_file_issues(&self, job_id: &str) -> Result<Vec<RecoveryIssue>, StateStoreError> {
+        let tmp_dir = self.resolve_job_path(job_id, "tmp")?;
+        if !tmp_dir.is_dir() {
+            return Ok(Vec::new());
+        }
+        let mut issues = Vec::new();
+        collect_tmp_file_issues(&tmp_dir, "tmp", &mut issues)?;
+        issues.sort_by(|left, right| left.artifact_path.cmp(&right.artifact_path));
+        Ok(issues)
     }
 
     fn read_json_artifact(
@@ -1054,11 +1190,96 @@ fn ensure_standard_dirs(job_dir: &Path) -> Result<(), StateStoreError> {
         "tool-output",
         "approvals",
         "review-packs",
+        "validation",
         "tmp",
     ] {
         let path = job_dir.join(name);
         fs::create_dir_all(&path)
             .map_err(|source| StateStoreError::AiRunsNotWritable { path, source })?;
+    }
+    Ok(())
+}
+
+fn recovery_issue_from_error(relative_path: &str, error: &StateStoreError) -> RecoveryIssue {
+    match error {
+        StateStoreError::ArtifactNotFound { .. } => RecoveryIssue::new(
+            relative_path,
+            "missing_required_file",
+            "block",
+            "required artifact is missing",
+            "inspect the job and recreate only through an explicit recovery command",
+        ),
+        StateStoreError::InvalidJson { .. } => RecoveryIssue::new(
+            relative_path,
+            "invalid_json",
+            "block",
+            "artifact is not valid JSON",
+            "preserve the original artifact and prepare a replacement through an explicit recovery command",
+        ),
+        StateStoreError::SchemaValidationFailed { errors, .. } => RecoveryIssue::new(
+            relative_path,
+            "schema_mismatch",
+            "block",
+            format!("artifact failed schema validation with {} error(s)", errors.len()),
+            "inspect schema errors and write a corrected artifact only through an explicit recovery command",
+        ),
+        StateStoreError::CorruptEventLog { line, .. } => RecoveryIssue::new(
+            relative_path,
+            "corrupt_event_log",
+            "block",
+            format!("event log contains an invalid line at {}", line),
+            "preserve the original log and create a recovered copy before replacing anything",
+        ),
+        StateStoreError::PathTraversalBlocked { .. }
+        | StateStoreError::PathOutsideJobDirectory { .. } => RecoveryIssue::new(
+            relative_path,
+            "path_violation",
+            "block",
+            "artifact path violates job directory containment",
+            "reject the recovery input and inspect the caller-provided path",
+        ),
+        _ => RecoveryIssue::new(
+            relative_path,
+            "inspection_failed",
+            "block",
+            "artifact inspection failed",
+            "inspect the job manually before attempting recovery",
+        ),
+    }
+}
+
+fn collect_tmp_file_issues(
+    directory: &Path,
+    relative_dir: &str,
+    issues: &mut Vec<RecoveryIssue>,
+) -> Result<(), StateStoreError> {
+    for entry in fs::read_dir(directory).map_err(|source| StateStoreError::AiRunsNotWritable {
+        path: directory.to_path_buf(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| StateStoreError::AiRunsNotWritable {
+            path: directory.to_path_buf(),
+            source,
+        })?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        let relative_path = format!("{}/{}", relative_dir, name);
+        let file_type = entry
+            .file_type()
+            .map_err(|source| StateStoreError::AiRunsNotWritable {
+                path: entry.path(),
+                source,
+            })?;
+        if file_type.is_dir() {
+            collect_tmp_file_issues(&entry.path(), &relative_path, issues)?;
+        } else if file_type.is_file() {
+            issues.push(RecoveryIssue::new(
+                relative_path,
+                "partial_tmp_file",
+                "warn",
+                "tmp file is not a canonical artifact",
+                "leave the tmp file untouched until an explicit discard-tmp recovery command is approved",
+            ));
+        }
     }
     Ok(())
 }
@@ -1233,7 +1454,10 @@ fn replace_file(source: &Path, target: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEMP_PROJECT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn repo_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -1248,10 +1472,12 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
+        let counter = TEMP_PROJECT_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "star-control-state-{}-{}",
+            "star-control-state-{}-{}-{}",
             std::process::id(),
-            nanos
+            nanos,
+            counter
         ));
         fs::create_dir_all(&path).expect("create temp project");
         path
@@ -1508,6 +1734,106 @@ mod tests {
     }
 
     #[test]
+    fn recovery_inspection_reports_ok_for_complete_job() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store);
+        store
+            .save_state("J-0001", &state("J-0001", "REQUESTED"))
+            .expect("save state");
+
+        let inspection = store.inspect_recovery("J-0001").expect("inspect recovery");
+        assert_eq!(inspection.status, "ok");
+        assert_eq!(inspection.mode, "inspect_only");
+        assert!(!inspection.manual_followup_required);
+        assert!(!inspection.destructive_actions_performed);
+        assert!(inspection.issues.is_empty());
+        assert_eq!(inspection.to_value()["status"], "ok");
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn recovery_inspection_reports_missing_required_files_and_tmp_without_mutation() {
+        let project = temp_project();
+        let store = open_store(&project);
+        let corrupt_dir = project.join(".ai-runs/J-0001");
+        fs::create_dir_all(corrupt_dir.join("tmp/nested")).expect("create corrupt job dirs");
+        let tmp_file = corrupt_dir.join("tmp/nested/run-state.json.tmp-test");
+        fs::write(&tmp_file, "{ partial json").expect("write tmp file");
+
+        let inspection = store
+            .inspect_recovery("J-0001")
+            .expect("inspect corrupt job");
+        let kinds: Vec<_> = inspection
+            .issues
+            .iter()
+            .map(|issue| issue.kind.as_str())
+            .collect();
+
+        assert_eq!(inspection.status, "needs_recovery");
+        assert!(inspection.manual_followup_required);
+        assert!(!inspection.destructive_actions_performed);
+        assert!(kinds.contains(&"missing_required_file"));
+        assert!(kinds.contains(&"partial_tmp_file"));
+        assert!(inspection
+            .issues
+            .iter()
+            .any(|issue| issue.artifact_path == "tmp/nested/run-state.json.tmp-test"));
+        assert!(tmp_file.is_file(), "inspection must not delete tmp files");
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn recovery_inspection_reports_invalid_state_and_corrupt_event_log() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store);
+        fs::write(
+            project.join(".ai-runs/J-0001/run-state.json"),
+            "{ invalid json",
+        )
+        .expect("write invalid state");
+        let mut events = OpenOptions::new()
+            .append(true)
+            .open(project.join(".ai-runs/J-0001/events.jsonl"))
+            .expect("open events");
+        writeln!(events, "{{ invalid event").expect("append corrupt event");
+
+        let inspection = store
+            .inspect_recovery("J-0001")
+            .expect("inspect corrupt artifacts");
+        assert!(inspection
+            .issues
+            .iter()
+            .any(|issue| issue.artifact_path == "run-state.json" && issue.kind == "invalid_json"));
+        assert!(inspection.issues.iter().any(
+            |issue| issue.artifact_path == "events.jsonl" && issue.kind == "corrupt_event_log"
+        ));
+        assert_eq!(
+            inspection.to_value()["destructive_actions_performed"],
+            false
+        );
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn recovery_inspection_rejects_unsafe_job_id() {
+        let project = temp_project();
+        let store = open_store(&project);
+        create_job(&store);
+
+        assert!(matches!(
+            store.inspect_recovery("../J-0001"),
+            Err(StateStoreError::InvalidJobId { .. })
+        ));
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
     fn resolves_provider_and_tool_output_dirs_inside_job() {
         let project = temp_project();
         let store = open_store(&project);
@@ -1557,6 +1883,13 @@ mod tests {
         let review_md_ref = store
             .write_review_pack_markdown("J-0001", "review_pack.md", "# Review\n")
             .expect("write review markdown");
+        let validation_ref = store
+            .write_validation_json(
+                "J-0001",
+                "validation-decision.json",
+                &json!({ "decision": "AUTO_PASS" }),
+            )
+            .expect("write validation json");
         let tmp_path = store
             .write_tmp_json("J-0001", "run-state.json", &json!({ "tmp": true }))
             .expect("write tmp json");
@@ -1578,6 +1911,11 @@ mod tests {
         assert_eq!(approval_ref["kind"], "approval");
         assert_eq!(review_json_ref["kind"], "review_pack");
         assert_eq!(review_md_ref["path"], "review-packs/review_pack.md");
+        assert_eq!(
+            validation_ref["path"],
+            "validation/validation-decision.json"
+        );
+        assert_eq!(validation_ref["kind"], "other");
         assert!(tmp_path.starts_with("tmp/run-state.json.tmp-"));
         assert!(project
             .join(".ai-runs/J-0001/provider-output/fake-default/request.json")
@@ -1593,6 +1931,9 @@ mod tests {
             .is_file());
         assert!(project
             .join(".ai-runs/J-0001/review-packs/review_pack.md")
+            .is_file());
+        assert!(project
+            .join(".ai-runs/J-0001/validation/validation-decision.json")
             .is_file());
 
         assert!(matches!(
