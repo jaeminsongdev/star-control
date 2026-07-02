@@ -58,6 +58,19 @@ E31-release-readiness-writer.md
 E32-release-readiness-api-read.md
 E33-release-version-consistency-checker.md
 E34-release-evidence-file-discovery.md
+E35-release-profile-readiness-integration.md
+E36-release-readiness-ui-read.md
+E37-release-readiness-cli-read.md
+E38-release-review-pack-foundation.md
+E39-recovery-command-surface.md
+E40-final-m9-readiness-audit.md
+E41-final-completion-audit.md
+E42-final-audit-evidence.md
+E43-stacked-pr-readiness-coordination.md
+E44-cli-providers-read-only.md
+E45-cli-sentinel-command-group.md
+E46-final-evidence-refresh.md
+E47-stacked-merge-procedure.md
 ```
 
 ## 사용 방법

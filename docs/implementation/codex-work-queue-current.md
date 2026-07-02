@@ -2768,6 +2768,1036 @@ no mutation regression test
 M9j는 release profile validation integration, release readiness CLI/UI read surface, or recovery command surface 중 하나로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
 ```
 
+## E35 Release Profile Readiness Integration
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+testing-ci-release.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-release/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+CLI command 추가
+artifact signing 구현
+package registry 설정
+repository branch protection/settings 변경
+Star Sentinel profile evaluator 변경
+automatic repository-wide scan
+changelog format parser
+```
+
+입력:
+
+```text
+release id
+target
+expected release version
+release profile name
+release profile pass/fail result
+release profile evidence paths
+release profile blockers
+ReleaseConsistencyResult
+```
+
+출력:
+
+```text
+schema-valid ReleaseReadiness JSON
+release-profile-passed check
+version-consistent check
+changelog-updated check
+not_ready status when blockers exist
+reserved status when checks pass but release automation remains reserved
+```
+
+핵심 TASK:
+
+```text
+ReleaseProfileValidation 추가
+ReleaseProfileReadinessBuilder 추가
+release-profile-passed check 생성
+profile blocker와 consistency blocker 병합
+profile/consistency all-pass 상태에서도 ready status 금지
+unsafe profile evidence path rejection
+schema-valid readiness regression test
+```
+
+완료 기준: `ReleaseProfileValidation`이 caller-provided release profile pass/fail evidence를 검증하고, `ReleaseProfileReadinessBuilder`가 profile check와 `ReleaseConsistencyResult`를 병합해 schema-valid ReleaseReadiness JSON을 만들어야 한다. blocker가 있으면 `not_ready`, 모든 check가 통과해도 release automation reserved blocker가 있는 `reserved` status를 사용해야 한다. Star Sentinel profile evaluator, CLI/API/UI surface, release/deploy/publish, repository settings, workflow, schema field 변경은 하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9k는 release readiness CLI/UI read surface, release review pack foundation, or recovery command surface 중 하나로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E36 Release Readiness UI Read
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+ui-shell-contract.md
+testing-ci-release.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-ui/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+CLI command 추가
+artifact signing 구현
+package registry 설정
+repository branch protection/settings 변경
+StateStore 직접 mutation
+Star Sentinel profile evaluator 변경
+```
+
+입력:
+
+```text
+project id
+job id
+ApiReadOnlyService GET /projects/{project_id}/jobs/{job_id}/release-readiness response
+```
+
+출력:
+
+```text
+release_readiness_viewer
+available true/false
+readiness path
+release id
+target
+version
+status
+checks
+blockers
+approvals
+read-only mutation flags
+```
+
+핵심 TASK:
+
+```text
+UiReadOnlyShell release_readiness view 추가
+job_detail에 release_readiness_viewer 포함
+missing readiness optional error surface 유지
+existing readiness read-only view regression
+release action disabled regression
+no mutation regression
+```
+
+완료 기준: `UiReadOnlyShell`이 release readiness API endpoint를 읽어 release readiness viewer를 반환하고, `job_detail` view가 이를 포함해야 한다. readiness artifact가 없으면 job detail 전체가 실패하지 않고 optional read-only error surface를 반환해야 하며, artifact가 있으면 status/checks/blockers/approvals를 표시해야 한다. UI는 readiness artifact, StateStore, release/deploy/publish state를 수정하지 않아야 한다. browser app, HTTP server, CLI command, release/deploy/publish, repository settings, workflow, schema field 변경은 하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9l는 release readiness CLI read surface, release review pack foundation, or recovery command surface 중 하나로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E37 Release Readiness CLI Read
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+cli-command-reference.md
+testing-ci-release.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-cli/**
+Cargo.lock
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+new top-level CLI command
+artifact signing 구현
+package registry 설정
+repository branch protection/settings 변경
+StateStore mutation
+Star Sentinel profile evaluator 변경
+```
+
+입력:
+
+```text
+star-control report --project <path> --job <job-id> --release-readiness
+```
+
+출력:
+
+```text
+schema-valid CLI output envelope
+report_kind = release_readiness
+release_readiness_path
+release_actions_enabled = false
+readiness
+```
+
+핵심 TASK:
+
+```text
+report --release-readiness option 추가
+ReleaseReadinessWriter readback 재사용
+missing readiness artifact error
+--stage 조합 거부
+release action disabled regression
+no mutation regression
+```
+
+완료 기준: `star-control report --release-readiness --json`이 existing ReleaseReadiness artifact를 schema-valid CLI output envelope로 반환하고, missing artifact는 schema-valid CLI error envelope과 `.ai-runs/{job_id}/release/release-readiness.json` artifact path를 반환해야 한다. `--stage`와 `--release-readiness`를 함께 쓰면 invalid input으로 거부해야 한다. CLI는 readiness artifact, StateStore, release/deploy/publish state를 수정하지 않아야 한다. 새 top-level CLI command, browser app, HTTP server, release/deploy/publish, repository settings, workflow, schema field 변경은 하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9m는 release review pack foundation으로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E38 Release Review Pack Foundation
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+testing-ci-release.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-release/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+new CLI/API/UI surface
+approval record 생성
+artifact signing 구현
+package registry 설정
+repository branch protection/settings 변경
+Star Sentinel profile evaluator 변경
+```
+
+입력:
+
+```text
+schema-valid ReleaseReadiness value
+StateStore job_id
+```
+
+출력:
+
+```text
+.ai-runs/{job_id}/review-packs/release-review-pack.md
+ArtifactRef kind = review_pack
+ArtifactRef producer = star-control-release
+```
+
+핵심 TASK:
+
+```text
+ReleaseReviewPackWriter 추가
+ReleaseReadinessWriter validation 재사용
+release review pack Markdown render
+review-packs/release-review-pack.md create_new write
+ready status rejection regression
+overwrite rejection regression
+release action disabled regression
+```
+
+완료 기준: `ReleaseReviewPackWriter`가 existing ReleaseReadiness value를 검증하고 `.ai-runs/{job_id}/review-packs/release-review-pack.md` Markdown artifact를 한 번만 써야 한다. 반환 ArtifactRef는 `kind=review_pack`, `producer=star-control-release`를 사용해야 한다. `ready` status와 overwrite는 거부해야 하며, review pack은 approval record가 아니고 release/deploy/publish/signing/repository settings action을 실행하거나 활성화하지 않아야 한다. schema field, workflow, dependency, CLI/API/UI surface는 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9n는 recovery command surface로 이어간다. signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E39 Recovery Command Surface
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+state-store.md
+state-store-recovery.md
+cli-command-reference.md
+testing-ci-release.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-cli/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+tmp file 삭제
+event log trim
+recovered copy 생성
+artifact 교체
+retention cleanup
+release/deploy/publish automation
+external account/repository settings 변경
+provider live call
+HTTP server 구현
+browser UI app 구현
+package registry 설정
+repository branch protection/settings 변경
+```
+
+입력:
+
+```text
+star-control recover --project <path> --job <job-id> --list --json
+```
+
+출력:
+
+```text
+schema-valid CLI output envelope
+command = recover
+mode = inspect_only
+recovery_actions_enabled = false
+recovery = StateStore::inspect_recovery(job_id)
+```
+
+핵심 TASK:
+
+```text
+recover --list command 추가
+StateStore::inspect_recovery 재사용
+CLI output envelope validation
+tmp file no-delete regression
+run-state/events no-mutation regression
+unsupported recovery mode rejection
+non-recovery option 조합 거부
+```
+
+완료 기준: `star-control recover --project <path> --job <job-id> --list --json`이 existing job의 recovery inspection을 schema-valid CLI output envelope로 반환해야 한다. output은 `mode=inspect_only`, `recovery_actions_enabled=false`, `destructive_actions_performed=false`를 포함해야 한다. `tmp/**` file은 warning issue로 표시하되 삭제하지 않아야 하며, command는 `run-state.json`, `events.jsonl`, provider/tool output, release/deploy/publish state를 수정하지 않아야 한다. `--list` 없는 recover와 non-recovery option 조합은 invalid input으로 거부한다. schema field, workflow, dependency, HTTP server, browser UI app, destructive recovery action은 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9o는 final M9 conformance/readiness audit 또는 승인된 recovery action surface로 이어간다. destructive recovery, signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E40 Final M9 Readiness Audit
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+testing-ci-release.md
+state-store-recovery.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-release/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+ready status 생성
+release/deploy/publish automation
+signing automation
+package registry 설정
+external account/repository settings 변경
+destructive recovery action
+tmp file 삭제
+event log trim
+artifact 교체
+provider live call
+HTTP server 구현
+browser UI app 구현
+```
+
+입력:
+
+```text
+M9_REQUIRED_READINESS_CHECKS
+Vec<M9ReadinessCheck>
+ReleaseReadinessWriter
+```
+
+출력:
+
+```text
+schema-valid ReleaseReadiness value
+status = reserved when every M9 required check passes
+status = not_ready when required check is missing, duplicated, or failed
+blockers include final release/deploy/publish reserved explanation
+```
+
+핵심 TASK:
+
+```text
+M9_REQUIRED_READINESS_CHECKS public contract 추가
+M9ReadinessCheck pass/fail evidence validation
+M9ReadinessAuditBuilder 추가
+missing/duplicate/failed check blocker 생성
+all-pass audit reserved status regression
+ready status no-generation regression
+unsafe evidence path rejection
+```
+
+완료 기준: `M9ReadinessAuditBuilder`가 all-pass M9 audit을 schema-valid `reserved` readiness로 조립해야 한다. missing, duplicate, failed M9 check는 schema-valid `not_ready` readiness와 blocker로 표시해야 한다. check name은 public required list에 있는 값만 허용하고, evidence path는 project-relative safe path만 허용해야 한다. schema field, workflow, dependency, CLI/API/UI surface, signing, publish, deploy, destructive recovery action은 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9p는 final completion audit, stacked PR merge 정리, 또는 별도 승인된 recovery/release action surface로 이어간다. destructive recovery, signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E41 Final Completion Audit
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+testing-ci-release.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-release/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+ready status 생성
+release/deploy/publish automation
+signing automation
+package registry 설정
+external account/repository settings 변경
+destructive recovery action
+tmp file 삭제
+event log trim
+artifact 교체
+provider live call
+HTTP server 구현
+browser UI app 구현
+```
+
+입력:
+
+```text
+COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS
+Vec<CompleteImplementationAuditCheck>
+ReleaseReadinessWriter
+```
+
+출력:
+
+```text
+schema-valid ReleaseReadiness value
+status = reserved when every complete implementation required check passes
+status = not_ready when required check is missing, duplicated, or failed
+blockers include release/deploy/publish and external repository settings reserved explanation
+```
+
+핵심 TASK:
+
+```text
+COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS public contract 추가
+CompleteImplementationAuditCheck pass/fail evidence validation
+CompleteImplementationAuditBuilder 추가
+missing/duplicate/failed completion check blocker 생성
+all-pass audit reserved status regression
+ready status no-generation regression
+unsafe evidence path rejection
+```
+
+완료 기준: `CompleteImplementationAuditBuilder`가 all-pass M0~M9 completion audit을 schema-valid `reserved` readiness로 조립해야 한다. missing, duplicate, failed completion check는 schema-valid `not_ready` readiness와 blocker로 표시해야 한다. check name은 public required list에 있는 값만 허용하고, evidence path는 project-relative safe path만 허용해야 한다. schema field, workflow, dependency, CLI/API/UI surface, signing, publish, deploy, destructive recovery action은 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9q는 final audit evidence 채움, stacked PR merge 정리, 또는 별도 승인된 recovery/release action surface로 이어간다. destructive recovery, signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E42 Final Audit Evidence
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+testing-ci-release.md
+docs/implementation/audit/final-completion-audit.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+examples/release-contracts/**
+docs/implementation/**
+docs/operations/**
+scripts/ci/check_schema_examples.py
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+ready status 생성
+release/deploy/publish automation
+signing automation
+package registry 설정
+external account/repository settings 변경
+destructive recovery action
+tmp file 삭제
+event log trim
+artifact 교체
+provider live call
+HTTP server 구현
+browser UI app 구현
+```
+
+입력:
+
+```text
+COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS
+docs/implementation/audit/final-completion-audit.md
+examples/release-contracts/complete-implementation-readiness.example.json
+```
+
+출력:
+
+```text
+schema-valid ReleaseReadiness example
+human-readable final completion audit evidence document
+schema example validation case
+status = reserved
+```
+
+핵심 TASK:
+
+```text
+complete implementation readiness example 추가
+final completion audit evidence 문서 추가
+schema example check에 새 ReleaseReadiness example 연결
+reserved status/no-ready regression 문서화
+stacked PR clean/remote CI/local validation evidence 기록
+```
+
+완료 기준: `examples/release-contracts/complete-implementation-readiness.example.json`이 `release-readiness.schema.json`을 만족해야 한다. example은 `COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS` 전체를 포함하고, status는 `reserved`이며 release/deploy/publish 및 external repository settings reserved blocker를 포함해야 한다. `docs/implementation/audit/final-completion-audit.md`는 M0~M9 evidence path, local validation command set, remote CI evidence, stacked PR clean state, reserved blockers를 설명해야 한다. schema field, workflow, dependency, CLI/API/UI surface, signing, publish, deploy, destructive recovery action은 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9r는 stacked PR merge/readiness coordination 또는 별도 승인된 recovery/release action surface로 이어간다. destructive recovery, signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E43 Stacked PR Readiness Coordination
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+release-readiness.md
+testing-ci-release.md
+docs/implementation/audit/final-completion-audit.md
+docs/implementation/audit/stacked-pr-readiness.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+examples/release-contracts/**
+docs/implementation/**
+docs/operations/**
+scripts/ci/check_schema_examples.py
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+PR merge
+main branch update
+ready status 생성
+release/deploy/publish automation
+signing automation
+package registry 설정
+external account/repository settings 변경
+destructive recovery action
+tmp file 삭제
+event log trim
+artifact 교체
+provider live call
+HTTP server 구현
+browser UI app 구현
+```
+
+입력:
+
+```text
+gh pr list --state open --limit 100 --json number,title,baseRefName,headRefName,isDraft,mergeStateStatus,url
+docs/implementation/audit/stacked-pr-readiness.md
+examples/release-contracts/stacked-pr-readiness.example.json
+```
+
+출력:
+
+```text
+schema-valid ReleaseReadiness example
+human-readable stacked PR readiness evidence document
+schema example validation case
+status = reserved
+```
+
+핵심 TASK:
+
+```text
+stacked PR readiness example 추가
+stacked PR readiness evidence 문서 추가
+schema example check에 새 ReleaseReadiness example 연결
+required stacked PR readiness checks sanity check 추가
+reserved status/no-main-merge regression 문서화
+```
+
+완료 기준: `examples/release-contracts/stacked-pr-readiness.example.json`이 `release-readiness.schema.json`을 만족해야 한다. example은 contiguous stack, clean merge state, draft review gate, main merge not performed, final audit evidence link check를 포함해야 한다. example status는 `reserved`여야 하고, review/merge coordination reserved blocker를 포함해야 한다. `docs/implementation/audit/stacked-pr-readiness.md`는 checked PR range, stack table, clean/draft state, main merge not performed, reserved blockers를 설명해야 한다. schema field, workflow, dependency, CLI/API/UI surface, PR merge, main update, signing, publish, deploy, destructive recovery action은 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9s는 public CLI surface의 남은 read-only gap인 `providers list/show`를 구현하거나, explicit approval을 받은 뒤 stacked PR ready/merge coordination으로 이어간다. destructive recovery, signing/publish/deploy automation은 별도 승인 전까지 RESERVED다.
+```
+
+## E44 CLI Providers Read-only Surface
+
+선행 문서:
+
+```text
+cli-command-reference.md
+provider-system.md
+complete-implementation-roadmap.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-cli/**
+packages/star-control-provider/**
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider healthcheck 실행
+provider live call
+provider execution
+credential raw value 출력
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+HTTP server 구현
+browser UI app 구현
+```
+
+입력:
+
+```text
+configs/registries/builtin-provider-registry.yaml
+builtin-providers/**/provider.yaml
+builtin-providers/**/capabilities.yaml
+```
+
+출력:
+
+```text
+star-control providers list --json
+star-control providers show <provider-id> --json
+schema-valid CLI output envelope
+healthcheck_enabled = false
+actions_enabled = false
+```
+
+핵심 TASK:
+
+```text
+ProviderRegistry read-only provider listing accessor 추가
+CLI providers list/show subcommand 추가
+providers healthcheck reserved error 고정
+mutating/run-specific options reject
+schema-valid CLI envelope regression test 추가
+```
+
+완료 기준: `providers list --json`은 builtin provider registry를 읽고 provider summary 목록을 반환해야 한다. `providers show <provider-id> --json`은 manifest와 capability profile을 schema-valid CLI output envelope으로 반환해야 한다. output은 repo-relative manifest/capability path를 사용하고 credential raw value를 출력하지 않아야 한다. `providers healthcheck`는 provider smoke가 준비되기 전까지 reserved invalid input으로 남아야 한다. `providers` command는 `.ai-runs/` artifact, provider output, daemon state, release artifact를 생성하거나 수정하지 않아야 한다. schema field, workflow, dependency, provider live call, release/deploy/publish, destructive recovery action은 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9t는 public CLI surface의 남은 `sentinel` command group을 별도 read-only/tool-wrapper slice로 구현하거나, explicit approval을 받은 뒤 stacked PR ready/merge coordination으로 이어간다. Provider healthcheck, live call, release/deploy/publish, destructive recovery action은 별도 승인 전까지 RESERVED다.
+```
+
+## E45 CLI Sentinel Command Group
+
+선행 문서:
+
+```text
+cli-command-reference.md
+star-sentinel-full-spec.md
+complete-implementation-roadmap.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-cli/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider healthcheck 실행
+provider live call
+provider execution
+credential raw value 출력
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+HTTP server 구현
+browser UI app 구현
+Star Sentinel rule engine 중복 구현
+```
+
+입력:
+
+```text
+.ai-runs/{job_id}/tool-output/star-sentinel/task.json
+.ai-runs/{job_id}/tool-output/star-sentinel/changed_lines.json
+builtin-tools/star-sentinel/policies/p0-rule-registry.json
+```
+
+출력:
+
+```text
+star-control sentinel selfcheck --json
+star-control sentinel check --project <path> --job <job-id> --json
+star-control sentinel gate --project <path> --job <job-id> --json
+star-control sentinel review-pack --project <path> --job <job-id> --json
+schema-valid CLI output envelope
+actions_enabled = false
+```
+
+핵심 TASK:
+
+```text
+CLI sentinel selfcheck/check/gate/review-pack subcommand 추가
+Star Sentinel task/changed_lines schema validation 연결
+diagnostics, approval, review-pack artifact writer 연결
+missing input artifact error path 고정
+reserved/mutating/provider/release options reject
+schema-valid CLI envelope regression test 추가
+```
+
+완료 기준: `sentinel selfcheck --json`은 Star Sentinel selfcheck 결과를 schema-valid CLI output envelope으로 반환해야 한다. `sentinel check --project <path> --job <job-id> --json`은 existing `task.json`과 `changed_lines.json`을 읽고 diagnostics artifact를 써야 한다. `sentinel gate`는 같은 평가 결과로 diagnostics와 approval artifact를 써야 한다. `sentinel review-pack`은 같은 평가 결과로 tool output review pack과 canonical `review-packs/review_pack.md`를 써야 한다. missing `task.json` 또는 `changed_lines.json`은 schema-valid CLI error envelope과 project-relative artifact path로 반환해야 한다. provider execution, provider live call, release/deploy/publish, destructive recovery action, schema field, workflow는 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9u는 explicit approval을 받은 뒤 stacked PR ready/merge coordination으로 이어가거나, 별도 승인된 destructive recovery/release action surface를 작은 slice로 다룬다. Provider healthcheck, live call, release/deploy/publish, destructive recovery action, main 병합은 별도 승인 전까지 RESERVED다.
+```
+
+## E46 Final Evidence Refresh
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+codex-work-queue-current.md
+docs/implementation/audit/final-completion-audit.md
+docs/implementation/audit/stacked-pr-readiness.md
+```
+
+허용 파일:
+
+```text
+docs/implementation/**
+examples/release-contracts/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Rust code
+Cargo.toml
+Cargo.lock
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+main branch update
+PR ready/merge action
+```
+
+입력:
+
+```text
+gh pr list --state open --limit 100 --json number,title,baseRefName,headRefName,isDraft,mergeStateStatus,url
+gh pr view 87 --json number,title,url,isDraft,mergeStateStatus,commits
+docs/implementation/audit/final-completion-audit.md
+docs/implementation/audit/stacked-pr-readiness.md
+examples/release-contracts/complete-implementation-readiness.example.json
+examples/release-contracts/stacked-pr-readiness.example.json
+```
+
+출력:
+
+```text
+updated final completion audit evidence through M9t
+updated stacked PR readiness evidence through PR #87
+schema-valid release readiness examples
+M9u handoff record
+```
+
+핵심 TASK:
+
+```text
+final completion audit snapshot을 M9t/#87/CI run 기준으로 갱신
+stacked PR readiness table을 #33~#87로 갱신
+machine-readable ReleaseReadiness examples 갱신
+brief/work queue/roadmap/PLANS 참조 갱신
+approval-gated actions reserved 유지
+```
+
+완료 기준: `docs/implementation/audit/final-completion-audit.md`가 M9t CLI sentinel command group과 PR #87 evidence를 포함해야 한다. `docs/implementation/audit/stacked-pr-readiness.md`가 #33~#87 contiguous clean draft stack을 설명해야 한다. `examples/release-contracts/complete-implementation-readiness.example.json`과 `stacked-pr-readiness.example.json`은 `release-readiness.schema.json`을 만족해야 한다. `ready` status, PR merge, main update, release/deploy/publish, destructive recovery action, repository settings 변경은 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9v는 explicit approval을 받은 뒤 stacked PR ready/merge coordination을 수행하거나, 별도 승인된 destructive recovery/release action surface를 작은 slice로 다룬다. 승인 전까지 main update, PR ready/merge, release/deploy/publish, destructive recovery action은 RESERVED다.
+```
+
+## E47 Stacked Merge Procedure
+
+선행 문서:
+
+```text
+docs/implementation/audit/stacked-pr-readiness.md
+docs/implementation/audit/final-completion-audit.md
+docs/implementation/briefs/E46-final-evidence-refresh.md
+```
+
+허용 파일:
+
+```text
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Rust code
+Cargo.toml
+Cargo.lock
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+main branch update
+PR ready/merge action
+```
+
+입력:
+
+```text
+docs/implementation/audit/stacked-pr-readiness.md
+gh pr list --state open --limit 100 --json number,title,baseRefName,headRefName,isDraft,mergeStateStatus,url
+gh run view <latest-top-branch-ci-run>
+```
+
+출력:
+
+```text
+docs/implementation/audit/stacked-pr-merge-procedure.md
+review order
+merge execution order
+pre-merge validation gates
+stop conditions
+explicit approval phrase
+```
+
+핵심 TASK:
+
+```text
+bottom-up human review order 문서화
+top-down stacked branch merge order 문서화
+pre-merge verification command 문서화
+merge 중 stop condition 문서화
+explicit approval phrase 문서화
+no-action/no-main-update boundary 문서화
+```
+
+완료 기준: procedure가 review order와 merge execution order를 분리해서 설명해야 한다. procedure가 branch-to-branch stacked PR의 실제 merge 순서를 top-down으로 고정해야 한다. procedure가 `mergeStateStatus=CLEAN`, draft state, latest CI success, local validation command를 precondition으로 둬야 한다. procedure가 conflict, failed CI, unexpected non-draft, base/head discontinuity 발견 시 즉시 중단하도록 해야 한다. 이 slice는 PR ready/merge, main update, release/deploy/publish, destructive recovery action, repository settings 변경을 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+이후에는 사용자가 explicit approval phrase로 승인한 경우에만 stacked PR ready/merge coordination을 수행한다. 승인 전까지 main update, PR ready/merge, release/deploy/publish, destructive recovery action은 RESERVED다.
+```
+
 ## RESERVED
 
 아래는 E12 이후 별도 작은 PR로 구현한다.
