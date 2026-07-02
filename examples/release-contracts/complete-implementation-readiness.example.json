@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.0.0",
+  "release_id": "completion-audit-0002",
+  "target": "star-control",
+  "version": "m0-m9",
+  "status": "reserved",
+  "checks": [
+    {
+      "name": "m0-docs-decisions",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/decisions/0005-full-implementation-defaults.md",
+        "docs/implementation/complete-implementation-roadmap.md",
+        "docs/implementation/codex-work-queue-current.md"
+      ]
+    },
+    {
+      "name": "m1-runtime-foundation",
+      "status": "pass",
+      "evidence_paths": [
+        "packages/star-control-schema/src/lib.rs",
+        "packages/star-control-state/src/lib.rs"
+      ]
+    },
+    {
+      "name": "m2-provider-neutral-execution",
+      "status": "pass",
+      "evidence_paths": [
+        "packages/star-control-provider/src/lib.rs",
+        "packages/star-control-router/src/lib.rs",
+        "packages/star-control-execution/src/lib.rs",
+        "packages/star-control-cli/src/lib.rs"
+      ]
+    },
+    {
+      "name": "m3-validation-gate",
+      "status": "pass",
+      "evidence_paths": [
+        "packages/star-sentinel/src/lib.rs",
+        "packages/star-control-validation/src/lib.rs"
+      ]
+    },
+    {
+      "name": "m4-v0-fake-e2e",
+      "status": "pass",
+      "evidence_paths": [
+        "packages/star-control-cli/tests/v0_fake_flow.rs"
+      ]
+    },
+    {
+      "name": "m5-local-provider",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/local-process-provider-policy.md",
+        "packages/star-control-provider/src/local_process.rs",
+        "packages/star-control-execution/src/lib.rs"
+      ]
+    },
+    {
+      "name": "m6-cloud-provider",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/cloud-provider-policy.md",
+        "packages/star-control-provider/src/cloud.rs",
+        "packages/star-control-provider/src/openai_compatible.rs",
+        "packages/star-control-execution/src/lib.rs"
+      ]
+    },
+    {
+      "name": "m7-daemon-api-control-plane",
+      "status": "pass",
+      "evidence_paths": [
+        "packages/star-control-daemon/src/lib.rs",
+        "packages/star-control-api/src/lib.rs",
+        "packages/star-control-cli/src/lib.rs"
+      ]
+    },
+    {
+      "name": "m8-ui-shell",
+      "status": "pass",
+      "evidence_paths": [
+        "packages/star-control-ui/src/lib.rs"
+      ]
+    },
+    {
+      "name": "m9-hardening-release-readiness",
+      "status": "pass",
+      "evidence_paths": [
+        "packages/star-control-security/src/lib.rs",
+        "packages/star-control-observability/src/lib.rs",
+        "packages/star-control-provider/src/conformance.rs",
+        "packages/star-control-state/src/lib.rs",
+        "packages/star-control-release/src/lib.rs",
+        "packages/star-control-cli/src/lib.rs",
+        "docs/implementation/briefs/E44-cli-providers-read-only.md",
+        "docs/implementation/briefs/E45-cli-sentinel-command-group.md"
+      ]
+    },
+    {
+      "name": "full-local-validation",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/audit/final-completion-audit.md"
+      ]
+    },
+    {
+      "name": "remote-ci-evidence",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/audit/final-completion-audit.md"
+      ]
+    },
+    {
+      "name": "stacked-prs-clean",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/audit/final-completion-audit.md",
+        "docs/implementation/audit/stacked-pr-readiness.md"
+      ]
+    },
+    {
+      "name": "reserved-actions-confirmed",
+      "status": "pass",
+      "evidence_paths": [
+        "docs/implementation/release-readiness.md",
+        "docs/decisions/0005-full-implementation-defaults.md"
+      ]
+    }
+  ],
+  "blockers": [
+    "release/deploy/publish and external repository settings remain reserved until explicit approval"
+  ],
+  "approvals": [],
+  "generated_at": "2026-07-02T00:00:00+09:00"
+}
