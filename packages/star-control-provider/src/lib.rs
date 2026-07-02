@@ -13,8 +13,8 @@ mod local_process;
 mod openai_compatible;
 
 pub use cloud::{
-    is_cloud_cli_manifest, is_cloud_provider_manifest, CloudCliProviderAdapter,
-    CloudProviderPreflightAdapter,
+    is_cloud_api_manifest, is_cloud_cli_manifest, is_cloud_provider_manifest,
+    CloudApiOfflineProviderAdapter, CloudCliProviderAdapter, CloudProviderPreflightAdapter,
 };
 pub use conformance::{
     ProviderConformanceChecker, ProviderConformanceError, ProviderConformanceProfile,
@@ -478,6 +478,10 @@ impl ProviderRegistry {
 
     pub fn instance(&self, instance_id: &str) -> Option<&ProviderInstance> {
         self.instances.get(instance_id)
+    }
+
+    pub fn providers(&self) -> Vec<&ProviderManifest> {
+        self.manifests.values().collect()
     }
 
     pub fn manifest_for_instance(
@@ -1218,6 +1222,10 @@ mod tests {
 
         let fake = registry.manifest("provider.fake").expect("fake provider");
         assert_eq!(fake.adapter(), "code_agent");
+        assert!(registry
+            .providers()
+            .iter()
+            .any(|provider| provider.id() == "provider.fake"));
         assert_eq!(registry.providers_by_kind("fake_provider").len(), 1);
         assert!(registry.providers_by_transport("manual").len() >= 2);
 

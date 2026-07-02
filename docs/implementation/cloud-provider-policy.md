@@ -117,7 +117,7 @@ Provider doc refresh:
 M6 전체 exit criteria에는 다음 fixture가 필요하다.
 
 - cloud CLI preflight success + transport execution fixture
-- cloud API preflight success + parser fixture
+- cloud API preflight success + offline request/response parser fixture
 - missing credential_ref -> `BLOCKED`
 - raw credential field -> `BLOCKED` and no raw value echo
 - unapproved privacy handoff -> `BLOCKED`
@@ -197,3 +197,109 @@ M6e는 다음을 구현하지 않는다.
 - live API call
 - streaming SSE parser
 - price/cost calculation
+
+## M6f cloud API offline fixture integration scope
+
+M6f는 `cloud_api_model` + `http` provider가 실제 외부 HTTP 호출 없이 request builder와 response parser를 같은 runtime path에서 검증하게 한다. 이 단계는 `transport_config.offline_response_fixture`가 있는 provider instance에서만 실행된다. fixture가 없으면 기존 M6a preflight `cloud_provider_transport_not_implemented` `BLOCKED` 흐름을 유지한다.
+
+실행 규칙:
+
+- `CloudApiOfflineProviderAdapter`는 M6a credential/privacy/cost preflight를 먼저 재사용한다.
+- `transport_config.offline_response_fixture`는 대상 프로젝트 root 기준 상대 JSON path만 허용한다.
+- absolute path, `..`, `.git`, drive prefix, 빈 path는 거부한다.
+- adapter는 `OpenAiCompatibleRequestBuilder`로 prepared request를 만들고 `provider-output/{provider_instance_id}/http-request.json`에 쓴다.
+- adapter는 fixture JSON을 `provider-output/{provider_instance_id}/raw-response.json`에 복사하고 `OpenAiCompatibleResponseParser`로 normalized provider `response.json`을 만든다.
+- request body, stdout/stderr, response, cost metric에는 credential raw value나 `credential_ref` 값을 포함하지 않는다.
+- parsed usage token은 `cost-metric.json`과 provider result metrics에 매핑한다.
+
+M6f output artifact:
+
+```text
+provider-output/{provider_instance_id}/request.json
+provider-output/{provider_instance_id}/http-request.json
+provider-output/{provider_instance_id}/raw-response.json
+provider-output/{provider_instance_id}/response.json
+provider-output/{provider_instance_id}/stdout.txt
+provider-output/{provider_instance_id}/stderr.txt
+provider-output/{provider_instance_id}/privacy-handoff.json
+provider-output/{provider_instance_id}/cost-metric.json
+```
+
+M6f는 다음을 구현하지 않는다.
+
+- live HTTP client execution
+- request signing/header construction
+- live credential lookup
+- streaming SSE parser
+- paid API call
+- external account mutation
+
+## M6g cloud API transport boundary scope
+
+M6g는 live HTTP transport adapter를 바로 실행하지 않고 future live adapter가 사용할 transport boundary artifact를 고정한다. 이 단계는 M6f offline fixture runtime path에 `http-transport-plan.json`을 추가한다.
+
+Provider doc refresh:
+
+- 2026-07-01 기준 OpenAI official API overview authentication, Responses API, Chat Completions API reference를 확인했다.
+- 확인 URL: `https://developers.openai.com/api/reference/overview/`, `https://developers.openai.com/api/reference/resources/responses/methods/create/`, `https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create/`
+- OpenAI API는 bearer credential을 사용하지만, M6g는 credential raw value를 조회하지 않고 header value를 만들지 않는다.
+
+Transport plan artifact:
+
+```text
+provider-output/{provider_instance_id}/http-transport-plan.json
+```
+
+Transport plan 규칙:
+
+- method, URL, request API, request body artifact path, raw response artifact path를 기록한다.
+- credential은 required/present/reference kind/materialized/value_present 상태만 기록한다.
+- full `credential_ref` 문자열과 credential raw value는 기록하지 않는다.
+- `Content-Type: application/json`은 literal header policy로 기록할 수 있다.
+- `Authorization`은 `deferred_credential_reference` policy로만 기록하고 header value는 만들지 않는다.
+- `live_api_call=false`, `approval_required_for_live_call=true`를 기록한다.
+- timeout은 provider instance `limits.timeout_seconds` policy를 따른다.
+
+M6g는 다음을 구현하지 않는다.
+
+- live HTTP client execution
+- credential raw value lookup
+- Authorization header value construction
+- retry/rate limit policy
+- streaming SSE parser
+- paid API call
+
+## M6h cloud API live approval gate scope
+
+M6h는 live HTTP transport adapter를 실행하지 않고, provider instance가 live call 의도를 명시했을 때 approval gate artifact와 `BLOCKED` runtime state를 남긴다. `transport_config.live_api_call_requested=true`는 외부 API 호출 승인이 아니라 approval-required flow를 시작하는 입력 flag다.
+
+Provider doc refresh:
+
+- 2026-07-01 기준 OpenAI official API overview authentication, Responses API, Chat Completions API reference를 확인했다.
+- 확인 URL: `https://developers.openai.com/api/reference/overview/`, `https://developers.openai.com/api/reference/resources/responses/methods/create/`, `https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create/`
+- OpenAI API는 bearer credential을 사용하지만, M6h도 credential raw value를 조회하지 않고 header value를 만들지 않는다.
+
+Live approval artifact:
+
+```text
+provider-output/{provider_instance_id}/live-transport-approval.json
+```
+
+M6h runtime 규칙:
+
+- `transport_config.live_api_call_requested=true`이고 `offline_response_fixture`가 없으면 provider result는 `blocked`다.
+- `http-request.json`, `http-transport-plan.json`, `live-transport-approval.json`, `privacy-handoff.json`, `cost-metric.json`을 기록한다.
+- `raw-response.json`은 생성하지 않는다.
+- `live-transport-approval.json`은 `credential_lookup`, `authorization_header_value_construction`, `live_http_request`, `paid_api_call`을 approval-required action으로 기록한다.
+- full `credential_ref` 문자열과 credential raw value는 기록하지 않는다.
+- transport plan은 `execution_mode=live_approval_required`, `raw_response_expected=false`, `live_api_call=false`, `approval_required_for_live_call=true`를 기록한다.
+- ExecutionEngine은 provider `blocked` result를 RunState `BLOCKED`로 전이한다.
+
+M6h는 다음을 구현하지 않는다.
+
+- live HTTP client execution
+- credential raw value lookup
+- Authorization header value construction
+- retry/rate limit policy
+- streaming SSE parser
+- paid API call

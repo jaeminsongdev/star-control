@@ -1,8 +1,8 @@
-# API Reserved Contract
+# API Read-Only Contract
 
 ## 목적
 
-API는 UI와 외부 도구가 Star-Control state를 읽고 제한된 mutation을 수행하게 하는 장기 surface다. 초기에는 read-only contract만 고정하고 실제 server 구현은 RESERVED로 둔다.
+API는 UI와 외부 도구가 Star-Control state를 읽고 제한된 mutation을 수행하게 하는 장기 surface다. M7c에서는 HTTP server를 열지 않고, `packages/star-control-api`의 read-only request/router library로 StateStore artifact 조회와 response envelope을 먼저 고정한다.
 
 ## machine-readable contracts
 
@@ -25,12 +25,16 @@ examples/surface-contracts/api-job-response.example.json
 ## read-only endpoint 후보
 
 ```text
+GET /daemon/state
 GET /projects
 GET /projects/{project_id}/jobs
 GET /projects/{project_id}/jobs/{job_id}
 GET /projects/{project_id}/jobs/{job_id}/events
-GET /projects/{project_id}/jobs/{job_id}/report
+GET /projects/{project_id}/jobs/{job_id}/report?stage={stage}
+GET /projects/{project_id}/jobs/{job_id}/release-readiness
 ```
+
+M7c 구현은 기본 endpoint를 in-process `ApiReadOnlyService` path dispatch로 제공하고, M9g는 release readiness read-only endpoint를 같은 방식으로 추가한다. HTTP server, socket listener, remote exposure는 아직 구현하지 않는다.
 
 ## mutation endpoint 후보
 
@@ -41,7 +45,7 @@ POST /projects/{project_id}/jobs/{job_id}/cancel
 POST /projects/{project_id}/jobs/{job_id}/resume
 ```
 
-Mutation endpoint는 CLI approve/cancel/resume이 안정화된 뒤 구현한다.
+M7d 구현은 HTTP server 없이 `packages/star-control-api`의 in-process `ApiControlService`로 mutation path dispatch를 제공한다. HTTP server, socket listener, auth/session, remote exposure는 아직 구현하지 않는다.
 
 ## API response envelope
 
@@ -76,11 +80,68 @@ waiting_approval
 - UI 편의를 위해 StateStore schema를 우회하지 않는다.
 - API가 provider process를 직접 실행하지 않는다.
 - API가 Star Sentinel rule을 직접 구현하지 않는다.
+- API read-only endpoint가 StateStore artifact를 수정하지 않는다.
+- API response에 secret-like raw value를 그대로 포함하지 않는다.
+
+## M7c 구현 범위
+
+구현함:
+
+- `packages/star-control-api` crate
+- `ApiReadOnlyService`
+- `GET /daemon/state`
+- in-memory project registry
+- read-only GET path dispatch
+- `api-response.schema.json` validation
+- missing project/job/report structured error
+- mutation method rejection
+- secret-like string/key redaction
+- M8a `UiReadOnlyShell` consumer 지원
+- M9g `release-readiness` read-only endpoint
+
+아직 구현하지 않음:
+
+- HTTP server
+- socket listener
+- remote exposure
+- auth/session
+- daemon background worker와의 live scheduling integration
+- browser UI shell
+
+## M7d 구현 범위
+
+구현함:
+
+```text
+ApiControlService
+POST /projects/{project_id}/jobs/{job_id}/approve
+POST /projects/{project_id}/jobs/{job_id}/cancel
+POST /projects/{project_id}/jobs/{job_id}/resume
+approval-response artifact writer
+run-state update
+events.jsonl audit event append
+structured mutation error envelope
+M8b `UiBrowserShell` consumer 지원
+```
+
+아직 구현하지 않음:
+
+```text
+HTTP server
+socket listener
+remote exposure
+auth/session
+daemon background worker integration
+provider execution scheduling
+```
 
 ## 테스트 기준
 
 1. API response example schema validation
-2. read-only endpoint는 StateStore artifact를 직접 변형하지 않음
+2. read-only endpoint는 daemon state와 StateStore artifact를 직접 변형하지 않음
 3. mutation endpoint는 approval/cancel/resume 계약을 따름
 4. secret raw value가 response에 포함되지 않음
 5. missing artifact는 structured error로 반환
+6. mutation method는 read-only API에서 거부
+7. control mutation은 approval/cancel/resume precondition을 지킴
+8. release readiness endpoint는 artifact를 읽기만 하고 StateStore를 수정하지 않음
