@@ -194,6 +194,8 @@ packages/star-adapter-openai-compatible
 - ReleaseEvidenceFileChecker for read-only version/changelog evidence files
 - ReleaseProfileReadinessBuilder for profile/version/changelog readiness assembly
 - ReleaseReviewPackWriter for `review-packs/release-review-pack.md`
+- M9ReadinessAuditBuilder for final M9 hardening/recovery/release readiness audit assembly
+- CompleteImplementationAuditBuilder for final M0~M9 completion audit assembly
 - reserved/not_ready readiness artifact generation
 - RESERVED: signing, publish, deploy automation, repository/package registry settings changes
 

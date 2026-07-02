@@ -307,6 +307,22 @@ M9m release review pack foundation은 `packages/star-control-release`의 `Releas
 
 M9n recovery command surface는 `packages/star-control-cli`의 `recover --list`로 구현한다. 이 slice는 `StateStore::inspect_recovery` 결과를 schema-valid CLI envelope으로 표시하되, tmp file 삭제, event log trim, recovered copy 생성, artifact 교체, retention cleanup은 별도 승인 전까지 RESERVED로 둔다.
 
+M9o final M9 readiness audit은 `packages/star-control-release`의 `M9ReadinessAuditBuilder`로 구현한다. 이 slice는 M9 필수 hardening/recovery/release-readiness check를 `release-readiness.schema.json` value로 조립하고 missing/duplicate/failed check를 blocker로 표시하되, all-pass 결과도 `ready`가 아니라 final release/deploy/publish reserved blocker가 있는 `reserved` status로 둔다.
+
+M9p final completion audit은 `packages/star-control-release`의 `CompleteImplementationAuditBuilder`로 구현한다. 이 slice는 M0~M9 milestone, full local validation, remote CI evidence, stacked PR clean state, reserved action confirmation을 `release-readiness.schema.json` value로 조립하고 missing/duplicate/failed check를 blocker로 표시하되, all-pass 결과도 `ready`가 아니라 release/deploy/publish와 external repository settings reserved blocker가 있는 `reserved` status로 둔다.
+
+M9q final audit evidence는 `examples/release-contracts/complete-implementation-readiness.example.json`과 `docs/implementation/audit/final-completion-audit.md`로 구현한다. 이 slice는 M0~M9 completion audit evidence를 schema-valid ReleaseReadiness example과 human-readable audit 문서로 고정하되, all-pass evidence도 `ready`가 아니라 release/deploy/publish와 external repository settings reserved blocker가 있는 `reserved` status로 둔다.
+
+M9r stacked PR readiness coordination은 `examples/release-contracts/stacked-pr-readiness.example.json`과 `docs/implementation/audit/stacked-pr-readiness.md`로 구현한다. 이 slice는 stacked PR chain의 contiguous base/head, clean merge state, draft review gate, main merge not performed, final audit evidence link를 schema-valid ReleaseReadiness example과 human-readable audit 문서로 고정하되, main update나 PR merge는 별도 승인 전까지 수행하지 않는다.
+
+M9s CLI providers read-only surface는 `packages/star-control-cli`의 `providers list/show`와 `packages/star-control-provider`의 read-only listing accessor로 구현한다. 이 slice는 public CLI surface에 남아 있던 provider discovery gap을 채우되, provider healthcheck, provider execution, live call, credential raw value 출력, schema field 변경, workflow 변경, release/deploy/publish는 수행하지 않는다.
+
+M9t CLI sentinel command group은 `packages/star-control-cli`의 `sentinel selfcheck/check/gate/review-pack`으로 구현한다. 이 slice는 Star Sentinel rule engine을 CLI에 재구현하지 않고 `packages/star-sentinel` API를 호출해 existing `.ai-runs/{job_id}/tool-output/star-sentinel/{task.json,changed_lines.json}` input을 평가하고 diagnostics, approval, review-pack artifact를 쓴다. Provider execution, provider live call, release/deploy/publish, destructive recovery action, schema field 변경, workflow 변경은 수행하지 않는다.
+
+M9u final evidence refresh는 `docs/implementation/audit/final-completion-audit.md`, `docs/implementation/audit/stacked-pr-readiness.md`, `examples/release-contracts/*readiness.example.json`을 M9t 구현 스택 기준으로 갱신한다. 이 slice는 evidence refresh만 수행하고 PR merge, main update, release/deploy/publish, repository settings 변경, destructive recovery action은 수행하지 않는다.
+
+M9v stacked merge procedure는 `docs/implementation/audit/stacked-pr-merge-procedure.md`로 review order, branch-to-branch merge execution order, pre-merge verification, stop condition, explicit approval phrase를 문서화한다. 이 slice는 절차만 고정하고 PR ready/merge, main update, release/deploy/publish, repository settings 변경, destructive recovery action은 수행하지 않는다.
+
 Validation:
 
 ```text
@@ -325,6 +341,14 @@ recovery command surface tests
 release readiness checks
 release readiness writer tests
 release review pack writer tests
+final M9 readiness audit tests
+final completion audit tests
+final completion readiness example validation
+stacked PR readiness example validation
+CLI providers list/show tests
+CLI sentinel command group tests
+final evidence refresh validation
+stacked merge procedure validation
 ```
 
 ## 다음 작업 선택 규칙
