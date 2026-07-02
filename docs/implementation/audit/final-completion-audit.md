@@ -13,12 +13,12 @@ examples/release-contracts/complete-implementation-readiness.example.json
 ## current snapshot
 
 ```text
-top branch: work/m9q-final-audit-evidence
-base branch: work/m9p-final-completion-audit
-open stacked PR range checked: #33 through #84
+top implemented branch: work/m9t-cli-sentinel-surface
+base branch: work/m9s-cli-providers-surface
+open stacked PR range checked: #33 through #87
 stack merge state checked with: gh pr list --state open --limit 100 --json number,title,baseRefName,headRefName,isDraft,mergeStateStatus,url
-observed stack status: every listed PR in #33 through #84 had mergeStateStatus=CLEAN
-latest remote CI evidence before stacked PR readiness slice: https://github.com/jaeminsongdev/star-control/actions/runs/28539021845
+observed stack status: every listed PR in #33 through #87 had mergeStateStatus=CLEAN and isDraft=true
+latest remote CI evidence before this evidence refresh: https://github.com/jaeminsongdev/star-control/actions/runs/28541021471
 ```
 
 This snapshot is evidence for review readiness, not a main-branch merge claim.
@@ -36,10 +36,10 @@ This snapshot is evidence for review readiness, not a main-branch merge claim.
 | `m6-cloud-provider` | pass | `docs/implementation/cloud-provider-policy.md`, `packages/star-control-provider/src/cloud.rs`, `packages/star-control-provider/src/openai_compatible.rs`, `packages/star-control-execution/src/lib.rs` |
 | `m7-daemon-api-control-plane` | pass | `packages/star-control-daemon/src/lib.rs`, `packages/star-control-api/src/lib.rs`, `packages/star-control-cli/src/lib.rs` |
 | `m8-ui-shell` | pass | `packages/star-control-ui/src/lib.rs` |
-| `m9-hardening-release-readiness` | pass | `packages/star-control-security/src/lib.rs`, `packages/star-control-observability/src/lib.rs`, `packages/star-control-provider/src/conformance.rs`, `packages/star-control-state/src/lib.rs`, `packages/star-control-release/src/lib.rs`, `packages/star-control-cli/src/lib.rs` |
+| `m9-hardening-release-readiness` | pass | `packages/star-control-security/src/lib.rs`, `packages/star-control-observability/src/lib.rs`, `packages/star-control-provider/src/conformance.rs`, `packages/star-control-state/src/lib.rs`, `packages/star-control-release/src/lib.rs`, `packages/star-control-cli/src/lib.rs`, `docs/implementation/briefs/E44-cli-providers-read-only.md`, `docs/implementation/briefs/E45-cli-sentinel-command-group.md` |
 | `full-local-validation` | pass | local validation command set listed below |
-| `remote-ci-evidence` | pass | Star-Control CI workflow_dispatch run `28539021845` completed with conclusion `success` |
-| `stacked-prs-clean` | pass | open PR stack #33 through #84 reported `mergeStateStatus=CLEAN`; detailed review/merge coordination evidence is in `docs/implementation/audit/stacked-pr-readiness.md` |
+| `remote-ci-evidence` | pass | Star-Control CI workflow_dispatch run `28541021471` completed with conclusion `success` |
+| `stacked-prs-clean` | pass | open PR stack #33 through #87 reported `mergeStateStatus=CLEAN` and `isDraft=true`; detailed review/merge coordination evidence is in `docs/implementation/audit/stacked-pr-readiness.md` |
 | `reserved-actions-confirmed` | pass | `docs/implementation/release-readiness.md`, `docs/decisions/0005-full-implementation-defaults.md` |
 
 ## local validation command set
@@ -50,6 +50,9 @@ The current final-audit evidence path expects the following commands to pass bef
 cargo fmt --check
 cargo test -p star-control-release --locked -- --nocapture
 cargo clippy -p star-control-release --all-targets --locked -- -D warnings
+cargo test -p star-control-cli --locked providers -- --nocapture
+cargo test -p star-control-cli --locked sentinel -- --nocapture
+cargo run --quiet -p star-control-cli -- sentinel selfcheck --json
 python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
@@ -70,4 +73,4 @@ The completion audit remains `reserved`, not `ready`, until the following are ex
 
 ## next handoff
 
-After this evidence slice, the next non-destructive step is stacked PR review/merge coordination. The M9r companion evidence is `docs/implementation/audit/stacked-pr-readiness.md`. Actual main merge, release/deploy/publish, or destructive recovery work remains approval-gated.
+After this evidence refresh, the next non-destructive step is explicit stacked PR review/merge coordination approval. The companion evidence is `docs/implementation/audit/stacked-pr-readiness.md`. Actual PR ready/merge, main update, release/deploy/publish, or destructive recovery work remains approval-gated.
