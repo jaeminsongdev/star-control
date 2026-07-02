@@ -80,6 +80,64 @@ packages/star-control-release
 
 M9j는 `ReleaseProfileValidation`과 `ReleaseProfileReadinessBuilder`를 제공한다. builder는 caller가 제공한 release profile pass/fail evidence를 `release-profile-passed` check로 만들고, `ReleaseConsistencyResult`의 version/changelog checks와 blockers를 같은 ReleaseReadiness JSON에 병합한다. profile/version/changelog가 모두 통과해도 `ready` status를 만들지 않고 release automation reserved blocker를 둔다. 이 slice는 Star Sentinel profile evaluator, release/deploy/publish action, CLI/API/UI surface, schema field 변경을 구현하지 않는다.
 
+M9k 구현 위치:
+
+```text
+packages/star-control-ui
+```
+
+M9k는 `UiReadOnlyShell`에 release readiness viewer를 추가한다. UI는 M9g `GET /projects/{project_id}/jobs/{job_id}/release-readiness` endpoint를 소비해 readiness status, checks, blockers, approvals를 read-only model로 표시한다. missing readiness artifact는 job detail 전체 실패가 아니라 optional error surface로 보여준다. 이 slice는 browser app, HTTP server, CLI command, release/deploy/publish action, StateStore 직접 mutation을 구현하지 않는다.
+
+M9l 구현 위치:
+
+```text
+packages/star-control-cli
+```
+
+M9l는 `star-control report --release-readiness` option을 제공한다. CLI는 existing `.ai-runs/{job_id}/release/release-readiness.json` artifact를 `ReleaseReadinessWriter::read`로 검증해 schema-valid CLI output envelope에 담고, missing artifact는 schema-valid CLI error envelope로 반환한다. 이 slice는 새 top-level command, release/deploy/publish action, StateStore mutation, schema field 변경을 구현하지 않는다.
+
+M9m 구현 위치:
+
+```text
+packages/star-control-release
+```
+
+M9m은 `ReleaseReviewPackWriter`를 제공한다. writer는 existing ReleaseReadiness value를 `ReleaseReadinessWriter` validation으로 검증한 뒤 `.ai-runs/{job_id}/review-packs/release-review-pack.md` Markdown artifact를 한 번만 쓴다. 반환 ArtifactRef는 `kind=review_pack`, `producer=star-control-release`를 사용한다. 이 slice는 approval record, CLI/API/UI surface, release/deploy/publish/signing action, schema field 변경을 구현하지 않는다.
+
+M9o 구현 위치:
+
+```text
+packages/star-control-release
+```
+
+M9o는 `M9_REQUIRED_READINESS_CHECKS`, `M9ReadinessCheck`, `M9ReadinessAuditBuilder`를 제공한다. audit builder는 M9 hardening/recovery/release-readiness foundation의 pass/fail evidence를 `release-readiness.schema.json` value로 조립한다. 모든 필수 check가 통과해도 `ready` status를 만들지 않고 final release/deploy/publish reserved blocker가 있는 `reserved` status를 사용한다. missing, duplicate, failed check는 `not_ready` blocker로 표시한다. 이 slice는 release/deploy/publish/signing action, destructive recovery action, CLI/API/UI surface, schema field 변경을 구현하지 않는다.
+
+M9p 구현 위치:
+
+```text
+packages/star-control-release
+```
+
+M9p는 `COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS`, `CompleteImplementationAuditCheck`, `CompleteImplementationAuditBuilder`를 제공한다. audit builder는 M0~M9 milestone, full local validation, remote CI evidence, stacked PR clean state, reserved action confirmation을 `release-readiness.schema.json` value로 조립한다. 모든 필수 check가 통과해도 `ready` status를 만들지 않고 release/deploy/publish 및 external repository settings reserved blocker가 있는 `reserved` status를 사용한다. missing, duplicate, failed check는 `not_ready` blocker로 표시한다. 이 slice는 release/deploy/publish/signing action, destructive recovery action, CLI/API/UI surface, schema field 변경을 구현하지 않는다.
+
+M9q 구현 위치:
+
+```text
+examples/release-contracts
+docs/implementation/audit
+```
+
+M9q는 `complete-implementation-readiness.example.json`과 `final-completion-audit.md`를 제공한다. example은 `COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS` 전체를 포함하는 schema-valid ReleaseReadiness이며, status는 `reserved`이고 release/deploy/publish 및 external repository settings reserved blocker를 포함한다. audit 문서는 M0~M9 evidence path, local validation command set, remote CI evidence, stacked PR clean state, reserved blockers를 사람이 검토할 수 있게 정리한다.
+
+M9r 구현 위치:
+
+```text
+examples/release-contracts
+docs/implementation/audit
+```
+
+M9r는 `stacked-pr-readiness.example.json`과 `stacked-pr-readiness.md`를 제공한다. example은 contiguous stack, clean merge state, draft review gate, main merge not performed, final audit evidence link를 schema-valid ReleaseReadiness로 고정하며, status는 `reserved`이고 review/merge coordination reserved blocker를 포함한다. audit 문서는 checked PR range, base/head chain, draft state, clean merge state, main merge not performed 상태를 사람이 검토할 수 있게 정리한다.
+
 ## readiness checks
 
 초기 check 후보:
@@ -94,6 +152,40 @@ version-consistent
 artifact-signing-ready
 rollback-plan-ready
 package-publishing-approved
+security-redaction
+audit-event-writer
+cost-budget-guard
+provider-conformance-hardening
+state-recovery-inspection
+release-readiness-writer
+release-readiness-api-read
+release-version-consistency
+release-evidence-file-checker
+release-profile-readiness
+release-readiness-ui-read
+release-readiness-cli-read
+recovery-command-surface
+release-review-pack
+destructive-actions-reserved
+release-automation-reserved
+m0-docs-decisions
+m1-runtime-foundation
+m2-provider-neutral-execution
+m3-validation-gate
+m4-v0-fake-e2e
+m5-local-provider
+m6-cloud-provider
+m7-daemon-api-control-plane
+m8-ui-shell
+m9-hardening-release-readiness
+full-local-validation
+remote-ci-evidence
+stacked-prs-clean
+reserved-actions-confirmed
+stacked-prs-contiguous
+stacked-prs-draft-review-reserved
+main-merge-not-performed
+final-audit-evidence-linked
 ```
 
 각 check는 `pass`, `fail`, `warn`, `not_applicable`, `reserved` 중 하나를 사용한다.
@@ -123,6 +215,11 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 - readiness status를 증거 없이 `ready`로 표시하지 않는다.
 - M9f writer는 기존 readiness artifact를 조용히 덮어쓰지 않는다.
 - M9g API endpoint는 readiness artifact를 읽기만 하고 release action을 실행하지 않는다.
+- M9m review pack은 approval record가 아니며 release action을 실행하거나 활성화하지 않는다.
+- M9o final readiness audit은 all-pass 결과도 `ready`로 표시하지 않는다.
+- M9p final completion audit은 all-pass 결과도 `ready`로 표시하지 않는다.
+- M9q final audit evidence example은 all-pass 결과도 `ready`로 표시하지 않는다.
+- M9r stacked PR readiness example은 all-pass 결과도 `ready`로 표시하지 않고 main merge나 PR merge를 수행하지 않는다.
 
 ## 테스트 기준
 
@@ -135,6 +232,13 @@ release/deploy/publish는 외부 계정과 사용자 배포 환경을 바꿀 수
 7. version/changelog checker output은 schema-valid `not_ready` readiness에 연결 가능함
 8. version/changelog evidence file reader는 project root 밖 path를 거부하고 read-only로 동작함
 9. release profile validation result는 version/changelog result와 같은 readiness artifact에 병합되며 `ready` status를 만들지 않음
+10. UI release readiness viewer는 existing artifact를 읽고 missing artifact를 optional read-only error로 표시함
+11. CLI `report --release-readiness`는 existing readiness artifact를 읽고 release action을 실행하지 않음
+12. release review pack writer는 readiness validation을 재사용하고 `review-packs/release-review-pack.md`를 overwrite 없이 쓰며 approval/release action을 만들지 않음
+13. final M9 readiness audit은 all-pass 결과를 `reserved`로 두고 missing/duplicate/failed check를 `not_ready` blocker로 표시함
+14. final completion audit은 M0~M9 all-pass 결과를 `reserved`로 두고 missing/duplicate/failed check를 `not_ready` blocker로 표시함
+15. final audit evidence example은 schema validation에 포함되고 all-pass evidence도 `reserved`로 둠
+16. stacked PR readiness example은 schema validation에 포함되고 review/merge coordination도 `reserved`로 둠
 
 ## Codex 구현 지시
 
@@ -146,8 +250,12 @@ Release 관련 구현은 다음 순서로 분리한다.
 4. changelog/version file discovery
 5. release profile validation integration
 6. release review pack 생성
-7. manual approval flow
-8. artifact signing policy
-9. publish/deploy automation
+7. final M9 readiness audit
+8. final completion audit
+9. final audit evidence
+10. stacked PR readiness coordination
+11. manual approval flow
+12. artifact signing policy
+13. publish/deploy automation
 
-8~9는 별도 승인 전까지 구현하지 않는다.
+11~13은 별도 승인 전까지 구현하지 않는다.
