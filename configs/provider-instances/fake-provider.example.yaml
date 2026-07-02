@@ -1,4 +1,4 @@
-id: my-fake-provider
+id: fake-default
 provider: provider.fake
 enabled: true
 limits:

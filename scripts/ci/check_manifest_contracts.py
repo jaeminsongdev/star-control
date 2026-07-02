@@ -54,6 +54,7 @@ REQUIRED_OUTPUTS = {
     "changed_lines.json",
     "diagnostics.json",
     "validation_runs.json",
+    "review_pack.json",
     "review_pack.md",
     "approval.json",
     "ledger.jsonl",

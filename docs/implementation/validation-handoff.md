@@ -29,6 +29,8 @@ invalid output -> FAILED
 tool-output/star-sentinel/approval.json
 tool-output/star-sentinel/review_pack.json
 tool-output/star-sentinel/review_pack.md
+tool-output/star-sentinel/validation_runs.json
+validation/validation-decision.json
 approvals/approval-request.json
 approvals/approval-response.json
 review-packs/review_pack.json
