@@ -2,7 +2,7 @@
 
 ## 목적
 
-이 디렉터리는 Codex가 E01~E11 구현을 시작할 때 먼저 읽는 짧은 작업 brief 모음이다. 상세 계약은 기존 구현 문서가 기준이고, brief는 각 EPIC의 착수 범위와 검증 명령을 빠르게 고정한다.
+이 디렉터리는 Codex가 E01 이후 구현을 시작할 때 먼저 읽는 짧은 작업 brief 모음이다. 상세 계약은 기존 구현 문서가 기준이고, brief는 각 EPIC의 착수 범위와 검증 명령을 빠르게 고정한다.
 
 ## 권한 관계
 
@@ -35,6 +35,42 @@ E08-cli-fake-flow.md
 E09-star-sentinel-p0.md
 E10-validation-engine.md
 E11-integration-smoke.md
+E12-cloud-provider-preflight.md
+E13-cloud-cli-transport.md
+E14-cloud-provider-conformance.md
+E15-openai-compatible-parser.md
+E16-openai-compatible-request-builder.md
+E17-cloud-api-offline-fixture.md
+E18-cloud-api-transport-boundary.md
+E19-cloud-api-live-approval-gate.md
+E20-cli-control-commands.md
+E21-daemon-queue-skeleton.md
+E22-api-read-only.md
+E23-ui-read-only-view.md
+E24-api-control-mutations.md
+E25-ui-browser-control-shell.md
+E26-security-redaction-utility.md
+E27-observability-audit-event-writer.md
+E28-cost-metric-budget-guard.md
+E29-provider-conformance-hardening.md
+E30-state-recovery-inspection.md
+E31-release-readiness-writer.md
+E32-release-readiness-api-read.md
+E33-release-version-consistency-checker.md
+E34-release-evidence-file-discovery.md
+E35-release-profile-readiness-integration.md
+E36-release-readiness-ui-read.md
+E37-release-readiness-cli-read.md
+E38-release-review-pack-foundation.md
+E39-recovery-command-surface.md
+E40-final-m9-readiness-audit.md
+E41-final-completion-audit.md
+E42-final-audit-evidence.md
+E43-stacked-pr-readiness-coordination.md
+E44-cli-providers-read-only.md
+E45-cli-sentinel-command-group.md
+E46-final-evidence-refresh.md
+E47-stacked-merge-procedure.md
 ```
 
 ## 사용 방법
