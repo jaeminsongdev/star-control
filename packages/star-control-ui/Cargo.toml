@@ -1,0 +1,15 @@
+[package]
+name = "star-control-ui"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+
+[dependencies]
+serde_json = "1"
+star-control-api = { path = "../star-control-api" }
+star-control-schema = { path = "../star-control-schema" }
+star-control-security = { path = "../star-control-security" }
+
+[dev-dependencies]
+star-control-state = { path = "../star-control-state" }
