@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "release_id": "completion-audit-0001",
+  "release_id": "completion-audit-0002",
   "target": "star-control",
   "version": "m0-m9",
   "status": "reserved",
@@ -91,7 +91,9 @@
         "packages/star-control-provider/src/conformance.rs",
         "packages/star-control-state/src/lib.rs",
         "packages/star-control-release/src/lib.rs",
-        "packages/star-control-cli/src/lib.rs"
+        "packages/star-control-cli/src/lib.rs",
+        "docs/implementation/briefs/E44-cli-providers-read-only.md",
+        "docs/implementation/briefs/E45-cli-sentinel-command-group.md"
       ]
     },
     {
@@ -112,7 +114,8 @@
       "name": "stacked-prs-clean",
       "status": "pass",
       "evidence_paths": [
-        "docs/implementation/audit/final-completion-audit.md"
+        "docs/implementation/audit/final-completion-audit.md",
+        "docs/implementation/audit/stacked-pr-readiness.md"
       ]
     },
     {

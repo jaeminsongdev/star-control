@@ -11,8 +11,12 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPLETE_IMPLEMENTATION_EXAMPLE = "examples/release-contracts/complete-implementation-readiness.example.json"
+STACKED_PR_READINESS_EXAMPLE = "examples/release-contracts/stacked-pr-readiness.example.json"
 COMPLETE_IMPLEMENTATION_RESERVED_BLOCKER = (
     "release/deploy/publish and external repository settings remain reserved until explicit approval"
+)
+STACKED_PR_READINESS_RESERVED_BLOCKER = (
+    "stacked PRs remain draft and require explicit review/merge coordination before main changes"
 )
 COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS = [
     "m0-docs-decisions",
@@ -29,6 +33,13 @@ COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS = [
     "remote-ci-evidence",
     "stacked-prs-clean",
     "reserved-actions-confirmed",
+]
+STACKED_PR_READINESS_REQUIRED_CHECKS = [
+    "stacked-prs-contiguous",
+    "stacked-prs-clean",
+    "stacked-prs-draft-review-reserved",
+    "main-merge-not-performed",
+    "final-audit-evidence-linked",
 ]
 
 VALIDATION_CASES = [
@@ -58,6 +69,7 @@ VALIDATION_CASES = [
     ("specs/schemas/privacy-handoff.schema.json", "examples/security-contracts/privacy-handoff.example.json"),
     ("specs/schemas/release-readiness.schema.json", "examples/release-contracts/release-readiness.example.json"),
     ("specs/schemas/release-readiness.schema.json", "examples/release-contracts/complete-implementation-readiness.example.json"),
+    ("specs/schemas/release-readiness.schema.json", "examples/release-contracts/stacked-pr-readiness.example.json"),
     ("specs/schemas/workspec.schema.json", "examples/runs/J-0001/workspecs/implement.json"),
     ("specs/schemas/report.schema.json", "configs/templates/report-template.json"),
     ("specs/schemas/report.schema.json", "examples/fake/impl-report-done.json"),
@@ -165,20 +177,46 @@ def validate_value(value: Any, schema: dict[str, Any], location: str, errors: li
 
 
 def validate_complete_implementation_example(errors: list[str]) -> None:
-    document = load_json(COMPLETE_IMPLEMENTATION_EXAMPLE)
+    validate_required_release_readiness_checks(
+        errors,
+        COMPLETE_IMPLEMENTATION_EXAMPLE,
+        COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS,
+        COMPLETE_IMPLEMENTATION_RESERVED_BLOCKER,
+        "complete implementation",
+    )
+
+
+def validate_stacked_pr_readiness_example(errors: list[str]) -> None:
+    validate_required_release_readiness_checks(
+        errors,
+        STACKED_PR_READINESS_EXAMPLE,
+        STACKED_PR_READINESS_REQUIRED_CHECKS,
+        STACKED_PR_READINESS_RESERVED_BLOCKER,
+        "stacked PR readiness",
+    )
+
+
+def validate_required_release_readiness_checks(
+    errors: list[str],
+    document_path: str,
+    required_checks: list[str],
+    reserved_blocker: str,
+    label: str,
+) -> None:
+    document = load_json(document_path)
     if document.get("status") != "reserved":
-        errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: status must remain reserved")
+        errors.append(f"{document_path}: status must remain reserved")
 
     blockers = document.get("blockers")
-    if not isinstance(blockers, list) or COMPLETE_IMPLEMENTATION_RESERVED_BLOCKER not in blockers:
+    if not isinstance(blockers, list) or reserved_blocker not in blockers:
         errors.append(
-            f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: missing reserved blocker "
-            f"{COMPLETE_IMPLEMENTATION_RESERVED_BLOCKER!r}"
+            f"{document_path}: missing reserved blocker "
+            f"{reserved_blocker!r}"
         )
 
     checks = document.get("checks")
     if not isinstance(checks, list):
-        errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: checks must be an array")
+        errors.append(f"{document_path}: checks must be an array")
         return
 
     observed: dict[str, dict[str, Any]] = {}
@@ -194,33 +232,33 @@ def validate_complete_implementation_example(errors: list[str]) -> None:
         observed[name] = check
 
     for name in duplicate_names:
-        errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: duplicate check {name!r}")
+        errors.append(f"{document_path}: duplicate check {name!r}")
 
-    for required_check in COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS:
+    for required_check in required_checks:
         check = observed.get(required_check)
         if check is None:
-            errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: missing check {required_check!r}")
+            errors.append(f"{document_path}: missing {label} check {required_check!r}")
             continue
         if check.get("status") != "pass":
             errors.append(
-                f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: check {required_check!r} must have status pass"
+                f"{document_path}: check {required_check!r} must have status pass"
             )
         evidence_paths = check.get("evidence_paths")
         if not isinstance(evidence_paths, list) or not evidence_paths:
             errors.append(
-                f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: check {required_check!r} must include evidence_paths"
+                f"{document_path}: check {required_check!r} must include evidence_paths"
             )
             continue
         for evidence_path in evidence_paths:
             if not isinstance(evidence_path, str) or not (ROOT / evidence_path).exists():
                 errors.append(
-                    f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: evidence path for "
+                    f"{document_path}: evidence path for "
                     f"{required_check!r} does not exist: {evidence_path!r}"
                 )
 
-    unexpected_checks = sorted(set(observed) - set(COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS))
+    unexpected_checks = sorted(set(observed) - set(required_checks))
     for unexpected_check in unexpected_checks:
-        errors.append(f"{COMPLETE_IMPLEMENTATION_EXAMPLE}: unexpected check {unexpected_check!r}")
+        errors.append(f"{document_path}: unexpected check {unexpected_check!r}")
 
 
 def main() -> int:
@@ -231,6 +269,7 @@ def main() -> int:
         errors.extend(f"{document_path} against {schema_path}: {error}" for error in case_errors)
 
     validate_complete_implementation_example(errors)
+    validate_stacked_pr_readiness_example(errors)
 
     if errors:
         print("ERROR: schema example check failed", file=sys.stderr)
