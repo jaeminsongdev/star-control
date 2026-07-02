@@ -6,6 +6,32 @@ use std::fmt;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
+mod cloud;
+mod conformance;
+mod fake;
+mod local_process;
+mod openai_compatible;
+
+pub use cloud::{
+    is_cloud_api_manifest, is_cloud_cli_manifest, is_cloud_provider_manifest,
+    CloudApiOfflineProviderAdapter, CloudCliProviderAdapter, CloudProviderPreflightAdapter,
+};
+pub use conformance::{
+    ProviderConformanceChecker, ProviderConformanceError, ProviderConformanceProfile,
+    ProviderConformanceReport,
+};
+pub use fake::{
+    load_execution_request, ExecutionRequest, FakeProviderAdapter, FakeProviderSimulation,
+    ProviderAdapter, ProviderAdapterError, ProviderExecution, ProviderRunContext,
+    ProviderRunResult,
+};
+pub use local_process::{LocalProcessCommandPolicy, LocalProcessProviderAdapter};
+pub use openai_compatible::{
+    OpenAiCompatibleParseError, OpenAiCompatibleParsedResponse, OpenAiCompatiblePreparedRequest,
+    OpenAiCompatibleRequestApi, OpenAiCompatibleRequestBuilder, OpenAiCompatibleRequestError,
+    OpenAiCompatibleResponseKind, OpenAiCompatibleResponseParser,
+};
+
 const PROVIDER_MANIFEST_SCHEMA: &str = "provider-manifest.schema.json";
 const PROVIDER_INSTANCE_SCHEMA: &str = "provider-instance.schema.json";
 const CAPABILITY_PROFILE_SCHEMA: &str = "capability-profile.schema.json";
@@ -452,6 +478,10 @@ impl ProviderRegistry {
 
     pub fn instance(&self, instance_id: &str) -> Option<&ProviderInstance> {
         self.instances.get(instance_id)
+    }
+
+    pub fn providers(&self) -> Vec<&ProviderManifest> {
+        self.manifests.values().collect()
     }
 
     pub fn manifest_for_instance(
@@ -1192,6 +1222,10 @@ mod tests {
 
         let fake = registry.manifest("provider.fake").expect("fake provider");
         assert_eq!(fake.adapter(), "code_agent");
+        assert!(registry
+            .providers()
+            .iter()
+            .any(|provider| provider.id() == "provider.fake"));
         assert_eq!(registry.providers_by_kind("fake_provider").len(), 1);
         assert!(registry.providers_by_transport("manual").len() >= 2);
 
