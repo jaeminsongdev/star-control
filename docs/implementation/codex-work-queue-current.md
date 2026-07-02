@@ -3723,6 +3723,81 @@ approval-gated actions reserved 유지
 M9v는 explicit approval을 받은 뒤 stacked PR ready/merge coordination을 수행하거나, 별도 승인된 destructive recovery/release action surface를 작은 slice로 다룬다. 승인 전까지 main update, PR ready/merge, release/deploy/publish, destructive recovery action은 RESERVED다.
 ```
 
+## E47 Stacked Merge Procedure
+
+선행 문서:
+
+```text
+docs/implementation/audit/stacked-pr-readiness.md
+docs/implementation/audit/final-completion-audit.md
+docs/implementation/briefs/E46-final-evidence-refresh.md
+```
+
+허용 파일:
+
+```text
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Rust code
+Cargo.toml
+Cargo.lock
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+main branch update
+PR ready/merge action
+```
+
+입력:
+
+```text
+docs/implementation/audit/stacked-pr-readiness.md
+gh pr list --state open --limit 100 --json number,title,baseRefName,headRefName,isDraft,mergeStateStatus,url
+gh run view <latest-top-branch-ci-run>
+```
+
+출력:
+
+```text
+docs/implementation/audit/stacked-pr-merge-procedure.md
+review order
+merge execution order
+pre-merge validation gates
+stop conditions
+explicit approval phrase
+```
+
+핵심 TASK:
+
+```text
+bottom-up human review order 문서화
+top-down stacked branch merge order 문서화
+pre-merge verification command 문서화
+merge 중 stop condition 문서화
+explicit approval phrase 문서화
+no-action/no-main-update boundary 문서화
+```
+
+완료 기준: procedure가 review order와 merge execution order를 분리해서 설명해야 한다. procedure가 branch-to-branch stacked PR의 실제 merge 순서를 top-down으로 고정해야 한다. procedure가 `mergeStateStatus=CLEAN`, draft state, latest CI success, local validation command를 precondition으로 둬야 한다. procedure가 conflict, failed CI, unexpected non-draft, base/head discontinuity 발견 시 즉시 중단하도록 해야 한다. 이 slice는 PR ready/merge, main update, release/deploy/publish, destructive recovery action, repository settings 변경을 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+이후에는 사용자가 explicit approval phrase로 승인한 경우에만 stacked PR ready/merge coordination을 수행한다. 승인 전까지 main update, PR ready/merge, release/deploy/publish, destructive recovery action은 RESERVED다.
+```
+
 ## RESERVED
 
 아래는 E12 이후 별도 작은 PR로 구현한다.
