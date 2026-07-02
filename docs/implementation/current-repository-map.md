@@ -116,7 +116,7 @@ star.sentinel
 | Star Sentinel P0 계약 | `star-sentinel-p0-contracts.md`, `builtin-tools/star-sentinel/` | `CANONICAL` |
 | validation handoff 계약 | `validation-engine.md`, `validation-handoff.md`, `examples/validation-contracts/` | `CANONICAL` |
 | CLI / daemon queue / API read-only / UI read-only / reserved surfaces | `cli-command-reference.md`, `daemon-contract.md`, `api-contract.md`, `ui-shell-contract.md` | `CANONICAL` / `RESERVED` |
-| security / privacy / observability contracts | `security-privacy-observability-contracts.md`, `security-cost-observability.md`, `packages/star-control-security/` | `CANONICAL` |
+| security / privacy / observability contracts | `security-privacy-observability-contracts.md`, `security-cost-observability.md`, `packages/star-control-security/`, `packages/star-control-observability/` | `CANONICAL` |
 | CI 계약 검증 | `scripts/ci/`, `.github/workflows/ci.yml`, `ci-contract-validation.md` | `CANONICAL` |
 | 현재 구현 큐 | `codex-work-queue-current.md` | `CANONICAL` |
 | 장기 backlog | `codex-work-queue.md` | `BACKLOG` |
