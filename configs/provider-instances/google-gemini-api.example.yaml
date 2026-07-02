@@ -7,6 +7,9 @@ limits:
 routing_tags:
   - cloud
   - api
+credential_ref: env:GOOGLE_GEMINI_API_KEY
+transport_config:
+  privacy_handoff_approved: false
 endpoint:
   base_url: "https://generativelanguage.googleapis.com"
   model: gemini-example

@@ -23,6 +23,14 @@ examples/security-contracts/cost-metric.fake.example.json
 
 RedactionReport는 artifact나 report를 생성할 때 민감정보 후보가 어떻게 처리됐는지 기록한다.
 
+M9a 구현 위치:
+
+```text
+packages/star-control-security
+```
+
+M9a는 `redact_value`, `redact_value_with_report`, RedactionReport builder를 제공하고 API/UI redaction helper가 이를 소비한다. RedactionReport artifact를 StateStore에 저장하는 작업은 audit/report hardening slice에서 별도로 연결한다.
+
 필수 필드:
 
 ```text
@@ -91,6 +99,14 @@ job_cancelled
 
 CoreEvent는 execution timeline이고, AuditEvent는 감사 목적의 요약 event다. 둘은 중복될 수 있지만 용도가 다르다.
 
+M9b 구현 위치:
+
+```text
+packages/star-control-observability
+```
+
+M9b는 `AuditEventWriter`를 제공한다. writer는 AuditEvent를 저장 전 redaction한 뒤 `audit-event.schema.json`으로 검증하고, 대상 프로젝트 `.ai-runs/{job_id}/audit/audit-events.jsonl`에 append-only로 기록한다. API/CLI/daemon/provider event를 자동 연결하는 작업은 후속 observability integration slice에서 처리한다.
+
 ## CostMetric
 
 CostMetric은 provider-neutral 비용·시간·token 측정값이다.
@@ -116,6 +132,14 @@ quota_remaining
 ```
 
 FakeProvider는 estimated_cost 0, token 0을 기록한다.
+
+M9c 구현 위치:
+
+```text
+packages/star-control-observability
+```
+
+M9c는 `CostMetricWriter`와 `CostBudgetThresholds`를 제공한다. writer는 CostMetric을 저장 전 redaction한 뒤 `cost-metric.schema.json`으로 검증하고, provider output sidecar `provider-output/{provider_instance_id}/cost-metric.json`에 기록한다. Budget evaluation은 `warn_only`로 시작하며, hard enforcement나 외부 billing/quota 조회는 후속 slice에서 처리한다.
 
 ## 금지 사항
 
