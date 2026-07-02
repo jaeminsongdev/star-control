@@ -6,6 +6,7 @@ use star_control_state::{StateStore, StateStoreError};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub const SENTINEL_TASK_SCHEMA: &str = "sentinel-task.schema.json";
@@ -14,9 +15,25 @@ pub const P0_RULE_REGISTRY_SCHEMA: &str = "p0-rule-registry.schema.json";
 pub const FIXTURE_OUTCOME_SCHEMA: &str = "fixture-outcome.schema.json";
 pub const DIAGNOSTIC_SCHEMA: &str = "diagnostic.schema.json";
 pub const APPROVAL_SCHEMA: &str = "approval.schema.json";
+pub const REVIEW_PACK_SCHEMA: &str = "review-pack.schema.json";
+pub const LEDGER_EVENT_SCHEMA: &str = "ledger-event.schema.json";
 pub const STAR_SENTINEL_TOOL_OUTPUT_DIR: &str = "star-sentinel";
 pub const DIAGNOSTICS_FILE: &str = "diagnostics.json";
 pub const APPROVAL_FILE: &str = "approval.json";
+pub const REVIEW_PACK_JSON_FILE: &str = "review_pack.json";
+pub const REVIEW_PACK_MARKDOWN_FILE: &str = "review_pack.md";
+pub const LEDGER_FILE: &str = "ledger.jsonl";
+
+pub const REQUIRED_MANIFEST_OUTPUTS: [&str; 8] = [
+    "repo_map.json",
+    "changed_lines.json",
+    DIAGNOSTICS_FILE,
+    "validation_runs.json",
+    REVIEW_PACK_JSON_FILE,
+    REVIEW_PACK_MARKDOWN_FILE,
+    APPROVAL_FILE,
+    LEDGER_FILE,
+];
 
 pub const RULE_SCOPE_ALLOWED_PATHS: &str = "task.scope.allowed_paths";
 pub const RULE_TEST_NO_DELETION: &str = "test.no_deletion";
@@ -469,6 +486,101 @@ pub struct GateArtifactRefs {
     pub approval_ref: Value,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewValidation {
+    pub command: String,
+    pub result: String,
+}
+
+impl ReviewValidation {
+    pub fn new(command: impl Into<String>, result: impl Into<String>) -> Self {
+        Self {
+            command: command.into(),
+            result: result.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewPackArtifactRefs {
+    pub tool_json_ref: Value,
+    pub tool_markdown_ref: Value,
+    pub review_json_ref: Value,
+    pub review_markdown_ref: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LedgerEvent {
+    pub event_id: String,
+    pub task_id: String,
+    pub event_type: String,
+    pub stage: String,
+    pub severity: Severity,
+    pub message: String,
+    pub created_at: String,
+    pub artifacts: Vec<String>,
+    pub metadata: Value,
+}
+
+impl LedgerEvent {
+    pub fn new(
+        event_id: impl Into<String>,
+        task_id: impl Into<String>,
+        event_type: impl Into<String>,
+        stage: impl Into<String>,
+        severity: Severity,
+        message: impl Into<String>,
+        created_at: impl Into<String>,
+    ) -> Self {
+        Self {
+            event_id: event_id.into(),
+            task_id: task_id.into(),
+            event_type: event_type.into(),
+            stage: stage.into(),
+            severity,
+            message: message.into(),
+            created_at: created_at.into(),
+            artifacts: Vec::new(),
+            metadata: json!({}),
+        }
+    }
+
+    pub fn artifacts(mut self, artifacts: impl IntoIterator<Item = String>) -> Self {
+        self.artifacts = artifacts.into_iter().collect();
+        self
+    }
+
+    pub fn metadata(mut self, metadata: Value) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    pub fn to_value(&self) -> Value {
+        json!({
+            "schema_version": "1.0.0",
+            "event_id": self.event_id,
+            "task_id": self.task_id,
+            "event_type": self.event_type,
+            "stage": self.stage,
+            "severity": self.severity.as_str(),
+            "message": self.message,
+            "created_at": self.created_at,
+            "source": {
+                "kind": "tool",
+                "name": STAR_SENTINEL_TOOL_OUTPUT_DIR
+            },
+            "artifacts": self.artifacts,
+            "metadata": self.metadata
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelfcheckReport {
+    pub ok: bool,
+    pub diagnostics: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct P0Evaluator {
     registry: P0RuleRegistry,
@@ -666,6 +778,221 @@ pub fn write_gate_artifacts(
         diagnostics_ref,
         approval_ref,
     })
+}
+
+pub fn build_review_pack_artifact(
+    task: &SentinelTask,
+    changed_lines: &ChangedLines,
+    result: &EvaluationResult,
+    validations: &[ReviewValidation],
+) -> Value {
+    let changed_files = changed_file_paths(changed_lines);
+    let risks = review_risks(result);
+    let validations = review_validations(result, validations);
+    let unverified_claims: Vec<String> = Vec::new();
+    let questions_for_human = review_questions(result);
+    let generated_artifacts = vec![
+        format!(
+            "tool-output/{}/{}",
+            STAR_SENTINEL_TOOL_OUTPUT_DIR, REVIEW_PACK_JSON_FILE
+        ),
+        format!(
+            "tool-output/{}/{}",
+            STAR_SENTINEL_TOOL_OUTPUT_DIR, REVIEW_PACK_MARKDOWN_FILE
+        ),
+        format!("review-packs/{}", REVIEW_PACK_JSON_FILE),
+        format!("review-packs/{}", REVIEW_PACK_MARKDOWN_FILE),
+    ];
+    let summary = review_summary(result.decision);
+    let markdown = render_review_pack_markdown(
+        result.decision,
+        &summary,
+        &changed_files,
+        &risks,
+        &validations,
+        &questions_for_human,
+    );
+
+    json!({
+        "schema_version": "1.0.0",
+        "task_id": task.task_id,
+        "decision": result.decision.as_str(),
+        "summary": summary,
+        "changed_files": changed_files,
+        "risks": risks,
+        "validations": validations.iter().map(|validation| {
+            json!({
+                "command": validation.command,
+                "result": validation.result
+            })
+        }).collect::<Vec<_>>(),
+        "unverified_claims": unverified_claims,
+        "questions_for_human": questions_for_human,
+        "generated_artifacts": generated_artifacts,
+        "review_pack_markdown": markdown
+    })
+}
+
+pub fn validate_review_pack_artifact(
+    review_pack: &Value,
+    schema_root: impl AsRef<Path>,
+) -> Result<(), SentinelError> {
+    validate_against_schema(
+        review_pack,
+        schema_root.as_ref(),
+        REVIEW_PACK_SCHEMA,
+        REVIEW_PACK_JSON_FILE,
+    )
+}
+
+pub fn write_review_pack_artifacts(
+    store: &StateStore,
+    job_id: &str,
+    review_pack: &Value,
+    schema_root: impl AsRef<Path>,
+) -> Result<ReviewPackArtifactRefs, SentinelError> {
+    validate_review_pack_artifact(review_pack, schema_root.as_ref())?;
+    let markdown = review_pack
+        .get("review_pack_markdown")
+        .and_then(Value::as_str)
+        .ok_or_else(|| missing_field(REVIEW_PACK_JSON_FILE, "review_pack_markdown"))?;
+
+    let tool_json_ref = store
+        .write_tool_json(
+            job_id,
+            STAR_SENTINEL_TOOL_OUTPUT_DIR,
+            REVIEW_PACK_JSON_FILE,
+            review_pack,
+        )
+        .map_err(|source| SentinelError::State { source })?;
+    let tool_markdown_ref = store
+        .write_tool_text(
+            job_id,
+            STAR_SENTINEL_TOOL_OUTPUT_DIR,
+            REVIEW_PACK_MARKDOWN_FILE,
+            markdown,
+        )
+        .map_err(|source| SentinelError::State { source })?;
+    let review_json_ref = store
+        .write_review_pack_json(job_id, REVIEW_PACK_JSON_FILE, review_pack)
+        .map_err(|source| SentinelError::State { source })?;
+    let review_markdown_ref = store
+        .write_review_pack_markdown(job_id, REVIEW_PACK_MARKDOWN_FILE, markdown)
+        .map_err(|source| SentinelError::State { source })?;
+
+    Ok(ReviewPackArtifactRefs {
+        tool_json_ref,
+        tool_markdown_ref,
+        review_json_ref,
+        review_markdown_ref,
+    })
+}
+
+pub fn build_gate_ledger_event(
+    event_id: &str,
+    task: &SentinelTask,
+    result: &EvaluationResult,
+    created_at: &str,
+) -> LedgerEvent {
+    let severity = match result.decision {
+        Decision::AutoPass => Severity::Info,
+        Decision::HumanReview => Severity::Warn,
+        Decision::Block => Severity::Block,
+    };
+    let message = match result.decision {
+        Decision::AutoPass => "Approval gate auto-passed the task.",
+        Decision::HumanReview => "Approval gate requires human review.",
+        Decision::Block => "Approval gate blocked the task because a P0 diagnostic was emitted.",
+    };
+
+    LedgerEvent::new(
+        event_id,
+        task.task_id.clone(),
+        "GATE_DECIDED",
+        "validate",
+        severity,
+        message,
+        created_at,
+    )
+    .artifacts([
+        format!(
+            "tool-output/{}/{}",
+            STAR_SENTINEL_TOOL_OUTPUT_DIR, APPROVAL_FILE
+        ),
+        format!(
+            "tool-output/{}/{}",
+            STAR_SENTINEL_TOOL_OUTPUT_DIR, DIAGNOSTICS_FILE
+        ),
+    ])
+    .metadata(json!({
+        "decision": result.decision.as_str(),
+        "diagnostic_count": result.diagnostics.len()
+    }))
+}
+
+pub fn ledger_events_jsonl(events: &[LedgerEvent]) -> Result<String, SentinelError> {
+    let mut lines = String::new();
+    for event in events {
+        let line = serde_json::to_string(&event.to_value()).map_err(|source| {
+            SentinelError::InvalidField {
+                artifact: LEDGER_FILE.to_string(),
+                field: "event".to_string(),
+                message: source.to_string(),
+            }
+        })?;
+        lines.push_str(&line);
+        lines.push('\n');
+    }
+    Ok(lines)
+}
+
+pub fn validate_ledger_events(
+    events: &[LedgerEvent],
+    schema_root: impl AsRef<Path>,
+) -> Result<(), SentinelError> {
+    for (index, event) in events.iter().enumerate() {
+        validate_against_schema(
+            &event.to_value(),
+            schema_root.as_ref(),
+            LEDGER_EVENT_SCHEMA,
+            &format!("{}[{}]", LEDGER_FILE, index),
+        )?;
+    }
+    Ok(())
+}
+
+pub fn write_ledger_artifact(
+    store: &StateStore,
+    job_id: &str,
+    events: &[LedgerEvent],
+    schema_root: impl AsRef<Path>,
+) -> Result<Value, SentinelError> {
+    validate_ledger_events(events, schema_root.as_ref())?;
+    let jsonl = ledger_events_jsonl(events)?;
+    store
+        .write_tool_text(job_id, STAR_SENTINEL_TOOL_OUTPUT_DIR, LEDGER_FILE, &jsonl)
+        .map_err(|source| SentinelError::State { source })
+}
+
+pub fn run_selfcheck(repo_root: impl AsRef<Path>) -> SelfcheckReport {
+    let repo_root = repo_root.as_ref();
+    let schema_root = repo_root.join("builtin-tools/star-sentinel/schemas");
+    let manifest_path = repo_root.join("builtin-tools/star-sentinel/tool.yaml");
+    let registry_path =
+        repo_root.join("builtin-tools/star-sentinel/policies/p0-rule-registry.json");
+    let fixtures_root = repo_root.join("builtin-tools/star-sentinel/fixtures/p0");
+    let mut diagnostics = Vec::new();
+
+    check_manifest_outputs(&manifest_path, &mut diagnostics);
+    check_p0_registry(&registry_path, &schema_root, &mut diagnostics);
+    check_schema_files(&schema_root, &mut diagnostics);
+    check_fixture_files(&fixtures_root, &mut diagnostics);
+    check_legacy_alias_locations(repo_root, &manifest_path, &mut diagnostics);
+
+    SelfcheckReport {
+        ok: diagnostics.is_empty(),
+        diagnostics,
+    }
 }
 
 pub fn read_task(
@@ -1278,6 +1605,300 @@ fn required_human_actions(decision: Decision) -> Vec<String> {
     }
 }
 
+fn changed_file_paths(changed_lines: &ChangedLines) -> Vec<String> {
+    let mut paths = BTreeSet::new();
+    for file in &changed_lines.files {
+        for path in file.changed_paths() {
+            paths.insert(normalize_path(path));
+        }
+    }
+    paths.into_iter().collect()
+}
+
+fn review_summary(decision: Decision) -> String {
+    match decision {
+        Decision::AutoPass => "P0 review passed with no diagnostics.".to_string(),
+        Decision::HumanReview => {
+            "P0 diagnostics require human review before proceeding.".to_string()
+        }
+        Decision::Block => "P0 diagnostics block automatic progress.".to_string(),
+    }
+}
+
+fn review_risks(result: &EvaluationResult) -> Vec<String> {
+    let mut risks = BTreeSet::new();
+    for diagnostic in &result.diagnostics {
+        risks.insert(risk_for_rule(&diagnostic.rule_id).to_string());
+    }
+    risks.into_iter().collect()
+}
+
+fn risk_for_rule(rule_id: &str) -> &'static str {
+    match rule_id {
+        RULE_SCOPE_ALLOWED_PATHS => "scope_violation",
+        RULE_TEST_NO_DELETION => "test_deletion",
+        RULE_DEPENDENCY_REQUIRES_APPROVAL => "dependency_addition",
+        RULE_SECRET_NO_PLAINTEXT_SECRET => "secret_exposure",
+        RULE_VALIDATOR_NO_SELF_BYPASS => "validator_bypass",
+        _ => "unknown_p0_risk",
+    }
+}
+
+fn review_validations(
+    result: &EvaluationResult,
+    validations: &[ReviewValidation],
+) -> Vec<ReviewValidation> {
+    if !validations.is_empty() {
+        return validations.to_vec();
+    }
+
+    let status = match result.decision {
+        Decision::AutoPass => "passed",
+        Decision::HumanReview => "requires_human_review",
+        Decision::Block => "blocked",
+    };
+    vec![ReviewValidation::new("policy:p0", status)]
+}
+
+fn review_questions(result: &EvaluationResult) -> Vec<String> {
+    if result.decision == Decision::AutoPass {
+        return Vec::new();
+    }
+
+    let mut questions = BTreeSet::new();
+    for diagnostic in &result.diagnostics {
+        let question = match diagnostic.rule_id.as_str() {
+            RULE_SCOPE_ALLOWED_PATHS => {
+                "Should the task scope be expanded, or should the out-of-scope change be removed?"
+            }
+            RULE_TEST_NO_DELETION => {
+                "What replacement validation covers the deleted test behavior?"
+            }
+            RULE_DEPENDENCY_REQUIRES_APPROVAL => "Was this dependency change explicitly approved?",
+            RULE_SECRET_NO_PLAINTEXT_SECRET => {
+                "Has the plaintext secret candidate been removed and rotated if needed?"
+            }
+            RULE_VALIDATOR_NO_SELF_BYPASS => {
+                "Does this validator-related change preserve enforcement?"
+            }
+            _ => "Does a human approve continuing with this diagnostic?",
+        };
+        questions.insert(question.to_string());
+    }
+    questions.into_iter().collect()
+}
+
+fn render_review_pack_markdown(
+    decision: Decision,
+    summary: &str,
+    changed_files: &[String],
+    risks: &[String],
+    validations: &[ReviewValidation],
+    questions: &[String],
+) -> String {
+    let mut markdown = String::new();
+    markdown.push_str("# Review Pack\n\n");
+    markdown.push_str("## Decision\n");
+    markdown.push_str(decision.as_str());
+    markdown.push_str("\n\n## Summary\n");
+    markdown.push_str(summary);
+    markdown.push_str("\n\n## Changed Files\n");
+    push_markdown_list(&mut markdown, changed_files);
+    markdown.push_str("\n## Risks\n");
+    push_markdown_list(&mut markdown, risks);
+    markdown.push_str("\n## Validations\n");
+    if validations.is_empty() {
+        markdown.push_str("- none\n");
+    } else {
+        for validation in validations {
+            markdown.push_str(&format!(
+                "- {}: {}\n",
+                validation.command, validation.result
+            ));
+        }
+    }
+    markdown.push_str("\n## Questions For Human\n");
+    push_markdown_list(&mut markdown, questions);
+    markdown
+}
+
+fn push_markdown_list(markdown: &mut String, items: &[String]) {
+    if items.is_empty() {
+        markdown.push_str("- none\n");
+        return;
+    }
+    for item in items {
+        markdown.push_str("- ");
+        markdown.push_str(item);
+        markdown.push('\n');
+    }
+}
+
+fn check_manifest_outputs(manifest_path: &Path, diagnostics: &mut Vec<String>) {
+    let Ok(content) = fs::read_to_string(manifest_path) else {
+        diagnostics.push(format!(
+            "missing or unreadable manifest {}",
+            manifest_path.display()
+        ));
+        return;
+    };
+    let outputs = yaml_list_section(&content, "outputs");
+    for required in REQUIRED_MANIFEST_OUTPUTS {
+        if !outputs.iter().any(|output| output == required) {
+            diagnostics.push(format!("manifest outputs missing {}", required));
+        }
+    }
+}
+
+fn check_p0_registry(registry_path: &Path, schema_root: &Path, diagnostics: &mut Vec<String>) {
+    match read_p0_rule_registry(registry_path, schema_root) {
+        Ok(registry) => {
+            let mut seen = HashSet::new();
+            for rule in registry.rules {
+                if !seen.insert(rule.rule_id.clone()) {
+                    diagnostics.push(format!("duplicate rule id {}", rule.rule_id));
+                }
+            }
+        }
+        Err(error) => diagnostics.push(format!("p0 registry check failed: {}", error)),
+    }
+}
+
+fn check_schema_files(schema_root: &Path, diagnostics: &mut Vec<String>) {
+    let Ok(entries) = fs::read_dir(schema_root) else {
+        diagnostics.push(format!(
+            "schema directory unreadable {}",
+            schema_root.display()
+        ));
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) == Some("json") {
+            if let Err(error) = load_schema(&path) {
+                diagnostics.push(format!("schema parse failed {}: {}", path.display(), error));
+            }
+        }
+    }
+}
+
+fn check_fixture_files(fixtures_root: &Path, diagnostics: &mut Vec<String>) {
+    let Ok(entries) = fs::read_dir(fixtures_root) else {
+        diagnostics.push(format!(
+            "fixture directory unreadable {}",
+            fixtures_root.display()
+        ));
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(&path) else {
+            diagnostics.push(format!("fixture unreadable {}", path.display()));
+            continue;
+        };
+        for required in ["case_id:", "rule_id:", "input:", "expected:", "decision:"] {
+            if !content.contains(required) {
+                diagnostics.push(format!("fixture {} missing {}", path.display(), required));
+            }
+        }
+    }
+}
+
+fn check_legacy_alias_locations(
+    repo_root: &Path,
+    manifest_path: &Path,
+    diagnostics: &mut Vec<String>,
+) {
+    let Ok(content) = fs::read_to_string(manifest_path) else {
+        return;
+    };
+    let aliases = yaml_list_section(&content, "legacy_aliases");
+    if aliases.is_empty() {
+        diagnostics.push("manifest legacy_aliases is empty".to_string());
+        return;
+    }
+
+    for alias in aliases {
+        let mut matches = Vec::new();
+        collect_alias_matches(repo_root, &alias, &mut matches);
+        for path in matches {
+            if path != manifest_path {
+                diagnostics.push(format!(
+                    "legacy alias {} appears outside manifest at {}",
+                    alias,
+                    path.display()
+                ));
+            }
+        }
+    }
+}
+
+fn collect_alias_matches(root: &Path, alias: &str, matches: &mut Vec<PathBuf>) {
+    if should_skip_selfcheck_path(root) {
+        return;
+    }
+    let Ok(metadata) = fs::metadata(root) else {
+        return;
+    };
+    if metadata.is_dir() {
+        let Ok(entries) = fs::read_dir(root) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            collect_alias_matches(&entry.path(), alias, matches);
+        }
+        return;
+    }
+
+    if !is_text_like_path(root) {
+        return;
+    }
+    if let Ok(content) = fs::read_to_string(root) {
+        if content.contains(alias) {
+            matches.push(root.to_path_buf());
+        }
+    }
+}
+
+fn should_skip_selfcheck_path(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .is_some_and(|name| matches!(name, ".git" | "target" | ".ai-runs"))
+}
+
+fn is_text_like_path(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|value| value.to_str()),
+        Some("md" | "txt" | "json" | "jsonl" | "yaml" | "yml" | "toml" | "rs" | "py" | "ps1")
+    )
+}
+
+fn yaml_list_section(content: &str, section: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    let mut in_section = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == format!("{}:", section) {
+            in_section = true;
+            continue;
+        }
+        if in_section && !line.starts_with(' ') && trimmed.ends_with(':') {
+            break;
+        }
+        if in_section {
+            if let Some(value) = trimmed.strip_prefix("- ") {
+                values.push(value.trim_matches('"').to_string());
+            }
+        }
+    }
+    values
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1522,6 +2143,186 @@ mod tests {
         fs::remove_dir_all(temp_project).ok();
     }
 
+    #[test]
+    fn builds_schema_valid_review_pack_for_block() {
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let changed_lines = changed_lines(json!([
+            file("src/allowed/index.ts", "modified", json!([])),
+            file("src/other/hidden.ts", "modified", json!([]))
+        ]));
+        let result = scope_block_result();
+
+        let review_pack = build_review_pack_artifact(&task, &changed_lines, &result, &[]);
+
+        validate_review_pack_artifact(&review_pack, schema_root()).expect("review pack schema");
+        assert_eq!(review_pack["decision"], "BLOCK");
+        assert_eq!(review_pack["risks"][0], "scope_violation");
+        assert!(review_pack["review_pack_markdown"]
+            .as_str()
+            .expect("markdown")
+            .contains("## Questions For Human"));
+    }
+
+    #[test]
+    fn review_pack_for_dependency_contains_human_question() {
+        let evaluator = P0Evaluator::new(builtin_registry());
+        let task = task_with_allowed_paths(["**"]);
+        let changed_lines = changed_lines(json!([file("Cargo.toml", "modified", json!([]))]));
+        let result = evaluator.evaluate(&task, &changed_lines).expect("evaluate");
+
+        let review_pack = build_review_pack_artifact(&task, &changed_lines, &result, &[]);
+
+        assert_eq!(review_pack["decision"], "HUMAN_REVIEW");
+        assert_eq!(review_pack["risks"][0], "dependency_addition");
+        assert_eq!(
+            review_pack["questions_for_human"][0],
+            "Was this dependency change explicitly approved?"
+        );
+    }
+
+    #[test]
+    fn writes_review_pack_artifacts_to_tool_output_and_review_packs() {
+        let temp_project = temp_dir();
+        let store =
+            StateStore::open(&temp_project, repo_root().join("specs/schemas")).expect("store");
+        let job = store
+            .create_job("review p0 output", "star-sentinel", Vec::new())
+            .expect("job");
+        let job_id = job["job_id"].as_str().expect("job_id");
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let changed_lines = changed_lines(json!([
+            file("src/allowed/index.ts", "modified", json!([])),
+            file("src/other/hidden.ts", "modified", json!([]))
+        ]));
+        let result = scope_block_result();
+        let review_pack = build_review_pack_artifact(&task, &changed_lines, &result, &[]);
+
+        let refs = write_review_pack_artifacts(&store, job_id, &review_pack, schema_root())
+            .expect("write");
+
+        assert_eq!(
+            refs.tool_json_ref["path"],
+            "tool-output/star-sentinel/review_pack.json"
+        );
+        assert_eq!(
+            refs.tool_markdown_ref["path"],
+            "tool-output/star-sentinel/review_pack.md"
+        );
+        assert_eq!(
+            refs.review_json_ref["path"],
+            "review-packs/review_pack.json"
+        );
+        assert_eq!(
+            refs.review_markdown_ref["path"],
+            "review-packs/review_pack.md"
+        );
+        assert!(temp_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/review_pack.json")
+            .is_file());
+        assert!(temp_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/review_pack.md")
+            .is_file());
+        assert!(temp_project
+            .join(".ai-runs/J-0001/review-packs/review_pack.json")
+            .is_file());
+        assert!(temp_project
+            .join(".ai-runs/J-0001/review-packs/review_pack.md")
+            .is_file());
+        fs::remove_dir_all(temp_project).ok();
+    }
+
+    #[test]
+    fn review_pack_writer_refuses_to_overwrite_existing_artifacts() {
+        let temp_project = temp_dir();
+        let store =
+            StateStore::open(&temp_project, repo_root().join("specs/schemas")).expect("store");
+        let job = store
+            .create_job("review p0 output", "star-sentinel", Vec::new())
+            .expect("job");
+        let job_id = job["job_id"].as_str().expect("job_id");
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let changed_lines =
+            changed_lines(json!([file("src/other/hidden.ts", "modified", json!([]))]));
+        let result = scope_block_result();
+        let review_pack = build_review_pack_artifact(&task, &changed_lines, &result, &[]);
+
+        write_review_pack_artifacts(&store, job_id, &review_pack, schema_root())
+            .expect("first write");
+        let overwrite = write_review_pack_artifacts(&store, job_id, &review_pack, schema_root());
+
+        assert!(matches!(overwrite, Err(SentinelError::State { .. })));
+        fs::remove_dir_all(temp_project).ok();
+    }
+
+    #[test]
+    fn builds_schema_valid_gate_ledger_event() {
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let result = scope_block_result();
+        let event = build_gate_ledger_event("E-P0-0001", &task, &result, "2026-01-01T00:00:00Z");
+
+        validate_ledger_events(std::slice::from_ref(&event), schema_root()).expect("ledger schema");
+        assert_eq!(event.to_value()["event_type"], "GATE_DECIDED");
+        assert_eq!(event.to_value()["metadata"]["decision"], "BLOCK");
+    }
+
+    #[test]
+    fn writes_ledger_jsonl_to_tool_output() {
+        let temp_project = temp_dir();
+        let store =
+            StateStore::open(&temp_project, repo_root().join("specs/schemas")).expect("store");
+        let job = store
+            .create_job("write ledger", "star-sentinel", Vec::new())
+            .expect("job");
+        let job_id = job["job_id"].as_str().expect("job_id");
+        let task = task_with_allowed_paths(["src/allowed/**"]);
+        let result = scope_block_result();
+        let event = build_gate_ledger_event("E-P0-0001", &task, &result, "2026-01-01T00:00:00Z");
+
+        let artifact_ref =
+            write_ledger_artifact(&store, job_id, &[event], schema_root()).expect("ledger write");
+
+        assert_eq!(
+            artifact_ref["path"],
+            "tool-output/star-sentinel/ledger.jsonl"
+        );
+        let ledger_path =
+            temp_project.join(".ai-runs/J-0001/tool-output/star-sentinel/ledger.jsonl");
+        assert!(ledger_path.is_file());
+        let content = fs::read_to_string(ledger_path).expect("ledger content");
+        assert_eq!(content.lines().count(), 1);
+        fs::remove_dir_all(temp_project).ok();
+    }
+
+    #[test]
+    fn selfcheck_passes_for_repository_contracts() {
+        let report = run_selfcheck(repo_root());
+
+        assert!(report.ok, "{:?}", report.diagnostics);
+    }
+
+    #[test]
+    fn selfcheck_reports_missing_manifest_output() {
+        let temp_repo = temp_dir();
+        copy_dir(
+            &repo_root().join("builtin-tools/star-sentinel"),
+            &temp_repo.join("builtin-tools/star-sentinel"),
+        );
+        let manifest = temp_repo.join("builtin-tools/star-sentinel/tool.yaml");
+        let content = fs::read_to_string(&manifest)
+            .expect("manifest")
+            .replace("  - ledger.jsonl\n", "");
+        fs::write(&manifest, content).expect("write manifest");
+
+        let report = run_selfcheck(&temp_repo);
+
+        assert!(!report.ok);
+        assert!(report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("manifest outputs missing ledger.jsonl")));
+        fs::remove_dir_all(temp_repo).ok();
+    }
+
     fn builtin_registry() -> P0RuleRegistry {
         read_p0_rule_registry(
             repo_root().join("builtin-tools/star-sentinel/policies/p0-rule-registry.json"),
@@ -1618,5 +2419,19 @@ mod tests {
             std::env::temp_dir().join(format!("star-sentinel-{}-{}", std::process::id(), nanos));
         fs::create_dir_all(&path).expect("create temp dir");
         path
+    }
+
+    fn copy_dir(source: &Path, destination: &Path) {
+        fs::create_dir_all(destination).expect("create destination");
+        for entry in fs::read_dir(source).expect("read source") {
+            let entry = entry.expect("entry");
+            let source_path = entry.path();
+            let destination_path = destination.join(entry.file_name());
+            if source_path.is_dir() {
+                copy_dir(&source_path, &destination_path);
+            } else {
+                fs::copy(&source_path, &destination_path).expect("copy file");
+            }
+        }
     }
 }

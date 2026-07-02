@@ -5,3 +5,20 @@ provider_policy:
   require_sandbox_for:
     - cli
     - process
+  local_process:
+    shell: false
+    command_allowlist_required: true
+    env_policy: allowlist
+    network: deny
+    workspace_write: deny
+    max_timeout_seconds: 600
+    cancel_grace_seconds: 5
+    denied_action_categories:
+      - dependency_install
+      - dependency_change
+      - workflow_change
+      - release_publish
+      - deploy
+      - credential_change
+      - external_account_change
+      - destructive_file_operation
