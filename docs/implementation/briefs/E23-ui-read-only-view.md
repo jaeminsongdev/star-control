@@ -4,7 +4,7 @@
 
 M8a의 목표는 browser app을 만들기 전에 `packages/star-control-ui`의 read-only view model 계층을 구현해 UI shell이 API read-only service 계약을 안전하게 소비할 수 있게 하는 것이다.
 
-이번 slice는 job list, job detail, timeline, provider output, validation result, approval request, review pack viewer가 사용할 JSON view model을 고정한다. 실제 browser UI, package manager, HTTP server, API mutation, provider process 실행은 구현하지 않는다.
+이번 slice는 job list, job detail, timeline, provider output, validation result, approval request, review pack viewer가 사용할 JSON view model을 고정한다. 실제 browser UI, package manager, HTTP server, API control mutation, provider process 실행은 구현하지 않는다. API control mutation은 E24에서 별도 slice로 다룬다.
 
 ## 선행 문서
 
@@ -37,7 +37,7 @@ README.md
 browser UI app 구현
 TypeScript/Node package manager 도입
 HTTP server 구현
-API mutation endpoint 구현
+API control mutation 구현
 provider process 실행 구현
 Star Sentinel rule 직접 구현
 StateStore file mutation 구현
@@ -94,7 +94,7 @@ missing report read-only error surface test
 - approval-required job은 approval path와 API/CLI mutation surface를 노출하지만 직접 mutation하지 않는다.
 - UI view model에 secret-like raw value가 그대로 포함되지 않는다.
 - read-only view model은 StateStore artifact를 수정하거나 새 UI artifact를 쓰지 않는다.
-- browser UI app, API server/mutation, provider process, Star Sentinel rule 구현은 포함하지 않는다.
+- browser UI app, HTTP API server, API control mutation, provider process, Star Sentinel rule 구현은 포함하지 않는다.
 
 ## 검증 명령
 
@@ -115,5 +115,5 @@ Cargo incremental finalize 경고가 재발하면, 병렬 Cargo 실행을 피하
 ## 다음 EPIC handoff
 
 ```text
-M8b browser UI shell 또는 API mutation slice를 별도 PR로 설계한다. browser UI package manager, network server, approval/cancel/resume mutation endpoint는 별도 승인과 보안 계약을 확인한 뒤 진행한다.
+E24 API control mutation slice를 별도 PR로 설계한다. 그 이후 M8b browser UI shell은 read-only view model과 API control service를 함께 소비하도록 설계한다.
 ```
