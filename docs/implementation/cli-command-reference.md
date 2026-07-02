@@ -289,6 +289,21 @@ selfcheck
 
 CLI는 Star Sentinel rule을 직접 구현하지 않고 tool command를 호출한다.
 
+M9t 기준 구현:
+
+```text
+star-control sentinel selfcheck --json
+star-control sentinel check --project <path> --job <job-id> --json
+star-control sentinel gate --project <path> --job <job-id> --json
+star-control sentinel review-pack --project <path> --job <job-id> --json
+```
+
+`check`, `gate`, `review-pack`은 `.ai-runs/{job_id}/tool-output/star-sentinel/task.json`과 `changed_lines.json`을 existing input으로 읽는다. `check`는 diagnostics artifact를 쓰고, `gate`는 diagnostics와 approval artifact를 쓰며, `review-pack`은 tool output과 canonical `review-packs/review_pack.md`를 쓴다. output은 schema-valid CLI envelope이며 `actions_enabled=false`를 포함한다.
+
+Star Sentinel의 `AUTO_PASS`, `HUMAN_REVIEW`, `BLOCK`은 command execution error가 아니라 policy decision data다. Artifact 생성이 성공하면 CLI는 success envelope을 반환하고, policy decision은 `status`와 `data.decision`으로 표시한다. missing input, invalid option, schema read failure 같은 command execution failure만 error envelope을 반환한다.
+
+`sentinel` command group은 provider execution, provider live call, release/deploy/publish, destructive recovery action을 실행하지 않는다. provider, stage, release, recovery 같은 unrelated options는 invalid input으로 거부한다.
+
 ## 오류 처리 기준
 
 대표 error example:
@@ -316,6 +331,7 @@ examples/cli-contracts/error-output.example.json
 7. approval request 없이는 approve 실패
 8. terminal job은 cancel 실패
 9. `providers list/show --json` output이 schema를 만족하고 provider healthcheck/action을 실행하지 않음
+10. `sentinel selfcheck/check/gate/review-pack --json` output이 schema를 만족하고 Star Sentinel input/output artifact boundary를 지킴
 
 ## Codex 구현 지시
 

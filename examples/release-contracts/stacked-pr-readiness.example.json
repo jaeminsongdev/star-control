@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
-  "release_id": "stacked-pr-readiness-0001",
+  "release_id": "stacked-pr-readiness-0002",
   "target": "star-control",
-  "version": "m0-m9-stack",
+  "version": "m0-m9-stack-through-m9t",
   "status": "reserved",
   "checks": [
     {
@@ -38,7 +38,9 @@
       "status": "pass",
       "evidence_paths": [
         "docs/implementation/audit/final-completion-audit.md",
-        "examples/release-contracts/complete-implementation-readiness.example.json"
+        "examples/release-contracts/complete-implementation-readiness.example.json",
+        "docs/implementation/briefs/E45-cli-sentinel-command-group.md",
+        "packages/star-control-cli/src/lib.rs"
       ]
     }
   ],

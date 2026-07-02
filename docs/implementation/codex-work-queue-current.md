@@ -3568,6 +3568,236 @@ schema-valid CLI envelope regression test 추가
 M9t는 public CLI surface의 남은 `sentinel` command group을 별도 read-only/tool-wrapper slice로 구현하거나, explicit approval을 받은 뒤 stacked PR ready/merge coordination으로 이어간다. Provider healthcheck, live call, release/deploy/publish, destructive recovery action은 별도 승인 전까지 RESERVED다.
 ```
 
+## E45 CLI Sentinel Command Group
+
+선행 문서:
+
+```text
+cli-command-reference.md
+star-sentinel-full-spec.md
+complete-implementation-roadmap.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-cli/**
+docs/implementation/**
+docs/operations/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider healthcheck 실행
+provider live call
+provider execution
+credential raw value 출력
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+HTTP server 구현
+browser UI app 구현
+Star Sentinel rule engine 중복 구현
+```
+
+입력:
+
+```text
+.ai-runs/{job_id}/tool-output/star-sentinel/task.json
+.ai-runs/{job_id}/tool-output/star-sentinel/changed_lines.json
+builtin-tools/star-sentinel/policies/p0-rule-registry.json
+```
+
+출력:
+
+```text
+star-control sentinel selfcheck --json
+star-control sentinel check --project <path> --job <job-id> --json
+star-control sentinel gate --project <path> --job <job-id> --json
+star-control sentinel review-pack --project <path> --job <job-id> --json
+schema-valid CLI output envelope
+actions_enabled = false
+```
+
+핵심 TASK:
+
+```text
+CLI sentinel selfcheck/check/gate/review-pack subcommand 추가
+Star Sentinel task/changed_lines schema validation 연결
+diagnostics, approval, review-pack artifact writer 연결
+missing input artifact error path 고정
+reserved/mutating/provider/release options reject
+schema-valid CLI envelope regression test 추가
+```
+
+완료 기준: `sentinel selfcheck --json`은 Star Sentinel selfcheck 결과를 schema-valid CLI output envelope으로 반환해야 한다. `sentinel check --project <path> --job <job-id> --json`은 existing `task.json`과 `changed_lines.json`을 읽고 diagnostics artifact를 써야 한다. `sentinel gate`는 같은 평가 결과로 diagnostics와 approval artifact를 써야 한다. `sentinel review-pack`은 같은 평가 결과로 tool output review pack과 canonical `review-packs/review_pack.md`를 써야 한다. missing `task.json` 또는 `changed_lines.json`은 schema-valid CLI error envelope과 project-relative artifact path로 반환해야 한다. provider execution, provider live call, release/deploy/publish, destructive recovery action, schema field, workflow는 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9u는 explicit approval을 받은 뒤 stacked PR ready/merge coordination으로 이어가거나, 별도 승인된 destructive recovery/release action surface를 작은 slice로 다룬다. Provider healthcheck, live call, release/deploy/publish, destructive recovery action, main 병합은 별도 승인 전까지 RESERVED다.
+```
+
+## E46 Final Evidence Refresh
+
+선행 문서:
+
+```text
+complete-implementation-roadmap.md
+codex-work-queue-current.md
+docs/implementation/audit/final-completion-audit.md
+docs/implementation/audit/stacked-pr-readiness.md
+```
+
+허용 파일:
+
+```text
+docs/implementation/**
+examples/release-contracts/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Rust code
+Cargo.toml
+Cargo.lock
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+main branch update
+PR ready/merge action
+```
+
+입력:
+
+```text
+gh pr list --state open --limit 100 --json number,title,baseRefName,headRefName,isDraft,mergeStateStatus,url
+gh pr view 87 --json number,title,url,isDraft,mergeStateStatus,commits
+docs/implementation/audit/final-completion-audit.md
+docs/implementation/audit/stacked-pr-readiness.md
+examples/release-contracts/complete-implementation-readiness.example.json
+examples/release-contracts/stacked-pr-readiness.example.json
+```
+
+출력:
+
+```text
+updated final completion audit evidence through M9t
+updated stacked PR readiness evidence through PR #87
+schema-valid release readiness examples
+M9u handoff record
+```
+
+핵심 TASK:
+
+```text
+final completion audit snapshot을 M9t/#87/CI run 기준으로 갱신
+stacked PR readiness table을 #33~#87로 갱신
+machine-readable ReleaseReadiness examples 갱신
+brief/work queue/roadmap/PLANS 참조 갱신
+approval-gated actions reserved 유지
+```
+
+완료 기준: `docs/implementation/audit/final-completion-audit.md`가 M9t CLI sentinel command group과 PR #87 evidence를 포함해야 한다. `docs/implementation/audit/stacked-pr-readiness.md`가 #33~#87 contiguous clean draft stack을 설명해야 한다. `examples/release-contracts/complete-implementation-readiness.example.json`과 `stacked-pr-readiness.example.json`은 `release-readiness.schema.json`을 만족해야 한다. `ready` status, PR merge, main update, release/deploy/publish, destructive recovery action, repository settings 변경은 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+M9v는 explicit approval을 받은 뒤 stacked PR ready/merge coordination을 수행하거나, 별도 승인된 destructive recovery/release action surface를 작은 slice로 다룬다. 승인 전까지 main update, PR ready/merge, release/deploy/publish, destructive recovery action은 RESERVED다.
+```
+
+## E47 Stacked Merge Procedure
+
+선행 문서:
+
+```text
+docs/implementation/audit/stacked-pr-readiness.md
+docs/implementation/audit/final-completion-audit.md
+docs/implementation/briefs/E46-final-evidence-refresh.md
+```
+
+허용 파일:
+
+```text
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Rust code
+Cargo.toml
+Cargo.lock
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+main branch update
+PR ready/merge action
+```
+
+입력:
+
+```text
+docs/implementation/audit/stacked-pr-readiness.md
+gh pr list --state open --limit 100 --json number,title,baseRefName,headRefName,isDraft,mergeStateStatus,url
+gh run view <latest-top-branch-ci-run>
+```
+
+출력:
+
+```text
+docs/implementation/audit/stacked-pr-merge-procedure.md
+review order
+merge execution order
+pre-merge validation gates
+stop conditions
+explicit approval phrase
+```
+
+핵심 TASK:
+
+```text
+bottom-up human review order 문서화
+top-down stacked branch merge order 문서화
+pre-merge verification command 문서화
+merge 중 stop condition 문서화
+explicit approval phrase 문서화
+no-action/no-main-update boundary 문서화
+```
+
+완료 기준: procedure가 review order와 merge execution order를 분리해서 설명해야 한다. procedure가 branch-to-branch stacked PR의 실제 merge 순서를 top-down으로 고정해야 한다. procedure가 `mergeStateStatus=CLEAN`, draft state, latest CI success, local validation command를 precondition으로 둬야 한다. procedure가 conflict, failed CI, unexpected non-draft, base/head discontinuity 발견 시 즉시 중단하도록 해야 한다. 이 slice는 PR ready/merge, main update, release/deploy/publish, destructive recovery action, repository settings 변경을 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+이후에는 사용자가 explicit approval phrase로 승인한 경우에만 stacked PR ready/merge coordination을 수행한다. 승인 전까지 main update, PR ready/merge, release/deploy/publish, destructive recovery action은 RESERVED다.
+```
+
 ## RESERVED
 
 아래는 E12 이후 별도 작은 PR로 구현한다.
