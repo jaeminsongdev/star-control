@@ -34,10 +34,10 @@ python scripts/ci/run_all.py
 | M3 Validation / Gate | Star Sentinel P0 fixture와 ValidationEngine decision mapping test를 추가한다. |
 | M4 v0 Fake E2E | fake provider integration smoke를 추가한다. |
 | M5 Local Provider | command policy, timeout/cancel, sandbox, stdout/stderr capture test를 추가한다. |
-| M6 Cloud Provider | provider conformance, artifact path/ref/file existence, credential reference, budget/cost, privacy handoff test를 추가한다. |
-| M7 Daemon / API | daemon/API smoke와 resume/cancel/approval regression test를 추가한다. |
-| M8 UI Shell | UI view model contract와 read-only smoke를 추가한다. |
-| M9 Hardening / Release Readiness | security guard, provider conformance suite, release readiness checks를 추가한다. |
+| M6 Cloud Provider | provider conformance, artifact path/ref/file existence, provider request/response fixture, cloud API offline fixture runtime, transport plan artifact, live approval gate artifact/state, credential reference, budget/cost, privacy handoff test를 추가한다. |
+| M7 Daemon / API | CLI approve/cancel/resume regression, daemon queue skeleton test, API read-only service test, in-process API approve/cancel/resume mutation test, daemon/API smoke와 resume/cancel/approval regression test를 추가한다. |
+| M8 UI Shell | `star-control-ui` view model contract, read-only no-write smoke, approval path smoke, browser control shell smoke를 추가한다. |
+| M9 Hardening / Release Readiness | redaction utility/report tests, audit event writer tests, cost metric budget guard tests, provider conformance hardening tests, state recovery inspection tests, recovery command surface tests, release readiness writer tests, release readiness API read tests, release version consistency checker tests, release evidence file discovery tests, release profile readiness integration tests, release readiness UI read tests, release readiness CLI read tests, release review pack writer tests, final M9 readiness audit tests, final completion audit tests, final completion readiness example validation, stacked PR readiness example validation, CLI providers tests, CLI sentinel command group tests, security guard, provider conformance suite, release readiness checks를 추가한다. |
 
 각 단계의 CI 추가는 실패 검사를 삭제하거나 약화하지 않는 별도 PR로 진행한다.
 
