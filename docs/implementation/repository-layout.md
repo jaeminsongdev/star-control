@@ -52,6 +52,7 @@ packages/
   star-control-api/
   star-control-ui/
   star-control-security/
+  star-control-release/
   star-sentinel/
 ```
 
@@ -89,6 +90,7 @@ packages/star-adapter-openai-compatible
 - job.json, run-state.json, events.jsonl 관리
 - atomic write와 append 규칙
 - Star-Control repository 내부 `.ai-runs` 사용 금지
+- inspect-only recovery report for missing/corrupt/tmp artifacts
 
 ### `star-control-schema`
 
@@ -118,6 +120,7 @@ packages/star-adapter-openai-compatible
 - provider instance loading
 - ProviderAdapter interface
 - fake, human, local, cloud provider adapter 경계
+- ProviderConformanceChecker result/ref/file/schema consistency hardening
 
 ### `star-control-validation`
 
@@ -136,6 +139,8 @@ packages/star-adapter-openai-compatible
 ### `star-control-cli`
 
 - `run`, `status`, `report`, `approve`, `cancel`, `resume` 명령
+- `report --release-readiness` read-only release readiness surface
+- `recover --list` inspect-only recovery surface
 - stdout/stderr/exit code 계약
 - daemon 없이도 file-based flow 실행 가능해야 함
 
@@ -159,6 +164,7 @@ packages/star-adapter-openai-compatible
 - API read-only service를 소비하는 UI read-only view model
 - API control service를 소비하는 browser-oriented control shell model
 - job list, job detail, timeline, provider output, validation, approval, review pack viewer data
+- release readiness viewer data
 - approve/cancel/resume action panel과 mutation result view
 - RESERVED: browser UI app, TypeScript/Node package manager, HTTP server, remote UI runtime
 
@@ -175,7 +181,23 @@ packages/star-adapter-openai-compatible
 - schema-valid `audit/audit-events.jsonl` append/readback helper
 - StateStore job directory containment for audit log paths
 - shared redaction utility application before audit persistence
-- RESERVED: API/CLI/daemon/provider automatic audit integration, cost/budget guard, retention/recovery command, release readiness automation
+- CostMetricWriter
+- schema-valid provider output `cost-metric.json` write/readback helper
+- warning-only CostBudgetThresholds evaluation
+- RESERVED: API/CLI/daemon/provider automatic audit/cost integration, hard budget enforcement, retention/recovery command, release readiness automation
+
+### `star-control-release`
+
+- ReleaseReadinessWriter
+- schema-valid `release/release-readiness.json` write/readback helper
+- ReleaseConsistencyChecker for version/changelog checks
+- ReleaseEvidenceFileChecker for read-only version/changelog evidence files
+- ReleaseProfileReadinessBuilder for profile/version/changelog readiness assembly
+- ReleaseReviewPackWriter for `review-packs/release-review-pack.md`
+- M9ReadinessAuditBuilder for final M9 hardening/recovery/release readiness audit assembly
+- CompleteImplementationAuditBuilder for final M0~M9 completion audit assembly
+- reserved/not_ready readiness artifact generation
+- RESERVED: signing, publish, deploy automation, repository/package registry settings changes
 
 ### `star-sentinel`
 
