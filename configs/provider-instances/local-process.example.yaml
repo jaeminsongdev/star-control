@@ -7,6 +7,14 @@ limits:
 routing_tags:
   - local
   - process
+command_policy:
+  shell: false
+  allowed_executables:
+    - runner
+  env_allowlist: []
+  cwd_policy: project_root
+  network: deny
+  workspace_write: deny
 command:
   executable: runner
   model_path: model.gguf
