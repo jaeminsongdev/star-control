@@ -7,6 +7,11 @@ members = [
     "packages/star-control-execution",
     "packages/star-control-validation",
     "packages/star-control-daemon",
+    "packages/star-control-api",
+    "packages/star-control-ui",
+    "packages/star-control-security",
+    "packages/star-control-observability",
+    "packages/star-control-release",
     "packages/star-control-cli",
     "packages/star-sentinel",
 ]

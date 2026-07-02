@@ -1,9 +1,20 @@
 use serde_json::{json, Value};
 use star_control_execution::{ExecutionEngine, ExecutionError};
-use star_control_provider::{ProviderRegistry, ProviderRegistryError, ProviderRegistryLoader};
+use star_control_provider::{
+    CapabilityProfile, ProviderManifest, ProviderRegistry, ProviderRegistryError,
+    ProviderRegistryLoader,
+};
+use star_control_release::{ReleaseReadinessError, ReleaseReadinessWriter, RELEASE_READINESS_PATH};
 use star_control_router::{JobSpec, RouterEngine, RouterError};
 use star_control_schema::{load_schema, validate_json};
 use star_control_state::{StateStore, StateStoreError};
+use star_sentinel::{
+    build_diagnostics_artifact, build_review_pack_artifact, read_changed_lines,
+    read_p0_rule_registry, read_task, run_selfcheck, validate_diagnostics_artifact,
+    write_gate_artifacts, write_review_pack_artifacts, ChangedLines, Decision, EvaluationResult,
+    P0Evaluator, ReviewValidation, SentinelError, SentinelTask, CHANGED_LINES_SCHEMA,
+    DIAGNOSTICS_FILE, SENTINEL_TASK_SCHEMA, STAR_SENTINEL_TOOL_OUTPUT_DIR,
+};
 use std::error::Error;
 use std::fmt;
 use std::fs;
@@ -17,6 +28,7 @@ const APPROVAL_RESPONSE_SCHEMA: &str = "approval-response.schema.json";
 const SCHEMA_VERSION: &str = "1.0.0";
 const DEFAULT_PROVIDER: &str = "fake-default";
 const DEFAULT_ENTRYPOINT: &str = "star-control";
+const BUILTIN_PROVIDER_REGISTRY: &str = "configs/registries/builtin-provider-registry.yaml";
 const TERMINAL_STATES: &[&str] = &["DONE", "FAILED", "BLOCKED", "CANCELLED"];
 
 #[derive(Debug, Clone)]
@@ -74,6 +86,14 @@ pub enum CliError {
         command: String,
         source: ProviderRegistryError,
     },
+    Sentinel {
+        command: String,
+        source: SentinelError,
+    },
+    ReleaseReadiness {
+        command: String,
+        source: ReleaseReadinessError,
+    },
     Execution {
         command: String,
         source: ExecutionError,
@@ -93,6 +113,8 @@ impl CliError {
             | Self::State { command, .. }
             | Self::Router { command, .. }
             | Self::ProviderRegistry { command, .. }
+            | Self::Sentinel { command, .. }
+            | Self::ReleaseReadiness { command, .. }
             | Self::Execution { command, .. }
             | Self::Internal { command, .. } => command,
         }
@@ -103,7 +125,11 @@ impl CliError {
             Self::InvalidInput { .. } => 2,
             Self::MissingArtifact { .. } | Self::State { .. } => 3,
             Self::ProviderExecution { .. } | Self::Execution { .. } => 4,
-            Self::Router { .. } | Self::ProviderRegistry { .. } | Self::Internal { .. } => 5,
+            Self::Router { .. }
+            | Self::ProviderRegistry { .. }
+            | Self::Sentinel { .. }
+            | Self::Internal { .. } => 5,
+            Self::ReleaseReadiness { .. } => 5,
         }
     }
 
@@ -115,6 +141,8 @@ impl CliError {
             Self::State { .. } => "StateReadFailed",
             Self::Router { .. } => "RouteFailed",
             Self::ProviderRegistry { .. } => "ProviderRegistryFailed",
+            Self::Sentinel { .. } => "StarSentinelFailed",
+            Self::ReleaseReadiness { .. } => "ReleaseReadinessReadFailed",
             Self::Execution { .. } => "ExecutionFailed",
             Self::Internal { .. } => "InternalError",
         }
@@ -127,6 +155,8 @@ impl CliError {
             Self::ProviderExecution { .. } | Self::Execution { .. } => "provider-execution",
             Self::Router { .. } => "router",
             Self::ProviderRegistry { .. } => "provider-registry",
+            Self::Sentinel { .. } => "star-sentinel",
+            Self::ReleaseReadiness { .. } => "release-readiness",
             Self::Internal { .. } => "internal",
         }
     }
@@ -140,6 +170,8 @@ impl CliError {
             Self::State { source, .. } => source.to_string(),
             Self::Router { source, .. } => source.to_string(),
             Self::ProviderRegistry { source, .. } => source.to_string(),
+            Self::Sentinel { source, .. } => source.to_string(),
+            Self::ReleaseReadiness { source, .. } => source.to_string(),
             Self::Execution { source, .. } => source.to_string(),
         }
     }
@@ -163,6 +195,8 @@ impl Error for CliError {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ParsedArgs {
     command: String,
+    subcommand: Option<String>,
+    subject: Option<String>,
     project: Option<PathBuf>,
     job_id: Option<String>,
     request: Option<String>,
@@ -173,6 +207,8 @@ struct ParsedArgs {
     response: Option<String>,
     reason: Option<String>,
     constraints: Vec<String>,
+    release_readiness: bool,
+    recovery_list: bool,
     dry_run: bool,
     json: bool,
     markdown: bool,
@@ -208,6 +244,9 @@ where
         "approve" => approve_command(&parsed, config),
         "cancel" => cancel_command(&parsed, config),
         "resume" => resume_command(&parsed, config),
+        "recover" => recover_command(&parsed, config),
+        "providers" => providers_command(&parsed, config),
+        "sentinel" => sentinel_command(&parsed, config),
         _ => Err(CliError::InvalidInput {
             command,
             message: "unsupported command".to_string(),
@@ -230,6 +269,8 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
 
     let mut parsed = ParsedArgs {
         command: command.clone(),
+        subcommand: None,
+        subject: None,
         project: None,
         job_id: None,
         request: None,
@@ -240,6 +281,8 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
         response: None,
         reason: None,
         constraints: Vec::new(),
+        release_readiness: false,
+        recovery_list: false,
         dry_run: false,
         json: false,
         markdown: false,
@@ -318,8 +361,22 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
                 )?);
             }
             "--dry-run" => parsed.dry_run = true,
+            "--release-readiness" => parsed.release_readiness = true,
+            "--list" => parsed.recovery_list = true,
             "--json" => parsed.json = true,
             "--markdown" => parsed.markdown = true,
+            positional if is_command_group_position(&command, positional) => {
+                if parsed.subcommand.is_none() {
+                    parsed.subcommand = Some(positional.to_string());
+                } else if parsed.subject.is_none() {
+                    parsed.subject = Some(positional.to_string());
+                } else {
+                    return Err(CliError::InvalidInput {
+                        command,
+                        message: format!("unsupported argument {}", positional),
+                    });
+                }
+            }
             unknown => {
                 return Err(CliError::InvalidInput {
                     command,
@@ -331,6 +388,10 @@ fn parse_args(args: &[String]) -> Result<ParsedArgs, CliError> {
     }
 
     Ok(parsed)
+}
+
+fn is_command_group_position(command: &str, argument: &str) -> bool {
+    matches!(command, "providers" | "sentinel") && !argument.starts_with("--")
 }
 
 fn require_option_value(
@@ -542,6 +603,502 @@ fn load_run_registry(
     Ok(registry)
 }
 
+fn providers_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    reject_provider_command_options(parsed)?;
+    let subcommand = parsed
+        .subcommand
+        .as_deref()
+        .ok_or_else(|| CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "providers requires subcommand list or show".to_string(),
+        })?;
+    match subcommand {
+        "list" => providers_list_command(parsed, config),
+        "show" => providers_show_command(parsed, config),
+        "healthcheck" => Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "providers healthcheck is reserved until provider smoke checks are enabled"
+                .to_string(),
+        }),
+        other => Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: format!("unsupported providers subcommand {}", other),
+        }),
+    }
+}
+
+fn providers_list_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    if parsed.provider.is_some() || parsed.subject.is_some() {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "providers list does not accept provider id arguments".to_string(),
+        });
+    }
+    let registry = load_builtin_provider_registry(parsed, config)?;
+    let providers: Vec<Value> = registry
+        .providers()
+        .into_iter()
+        .map(|manifest| {
+            let profile = registry.capability_profile(manifest.id());
+            provider_summary_value(manifest, profile, config)
+        })
+        .collect();
+
+    Ok(success_envelope(
+        "providers",
+        "success",
+        json!({
+            "subcommand": "list",
+            "registry_path": BUILTIN_PROVIDER_REGISTRY,
+            "provider_count": providers.len(),
+            "providers": providers,
+            "healthcheck_enabled": false,
+            "actions_enabled": false
+        }),
+        Vec::new(),
+    ))
+}
+
+fn providers_show_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    let provider_id = match (parsed.subject.as_deref(), parsed.provider.as_deref()) {
+        (Some(subject), Some(provider)) if subject != provider => {
+            return Err(CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!(
+                    "providers show provider id mismatch: argument {}, --provider {}",
+                    subject, provider
+                ),
+            });
+        }
+        (Some(subject), _) => subject.to_string(),
+        (_, Some(provider)) => provider.to_string(),
+        (None, None) => {
+            return Err(CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: "providers show requires a provider id".to_string(),
+            });
+        }
+    };
+
+    let registry = load_builtin_provider_registry(parsed, config)?;
+    let manifest = registry
+        .manifest(&provider_id)
+        .ok_or_else(|| CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: format!("provider {} is not registered", provider_id),
+        })?;
+    let profile =
+        registry
+            .capability_profile(&provider_id)
+            .ok_or_else(|| CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!("provider {} has no capability profile", provider_id),
+            })?;
+
+    Ok(success_envelope(
+        "providers",
+        "success",
+        json!({
+            "subcommand": "show",
+            "registry_path": BUILTIN_PROVIDER_REGISTRY,
+            "provider": provider_summary_value(manifest, Some(profile), config),
+            "manifest": manifest.value(),
+            "capability_profile": profile.value(),
+            "healthcheck_enabled": false,
+            "actions_enabled": false
+        }),
+        Vec::new(),
+    ))
+}
+
+fn load_builtin_provider_registry(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+) -> Result<ProviderRegistry, CliError> {
+    let loader = ProviderRegistryLoader::new(config.repo_root());
+    loader
+        .load_registry(BUILTIN_PROVIDER_REGISTRY, &[])
+        .map_err(|source| CliError::ProviderRegistry {
+            command: parsed.command.clone(),
+            source,
+        })
+}
+
+fn provider_summary_value(
+    manifest: &ProviderManifest,
+    profile: Option<&CapabilityProfile>,
+    config: &CliConfig,
+) -> Value {
+    json!({
+        "id": manifest.id(),
+        "kind": manifest.kind(),
+        "transport": manifest.transport(),
+        "adapter": manifest.adapter(),
+        "manifest_path": repo_relative_path(config.repo_root(), manifest.path()),
+        "capabilities_path": profile
+            .map(|profile| repo_relative_path(config.repo_root(), profile.path()))
+            .unwrap_or_default(),
+        "routing_tags": profile
+            .map(|profile| profile.routing_tags().to_vec())
+            .unwrap_or_default()
+    })
+}
+
+fn reject_provider_command_options(parsed: &ParsedArgs) -> Result<(), CliError> {
+    let unsupported = [
+        (parsed.project.is_some(), "--project"),
+        (parsed.job_id.is_some(), "--job"),
+        (parsed.request.is_some(), "--request"),
+        (parsed.entrypoint.is_some(), "--entrypoint"),
+        (!parsed.provider_instances.is_empty(), "--provider-instance"),
+        (parsed.stage.is_some(), "--stage"),
+        (parsed.response.is_some(), "--response"),
+        (parsed.reason.is_some(), "--reason"),
+        (!parsed.constraints.is_empty(), "--constraint"),
+        (parsed.release_readiness, "--release-readiness"),
+        (parsed.recovery_list, "--list"),
+        (parsed.dry_run, "--dry-run"),
+        (parsed.markdown, "--markdown"),
+    ];
+    for (is_set, option) in unsupported {
+        if is_set {
+            return Err(CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!("providers does not accept {}", option),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn repo_relative_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn sentinel_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    let subcommand = parsed
+        .subcommand
+        .as_deref()
+        .ok_or_else(|| CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "sentinel requires subcommand check, gate, review-pack, or selfcheck"
+                .to_string(),
+        })?;
+    match subcommand {
+        "check" => sentinel_check_command(parsed, config),
+        "gate" => sentinel_gate_command(parsed, config),
+        "review-pack" => sentinel_review_pack_command(parsed, config),
+        "selfcheck" => sentinel_selfcheck_command(parsed, config),
+        other => Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: format!("unsupported sentinel subcommand {}", other),
+        }),
+    }
+}
+
+fn sentinel_check_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    reject_sentinel_command_options(parsed, true)?;
+    let job_id = required_job(parsed)?;
+    let (store, task, _changed_lines, result) = evaluate_sentinel_job(parsed, config, &job_id)?;
+    let diagnostics = build_diagnostics_artifact(&result);
+    let sentinel_schema_root = sentinel_schema_root(config);
+    validate_diagnostics_artifact(&diagnostics, &sentinel_schema_root).map_err(|source| {
+        CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        }
+    })?;
+    store
+        .write_tool_json(
+            &job_id,
+            STAR_SENTINEL_TOOL_OUTPUT_DIR,
+            DIAGNOSTICS_FILE,
+            &diagnostics,
+        )
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let diagnostics_path = sentinel_artifact_path(&job_id, DIAGNOSTICS_FILE);
+
+    Ok(success_envelope(
+        "sentinel",
+        "success",
+        json!({
+            "subcommand": "check",
+            "job_id": job_id,
+            "task_id": task.task_id,
+            "decision": result.decision.as_str(),
+            "diagnostic_count": result.diagnostics.len(),
+            "diagnostics": diagnostics,
+            "diagnostics_path": diagnostics_path,
+            "actions_enabled": false
+        }),
+        vec![diagnostics_path],
+    ))
+}
+
+fn sentinel_gate_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    reject_sentinel_command_options(parsed, true)?;
+    let job_id = required_job(parsed)?;
+    let (store, task, _changed_lines, result) = evaluate_sentinel_job(parsed, config, &job_id)?;
+    write_gate_artifacts(
+        &store,
+        &job_id,
+        &task,
+        &result,
+        sentinel_schema_root(config),
+    )
+    .map_err(|source| CliError::Sentinel {
+        command: parsed.command.clone(),
+        source,
+    })?;
+    let diagnostics_path = sentinel_artifact_path(&job_id, DIAGNOSTICS_FILE);
+    let approval_path = sentinel_artifact_path(&job_id, star_sentinel::APPROVAL_FILE);
+
+    Ok(success_envelope(
+        "sentinel",
+        status_for_sentinel_decision(result.decision),
+        json!({
+            "subcommand": "gate",
+            "job_id": job_id,
+            "task_id": task.task_id,
+            "decision": result.decision.as_str(),
+            "diagnostic_count": result.diagnostics.len(),
+            "diagnostics_path": diagnostics_path,
+            "approval_path": approval_path,
+            "actions_enabled": false
+        }),
+        vec![diagnostics_path, approval_path],
+    ))
+}
+
+fn sentinel_review_pack_command(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+) -> Result<Value, CliError> {
+    reject_sentinel_command_options(parsed, true)?;
+    let job_id = required_job(parsed)?;
+    let (store, task, changed_lines, result) = evaluate_sentinel_job(parsed, config, &job_id)?;
+    let review_pack = build_review_pack_artifact(
+        &task,
+        &changed_lines,
+        &result,
+        &[ReviewValidation::new(
+            "star-control sentinel check",
+            validation_result_for_sentinel_decision(result.decision),
+        )],
+    );
+    write_review_pack_artifacts(&store, &job_id, &review_pack, sentinel_schema_root(config))
+        .map_err(|source| CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let tool_json_path = sentinel_artifact_path(&job_id, star_sentinel::REVIEW_PACK_JSON_FILE);
+    let tool_markdown_path =
+        sentinel_artifact_path(&job_id, star_sentinel::REVIEW_PACK_MARKDOWN_FILE);
+    let review_json_path = format!(
+        ".ai-runs/{}/review-packs/{}",
+        job_id,
+        star_sentinel::REVIEW_PACK_JSON_FILE
+    );
+    let review_markdown_path = format!(
+        ".ai-runs/{}/review-packs/{}",
+        job_id,
+        star_sentinel::REVIEW_PACK_MARKDOWN_FILE
+    );
+
+    Ok(success_envelope(
+        "sentinel",
+        status_for_sentinel_decision(result.decision),
+        json!({
+            "subcommand": "review-pack",
+            "job_id": job_id,
+            "task_id": task.task_id,
+            "decision": result.decision.as_str(),
+            "review_pack_path": review_markdown_path,
+            "tool_review_pack_path": tool_markdown_path,
+            "actions_enabled": false
+        }),
+        vec![
+            tool_json_path,
+            tool_markdown_path,
+            review_json_path,
+            review_markdown_path,
+        ],
+    ))
+}
+
+fn sentinel_selfcheck_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    reject_sentinel_command_options(parsed, false)?;
+    let report = run_selfcheck(config.repo_root());
+    Ok(success_envelope(
+        "sentinel",
+        if report.ok { "success" } else { "failed" },
+        json!({
+            "subcommand": "selfcheck",
+            "ok": report.ok,
+            "diagnostic_count": report.diagnostics.len(),
+            "diagnostics": report.diagnostics,
+            "actions_enabled": false
+        }),
+        Vec::new(),
+    ))
+}
+
+fn evaluate_sentinel_job(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+    job_id: &str,
+) -> Result<(StateStore, SentinelTask, ChangedLines, EvaluationResult), CliError> {
+    let project = required_project(parsed)?;
+    let store =
+        StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let task_path = require_sentinel_input(&store, job_id, "task.json", SENTINEL_TASK_SCHEMA)?;
+    let changed_lines_path =
+        require_sentinel_input(&store, job_id, "changed_lines.json", CHANGED_LINES_SCHEMA)?;
+    let sentinel_schema_root = sentinel_schema_root(config);
+    let task =
+        read_task(&task_path, &sentinel_schema_root).map_err(|source| CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let changed_lines =
+        read_changed_lines(&changed_lines_path, &sentinel_schema_root).map_err(|source| {
+            CliError::Sentinel {
+                command: parsed.command.clone(),
+                source,
+            }
+        })?;
+    let registry = read_p0_rule_registry(sentinel_registry_path(config), &sentinel_schema_root)
+        .map_err(|source| CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let result = P0Evaluator::new(registry)
+        .evaluate(&task, &changed_lines)
+        .map_err(|source| CliError::Sentinel {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    Ok((store, task, changed_lines, result))
+}
+
+fn require_sentinel_input(
+    store: &StateStore,
+    job_id: &str,
+    file_name: &str,
+    schema_name: &str,
+) -> Result<PathBuf, CliError> {
+    let relative_path = format!(
+        "tool-output/{}/{}",
+        STAR_SENTINEL_TOOL_OUTPUT_DIR, file_name
+    );
+    let path = store
+        .resolve_job_path(job_id, &relative_path)
+        .map_err(|source| CliError::State {
+            command: "sentinel".to_string(),
+            source,
+        })?;
+    if path.is_file() {
+        Ok(path)
+    } else {
+        Err(CliError::MissingArtifact {
+            command: "sentinel".to_string(),
+            message: format!(
+                "required Star Sentinel input not found: {} ({})",
+                relative_path, schema_name
+            ),
+            artifact_paths: vec![format!(".ai-runs/{}/{}", job_id, relative_path)],
+        })
+    }
+}
+
+fn reject_sentinel_command_options(
+    parsed: &ParsedArgs,
+    requires_project_job: bool,
+) -> Result<(), CliError> {
+    let unsupported = [
+        (parsed.subject.is_some(), "extra positional argument"),
+        (parsed.request.is_some(), "--request"),
+        (parsed.entrypoint.is_some(), "--entrypoint"),
+        (parsed.provider.is_some(), "--provider"),
+        (!parsed.provider_instances.is_empty(), "--provider-instance"),
+        (parsed.stage.is_some(), "--stage"),
+        (parsed.response.is_some(), "--response"),
+        (parsed.reason.is_some(), "--reason"),
+        (!parsed.constraints.is_empty(), "--constraint"),
+        (parsed.release_readiness, "--release-readiness"),
+        (parsed.recovery_list, "--list"),
+        (parsed.dry_run, "--dry-run"),
+        (parsed.markdown, "--markdown"),
+    ];
+    for (is_set, option) in unsupported {
+        if is_set {
+            return Err(CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!("sentinel does not accept {}", option),
+            });
+        }
+    }
+    if requires_project_job {
+        let _ = required_project(parsed)?;
+        let _ = required_job(parsed)?;
+    } else if parsed.project.is_some() || parsed.job_id.is_some() {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "sentinel selfcheck does not accept --project or --job".to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn sentinel_schema_root(config: &CliConfig) -> PathBuf {
+    config
+        .repo_root()
+        .join("builtin-tools")
+        .join("star-sentinel")
+        .join("schemas")
+}
+
+fn sentinel_registry_path(config: &CliConfig) -> PathBuf {
+    config
+        .repo_root()
+        .join("builtin-tools")
+        .join("star-sentinel")
+        .join("policies")
+        .join("p0-rule-registry.json")
+}
+
+fn sentinel_artifact_path(job_id: &str, file_name: &str) -> String {
+    format!(
+        ".ai-runs/{}/tool-output/{}/{}",
+        job_id, STAR_SENTINEL_TOOL_OUTPUT_DIR, file_name
+    )
+}
+
+fn status_for_sentinel_decision(decision: Decision) -> &'static str {
+    match decision {
+        Decision::AutoPass => "success",
+        Decision::HumanReview => "waiting_approval",
+        Decision::Block => "blocked",
+    }
+}
+
+fn validation_result_for_sentinel_decision(decision: Decision) -> &'static str {
+    match decision {
+        Decision::AutoPass => "PASS",
+        Decision::HumanReview => "HUMAN_REVIEW",
+        Decision::Block => "BLOCK",
+    }
+}
+
 fn route_value_for_provider(route: &Value, provider_instance_id: &str) -> Value {
     let mut route = route.clone();
     if provider_instance_id == DEFAULT_PROVIDER {
@@ -646,6 +1203,9 @@ fn status_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliE
 fn report_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
     let project = required_project(parsed)?;
     let job_id = required_job(parsed)?;
+    if parsed.release_readiness {
+        return release_readiness_report_command(parsed, config, project, job_id);
+    }
     let stage = parsed.stage.as_deref().unwrap_or("implement");
     let store =
         StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
@@ -681,6 +1241,54 @@ fn report_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliE
             "report": report
         }),
         vec![format!(".ai-runs/{}/reports/{}.json", job_id, report_name)],
+    ))
+}
+
+fn release_readiness_report_command(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+    project: PathBuf,
+    job_id: String,
+) -> Result<Value, CliError> {
+    if parsed.stage.is_some() {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "--stage cannot be combined with --release-readiness".to_string(),
+        });
+    }
+    let store =
+        StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    store.load_job(&job_id).map_err(|source| CliError::State {
+        command: parsed.command.clone(),
+        source,
+    })?;
+    let writer = ReleaseReadinessWriter::new(config.schema_root());
+    let readiness = writer
+        .read(&store, &job_id)
+        .map_err(|source| CliError::ReleaseReadiness {
+            command: parsed.command.clone(),
+            source,
+        })?
+        .ok_or_else(|| CliError::MissingArtifact {
+            command: parsed.command.clone(),
+            message: "release readiness artifact not found".to_string(),
+            artifact_paths: vec![format!(".ai-runs/{}/{}", job_id, RELEASE_READINESS_PATH)],
+        })?;
+
+    Ok(success_envelope(
+        "report",
+        "success",
+        json!({
+            "job_id": job_id,
+            "report_kind": "release_readiness",
+            "release_readiness_path": format!(".ai-runs/{}/{}", job_id, RELEASE_READINESS_PATH),
+            "release_actions_enabled": false,
+            "readiness": readiness
+        }),
+        vec![format!(".ai-runs/{}/{}", job_id, RELEASE_READINESS_PATH)],
     ))
 }
 
@@ -1009,6 +1617,72 @@ fn resume_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliE
             "resumed": false
         }),
         vec![format!(".ai-runs/{}/run-state.json", job_id)],
+    ))
+}
+
+fn recover_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    let project = required_project(parsed)?;
+    let job_id = required_job(parsed)?;
+    if !parsed.recovery_list {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "recover currently supports --list only".to_string(),
+        });
+    }
+    if parsed.release_readiness
+        || parsed.stage.is_some()
+        || parsed.markdown
+        || parsed.dry_run
+        || parsed.request.is_some()
+        || parsed.entrypoint.is_some()
+        || parsed.provider.is_some()
+        || !parsed.provider_instances.is_empty()
+        || parsed.response.is_some()
+        || parsed.reason.is_some()
+        || !parsed.constraints.is_empty()
+    {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "recover --list only accepts --project, --job, --list, and --json".to_string(),
+        });
+    }
+
+    let store =
+        StateStore::open(&project, config.schema_root()).map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let inspection = store
+        .inspect_recovery(&job_id)
+        .map_err(|source| CliError::State {
+            command: parsed.command.clone(),
+            source,
+        })?;
+    let inspection_value = inspection.to_value();
+    let mut artifacts = vec![
+        format!(".ai-runs/{}/job.json", job_id),
+        format!(".ai-runs/{}/run-state.json", job_id),
+        format!(".ai-runs/{}/events.jsonl", job_id),
+    ];
+    artifacts.extend(
+        inspection
+            .issues
+            .iter()
+            .map(|issue| format!(".ai-runs/{}/{}", job_id, issue.artifact_path)),
+    );
+    artifacts.sort();
+    artifacts.dedup();
+
+    Ok(success_envelope(
+        "recover",
+        "success",
+        json!({
+            "job_id": job_id,
+            "mode": "inspect_only",
+            "recovery_actions_enabled": false,
+            "recovery": inspection_value
+        }),
+        artifacts,
     ))
 }
 
@@ -1449,7 +2123,10 @@ fn human_summary(envelope: &Value) -> String {
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEMP_PROJECT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn run_status_and_report_json_work_for_fake_project() {
@@ -1540,6 +2217,444 @@ mod tests {
         assert!(!project
             .join(".ai-runs/J-0001/provider-output/fake-default/response.json")
             .exists());
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn providers_list_and_show_are_schema_valid_and_read_only() {
+        let config = CliConfig::new(repo_root());
+
+        let list = run_cli(["providers", "list", "--json"], &config);
+        assert_eq!(list.exit_code, 0, "{}", list.stderr);
+        let list_json: Value = serde_json::from_str(&list.stdout).expect("providers list json");
+        assert_eq!(list_json["command"], "providers");
+        assert_eq!(list_json["data"]["subcommand"], "list");
+        assert_eq!(list_json["data"]["actions_enabled"], false);
+        assert_eq!(list_json["data"]["healthcheck_enabled"], false);
+        assert_eq!(
+            list_json["artifacts"].as_array().expect("artifacts").len(),
+            0
+        );
+        let providers = list_json["data"]["providers"]
+            .as_array()
+            .expect("providers array");
+        assert!(providers.len() >= 20);
+        let fake = providers
+            .iter()
+            .find(|provider| provider["id"] == "provider.fake")
+            .expect("provider.fake listed");
+        assert_eq!(fake["kind"], "fake_provider");
+        assert_eq!(
+            fake["manifest_path"],
+            "builtin-providers/test/fake-provider/provider.yaml"
+        );
+
+        let show = run_cli(["providers", "show", "provider.fake", "--json"], &config);
+        assert_eq!(show.exit_code, 0, "{}", show.stderr);
+        let show_json: Value = serde_json::from_str(&show.stdout).expect("providers show json");
+        assert_eq!(show_json["command"], "providers");
+        assert_eq!(show_json["data"]["subcommand"], "show");
+        assert_eq!(show_json["data"]["provider"]["id"], "provider.fake");
+        assert_eq!(
+            show_json["data"]["capability_profile"]["provider"],
+            "provider.fake"
+        );
+        assert_eq!(show_json["data"]["actions_enabled"], false);
+        assert_eq!(show_json["data"]["healthcheck_enabled"], false);
+
+        let show_with_option = run_cli(
+            ["providers", "show", "--provider", "provider.fake", "--json"],
+            &config,
+        );
+        assert_eq!(show_with_option.exit_code, 0, "{}", show_with_option.stderr);
+        let show_with_option_json: Value =
+            serde_json::from_str(&show_with_option.stdout).expect("providers show option json");
+        assert_eq!(
+            show_with_option_json["data"]["provider"]["id"],
+            "provider.fake"
+        );
+    }
+
+    #[test]
+    fn providers_rejects_mutating_or_reserved_options() {
+        let config = CliConfig::new(repo_root());
+
+        let missing = run_cli(["providers", "show", "--json"], &config);
+        assert_eq!(missing.exit_code, 2);
+        let missing_json: Value =
+            serde_json::from_str(&missing.stdout).expect("missing provider error");
+        assert_eq!(missing_json["error"]["code"], "InvalidInput");
+
+        let reserved = run_cli(["providers", "healthcheck", "--json"], &config);
+        assert_eq!(reserved.exit_code, 2);
+        let reserved_json: Value =
+            serde_json::from_str(&reserved.stdout).expect("reserved provider error");
+        assert_eq!(reserved_json["error"]["code"], "InvalidInput");
+        assert!(reserved_json["error"]["message"]
+            .as_str()
+            .expect("message")
+            .contains("reserved"));
+
+        let invalid_option = run_cli(
+            [
+                "providers",
+                "list",
+                "--project",
+                "target/not-used",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(invalid_option.exit_code, 2);
+    }
+
+    #[test]
+    fn sentinel_commands_wrap_star_sentinel_artifacts() {
+        let config = CliConfig::new(repo_root());
+
+        let selfcheck = run_cli(["sentinel", "selfcheck", "--json"], &config);
+        assert_eq!(selfcheck.exit_code, 0, "{}", selfcheck.stderr);
+        let selfcheck_json: Value =
+            serde_json::from_str(&selfcheck.stdout).expect("selfcheck json");
+        assert_eq!(selfcheck_json["command"], "sentinel");
+        assert_eq!(selfcheck_json["data"]["subcommand"], "selfcheck");
+        assert_eq!(selfcheck_json["data"]["ok"], true);
+        assert_eq!(selfcheck_json["data"]["actions_enabled"], false);
+
+        let check_project = temp_project();
+        write_sentinel_input_job(&check_project, "p0-auto-pass", vec!["src/**"], "src/lib.rs");
+        let check = run_cli(
+            [
+                "sentinel",
+                "check",
+                "--project",
+                check_project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(check.exit_code, 0, "{}", check.stderr);
+        let check_json: Value = serde_json::from_str(&check.stdout).expect("check json");
+        assert_eq!(check_json["data"]["subcommand"], "check");
+        assert_eq!(check_json["data"]["decision"], "AUTO_PASS");
+        assert_eq!(check_json["data"]["actions_enabled"], false);
+        assert!(check_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/diagnostics.json")
+            .is_file());
+        assert!(!check_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/approval.json")
+            .exists());
+
+        let gate_project = temp_project();
+        write_sentinel_input_job(&gate_project, "p0-human-review", vec!["**"], "Cargo.toml");
+        let gate = run_cli(
+            [
+                "sentinel",
+                "gate",
+                "--project",
+                gate_project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(gate.exit_code, 0, "{}", gate.stderr);
+        let gate_json: Value = serde_json::from_str(&gate.stdout).expect("gate json");
+        assert_eq!(gate_json["status"], "waiting_approval");
+        assert_eq!(gate_json["data"]["decision"], "HUMAN_REVIEW");
+        assert!(gate_project
+            .join(".ai-runs/J-0001/tool-output/star-sentinel/approval.json")
+            .is_file());
+
+        let review_project = temp_project();
+        write_sentinel_input_job(
+            &review_project,
+            "p0-block",
+            vec!["src/allowed/**"],
+            "src/other.rs",
+        );
+        let review = run_cli(
+            [
+                "sentinel",
+                "review-pack",
+                "--project",
+                review_project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(review.exit_code, 0, "{}", review.stderr);
+        let review_json: Value = serde_json::from_str(&review.stdout).expect("review json");
+        assert_eq!(review_json["status"], "blocked");
+        assert_eq!(review_json["data"]["decision"], "BLOCK");
+        assert!(review_project
+            .join(".ai-runs/J-0001/review-packs/review_pack.md")
+            .is_file());
+
+        fs::remove_dir_all(check_project).ok();
+        fs::remove_dir_all(gate_project).ok();
+        fs::remove_dir_all(review_project).ok();
+    }
+
+    #[test]
+    fn sentinel_rejects_missing_inputs_and_reserved_options() {
+        let config = CliConfig::new(repo_root());
+        let project = temp_project();
+        let store =
+            StateStore::open(&project, repo_root().join("specs/schemas")).expect("open store");
+        store
+            .create_job("missing sentinel inputs", "codex", vec![])
+            .expect("create job");
+
+        let missing = run_cli(
+            [
+                "sentinel",
+                "check",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(missing.exit_code, 3);
+        let missing_json: Value = serde_json::from_str(&missing.stdout).expect("missing json");
+        assert_eq!(missing_json["error"]["code"], "MissingArtifact");
+        assert_eq!(
+            missing_json["error"]["artifact_paths"][0],
+            ".ai-runs/J-0001/tool-output/star-sentinel/task.json"
+        );
+
+        let invalid_selfcheck = run_cli(
+            [
+                "sentinel",
+                "selfcheck",
+                "--project",
+                project.to_str().expect("project path"),
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(invalid_selfcheck.exit_code, 2);
+
+        let invalid_option = run_cli(
+            [
+                "sentinel",
+                "gate",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--provider",
+                "fake-default",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(invalid_option.exit_code, 2);
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn report_release_readiness_reads_existing_artifact_without_mutation() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        write_release_readiness_job(&project, true);
+        let readiness_path = project.join(".ai-runs/J-0001/release/release-readiness.json");
+        let before_readiness = fs::read_to_string(&readiness_path).expect("read readiness before");
+
+        let report = run_cli(
+            [
+                "report",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--release-readiness",
+                "--json",
+            ],
+            &config,
+        );
+
+        assert_eq!(report.exit_code, 0, "{}", report.stderr);
+        let report_json: Value = serde_json::from_str(&report.stdout).expect("report json");
+        assert_eq!(report_json["command"], "report");
+        assert_eq!(report_json["data"]["report_kind"], "release_readiness");
+        assert_eq!(report_json["data"]["release_actions_enabled"], false);
+        assert_eq!(
+            report_json["data"]["release_readiness_path"],
+            ".ai-runs/J-0001/release/release-readiness.json"
+        );
+        assert_eq!(report_json["data"]["readiness"]["status"], "reserved");
+        assert_eq!(
+            report_json["artifacts"][0],
+            ".ai-runs/J-0001/release/release-readiness.json"
+        );
+        let after_readiness = fs::read_to_string(&readiness_path).expect("read readiness after");
+        assert_eq!(after_readiness, before_readiness);
+        assert!(!project
+            .join(".ai-runs/J-0001/release/release-action.json")
+            .exists());
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn report_release_readiness_requires_existing_artifact_and_rejects_stage() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        write_release_readiness_job(&project, false);
+
+        let missing = run_cli(
+            [
+                "report",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--release-readiness",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(missing.exit_code, 3);
+        let missing_json: Value = serde_json::from_str(&missing.stdout).expect("missing json");
+        assert_eq!(missing_json["error"]["code"], "MissingArtifact");
+        assert_eq!(
+            missing_json["error"]["artifact_paths"][0],
+            ".ai-runs/J-0001/release/release-readiness.json"
+        );
+
+        let invalid = run_cli(
+            [
+                "report",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--release-readiness",
+                "--stage",
+                "implement",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(invalid.exit_code, 2);
+        let invalid_json: Value = serde_json::from_str(&invalid.stdout).expect("invalid json");
+        assert_eq!(invalid_json["error"]["code"], "InvalidInput");
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn recover_list_reports_inspection_without_mutation() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        write_recovery_inspection_job(&project);
+        let tmp_path = project.join(".ai-runs/J-0001/tmp/run-state.json.tmp-test");
+        let state_path = project.join(".ai-runs/J-0001/run-state.json");
+        let events_path = project.join(".ai-runs/J-0001/events.jsonl");
+        let before_state = fs::read_to_string(&state_path).expect("state before");
+        let before_events = fs::read_to_string(&events_path).expect("events before");
+
+        let recover = run_cli(
+            [
+                "recover",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--list",
+                "--json",
+            ],
+            &config,
+        );
+
+        assert_eq!(recover.exit_code, 0, "{}", recover.stderr);
+        let recover_json: Value = serde_json::from_str(&recover.stdout).expect("recover json");
+        assert_eq!(recover_json["command"], "recover");
+        assert_eq!(recover_json["status"], "success");
+        assert_eq!(recover_json["data"]["mode"], "inspect_only");
+        assert_eq!(recover_json["data"]["recovery_actions_enabled"], false);
+        assert_eq!(recover_json["data"]["recovery"]["status"], "needs_recovery");
+        assert_eq!(
+            recover_json["data"]["recovery"]["destructive_actions_performed"],
+            false
+        );
+        assert_eq!(
+            recover_json["data"]["recovery"]["issues"][0]["kind"],
+            "partial_tmp_file"
+        );
+        assert_eq!(
+            recover_json["data"]["recovery"]["issues"][0]["artifact_path"],
+            "tmp/run-state.json.tmp-test"
+        );
+        assert!(recover_json["artifacts"]
+            .as_array()
+            .expect("artifacts")
+            .contains(&json!(".ai-runs/J-0001/tmp/run-state.json.tmp-test")));
+        assert_eq!(
+            fs::read_to_string(&state_path).expect("state after"),
+            before_state
+        );
+        assert_eq!(
+            fs::read_to_string(&events_path).expect("events after"),
+            before_events
+        );
+        assert!(tmp_path.is_file());
+        assert!(!project.join(".ai-runs/J-0001/recovery").exists());
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn recover_requires_list_and_rejects_non_recovery_options() {
+        let project = temp_project();
+        let config = CliConfig::new(repo_root());
+        write_recovery_inspection_job(&project);
+
+        let missing_mode = run_cli(
+            [
+                "recover",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(missing_mode.exit_code, 2);
+        let missing_mode_json: Value =
+            serde_json::from_str(&missing_mode.stdout).expect("missing mode json");
+        assert_eq!(missing_mode_json["error"]["code"], "InvalidInput");
+
+        let invalid_combo = run_cli(
+            [
+                "recover",
+                "--project",
+                project.to_str().expect("project path"),
+                "--job",
+                "J-0001",
+                "--list",
+                "--stage",
+                "implement",
+                "--json",
+            ],
+            &config,
+        );
+        assert_eq!(invalid_combo.exit_code, 2);
+        let invalid_combo_json: Value =
+            serde_json::from_str(&invalid_combo.stdout).expect("invalid combo json");
+        assert_eq!(invalid_combo_json["error"]["code"], "InvalidInput");
+
         fs::remove_dir_all(project).ok();
     }
 
@@ -1868,8 +2983,13 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time")
             .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("star-control-cli-{}-{}", std::process::id(), nanos));
+        let counter = TEMP_PROJECT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "star-control-cli-{}-{}-{}",
+            std::process::id(),
+            nanos,
+            counter
+        ));
         fs::create_dir_all(&path).expect("create temp project");
         path
     }
@@ -1904,6 +3024,100 @@ mod tests {
         )
         .expect("write local process instance");
         path
+    }
+
+    fn write_sentinel_input_job(
+        project: &Path,
+        task_id: &str,
+        allowed_paths: Vec<&str>,
+        changed_path: &str,
+    ) {
+        let store =
+            StateStore::open(project, repo_root().join("specs/schemas")).expect("open store");
+        store
+            .create_job("sentinel input", "codex", vec![])
+            .expect("create job");
+        store
+            .write_tool_json(
+                "J-0001",
+                "star-sentinel",
+                "task.json",
+                &sentinel_task_value(task_id, allowed_paths),
+            )
+            .expect("write sentinel task");
+        store
+            .write_tool_json(
+                "J-0001",
+                "star-sentinel",
+                "changed_lines.json",
+                &changed_lines_value(task_id, changed_path),
+            )
+            .expect("write changed lines");
+    }
+
+    fn sentinel_task_value(task_id: &str, allowed_paths: Vec<&str>) -> Value {
+        json!({
+            "schema_version": "1.0.0",
+            "task_id": task_id,
+            "goal": "Validate a scoped CLI sentinel fixture.",
+            "allowed_paths": allowed_paths,
+            "forbidden_paths": [
+                ".github/workflows/**",
+                "package.json",
+                "package-lock.json"
+            ],
+            "forbidden_change_types": [
+                "test_deletion",
+                "assertion_weakening",
+                "validator_bypass",
+                "secret_exposure"
+            ],
+            "required_validation": [
+                "policy:p0"
+            ],
+            "approval_required_changes": [
+                "public_api_change",
+                "schema_change",
+                "dependency_addition"
+            ],
+            "notes": "CLI sentinel command fixture."
+        })
+    }
+
+    fn changed_lines_value(task_id: &str, path: &str) -> Value {
+        json!({
+            "schema_version": "1.0.0",
+            "task_id": task_id,
+            "files": [
+                {
+                    "path": path,
+                    "change_type": "modified",
+                    "old_path": null,
+                    "hunks": [
+                        {
+                            "old_start": 1,
+                            "old_lines": 2,
+                            "new_start": 1,
+                            "new_lines": 3,
+                            "lines": [
+                                {
+                                    "kind": "context",
+                                    "old_line": 1,
+                                    "new_line": 1,
+                                    "content": "fn existing() {}"
+                                },
+                                {
+                                    "kind": "added",
+                                    "old_line": null,
+                                    "new_line": 2,
+                                    "content": "fn added() {}"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        })
     }
 
     fn write_waiting_approval_job(project: &Path, include_request: bool) {
@@ -1960,6 +3174,72 @@ mod tests {
                 )
                 .expect("write approval request");
         }
+    }
+
+    fn write_release_readiness_job(project: &Path, include_readiness: bool) {
+        let store =
+            StateStore::open(project, repo_root().join("specs/schemas")).expect("open store");
+        store
+            .create_job("release readiness", "codex", vec![])
+            .expect("create job");
+        if include_readiness {
+            let path = project.join(".ai-runs/J-0001/release/release-readiness.json");
+            fs::create_dir_all(path.parent().expect("release dir")).expect("create release dir");
+            fs::write(
+                &path,
+                serde_json::to_vec_pretty(&json!({
+                    "schema_version": "1.0.0",
+                    "release_id": "release-0008",
+                    "target": "star-control",
+                    "version": "1.2.3",
+                    "status": "reserved",
+                    "checks": [
+                        {
+                            "name": "release-profile-passed",
+                            "status": "pass",
+                            "evidence_paths": ["review-packs/release-profile.json"]
+                        }
+                    ],
+                    "blockers": [
+                        "release approval/signing/publish/deploy automation remains reserved"
+                    ],
+                    "approvals": [],
+                    "generated_at": "unix:8"
+                }))
+                .expect("release readiness JSON"),
+            )
+            .expect("write release readiness");
+        }
+    }
+
+    fn write_recovery_inspection_job(project: &Path) {
+        let store =
+            StateStore::open(project, repo_root().join("specs/schemas")).expect("open store");
+        store
+            .create_job("recovery inspection", "codex", vec![])
+            .expect("create job");
+        store
+            .save_state(
+                "J-0001",
+                &json!({
+                    "schema_version": "1.0.0",
+                    "job_id": "J-0001",
+                    "state": "DONE",
+                    "current_stage": "report",
+                    "updated_at": "test:recovery",
+                    "threads": {},
+                    "workers": {},
+                    "artifacts": {},
+                    "latest_event_id": "J-0001-0001",
+                    "active_provider": null,
+                    "next_action": "none",
+                    "budget": {},
+                    "history": []
+                }),
+            )
+            .expect("save recovery state");
+        let tmp_path = project.join(".ai-runs/J-0001/tmp/run-state.json.tmp-test");
+        fs::write(&tmp_path, b"{\"partial\":true").expect("write tmp file");
     }
 
     fn current_test_executable() -> String {
