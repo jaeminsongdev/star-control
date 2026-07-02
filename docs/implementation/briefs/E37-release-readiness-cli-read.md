@@ -96,4 +96,4 @@ git diff --check
 
 ## 다음 handoff
 
-M9m는 release review pack foundation, recovery command surface, or final M9 conformance/readiness audit 중 하나로 이어간다. signing, publish, deploy automation은 별도 승인 전까지 RESERVED다.
+M9m는 release review pack foundation으로 이어간다. signing, publish, deploy automation은 별도 승인 전까지 RESERVED다.
