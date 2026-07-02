@@ -52,20 +52,31 @@
 확인 URL:
 
 ```text
-https://platform.openai.com/docs/api-reference/responses
+https://developers.openai.com/api/reference/resources/responses/methods/create/
+https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create/
+https://developers.openai.com/api/docs/guides/text
+https://developers.openai.com/api/reference/overview/
 ```
 
 확인한 내용:
 
+- 2026-07-01 기준 공식 문서를 refresh했다.
 - Responses API는 text/image input과 text/JSON output을 다룬다.
 - `POST /v1/responses` endpoint가 있다.
 - streaming은 `stream: true`로 server-sent events를 사용한다.
 - tools, function calling, structured outputs, conversation state가 문서화되어 있다.
+- Responses API text output은 SDK convenience field인 `output_text`로 집계될 수 있지만, `output[]`는 여러 item을 포함할 수 있으므로 first item에 text가 있다고 가정하지 않는다.
+- Chat Completions response는 `choices[].message.content`와 usage token fields를 제공한다.
+- Request builder는 Responses API `model` + `input`, Chat Completions `model` + `messages`를 fixture 기준으로 사용한다.
+- M6f offline fixture integration은 `transport_config.offline_response_fixture`에서 읽은 raw response fixture를 `raw-response.json`으로 복사하고 parser 결과를 normalized `response.json`과 `cost-metric.json` token usage에 반영한다.
+- M6g transport boundary는 bearer credential requirement를 credential reference kind와 deferred Authorization header policy로만 표현하며 raw credential value나 full credential reference string을 materialize하지 않는다.
+- M6h live approval gate는 `transport_config.live_api_call_requested=true`를 실제 호출이 아니라 `live-transport-approval.json`과 `BLOCKED` state로 정규화한다.
 - Star-Control manifest의 `transport: http`, `adapter: openai_compatible`, `structured_output: true`는 현재 snapshot에서 타당하다.
 
 보류:
 
 - 실제 model list, price, rate limit, background response, cancel behavior는 adapter 구현 직전 재확인한다.
+- 실제 HTTP transport, credential lookup, request signing/header construction, streaming SSE parser는 별도 승인 후 구현한다.
 
 ### Anthropic API
 
