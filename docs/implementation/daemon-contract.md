@@ -1,8 +1,8 @@
-# Daemon Reserved Contract
+# Daemon Queue Contract
 
 ## 목적
 
-Daemon은 장시간 job queue, provider scheduling, cancel/resume orchestration을 담당하는 장기 surface다. 초기 구현 대상은 아니며, CLI file-based flow가 안정화된 뒤 구현한다.
+Daemon은 장시간 job queue, provider scheduling, cancel/resume orchestration을 담당하는 장기 surface다. M7b에서는 daemon process를 시작하지 않고, file-based queue state와 안전 precondition만 먼저 구현한다.
 
 ## machine-readable contracts
 
@@ -36,14 +36,13 @@ Daemon이 담당하지 않는 것:
 
 Daemon runtime state는 Star-Control repository가 아니라 user machine의 config/cache 영역을 사용한다. Job artifact는 여전히 대상 project의 `.ai-runs/` 아래에 둔다.
 
-후보:
+M7b queue skeleton은 caller가 넘긴 config root 아래에 daemon state를 둔다.
 
 ```text
-~/.star-control/daemon/state.json
-~/.star-control/daemon/logs/
+{config_root}/daemon/state.json
 ```
 
-OS별 config/cache path는 별도 문서에서 확정한다.
+OS별 기본 config/cache path와 logs directory는 별도 문서에서 확정한다. library는 repository root나 대상 project root에 daemon state를 자동 생성하지 않는다.
 
 ## DaemonState
 
@@ -70,7 +69,28 @@ error
 
 ## 구현 전제
 
-초기에는 `reserved` status example만 유지한다. 실제 daemon process, socket, API server, background worker는 별도 승인과 별도 PR이 필요하다.
+M7b 구현 범위:
+
+- `packages/star-control-daemon` crate
+- `DaemonConfig`
+- `DaemonQueue`
+- `{config_root}/daemon/state.json` 생성/검증
+- StateStore job을 queue entry로 참조 등록
+- terminal job queue 거부
+- `WAITING_APPROVAL` job의 approved `approval-response.json` precondition
+- duplicate queue entry guard
+
+M7b에서 아직 구현하지 않는 것:
+
+- daemon background process
+- socket
+- HTTP API server
+- provider scheduling worker
+- API mutation endpoint
+- UI shell
+- OS별 기본 config path 자동 선택
+
+실제 daemon process, socket, API server, background worker는 별도 승인과 별도 PR이 필요하다.
 
 ## 테스트 기준
 
@@ -79,3 +99,4 @@ error
 3. job artifact는 대상 project `.ai-runs/` 아래에 유지
 4. terminal job은 queue에 재등록하지 않음
 5. approval required job은 approval response 없이 실행하지 않음
+6. duplicate queue entry를 등록하지 않음
