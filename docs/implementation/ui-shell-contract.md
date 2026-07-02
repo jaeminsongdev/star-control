@@ -42,6 +42,7 @@ provider output path viewer data
 validation result path viewer data
 approval request viewer data
 review pack viewer data
+release readiness viewer data
 ui-job-view schema validation
 secret-like value redaction
 read-only no-write regression test
@@ -160,3 +161,4 @@ Approval mutation은 `ApprovalResponse` 계약을 통해 API 또는 CLI로 전�
 6. missing report 같은 선택 artifact는 read-only error surface로 표시함
 7. browser control shell은 HTTP server나 package manager 없이 approve/cancel/resume action result를 생성함
 8. terminal job cancel은 disabled로 표시되고 structured failure result를 유지함
+9. release readiness viewer는 API read-only endpoint를 소비하고 release action을 활성화하지 않음

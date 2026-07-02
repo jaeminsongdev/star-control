@@ -85,6 +85,13 @@ star-control recover --project <path> --job <job-id> --list
 star-control recover --project <path> --job <job-id> --discard-tmp
 ```
 
+M9n 구현:
+
+- `star-control recover --project <path> --job <job-id> --list --json`은 `StateStore::inspect_recovery(job_id)` 결과를 CLI envelope으로 표시한다.
+- output은 `mode=inspect_only`, `recovery_actions_enabled=false`, `destructive_actions_performed=false`를 포함한다.
+- tmp file은 warning issue로만 보고하고 삭제하지 않는다.
+- `--discard-tmp` 같은 destructive recovery action은 별도 승인 전까지 구현하지 않는다.
+
 ## event log recovery 후보
 
 초기 구현에서는 자동 repair를 하지 않는다.

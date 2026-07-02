@@ -11,6 +11,7 @@ members = [
     "packages/star-control-ui",
     "packages/star-control-security",
     "packages/star-control-observability",
+    "packages/star-control-release",
     "packages/star-control-cli",
     "packages/star-sentinel",
 ]
