@@ -1,6 +1,7 @@
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use star_control_api::{ApiControlService, ApiError, ApiReadOnlyService};
 use star_control_schema::{load_schema, validate_json, ValidationError};
+use star_control_security::redact_value;
 use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
@@ -150,6 +151,7 @@ impl UiReadOnlyShell {
             .and_then(Value::as_str)
             .unwrap_or(DEFAULT_REPORT_STAGE);
         let report = self.report(project_id, job_id, report_stage)?;
+        let release_readiness = self.release_readiness(project_id, job_id)?;
         let artifact_sections = artifact_sections(state.get("artifacts").unwrap_or(&Value::Null));
         let approval = approval_summary(&job_view, &artifact_sections);
 
@@ -189,8 +191,43 @@ impl UiReadOnlyShell {
             "review_pack_viewer": {
                 "paths": paths_for_section(&artifact_sections, "review_pack")
             },
+            "release_readiness_viewer": release_readiness,
             "artifact_sections": artifact_sections,
             "report_summary": report
+        })))
+    }
+
+    pub fn release_readiness(&self, project_id: &str, job_id: &str) -> Result<Value, UiError> {
+        let endpoint = format!("/projects/{}/jobs/{}/release-readiness", project_id, job_id);
+        let response = self.api_get(&endpoint)?;
+        if response.get("status").and_then(Value::as_str) == Some("failed") {
+            return Ok(redact_value(json!({
+                "available": false,
+                "read_only": true,
+                "mutations_enabled": false,
+                "release_actions_enabled": false,
+                "error": response.get("error").cloned().unwrap_or(Value::Null)
+            })));
+        }
+        let data = self.data_or_error(response, &endpoint)?;
+        let readiness = data
+            .get("readiness")
+            .ok_or_else(|| invalid_data(&endpoint, "readiness object is missing"))?;
+
+        Ok(redact_value(json!({
+            "available": true,
+            "read_only": true,
+            "mutations_enabled": false,
+            "release_actions_enabled": false,
+            "readiness_path": data.get("readiness_path").cloned().unwrap_or(Value::Null),
+            "release_id": readiness.get("release_id").cloned().unwrap_or(Value::Null),
+            "target": readiness.get("target").cloned().unwrap_or(Value::Null),
+            "version": readiness.get("version").cloned().unwrap_or(Value::Null),
+            "status": readiness.get("status").cloned().unwrap_or(Value::Null),
+            "checks": readiness.get("checks").cloned().unwrap_or_else(|| json!([])),
+            "blockers": readiness.get("blockers").cloned().unwrap_or_else(|| json!([])),
+            "approvals": readiness.get("approvals").cloned().unwrap_or_else(|| json!([])),
+            "generated_at": readiness.get("generated_at").cloned().unwrap_or(Value::Null)
         })))
     }
 
@@ -676,50 +713,6 @@ fn approval_summary(job_view: &Value, sections: &[Value]) -> Value {
     })
 }
 
-fn redact_value(value: Value) -> Value {
-    match value {
-        Value::Object(object) => Value::Object(redact_object(object)),
-        Value::Array(items) => Value::Array(items.into_iter().map(redact_value).collect()),
-        Value::String(text) if looks_sensitive_string(&text) => json!("[REDACTED]"),
-        other => other,
-    }
-}
-
-fn redact_object(object: Map<String, Value>) -> Map<String, Value> {
-    object
-        .into_iter()
-        .map(|(key, value)| {
-            if is_sensitive_key(&key) {
-                (key, json!("[REDACTED]"))
-            } else {
-                (key, redact_value(value))
-            }
-        })
-        .collect()
-}
-
-fn is_sensitive_key(key: &str) -> bool {
-    let key = key.to_ascii_lowercase();
-    key.contains("credential")
-        || key.contains("secret")
-        || key.contains("password")
-        || key.contains("api_key")
-        || key.contains("apikey")
-        || key.contains("authorization")
-        || key == "token"
-        || key.ends_with("_token")
-}
-
-fn looks_sensitive_string(value: &str) -> bool {
-    let lower = value.to_ascii_lowercase();
-    lower.contains("bearer ")
-        || lower.contains("api_key=")
-        || lower.contains("apikey=")
-        || lower.contains("password=")
-        || lower.contains("token=")
-        || value.contains("sk-")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -870,6 +863,41 @@ mod tests {
             .expect("write approval request");
     }
 
+    fn write_release_readiness(project: &Path) -> PathBuf {
+        let path = project.join(".ai-runs/J-0001/release/release-readiness.json");
+        fs::create_dir_all(path.parent().expect("release dir")).expect("create release dir");
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(&json!({
+                "schema_version": SCHEMA_VERSION,
+                "release_id": "release-0007",
+                "target": "star-control",
+                "version": "1.2.3",
+                "status": "reserved",
+                "checks": [
+                    {
+                        "name": "release-profile-passed",
+                        "status": "pass",
+                        "evidence_paths": ["review-packs/release-profile.json"]
+                    },
+                    {
+                        "name": "version-consistent",
+                        "status": "pass",
+                        "evidence_paths": ["VERSION"]
+                    }
+                ],
+                "blockers": [
+                    "release approval/signing/publish/deploy automation remains reserved"
+                ],
+                "approvals": [],
+                "generated_at": "unix:7"
+            }))
+            .expect("release readiness JSON"),
+        )
+        .expect("write release readiness");
+        path
+    }
+
     #[test]
     fn job_list_builds_schema_valid_views_from_api() {
         let project = temp_project("list");
@@ -906,6 +934,11 @@ mod tests {
         assert_eq!(view["job"]["latest_event"], "J-0001-0002");
         assert!(view["timeline"]["events"].as_array().expect("events").len() >= 2);
         assert_eq!(view["report_summary"]["available"], true);
+        assert_eq!(view["release_readiness_viewer"]["available"], false);
+        assert_eq!(
+            view["release_readiness_viewer"]["error"]["code"],
+            "release_readiness_not_found"
+        );
         assert_eq!(
             view["provider_output_viewer"]["paths"][0],
             "provider-output/fake-default/output.json"
@@ -922,6 +955,45 @@ mod tests {
         let after_state = fs::read_to_string(&state_path).expect("read state after");
         assert_eq!(after_state, before_state);
         assert!(!project.join(".ai-runs/J-0001/ui-view.json").exists());
+
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
+    fn release_readiness_viewer_reads_api_artifact_without_mutation() {
+        let project = temp_project("release-readiness");
+        let store = open_store(&project);
+        create_job(&store, "DONE", "report", "none");
+        save_report(&store, "report", Vec::new());
+        let readiness_path = write_release_readiness(&project);
+        let before_readiness = fs::read_to_string(&readiness_path).expect("read readiness before");
+        let ui = ui_with_store(store);
+
+        let readiness = ui
+            .release_readiness("local", "J-0001")
+            .expect("release readiness view");
+        assert_eq!(readiness["available"], true);
+        assert_eq!(readiness["read_only"], true);
+        assert_eq!(readiness["mutations_enabled"], false);
+        assert_eq!(readiness["release_actions_enabled"], false);
+        assert_eq!(
+            readiness["readiness_path"],
+            ".ai-runs/J-0001/release/release-readiness.json"
+        );
+        assert_eq!(readiness["status"], "reserved");
+        assert_eq!(readiness["checks"][0]["name"], "release-profile-passed");
+        assert_eq!(
+            readiness["blockers"][0],
+            "release approval/signing/publish/deploy automation remains reserved"
+        );
+
+        let detail = ui.job_detail("local", "J-0001").expect("job detail");
+        assert_eq!(detail["release_readiness_viewer"], readiness);
+        let after_readiness = fs::read_to_string(&readiness_path).expect("read readiness after");
+        assert_eq!(after_readiness, before_readiness);
+        assert!(!project
+            .join(".ai-runs/J-0001/release/release-action.json")
+            .exists());
 
         fs::remove_dir_all(project).ok();
     }
