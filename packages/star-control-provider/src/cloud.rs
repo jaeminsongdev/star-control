@@ -20,6 +20,7 @@ const CLI_TRANSPORT: &str = "cli";
 const HTTP_TRANSPORT: &str = "http";
 const HTTP_REQUEST_FILE: &str = "http-request.json";
 const HTTP_TRANSPORT_PLAN_FILE: &str = "http-transport-plan.json";
+const LIVE_TRANSPORT_APPROVAL_FILE: &str = "live-transport-approval.json";
 const RAW_RESPONSE_FILE: &str = "raw-response.json";
 const STDOUT_FILE: &str = "stdout.txt";
 const STDERR_FILE: &str = "stderr.txt";
@@ -199,6 +200,11 @@ impl ProviderAdapter for CloudApiOfflineProviderAdapter {
             return CloudProviderPreflightAdapter.execute(request, context);
         }
         let Some(fixture_relative_path) = offline_response_fixture_path(instance)? else {
+            if live_api_call_requested(instance)? {
+                return execute_cloud_api_live_approval_required(
+                    request, context, manifest, instance,
+                );
+            }
             return CloudProviderPreflightAdapter.execute(request, context);
         };
 
@@ -238,6 +244,7 @@ impl ProviderAdapter for CloudApiOfflineProviderAdapter {
             instance,
             &prepared_request,
             "offline_fixture",
+            true,
         )?;
         let wall_time_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
 
@@ -345,6 +352,139 @@ impl ProviderAdapter for CloudApiOfflineProviderAdapter {
         debug_assert_eq!(raw_response_ref["kind"], "provider_output");
         Ok(execution)
     }
+}
+
+fn execute_cloud_api_live_approval_required(
+    request: &ExecutionRequest,
+    context: &ProviderRunContext<'_>,
+    manifest: &ProviderManifest,
+    instance: &ProviderInstance,
+) -> Result<ProviderExecution, ProviderAdapterError> {
+    ensure_output_files_absent(
+        context.state_store(),
+        request.job_id(),
+        &planned_output_files(request.provider_instance_id()),
+    )?;
+
+    let started_at = Instant::now();
+    let prepared_request = OpenAiCompatibleRequestBuilder
+        .build(request, instance)
+        .map_err(|source| {
+            cloud_policy_denied(
+                instance.id(),
+                &format!("OpenAI-compatible request build failed: {}", source),
+            )
+        })?;
+    let http_request_value = prepared_request_value(&prepared_request);
+    let http_transport_plan = http_transport_plan_value(
+        request,
+        manifest,
+        instance,
+        &prepared_request,
+        "live_approval_required",
+        false,
+    )?;
+    let live_approval =
+        live_transport_approval_value(request, manifest, instance, &prepared_request)?;
+    let wall_time_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+
+    let request_ref = context.state_store().write_provider_json(
+        request.job_id(),
+        request.provider_instance_id(),
+        "request.json",
+        request.value(),
+    )?;
+    let http_request_ref = context.state_store().write_provider_json(
+        request.job_id(),
+        request.provider_instance_id(),
+        HTTP_REQUEST_FILE,
+        &http_request_value,
+    )?;
+    let http_transport_plan_ref = context.state_store().write_provider_json(
+        request.job_id(),
+        request.provider_instance_id(),
+        HTTP_TRANSPORT_PLAN_FILE,
+        &http_transport_plan,
+    )?;
+    let live_approval_ref = context.state_store().write_provider_json(
+        request.job_id(),
+        request.provider_instance_id(),
+        LIVE_TRANSPORT_APPROVAL_FILE,
+        &live_approval,
+    )?;
+
+    let privacy_handoff = privacy_handoff_value(request, manifest, true);
+    validate_contract(
+        &privacy_handoff,
+        Path::new(PRIVACY_HANDOFF_FILE),
+        context.schema_root(),
+        PRIVACY_HANDOFF_SCHEMA,
+    )?;
+    let privacy_ref = context.state_store().write_provider_json(
+        request.job_id(),
+        request.provider_instance_id(),
+        PRIVACY_HANDOFF_FILE,
+        &privacy_handoff,
+    )?;
+
+    let cost_metric = cost_metric_value_with_wall_time(request, instance, wall_time_ms);
+    validate_contract(
+        &cost_metric,
+        Path::new(COST_METRIC_FILE),
+        context.schema_root(),
+        COST_METRIC_SCHEMA,
+    )?;
+    let cost_ref = context.state_store().write_provider_json(
+        request.job_id(),
+        request.provider_instance_id(),
+        COST_METRIC_FILE,
+        &cost_metric,
+    )?;
+
+    let stdout_ref = context.state_store().write_provider_text(
+        request.job_id(),
+        request.provider_instance_id(),
+        STDOUT_FILE,
+        &api_live_approval_stdout_value(manifest, &prepared_request),
+    )?;
+    let stderr_ref = context.state_store().write_provider_text(
+        request.job_id(),
+        request.provider_instance_id(),
+        STDERR_FILE,
+        "blocked kind=cloud_api_live_transport_approval_required field=transport_config.live_api_call_requested message=cloud API live HTTP transport requires explicit approval before credential lookup or external API call\n",
+    )?;
+
+    let response_value = api_live_approval_response_value(
+        request,
+        manifest,
+        instance,
+        &prepared_request,
+        wall_time_ms,
+    );
+    let result = ProviderRunResult::from_value(
+        response_value.clone(),
+        provider_output_path(request.provider_instance_id(), "response.json"),
+        context.schema_root(),
+    )?;
+    let response_ref = context.state_store().write_provider_json(
+        request.job_id(),
+        request.provider_instance_id(),
+        "response.json",
+        &response_value,
+    )?;
+
+    let execution = ProviderExecution::new(
+        result,
+        request_ref,
+        response_ref,
+        stdout_ref,
+        Some(stderr_ref),
+    );
+    assert_provider_sidecar_refs(&execution, &privacy_ref, &cost_ref);
+    debug_assert_eq!(http_request_ref["kind"], "provider_output");
+    debug_assert_eq!(http_transport_plan_ref["kind"], "provider_output");
+    debug_assert_eq!(live_approval_ref["kind"], "provider_output");
+    Ok(execution)
 }
 
 impl ProviderAdapter for CloudProviderPreflightAdapter {
@@ -827,6 +967,71 @@ fn api_offline_response_value(
     })
 }
 
+fn api_live_approval_response_value(
+    request: &ExecutionRequest,
+    manifest: &ProviderManifest,
+    instance: &ProviderInstance,
+    prepared_request: &OpenAiCompatiblePreparedRequest,
+    wall_time_ms: u64,
+) -> Value {
+    let request_path = provider_output_path(request.provider_instance_id(), "request.json");
+    let http_request_path = provider_output_path(request.provider_instance_id(), HTTP_REQUEST_FILE);
+    let http_transport_plan_path =
+        provider_output_path(request.provider_instance_id(), HTTP_TRANSPORT_PLAN_FILE);
+    let live_approval_path =
+        provider_output_path(request.provider_instance_id(), LIVE_TRANSPORT_APPROVAL_FILE);
+    let response_path = provider_output_path(request.provider_instance_id(), "response.json");
+    let stdout_path = provider_output_path(request.provider_instance_id(), STDOUT_FILE);
+    let stderr_path = provider_output_path(request.provider_instance_id(), STDERR_FILE);
+    let privacy_path = provider_output_path(request.provider_instance_id(), PRIVACY_HANDOFF_FILE);
+    let cost_path = provider_output_path(request.provider_instance_id(), COST_METRIC_FILE);
+
+    json!({
+        "schema_version": "1.0.0",
+        "provider_instance_id": request.provider_instance_id(),
+        "job_id": request.job_id(),
+        "stage": request.stage(),
+        "status": "blocked",
+        "started_at": request.created_at(),
+        "finished_at": request.created_at(),
+        "stdout_path": stdout_path,
+        "stderr_path": stderr_path,
+        "summary": "cloud API live HTTP transport requires explicit approval before credential lookup or external API call",
+        "changed_files": [],
+        "artifacts": [
+            response_path,
+            request_path,
+            http_request_path,
+            http_transport_plan_path,
+            live_approval_path,
+            stdout_path,
+            stderr_path,
+            privacy_path,
+            cost_path
+        ],
+        "metrics": {
+            "estimated_cost": estimated_cost(instance),
+            "currency": currency(instance),
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "wall_time_ms": wall_time_ms,
+            "transport": HTTP_TRANSPORT,
+            "transport_execution": "approval_required",
+            "request_api": request_api_name(prepared_request.api()),
+            "provider_id": manifest.id(),
+            "live_api_call": false,
+            "approval_required_for_live_call": true
+        },
+        "error": {
+            "kind": "cloud_api_live_transport_approval_required",
+            "message": "cloud API live HTTP transport requires explicit approval before credential lookup or external API call",
+            "action": "approve_live_cloud_api_transport",
+            "field": "transport_config.live_api_call_requested"
+        }
+    })
+}
+
 fn prepared_request_value(prepared_request: &OpenAiCompatiblePreparedRequest) -> Value {
     json!({
         "schema_version": "1.0.0",
@@ -843,6 +1048,7 @@ fn http_transport_plan_value(
     instance: &ProviderInstance,
     prepared_request: &OpenAiCompatiblePreparedRequest,
     execution_mode: &str,
+    raw_response_expected: bool,
 ) -> Result<Value, ProviderAdapterError> {
     let credential_ref = string_field(instance.value(), "credential_ref").ok_or_else(|| {
         cloud_policy_denied(
@@ -850,6 +1056,14 @@ fn http_transport_plan_value(
             "cloud API transport plan requires a credential_ref declaration",
         )
     })?;
+    let raw_response_path = if raw_response_expected {
+        json!(provider_output_path(
+            request.provider_instance_id(),
+            RAW_RESPONSE_FILE
+        ))
+    } else {
+        Value::Null
+    };
     Ok(json!({
         "schema_version": "1.0.0",
         "provider_instance_id": request.provider_instance_id(),
@@ -864,7 +1078,8 @@ fn http_transport_plan_value(
         "url": prepared_request.url(),
         "request_api": request_api_name(prepared_request.api()),
         "request_body_path": provider_output_path(request.provider_instance_id(), HTTP_REQUEST_FILE),
-        "raw_response_path": provider_output_path(request.provider_instance_id(), RAW_RESPONSE_FILE),
+        "raw_response_path": raw_response_path,
+        "raw_response_expected": raw_response_expected,
         "credential": {
             "required": true,
             "reference_present": true,
@@ -888,6 +1103,55 @@ fn http_transport_plan_value(
         "timeout_seconds": timeout_seconds(instance.value(), instance.id())?,
         "live_api_call": false,
         "approval_required_for_live_call": true
+    }))
+}
+
+fn live_transport_approval_value(
+    request: &ExecutionRequest,
+    manifest: &ProviderManifest,
+    instance: &ProviderInstance,
+    prepared_request: &OpenAiCompatiblePreparedRequest,
+) -> Result<Value, ProviderAdapterError> {
+    let credential_ref = string_field(instance.value(), "credential_ref").ok_or_else(|| {
+        cloud_policy_denied(
+            instance.id(),
+            "cloud API live transport approval requires a credential_ref declaration",
+        )
+    })?;
+    Ok(json!({
+        "schema_version": "1.0.0",
+        "provider_instance_id": request.provider_instance_id(),
+        "job_id": request.job_id(),
+        "stage": request.stage(),
+        "provider_id": manifest.id(),
+        "provider_kind": manifest.kind(),
+        "adapter": manifest.adapter(),
+        "transport": HTTP_TRANSPORT,
+        "kind": "cloud_api_live_transport_approval_required",
+        "status": "blocked",
+        "approval_required": true,
+        "approval_required_actions": [
+            "credential_lookup",
+            "authorization_header_value_construction",
+            "live_http_request",
+            "paid_api_call"
+        ],
+        "request": {
+            "method": prepared_request.method(),
+            "url": prepared_request.url(),
+            "api": request_api_name(prepared_request.api()),
+            "body_path": provider_output_path(request.provider_instance_id(), HTTP_REQUEST_FILE)
+        },
+        "credential": {
+            "required": true,
+            "reference_present": true,
+            "reference_kind": credential_reference_kind(credential_ref),
+            "materialized": false,
+            "value_present": false
+        },
+        "live_api_call": false,
+        "approval_required_for_live_call": true,
+        "notes": "No credential value is read and no external HTTP request is sent until a separate approval step is implemented."
     }))
 }
 
@@ -1016,12 +1280,27 @@ fn api_offline_stdout_value(
     )
 }
 
+fn api_live_approval_stdout_value(
+    manifest: &ProviderManifest,
+    prepared_request: &OpenAiCompatiblePreparedRequest,
+) -> String {
+    format!(
+        "cloud API live transport approval required\nprovider_id={}\nkind={}\ntransport={}\nrequest_method={}\nrequest_url={}\ntransport_execution=approval_required\nlive_api_call=false\ncredential_materialized=false\n",
+        manifest.id(),
+        manifest.kind(),
+        manifest.transport(),
+        prepared_request.method(),
+        prepared_request.url(),
+    )
+}
+
 fn planned_output_files(provider_instance_id: &str) -> Vec<String> {
     vec![
         provider_output_path(provider_instance_id, "request.json"),
         provider_output_path(provider_instance_id, "response.json"),
         provider_output_path(provider_instance_id, HTTP_REQUEST_FILE),
         provider_output_path(provider_instance_id, HTTP_TRANSPORT_PLAN_FILE),
+        provider_output_path(provider_instance_id, LIVE_TRANSPORT_APPROVAL_FILE),
         provider_output_path(provider_instance_id, RAW_RESPONSE_FILE),
         provider_output_path(provider_instance_id, STDOUT_FILE),
         provider_output_path(provider_instance_id, STDERR_FILE),
@@ -1223,6 +1502,22 @@ fn offline_response_fixture_path(
         ));
     }
     Ok(Some(path.to_string()))
+}
+
+fn live_api_call_requested(instance: &ProviderInstance) -> Result<bool, ProviderAdapterError> {
+    let Some(item) = instance
+        .value()
+        .pointer("/transport_config/live_api_call_requested")
+    else {
+        return Ok(false);
+    };
+    let Some(value) = item.as_bool() else {
+        return Err(cloud_policy_denied(
+            instance.id(),
+            "transport_config.live_api_call_requested must be a boolean",
+        ));
+    };
+    Ok(value)
 }
 
 fn resolve_project_relative_path(
@@ -1711,6 +2006,131 @@ mod tests {
     }
 
     #[test]
+    fn cloud_api_live_transport_request_blocks_with_approval_artifacts() {
+        let instance_value = json!({
+            "id": "cloud-default",
+            "provider": "provider.cloud",
+            "enabled": true,
+            "credential_ref": "env:STAR_CONTROL_TEST_TOKEN",
+            "limits": {
+                "timeout_seconds": 300,
+                "max_parallel_jobs": 1
+            },
+            "routing_tags": ["cloud", "api"],
+            "transport_config": {
+                "privacy_handoff_approved": true,
+                "live_api_call_requested": true
+            },
+            "budget": {
+                "estimated_cost": 0.03,
+                "currency": "USD"
+            },
+            "endpoint": {
+                "base_url": "https://api.openai.com/v1/",
+                "model": "gpt-example"
+            }
+        });
+        let (execution, project) =
+            execute_cloud_api_live_approval(instance_value.clone()).expect("execute live approval");
+
+        assert_eq!(execution.result().status(), "blocked");
+        assert_eq!(
+            execution.result().value()["error"]["kind"],
+            "cloud_api_live_transport_approval_required"
+        );
+        assert_eq!(
+            execution.result().value()["metrics"]["transport_execution"],
+            "approval_required"
+        );
+        assert_eq!(
+            execution.result().value()["metrics"]["live_api_call"],
+            false
+        );
+        assert_eq!(
+            execution.result().value()["artifacts"],
+            json!([
+                "provider-output/cloud-default/response.json",
+                "provider-output/cloud-default/request.json",
+                "provider-output/cloud-default/http-request.json",
+                "provider-output/cloud-default/http-transport-plan.json",
+                "provider-output/cloud-default/live-transport-approval.json",
+                "provider-output/cloud-default/stdout.txt",
+                "provider-output/cloud-default/stderr.txt",
+                "provider-output/cloud-default/privacy-handoff.json",
+                "provider-output/cloud-default/cost-metric.json"
+            ])
+        );
+        assert!(!project
+            .join(".ai-runs/J-0001/provider-output/cloud-default/raw-response.json")
+            .exists());
+
+        let http_request = read_json(
+            &project.join(".ai-runs/J-0001/provider-output/cloud-default/http-request.json"),
+        );
+        assert_eq!(http_request["method"], "POST");
+        assert_eq!(http_request["url"], "https://api.openai.com/v1/responses");
+        assert_eq!(http_request["body"]["model"], "gpt-example");
+        let http_request_text =
+            serde_json::to_string(&http_request).expect("serialize http request");
+        assert!(!http_request_text.contains("STAR_CONTROL_TEST_TOKEN"));
+        assert!(!http_request_text.contains("credential_ref"));
+
+        let transport_plan = read_json(
+            &project.join(".ai-runs/J-0001/provider-output/cloud-default/http-transport-plan.json"),
+        );
+        assert_eq!(transport_plan["execution_mode"], "live_approval_required");
+        assert_eq!(transport_plan["credential"]["reference_kind"], "env");
+        assert_eq!(transport_plan["credential"]["materialized"], false);
+        assert_eq!(transport_plan["credential"]["value_present"], false);
+        assert_eq!(transport_plan["raw_response_path"], Value::Null);
+        assert_eq!(transport_plan["raw_response_expected"], false);
+        assert_eq!(transport_plan["live_api_call"], false);
+        assert_eq!(transport_plan["approval_required_for_live_call"], true);
+
+        let approval = read_json(
+            &project
+                .join(".ai-runs/J-0001/provider-output/cloud-default/live-transport-approval.json"),
+        );
+        assert_eq!(
+            approval["kind"],
+            "cloud_api_live_transport_approval_required"
+        );
+        assert_eq!(approval["approval_required"], true);
+        assert_eq!(
+            approval["approval_required_actions"],
+            json!([
+                "credential_lookup",
+                "authorization_header_value_construction",
+                "live_http_request",
+                "paid_api_call"
+            ])
+        );
+        assert_eq!(approval["credential"]["reference_kind"], "env");
+        assert_eq!(approval["credential"]["materialized"], false);
+        assert_eq!(approval["live_api_call"], false);
+        let approval_text = serde_json::to_string(&approval).expect("serialize approval");
+        assert!(!approval_text.contains("STAR_CONTROL_TEST_TOKEN"));
+        assert!(!approval_text.contains("env:STAR_CONTROL_TEST_TOKEN"));
+        let transport_plan_text =
+            serde_json::to_string(&transport_plan).expect("serialize transport plan");
+        assert!(!transport_plan_text.contains("STAR_CONTROL_TEST_TOKEN"));
+        assert!(!transport_plan_text.contains("env:STAR_CONTROL_TEST_TOKEN"));
+
+        let schemas = schema_root();
+        let store = StateStore::open(&project, &schemas).expect("open executed project");
+        let registry = registry_with_instance(CLOUD_API_KIND, HTTP_TRANSPORT, instance_value)
+            .expect("reload cloud API registry");
+        let context = ProviderRunContext::new(&registry, &store, &schemas);
+        let conformance = ProviderConformanceChecker
+            .check_execution(&execution, &context, ProviderConformanceProfile::Cloud)
+            .expect("cloud API live approval provider conformance");
+        assert!(conformance
+            .checked_artifacts()
+            .contains(&"provider-output/cloud-default/live-transport-approval.json".to_string()));
+        fs::remove_dir_all(project).ok();
+    }
+
+    #[test]
     fn cloud_api_offline_fixture_rejects_unsafe_fixture_path() {
         let error = execute_cloud_api_offline(
             json!({
@@ -1939,6 +2359,29 @@ mod tests {
             serde_json::to_string_pretty(fixture_value).expect("serialize response fixture"),
         )
         .expect("write response fixture");
+        let schemas = schema_root();
+        let store = StateStore::open(&project, &schemas).expect("open store");
+        store
+            .create_job("use cloud API provider", "codex", vec![])
+            .expect("create job");
+        let registry = registry_with_instance(CLOUD_API_KIND, HTTP_TRANSPORT, instance_value)
+            .expect("register cloud API provider");
+        let request = ExecutionRequest::from_value(request_value(), "request.json", &schemas)
+            .expect("request");
+        let context = ProviderRunContext::new(&registry, &store, &schemas);
+        match CloudApiOfflineProviderAdapter.execute(&request, &context) {
+            Ok(execution) => Ok((execution, project)),
+            Err(error) => {
+                fs::remove_dir_all(project).ok();
+                Err(error)
+            }
+        }
+    }
+
+    fn execute_cloud_api_live_approval(
+        instance_value: Value,
+    ) -> Result<(ProviderExecution, PathBuf), ProviderAdapterError> {
+        let project = temp_project();
         let schemas = schema_root();
         let store = StateStore::open(&project, &schemas).expect("open store");
         store

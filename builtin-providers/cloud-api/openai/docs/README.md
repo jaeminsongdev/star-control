@@ -32,3 +32,10 @@ Builtin provider manifest for `provider.openai`.
 - credential은 reference kind와 materialized/value_present 상태만 기록하고 full `credential_ref` 문자열이나 raw value는 기록하지 않는다.
 - `Authorization` header는 `deferred_credential_reference` policy로만 기록하며 header value는 만들지 않는다.
 - `live_api_call=false`, `approval_required_for_live_call=true`를 유지한다.
+
+## M6h live approval gate 기준
+
+- `transport_config.live_api_call_requested=true`는 실제 OpenAI API 호출 승인이 아니라 approval-required provider result를 만들기 위한 명시 flag다.
+- adapter는 `live-transport-approval.json`에 `credential_lookup`, `authorization_header_value_construction`, `live_http_request`, `paid_api_call`을 승인 필요 action으로 기록한다.
+- `raw-response.json`은 생성하지 않고 provider result와 ExecutionEngine state는 `BLOCKED`로 전이한다.
+- 이 단계도 bearer token lookup, `Authorization` header value construction, HTTP client execution, streaming parser, paid API call은 실행하지 않는다.

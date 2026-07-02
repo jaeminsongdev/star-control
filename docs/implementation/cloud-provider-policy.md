@@ -268,3 +268,38 @@ M6g는 다음을 구현하지 않는다.
 - retry/rate limit policy
 - streaming SSE parser
 - paid API call
+
+## M6h cloud API live approval gate scope
+
+M6h는 live HTTP transport adapter를 실행하지 않고, provider instance가 live call 의도를 명시했을 때 approval gate artifact와 `BLOCKED` runtime state를 남긴다. `transport_config.live_api_call_requested=true`는 외부 API 호출 승인이 아니라 approval-required flow를 시작하는 입력 flag다.
+
+Provider doc refresh:
+
+- 2026-07-01 기준 OpenAI official API overview authentication, Responses API, Chat Completions API reference를 확인했다.
+- 확인 URL: `https://developers.openai.com/api/reference/overview/`, `https://developers.openai.com/api/reference/resources/responses/methods/create/`, `https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create/`
+- OpenAI API는 bearer credential을 사용하지만, M6h도 credential raw value를 조회하지 않고 header value를 만들지 않는다.
+
+Live approval artifact:
+
+```text
+provider-output/{provider_instance_id}/live-transport-approval.json
+```
+
+M6h runtime 규칙:
+
+- `transport_config.live_api_call_requested=true`이고 `offline_response_fixture`가 없으면 provider result는 `blocked`다.
+- `http-request.json`, `http-transport-plan.json`, `live-transport-approval.json`, `privacy-handoff.json`, `cost-metric.json`을 기록한다.
+- `raw-response.json`은 생성하지 않는다.
+- `live-transport-approval.json`은 `credential_lookup`, `authorization_header_value_construction`, `live_http_request`, `paid_api_call`을 approval-required action으로 기록한다.
+- full `credential_ref` 문자열과 credential raw value는 기록하지 않는다.
+- transport plan은 `execution_mode=live_approval_required`, `raw_response_expected=false`, `live_api_call=false`, `approval_required_for_live_call=true`를 기록한다.
+- ExecutionEngine은 provider `blocked` result를 RunState `BLOCKED`로 전이한다.
+
+M6h는 다음을 구현하지 않는다.
+
+- live HTTP client execution
+- credential raw value lookup
+- Authorization header value construction
+- retry/rate limit policy
+- streaming SSE parser
+- paid API call

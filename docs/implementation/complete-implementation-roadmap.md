@@ -200,7 +200,7 @@ Exit criteria:
 - provider별 parser와 conformance fixture가 있다.
 - budget, cost, rate limit, privacy handoff가 report에 반영된다.
 
-M6a preflight는 실제 외부 호출 전에 credential/privacy/cost artifact 계약을 적용한다. M6b cloud CLI transport는 provider instance command vector를 local fixture로 검증한다. M6c provider output conformance는 cloud provider artifact path/ref/file existence와 privacy/cost sidecar를 runtime fixture로 검증한다. M6d OpenAI-compatible parser는 Responses API와 Chat Completions response fixture를 live call 없이 정규화한다. M6e request builder는 OpenAI-compatible request URL/body fixture를 credential 없이 생성한다. M6f cloud API offline fixture integration은 prepared request와 raw response fixture parse를 같은 runtime path에서 검증한다. M6g cloud API transport boundary는 live call 없이 `http-transport-plan.json`으로 method/url/header policy/credential reference kind를 고정한다. Cloud API 실제 transport 실행은 별도 M6 slice에서 provider 공식 문서 refresh와 승인 조건을 확인한 뒤 구현한다.
+M6a preflight는 실제 외부 호출 전에 credential/privacy/cost artifact 계약을 적용한다. M6b cloud CLI transport는 provider instance command vector를 local fixture로 검증한다. M6c provider output conformance는 cloud provider artifact path/ref/file existence와 privacy/cost sidecar를 runtime fixture로 검증한다. M6d OpenAI-compatible parser는 Responses API와 Chat Completions response fixture를 live call 없이 정규화한다. M6e request builder는 OpenAI-compatible request URL/body fixture를 credential 없이 생성한다. M6f cloud API offline fixture integration은 prepared request와 raw response fixture parse를 같은 runtime path에서 검증한다. M6g cloud API transport boundary는 live call 없이 `http-transport-plan.json`으로 method/url/header policy/credential reference kind를 고정한다. M6h cloud API live approval gate는 explicit live request flag를 `BLOCKED` approval artifact로 정규화한다. Cloud API 실제 transport 실행은 provider 공식 문서 refresh와 별도 승인 조건을 확인한 뒤 구현한다.
 
 Validation:
 
@@ -225,6 +225,8 @@ Exit criteria:
 - API는 read-only endpoint부터 시작하고, mutation은 approval/cancel/resume 계약을 따른다.
 - daemon state는 repository root가 아니라 user config/cache 영역에 둔다.
 
+M7a CLI control commands는 daemon/API 구현 전에 `approve`, `cancel`, `resume`의 file-based StateStore mutation과 schema-valid CLI output/error envelope을 고정한다. M7b daemon queue skeleton은 daemon process 없이 `{config_root}/daemon/state.json`과 StateStore job 참조 등록, terminal/approval guard를 고정한다. M7c API read-only service는 HTTP server 없이 daemon state와 StateStore job/events/report를 `api-response` envelope으로 조회한다. M8a UI read-only view model은 이 read-only API를 소비한다. M7d API control mutation service는 HTTP server 없이 `approve`, `cancel`, `resume` mutation을 `api-response` envelope과 StateStore `.ai-runs/` artifact로 고정한다.
+
 Validation:
 
 ```text
@@ -233,6 +235,7 @@ cargo fmt --check
 cargo check --workspace
 cargo test --workspace
 daemon/API smoke tests
+API control mutation tests
 ```
 
 ## M8 UI Shell
@@ -248,13 +251,19 @@ Exit criteria:
 - UI는 provider process나 Star Sentinel rule을 직접 실행하지 않는다.
 - approval mutation은 API/CLI 계약을 통해서만 수행한다.
 
+M8a read-only view model은 `packages/star-control-ui`의 `UiReadOnlyShell`로 구현한다. 이 slice는 browser app이 아니라 API read-only service를 소비하는 library-level view model이며, job list/detail/timeline/provider output/validation/approval/review pack 데이터를 만들고 StateStore artifact를 직접 수정하지 않는다.
+
+M8b browser UI shell은 `packages/star-control-ui`의 `UiBrowserShell`로 구현한다. 이 slice는 browser app이 아니라 browser-oriented library model이며 `ApiControlService`를 소비해 action panel, approve/cancel/resume result view, enable/disable reason을 만든다. Browser package manager, network server, remote exposure는 별도 승인 전까지 구현하지 않는다.
+
 Validation:
 
 ```text
 python scripts/ci/run_all.py
+cargo test -p star-control-ui -- --nocapture
 UI contract tests
 read-only view smoke
 approval flow smoke
+browser control shell smoke
 ```
 
 ## M9 Hardening / Conformance / Release Readiness
@@ -270,6 +279,50 @@ Exit criteria:
 - release readiness artifact가 생성된다.
 - release/deploy/publish 자동화는 별도 approval 뒤에만 진행한다.
 
+M9a redaction utility는 `packages/star-control-security`의 shared redaction utility와 schema-valid RedactionReport builder로 구현한다. 이 slice는 API/UI redaction helper를 통합하지만 RedactionReport artifact 저장, audit/cost/budget guard, retention/recovery command, release readiness automation은 후속 slice로 남긴다.
+
+M9b audit event writer는 `packages/star-control-observability`의 AuditEventWriter로 구현한다. 이 slice는 `.ai-runs/{job_id}/audit/audit-events.jsonl` append-only writer/readback helper, schema validation, 저장 전 redaction, job directory containment를 고정한다. API/CLI/daemon/provider event 자동 연결, cost/budget guard, retention/recovery command, release readiness automation은 후속 slice로 남긴다.
+
+M9c cost metric budget guard는 `packages/star-control-observability`의 CostMetricWriter와 CostBudgetThresholds로 구현한다. 이 slice는 provider output sidecar `cost-metric.json` validation/write/readback, 저장 전 redaction, missing metric non-fatal path, warning-only budget evaluation을 고정한다. provider execution 자동 연결, hard enforcement, 외부 billing/quota 조회, retention/recovery command, release readiness automation은 후속 slice로 남긴다.
+
+M9d provider conformance hardening은 `packages/star-control-provider`의 ProviderConformanceChecker를 강화한다. 이 slice는 ArtifactRef path/kind/producer, stored `response.json` schema/value 일치, cloud privacy/cost sidecar schema와 job/provider/stage 일치를 검증한다. provider live call, schema field 변경, workflow/release/deploy/publish automation은 구현하지 않는다.
+
+M9e state recovery inspection은 `packages/star-control-state`의 `StateStore::inspect_recovery`로 구현한다. 이 slice는 missing/invalid/schema/corrupt/tmp issue를 inspect-only report로 분류하되, tmp file 삭제, event log trim, recovered copy 생성, artifact 교체, retention cleanup은 수행하지 않는다.
+
+M9f release readiness writer는 `packages/star-control-release`의 ReleaseReadinessWriter로 구현한다. 이 slice는 `.ai-runs/{job_id}/release/release-readiness.json` artifact를 생성/검증하되, `ready` status, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
+M9g release readiness API read는 `packages/star-control-api`의 `ApiReadOnlyService`에 `GET /projects/{project_id}/jobs/{job_id}/release-readiness` path를 추가한다. 이 slice는 existing readiness artifact를 schema-valid API envelope으로 읽어 반환하되, HTTP server, CLI command, UI app, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
+M9h release version consistency checker는 `packages/star-control-release`의 `ReleaseConsistencyChecker`로 구현한다. 이 slice는 caller-provided expected version, declared version text, changelog text를 평가해 `version-consistent`/`changelog-updated` checks와 blockers를 생성하되, filesystem discovery, changelog parser, release profile integration, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
+M9i release evidence file discovery는 `packages/star-control-release`의 `ReleaseEvidenceFileChecker`로 구현한다. 이 slice는 caller-provided project root와 relative evidence path에서 version/changelog text를 read-only로 읽어 `ReleaseConsistencyChecker`에 연결하되, automatic repository-wide scan, changelog parser, release profile integration, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
+M9j release profile readiness integration은 `packages/star-control-release`의 `ReleaseProfileValidation`과 `ReleaseProfileReadinessBuilder`로 구현한다. 이 slice는 caller-provided release profile pass/fail result를 `release-profile-passed` check로 만들고 version/changelog consistency checks와 병합하되, Star Sentinel profile evaluator, CLI/API/UI surface, schema field 변경, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
+M9k release readiness UI read는 `packages/star-control-ui`의 `UiReadOnlyShell`에 release readiness viewer를 추가한다. 이 slice는 existing ReleaseReadiness artifact를 API read-only endpoint를 통해 표시하고 missing artifact를 optional read-only error로 처리하되, browser app, HTTP server, CLI command, StateStore 직접 mutation, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
+M9l release readiness CLI read는 `packages/star-control-cli`의 `report --release-readiness` option으로 구현한다. 이 slice는 existing ReleaseReadiness artifact를 schema-valid CLI output envelope으로 읽고 missing artifact를 schema-valid error로 반환하되, 새 top-level command, StateStore mutation, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
+M9m release review pack foundation은 `packages/star-control-release`의 `ReleaseReviewPackWriter`로 구현한다. 이 slice는 existing ReleaseReadiness value를 검증한 뒤 `.ai-runs/{job_id}/review-packs/release-review-pack.md` Markdown artifact를 한 번만 쓰되, approval record, CLI/API/UI surface, signing, publish, deploy, repository settings 변경은 별도 승인 전까지 RESERVED로 둔다.
+
+M9n recovery command surface는 `packages/star-control-cli`의 `recover --list`로 구현한다. 이 slice는 `StateStore::inspect_recovery` 결과를 schema-valid CLI envelope으로 표시하되, tmp file 삭제, event log trim, recovered copy 생성, artifact 교체, retention cleanup은 별도 승인 전까지 RESERVED로 둔다.
+
+M9o final M9 readiness audit은 `packages/star-control-release`의 `M9ReadinessAuditBuilder`로 구현한다. 이 slice는 M9 필수 hardening/recovery/release-readiness check를 `release-readiness.schema.json` value로 조립하고 missing/duplicate/failed check를 blocker로 표시하되, all-pass 결과도 `ready`가 아니라 final release/deploy/publish reserved blocker가 있는 `reserved` status로 둔다.
+
+M9p final completion audit은 `packages/star-control-release`의 `CompleteImplementationAuditBuilder`로 구현한다. 이 slice는 M0~M9 milestone, full local validation, remote CI evidence, stacked PR clean state, reserved action confirmation을 `release-readiness.schema.json` value로 조립하고 missing/duplicate/failed check를 blocker로 표시하되, all-pass 결과도 `ready`가 아니라 release/deploy/publish와 external repository settings reserved blocker가 있는 `reserved` status로 둔다.
+
+M9q final audit evidence는 `examples/release-contracts/complete-implementation-readiness.example.json`과 `docs/implementation/audit/final-completion-audit.md`로 구현한다. 이 slice는 M0~M9 completion audit evidence를 schema-valid ReleaseReadiness example과 human-readable audit 문서로 고정하되, all-pass evidence도 `ready`가 아니라 release/deploy/publish와 external repository settings reserved blocker가 있는 `reserved` status로 둔다.
+
+M9r stacked PR readiness coordination은 `examples/release-contracts/stacked-pr-readiness.example.json`과 `docs/implementation/audit/stacked-pr-readiness.md`로 구현한다. 이 slice는 stacked PR chain의 contiguous base/head, clean merge state, draft review gate, main merge not performed, final audit evidence link를 schema-valid ReleaseReadiness example과 human-readable audit 문서로 고정하되, main update나 PR merge는 별도 승인 전까지 수행하지 않는다.
+
+M9s CLI providers read-only surface는 `packages/star-control-cli`의 `providers list/show`와 `packages/star-control-provider`의 read-only listing accessor로 구현한다. 이 slice는 public CLI surface에 남아 있던 provider discovery gap을 채우되, provider healthcheck, provider execution, live call, credential raw value 출력, schema field 변경, workflow 변경, release/deploy/publish는 수행하지 않는다.
+
+M9t CLI sentinel command group은 `packages/star-control-cli`의 `sentinel selfcheck/check/gate/review-pack`으로 구현한다. 이 slice는 Star Sentinel rule engine을 CLI에 재구현하지 않고 `packages/star-sentinel` API를 호출해 existing `.ai-runs/{job_id}/tool-output/star-sentinel/{task.json,changed_lines.json}` input을 평가하고 diagnostics, approval, review-pack artifact를 쓴다. Provider execution, provider live call, release/deploy/publish, destructive recovery action, schema field 변경, workflow 변경은 수행하지 않는다.
+
+M9u final evidence refresh는 `docs/implementation/audit/final-completion-audit.md`, `docs/implementation/audit/stacked-pr-readiness.md`, `examples/release-contracts/*readiness.example.json`을 M9t 구현 스택 기준으로 갱신한다. 이 slice는 evidence refresh만 수행하고 PR merge, main update, release/deploy/publish, repository settings 변경, destructive recovery action은 수행하지 않는다.
+
+M9v stacked merge procedure는 `docs/implementation/audit/stacked-pr-merge-procedure.md`로 review order, branch-to-branch merge execution order, pre-merge verification, stop condition, explicit approval phrase를 문서화한다. 이 slice는 절차만 고정하고 PR ready/merge, main update, release/deploy/publish, repository settings 변경, destructive recovery action은 수행하지 않는다.
+
 Validation:
 
 ```text
@@ -279,7 +332,23 @@ cargo check --workspace
 cargo test --workspace
 provider conformance suite
 security guard tests
+redaction report tests
+audit event writer tests
+cost metric budget guard tests
+provider conformance hardening tests
+state recovery inspection tests
+recovery command surface tests
 release readiness checks
+release readiness writer tests
+release review pack writer tests
+final M9 readiness audit tests
+final completion audit tests
+final completion readiness example validation
+stacked PR readiness example validation
+CLI providers list/show tests
+CLI sentinel command group tests
+final evidence refresh validation
+stacked merge procedure validation
 ```
 
 ## 다음 작업 선택 규칙
