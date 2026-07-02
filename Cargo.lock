@@ -93,6 +93,7 @@ dependencies = [
  "serde_json",
  "star-control-execution",
  "star-control-provider",
+ "star-control-release",
  "star-control-router",
  "star-control-schema",
  "star-control-state",

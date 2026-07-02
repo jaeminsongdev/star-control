@@ -139,6 +139,8 @@ packages/star-adapter-openai-compatible
 ### `star-control-cli`
 
 - `run`, `status`, `report`, `approve`, `cancel`, `resume` 명령
+- `report --release-readiness` read-only release readiness surface
+- `recover --list` inspect-only recovery surface
 - stdout/stderr/exit code 계약
 - daemon 없이도 file-based flow 실행 가능해야 함
 
@@ -191,6 +193,9 @@ packages/star-adapter-openai-compatible
 - ReleaseConsistencyChecker for version/changelog checks
 - ReleaseEvidenceFileChecker for read-only version/changelog evidence files
 - ReleaseProfileReadinessBuilder for profile/version/changelog readiness assembly
+- ReleaseReviewPackWriter for `review-packs/release-review-pack.md`
+- M9ReadinessAuditBuilder for final M9 hardening/recovery/release readiness audit assembly
+- CompleteImplementationAuditBuilder for final M0~M9 completion audit assembly
 - reserved/not_ready readiness artifact generation
 - RESERVED: signing, publish, deploy automation, repository/package registry settings changes
 
