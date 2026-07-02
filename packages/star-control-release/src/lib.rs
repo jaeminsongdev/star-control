@@ -31,6 +31,22 @@ pub const M9_REQUIRED_READINESS_CHECKS: &[&str] = &[
     "destructive-actions-reserved",
     "release-automation-reserved",
 ];
+pub const COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS: &[&str] = &[
+    "m0-docs-decisions",
+    "m1-runtime-foundation",
+    "m2-provider-neutral-execution",
+    "m3-validation-gate",
+    "m4-v0-fake-e2e",
+    "m5-local-provider",
+    "m6-cloud-provider",
+    "m7-daemon-api-control-plane",
+    "m8-ui-shell",
+    "m9-hardening-release-readiness",
+    "full-local-validation",
+    "remote-ci-evidence",
+    "stacked-prs-clean",
+    "reserved-actions-confirmed",
+];
 
 #[derive(Debug)]
 pub enum ReleaseReadinessError {
@@ -462,6 +478,134 @@ impl M9ReadinessAuditBuilder {
         if blockers.is_empty() {
             blockers.push(
                 "final release/deploy/publish remains reserved until explicit approval".to_string(),
+            );
+            writer.readiness(release_id, target, version, "reserved", checks, blockers)
+        } else {
+            writer.not_ready(release_id, target, version, checks, blockers)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompleteImplementationAuditCheck {
+    name: String,
+    passed: bool,
+    evidence_paths: Vec<String>,
+    blockers: Vec<String>,
+}
+
+impl CompleteImplementationAuditCheck {
+    pub fn passed(
+        name: impl Into<String>,
+        evidence_paths: Vec<String>,
+    ) -> Result<Self, ReleaseReadinessError> {
+        Ok(Self {
+            name: normalized_complete_implementation_check_name(name)?,
+            passed: true,
+            evidence_paths: normalize_evidence_paths(evidence_paths)?,
+            blockers: Vec::new(),
+        })
+    }
+
+    pub fn failed(
+        name: impl Into<String>,
+        evidence_paths: Vec<String>,
+        blockers: Vec<String>,
+    ) -> Result<Self, ReleaseReadinessError> {
+        let blockers = normalize_complete_implementation_blockers(blockers)?;
+        if blockers.is_empty() {
+            return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+                message: "failed complete implementation check requires at least one blocker"
+                    .to_string(),
+            });
+        }
+        Ok(Self {
+            name: normalized_complete_implementation_check_name(name)?,
+            passed: false,
+            evidence_paths: normalize_evidence_paths(evidence_paths)?,
+            blockers,
+        })
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn is_passed(&self) -> bool {
+        self.passed
+    }
+
+    pub fn evidence_paths(&self) -> &[String] {
+        &self.evidence_paths
+    }
+
+    pub fn blockers(&self) -> &[String] {
+        &self.blockers
+    }
+
+    fn to_check(&self) -> Value {
+        release_check(
+            &self.name,
+            check_status(self.passed),
+            self.evidence_paths.clone(),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CompleteImplementationAuditBuilder;
+
+impl CompleteImplementationAuditBuilder {
+    pub fn build(
+        &self,
+        writer: &ReleaseReadinessWriter,
+        release_id: impl Into<String>,
+        target: impl Into<String>,
+        version: impl Into<String>,
+        audit_checks: Vec<CompleteImplementationAuditCheck>,
+    ) -> Value {
+        let release_id = release_id.into();
+        let target = target.into();
+        let version = version.into();
+        let mut checks = Vec::with_capacity(audit_checks.len());
+        let mut blockers = Vec::new();
+        let mut seen = Vec::with_capacity(audit_checks.len());
+
+        for audit_check in &audit_checks {
+            if seen
+                .iter()
+                .any(|seen_name: &String| seen_name == audit_check.name())
+            {
+                blockers.push(format!(
+                    "duplicate complete implementation check: {}",
+                    audit_check.name()
+                ));
+            } else {
+                seen.push(audit_check.name().to_string());
+            }
+
+            checks.push(audit_check.to_check());
+
+            if !audit_check.is_passed() {
+                for blocker in audit_check.blockers() {
+                    blockers.push(format!("{}: {}", audit_check.name(), blocker));
+                }
+            }
+        }
+
+        for required_check in COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS {
+            if !seen.iter().any(|seen_name| seen_name == required_check) {
+                blockers.push(format!(
+                    "missing complete implementation check: {}",
+                    required_check
+                ));
+            }
+        }
+
+        if blockers.is_empty() {
+            blockers.push(
+                "release/deploy/publish and external repository settings remain reserved until explicit approval"
+                    .to_string(),
             );
             writer.readiness(release_id, target, version, "reserved", checks, blockers)
         } else {
@@ -991,6 +1135,40 @@ fn normalize_m9_readiness_blockers(
         if blocker.is_empty() {
             return Err(ReleaseReadinessError::InvalidReleaseReadiness {
                 message: "M9 readiness blocker must not be empty".to_string(),
+            });
+        }
+        normalized.push(blocker.to_string());
+    }
+    Ok(normalized)
+}
+
+fn normalized_complete_implementation_check_name(
+    name: impl Into<String>,
+) -> Result<String, ReleaseReadinessError> {
+    let name = name.into();
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+            message: "complete implementation check name is required".to_string(),
+        });
+    }
+    if !COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS.contains(&name) {
+        return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+            message: format!("unknown complete implementation check: {}", name),
+        });
+    }
+    Ok(name.to_string())
+}
+
+fn normalize_complete_implementation_blockers(
+    blockers: Vec<String>,
+) -> Result<Vec<String>, ReleaseReadinessError> {
+    let mut normalized = Vec::with_capacity(blockers.len());
+    for blocker in blockers {
+        let blocker = blocker.trim();
+        if blocker.is_empty() {
+            return Err(ReleaseReadinessError::InvalidReleaseReadiness {
+                message: "complete implementation blocker must not be empty".to_string(),
             });
         }
         normalized.push(blocker.to_string());
@@ -1631,6 +1809,107 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn complete_implementation_audit_builder_reserves_complete_audit() {
+        let writer = ReleaseReadinessWriter::new(schema_root());
+        let readiness = CompleteImplementationAuditBuilder.build(
+            &writer,
+            "completion-audit-0001",
+            "star-control",
+            "m0-m9",
+            all_complete_implementation_checks_passed(),
+        );
+
+        writer
+            .validate_readiness(&readiness)
+            .expect("schema-valid reserved complete implementation readiness");
+        assert_eq!(readiness["status"], "reserved");
+        assert_eq!(
+            readiness["checks"].as_array().expect("checks").len(),
+            COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS.len()
+        );
+        assert_eq!(
+            readiness["checks"][0]["name"],
+            COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS[0]
+        );
+        assert_eq!(readiness["checks"][0]["status"], "pass");
+        assert!(readiness["blockers"]
+            .as_array()
+            .expect("blockers")
+            .contains(&json!(
+                "release/deploy/publish and external repository settings remain reserved until explicit approval"
+            )));
+    }
+
+    #[test]
+    fn complete_implementation_audit_builder_blocks_missing_failed_and_duplicate_checks() {
+        let writer = ReleaseReadinessWriter::new(schema_root());
+        let mut checks = all_complete_implementation_checks_passed();
+        checks.retain(|check| check.name() != "remote-ci-evidence");
+        checks.push(
+            CompleteImplementationAuditCheck::failed(
+                "m6-cloud-provider",
+                vec!["docs/implementation/cloud-provider-policy.md".to_string()],
+                vec!["cloud API live transport remains approval-gated".to_string()],
+            )
+            .expect("failed complete implementation check"),
+        );
+
+        let readiness = CompleteImplementationAuditBuilder.build(
+            &writer,
+            "completion-audit-0002",
+            "star-control",
+            "m0-m9",
+            checks,
+        );
+
+        writer
+            .validate_readiness(&readiness)
+            .expect("schema-valid not_ready complete implementation readiness");
+        assert_eq!(readiness["status"], "not_ready");
+        let blockers = readiness["blockers"].as_array().expect("blockers");
+        assert!(blockers.contains(&json!(
+            "missing complete implementation check: remote-ci-evidence"
+        )));
+        assert!(blockers.contains(&json!(
+            "duplicate complete implementation check: m6-cloud-provider"
+        )));
+        assert!(blockers.contains(&json!(
+            "m6-cloud-provider: cloud API live transport remains approval-gated"
+        )));
+    }
+
+    #[test]
+    fn complete_implementation_check_rejects_unknown_or_unsafe_inputs() {
+        let unknown_check = CompleteImplementationAuditCheck::passed("m10-extra", Vec::new())
+            .expect_err("unknown completion check");
+        assert!(matches!(
+            unknown_check,
+            ReleaseReadinessError::InvalidReleaseReadiness { .. }
+        ));
+
+        let unsafe_evidence = CompleteImplementationAuditCheck::passed(
+            "m0-docs-decisions",
+            vec!["../complete-implementation-roadmap.md".to_string()],
+        )
+        .expect_err("unsafe evidence");
+        assert!(matches!(
+            unsafe_evidence,
+            ReleaseReadinessError::InvalidReleaseEvidence { .. }
+        ));
+
+        let empty_blocker = CompleteImplementationAuditCheck::failed(
+            "stacked-prs-clean",
+            Vec::new(),
+            vec![" ".to_string()],
+        )
+        .expect_err("empty blocker");
+        assert!(matches!(
+            empty_blocker,
+            ReleaseReadinessError::InvalidReleaseReadiness { .. }
+        ));
+    }
+
     fn create_job(store: &StateStore) {
         store
             .create_job("request", "cli", Vec::new())
@@ -1672,6 +1951,19 @@ mod tests {
                     vec![format!("docs/implementation/briefs/{}.md", check_name)],
                 )
                 .expect("M9 readiness check")
+            })
+            .collect()
+    }
+
+    fn all_complete_implementation_checks_passed() -> Vec<CompleteImplementationAuditCheck> {
+        COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS
+            .iter()
+            .map(|check_name| {
+                CompleteImplementationAuditCheck::passed(
+                    *check_name,
+                    vec![format!("docs/implementation/audit/{}.md", check_name)],
+                )
+                .expect("complete implementation check")
             })
             .collect()
     }
