@@ -80,7 +80,9 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "star-control-daemon",
+ "star-control-release",
  "star-control-schema",
+ "star-control-security",
  "star-control-state",
 ]
 
@@ -91,6 +93,7 @@ dependencies = [
  "serde_json",
  "star-control-execution",
  "star-control-provider",
+ "star-control-release",
  "star-control-router",
  "star-control-schema",
  "star-control-state",
@@ -119,7 +122,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "star-control-observability"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-schema",
+ "star-control-security",
+ "star-control-state",
+]
+
+[[package]]
 name = "star-control-provider"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-schema",
+ "star-control-state",
+]
+
+[[package]]
+name = "star-control-release"
 version = "0.1.0"
 dependencies = [
  "serde_json",
@@ -144,11 +166,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "star-control-security"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-schema",
+]
+
+[[package]]
 name = "star-control-state"
 version = "0.1.0"
 dependencies = [
  "serde_json",
  "star-control-schema",
+]
+
+[[package]]
+name = "star-control-ui"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-api",
+ "star-control-schema",
+ "star-control-security",
+ "star-control-state",
 ]
 
 [[package]]
