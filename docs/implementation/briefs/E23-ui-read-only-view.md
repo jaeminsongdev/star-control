@@ -102,7 +102,6 @@ missing report read-only error surface test
 cargo fmt --check
 cargo test -p star-control-ui -- --nocapture
 cargo clippy -p star-control-ui --all-targets -- -D warnings
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
 cargo test --workspace --all-targets --locked

@@ -1,0 +1,12 @@
+pub(super) const COMMAND_RUN: &str = "run";
+pub(super) const JOB_SCHEMA_PATH: &str = "job.json";
+pub(super) const IMPLEMENT_STAGE: &str = "implement";
+pub(super) const ROUTED_STATE: &str = "ROUTED";
+pub(super) const DONE_STATE: &str = "DONE";
+pub(super) const BLOCKED_STATE: &str = "BLOCKED";
+pub(super) const FAILED_STATE: &str = "FAILED";
+pub(super) const SUCCESS_STATUS: &str = "success";
+pub(super) const BLOCKED_STATUS: &str = "blocked";
+pub(super) const ERROR_STATUS: &str = "error";
+pub(super) const NEXT_ACTION_RUN: &str = "run";
+pub(super) const NEXT_ACTION_STATUS: &str = "status";

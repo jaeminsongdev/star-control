@@ -87,4 +87,16 @@ Codex는 새 EPIC에 들어갈 때 다음 순서로 읽는다.
 7. brief에 적힌 상세 문서
 ```
 
+## 검증 명령 기준
+
+brief의 검증 명령은 logical slice 완료 시 실행할 기준이다. 한 줄 또는 한 파일을 수정할 때마다 full validation을 반복하지 않는다.
+
+Windows local 기본 검증은 아래 명령이다.
+
+```text
+powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
+```
+
+`scripts/test.ps1`는 `scripts/ci/run_all.py` wrapper이므로 같은 검증 단계에서 두 명령을 중복 실행하지 않는다. Windows가 아닌 환경에서는 `python scripts/ci/run_all.py`를 대신 사용한다.
+
 각 PR 보고에는 실행한 brief 이름, 수정 파일, 검증 명령, 다음 handoff를 남긴다.

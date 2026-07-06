@@ -80,7 +80,6 @@ no-action/no-main-update boundary 문서화
 ## 검증
 
 ```text
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 git diff --check
 ```

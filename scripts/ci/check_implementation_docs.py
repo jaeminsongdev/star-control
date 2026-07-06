@@ -34,6 +34,7 @@ REQUIRED_DOCS = (
     "docs/implementation/target-architecture.md",
     "docs/implementation/current-repository-map.md",
     "docs/implementation/repository-layout.md",
+    "docs/implementation/refactoring-hardcoding-guidelines.md",
     "docs/implementation/complete-implementation-roadmap.md",
     "docs/implementation/data-contracts.md",
     "docs/implementation/handoff-vocabularies.md",

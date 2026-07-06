@@ -92,7 +92,6 @@ schema-invalid cloud sidecar regression test
 cargo fmt --check
 cargo test -p star-control-provider --locked -- --nocapture
 cargo clippy -p star-control-provider --all-targets --locked -- -D warnings
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
 cargo test --workspace --all-targets --locked

@@ -1,0 +1,9 @@
+pub(crate) const SCHEMA_VERSION: &str = "1.0.0";
+pub(crate) const DAEMON_DIR: &str = "daemon";
+pub(crate) const DAEMON_STATE_FILE: &str = "state.json";
+pub(crate) const DAEMON_STATE_SCHEMA: &str = "daemon-state.schema.json";
+pub(crate) const APPROVAL_RESPONSE_SCHEMA: &str = "approval-response.schema.json";
+pub(crate) const DEFAULT_DAEMON_ID: &str = "local-daemon";
+pub(crate) const DEFAULT_PRIORITY: &str = "normal";
+pub(crate) const QUEUED_STATE: &str = "QUEUED";
+pub(crate) const TERMINAL_STATES: &[&str] = &["DONE", "FAILED", "BLOCKED", "CANCELLED"];

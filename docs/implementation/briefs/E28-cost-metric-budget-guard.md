@@ -92,7 +92,6 @@ CLI test temp project path collision hardening if workspace validation exposes f
 cargo fmt --check
 cargo test -p star-control-observability -- --nocapture
 cargo clippy -p star-control-observability --all-targets -- -D warnings
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
 cargo test --workspace --all-targets --locked

@@ -105,7 +105,6 @@ ApiReadOnlyService non-GET rejection 유지
 cargo fmt --check
 cargo test -p star-control-api -- --nocapture
 cargo clippy -p star-control-api --all-targets -- -D warnings
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
 cargo test --workspace --all-targets --locked

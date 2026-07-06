@@ -149,7 +149,15 @@ Codex는 다음을 하면 안 된다.
 
 각 PR은 최소 하나 이상의 validation command를 가져야 한다.
 
-현재 기본 검증:
+검증은 line-by-line로 실행하지 않는다. 관련 변경을 logical slice로 묶고, 개발 중에는 영향 범위에 맞는 targeted check를 사용한다. full contract validation은 slice 완료, PR/handoff 직전, 실패 수정 완료 후에 실행한다.
+
+현재 Windows local 기본 검증:
+
+```text
+powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
+```
+
+`scripts/test.ps1`는 `scripts/ci/run_all.py` wrapper다. 같은 검증 단계에서 `scripts/test.ps1`와 `python scripts/ci/run_all.py`를 둘 다 실행하지 않는다. Windows가 아닌 환경이나 CI 순서 재현이 필요할 때는 아래 직접 runner를 대신 사용한다.
 
 ```text
 python scripts/ci/run_all.py

@@ -85,7 +85,6 @@ release action disabled regression
 cargo fmt --check
 cargo test -p star-control-release --locked -- --nocapture
 cargo clippy -p star-control-release --all-targets --locked -- -D warnings
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
 cargo test --workspace --all-targets --locked

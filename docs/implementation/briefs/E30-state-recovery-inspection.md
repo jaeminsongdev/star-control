@@ -88,7 +88,6 @@ path traversal/unsafe job id rejection test
 cargo fmt --check
 cargo test -p star-control-state --locked -- --nocapture
 cargo clippy -p star-control-state --all-targets --locked -- -D warnings
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
 cargo test --workspace --all-targets --locked

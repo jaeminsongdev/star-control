@@ -84,7 +84,6 @@ stacked PR clean/remote CI/local validation evidence 기록
 ## 검증
 
 ```text
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo fmt --check
 cargo check --workspace --all-targets --locked

@@ -87,7 +87,6 @@ reserved status/no-main-merge regression 문서화
 ## 검증
 
 ```text
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo fmt --check
 cargo check --workspace --all-targets --locked

@@ -88,7 +88,6 @@ project artifact 미복사 regression test
 cargo fmt --check
 cargo test -p star-control-daemon -- --nocapture
 cargo clippy -p star-control-daemon --all-targets -- -D warnings
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace
 cargo test --workspace

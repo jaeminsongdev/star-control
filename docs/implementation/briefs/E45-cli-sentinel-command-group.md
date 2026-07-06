@@ -87,7 +87,6 @@ schema-valid CLI envelope regression test 추가
 cargo fmt --check
 cargo test -p star-control-cli --locked sentinel -- --nocapture
 cargo run --quiet -p star-control-cli -- sentinel selfcheck --json
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
 cargo test --workspace --all-targets --locked

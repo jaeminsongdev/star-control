@@ -43,17 +43,18 @@ cargo test --workspace
 E08 이후 CLI가 준비되면 v0 fake flow는 다음 command shape를 기준으로 한다.
 
 ```powershell
-star-control run --project D:\개발\프로젝트A --request "스톱워치 만들어줘" --provider fake-default --json
-star-control status --project D:\개발\프로젝트A --job J-0001 --json
-star-control report --project D:\개발\프로젝트A --job J-0001 --json
+$projectRoot = Join-Path $env:USERPROFILE 'star-control-demo\project-a'
+star-control run --project $projectRoot --request "스톱워치 만들어줘" --provider fake-default --json
+star-control status --project $projectRoot --job J-0001 --json
+star-control report --project $projectRoot --job J-0001 --json
 ```
 
 Approval flow가 준비되면 다음 command shape를 사용한다.
 
 ```powershell
-star-control approve --project D:\개발\프로젝트A --job J-0001 --response approved --reason "reviewed" --json
-star-control resume --project D:\개발\프로젝트A --job J-0001 --json
-star-control cancel --project D:\개발\프로젝트A --job J-0001 --json
+star-control approve --project $projectRoot --job J-0001 --response approved --reason "reviewed" --json
+star-control resume --project $projectRoot --job J-0001 --json
+star-control cancel --project $projectRoot --job J-0001 --json
 ```
 
 ## 5. v0 완료 기준
@@ -68,10 +69,10 @@ star-control cancel --project D:\개발\프로젝트A --job J-0001 --json
 ## 6. 실패 시 확인 순서
 
 ```powershell
-star-control status --project D:\개발\프로젝트A --job J-0001 --json
-Get-Content D:\개발\프로젝트A\.ai-runs\J-0001\run-state.json
-Get-Content D:\개발\프로젝트A\.ai-runs\J-0001\events.jsonl
-Get-Content D:\개발\프로젝트A\.ai-runs\J-0001\reports\final-report.json
+star-control status --project $projectRoot --job J-0001 --json
+Get-Content (Join-Path $projectRoot '.ai-runs\J-0001\run-state.json')
+Get-Content (Join-Path $projectRoot '.ai-runs\J-0001\events.jsonl')
+Get-Content (Join-Path $projectRoot '.ai-runs\J-0001\reports\final-report.json')
 ```
 
 긴 provider log는 user-facing report에 붙이지 않고 `provider-output/` 또는 `tool-output/` artifact path로 추적한다.
@@ -81,14 +82,15 @@ Get-Content D:\개발\프로젝트A\.ai-runs\J-0001\reports\final-report.json
 아래 command들은 완전 구현 후반의 후보이며, v0 fake flow에서 지원된다고 가정하지 않는다.
 
 ```powershell
-star-control init --global D:\개발\Star-Control
-star-control init --project D:\개발\프로젝트A
+$configRoot = Join-Path $env:USERPROFILE '.star-control'
+star-control init --global $configRoot
+star-control init --project $projectRoot
 star-control validate schemas
 star-control validate policies
 star-control provider check codex
 star-control render codex --dry-run
 star-control render codex --apply
-star-control run --project D:\개발\프로젝트A --request "스톱워치 만들어줘" --provider codex
+star-control run --project $projectRoot --request "스톱워치 만들어줘" --provider codex
 ```
 
 Codex CLI, Claude Code, Gemini CLI 같은 cloud CLI provider는 v0 fake flow와 local provider가 안정화된 뒤 provider별 공식 문서 refresh, credential policy, budget guard, approval gate를 확인하고 별도 PR로 구현한다.

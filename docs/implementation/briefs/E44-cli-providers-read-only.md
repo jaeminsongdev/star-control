@@ -84,7 +84,6 @@ schema-valid CLI envelope regression test 추가
 cargo fmt --check
 cargo test -p star-control-cli --locked providers -- --nocapture
 cargo test -p star-control-provider --locked loads_builtin_yaml_registry_and_fake_provider_contracts -- --nocapture
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
 cargo test --workspace --all-targets --locked

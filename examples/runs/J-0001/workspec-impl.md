@@ -5,7 +5,7 @@
 - stage: implement
 - role: worker-impl
 - provider: codex
-- project_root: D:\개발\프로젝트A
+- project_root: <target-project-root>
 
 ## Goal
 스톱워치 기능을 구현한다.

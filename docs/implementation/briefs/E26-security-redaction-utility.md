@@ -99,7 +99,6 @@ cargo test -p star-control-security -- --nocapture
 cargo clippy -p star-control-security --all-targets -- -D warnings
 cargo test -p star-control-api -- --nocapture
 cargo test -p star-control-ui -- --nocapture
-python scripts/ci/run_all.py
 powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
 cargo check --workspace --all-targets --locked
 cargo test --workspace --all-targets --locked
