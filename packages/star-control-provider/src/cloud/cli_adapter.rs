@@ -9,6 +9,9 @@ use crate::cloud_sidecars::{
     cost_metric_value_with_wall_time, planned_output_files, privacy_handoff_value,
 };
 use crate::fake::{ensure_output_files_absent, provider_output_path};
+use crate::provider_redaction::{
+    redact_provider_json_artifact, redact_provider_text_file_artifact,
+};
 use crate::{
     ExecutionRequest, ProviderAdapter, ProviderAdapterError, ProviderExecution, ProviderRunContext,
     ProviderRunResult,
@@ -54,11 +57,13 @@ impl ProviderAdapter for CloudCliProviderAdapter {
             &planned_output_files(request.provider_instance_id()),
         )?;
 
+        let request_redaction =
+            redact_provider_json_artifact(context, request, REQUEST_FILE, request.value())?;
         let request_ref = context.state_store().write_provider_json(
             request.job_id(),
             request.provider_instance_id(),
             REQUEST_FILE,
-            request.value(),
+            request_redaction.value(),
         )?;
         let privacy_handoff = privacy_handoff_value(request, manifest, true);
         validate_contract(
@@ -96,6 +101,10 @@ impl ProviderAdapter for CloudCliProviderAdapter {
             stderr_file,
         )?;
         let wall_time_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        let stdout_redaction =
+            redact_provider_text_file_artifact(context, request, STDOUT_FILE, &stdout_path)?;
+        let stderr_redaction =
+            redact_provider_text_file_artifact(context, request, STDERR_FILE, &stderr_path)?;
 
         let stdout_ref = artifact_ref(context, request, STDOUT_FILE)?;
         let stderr_ref = artifact_ref(context, request, STDERR_FILE)?;
@@ -113,10 +122,26 @@ impl ProviderAdapter for CloudCliProviderAdapter {
             &cost_metric,
         )?;
 
-        let response_value =
-            cli_response_value(request, manifest, instance, &process_result, wall_time_ms);
+        let redaction_artifacts = [
+            request_redaction.report_path().map(ToString::to_string),
+            stdout_redaction,
+            stderr_redaction,
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        let response_value = cli_response_value(
+            request,
+            manifest,
+            instance,
+            &process_result,
+            wall_time_ms,
+            &redaction_artifacts,
+        );
+        let response_redaction =
+            redact_provider_json_artifact(context, request, RESPONSE_FILE, &response_value)?;
         let result = ProviderRunResult::from_value(
-            response_value.clone(),
+            response_redaction.value().clone(),
             provider_output_path(request.provider_instance_id(), RESPONSE_FILE),
             context.schema_root(),
         )?;
@@ -124,7 +149,7 @@ impl ProviderAdapter for CloudCliProviderAdapter {
             request.job_id(),
             request.provider_instance_id(),
             RESPONSE_FILE,
-            &response_value,
+            response_redaction.value(),
         )?;
 
         let execution = ProviderExecution::new(

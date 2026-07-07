@@ -4,6 +4,8 @@
 
 M9s slice는 public CLI surface에 남아 있던 `star-control providers` command group 중 read-only `list`와 `show`를 구현한다. 이 slice는 provider healthcheck, provider execution, live call, external account access를 수행하지 않는다.
 
+후속 productization slice E48은 `providers healthcheck`를 live call 없는 `offline_readiness` surface로 승격한다. E44의 healthcheck reserved 문장은 E44 당시 범위에만 적용한다.
+
 ## 선행 문서
 
 ```text

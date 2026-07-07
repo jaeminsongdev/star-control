@@ -117,3 +117,60 @@ fn cloud_cli_transport_timeout_writes_timeout_result() {
     );
     fs::remove_dir_all(project).ok();
 }
+
+#[test]
+fn cloud_cli_hard_budget_blocks_before_process_execution() {
+    let _env = EnvVarGuard::set("STAR_CONTROL_CLOUD_CLI_SUCCESS_HELPER", "1");
+    let (execution, project) = execute_cloud_cli_transport(json!({
+        "id": "cloud-default",
+        "provider": "provider.cloud",
+        "enabled": true,
+        "limits": {
+            "timeout_seconds": 10,
+            "max_parallel_jobs": 1
+        },
+        "routing_tags": ["cloud", "cli"],
+        "transport_config": {
+            "auth_mode": "login_session",
+            "privacy_handoff_approved": true
+        },
+        "budget": {
+            "estimated_cost": 0.25,
+            "max_estimated_cost": 0.10,
+            "currency": "USD"
+        },
+        "command_policy": {
+            "shell": false,
+            "env_allowlist": ["STAR_CONTROL_CLOUD_CLI_SUCCESS_HELPER"]
+        },
+        "command": {
+            "executable": current_test_executable(),
+            "args": [
+                "--exact",
+                "cloud::tests::cloud_cli_success_helper",
+                "--nocapture"
+            ]
+        }
+    }))
+    .expect("execute cloud CLI budget block");
+
+    assert_eq!(execution.result().status(), "blocked");
+    assert_eq!(
+        execution.result().value()["error"]["kind"],
+        "cloud_budget_estimated_cost_exceeded"
+    );
+    assert_eq!(
+        execution.result().value()["error"]["field"],
+        "budget.max_estimated_cost"
+    );
+    let stdout = fs::read_to_string(
+        project.join(".ai-runs/J-0001/provider-output/cloud-default/stdout.txt"),
+    )
+    .expect("read preflight stdout");
+    assert!(stdout.contains("transport_execution=false"));
+    assert!(!stdout.contains("cloud cli success"));
+    let cost_metric =
+        read_json(&project.join(".ai-runs/J-0001/provider-output/cloud-default/cost-metric.json"));
+    assert_eq!(cost_metric["estimated_cost"], 0.25);
+    fs::remove_dir_all(project).ok();
+}

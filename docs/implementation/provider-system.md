@@ -293,7 +293,8 @@ M9d 구현 기준:
 - request/response/stdout/stderr ArtifactRef는 expected path, kind, producer를 만족해야 한다.
 - stored `provider-output/{provider_instance_id}/response.json`은 `provider-run-result.schema.json`을 만족하고 `ProviderExecution.result().value()`와 일치해야 한다.
 - cloud profile은 `privacy-handoff.json`과 `cost-metric.json`을 schema로 검증한다.
-- cloud cost metric은 job_id, provider_instance_id, stage가 ProviderRunResult와 일치해야 한다.
+- fake/local/cloud provider output은 `cost-metric.json` sidecar를 남긴다.
+- cost metric은 job_id, provider_instance_id, stage가 ProviderRunResult와 일치해야 한다.
 
 이 checker는 실제 provider live call을 시작하지 않는다. provider execution path에 자동 연결하는 작업은 별도 hardening slice로 둔다.
 
@@ -305,7 +306,7 @@ M9d 구현 기준:
 
 - WorkSpec을 읽는다.
 - 외부 명령이나 network 호출 없이 deterministic response를 만든다.
-- provider output directory에 `request.json`, `response.json`을 쓴다.
+- provider output directory에 `request.json`, `response.json`, `cost-metric.json`을 쓴다.
 - 필요하면 dummy changed_files와 summary를 만든다.
 
 금지:
@@ -390,6 +391,7 @@ RESERVED. approval과 manual review에 사용한다.
 provider-output/{provider-instance-id}/
   request.json
   response.json
+  cost-metric.json
   stdout.txt
   stderr.txt
   logs/

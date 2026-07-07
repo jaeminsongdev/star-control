@@ -165,6 +165,34 @@ examples/cli-contracts/status-output.example.json
 
 `--release-readiness`를 사용하면 stage report 대신 `.ai-runs/{job_id}/release/release-readiness.json`을 read-only로 읽는다. 이 옵션은 `--stage`와 함께 사용할 수 없다. CLI는 readiness artifact를 표시할 뿐이며 signing, publish, deploy, release action을 실행하지 않는다.
 
+## star-control release
+
+목적:
+
+- release readiness artifact를 기반으로 signing/publish/deploy/rollback/review 준비 계획을 표시한다.
+- 실제 release/deploy/publish 실행은 approval-gated executor 후속 slice로 남긴다.
+
+옵션:
+
+```text
+--project <path>
+--job <job-id>
+--action prepare|signing-policy|package-publish|deploy|rollback-checklist|approval-record|review-pack
+--dry-run
+--approve-release-action <token>
+--json
+```
+
+E54 기준 구현은 `--action <name> --dry-run`으로 release automation plan을 표시한다. `--dry-run` 없는 action은 실제 실행하지 않고 `status=blocked`, `mode=approval_required`, `approval_gate.approval_token`을 반환한다. CLI는 `release/release-readiness.json`을 읽어 plan의 release id, target, version, readiness status를 채운다.
+
+금지:
+
+- 승인 gate 없는 signing 실행
+- 승인 gate 없는 package publish
+- 승인 gate 없는 deploy
+- 승인 gate 없는 repository/package registry/cloud account 변경
+- readiness artifact 삭제/덮어쓰기
+
 ## star-control approve
 
 목적:
@@ -226,7 +254,8 @@ examples/cli-contracts/approve-output.example.json
 
 목적:
 
-- 손상되었거나 불완전할 수 있는 job artifact를 inspect-only로 점검한다.
+- 손상되었거나 불완전할 수 있는 job artifact를 점검한다.
+- 제품화 recovery action을 dry-run/approval-gated surface로 표시한다.
 
 옵션:
 
@@ -234,21 +263,40 @@ examples/cli-contracts/approve-output.example.json
 --project <path>
 --job <job-id>
 --list
+--action tmp-cleanup|recovered-copy|event-log-trim|artifact-replace|retention-cleanup
+--dry-run
+--approve-recovery-action <token>
+--recovery-artifact <job-relative-target-path>
+--recovery-source <job-relative-source-path>
 --json
 ```
 
 M9n 기준 구현은 `--list`만 지원한다. CLI는 `StateStore::inspect_recovery(job_id)` 결과를 `cli-output.schema.json` envelope으로 표시하고, `mode=inspect_only`, `recovery_actions_enabled=false`를 반환한다.
 
+E53 기준 구현은 `--action <name> --dry-run`으로 recovery action 계획을 표시한다. E57 기준 구현은 `--approve-recovery-action` token이 일치할 때 `tmp-cleanup`, `recovered-copy`, `event-log-trim`, `retention-cleanup` executor를 실행한다. E59 기준 구현은 `artifact-replace`에서 `--recovery-artifact` target과 `--recovery-source` source가 현재 inspection issue와 일치하고 approval token이 맞을 때만 target artifact를 source artifact로 교체한다.
+
+지원 action:
+
+```text
+tmp-cleanup
+recovered-copy
+event-log-trim
+artifact-replace
+retention-cleanup
+```
+
 금지:
 
-- tmp file 삭제
-- event log trim
-- recovered copy 생성
-- artifact 교체
-- retention cleanup
+- 승인 gate 없는 tmp file 삭제
+- 승인 gate 없는 event log trim
+- 승인 gate 없는 recovered copy 생성
+- 승인 gate 없는 artifact 교체
+- 현재 recovery issue와 일치하지 않는 artifact 교체
+- job directory 밖 source/target artifact 접근
+- 승인 gate 없는 retention cleanup
 - provider/tool output 수정
 
-`--list` 없는 `recover`와 non-recovery option 조합은 invalid input으로 거부한다.
+`--list`와 `--action` 동시 사용, recovery와 무관한 option 조합은 invalid input으로 거부한다.
 
 ## star-control providers
 
@@ -260,7 +308,7 @@ show
 healthcheck
 ```
 
-초기 구현은 `list`와 `show`를 read-only로 시작한다. `healthcheck`는 provider adapter smoke가 준비된 뒤 구현한다.
+초기 구현은 `list`와 `show`를 read-only로 시작했다. Productization readiness slice는 `healthcheck`를 live call 없는 offline readiness surface로 제공한다.
 
 M9s 기준 구현:
 
@@ -270,9 +318,9 @@ star-control providers show <provider-id> --json
 star-control providers show --provider <provider-id> --json
 ```
 
-`list`와 `show`는 `configs/registries/builtin-provider-registry.yaml`과 builtin provider manifest/capability profile만 읽는다. output은 schema-valid CLI envelope이며 `healthcheck_enabled=false`, `actions_enabled=false`를 포함한다. 이 command group은 `.ai-runs/`, provider output, daemon state, release artifact를 생성하거나 수정하지 않는다.
+`list`와 `show`는 `configs/registries/builtin-provider-registry.yaml`과 builtin provider manifest/capability profile만 읽는다. output은 schema-valid CLI envelope이며 `healthcheck_enabled=true`, `healthcheck_mode=offline_readiness`, `actions_enabled=false`를 포함한다. 이 command group은 `.ai-runs/`, provider output, daemon state, release artifact를 생성하거나 수정하지 않는다.
 
-`providers healthcheck`는 provider smoke가 준비되기 전까지 reserved invalid input으로 남긴다.
+`providers healthcheck`는 builtin provider readiness를 offline으로 평가하고 `live_calls_performed=false`, `actions_enabled=false`를 반환한다. Local AI/Cloud AI provider는 manifest/readiness surface까지만 노출하고 live execution은 disabled/reserved로 표시한다.
 
 ## star-control sentinel
 

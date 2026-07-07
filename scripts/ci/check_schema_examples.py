@@ -12,12 +12,13 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 COMPLETE_IMPLEMENTATION_EXAMPLE = "examples/release-contracts/complete-implementation-readiness.example.json"
 STACKED_PR_READINESS_EXAMPLE = "examples/release-contracts/stacked-pr-readiness.example.json"
-COMPLETE_IMPLEMENTATION_RESERVED_BLOCKER = (
-    "release/deploy/publish and external repository settings remain reserved until explicit approval"
-)
-STACKED_PR_READINESS_RESERVED_BLOCKER = (
+COMPLETE_IMPLEMENTATION_RESERVED_BLOCKERS = [
+    "Local AI connector live execution",
+    "Cloud AI connector live execution",
+]
+STACKED_PR_READINESS_RESERVED_BLOCKERS = [
     "stacked PRs remain draft and require explicit review/merge coordination before main changes"
-)
+]
 COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS = [
     "m0-docs-decisions",
     "m1-runtime-foundation",
@@ -25,15 +26,20 @@ COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS = [
     "m3-validation-gate",
     "m4-v0-fake-e2e",
     "m5-local-provider",
-    "m6-cloud-provider",
+    "m6-cloud-provider-no-live-call",
     "m7-daemon-api-control-plane",
-    "m8-ui-shell",
+    "m8-ui-shell-and-static-app",
     "m9-hardening-release-readiness",
+    "productization-e2e-smoke",
+    "external-release-policy-reserved",
     "full-local-validation",
     "remote-ci-evidence",
-    "stacked-prs-clean",
-    "reserved-actions-confirmed",
+    "approval-gated-actions-separated",
+    "final-blockers-only-ai-live-connectors",
 ]
+COMPLETE_IMPLEMENTATION_REQUIRED_STATUSES = {
+    "remote-ci-evidence": "warn",
+}
 STACKED_PR_READINESS_REQUIRED_CHECKS = [
     "stacked-prs-contiguous",
     "stacked-prs-clean",
@@ -181,8 +187,9 @@ def validate_complete_implementation_example(errors: list[str]) -> None:
         errors,
         COMPLETE_IMPLEMENTATION_EXAMPLE,
         COMPLETE_IMPLEMENTATION_REQUIRED_CHECKS,
-        COMPLETE_IMPLEMENTATION_RESERVED_BLOCKER,
+        COMPLETE_IMPLEMENTATION_RESERVED_BLOCKERS,
         "complete implementation",
+        COMPLETE_IMPLEMENTATION_REQUIRED_STATUSES,
     )
 
 
@@ -191,8 +198,9 @@ def validate_stacked_pr_readiness_example(errors: list[str]) -> None:
         errors,
         STACKED_PR_READINESS_EXAMPLE,
         STACKED_PR_READINESS_REQUIRED_CHECKS,
-        STACKED_PR_READINESS_RESERVED_BLOCKER,
+        STACKED_PR_READINESS_RESERVED_BLOCKERS,
         "stacked PR readiness",
+        {},
     )
 
 
@@ -200,19 +208,24 @@ def validate_required_release_readiness_checks(
     errors: list[str],
     document_path: str,
     required_checks: list[str],
-    reserved_blocker: str,
+    reserved_blockers: list[str],
     label: str,
+    required_statuses: dict[str, str],
 ) -> None:
     document = load_json(document_path)
     if document.get("status") != "reserved":
         errors.append(f"{document_path}: status must remain reserved")
 
     blockers = document.get("blockers")
-    if not isinstance(blockers, list) or reserved_blocker not in blockers:
-        errors.append(
-            f"{document_path}: missing reserved blocker "
-            f"{reserved_blocker!r}"
-        )
+    if not isinstance(blockers, list):
+        errors.append(f"{document_path}: blockers must be an array")
+    else:
+        for reserved_blocker in reserved_blockers:
+            if reserved_blocker not in blockers:
+                errors.append(
+                    f"{document_path}: missing reserved blocker "
+                    f"{reserved_blocker!r}"
+                )
 
     checks = document.get("checks")
     if not isinstance(checks, list):
@@ -239,9 +252,10 @@ def validate_required_release_readiness_checks(
         if check is None:
             errors.append(f"{document_path}: missing {label} check {required_check!r}")
             continue
-        if check.get("status") != "pass":
+        expected_status = required_statuses.get(required_check, "pass")
+        if check.get("status") != expected_status:
             errors.append(
-                f"{document_path}: check {required_check!r} must have status pass"
+                f"{document_path}: check {required_check!r} must have status {expected_status}"
             )
         evidence_paths = check.get("evidence_paths")
         if not isinstance(evidence_paths, list) or not evidence_paths:

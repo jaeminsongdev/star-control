@@ -79,6 +79,10 @@ password assignment
 
 Star Sentinel security profile은 secret exposure 후보를 block으로 처리할 수 있다.
 
+Productization E64는 `star-control report --json`이 report artifact를 외부 출력하기 전에 shared redaction utility를 적용하도록 연결한다. redaction finding이 있으면 `StateStore::write_redaction_report_json`으로 job 내부 `audit/redaction-report-<stage>.json`을 저장하고, 반복 조회 시 기존 RedactionReport artifact 때문에 report command가 실패하지 않도록 유지한다. 이 경로는 credential raw value 접근, provider live call, external billing/quota 조회를 수행하지 않는다.
+
+Productization E65는 fake/local/cloud provider artifact 저장 경로에 provider-specific redaction helper를 연결한다. provider request/stdout/stderr/response 계열 artifact는 secret-like string을 `[REDACTED]`로 저장하고, finding이 있으면 `audit/provider-redaction-<provider_instance_id>-<artifact>.json` RedactionReport를 기록한다. local-process stdout/stderr는 process 종료 후 redaction post-process를 거치며, cloud live approval 경로도 approval artifact만 redaction하고 live call은 수행하지 않는다.
+
 ## dangerous action guard
 
 다음 action은 approval 없이 자동 진행하면 안 된다.
@@ -169,7 +173,7 @@ quota_remaining
 rate_limit_remaining
 ```
 
-FakeProvider는 비용을 0으로 기록한다.
+FakeProvider와 local process provider는 비용을 0으로 기록한다.
 
 M9c 구현은 `packages/star-control-observability`의 CostMetricWriter가 담당한다. writer는 schema-valid CostMetric을 provider output sidecar로 저장/읽기하고, missing metric은 core flow 실패로 취급하지 않는다.
 
@@ -185,9 +189,9 @@ per project
 per user approval session
 ```
 
-초기 구현은 hard enforcement보다 report와 warning 중심으로 시작할 수 있다.
-
 M9c budget evaluation은 `warn_only`다. threshold 초과는 status `warning`과 reasons로 표현하지만 provider execution, validation, report generation을 직접 중단하지 않는다.
+
+E63 cloud hard budget enforcement는 provider instance의 `budget.max_estimated_cost`를 hard limit으로 사용한다. `budget.estimated_cost`가 이 limit을 초과하면 cloud CLI process, cloud API offline fixture, cloud API live approval path는 transport 준비나 process 실행 전에 `cloud_budget_estimated_cost_exceeded` blocked result로 정규화한다. 이 경로는 credential raw value 접근, live HTTP call, 외부 billing/quota 조회를 수행하지 않는다.
 
 초과 후보 상태:
 

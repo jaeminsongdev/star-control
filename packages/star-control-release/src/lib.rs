@@ -1,4 +1,5 @@
 mod audits;
+mod automation;
 mod consistency;
 mod constants;
 mod error;
@@ -11,6 +12,7 @@ pub use audits::{
     CompleteImplementationAuditBuilder, CompleteImplementationAuditCheck, M9ReadinessAuditBuilder,
     M9ReadinessCheck,
 };
+pub use automation::{ReleaseAutomationPlanner, RELEASE_AUTOMATION_ACTIONS};
 pub use consistency::{
     ReleaseConsistencyChecker, ReleaseConsistencyResult, ReleaseEvidenceFileChecker,
 };

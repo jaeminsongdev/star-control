@@ -1,4 +1,5 @@
 mod options;
+mod readiness;
 mod registry;
 mod summary;
 
@@ -8,6 +9,7 @@ use crate::constants::BUILTIN_PROVIDER_REGISTRY;
 use crate::error::CliError;
 use crate::output::success_envelope;
 use options::reject_provider_command_options;
+use readiness::{provider_readiness_value, readiness_summary_value};
 use registry::load_builtin_provider_registry;
 use serde_json::{json, Value};
 use summary::provider_summary_value;
@@ -27,11 +29,7 @@ pub(crate) fn providers_command(
     match subcommand {
         "list" => providers_list_command(parsed, config),
         "show" => providers_show_command(parsed, config),
-        "healthcheck" => Err(CliError::InvalidInput {
-            command: parsed.command.clone(),
-            message: "providers healthcheck is reserved until provider smoke checks are enabled"
-                .to_string(),
-        }),
+        "healthcheck" => providers_healthcheck_command(parsed, config),
         other => Err(CliError::InvalidInput {
             command: parsed.command.clone(),
             message: format!("unsupported providers subcommand {}", other),
@@ -64,7 +62,8 @@ fn providers_list_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Val
             "registry_path": BUILTIN_PROVIDER_REGISTRY,
             "provider_count": providers.len(),
             "providers": providers,
-            "healthcheck_enabled": false,
+            "healthcheck_enabled": true,
+            "healthcheck_mode": "offline_readiness",
             "actions_enabled": false
         }),
         Vec::new(),
@@ -116,8 +115,72 @@ fn providers_show_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Val
             "provider": provider_summary_value(manifest, Some(profile), config),
             "manifest": manifest.value(),
             "capability_profile": profile.value(),
-            "healthcheck_enabled": false,
+            "healthcheck_enabled": true,
+            "healthcheck_mode": "offline_readiness",
             "actions_enabled": false
+        }),
+        Vec::new(),
+    ))
+}
+
+fn providers_healthcheck_command(
+    parsed: &ParsedArgs,
+    config: &CliConfig,
+) -> Result<Value, CliError> {
+    let requested_provider = match (parsed.subject.as_deref(), parsed.provider.as_deref()) {
+        (Some(subject), Some(provider)) if subject != provider => {
+            return Err(CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!(
+                    "providers healthcheck provider id mismatch: argument {}, --provider {}",
+                    subject, provider
+                ),
+            });
+        }
+        (Some(subject), _) => Some(subject.to_string()),
+        (_, Some(provider)) => Some(provider.to_string()),
+        (None, None) => None,
+    };
+
+    let registry = load_builtin_provider_registry(parsed, config)?;
+    let providers = if let Some(provider_id) = requested_provider {
+        let manifest = registry
+            .manifest(&provider_id)
+            .ok_or_else(|| CliError::InvalidInput {
+                command: parsed.command.clone(),
+                message: format!("provider {} is not registered", provider_id),
+            })?;
+        vec![provider_readiness_value(
+            manifest,
+            registry.capability_profile(manifest.id()),
+            config,
+        )]
+    } else {
+        registry
+            .providers()
+            .into_iter()
+            .map(|manifest| {
+                provider_readiness_value(
+                    manifest,
+                    registry.capability_profile(manifest.id()),
+                    config,
+                )
+            })
+            .collect()
+    };
+
+    Ok(success_envelope(
+        "providers",
+        "success",
+        json!({
+            "subcommand": "healthcheck",
+            "registry_path": BUILTIN_PROVIDER_REGISTRY,
+            "healthcheck_mode": "offline_readiness",
+            "live_calls_performed": false,
+            "actions_enabled": false,
+            "provider_count": providers.len(),
+            "summary": readiness_summary_value(&providers),
+            "providers": providers
         }),
         Vec::new(),
     ))

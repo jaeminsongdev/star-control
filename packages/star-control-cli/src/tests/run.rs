@@ -9,6 +9,11 @@ fn run_status_and_report_json_work_for_fake_project() {
 }
 
 #[test]
+fn report_json_redacts_sensitive_values_and_writes_redaction_report() {
+    fake::report_json_redacts_sensitive_values_and_writes_redaction_report();
+}
+
+#[test]
 fn run_dry_run_writes_route_without_provider_output() {
     fake::run_dry_run_writes_route_without_provider_output();
 }

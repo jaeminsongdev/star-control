@@ -135,3 +135,62 @@ fn cloud_api_offline_fixture_builds_request_and_parses_response_contract() {
         .contains(&"provider-output/cloud-default/raw-response.json".to_string()));
     fs::remove_dir_all(project).ok();
 }
+
+#[test]
+fn cloud_api_hard_budget_blocks_before_offline_fixture_processing() {
+    let fixture_relative_path = "fixtures/openai-response.json";
+    let instance_value = json!({
+        "id": "cloud-default",
+        "provider": "provider.cloud",
+        "enabled": true,
+        "credential_ref": "env:STAR_CONTROL_TEST_TOKEN",
+        "limits": {
+            "timeout_seconds": 300,
+            "max_parallel_jobs": 1
+        },
+        "routing_tags": ["cloud", "api"],
+        "transport_config": {
+            "privacy_handoff_approved": true,
+            "offline_response_fixture": fixture_relative_path
+        },
+        "budget": {
+            "estimated_cost": 0.50,
+            "max_estimated_cost": 0.10,
+            "currency": "USD"
+        },
+        "endpoint": {
+            "base_url": "https://api.openai.com/v1/",
+            "model": "gpt-example"
+        }
+    });
+    let fixture_value = json!({
+        "id": "resp_fixture",
+        "model": "gpt-example",
+        "status": "completed",
+        "output_text": "offline fixture answer",
+        "usage": {
+            "input_tokens": 5,
+            "output_tokens": 7,
+            "total_tokens": 12
+        }
+    });
+    let (execution, project) =
+        execute_cloud_api_offline(instance_value, fixture_relative_path, &fixture_value)
+            .expect("execute cloud API hard budget block");
+
+    assert_eq!(execution.result().status(), "blocked");
+    assert_eq!(
+        execution.result().value()["error"]["kind"],
+        "cloud_budget_estimated_cost_exceeded"
+    );
+    assert!(!project
+        .join(".ai-runs/J-0001/provider-output/cloud-default/http-request.json")
+        .exists());
+    assert!(!project
+        .join(".ai-runs/J-0001/provider-output/cloud-default/raw-response.json")
+        .exists());
+    let cost_metric =
+        read_json(&project.join(".ai-runs/J-0001/provider-output/cloud-default/cost-metric.json"));
+    assert_eq!(cost_metric["estimated_cost"], 0.50);
+    fs::remove_dir_all(project).ok();
+}

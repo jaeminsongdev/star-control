@@ -103,8 +103,8 @@ packages/star-adapter-openai-compatible
 - artifact ref/register, provider output, tool output, approval, review-pack, validation, and tmp writers in `src/outputs/`
 - artifact helper root in `src/artifacts.rs`
 - atomic write, JSON/text artifact IO, platform replace, schema validation, and timestamp helpers in `src/artifacts/`
-- inspect-only recovery model root in `src/recovery.rs`
-- inspect-only recovery report, issue model/error mapping, job summary, and tmp artifact warning modules in `src/recovery/`
+- recovery model root in `src/recovery.rs`
+- inspect-only recovery report, action dry-run plan, approval-gated executor, artifact replacement source selection executor, issue model/error mapping, job summary, and tmp artifact warning modules in `src/recovery/`
 - unit test module root and shared fixture helper in `src/tests.rs`
 - store test root in `src/tests/store.rs`
 - store job/event/path scenario tests in `src/tests/store/`
@@ -114,7 +114,7 @@ packages/star-adapter-openai-compatible
 - job.json, run-state.json, events.jsonl 관리
 - atomic write와 append 규칙
 - Star-Control repository 내부 `.ai-runs` 사용 금지
-- inspect-only recovery report for missing/corrupt/tmp artifacts
+- inspect-only recovery report, dry-run action plan, approved tmp cleanup, non-destructive recovered copy, approved event-log trim, and approved artifact replacement from explicit source for missing/corrupt/tmp artifacts
 
 ### `star-control-schema`
 
@@ -190,6 +190,7 @@ packages/star-adapter-openai-compatible
 - fake provider model error root, error Display/source helpers, request/result/execution/validation modules in `src/fake/model/`
 - fake provider output path and overwrite guard helpers in `src/fake/output.rs`
 - fake provider scenario tests in `src/fake/tests.rs` and fixture/request/temp-store helpers in `src/fake/tests/`
+- provider-neutral zero-cost metric sidecar helper in `src/provider_cost.rs`
 - ProviderConformanceChecker result/ref/file/schema consistency hardening
 - ProviderConformanceChecker orchestration in `src/conformance/checker.rs`
 - ProviderConformanceChecker checked artifact collection root in `src/conformance/checker/artifacts.rs`
@@ -203,6 +204,7 @@ packages/star-adapter-openai-compatible
 - ProviderConformanceChecker path policy, response consistency, cloud sidecar schema, and shared fixture tests in `src/conformance/tests/`
 - local process provider contract constants, command policy root, command policy field/timeout parser, executable allow/deny checker, process runner, forbidden-action evidence, and sidecar facade modules
 - local process sidecar response JSON builder, planned output/artifact ref helper, and output file creation helper in `src/local_process/sidecars/`
+- fake/local process provider output writes schema-valid `cost-metric.json`
 - local process provider shared test root and child-process helpers in `src/local_process/tests.rs`
 - local process provider execution/policy/cancellation/forbidden-action scenario tests in `src/local_process/tests/`
 - local process provider test support facade in `src/local_process/tests/support.rs`
@@ -304,7 +306,8 @@ packages/star-adapter-openai-compatible
 - DaemonError Display and source mapping are split into `src/error/`
 - daemon approval guard, enqueue flow, field helper, schema validation, and state IO helpers in `src/queue/`
 - daemon default-state, enqueue, approval, and shared test helpers in `src/tests/`
-- RESERVED: background runner, socket, API server, provider session scheduling
+- app layer `apps/star-daemon` exposes status/serve/api process surfaces, a `fake-default` scheduler tick, and a local-process scheduler executor
+- RESERVED: long-running background runner, socket, remote exposure, cloud/live scheduler executor, Local/Cloud AI live connector execution
 
 ### `star-control-api`
 
@@ -324,7 +327,8 @@ packages/star-adapter-openai-compatible
 - unit tests in `src/tests.rs`
 - read-only endpoint test root and control mutation scenario tests in `src/tests/`
 - read-only daemon/errors/projects/release/report scenario tests plus assertion and state snapshot helpers in `src/tests/read_only/`
-- RESERVED: HTTP server, remote exposure, auth/session, provider scheduling
+- HTTP server surface is provided by `apps/star-daemon api` for loopback-only local use
+- RESERVED: remote exposure, auth/session, cloud/live scheduler executor
 
 ### `star-control-ui`
 
@@ -360,7 +364,10 @@ packages/star-adapter-openai-compatible
 - RedactionReport builder in `src/report.rs`
 - schema-valid redaction scenario tests in `src/tests.rs`
 - secret-like key/string detection without storing raw values
-- RESERVED: RedactionReport artifact storage, retention/recovery command, release readiness automation
+- RedactionReport StateStore artifact writer via `StateStore::write_redaction_report_json`
+- CLI report redaction artifact wiring through `star-control report --json`
+- provider output redaction artifact wiring in `packages/star-control-provider/src/provider_redaction.rs`
+- RESERVED: retention/recovery command, release readiness automation
 
 ### `star-control-observability`
 
@@ -381,11 +388,13 @@ packages/star-adapter-openai-compatible
 - cost provider path guard in `src/cost/paths.rs`
 - cost metric schema and semantic validation in `src/cost/validation.rs`
 - schema-valid provider output `cost-metric.json` write/readback helper
+- fake/local/cloud provider execution path leaves provider output `cost-metric.json`
+- cloud provider hard budget limit guard via `budget.max_estimated_cost`
 - warning-only CostBudgetThresholds evaluation
 - test module root in `src/tests.rs`
 - audit and cost scenario tests in `src/tests/audit.rs` and `src/tests/cost.rs`
 - observability test schema/temp project/StateStore helpers in `src/tests/`
-- RESERVED: API/CLI/daemon/provider automatic audit/cost integration, hard budget enforcement, retention/recovery command, release readiness automation
+- RESERVED: remaining automatic audit/redaction wiring, external billing/quota lookup, retention/recovery command, release readiness automation
 
 ### `star-control-release`
 
@@ -395,6 +404,7 @@ packages/star-adapter-openai-compatible
 - ReleaseEvidenceFileChecker for read-only version/changelog evidence files
 - ReleaseProfileReadinessBuilder for profile/version/changelog readiness assembly
 - ReleaseReviewPackWriter for `review-packs/release-review-pack.md`
+- ReleaseAutomationPlanner for release action dry-run/approval planning and approval-gated local result artifact recording
 - release review-pack Markdown rendering and no-overwrite text writer helpers in `src/review_pack/`
 - M9ReadinessAuditBuilder for final M9 hardening/recovery/release readiness audit assembly in `src/audits/m9.rs`
 - CompleteImplementationAuditBuilder for final M0~M9 completion audit assembly in `src/audits/complete.rs`
@@ -409,6 +419,7 @@ packages/star-adapter-openai-compatible
 - release contract constants and public error boundary modules
 - release consistency/evidence checker module
 - release profile readiness builder module
+- release automation planner/executor module
 - final readiness audit builder root and M9/complete audit builder modules
 - release readiness writer facade in `src/writer.rs`
 - release readiness file IO, JSON builder, and schema/status validation helpers in `src/writer/`
@@ -417,7 +428,7 @@ packages/star-adapter-openai-compatible
 - release check/status, evidence path guard, name/blocker normalization, release text/version parsing, and timestamp helpers in `src/support/`
 - unit tests in `src/tests.rs`
 - reserved/not_ready readiness artifact generation
-- RESERVED: signing, publish, deploy automation, repository/package registry settings changes
+- RESERVED: external signing, publish, deploy executors, repository/package registry settings changes
 
 ### `star-sentinel`
 
@@ -449,8 +460,8 @@ apps/
 ```
 
 - `apps/starctl/`은 CLI entrypoint 후보다.
-- `apps/star-daemon/`은 daemon entrypoint 후보이며 초기 구현 대상이 아니다.
-- `apps/star-control-ui/`는 browser UI app 후보이며 초기 구현 대상이 아니다. M8a/M8b의 library-level view/control shell model은 `packages/star-control-ui/`에 둔다.
+- `apps/star-daemon/`은 local daemon app entrypoint이며 `status`, `serve --max-ticks`, loopback-only `api` surface를 제공한다.
+- `apps/star-control-ui/`는 static browser UI app이며 `star-daemon api`를 소비한다. M8a/M8b의 library-level view/control shell model은 `packages/star-control-ui/`에 둔다.
 - app layer는 core logic을 직접 소유하지 않고, 안정화된 package API를 호출하는 얇은 표면이어야 한다.
 
 ## builtin 경계
@@ -519,7 +530,7 @@ Star Sentinel 전용 schema는 `builtin-tools/star-sentinel/schemas/`에 둔다.
 
 ## scripts 경계
 
-`scripts/ci/`는 현재 repository의 계약 검증 스크립트를 둔다.
+`scripts/ci/`는 현재 repository의 계약 검증 스크립트와 productization E2E smoke를 둔다.
 
 현재 검사 후보:
 
@@ -570,7 +581,7 @@ E11 Integration Smoke
 8. local process provider를 먼저 붙인다.
 9. local model/server provider와 cloud CLI/API provider를 순차 확장한다.
 10. daemon, API, UI는 CLI file-based flow와 approval flow가 안정화된 뒤 확장한다.
-11. release automation은 release readiness와 approval flow가 안정화된 뒤 별도 승인으로만 구현한다.
+11. release automation은 release readiness와 approval flow가 안정화된 뒤 local artifact executor부터 구현하고, external signing/publish/deploy 실행은 별도 승인으로만 구현한다.
 
 ## PR 경계 원칙
 

@@ -134,11 +134,13 @@ Adapter는 child process의 captured stdout/stderr에서 위 marker를 찾는다
 ```text
 provider-output/{provider_instance_id}/request.json
 provider-output/{provider_instance_id}/response.json
+provider-output/{provider_instance_id}/cost-metric.json
 provider-output/{provider_instance_id}/stdout.txt
 provider-output/{provider_instance_id}/stderr.txt
 ```
 
 `response.json`은 `specs/schemas/provider-run-result.schema.json`에 맞춰야 한다.
+`cost-metric.json`은 `specs/schemas/cost-metric.schema.json`에 맞춰야 하며 local process provider는 estimated_cost 0, token 0을 기록한다.
 
 stdout/stderr는 secret redaction 후보가 포함될 수 있으므로 report에 전문을 복사하지 않는다. report는 path와 요약만 참조한다.
 

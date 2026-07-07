@@ -28,6 +28,8 @@ impl CloudProviderPolicyDecision {
             string_pointer(instance.value(), "/transport_config/auth_mode")
                 == Some("login_session");
 
+        let hard_budget_block = hard_budget_block(instance);
+
         let block = if let Some(field) = raw_credential_field(instance.value()) {
             CloudProviderBlock::new(
                 "cloud_provider_raw_credential",
@@ -41,6 +43,8 @@ impl CloudProviderPolicyDecision {
                     "credential_ref must use an allowed reference prefix",
                     Some("credential_ref".to_string()),
                 )
+            } else if let Some(block) = hard_budget_block {
+                block
             } else if !privacy_approved {
                 CloudProviderBlock::new(
                     "cloud_privacy_handoff_unapproved",
@@ -62,6 +66,8 @@ impl CloudProviderPolicyDecision {
                 "cloud CLI provider requires credential_ref or transport_config.auth_mode=login_session",
                 Some("credential_ref".to_string()),
             )
+        } else if let Some(block) = hard_budget_block {
+            block
         } else if !privacy_approved {
             CloudProviderBlock::new(
                 "cloud_privacy_handoff_unapproved",
@@ -112,6 +118,36 @@ impl CloudProviderBlock {
 
 pub(crate) fn estimated_cost(instance: &ProviderInstance) -> f64 {
     number_pointer(instance.value(), "/budget/estimated_cost").unwrap_or(0.0)
+}
+
+fn hard_budget_block(instance: &ProviderInstance) -> Option<CloudProviderBlock> {
+    let limit_value = instance.value().pointer("/budget/max_estimated_cost")?;
+    let Some(limit) = limit_value.as_f64() else {
+        return Some(CloudProviderBlock::new(
+            "cloud_budget_limit_invalid",
+            "budget.max_estimated_cost must be a non-negative number when provided",
+            Some("budget.max_estimated_cost".to_string()),
+        ));
+    };
+    if limit < 0.0 {
+        return Some(CloudProviderBlock::new(
+            "cloud_budget_limit_invalid",
+            "budget.max_estimated_cost must be a non-negative number when provided",
+            Some("budget.max_estimated_cost".to_string()),
+        ));
+    }
+    let estimated = estimated_cost(instance);
+    if estimated > limit {
+        return Some(CloudProviderBlock::new(
+            "cloud_budget_estimated_cost_exceeded",
+            &format!(
+                "estimated cost {} exceeds hard budget limit {}",
+                estimated, limit
+            ),
+            Some("budget.max_estimated_cost".to_string()),
+        ));
+    }
+    None
 }
 
 pub(crate) fn currency(instance: &ProviderInstance) -> String {

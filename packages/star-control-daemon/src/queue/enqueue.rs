@@ -4,12 +4,22 @@ use crate::queue::fields::string_field;
 use crate::queue::DaemonQueue;
 use serde_json::{json, Value};
 use star_control_state::StateStore;
+use std::path::PathBuf;
 
 impl DaemonQueue {
     pub fn enqueue_project_job(
         &self,
         project_store: &StateStore,
         job_id: &str,
+    ) -> Result<Value, DaemonError> {
+        self.enqueue_project_job_with_provider_instances(project_store, job_id, Vec::new())
+    }
+
+    pub fn enqueue_project_job_with_provider_instances(
+        &self,
+        project_store: &StateStore,
+        job_id: &str,
+        provider_instance_paths: Vec<PathBuf>,
     ) -> Result<Value, DaemonError> {
         project_store.load_job(job_id)?;
         let run_state = project_store.load_state(job_id)?;
@@ -27,7 +37,7 @@ impl DaemonQueue {
         let project_root = project_store.project_root().display().to_string();
         let current_stage =
             string_field(&run_state, "current_stage").unwrap_or_else(|| "implement".to_string());
-        let entry = json!({
+        let mut entry = json!({
             "job_id": job_id,
             "priority": DEFAULT_PRIORITY,
             "state": QUEUED_STATE,
@@ -36,6 +46,14 @@ impl DaemonQueue {
             "run_state": state,
             "run_dir": format!(".ai-runs/{}", job_id)
         });
+        if !provider_instance_paths.is_empty() {
+            entry["provider_instance_paths"] = Value::Array(
+                provider_instance_paths
+                    .into_iter()
+                    .map(|path| Value::String(path.display().to_string()))
+                    .collect(),
+            );
+        }
 
         let mut daemon_state = self.load_state()?;
         let queue = daemon_state

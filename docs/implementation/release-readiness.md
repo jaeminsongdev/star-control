@@ -2,7 +2,7 @@
 
 ## 목적
 
-이 문서는 Star-Control release/deploy/publish 자동화 전에 필요한 readiness artifact와 gate 기준을 고정한다. 현재 release automation은 RESERVED이며, 이 문서는 실제 배포를 수행하지 않는다.
+이 문서는 Star-Control release/deploy/publish 자동화 전에 필요한 readiness artifact와 gate 기준을 고정한다. 현재 release automation은 dry-run/approval/local result artifact 기록과 machine-readable external execution policy까지 구현하며, 실제 external release/deploy/publish는 수행하지 않는다.
 
 ## machine-readable contracts
 
@@ -103,6 +103,26 @@ packages/star-control-release
 ```
 
 M9m은 `ReleaseReviewPackWriter`를 제공한다. writer는 existing ReleaseReadiness value를 `ReleaseReadinessWriter` validation으로 검증한 뒤 `.ai-runs/{job_id}/review-packs/release-review-pack.md` Markdown artifact를 한 번만 쓴다. 반환 ArtifactRef는 `kind=review_pack`, `producer=star-control-release`를 사용한다. 이 slice는 approval record, CLI/API/UI surface, release/deploy/publish/signing action, schema field 변경을 구현하지 않는다.
+
+E54 구현 위치:
+
+```text
+packages/star-control-release
+packages/star-control-cli
+```
+
+E54는 `ReleaseAutomationPlanner`와 `star-control release --action <name>`을 제공한다. planner는 existing ReleaseReadiness value를 검증한 뒤 signing policy, package publish, deploy, rollback checklist, approval record, release review pack 준비 단계를 JSON plan으로 만든다. CLI는 `--dry-run`이면 `success`, dry-run이 아니면 `blocked`와 approval token을 반환한다. 이 slice는 실제 release/deploy/publish/signing action, repository settings 변경, external account 변경, release readiness overwrite를 수행하지 않는다.
+
+E58 구현 위치:
+
+```text
+packages/star-control-release
+packages/star-control-cli
+```
+
+E58은 `ReleaseAutomationPlanner::execute`와 CLI `--approve-release-action <token>` path를 제공한다. approval이 필요한 action은 `approve:{action}:{job_id}` token이 일치할 때만 실행되고, approval이 필요 없는 `rollback-checklist`는 바로 local result artifact를 기록한다. executor는 `.ai-runs/{job_id}/release/{action}-automation-result.json`을 새 파일로 쓰고 `release_actions_performed=true`를 반환하지만, signing/package publish/deploy/repository settings mutation/external account 변경은 실행하지 않으며 `external_actions_performed=false`를 유지한다. `review-pack` action은 기존 ReleaseReviewPackWriter를 사용해 review pack artifact를 준비할 수 있다.
+
+E66은 release automation plan/result/CLI output에 `external_execution_policy`를 추가한다. 이 policy는 `status=reserved`, `live_execution_enabled=false`, `external_actions_allowed=false`, `blocked_operations=[...]`를 반환한다. approved deploy/package-publish 계열도 external-effect step을 `local_plan_record_only`로 기록하고 실제 signing/package publish/deploy/repository settings mutation/external account 변경은 수행하지 않는다.
 
 M9o 구현 위치:
 

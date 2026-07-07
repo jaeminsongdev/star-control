@@ -12,6 +12,7 @@ pub(crate) enum CoreSchema {
     Report,
     Event,
     ArtifactRef,
+    RedactionReport,
 }
 
 impl CoreSchema {
@@ -24,6 +25,7 @@ impl CoreSchema {
             Self::Report => "report.schema.json",
             Self::Event => "event.schema.json",
             Self::ArtifactRef => "artifact-ref.schema.json",
+            Self::RedactionReport => "redaction-report.schema.json",
         }
     }
 }

@@ -1,4 +1,5 @@
 use super::ProviderAdapterError;
+use crate::provider_cost::COST_METRIC_FILE;
 use star_control_state::StateStore;
 
 pub(super) fn planned_output_files(
@@ -9,6 +10,7 @@ pub(super) fn planned_output_files(
         provider_output_path(provider_instance_id, "request.json"),
         provider_output_path(provider_instance_id, "stdout.txt"),
         provider_output_path(provider_instance_id, "response.json"),
+        provider_output_path(provider_instance_id, COST_METRIC_FILE),
     ];
     if include_stderr {
         files.push(provider_output_path(provider_instance_id, "stderr.txt"));

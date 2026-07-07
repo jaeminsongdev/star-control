@@ -11,7 +11,17 @@ pub(crate) fn response_value(
     manifest: &ProviderManifest,
     instance: &ProviderInstance,
     decision: &CloudProviderPolicyDecision,
+    redaction_artifacts: &[String],
 ) -> Value {
+    let mut artifacts = vec![
+        provider_output_path(request.provider_instance_id(), RESPONSE_FILE),
+        provider_output_path(request.provider_instance_id(), STDOUT_FILE),
+        provider_output_path(request.provider_instance_id(), STDERR_FILE),
+        provider_output_path(request.provider_instance_id(), PRIVACY_HANDOFF_FILE),
+        provider_output_path(request.provider_instance_id(), COST_METRIC_FILE),
+    ];
+    artifacts.extend(redaction_artifacts.iter().cloned());
+
     json!({
         "schema_version": "1.0.0",
         "provider_instance_id": request.provider_instance_id(),
@@ -24,13 +34,7 @@ pub(crate) fn response_value(
         "stderr_path": provider_output_path(request.provider_instance_id(), STDERR_FILE),
         "summary": format!("cloud provider preflight blocked: {}", decision.block.message),
         "changed_files": [],
-        "artifacts": [
-            provider_output_path(request.provider_instance_id(), RESPONSE_FILE),
-            provider_output_path(request.provider_instance_id(), STDOUT_FILE),
-            provider_output_path(request.provider_instance_id(), STDERR_FILE),
-            provider_output_path(request.provider_instance_id(), PRIVACY_HANDOFF_FILE),
-            provider_output_path(request.provider_instance_id(), COST_METRIC_FILE)
-        ],
+        "artifacts": artifacts,
         "metrics": {
             "estimated_cost": estimated_cost(instance),
             "currency": currency(instance),

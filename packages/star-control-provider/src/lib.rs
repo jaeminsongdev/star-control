@@ -9,6 +9,8 @@ mod conformance;
 mod fake;
 mod local_process;
 mod openai_compatible;
+mod provider_cost;
+mod provider_redaction;
 mod registry_domain;
 mod registry_error;
 mod registry_loader;

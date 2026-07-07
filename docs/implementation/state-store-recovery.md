@@ -92,6 +92,30 @@ M9n 구현:
 - tmp file은 warning issue로만 보고하고 삭제하지 않는다.
 - `--discard-tmp` 같은 destructive recovery action은 별도 승인 전까지 구현하지 않는다.
 
+E53 구현:
+
+- `StateStore::plan_recovery_action(job_id, action, mode)`은 inspect result를 기반으로 recovery action 계획을 만든다.
+- `star-control recover --project <path> --job <job-id> --action <name> --dry-run --json`은 action plan을 CLI envelope으로 표시한다.
+- 지원 action name은 `tmp-cleanup`, `recovered-copy`, `event-log-trim`, `artifact-replace`, `retention-cleanup`이다.
+- dry-run 없는 action은 실제 mutation을 수행하지 않고 `status=blocked`, `mode=approval_required`, `approval_gate.approval_token`을 반환한다.
+- destructive executor는 action-specific 후속 slice로 남기며, `destructive_actions_performed=false`를 유지한다.
+
+E57 구현:
+
+- `StateStore::execute_recovery_action(job_id, action, approval_token)`은 action plan의 approval token을 검증한 뒤 executor를 수행한다.
+- `tmp-cleanup`과 `retention-cleanup`은 승인 token이 일치할 때만 `tmp/**` file을 삭제한다.
+- `recovered-copy`는 원본 artifact를 덮어쓰지 않는 비파괴 action이므로 approval token 없이 `recovery/*.recovered-copy`를 생성할 수 있다.
+- `event-log-trim`은 승인 token이 일치할 때 `recovery/events.trimmed.jsonl`을 쓰고 원본 `events.jsonl`을 parse 가능한 줄만 남긴 copy로 교체한다.
+- executor result는 `recovery/{action}-result.json`에 기록한다.
+
+E59 구현:
+
+- `RecoverySourceSelection { artifact_path, source_path }`은 `artifact-replace`의 명시 target/source 선택을 표현한다.
+- `StateStore::plan_recovery_action_with_source(job_id, action, mode, selection)`은 current inspection issue와 일치하는 `artifact-replace` planned change에 approved source path를 주입한다.
+- `StateStore::execute_recovery_action_with_source(job_id, action, approval_token, selection)`은 approval token이 일치하고 target/source가 모두 job directory 내부 relative path일 때만 target artifact를 source bytes로 atomic replace한다.
+- CLI `--recovery-artifact <path> --recovery-source <path>`는 `artifact-replace`에서만 허용되며, current inspection issue와 일치하지 않는 target은 invalid input으로 거부한다.
+- source path를 자동 추론하거나 job directory 밖 file을 읽지 않는다.
+
 ## event log recovery 후보
 
 초기 구현에서는 자동 repair를 하지 않는다.

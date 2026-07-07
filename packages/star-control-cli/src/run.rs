@@ -21,6 +21,12 @@ mod route;
 mod state;
 
 pub(crate) fn run_command(parsed: &ParsedArgs, config: &CliConfig) -> Result<Value, CliError> {
+    if parsed.has_recovery_source_selection() {
+        return Err(CliError::InvalidInput {
+            command: parsed.command.clone(),
+            message: "run does not accept --recovery-artifact or --recovery-source".to_string(),
+        });
+    }
     let project = required_project(parsed)?;
     let request = parsed
         .request

@@ -1,6 +1,7 @@
 use super::helpers::{cleanup_dirs, create_job, open_daemon_queue, open_project_store, temp_dir};
 use crate::constants::{DEFAULT_PRIORITY, QUEUED_STATE};
 use crate::DaemonError;
+use std::fs;
 
 pub(super) fn enqueue_nonterminal_job_records_project_reference_without_copying_artifacts() {
     let project = temp_dir("project");
@@ -28,6 +29,32 @@ pub(super) fn enqueue_nonterminal_job_records_project_reference_without_copying_
     assert!(project.join(".ai-runs/J-0001/job.json").is_file());
     assert!(project.join(".ai-runs/J-0001/run-state.json").is_file());
     assert!(!queue.daemon_dir().join(".ai-runs").exists());
+
+    cleanup_dirs(project, config);
+}
+
+pub(super) fn enqueue_job_can_preserve_provider_instance_paths_for_scheduler() {
+    let project = temp_dir("project");
+    let config = temp_dir("config");
+    let store = open_project_store(&project);
+    create_job(&store, "ROUTED", "implement");
+    let instance_path = project.join("local-process-instance.json");
+    fs::write(&instance_path, "{}").expect("write provider instance placeholder");
+    let queue = open_daemon_queue(&config);
+
+    let entry = queue
+        .enqueue_project_job_with_provider_instances(&store, "J-0001", vec![instance_path.clone()])
+        .expect("enqueue job with provider instance path");
+
+    assert_eq!(
+        entry["provider_instance_paths"][0],
+        instance_path.display().to_string()
+    );
+    let daemon_state = queue.load_state().expect("load daemon state");
+    assert_eq!(
+        daemon_state["queue"][0]["provider_instance_paths"][0],
+        instance_path.display().to_string()
+    );
 
     cleanup_dirs(project, config);
 }

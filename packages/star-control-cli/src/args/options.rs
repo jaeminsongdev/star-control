@@ -56,6 +56,41 @@ pub(super) fn parse_next_argument(
         "--dry-run" => parsed.dry_run = true,
         "--release-readiness" => parsed.release_readiness = true,
         "--list" => parsed.recovery_list = true,
+        "--action" => {
+            parsed.action = Some(require_option_value(args, index, "--action", &command)?);
+        }
+        "--approve-recovery-action" => {
+            parsed.recovery_approval = Some(require_option_value(
+                args,
+                index,
+                "--approve-recovery-action",
+                &command,
+            )?);
+        }
+        "--recovery-artifact" => {
+            parsed.recovery_artifact = Some(require_option_value(
+                args,
+                index,
+                "--recovery-artifact",
+                &command,
+            )?);
+        }
+        "--recovery-source" => {
+            parsed.recovery_source = Some(require_option_value(
+                args,
+                index,
+                "--recovery-source",
+                &command,
+            )?);
+        }
+        "--approve-release-action" => {
+            parsed.release_approval = Some(require_option_value(
+                args,
+                index,
+                "--approve-release-action",
+                &command,
+            )?);
+        }
         "--json" => parsed.json = true,
         "--markdown" => parsed.markdown = true,
         positional if is_command_group_position(&command, positional) => {

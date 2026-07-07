@@ -17,6 +17,11 @@ pub(crate) struct ParsedArgs {
     pub(crate) constraints: Vec<String>,
     pub(crate) release_readiness: bool,
     pub(crate) recovery_list: bool,
+    pub(crate) action: Option<String>,
+    pub(crate) recovery_approval: Option<String>,
+    pub(crate) recovery_artifact: Option<String>,
+    pub(crate) recovery_source: Option<String>,
+    pub(crate) release_approval: Option<String>,
     pub(crate) dry_run: bool,
     pub(crate) json: bool,
     pub(crate) markdown: bool,
@@ -40,9 +45,18 @@ impl ParsedArgs {
             constraints: Vec::new(),
             release_readiness: false,
             recovery_list: false,
+            action: None,
+            recovery_approval: None,
+            recovery_artifact: None,
+            recovery_source: None,
+            release_approval: None,
             dry_run: false,
             json: false,
             markdown: false,
         }
+    }
+
+    pub(crate) fn has_recovery_source_selection(&self) -> bool {
+        self.recovery_artifact.is_some() || self.recovery_source.is_some()
     }
 }

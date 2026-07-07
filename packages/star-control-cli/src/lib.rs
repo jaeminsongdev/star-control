@@ -11,6 +11,7 @@ mod error;
 mod output;
 mod providers;
 mod read_commands;
+mod release;
 mod run;
 mod sentinel;
 #[cfg(test)]
@@ -40,6 +41,7 @@ where
         "cancel" => control::cancel_command(&parsed, config),
         "resume" => control::resume_command(&parsed, config),
         "recover" => read_commands::recover_command(&parsed, config),
+        "release" => release::release_command(&parsed, config),
         "providers" => providers::providers_command(&parsed, config),
         "sentinel" => sentinel::sentinel_command(&parsed, config),
         _ => Err(CliError::InvalidInput {

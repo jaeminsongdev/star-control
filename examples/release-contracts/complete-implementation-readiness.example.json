@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
-  "release_id": "completion-audit-0002",
+  "release_id": "completion-audit-0003",
   "target": "star-control",
-  "version": "m0-m9",
+  "version": "productization-pre-live-ai",
   "status": "reserved",
   "checks": [
     {
@@ -57,11 +57,12 @@
       ]
     },
     {
-      "name": "m6-cloud-provider",
+      "name": "m6-cloud-provider-no-live-call",
       "status": "pass",
       "evidence_paths": [
         "docs/implementation/cloud-provider-policy.md",
         "packages/star-control-provider/src/cloud.rs",
+        "packages/star-control-provider/src/cloud_policy.rs",
         "packages/star-control-provider/src/openai_compatible.rs",
         "packages/star-control-execution/src/lib.rs"
       ]
@@ -70,16 +71,20 @@
       "name": "m7-daemon-api-control-plane",
       "status": "pass",
       "evidence_paths": [
+        "apps/star-daemon/src/main.rs",
         "packages/star-control-daemon/src/lib.rs",
         "packages/star-control-api/src/lib.rs",
         "packages/star-control-cli/src/lib.rs"
       ]
     },
     {
-      "name": "m8-ui-shell",
+      "name": "m8-ui-shell-and-static-app",
       "status": "pass",
       "evidence_paths": [
-        "packages/star-control-ui/src/lib.rs"
+        "packages/star-control-ui/src/lib.rs",
+        "apps/star-control-ui/index.html",
+        "apps/star-control-ui/app.js",
+        "apps/star-control-ui/styles.css"
       ]
     },
     {
@@ -88,12 +93,27 @@
       "evidence_paths": [
         "packages/star-control-security/src/lib.rs",
         "packages/star-control-observability/src/lib.rs",
-        "packages/star-control-provider/src/conformance.rs",
+        "packages/star-control-provider/src/provider_redaction.rs",
         "packages/star-control-state/src/lib.rs",
         "packages/star-control-release/src/lib.rs",
-        "packages/star-control-cli/src/lib.rs",
-        "docs/implementation/briefs/E44-cli-providers-read-only.md",
-        "docs/implementation/briefs/E45-cli-sentinel-command-group.md"
+        "packages/star-control-cli/src/lib.rs"
+      ]
+    },
+    {
+      "name": "productization-e2e-smoke",
+      "status": "pass",
+      "evidence_paths": [
+        "scripts/ci/productization_e2e_smoke.py",
+        "docs/implementation/testing-ci-release.md"
+      ]
+    },
+    {
+      "name": "external-release-policy-reserved",
+      "status": "pass",
+      "evidence_paths": [
+        "packages/star-control-release/src/automation.rs",
+        "packages/star-control-cli/src/release.rs",
+        "docs/implementation/release-readiness.md"
       ]
     },
     {
@@ -105,31 +125,41 @@
     },
     {
       "name": "remote-ci-evidence",
-      "status": "pass",
+      "status": "warn",
       "evidence_paths": [
         "docs/implementation/audit/final-completion-audit.md"
       ]
     },
     {
-      "name": "stacked-prs-clean",
+      "name": "approval-gated-actions-separated",
       "status": "pass",
       "evidence_paths": [
         "docs/implementation/audit/final-completion-audit.md",
-        "docs/implementation/audit/stacked-pr-readiness.md"
+        "docs/implementation/release-readiness.md",
+        "docs/implementation/audit/stacked-pr-merge-procedure.md"
       ]
     },
     {
-      "name": "reserved-actions-confirmed",
+      "name": "final-blockers-only-ai-live-connectors",
       "status": "pass",
       "evidence_paths": [
-        "docs/implementation/release-readiness.md",
-        "docs/decisions/0005-full-implementation-defaults.md"
+        "docs/implementation/audit/final-completion-audit.md",
+        "docs/implementation/codex-work-queue-current.md",
+        "README.md",
+        "PLANS.md"
       ]
     }
   ],
   "blockers": [
-    "release/deploy/publish and external repository settings remain reserved until explicit approval"
+    "Local AI connector live execution",
+    "Cloud AI connector live execution"
   ],
-  "approvals": [],
-  "generated_at": "2026-07-02T00:00:00+09:00"
+  "approvals": [
+    "release/deploy/publish live execution remains approval-gated",
+    "package registry publishing remains approval-gated",
+    "external repository settings changes remain approval-gated",
+    "destructive recovery execution remains approval-gated",
+    "PR ready/merge and main update remain approval-gated"
+  ],
+  "generated_at": "2026-07-07T00:00:00+09:00"
 }

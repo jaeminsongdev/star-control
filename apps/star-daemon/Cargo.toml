@@ -1,0 +1,15 @@
+[package]
+name = "star-daemon"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+
+[dependencies]
+serde_json = "1"
+star-control-api = { path = "../../packages/star-control-api" }
+star-control-daemon = { path = "../../packages/star-control-daemon" }
+star-control-execution = { path = "../../packages/star-control-execution" }
+star-control-observability = { path = "../../packages/star-control-observability" }
+star-control-provider = { path = "../../packages/star-control-provider" }
+star-control-state = { path = "../../packages/star-control-state" }

@@ -13,6 +13,7 @@ pub(crate) fn cli_response_value(
     instance: &ProviderInstance,
     process_result: &CloudCliRunResult,
     wall_time_ms: u64,
+    redaction_artifacts: &[String],
 ) -> Value {
     let stdout_path = provider_output_path(request.provider_instance_id(), STDOUT_FILE);
     let stderr_path = provider_output_path(request.provider_instance_id(), STDERR_FILE);
@@ -75,6 +76,15 @@ pub(crate) fn cli_response_value(
         ),
     };
 
+    let mut artifacts = vec![
+        response_path,
+        stdout_path.clone(),
+        stderr_path.clone(),
+        privacy_path,
+        cost_path,
+    ];
+    artifacts.extend(redaction_artifacts.iter().cloned());
+
     json!({
         "schema_version": "1.0.0",
         "provider_instance_id": request.provider_instance_id(),
@@ -87,13 +97,7 @@ pub(crate) fn cli_response_value(
         "stderr_path": stderr_path,
         "summary": summary,
         "changed_files": [],
-        "artifacts": [
-            response_path,
-            stdout_path,
-            stderr_path,
-            privacy_path,
-            cost_path
-        ],
+        "artifacts": artifacts,
         "metrics": {
             "estimated_cost": estimated_cost(instance),
             "currency": currency(instance),

@@ -42,6 +42,24 @@ fn writes_output_artifacts_and_artifact_refs_inside_job() {
             &json!({ "decision": "AUTO_PASS" }),
         )
         .expect("write validation json");
+    let redaction_ref = store
+        .write_redaction_report_json(
+            "J-0001",
+            "redaction-report.json",
+            &json!({
+                "schema_version": "1.0.0",
+                "job_id": "J-0001",
+                "artifact_path": "provider-output/fake-default/stdout.txt",
+                "redacted": true,
+                "placeholder": "[REDACTED]",
+                "findings": [{
+                    "kind": "credential_candidate",
+                    "path": "$.stdout",
+                    "action": "redacted"
+                }]
+            }),
+        )
+        .expect("write redaction report");
     let tmp_path = store
         .write_tmp_json("J-0001", "run-state.json", &json!({ "tmp": true }))
         .expect("write tmp json");
@@ -68,6 +86,12 @@ fn writes_output_artifacts_and_artifact_refs_inside_job() {
         "validation/validation-decision.json"
     );
     assert_eq!(validation_ref["kind"], "other");
+    assert_eq!(redaction_ref["path"], "audit/redaction-report.json");
+    assert_eq!(redaction_ref["kind"], "other");
+    assert_eq!(
+        redaction_ref["schema_path"],
+        "specs/schemas/redaction-report.schema.json"
+    );
     assert!(tmp_path.starts_with("tmp/run-state.json.tmp-"));
     assert!(project
         .join(".ai-runs/J-0001/provider-output/fake-default/request.json")
@@ -86,6 +110,9 @@ fn writes_output_artifacts_and_artifact_refs_inside_job() {
         .is_file());
     assert!(project
         .join(".ai-runs/J-0001/validation/validation-decision.json")
+        .is_file());
+    assert!(project
+        .join(".ai-runs/J-0001/audit/redaction-report.json")
         .is_file());
 
     assert!(matches!(

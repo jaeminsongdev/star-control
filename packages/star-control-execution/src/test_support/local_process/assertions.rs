@@ -12,6 +12,7 @@ pub(super) fn assert_local_process_output_contract(
         "provider-output/local-default/response.json",
         "provider-output/local-default/stdout.txt",
         "provider-output/local-default/stderr.txt",
+        "provider-output/local-default/cost-metric.json",
     ];
     assert!(
         fixture
@@ -74,6 +75,22 @@ pub(super) fn assert_local_process_output_contract(
         outcome.state()["artifacts"]["implement_provider_stderr"]["path"],
         "provider-output/local-default/stderr.txt",
         "{} stderr artifact ref",
+        case.id
+    );
+    assert_eq!(
+        result["metrics"]["estimated_cost"],
+        json!(0),
+        "{} cost metric estimate",
+        case.id
+    );
+    assert_eq!(
+        result["metrics"]["currency"], "USD",
+        "{} cost metric currency",
+        case.id
+    );
+    assert!(
+        result["metrics"]["wall_time_ms"].as_u64().is_some(),
+        "{} cost metric wall time",
         case.id
     );
 

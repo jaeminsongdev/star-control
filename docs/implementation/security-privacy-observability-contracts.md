@@ -29,7 +29,14 @@ M9a 구현 위치:
 packages/star-control-security
 ```
 
-M9a는 `redact_value`, `redact_value_with_report`, RedactionReport builder를 제공하고 API/UI redaction helper가 이를 소비한다. RedactionReport artifact를 StateStore에 저장하는 작업은 audit/report hardening slice에서 별도로 연결한다.
+M9a는 `redact_value`, `redact_value_with_report`, RedactionReport builder를 제공하고 API/UI redaction helper가 이를 소비한다. E61은 `StateStore::write_redaction_report_json`으로 RedactionReport를 job 내부 `audit/<file>` artifact에 저장하는 경로를 추가했다.
+
+E61 저장 규칙:
+
+- `specs/schemas/redaction-report.schema.json`으로 저장 전 JSON을 검증한다.
+- `audit/<file>` 아래 새 artifact로만 기록하고 기존 파일을 overwrite하지 않는다.
+- 반환 ArtifactRef는 `producer=star-control-security`, `schema_path=specs/schemas/redaction-report.schema.json`를 포함한다.
+- credential raw value와 민감정보 원문은 report, artifact ref, log에 기록하지 않는다.
 
 필수 필드:
 
@@ -131,7 +138,7 @@ output_tokens
 quota_remaining
 ```
 
-FakeProvider는 estimated_cost 0, token 0을 기록한다.
+FakeProvider와 local process provider는 estimated_cost 0, token 0을 기록한다.
 
 M9c 구현 위치:
 
@@ -139,7 +146,7 @@ M9c 구현 위치:
 packages/star-control-observability
 ```
 
-M9c는 `CostMetricWriter`와 `CostBudgetThresholds`를 제공한다. writer는 CostMetric을 저장 전 redaction한 뒤 `cost-metric.schema.json`으로 검증하고, provider output sidecar `provider-output/{provider_instance_id}/cost-metric.json`에 기록한다. Budget evaluation은 `warn_only`로 시작하며, hard enforcement나 외부 billing/quota 조회는 후속 slice에서 처리한다.
+M9c는 `CostMetricWriter`와 `CostBudgetThresholds`를 제공한다. writer는 CostMetric을 저장 전 redaction한 뒤 `cost-metric.schema.json`으로 검증하고, provider output sidecar `provider-output/{provider_instance_id}/cost-metric.json`에 기록한다. E62는 fake/local-process provider execution path가 schema-valid `cost-metric.json` sidecar를 직접 남기도록 연결한다. E63은 cloud provider `budget.max_estimated_cost` hard limit 초과를 transport 실행 전 `cloud_budget_estimated_cost_exceeded` blocked result로 정규화한다. E64는 `star-control report --json` 출력에 shared redaction을 적용하고 finding이 있으면 schema-valid RedactionReport artifact를 저장한다. E65는 fake/local/cloud provider output artifact 저장 경로에 provider-specific redaction과 RedactionReport artifact 저장을 연결한다. 외부 billing/quota 조회는 후속 slice에서 처리한다.
 
 ## 금지 사항
 
@@ -156,6 +163,6 @@ M9c는 `CostMetricWriter`와 `CostBudgetThresholds`를 제공한다. writer는 C
 3. AuditEvent example schema validation
 4. CostMetric example schema validation
 5. redaction finding에 raw value가 없음
-6. fake provider cost는 0
+6. fake/local-process provider cost는 0
 7. unapproved privacy handoff는 execution 금지
 8. approval/gate/provider event는 audit 후보로 기록 가능

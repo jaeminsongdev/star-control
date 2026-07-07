@@ -18,6 +18,7 @@ pub(super) fn reject_sentinel_command_options(
         (!parsed.constraints.is_empty(), "--constraint"),
         (parsed.release_readiness, "--release-readiness"),
         (parsed.recovery_list, "--list"),
+        (parsed.has_recovery_source_selection(), "--recovery-source"),
         (parsed.dry_run, "--dry-run"),
         (parsed.markdown, "--markdown"),
     ];

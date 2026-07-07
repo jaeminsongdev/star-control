@@ -2278,7 +2278,7 @@ budget threshold warning test
 CLI test temp project path collision hardening if workspace validation exposes flake
 ```
 
-완료 기준: CostMetricWriter가 schema-valid CostMetric만 provider output sidecar로 저장하고, missing metric은 core flow 실패가 아닌 `Ok(None)`으로 표현해야 한다. Budget evaluation은 `warn_only`이며 hard enforcement, billing/quota 외부 조회, provider execution 자동 연결은 후속 slice로 남긴다.
+완료 기준: CostMetricWriter가 schema-valid CostMetric만 provider output sidecar로 저장하고, missing metric은 core flow 실패가 아닌 `Ok(None)`으로 표현해야 한다. Budget evaluation은 `warn_only`이며 hard enforcement와 billing/quota 외부 조회는 후속 slice로 남긴다. fake/local-process provider execution path의 cost sidecar 연결은 E62에서 처리한다.
 
 다음 EPIC handoff:
 
@@ -3798,6 +3798,1478 @@ no-action/no-main-update boundary 문서화
 이후에는 사용자가 explicit approval phrase로 승인한 경우에만 stacked PR ready/merge coordination을 수행한다. 승인 전까지 main update, PR ready/merge, release/deploy/publish, destructive recovery action은 RESERVED다.
 ```
 
+## E48 Provider Offline Readiness Healthcheck
+
+선행 문서:
+
+```text
+provider-system.md
+cloud-provider-policy.md
+local-process-provider-policy.md
+complete-implementation-roadmap.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-cli/**
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+network/process probe
+credential raw value 접근/출력
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+HTTP server 구현
+browser UI app 구현
+```
+
+입력:
+
+```text
+configs/registries/builtin-provider-registry.yaml
+builtin-providers/**/provider.yaml
+builtin-providers/**/capabilities.yaml
+```
+
+출력:
+
+```text
+star-control providers healthcheck --json
+star-control providers healthcheck <provider-id> --json
+schema-valid CLI output envelope
+healthcheck_mode = offline_readiness
+live_calls_performed = false
+Local AI connector disabled
+Cloud AI connector disabled
+```
+
+핵심 TASK:
+
+```text
+providers healthcheck subcommand을 offline readiness surface로 전환
+provider kind별 connector scope 분류
+manifest/capability profile presence check
+Local/Cloud AI live connector disabled 상태 명시
+network/process/live probe 금지 regression test 추가
+```
+
+완료 기준: `providers healthcheck --json`은 builtin provider registry를 읽고 provider별 offline readiness를 반환해야 한다. output은 live call 없이 `live_calls_performed=false`를 고정해야 한다. fake provider는 `ready`, human handoff는 `manual`, Local AI/Cloud AI connector 계열은 `disabled`/`reserved`로 표시해야 한다. command는 `.ai-runs/` artifact, provider output, daemon state, release artifact를 생성하거나 수정하지 않아야 한다. schema field, dependency, provider execution, provider live call, credential raw value 접근, release/deploy/publish, destructive recovery action은 변경하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 daemon process, HTTP API server, browser UI app, observability/security 자동 통합, recovery/retention action, release automation surface 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E49 Daemon App Process Surface
+
+선행 문서:
+
+```text
+daemon-contract.md
+cli-daemon-api-ui.md
+complete-implementation-roadmap.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+apps/star-daemon/**
+packages/star-control-daemon/**
+Cargo.toml
+Cargo.lock
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+HTTP server 구현
+provider execution
+provider live call
+network probe
+credential raw value 접근/출력
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+browser UI app 구현
+```
+
+입력:
+
+```text
+specs/schemas/daemon-state.schema.json
+packages/star-control-daemon/**
+```
+
+출력:
+
+```text
+apps/star-daemon Cargo binary
+star-daemon status --json
+star-daemon serve --max-ticks 1 --json
+daemon state opened under explicit config root
+Local AI connector disabled
+Cloud AI connector disabled
+```
+
+핵심 TASK:
+
+```text
+apps/star-daemon을 workspace binary로 등록
+explicit config-root/schema-root option 처리
+status command로 daemon state를 JSON 출력
+serve --max-ticks smoke로 process surface 검증
+HTTP server/provider scheduling/live connector disabled 상태 명시
+```
+
+완료 기준: `star-daemon status --json`은 explicit config root 아래 daemon state를 열고 state path와 process capability를 반환해야 한다. `star-daemon serve --max-ticks 1 --json`은 long-running loop 대신 테스트 가능한 tick summary를 반환해야 한다. output은 HTTP server, provider scheduling, Local/Cloud AI live connector, live call을 disabled/false로 표시해야 한다. command는 Star-Control repo에 `.ai-runs/`를 만들지 않아야 하며, external dependency, provider live call, release/deploy/publish, destructive recovery action은 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 HTTP API server, browser UI app, daemon queue loop/provider scheduling integration, observability/security 자동 통합, recovery/retention action, release automation surface 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E50 Local HTTP API Server Surface
+
+선행 문서:
+
+```text
+api-contract.md
+daemon-contract.md
+cli-daemon-api-ui.md
+complete-implementation-roadmap.md
+```
+
+허용 파일:
+
+```text
+apps/star-daemon/**
+packages/star-control-api/**
+Cargo.toml
+Cargo.lock
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+remote API exposure
+provider execution
+provider live call
+credential raw value 접근/출력
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+browser UI app 구현
+```
+
+입력:
+
+```text
+packages/star-control-api/**
+packages/star-control-daemon/**
+packages/star-control-state/**
+```
+
+출력:
+
+```text
+star-daemon api --bind 127.0.0.1:0 --max-requests 0 --json
+loopback-only HTTP server bridge
+GET /daemon/state
+GET /projects
+POST control mutation routing
+remote_exposure_enabled = false
+```
+
+핵심 TASK:
+
+```text
+ApiControlService를 stdlib TCP HTTP request/response로 연결
+loopback-only bind policy 추가
+project registration option 추가
+GET/POST routing smoke 추가
+remote exposure/provider scheduling/live connector disabled 상태 명시
+```
+
+완료 기준: `star-daemon api --bind 127.0.0.1:0 --max-requests 0 --json`은 local HTTP server plan을 반환해야 한다. server bridge는 `GET /daemon/state`, `GET /projects`, POST control path를 `ApiControlService`에 전달해야 한다. bind는 loopback-only여야 하며 remote exposure는 명시 승인 전까지 disabled여야 한다. provider execution, provider live call, credential raw value 접근, release/deploy/publish, destructive recovery action은 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 browser UI app, daemon queue loop/provider scheduling integration, observability/security 자동 통합, recovery/retention action, release automation surface 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E51 Static Browser UI App Surface
+
+선행 문서:
+
+```text
+ui-shell-contract.md
+api-contract.md
+cli-daemon-api-ui.md
+complete-implementation-roadmap.md
+```
+
+허용 파일:
+
+```text
+apps/star-control-ui/**
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+Star Sentinel rule 직접 구현
+StateStore file 직접 mutation
+credential raw value 접근/출력
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+remote API exposure
+```
+
+입력:
+
+```text
+star-daemon api loopback endpoint
+ApiControlService GET/POST response envelope
+packages/star-control-ui library model contract
+```
+
+출력:
+
+```text
+apps/star-control-ui/index.html
+apps/star-control-ui/styles.css
+apps/star-control-ui/app.js
+node --test apps/star-control-ui/tests/app.test.mjs
+```
+
+핵심 TASK:
+
+```text
+정적 browser app shell 구현
+API base/project id connection form 구현
+daemon state/job list/job detail/timeline/release readiness rendering
+approve/cancel/resume action panel 구현
+Local/Cloud AI connector disabled state 표시
+package manager 없는 helper regression test 추가
+```
+
+완료 기준: `apps/star-control-ui/index.html`은 browser에서 직접 열 수 있는 정적 app이어야 한다. app은 `star-daemon api`의 loopback endpoint를 소비해 daemon state, project jobs, job detail, event timeline, release readiness, approve/cancel/resume action result를 표시해야 한다. UI는 provider process, Star Sentinel rule, StateStore file mutation, Local/Cloud AI live connector를 직접 실행하지 않아야 한다. 새 package manager, external dependency, remote exposure, release/deploy/publish, destructive recovery action은 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 observability/security 자동 통합, recovery/retention action, release automation surface, productization E2E smoke, final readiness 정리 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E52 Daemon HTTP Control Audit Integration
+
+선행 문서:
+
+```text
+security-privacy-observability-contracts.md
+security-cost-observability.md
+api-contract.md
+daemon-contract.md
+cli-daemon-api-ui.md
+complete-implementation-roadmap.md
+```
+
+허용 파일:
+
+```text
+apps/star-daemon/**
+docs/implementation/**
+PLANS.md
+README.md
+Cargo.lock
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+network/process probe
+credential raw value 접근/출력
+release/deploy/publish automation
+repository settings 변경
+destructive recovery action
+remote API exposure
+```
+
+입력:
+
+```text
+star-daemon api loopback endpoint
+ApiControlService GET/POST response envelope
+packages/star-control-observability::AuditEventWriter
+StateStore project registration
+```
+
+출력:
+
+```text
+star-daemon HTTP approve/cancel/resume audit event append
+.ai-runs/{job_id}/audit/audit-events.jsonl
+API response data.observability.audit_event_ref
+audit omission warnings when no job/project audit target exists
+cargo test -p star-daemon --all-targets --locked
+```
+
+핵심 TASK:
+
+```text
+star-daemon HTTP wrapper를 DaemonApiService로 분리
+registered project StateStore를 audit target으로 보존
+approve/cancel/resume POST response 이후 AuditEventWriter append 연결
+schema-valid/redacted audit event와 artifact ref 노출
+audit 누락 시 API response warning으로 표시
+HTTP control action audit regression test 추가
+```
+
+완료 기준: `star-daemon api`가 approve/cancel/resume HTTP POST action을 처리한 뒤 대상 job의 `audit/audit-events.jsonl`에 `api_control_action` audit event를 append해야 한다. audit event는 `AuditEventWriter`를 통해 schema validation과 shared redaction을 거쳐야 하며, response에는 audit artifact ref 또는 누락 warning이 표시되어야 한다. 이 slice는 provider execution, provider live call, credential raw value 접근, network/process probe, hard budget enforcement, RedactionReport artifact storage, recovery/destructive action, release/deploy/publish automation을 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 observability/security 자동 통합의 남은 부분, recovery/retention action, release automation surface, productization E2E smoke, final readiness 정리 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E53 Recovery Action Dry-run Approval Surface
+
+선행 문서:
+
+```text
+state-store-recovery.md
+cli-command-reference.md
+security-cost-observability.md
+complete-implementation-roadmap.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-state/**
+packages/star-control-cli/**
+docs/implementation/**
+PLANS.md
+README.md
+Cargo.lock
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+credential raw value 접근/출력
+release/deploy/publish automation
+repository settings 변경
+destructive recovery mutation
+remote API exposure
+browser UI 변경
+```
+
+입력:
+
+```text
+StateStore::inspect_recovery(job_id)
+star-control recover --action <name> --dry-run --json
+star-control recover --action <name> --json
+```
+
+출력:
+
+```text
+StateStore::plan_recovery_action(job_id, action, mode)
+RecoveryActionPlan JSON value
+schema-valid CLI envelope
+supported actions: tmp-cleanup, recovered-copy, event-log-trim, artifact-replace, retention-cleanup
+approval gate token for non-dry-run action
+destructive_actions_performed = false
+```
+
+핵심 TASK:
+
+```text
+recovery action plan model 추가
+recover --action parser option 추가
+dry-run action plan output 추가
+non-dry-run action approval gate blocked output 추가
+tmp file no-delete regression 유지
+unsupported action/non-recovery option rejection 유지
+```
+
+완료 기준: `star-control recover --action <name> --dry-run --json`은 tmp cleanup, recovered copy, event log trim, artifact replace, retention cleanup 계획을 CLI envelope으로 반환해야 한다. dry-run 없는 action은 destructive mutation 없이 `status=blocked`, `approval_gate.approval_token`, `destructive_actions_performed=false`를 반환해야 한다. 이 slice는 실제 file delete, event log trim replacement, artifact replacement, retention deletion, provider output mutation, release/deploy/publish automation을 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 recovery action executor, release automation surface, daemon queue loop/provider scheduling integration, productization E2E smoke, final readiness 정리 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E54 Release Automation Dry-run Approval Surface
+
+선행 문서:
+
+```text
+release-readiness.md
+cli-command-reference.md
+security-cost-observability.md
+complete-implementation-roadmap.md
+docs/decisions/0005-full-implementation-defaults.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-release/**
+packages/star-control-cli/**
+docs/implementation/**
+PLANS.md
+README.md
+Cargo.lock
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+credential raw value 접근/출력
+release/deploy/publish 실행
+repository settings 변경
+external account 변경
+destructive recovery mutation
+remote API exposure
+browser UI 변경
+```
+
+입력:
+
+```text
+release/release-readiness.json
+star-control release --action <name> --dry-run --json
+star-control release --action <name> --json
+```
+
+출력:
+
+```text
+ReleaseAutomationPlanner
+schema-valid CLI envelope
+supported actions: prepare, signing-policy, package-publish, deploy, rollback-checklist, approval-record, review-pack
+approval gate token for non-dry-run action
+external_actions_performed = false
+release_actions_performed = false
+```
+
+핵심 TASK:
+
+```text
+release automation plan model 추가
+release top-level CLI command 추가
+dry-run release action plan output 추가
+non-dry-run release action approval gate blocked output 추가
+release readiness no-mutation regression 유지
+unsupported action/non-release option rejection 유지
+```
+
+완료 기준: `star-control release --action <name> --dry-run --json`은 signing policy, package publish, deploy, rollback checklist, approval record, release review pack 준비 계획을 CLI envelope으로 반환해야 한다. dry-run 없는 action은 external/release mutation 없이 `status=blocked`, `approval_gate.approval_token`, `external_actions_performed=false`, `release_actions_performed=false`를 반환해야 한다. 이 slice는 실제 signing, package publish, deploy, repository settings mutation, external account 변경, release readiness overwrite를 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 release/recovery action executor, daemon queue loop/provider scheduling integration, observability/security 남은 자동 통합, productization E2E smoke, final readiness 정리 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E55 Daemon Queue Scheduler Tick
+
+선행 문서:
+
+```text
+daemon-contract.md
+cli-daemon-api-ui.md
+provider-system.md
+local-process-provider-policy.md
+cloud-provider-policy.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+apps/star-daemon/**
+packages/star-control-daemon/**
+docs/implementation/**
+PLANS.md
+README.md
+Cargo.lock
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+Local AI live connector 실행
+Cloud AI live connector 실행
+credential raw value 접근/출력
+release/deploy/publish 실행
+repository settings 변경
+external account 변경
+destructive recovery mutation
+remote API exposure
+```
+
+입력:
+
+```text
+{config_root}/daemon/state.json
+{target-project}/.ai-runs/{job_id}/workspec/{stage}.json
+star-daemon serve --max-ticks 1
+```
+
+출력:
+
+```text
+scheduler_ticks[]
+fake-default provider output artifact
+daemon queue state update
+non-fake provider DISABLED scheduler result
+live_calls_performed = false
+local_ai_live_connector = disabled
+cloud_ai_live_connector = disabled
+```
+
+핵심 TASK:
+
+```text
+serve tick queue loop 추가
+queued entry RUNNING/active_jobs state update 추가
+fake-default ExecutionEngine dispatch 추가
+executed queue entry removal 추가
+non-fake provider disabled scheduler result 추가
+Local/Cloud live connector disabled regression 추가
+```
+
+완료 기준: `star-daemon serve --max-ticks 1`은 queued `fake-default` job을 실행하고 queue에서 제거해야 한다. non-fake provider는 provider-specific scheduler approval 전까지 `DISABLED`로 남겨야 하며 provider live call, Local AI live connector, Cloud AI live connector를 실행하지 않아야 한다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 local-process scheduler executor, recovery action executor, release automation executor, observability/security 남은 자동 통합, productization E2E smoke, final readiness 정리 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E56 Daemon Local Process Scheduler Executor
+
+선행 문서:
+
+```text
+daemon-contract.md
+cli-daemon-api-ui.md
+provider-system.md
+local-process-provider-policy.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+apps/star-daemon/**
+packages/star-control-daemon/**
+docs/implementation/**
+PLANS.md
+README.md
+Cargo.lock
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+Local AI live connector 실행
+Cloud AI live connector 실행
+cloud CLI/API live execution
+local model server HTTP connector execution
+credential raw value 접근/출력
+release/deploy/publish 실행
+repository settings 변경
+external account 변경
+destructive recovery mutation
+remote API exposure
+```
+
+입력:
+
+```text
+{config_root}/daemon/state.json
+queue entry provider_instance_paths[]
+{target-project}/.ai-runs/{job_id}/workspec/{stage}.json
+local-process provider instance file
+star-daemon serve --max-ticks 1
+```
+
+출력:
+
+```text
+scheduler_ticks[]
+local-process provider output artifact
+daemon queue state update
+live_calls_performed = false
+local_ai_live_connector = disabled
+cloud_ai_live_connector = disabled
+```
+
+핵심 TASK:
+
+```text
+DaemonQueue provider_instance_paths preservation 추가
+serve tick builtin registry + provider instance path loading 추가
+local_process_model/process manifest allowlist 추가
+local-process ExecutionEngine dispatch 추가
+provider instance path 없는 non-fake disabled regression 유지
+Local/Cloud live connector disabled regression 유지
+```
+
+완료 기준: `star-daemon serve --max-ticks 1`은 `provider_instance_paths`가 있는 queued local-process job을 실행하고 queue에서 제거해야 한다. local-process output은 대상 project `.ai-runs/` 아래에 생성되어야 한다. cloud/live connector 계열, provider instance path가 없는 non-fake provider, Local AI live connector, Cloud AI live connector는 실행하지 않고 disabled 상태로 남겨야 한다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 recovery action executor, release automation executor, observability/security 남은 자동 통합, productization E2E smoke, final readiness 정리, cloud/offline scheduler policy 정리 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E57 Recovery Action Executor
+
+선행 문서:
+
+```text
+state-store-recovery.md
+cli-command-reference.md
+security-cost-observability.md
+complete-implementation-roadmap.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-state/**
+packages/star-control-cli/**
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+credential raw value 접근/출력
+release/deploy/publish 실행
+repository settings 변경
+external account 변경
+remote API exposure
+```
+
+입력:
+
+```text
+star-control recover --action <name> --dry-run --json
+star-control recover --action <name> --json
+star-control recover --action <name> --approve-recovery-action <token> --json
+```
+
+출력:
+
+```text
+StateStore::execute_recovery_action
+approved tmp cleanup
+non-destructive recovered copy
+approved event log trim
+recovery/{action}-result.json
+schema-valid CLI envelope
+```
+
+핵심 TASK:
+
+```text
+approval token 검증 executor 추가
+tmp-cleanup delete execution 추가
+recovered-copy no-overwrite execution 추가
+event-log-trim preview/write/replace execution 추가
+wrong approval no-mutation regression 추가
+CLI result envelope과 artifact list 갱신
+```
+
+완료 기준: destructive recovery action은 approval token이 없거나 틀리면 mutation 없이 blocked 상태를 반환해야 한다. approved `tmp-cleanup`은 temp artifact를 삭제하고 result artifact를 기록해야 한다. `recovered-copy`는 원본을 덮어쓰지 않고 copy artifact를 생성해야 한다. approved `event-log-trim`은 corrupt event line을 제거한 event log로 교체하고 preview/result artifact를 남겨야 한다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 release automation executor, observability/security 남은 자동 통합, productization E2E smoke, final readiness 정리 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E58 Release Automation Executor
+
+선행 문서:
+
+```text
+release-readiness.md
+cli-command-reference.md
+security-cost-observability.md
+complete-implementation-roadmap.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-release/**
+packages/star-control-cli/**
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+credential raw value 접근/출력
+external release/deploy/publish 실행
+repository settings 변경
+external account 변경
+destructive recovery mutation
+remote API exposure
+```
+
+입력:
+
+```text
+release/release-readiness.json
+star-control release --action <name> --json
+star-control release --action <name> --approve-release-action <token> --json
+```
+
+출력:
+
+```text
+ReleaseAutomationPlanner::execute
+release/{action}-automation-result.json
+schema-valid CLI envelope
+approval-gated local result artifact
+external_actions_performed = false
+release_actions_performed = true
+```
+
+핵심 TASK:
+
+```text
+approval token 검증 executor 추가
+approved release action local result artifact 기록
+rollback-checklist approval-free local result 기록
+review-pack action을 ReleaseReviewPackWriter와 연결
+wrong approval no-mutation regression 추가
+release readiness no-overwrite regression 유지
+```
+
+완료 기준: approval이 필요한 release action은 token이 없거나 틀리면 local result artifact 없이 blocked 상태를 반환해야 한다. approved action은 `.ai-runs/{job_id}/release/{action}-automation-result.json`을 기록하되 external signing, package publish, deploy, repository settings mutation, external account 변경을 수행하지 않아야 한다. `rollback-checklist`는 approval 없이 local result artifact를 기록할 수 있어야 한다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 observability/security 남은 자동 통합, productization E2E smoke, final readiness 정리, external release/deploy/publish executor policy 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E59 Artifact Replacement Source Selection
+
+선행 문서:
+
+```text
+state-store-recovery.md
+cli-command-reference.md
+security-cost-observability.md
+complete-implementation-roadmap.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-state/**
+packages/star-control-cli/**
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+provider execution
+provider live call
+credential raw value 접근/출력
+release/deploy/publish 실행
+repository settings 변경
+external account 변경
+remote API exposure
+source path 자동 추론
+job directory 밖 source/target 접근
+```
+
+입력:
+
+```text
+star-control recover --action artifact-replace --dry-run --json
+star-control recover --action artifact-replace --recovery-artifact <target> --recovery-source <source> --json
+star-control recover --action artifact-replace --recovery-artifact <target> --recovery-source <source> --approve-recovery-action <token> --json
+```
+
+출력:
+
+```text
+RecoverySourceSelection
+StateStore::plan_recovery_action_with_source
+StateStore::execute_recovery_action_with_source
+recovery/artifact-replace-result.json
+schema-valid CLI envelope
+```
+
+핵심 TASK:
+
+```text
+artifact-replace target/source CLI option 추가
+source selection matching validation 추가
+approved source bytes atomic replacement 추가
+wrong/missing source no-mutation regression 추가
+non-matching target invalid input regression 추가
+```
+
+완료 기준: `artifact-replace` execution은 `--recovery-artifact`와 `--recovery-source`가 없으면 invalid input으로 거부해야 한다. target은 current inspection issue와 일치해야 하며, approved token이 있을 때만 job 내부 source bytes로 target artifact를 atomic replace하고 `recovery/artifact-replace-result.json`을 기록해야 한다. source path 자동 추론과 job directory 밖 접근은 금지한다.
+
+다음 EPIC handoff:
+
+```text
+다음 productization slice는 observability/security 남은 자동 통합, productization E2E smoke, final readiness 정리, external release/deploy/publish executor policy 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E60 Productization E2E Smoke
+
+선행 문서:
+
+```text
+testing-ci-release.md
+cli-daemon-api-ui.md
+release-readiness.md
+state-store-recovery.md
+provider-system.md
+```
+
+허용 파일:
+
+```text
+scripts/ci/**
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+GitHub workflow
+schema field 변경
+Cargo 외 package manager
+새 external dependency
+Local AI live connector 실행
+Cloud AI live connector 실행
+external release/deploy/publish 실행
+repository settings 변경
+external account 변경
+remote API exposure
+repo-root .ai-runs 생성
+```
+
+입력:
+
+```text
+python scripts/ci/productization_e2e_smoke.py
+```
+
+출력:
+
+```text
+status=success JSON summary
+temp project .ai-runs artifacts
+CLI fake run smoke
+provider offline healthcheck smoke
+daemon status/API smoke
+static UI surface smoke
+recovery dry-run smoke
+release local executor smoke
+Sentinel selfcheck smoke
+```
+
+핵심 TASK:
+
+```text
+productization smoke script 추가
+binary build/run helper 추가
+loopback HTTP API GET smoke 추가
+Local/Cloud AI disabled assertion 추가
+external release action false assertion 추가
+```
+
+완료 기준: smoke는 실제 `star-control`/`star-daemon` binary를 사용해 temp project/config에서 제품화 주요 surface를 검증해야 한다. Local/Cloud AI live connector는 disabled로 남아야 하며 release smoke는 local artifact만 기록하고 external action을 수행하지 않아야 한다.
+
+다음 EPIC handoff:
+
+```text
+E61은 RedactionReport artifact storage를 처리한다. 그 다음 productization slice는 observability/security 남은 자동 통합, final readiness 정리, external release/deploy/publish executor policy 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E61 RedactionReport Artifact Storage
+
+선행 문서:
+
+```text
+security-privacy-observability-contracts.md
+security-cost-observability.md
+state-store.md
+state-store-recovery.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-state/**
+packages/star-control-security/**
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+schema field 변경
+credential raw value 접근/출력
+provider live call
+Local AI live connector 실행
+Cloud AI live connector 실행
+external release/deploy/publish 실행
+repository settings 변경
+external account 변경
+destructive recovery action
+```
+
+입력:
+
+```text
+StateStore::write_redaction_report_json(job_id, file_name, value)
+```
+
+출력:
+
+```text
+.ai-runs/{job_id}/audit/{file_name}
+ArtifactRef kind=other
+producer=star-control-security
+schema_path=specs/schemas/redaction-report.schema.json
+```
+
+핵심 TASK:
+
+```text
+CoreSchema RedactionReport mapping 추가
+StateStore RedactionReport writer 추가
+schema validation 전 write 금지
+job 내부 audit path containment 검증
+overwrite 금지 artifact write 사용
+ArtifactRef producer/schema path regression 추가
+```
+
+완료 기준: RedactionReport JSON은 저장 전에 `specs/schemas/redaction-report.schema.json`으로 검증되어야 하며, job 내부 `audit/<file>` 경로에만 새 artifact로 기록되어야 한다. 반환 ArtifactRef는 security producer와 schema path를 포함해야 한다. 이 slice는 CLI/provider 자동 redaction-report wiring, hard budget enforcement, provider live call, Local/Cloud AI live connector 실행을 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+E62는 provider cost-metric sidecar integration을 처리한다. 그 다음 productization slice는 observability/security 자동 통합의 남은 부분, hard budget enforcement, final readiness 정리, external release/deploy/publish executor policy 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E62 Provider Cost-Metric Sidecar Integration
+
+선행 문서:
+
+```text
+provider-system.md
+local-process-provider-policy.md
+security-privacy-observability-contracts.md
+security-cost-observability.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+packages/star-control-execution/**
+scripts/ci/productization_e2e_smoke.py
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+schema field 변경
+새 external dependency
+Cargo 외 package manager
+credential raw value 접근/출력
+provider live call
+Local AI live connector 실행
+Cloud AI live connector 실행
+external release/deploy/publish 실행
+repository settings 변경
+external account 변경
+```
+
+입력:
+
+```text
+FakeProviderAdapter::execute
+LocalProcessProviderAdapter::execute
+```
+
+출력:
+
+```text
+provider-output/{provider_instance_id}/cost-metric.json
+schema-valid CostMetric
+estimated_cost=0
+input_tokens=0
+output_tokens=0
+```
+
+핵심 TASK:
+
+```text
+provider-neutral zero-cost metric helper 추가
+fake provider cost sidecar write 추가
+local-process provider cost sidecar write 추가
+response artifacts에 cost-metric path 포함
+local-process conformance expected artifact 갱신
+productization smoke에서 fake cost-metric sidecar 검증
+```
+
+완료 기준: fake/local-process provider execution path는 cloud provider처럼 job 내부 `provider-output/{provider_instance_id}/cost-metric.json`을 저장해야 한다. 저장 전 `cost-metric.schema.json` validation을 수행하고, productization E2E smoke는 CLI fake run의 cost metric sidecar를 확인해야 한다. 이 slice는 hard budget enforcement, 외부 billing/quota 조회, provider live call, Local/Cloud AI live connector 실행을 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+E63은 cloud hard budget enforcement를 처리한다. E64는 CLI report redaction artifact wiring을 처리한다. E65는 provider output redaction artifact wiring을 처리한다. E66은 external release execution policy surface를 처리한다. E67은 final readiness pre-live-AI 정리를 처리한다. 이후 구현 blocker는 Local AI connector live execution과 Cloud AI connector live execution 두 개만 남긴다.
+```
+
+## E63 Cloud Hard Budget Enforcement
+
+선행 문서:
+
+```text
+security-cost-observability.md
+security-privacy-observability-contracts.md
+provider-system.md
+cloud-provider-policy.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+schema field 변경
+새 external dependency
+Cargo 외 package manager
+credential raw value 접근/출력
+provider live call
+Local AI live connector 실행
+Cloud AI live connector 실행
+external billing/quota 조회
+external release/deploy/publish 실행
+repository settings 변경
+external account 변경
+```
+
+입력:
+
+```text
+provider instance budget.estimated_cost
+provider instance budget.max_estimated_cost
+CloudProviderPolicyDecision::evaluate
+```
+
+출력:
+
+```text
+cloud_budget_estimated_cost_exceeded blocked provider result
+provider-output/{provider_instance_id}/cost-metric.json
+privacy-handoff.json
+stdout/stderr preflight evidence
+```
+
+핵심 TASK:
+
+```text
+budget.max_estimated_cost hard limit parser 추가
+estimated_cost > max_estimated_cost block 추가
+cloud CLI process launch 전 budget block regression 추가
+cloud API offline fixture/read/HTTP artifact 생성 전 budget block regression 추가
+credential raw value/live call/external billing 조회 미수행 확인
+```
+
+완료 기준: cloud provider instance가 `budget.max_estimated_cost`를 선언하고 `budget.estimated_cost`가 이를 초과하면 cloud CLI transport process, cloud API offline fixture processing, cloud API live approval preparation 전에 `cloud_budget_estimated_cost_exceeded` blocked result로 정규화해야 한다. CostMetric sidecar는 남기되 credential raw value 접근, live call, external billing/quota 조회는 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+E64는 CLI report redaction artifact wiring을 처리한다. 그 다음 productization slice는 provider observability/security 자동 통합의 남은 부분, final readiness 정리, external release/deploy/publish executor policy 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E64 CLI Report Redaction Artifact Wiring
+
+선행 문서:
+
+```text
+security-cost-observability.md
+security-privacy-observability-contracts.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-cli/**
+scripts/ci/productization_e2e_smoke.py
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+schema field 변경
+새 external dependency
+Cargo 외 package manager
+credential raw value 접근/출력
+provider live call
+Local AI live connector 실행
+Cloud AI live connector 실행
+external billing/quota 조회
+external release/deploy/publish 실행
+repository settings 변경
+external account 변경
+```
+
+입력:
+
+```text
+reports/{stage}-report.json
+star-control-security redaction utility
+StateStore::write_redaction_report_json
+```
+
+출력:
+
+```text
+redacted CLI report JSON envelope
+audit/redaction-report-{stage}.json
+CLI artifacts entry for redaction report
+productization smoke redaction assertion
+```
+
+핵심 TASK:
+
+```text
+star-control report --json output redaction 적용
+secret-like finding이 있으면 RedactionReport artifact 저장
+반복 report read가 ArtifactAlreadyExists로 실패하지 않도록 처리
+productization E2E smoke에 CLI report redaction artifact assertion 추가
+credential raw value 미출력/미저장 확인
+```
+
+완료 기준: `star-control report --json`은 저장된 report에 secret-like 값이 있어도 stdout에 raw value를 노출하지 않고 `[REDACTED]`로 반환해야 한다. redaction finding이 있으면 schema-valid `audit/redaction-report-<stage>.json` artifact를 기록하고 CLI artifacts에 포함해야 하며, 같은 report를 반복 조회해도 기존 RedactionReport 때문에 실패하지 않아야 한다.
+
+다음 EPIC handoff:
+
+```text
+E65는 provider output redaction artifact wiring을 처리한다. 그 다음 productization slice는 final readiness 정리 또는 external release/deploy/publish executor policy 중 하나를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E65 Provider Output Redaction Artifact Wiring
+
+선행 문서:
+
+```text
+security-cost-observability.md
+security-privacy-observability-contracts.md
+provider-system.md
+testing-ci-release.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-provider/**
+scripts/ci/productization_e2e_smoke.py
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+schema field 변경
+새 external dependency
+Cargo 외 package manager
+credential raw value 출력/저장
+provider live call
+Local AI live connector 실행
+Cloud AI live connector 실행
+external billing/quota 조회
+external release/deploy/publish 실행
+repository settings 변경
+external account 변경
+```
+
+입력:
+
+```text
+provider-output/{provider_instance_id}/*
+star-control-security redaction utility
+StateStore::write_redaction_report_json
+```
+
+출력:
+
+```text
+redacted provider request/stdout/stderr/response artifacts
+audit/provider-redaction-{provider_instance_id}-{artifact}.json
+provider response artifacts entries for redaction reports
+productization smoke provider request redaction assertion
+```
+
+핵심 TASK:
+
+```text
+provider-specific redaction helper 추가
+fake provider request/stdout/stderr/response artifact redaction 연결
+local-process stdout/stderr file post-process redaction 연결
+cloud preflight/CLI/API offline/live approval artifact redaction 연결
+RedactionReport artifact 저장 및 raw secret 미포함 regression 추가
+```
+
+완료 기준: fake/local/cloud provider artifact 저장 경로는 secret-like string을 raw로 보존하지 않고 `[REDACTED]`로 저장해야 한다. finding이 있으면 schema-valid `audit/provider-redaction-<provider>-<artifact>.json`을 기록해야 하며, provider response artifacts 또는 productization smoke가 해당 artifact 존재를 확인해야 한다. provider live call, credential raw value 출력, external billing/quota 조회는 수행하지 않는다.
+
+다음 EPIC handoff:
+
+```text
+E66은 external release execution policy surface를 처리한다. 그 다음 productization slice는 final readiness 정리를 작은 단위로 구현한다. Local AI connector live execution과 Cloud AI connector live execution은 최종 blocker로 남긴다.
+```
+
+## E66 External Release Execution Policy
+
+선행 문서:
+
+```text
+release-readiness.md
+testing-ci-release.md
+security-cost-observability.md
+```
+
+허용 파일:
+
+```text
+packages/star-control-release/**
+packages/star-control-cli/**
+scripts/ci/productization_e2e_smoke.py
+docs/implementation/**
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+schema field 변경
+새 external dependency
+Cargo 외 package manager
+external release/deploy/publish 실행
+repository settings 변경
+package registry 변경
+external account 변경
+Local AI live connector 실행
+Cloud AI live connector 실행
+```
+
+입력:
+
+```text
+ReleaseAutomationPlanner::plan
+ReleaseAutomationPlanner::execute
+release action steps external_effect
+```
+
+출력:
+
+```text
+release_automation_plan.external_execution_policy
+release_execution.external_execution_policy
+CLI release data.external_execution_policy
+productization smoke external_release_policy reserved assertion
+```
+
+핵심 TASK:
+
+```text
+external_execution_policy JSON object 추가
+live_execution_enabled=false 유지
+external_actions_allowed=false 유지
+blocked external operation 목록 제공
+approved deploy/package-publish 계열도 local_plan_record_only 유지
+external_actions_performed=false regression 유지
+```
+
+완료 기준: release automation dry-run/blocked/approved result는 external release/deploy/publish live execution이 disabled/reserved임을 machine-readable `external_execution_policy`로 반환해야 한다. approved deploy/package-publish 계열도 실제 external action을 수행하지 않고 local plan/result artifact만 기록해야 한다.
+
+다음 EPIC handoff:
+
+```text
+E67은 final readiness pre-live-AI 정리를 처리한다. 이후 구현 blocker는 Local AI connector live execution과 Cloud AI connector live execution 두 개만 남긴다.
+```
+
+## E67 Final Readiness Pre-Live-AI
+
+선행 문서:
+
+```text
+docs/implementation/audit/final-completion-audit.md
+examples/release-contracts/complete-implementation-readiness.example.json
+README.md
+PLANS.md
+```
+
+허용 파일:
+
+```text
+docs/implementation/audit/final-completion-audit.md
+examples/release-contracts/complete-implementation-readiness.example.json
+docs/implementation/briefs/**
+docs/implementation/codex-work-queue-current.md
+PLANS.md
+README.md
+```
+
+금지 파일:
+
+```text
+schema field 변경
+external release/deploy/publish 실행
+repository settings 변경
+destructive recovery 실행
+PR ready/merge/main update
+Local AI live connector 실행
+Cloud AI live connector 실행
+```
+
+완료 기준: final completion audit와 readiness example은 productization-pre-live-AI 상태를 반영하고, 구현 blocker를 Local AI connector live execution / Cloud AI connector live execution 두 개로만 기록해야 한다. release/deploy/publish live execution, package registry, repository settings, destructive recovery, PR ready/merge/main update는 approval-gated execution으로 분리한다.
+
+다음 EPIC handoff:
+
+```text
+남은 구현 blocker는 Local AI connector live execution과 Cloud AI connector live execution 두 개뿐이다. release/deploy/publish live execution, repository settings, destructive recovery, PR ready/merge/main update는 별도 명시 승인 전까지 실행하지 않는다.
+```
+
 ## RESERVED
 
 아래는 E12 이후 별도 작은 PR로 구현한다.
@@ -3808,11 +5280,10 @@ Local Model Provider
 Cloud CLI Provider parser / conformance extension
 Cloud API Provider transport execution
 Cloud provider-specific parser / conformance
-Daemon
-HTTP server / remote API exposure
-Browser UI Shell app / remote UI runtime
-Observability Integration / Conformance Hardening
-Release Readiness Automation
+Daemon cloud/live scheduler policy expansion
+API remote exposure
+UI Shell remote runtime
+External release/deploy/publish executors
 ```
 
-release/deploy/publish, repository settings 변경, package registry 변경은 별도 승인 전까지 구현하지 않는다.
+external release/deploy/publish, repository settings 변경, package registry 변경은 별도 승인 전까지 실행하지 않는다.

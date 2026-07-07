@@ -6,6 +6,7 @@ use crate::cloud_constants::{
 };
 use crate::cloud_io::validate_contract;
 use crate::cloud_sidecars::{cost_metric_value_with_wall_time, privacy_handoff_value};
+use crate::provider_redaction::redact_provider_text_artifact;
 use crate::{
     ExecutionRequest, ProviderAdapterError, ProviderInstance, ProviderManifest, ProviderRunContext,
 };
@@ -17,6 +18,7 @@ pub(super) struct LiveApprovalSidecarRefs {
     pub(super) cost_ref: Value,
     pub(super) stdout_ref: Value,
     pub(super) stderr_ref: Value,
+    pub(super) redaction_artifacts: Vec<String>,
 }
 
 pub(super) fn write_live_approval_sidecars(
@@ -54,17 +56,21 @@ pub(super) fn write_live_approval_sidecars(
         &cost_metric,
     )?;
 
+    let stdout = api_live_approval_stdout_value(manifest, &artifacts.prepared_request);
+    let stdout_redaction = redact_provider_text_artifact(context, request, STDOUT_FILE, &stdout)?;
     let stdout_ref = context.state_store().write_provider_text(
         request.job_id(),
         request.provider_instance_id(),
         STDOUT_FILE,
-        &api_live_approval_stdout_value(manifest, &artifacts.prepared_request),
+        stdout_redaction.content(),
     )?;
+    let stderr = "blocked kind=cloud_api_live_transport_approval_required field=transport_config.live_api_call_requested message=cloud API live HTTP transport requires explicit approval before credential lookup or external API call\n";
+    let stderr_redaction = redact_provider_text_artifact(context, request, STDERR_FILE, stderr)?;
     let stderr_ref = context.state_store().write_provider_text(
         request.job_id(),
         request.provider_instance_id(),
         STDERR_FILE,
-        "blocked kind=cloud_api_live_transport_approval_required field=transport_config.live_api_call_requested message=cloud API live HTTP transport requires explicit approval before credential lookup or external API call\n",
+        stderr_redaction.content(),
     )?;
 
     Ok(LiveApprovalSidecarRefs {
@@ -72,5 +78,12 @@ pub(super) fn write_live_approval_sidecars(
         cost_ref,
         stdout_ref,
         stderr_ref,
+        redaction_artifacts: [
+            stdout_redaction.report_path().map(ToString::to_string),
+            stderr_redaction.report_path().map(ToString::to_string),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
     })
 }

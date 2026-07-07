@@ -8,6 +8,7 @@ use crate::cloud_api_artifacts::api_live_approval_response_value;
 use crate::cloud_constants::*;
 use crate::cloud_sidecars::{assert_provider_sidecar_refs, planned_output_files};
 use crate::fake::{ensure_output_files_absent, provider_output_path};
+use crate::provider_redaction::redact_provider_json_artifact;
 use crate::{
     ExecutionRequest, ProviderAdapterError, ProviderExecution, ProviderInstance, ProviderManifest,
     ProviderRunContext, ProviderRunResult,
@@ -27,15 +28,22 @@ pub(super) fn execute_cloud_api_live_approval_required(
 
     let live_artifacts = prepare_live_approval_artifacts(request, manifest, instance)?;
 
+    let request_redaction =
+        redact_provider_json_artifact(context, request, REQUEST_FILE, request.value())?;
     let request_ref = context.state_store().write_provider_json(
         request.job_id(),
         request.provider_instance_id(),
         REQUEST_FILE,
-        request.value(),
+        request_redaction.value(),
     )?;
-    write_live_approval_plan_artifacts(request, context, &live_artifacts)?;
+    let mut redaction_artifacts =
+        write_live_approval_plan_artifacts(request, context, &live_artifacts)?;
     let sidecars =
         write_live_approval_sidecars(request, context, manifest, instance, &live_artifacts)?;
+    redaction_artifacts.extend(sidecars.redaction_artifacts.iter().cloned());
+    if let Some(path) = request_redaction.report_path() {
+        redaction_artifacts.push(path.to_string());
+    }
 
     let response_value = api_live_approval_response_value(
         request,
@@ -43,9 +51,12 @@ pub(super) fn execute_cloud_api_live_approval_required(
         instance,
         &live_artifacts.prepared_request,
         live_artifacts.wall_time_ms,
+        &redaction_artifacts,
     );
+    let response_redaction =
+        redact_provider_json_artifact(context, request, RESPONSE_FILE, &response_value)?;
     let result = ProviderRunResult::from_value(
-        response_value.clone(),
+        response_redaction.value().clone(),
         provider_output_path(request.provider_instance_id(), RESPONSE_FILE),
         context.schema_root(),
     )?;
@@ -53,7 +64,7 @@ pub(super) fn execute_cloud_api_live_approval_required(
         request.job_id(),
         request.provider_instance_id(),
         RESPONSE_FILE,
-        &response_value,
+        response_redaction.value(),
     )?;
 
     let execution = ProviderExecution::new(

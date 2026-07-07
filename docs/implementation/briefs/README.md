@@ -71,6 +71,26 @@ E44-cli-providers-read-only.md
 E45-cli-sentinel-command-group.md
 E46-final-evidence-refresh.md
 E47-stacked-merge-procedure.md
+E48-provider-offline-readiness-healthcheck.md
+E49-daemon-app-process-surface.md
+E50-local-http-api-server-surface.md
+E51-static-browser-ui-app-surface.md
+E52-daemon-http-control-audit-integration.md
+E53-recovery-action-dry-run-approval-surface.md
+E54-release-automation-dry-run-approval-surface.md
+E55-daemon-queue-scheduler-tick.md
+E56-daemon-local-process-scheduler-executor.md
+E57-recovery-action-executor.md
+E58-release-automation-executor.md
+E59-artifact-replacement-source-selection.md
+E60-productization-e2e-smoke.md
+E61-redaction-report-artifact-storage.md
+E62-provider-cost-metric-sidecar-integration.md
+E63-cloud-hard-budget-enforcement.md
+E64-cli-report-redaction-artifact-wiring.md
+E65-provider-output-redaction-artifact-wiring.md
+E66-external-release-execution-policy.md
+E67-final-readiness-pre-live-ai.md
 ```
 
 ## 사용 방법

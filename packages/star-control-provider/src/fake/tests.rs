@@ -66,6 +66,54 @@ fn fake_provider_writes_deterministic_success_output() {
     assert!(project
         .join(".ai-runs/J-0001/provider-output/fake-default/response.json")
         .is_file());
+    let cost_metric: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(
+            project.join(".ai-runs/J-0001/provider-output/fake-default/cost-metric.json"),
+        )
+        .expect("read fake cost metric"),
+    )
+    .expect("parse fake cost metric");
+    assert_eq!(cost_metric["estimated_cost"], json!(0));
+    assert_eq!(cost_metric["currency"], "USD");
+    assert_eq!(cost_metric["wall_time_ms"], json!(0));
+
+    fs::remove_dir_all(project).ok();
+}
+
+#[test]
+fn fake_provider_redacts_request_artifact_and_writes_redaction_report() {
+    let project = temp_project();
+    let store = open_store(&project);
+    store
+        .create_job("implement feature", "codex", vec![])
+        .expect("create job");
+    let registry = ProviderRegistryLoader::new(repo_root())
+        .load_fake_default_registry()
+        .expect("load fake registry");
+    let request = request_value("Authorization: Bearer sk-test-secret");
+    let request =
+        ExecutionRequest::from_value(request, "request.json", schema_root()).expect("request");
+    let schemas = schema_root();
+    let context = ProviderRunContext::new(&registry, &store, &schemas);
+
+    let execution = FakeProviderAdapter::success()
+        .execute(&request, &context)
+        .expect("execute fake provider");
+
+    let request_text = fs::read_to_string(
+        project.join(".ai-runs/J-0001/provider-output/fake-default/request.json"),
+    )
+    .expect("read request");
+    assert!(!request_text.contains("sk-test-secret"));
+    assert!(request_text.contains("[REDACTED]"));
+    assert!(project
+        .join(".ai-runs/J-0001/audit/provider-redaction-fake-default-request-json.json")
+        .is_file());
+    assert!(execution.result().value()["artifacts"]
+        .as_array()
+        .expect("artifacts")
+        .iter()
+        .any(|artifact| artifact == "audit/provider-redaction-fake-default-request-json.json"));
 
     fs::remove_dir_all(project).ok();
 }

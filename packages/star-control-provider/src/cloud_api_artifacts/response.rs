@@ -15,6 +15,7 @@ pub(crate) fn api_offline_response_value(
     prepared_request: &OpenAiCompatiblePreparedRequest,
     parsed_response: &OpenAiCompatibleParsedResponse,
     wall_time_ms: u64,
+    redaction_artifacts: &[String],
 ) -> Value {
     let request_path = provider_output_path(request.provider_instance_id(), REQUEST_FILE);
     let http_request_path = provider_output_path(request.provider_instance_id(), HTTP_REQUEST_FILE);
@@ -26,6 +27,19 @@ pub(crate) fn api_offline_response_value(
     let stderr_path = provider_output_path(request.provider_instance_id(), STDERR_FILE);
     let privacy_path = provider_output_path(request.provider_instance_id(), PRIVACY_HANDOFF_FILE);
     let cost_path = provider_output_path(request.provider_instance_id(), COST_METRIC_FILE);
+
+    let mut artifacts = vec![
+        response_path,
+        request_path,
+        http_request_path,
+        http_transport_plan_path,
+        raw_response_path,
+        stdout_path.clone(),
+        stderr_path.clone(),
+        privacy_path,
+        cost_path,
+    ];
+    artifacts.extend(redaction_artifacts.iter().cloned());
 
     json!({
         "schema_version": "1.0.0",
@@ -39,17 +53,7 @@ pub(crate) fn api_offline_response_value(
         "stderr_path": stderr_path,
         "summary": parsed_response.text(),
         "changed_files": [],
-        "artifacts": [
-            response_path,
-            request_path,
-            http_request_path,
-            http_transport_plan_path,
-            raw_response_path,
-            stdout_path,
-            stderr_path,
-            privacy_path,
-            cost_path
-        ],
+        "artifacts": artifacts,
         "metrics": {
             "estimated_cost": estimated_cost(instance),
             "currency": currency(instance),
@@ -75,6 +79,7 @@ pub(crate) fn api_live_approval_response_value(
     instance: &ProviderInstance,
     prepared_request: &OpenAiCompatiblePreparedRequest,
     wall_time_ms: u64,
+    redaction_artifacts: &[String],
 ) -> Value {
     let request_path = provider_output_path(request.provider_instance_id(), REQUEST_FILE);
     let http_request_path = provider_output_path(request.provider_instance_id(), HTTP_REQUEST_FILE);
@@ -88,6 +93,19 @@ pub(crate) fn api_live_approval_response_value(
     let privacy_path = provider_output_path(request.provider_instance_id(), PRIVACY_HANDOFF_FILE);
     let cost_path = provider_output_path(request.provider_instance_id(), COST_METRIC_FILE);
 
+    let mut artifacts = vec![
+        response_path,
+        request_path,
+        http_request_path,
+        http_transport_plan_path,
+        live_approval_path,
+        stdout_path.clone(),
+        stderr_path.clone(),
+        privacy_path,
+        cost_path,
+    ];
+    artifacts.extend(redaction_artifacts.iter().cloned());
+
     json!({
         "schema_version": "1.0.0",
         "provider_instance_id": request.provider_instance_id(),
@@ -100,17 +118,7 @@ pub(crate) fn api_live_approval_response_value(
         "stderr_path": stderr_path,
         "summary": "cloud API live HTTP transport requires explicit approval before credential lookup or external API call",
         "changed_files": [],
-        "artifacts": [
-            response_path,
-            request_path,
-            http_request_path,
-            http_transport_plan_path,
-            live_approval_path,
-            stdout_path,
-            stderr_path,
-            privacy_path,
-            cost_path
-        ],
+        "artifacts": artifacts,
         "metrics": {
             "estimated_cost": estimated_cost(instance),
             "currency": currency(instance),

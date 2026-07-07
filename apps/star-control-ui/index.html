@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Star-Control</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Star-Control navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">SC</span>
+          <div>
+            <h1>Star-Control</h1>
+            <p>Control plane</p>
+          </div>
+        </div>
+
+        <form id="connection-form" class="connection-form">
+          <label>
+            API base
+            <input id="api-base" name="apiBase" value="http://127.0.0.1:8787" />
+          </label>
+          <label>
+            Project
+            <input id="project-id" name="projectId" value="local" />
+          </label>
+          <button type="submit">Connect</button>
+        </form>
+
+        <nav class="nav-list" aria-label="Views">
+          <button class="nav-item active" type="button" data-view="overview">Overview</button>
+          <button class="nav-item" type="button" data-view="jobs">Jobs</button>
+          <button class="nav-item" type="button" data-view="approval">Approval</button>
+          <button class="nav-item" type="button" data-view="release">Release</button>
+        </nav>
+
+        <section class="connector-state" aria-label="AI connector state">
+          <h2>AI connectors</h2>
+          <div class="connector-row">
+            <span>Local AI</span>
+            <strong>Disabled</strong>
+          </div>
+          <div class="connector-row">
+            <span>Cloud AI</span>
+            <strong>Disabled</strong>
+          </div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="section-label">Runtime</p>
+            <h2 id="page-title">Overview</h2>
+          </div>
+          <div class="topbar-actions">
+            <button id="refresh-button" type="button">Refresh</button>
+            <span id="connection-state" class="status-pill muted">Not connected</span>
+          </div>
+        </header>
+
+        <section class="metric-strip" aria-label="Runtime summary">
+          <div>
+            <span>Daemon</span>
+            <strong id="daemon-status">Unknown</strong>
+          </div>
+          <div>
+            <span>Jobs</span>
+            <strong id="job-count">0</strong>
+          </div>
+          <div>
+            <span>Selected</span>
+            <strong id="selected-job">None</strong>
+          </div>
+          <div>
+            <span>Live calls</span>
+            <strong>Disabled</strong>
+          </div>
+        </section>
+
+        <section class="content-grid">
+          <section class="panel job-list-panel" aria-labelledby="jobs-heading">
+            <div class="panel-heading">
+              <h3 id="jobs-heading">Jobs</h3>
+              <span id="jobs-state" class="panel-note">Waiting for API</span>
+            </div>
+            <div id="job-list" class="job-list" role="list"></div>
+          </section>
+
+          <section class="panel detail-panel" aria-labelledby="detail-heading">
+            <div class="panel-heading">
+              <h3 id="detail-heading">Job detail</h3>
+              <span id="detail-state" class="panel-note">No job selected</span>
+            </div>
+            <div id="job-detail" class="detail-body empty-state">
+              Select a job to inspect timeline, artifacts, approval, and release readiness.
+            </div>
+          </section>
+        </section>
+
+        <section class="content-grid lower-grid">
+          <section class="panel" aria-labelledby="timeline-heading">
+            <div class="panel-heading">
+              <h3 id="timeline-heading">Timeline</h3>
+            </div>
+            <ol id="timeline" class="timeline"></ol>
+          </section>
+
+          <section class="panel" aria-labelledby="actions-heading">
+            <div class="panel-heading">
+              <h3 id="actions-heading">Actions</h3>
+            </div>
+            <div class="action-stack">
+              <button id="approve-button" type="button" disabled>Approve</button>
+              <button id="resume-button" type="button" disabled>Resume</button>
+              <button id="cancel-button" type="button" disabled>Cancel</button>
+            </div>
+            <label class="reason-field">
+              Approval reason
+              <textarea id="approval-reason" rows="4">Approved from Star-Control browser UI.</textarea>
+            </label>
+            <pre id="action-output" class="output-pane">No action run.</pre>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

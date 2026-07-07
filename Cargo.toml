@@ -14,5 +14,6 @@ members = [
     "packages/star-control-release",
     "packages/star-control-cli",
     "packages/star-sentinel",
+    "apps/star-daemon",
 ]
 resolver = "2"

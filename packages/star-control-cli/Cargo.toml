@@ -10,6 +10,7 @@ star-control-provider = { path = "../star-control-provider" }
 star-control-release = { path = "../star-control-release" }
 star-control-router = { path = "../star-control-router" }
 star-control-schema = { path = "../star-control-schema" }
+star-control-security = { path = "../star-control-security" }
 star-control-state = { path = "../star-control-state" }
 star-sentinel = { path = "../star-sentinel" }
 

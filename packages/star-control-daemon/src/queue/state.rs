@@ -44,7 +44,7 @@ impl DaemonQueue {
         })
     }
 
-    pub(crate) fn save_state(&self, state: &Value) -> Result<(), DaemonError> {
+    pub fn save_state(&self, state: &Value) -> Result<(), DaemonError> {
         self.validate_schema(DAEMON_STATE_SCHEMA, &self.state_path, state)?;
         let mut bytes =
             serde_json::to_vec_pretty(state).map_err(|source| DaemonError::InvalidJson {

@@ -2,6 +2,7 @@ use crate::fake::provider_output_path;
 use crate::local_process::constants::{FORBIDDEN_ACTION_EVIDENCE_PREFIX, STDERR_FILE, STDOUT_FILE};
 use crate::local_process::policy::LocalProcessCommandPolicy;
 use crate::local_process::runner::LocalProcessRunResult;
+use crate::provider_cost::COST_METRIC_FILE;
 use crate::ExecutionRequest;
 use serde_json::{json, Value};
 
@@ -9,10 +10,13 @@ pub(crate) fn response_value(
     request: &ExecutionRequest,
     policy: &LocalProcessCommandPolicy,
     process_result: &LocalProcessRunResult,
+    wall_time_ms: u64,
+    redaction_artifacts: &[String],
 ) -> Value {
     let stdout_path = provider_output_path(request.provider_instance_id(), STDOUT_FILE);
     let stderr_path = provider_output_path(request.provider_instance_id(), STDERR_FILE);
     let response_path = provider_output_path(request.provider_instance_id(), "response.json");
+    let cost_path = provider_output_path(request.provider_instance_id(), COST_METRIC_FILE);
     let (status, summary, error) = match process_result {
         LocalProcessRunResult::Exited { status } if status.success() => (
             "success",
@@ -85,6 +89,14 @@ pub(crate) fn response_value(
         ),
     };
 
+    let mut artifacts = vec![
+        response_path,
+        stdout_path.clone(),
+        stderr_path.clone(),
+        cost_path,
+    ];
+    artifacts.extend(redaction_artifacts.iter().cloned());
+
     json!({
         "schema_version": "1.0.0",
         "provider_instance_id": request.provider_instance_id(),
@@ -97,15 +109,13 @@ pub(crate) fn response_value(
         "stderr_path": stderr_path,
         "summary": summary,
         "changed_files": [],
-        "artifacts": [
-            response_path,
-            stdout_path,
-            stderr_path
-        ],
+        "artifacts": artifacts,
         "metrics": {
             "estimated_cost": 0,
+            "currency": "USD",
             "input_tokens": 0,
-            "output_tokens": 0
+            "output_tokens": 0,
+            "wall_time_ms": wall_time_ms
         },
         "error": error
     })

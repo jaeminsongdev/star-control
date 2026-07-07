@@ -2,7 +2,7 @@
 
 ## 목적
 
-Daemon은 장시간 job queue, provider scheduling, cancel/resume orchestration을 담당하는 장기 surface다. M7b에서는 daemon process를 시작하지 않고, file-based queue state와 안전 precondition만 먼저 구현한다.
+Daemon은 장시간 job queue, provider scheduling, cancel/resume orchestration을 담당하는 장기 surface다. M7b에서는 daemon process를 시작하지 않고, file-based queue state와 안전 precondition만 먼저 구현한다. Productization daemon app slice에서는 `apps/star-daemon serve --max-ticks`가 queued `fake-default`와 allowlisted local-process job을 실행하는 scheduler tick을 제공한다.
 
 ## machine-readable contracts
 
@@ -90,7 +90,7 @@ M7b에서 아직 구현하지 않는 것:
 - UI shell
 - OS별 기본 config path 자동 선택
 
-실제 daemon process, socket, API server, background worker는 별도 승인과 별도 PR이 필요하다.
+Productization app slice에서 실제 daemon process surface, loopback HTTP API server, `fake-default` queue scheduler tick, local-process scheduler executor는 구현한다. 아직 남은 범위는 long-running background worker, socket, remote exposure, cloud/live scheduler executor, Local/Cloud AI live connector execution이다.
 
 ## 테스트 기준
 

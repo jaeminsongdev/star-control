@@ -5,6 +5,7 @@ use crate::cloud_constants::{
     HTTP_REQUEST_FILE, HTTP_TRANSPORT_PLAN_FILE, LIVE_TRANSPORT_APPROVAL_FILE,
 };
 use crate::cloud_policy::cloud_policy_denied;
+use crate::provider_redaction::redact_provider_json_artifact;
 use crate::{
     ExecutionRequest, OpenAiCompatiblePreparedRequest, OpenAiCompatibleRequestBuilder,
     ProviderAdapterError, ProviderInstance, ProviderManifest, ProviderRunContext,
@@ -60,28 +61,59 @@ pub(super) fn write_live_approval_plan_artifacts(
     request: &ExecutionRequest,
     context: &ProviderRunContext<'_>,
     artifacts: &LiveApprovalArtifacts,
-) -> Result<(), ProviderAdapterError> {
+) -> Result<Vec<String>, ProviderAdapterError> {
+    let http_request_redaction = redact_provider_json_artifact(
+        context,
+        request,
+        HTTP_REQUEST_FILE,
+        &artifacts.http_request_value,
+    )?;
     let http_request_ref = context.state_store().write_provider_json(
         request.job_id(),
         request.provider_instance_id(),
         HTTP_REQUEST_FILE,
-        &artifacts.http_request_value,
+        http_request_redaction.value(),
+    )?;
+    let http_transport_plan_redaction = redact_provider_json_artifact(
+        context,
+        request,
+        HTTP_TRANSPORT_PLAN_FILE,
+        &artifacts.http_transport_plan,
     )?;
     let http_transport_plan_ref = context.state_store().write_provider_json(
         request.job_id(),
         request.provider_instance_id(),
         HTTP_TRANSPORT_PLAN_FILE,
-        &artifacts.http_transport_plan,
+        http_transport_plan_redaction.value(),
+    )?;
+    let live_approval_redaction = redact_provider_json_artifact(
+        context,
+        request,
+        LIVE_TRANSPORT_APPROVAL_FILE,
+        &artifacts.live_approval,
     )?;
     let live_approval_ref = context.state_store().write_provider_json(
         request.job_id(),
         request.provider_instance_id(),
         LIVE_TRANSPORT_APPROVAL_FILE,
-        &artifacts.live_approval,
+        live_approval_redaction.value(),
     )?;
 
     debug_assert_eq!(http_request_ref["kind"], "provider_output");
     debug_assert_eq!(http_transport_plan_ref["kind"], "provider_output");
     debug_assert_eq!(live_approval_ref["kind"], "provider_output");
-    Ok(())
+    Ok([
+        http_request_redaction
+            .report_path()
+            .map(ToString::to_string),
+        http_transport_plan_redaction
+            .report_path()
+            .map(ToString::to_string),
+        live_approval_redaction
+            .report_path()
+            .map(ToString::to_string),
+    ]
+    .into_iter()
+    .flatten()
+    .collect())
 }

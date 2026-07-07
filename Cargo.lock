@@ -96,6 +96,7 @@ dependencies = [
  "star-control-release",
  "star-control-router",
  "star-control-schema",
+ "star-control-security",
  "star-control-state",
  "star-control-validation",
  "star-sentinel",
@@ -137,6 +138,7 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "star-control-schema",
+ "star-control-security",
  "star-control-state",
 ]
 
@@ -198,6 +200,19 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "star-control-schema",
+ "star-control-state",
+]
+
+[[package]]
+name = "star-daemon"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-control-api",
+ "star-control-daemon",
+ "star-control-execution",
+ "star-control-observability",
+ "star-control-provider",
  "star-control-state",
 ]
 

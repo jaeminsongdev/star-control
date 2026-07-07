@@ -81,4 +81,14 @@ impl StateStore {
         }
         self.write_bytes_atomic(job_id, &target_path, content.as_bytes())
     }
+
+    pub(crate) fn write_text_artifact(
+        &self,
+        job_id: &str,
+        relative_path: &str,
+        content: &str,
+    ) -> Result<(), StateStoreError> {
+        let target_path = self.resolve_job_path(job_id, relative_path)?;
+        self.write_bytes_atomic(job_id, &target_path, content.as_bytes())
+    }
 }

@@ -9,7 +9,10 @@ mod store;
 mod types;
 
 pub use error::StateStoreError;
-pub use recovery::{JobSummary, RecoveryInspection, RecoveryIssue};
+pub use recovery::{
+    JobSummary, RecoveryActionExecution, RecoveryActionPlan, RecoveryInspection, RecoveryIssue,
+    RecoverySourceSelection, RECOVERY_ACTIONS,
+};
 pub use types::{ArtifactKind, StateStore};
 
 pub(crate) use constants::SCHEMA_VERSION;

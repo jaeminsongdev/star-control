@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use star_control_provider::{CapabilityProfile, ProviderManifest};
 use std::path::Path;
 
-pub(super) fn provider_summary_value(
+pub(in crate::providers) fn provider_summary_value(
     manifest: &ProviderManifest,
     profile: Option<&CapabilityProfile>,
     config: &CliConfig,

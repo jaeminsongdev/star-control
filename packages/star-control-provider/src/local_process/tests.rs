@@ -37,3 +37,14 @@ fn local_process_forbidden_evidence_helper() {
         );
     }
 }
+
+#[test]
+fn local_process_secret_output_helper() {
+    let is_child_helper = std::env::args().collect::<Vec<_>>().windows(2).any(|args| {
+        args[0] == "--exact"
+            && args[1] == "local_process::tests::local_process_secret_output_helper"
+    });
+    if is_child_helper && std::env::var("STAR_CONTROL_LOCAL_PROCESS_SECRET_HELPER").is_ok() {
+        println!("Authorization: Bearer sk-test-secret");
+    }
+}

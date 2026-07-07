@@ -272,6 +272,42 @@ packages/star-control-cli/tests/v0_fake_flow.rs
 
 이 테스트는 `star-control run`으로 fake provider output을 만든 뒤 Star Sentinel P0 gate와 ValidationEngine을 연결해 `AUTO_PASS`, `HUMAN_REVIEW`, `BLOCK` 경로를 검증한다. `HUMAN_REVIEW`는 approval response 없이는 다음 단계로 진행하지 않는 것을 확인하고, approved response 후 final report smoke를 완료한다.
 
+현재 productization E2E smoke 위치:
+
+```text
+scripts/ci/productization_e2e_smoke.py
+```
+
+이 smoke는 실제 binary를 빌드한 뒤 temp project/config에서 CLI fake run, fake provider cost-metric sidecar, provider request redaction artifact, CLI report redaction artifact, `providers healthcheck`, `star-daemon status`, loopback-only `star-daemon api` GET, static UI file surface, recovery dry-run, external release policy, release rollback-checklist local executor, Sentinel selfcheck를 확인한다. Local/Cloud AI live connector는 disabled 상태여야 하며 external release action은 수행하지 않는다.
+
+현재 RedactionReport artifact storage 검증 위치:
+
+```text
+packages/star-control-state/src/tests/artifacts/writers.rs
+packages/star-control-security/src/tests.rs
+```
+
+이 검증은 schema-valid RedactionReport가 `StateStore::write_redaction_report_json`을 통해 job 내부 `audit/redaction-report.json`에 저장되고, 반환 ArtifactRef가 `producer=star-control-security`와 `specs/schemas/redaction-report.schema.json` schema path를 포함하는지 확인한다. security package test는 redaction report가 raw secret 값을 보존하지 않는지 확인한다.
+
+현재 CLI report redaction artifact wiring 검증 위치:
+
+```text
+packages/star-control-cli/src/tests/run/fake.rs
+scripts/ci/productization_e2e_smoke.py
+```
+
+이 검증은 `star-control report --json`이 report artifact 안의 secret-like 값을 stdout에 raw로 노출하지 않고 `[REDACTED]`로 반환하며, `audit/redaction-report-<stage>.json`을 저장하고 반복 report read가 기존 RedactionReport artifact 때문에 실패하지 않는지 확인한다.
+
+현재 provider output redaction artifact wiring 검증 위치:
+
+```text
+packages/star-control-provider/src/fake/tests.rs
+packages/star-control-provider/src/local_process/tests/execution.rs
+scripts/ci/productization_e2e_smoke.py
+```
+
+이 검증은 fake provider request artifact와 local-process stdout artifact가 secret-like 값을 raw로 보존하지 않고 `[REDACTED]`로 저장하는지, `audit/provider-redaction-<provider>-<artifact>.json`이 생성되는지, RedactionReport 자체에는 raw secret 값이 없는지 확인한다.
+
 ## CLI tests
 
 CLI test 후보:
@@ -379,10 +415,12 @@ M9c cost metric budget guard는 observability crate 수준에서 검증한다.
 검증 항목:
 
 - `star-control-observability`가 schema-valid CostMetric을 provider output sidecar로 저장
+- fake/local-process provider execution path가 schema-valid `cost-metric.json` sidecar를 저장
 - cost metric path가 provider output directory 내부로 제한됨
 - unexpected secret-like field가 저장 전 `[REDACTED]`로 치환됨
 - missing cost metric이 non-fatal `Ok(None)`으로 표현됨
 - budget threshold 초과가 hard failure가 아니라 `warn_only` evaluation으로 표현됨
+- cloud provider `budget.max_estimated_cost` 초과가 CLI/API transport 실행 전 `blocked` result로 정규화됨
 
 M9d provider conformance hardening은 provider crate 수준에서 검증한다.
 
@@ -497,6 +535,81 @@ M9n recovery command surface는 CLI crate 수준에서 검증한다.
 - `run-state.json`과 `events.jsonl`을 수정하지 않음
 - `--list` 없는 recover와 non-recovery option 조합을 invalid input으로 거부함
 - destructive recovery action, schema field, workflow, dependency, HTTP server, browser UI app 변경이 없음
+
+E53 recovery action dry-run/approval surface는 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control recover --action tmp-cleanup --dry-run --json`이 planned change를 CLI output envelope으로 반환함
+- dry-run action은 `destructive_actions_performed=false`를 유지하고 `tmp/**` file을 삭제하지 않음
+- dry-run 없는 `recover --action tmp-cleanup --json`은 `status=blocked`, `mode=approval_required`, `approval_gate.approval_token`을 반환함
+- destructive executor, provider/tool output mutation, release/deploy/publish automation은 실행하지 않음
+
+E54 release automation dry-run/approval surface는 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-control release --action prepare --dry-run --json`이 signing/publish/deploy/rollback/review 준비 step을 CLI output envelope으로 반환함
+- dry-run action은 `external_actions_performed=false`, `release_actions_performed=false`를 유지하고 readiness artifact를 수정하지 않음
+- dry-run 없는 `release --action deploy --json`은 `status=blocked`, `mode=approval_required`, `approval_gate.approval_token`을 반환함
+- signing/publish/deploy executor, repository settings mutation, external account 변경은 실행하지 않음
+
+E58 release automation executor는 release crate와 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- 잘못된 `--approve-release-action` token은 `status=blocked`, `approval_accepted=false`, `action_execution_enabled=false`를 반환하고 result artifact를 만들지 않음
+- approved `release --action deploy --approve-release-action approve:deploy:{job_id} --json`은 `mode=approved_execution`, `release_actions_performed=true`를 반환하고 `release/deploy-automation-result.json`을 기록함
+- `rollback-checklist`는 approval 없이 local result artifact를 기록함
+- 모든 executor result는 `external_actions_performed=false`를 유지하고 signing/package publish/deploy/repository settings mutation/external account 변경을 수행하지 않음
+
+E66 external release execution policy는 release crate, CLI crate, productization smoke 수준에서 검증한다.
+
+- release automation plan/result/CLI output이 `external_execution_policy.status=reserved`를 반환함
+- `live_execution_enabled=false`, `external_actions_allowed=false`를 유지함
+- deploy/package-publish 계열 external-effect operation은 `blocked_operations`에 표시됨
+- approved deploy result도 `external_policy_decision=record_only_reserved`와 `external_actions_performed=false`를 유지함
+- release readiness artifact overwrite 없이 기존 readiness value를 그대로 유지함
+
+E55 daemon queue scheduler tick은 daemon app crate 수준에서 검증한다.
+
+검증 항목:
+
+- `star-daemon serve --max-ticks 1`이 idle queue에서 scheduler tick 결과를 반환하고 live call을 수행하지 않음
+- queued `fake-default` job을 `ExecutionEngine`으로 실행하고 provider output artifact를 대상 project `.ai-runs/` 아래에 생성함
+- 실행된 `fake-default` queue entry는 제거되고 run state가 `IMPLEMENTED`로 갱신됨
+- non-fake provider job은 `DISABLED` scheduler result로 남고 provider-specific output을 생성하지 않음
+- Local/Cloud AI connector 상태는 disabled이며 `live_calls_performed=false`를 유지함
+
+E56 daemon local-process scheduler executor는 daemon app crate와 daemon queue crate 수준에서 검증한다.
+
+검증 항목:
+
+- queue entry가 scheduler용 `provider_instance_paths`를 보존함
+- `star-daemon serve --max-ticks 1`이 `provider_instance_paths`로 builtin registry와 local-process instance를 로드함
+- queued local-process job이 allowlisted command policy로 실행되고 request/stdout/stderr/response artifact를 대상 project `.ai-runs/` 아래에 생성함
+- 실행된 local-process queue entry는 제거되고 run state가 `IMPLEMENTED`로 갱신됨
+- provider instance path가 없는 non-fake provider와 Local/Cloud AI connector는 disabled이며 `live_calls_performed=false`를 유지함
+
+E57 recovery action executor는 StateStore와 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- dry-run recovery action은 계속 mutation 없이 preview만 반환함
+- approval token 없는 destructive recovery action은 `status=blocked`이고 file mutation을 수행하지 않음
+- 잘못된 approval token은 `approval_accepted=false`, `action_execution_enabled=false`로 남고 file mutation을 수행하지 않음
+- approved `tmp-cleanup`은 temp artifact를 삭제하고 `recovery/tmp-cleanup-result.json`을 기록함
+- `recovered-copy`는 비파괴 action으로 approval 없이 recovered copy artifact를 생성함
+- approved `event-log-trim`은 `recovery/events.trimmed.jsonl`을 만들고 corrupt event line을 제거한 event log로 교체함
+
+E59 artifact replacement source selection executor는 StateStore와 CLI crate 수준에서 검증한다.
+
+검증 항목:
+
+- approved `artifact-replace`라도 `--recovery-artifact`와 `--recovery-source`가 없으면 invalid input으로 거부하고 target을 수정하지 않음
+- current inspection issue와 일치하지 않는 target artifact는 invalid input으로 거부함
+- approved `artifact-replace --recovery-artifact <target> --recovery-source <source>`는 job 내부 source bytes로 target artifact를 atomic replace하고 `recovery/artifact-replace-result.json`을 기록함
+- source/target path는 StateStore job-relative path guard를 통과해야 하며, job directory 밖 file 접근은 허용하지 않음
 
 M9o final M9 readiness audit은 release crate 수준에서 검증한다.
 

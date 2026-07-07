@@ -14,6 +14,11 @@ fn enqueue_nonterminal_job_records_project_reference_without_copying_artifacts()
 }
 
 #[test]
+fn enqueue_job_can_preserve_provider_instance_paths_for_scheduler() {
+    enqueue::enqueue_job_can_preserve_provider_instance_paths_for_scheduler();
+}
+
+#[test]
 fn terminal_job_is_not_queued() {
     enqueue::terminal_job_is_not_queued();
 }

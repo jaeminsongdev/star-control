@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::Path;
 
 impl StateStore {
-    pub(super) fn write_bytes_atomic(
+    pub(crate) fn write_bytes_atomic(
         &self,
         job_id: &str,
         target_path: &Path,

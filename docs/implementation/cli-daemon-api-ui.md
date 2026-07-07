@@ -4,7 +4,7 @@
 
 이 문서는 Star-Control의 사용자 표면을 정의한다. Star-Control은 장시간 작업 관제 시스템이므로, 최종적으로 CLI, daemon, API, UI shell이 같은 데이터 계약과 StateStore를 공유해야 한다.
 
-초기 구현은 CLI와 file-based StateStore를 우선한다. M7b에서는 daemon process 없이 file-based queue skeleton만 구현한다. API, UI는 전체 목표 구조를 먼저 고정하고 실제 구현은 후속 단계에서 진행한다.
+초기 구현은 CLI와 file-based StateStore를 우선한다. M7b에서는 daemon process 없이 file-based queue skeleton을 먼저 구현했다. 이후 productization slices에서 `apps/star-daemon` process surface, loopback-only HTTP API server, static browser UI app, `fake-default` queue scheduler tick, local-process scheduler executor를 추가했다. remote exposure, cloud/live scheduler executor, Local/Cloud AI live connector execution은 후속 단계로 남긴다.
 
 ## 공통 원칙
 
@@ -231,7 +231,7 @@ Daemon은 장시간 작업과 provider session을 관리한다.
 - status watch
 - API server host 후보
 
-M7b에서는 `packages/star-control-daemon`의 file-based queue skeleton만 구현한다. daemon process, socket, HTTP API server, provider scheduling worker는 아직 RESERVED다.
+M7b에서는 `packages/star-control-daemon`의 file-based queue skeleton만 구현한다. Productization daemon app slice는 `apps/star-daemon status`, 테스트 가능한 `serve --max-ticks`, loopback-only `api` HTTP server를 제공한다. `serve --max-ticks`는 queued `fake-default` job을 실행하고 `provider_instance_paths`가 있는 local-process provider를 실행한다. provider instance path가 없거나 cloud/live connector에 해당하는 provider는 disabled scheduler result로 남긴다. socket, remote exposure, long-running background worker, cloud/live scheduler executor는 아직 RESERVED다.
 
 ## daemon state
 
@@ -271,7 +271,7 @@ POST /projects/{project_id}/jobs/{job_id}/cancel
 POST /projects/{project_id}/jobs/{job_id}/resume
 ```
 
-M7c는 HTTP server가 아니라 `packages/star-control-api`의 in-process read-only service로 구현한다. API는 daemon queue state와 StateStore artifact를 read-only로 조회한다. API는 local-first를 기본으로 하고, HTTP server, socket listener, auth, remote exposure는 별도 보안 문서와 승인 이후 구현한다.
+M7c는 먼저 `packages/star-control-api`의 in-process read-only service로 구현한다. API는 daemon queue state와 StateStore artifact를 read-only로 조회한다. Productization HTTP API slice는 이 service를 `star-daemon api` loopback-only HTTP server로 노출한다. auth/session, socket listener, remote exposure는 별도 보안 문서와 승인 이후 구현한다.
 
 M7d control mutation endpoint:
 
@@ -281,7 +281,7 @@ POST /projects/{project_id}/jobs/{job_id}/cancel
 POST /projects/{project_id}/jobs/{job_id}/resume
 ```
 
-M7d는 HTTP server가 아니라 `packages/star-control-api`의 in-process `ApiControlService`로 구현한다. `approve`, `cancel`, `resume`은 CLI control command와 같은 StateStore `.ai-runs/` artifact를 수정하고 `api-response.schema.json` envelope을 반환한다. HTTP server, socket listener, auth/session, remote exposure는 아직 구현하지 않는다.
+M7d는 먼저 `packages/star-control-api`의 in-process `ApiControlService`로 구현한다. `approve`, `cancel`, `resume`은 CLI control command와 같은 StateStore `.ai-runs/` artifact를 수정하고 `api-response.schema.json` envelope을 반환한다. Productization HTTP API slice는 approve/cancel/resume POST endpoint를 loopback-only로 노출하고 audit event를 기록한다. socket listener, auth/session, remote exposure는 아직 구현하지 않는다.
 
 ## API 응답 규칙
 
@@ -324,7 +324,7 @@ approval request viewer data
 review pack viewer data
 ```
 
-M8a는 browser UI app, TypeScript/Node package manager, HTTP API server, browser mutation wiring을 구현하지 않는다.
+M8a는 library-level read-only view model이며 browser UI app, TypeScript/Node package manager, HTTP API server, browser mutation wiring을 구현하지 않는다.
 
 M8b 구현 범위:
 
@@ -338,7 +338,7 @@ terminal cancel disabled surface
 approved response 이후 resume enabled surface
 ```
 
-M8b는 browser-oriented library model이며, browser UI app, TypeScript/Node package manager, HTTP server, socket listener, auth/session, remote exposure는 구현하지 않는다.
+M8b는 browser-oriented library model이며, TypeScript/Node package manager, socket listener, auth/session, remote exposure는 구현하지 않는다. Productization static browser UI app slice는 새 package manager 없이 `apps/star-control-ui`에서 `star-daemon api`를 소비한다.
 
 ## UI 금지 사항
 
@@ -394,6 +394,6 @@ Codex는 CLI를 먼저 구현한다. Daemon, API, UI는 문서 계약만 보고 
 7. UI shell read-only view model
 8. API approve/cancel/resume control mutation service
 
-M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. M7b 기준으로 daemon queue skeleton은 config root 아래 `daemon/state.json`을 만들고 StateStore job을 참조 등록한다. M7c 기준으로 API read-only service는 daemon state와 StateStore artifact를 schema-valid envelope으로 읽는다. M8a 기준으로 UI read-only view model은 이 API service를 소비하고 StateStore artifact를 직접 수정하지 않는다. M7d 기준으로 API control mutation service는 HTTP server 없이 approval/cancel/resume mutation을 in-process로 제공한다. M8b 기준으로 browser-oriented UI control shell은 `ApiControlService`를 소비해 action panel과 mutation result view를 만든다. API server, auth/session, remote exposure, 실제 browser UI app은 별도 승인 전까지 구현하지 않는다.
+M7a 기준으로 CLI `approve`, `cancel`, `resume`은 file-based StateStore mutation으로 구현한다. M7b 기준으로 daemon queue skeleton은 config root 아래 `daemon/state.json`을 만들고 StateStore job을 참조 등록한다. M7c 기준으로 API read-only service는 daemon state와 StateStore artifact를 schema-valid envelope으로 읽는다. M8a 기준으로 UI read-only view model은 이 API service를 소비하고 StateStore artifact를 직접 수정하지 않는다. M7d 기준으로 API control mutation service는 approval/cancel/resume mutation을 in-process로 제공한다. M8b 기준으로 browser-oriented UI control shell은 `ApiControlService`를 소비해 action panel과 mutation result view를 만든다. Productization slices 기준으로 `apps/star-daemon` local HTTP API server, HTTP control audit integration, `fake-default` queue scheduler tick, local-process scheduler executor, `apps/star-control-ui` static browser UI app은 구현되어 있다. auth/session, remote exposure, cloud/live scheduler executor, Local/Cloud AI live connector execution은 별도 승인 전까지 구현하지 않는다.
 
 각 단계는 별도 PR로 진행한다.
