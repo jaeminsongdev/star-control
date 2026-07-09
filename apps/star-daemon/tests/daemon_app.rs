@@ -364,6 +364,58 @@ fn http_server_serves_api_control_service_get_requests() {
 }
 
 #[test]
+fn http_server_serves_provider_connection_management() {
+    let config_root = temp_config_root("http-provider-connections");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind provider api test listener");
+    let address = listener.local_addr().expect("local addr");
+    let service =
+        star_daemon::api_service(config_root.clone(), schema_root(), None).expect("api service");
+    let handle =
+        thread::spawn(move || star_daemon::serve_api_listener(listener, service, 2).unwrap());
+
+    let body = serde_json::to_string(&json!({
+        "instance": {
+            "id": "local-ui",
+            "provider": "provider.local-openai-compatible",
+            "enabled": true,
+            "limits": {
+                "timeout_seconds": 10,
+                "max_parallel_jobs": 1
+            },
+            "routing_tags": ["local", "ui"],
+            "endpoint": {
+                "base_url": "http://127.0.0.1:11434/v1",
+                "model": "local-coder"
+            }
+        }
+    }))
+    .expect("serialize provider instance");
+    let save_response = http_post(address, "/provider-connections/instances", &body);
+    assert!(save_response.starts_with("HTTP/1.1 200 OK"));
+    let save_json = response_json(&save_response);
+    assert_eq!(save_json["status"], "success");
+    assert_eq!(save_json["data"]["instance"]["id"], "local-ui");
+    assert_eq!(save_json["data"]["validation"]["ok"], true);
+    assert!(config_root
+        .join("provider-instances/local-ui.json")
+        .is_file());
+
+    let list_response = http_get(address, "/provider-connections");
+    assert!(list_response.starts_with("HTTP/1.1 200 OK"));
+    let list_json = response_json(&list_response);
+    assert_eq!(list_json["status"], "success");
+    assert!(list_json["data"]["instances"]
+        .as_array()
+        .expect("instances")
+        .iter()
+        .any(|instance| instance["id"] == "local-ui"));
+    assert_eq!(list_json["data"]["policy"]["live_calls_performed"], false);
+
+    assert_eq!(handle.join().expect("server join"), 2);
+    fs::remove_dir_all(config_root).ok();
+}
+
+#[test]
 fn http_control_actions_append_audit_events() {
     let config_root = temp_config_root("http-audit");
     let project_root = temp_config_root("http-audit-project");

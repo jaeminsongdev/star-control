@@ -12,7 +12,7 @@ mod mutations;
 
 #[derive(Debug, Clone)]
 pub struct ApiControlService {
-    read_only: ApiReadOnlyService,
+    pub(crate) read_only: ApiReadOnlyService,
 }
 
 impl ApiControlService {
@@ -28,6 +28,10 @@ impl ApiControlService {
 
     pub fn register_daemon_queue(&mut self, daemon_queue: DaemonQueue) {
         self.read_only.register_daemon_queue(daemon_queue);
+    }
+
+    pub fn register_config_root(&mut self, config_root: impl Into<PathBuf>) {
+        self.read_only.register_config_root(config_root);
     }
 
     pub fn register_project_store(
@@ -64,6 +68,21 @@ impl ApiControlService {
         let parsed = ParsedPath::parse(request.path());
         let segments = parsed.segments();
         match segments.as_slice() {
+            ["provider-connections", "instances"] => {
+                self.provider_connection_save_response(request.body())
+            }
+            ["provider-connections", "validate"] => self
+                .read_only
+                .provider_connection_validate_response(request.body()),
+            ["provider-connections", "select"] => {
+                self.provider_connection_select_response(request.body())
+            }
+            ["provider-connections", "healthcheck"] => {
+                self.provider_connection_healthcheck_response(request.body())
+            }
+            ["provider-connections", "run-request"] => {
+                self.provider_connection_run_request_response(request.body())
+            }
             ["projects", project_id, "jobs", job_id, "approve"] => {
                 self.approve_response(project_id, job_id, request.body())
             }

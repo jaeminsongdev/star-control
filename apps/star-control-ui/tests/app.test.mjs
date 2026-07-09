@@ -6,6 +6,8 @@ import {
   artifactEntries,
   endpoint,
   eventKind,
+  providerConnectionSummary,
+  providerInstanceFromForm,
   stateClass,
   summarizeJob,
   terminalState,
@@ -80,4 +82,55 @@ test("artifact entries classify evidence paths", () => {
     { section: "route", path: "route.json", kind: "artifact" },
     { section: "review", path: "review-packs/release-review-pack.md", kind: "review" }
   ]);
+});
+
+test("provider connection summary counts manifests and selected instance", () => {
+  assert.deepEqual(
+    providerConnectionSummary({
+      providers: [{ id: "provider.ollama" }],
+      instances: [{ id: "local-default" }],
+      selection: { selected_provider_instance_id: "local-default" },
+      policy: {
+        daemon_local_ai_live_connector: "disabled",
+        cloud_live_execution_without_approval: "blocked"
+      }
+    }),
+    {
+      providers: 1,
+      instances: 1,
+      selected: "local-default",
+      localAi: "disabled",
+      cloudAi: "blocked"
+    }
+  );
+});
+
+test("provider instance form produces schema-shaped instance without raw credentials", () => {
+  assert.deepEqual(
+    providerInstanceFromForm({
+      providerId: "provider.local-openai-compatible",
+      instanceId: "local-default",
+      endpointBaseUrl: "http://127.0.0.1:11434/v1",
+      model: "local-coder",
+      credentialRef: "",
+      commandExecutable: "",
+      routingTags: "local, private",
+      timeoutSeconds: "10",
+      enabled: true
+    }),
+    {
+      id: "local-default",
+      provider: "provider.local-openai-compatible",
+      enabled: true,
+      limits: {
+        timeout_seconds: 10,
+        max_parallel_jobs: 1
+      },
+      routing_tags: ["local", "private"],
+      endpoint: {
+        base_url: "http://127.0.0.1:11434/v1",
+        model: "local-coder"
+      }
+    }
+  );
 });

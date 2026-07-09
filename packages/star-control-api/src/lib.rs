@@ -3,6 +3,7 @@ mod constants;
 mod control;
 mod error;
 mod paths;
+mod provider_connections;
 mod read_only;
 mod request;
 

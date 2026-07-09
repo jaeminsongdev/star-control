@@ -130,3 +130,135 @@ fn control_requires_approval_request_and_approved_response() {
 
     fs::remove_dir_all(project).ok();
 }
+
+#[test]
+fn provider_connection_save_healthcheck_and_run_request_are_policy_driven() {
+    let config_root = temp_project();
+    let service = control_with_config_root(&config_root);
+
+    let raw_credential = service
+        .handle_post(
+            "/provider-connections/instances",
+            json!({
+                "instance": {
+                    "id": "local-with-secret",
+                    "provider": "provider.local-openai-compatible",
+                    "enabled": true,
+                    "limits": {
+                        "timeout_seconds": 10,
+                        "max_parallel_jobs": 1
+                    },
+                    "routing_tags": ["local"],
+                    "endpoint": {
+                        "base_url": "http://127.0.0.1:11434/v1",
+                        "model": "local-coder"
+                    },
+                    "api_key": "raw-test-value"
+                }
+            }),
+        )
+        .expect("raw credential response");
+    assert_eq!(raw_credential["status"], "failed");
+    assert_eq!(raw_credential["error"]["code"], "provider_instance_invalid");
+    assert!(!config_root
+        .join("provider-instances/local-with-secret.json")
+        .exists());
+
+    let save = service
+        .handle_post(
+            "/provider-connections/instances",
+            json!({
+                "instance": {
+                    "id": "local-ollama",
+                    "provider": "provider.local-openai-compatible",
+                    "enabled": true,
+                    "limits": {
+                        "timeout_seconds": 10,
+                        "max_parallel_jobs": 1
+                    },
+                    "routing_tags": ["local", "private"],
+                    "endpoint": {
+                        "base_url": "http://127.0.0.1:11434/v1",
+                        "model": "local-coder"
+                    }
+                }
+            }),
+        )
+        .expect("save provider connection");
+    assert_eq!(save["status"], "success");
+    let saved_path = save["data"]["instance"]["path"]
+        .as_str()
+        .expect("saved path")
+        .to_string();
+    assert!(Path::new(&saved_path).is_file());
+    assert_eq!(
+        save["data"]["cli_reuse"]["args"],
+        json!([
+            "--provider",
+            "local-ollama",
+            "--provider-instance",
+            saved_path
+        ])
+    );
+
+    let list = service
+        .handle_get("/provider-connections")
+        .expect("provider connections list");
+    assert_eq!(list["status"], "success");
+    assert_eq!(list["data"]["storage"]["configured"], true);
+    assert!(list["data"]["providers"]
+        .as_array()
+        .expect("providers")
+        .iter()
+        .any(|provider| provider["id"] == "provider.ollama"));
+    assert!(list["data"]["instances"]
+        .as_array()
+        .expect("instances")
+        .iter()
+        .any(|instance| instance["id"] == "local-ollama"));
+
+    let healthcheck = service
+        .handle_post(
+            "/provider-connections/healthcheck",
+            json!({ "provider_instance_id": "local-ollama" }),
+        )
+        .expect("healthcheck");
+    assert_eq!(healthcheck["status"], "success");
+    assert_eq!(healthcheck["data"]["healthcheck"]["status"], "policy_ready");
+    assert_eq!(
+        healthcheck["data"]["healthcheck"]["live_probe_performed"],
+        false
+    );
+    assert_eq!(
+        healthcheck["data"]["healthcheck"]["live_calls_performed"],
+        false
+    );
+
+    let run_request = service
+        .handle_post(
+            "/provider-connections/run-request",
+            json!({
+                "provider_instance_id": "local-ollama",
+                "mode": "live"
+            }),
+        )
+        .expect("run request");
+    assert_eq!(run_request["status"], "blocked");
+    assert_eq!(
+        run_request["error"]["code"],
+        "daemon_local_ai_live_connector_disabled"
+    );
+    assert_eq!(run_request["data"]["provider_execution_performed"], false);
+    assert_eq!(run_request["data"]["live_calls_performed"], false);
+    assert_eq!(
+        run_request["data"]["cli_reuse"]["args"],
+        json!([
+            "--provider",
+            "local-ollama",
+            "--provider-instance",
+            saved_path
+        ])
+    );
+
+    fs::remove_dir_all(config_root).ok();
+}

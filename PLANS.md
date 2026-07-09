@@ -8,7 +8,10 @@
 
 ### 현재 목표
 
-- Star-Control repository의 현재 goal은 static UI와 loopback API를 실제 `.ai-runs`에 연결하고, 명시 provider-instance 기반 Local AI smoke를 검증한 상태를 보존하는 것이다.
+- Star-Control repository의 현재 goal은 하드코딩 smoke 중심 Local AI/Codex CLI/provider 연결을 UI 주도 provider connection 관리로 전환하는 것이다.
+- `apps/star-control-ui`는 provider instance 등록, 편집, 검증, 선택, 저장 요청을 `star-daemon api`로 보낸다.
+- `star-daemon api`는 provider manifest/instance discovery, loopback 정책 검증, healthcheck, dry-run/live 실행 요청을 제공하되 credential raw value 저장/출력, mock 성공, 승인 없는 외부 유료 호출을 금지한다.
+- 기존 CLI `run --provider <id> --provider-instance <path>` explicit provider-instance 실행 경로는 유지하고, UI가 저장한 instance path를 그대로 재사용하게 한다.
 - v0 runtime 구현 스택은 Rust + Cargo workspace로 결정했다.
 - v0 fake provider instance id는 `fake-default`로 결정했다.
 - v0 Star Sentinel P0 rule set은 5개 핵심 rule로 결정했다.
@@ -149,9 +152,9 @@
 
 ### 아직 남은 것
 
-- 제품화 직전 상태까지의 daemon/API/UI/운영/복구/릴리즈/보안/관측성 surface와 final readiness 정리는 구현됐다. daemon/API/UI surface, daemon HTTP control action audit 기록, queue loop/provider scheduling, recovery/retention dry-run/approval gate와 local executor, release automation dry-run/approval gate와 local executor, external release/deploy/publish execution policy, RedactionReport artifact storage, CLI report/provider output redaction artifact wiring, fake/local/cloud provider cost-metric sidecar, cloud hard budget enforcement, productization E2E smoke는 구현됐다.
-- 최종 blocker로 남길 항목은 Local AI connector live execution과 Cloud AI connector live execution뿐이다.
-- 현재 구현된 E48 provider healthcheck는 offline readiness만 수행하며 provider execution, network/process probe, credential raw value 접근, Local/Cloud AI live call은 수행하지 않는다.
+- 제품화 직전 상태까지의 daemon/API/UI/운영/복구/릴리즈/보안/관측성 surface와 final readiness 정리는 구현됐다.
+- 명시 provider-instance CLI 경로와 local OpenAI-compatible loopback adapter는 구현되어 있으나, provider connection 관리가 아직 UI/API 중심으로 묶이지 않았다.
+- Cloud API/CLI live execution, 외부 유료 호출, raw credential materialization은 계속 승인 전 금지다.
 
 ### 건드리면 안 되는 것
 
@@ -193,7 +196,7 @@ cargo test --workspace
 
 | ID | 상태 | 목표 | 주요 파일 | 다음 조치 |
 |---|---|---|---|---|
-| - | 없음 | 현재 리팩토링/하드코딩 slice 완료 | `docs/implementation/refactoring-hardcoding-guidelines.md`, `docs/implementation/current-repository-map.md`, `docs/implementation/repository-layout.md`, `PLANS.md` | 새 기능 branch가 커질 때 top 후보를 재산정 |
+| - | 없음 | provider connection 관리 slice 완료 | `packages/star-control-api/**`, `apps/star-daemon/**`, `apps/star-control-ui/**`, `scripts/ci/productization_e2e_smoke.py`, 문서 | 다음 작업 착수 전 최신 상태 재확인 |
 
 ## 열린 리스크
 
@@ -540,3 +543,4 @@ cargo test --workspace
 | P-0231 | 2026-07-07 | external release execution policy surface 추가. `ReleaseAutomationPlanner::plan/execute`와 CLI `release` output이 `external_execution_policy`를 포함해 live execution disabled, external actions disallowed, blocked external operations를 machine-readable하게 반환한다. approved deploy/package-publish 계열은 계속 local plan/result artifact만 기록하고 `external_actions_performed=false`를 유지한다 | `packages/star-control-release/src/automation.rs`, `packages/star-control-cli/src/release.rs`, `packages/star-control-cli/src/tests/release.rs`, `scripts/ci/productization_e2e_smoke.py`, `docs/implementation/briefs/E66-external-release-execution-policy.md`, `docs/implementation/codex-work-queue-current.md`, `docs/implementation/release-readiness.md`, `docs/implementation/testing-ci-release.md`, `README.md`, `PLANS.md` |
 | P-0232 | 2026-07-07 | final readiness 정리 갱신. `complete-implementation-readiness.example.json`과 `final-completion-audit.md`가 productization-pre-live-AI 상태를 반영하고, 구현 blocker는 Local AI connector live execution / Cloud AI connector live execution 2개만 남긴다. release/deploy/publish live execution, package registry, repository settings, destructive recovery, PR ready/merge/main update는 구현 blocker가 아니라 approval-gated execution으로 분리한다 | `examples/release-contracts/complete-implementation-readiness.example.json`, `docs/implementation/audit/final-completion-audit.md`, `docs/implementation/briefs/E67-final-readiness-pre-live-ai.md`, `docs/implementation/codex-work-queue-current.md`, `README.md`, `PLANS.md` |
 | P-0233 | 2026-07-09 | local OpenAI-compatible loopback provider adapter와 browser UI live smoke 추가. explicit provider-instance 경로에서 Ollama/OpenAI-compatible loopback server를 live 호출하고 request/http/raw-response/stdout/stderr/cost-metric/response artifact를 남긴다. `star-daemon api`는 loopback CORS/preflight를 지원하며 static UI는 restored API state, optional release/report errors, real daemon job list/detail/timeline/evidence/release readiness, approve/resume/cancel action을 Browser로 검증했다. daemon scheduler Local/Cloud live connector와 Cloud live execution은 계속 RESERVED다 | `packages/star-control-provider/src/local_openai_compatible.rs`, `packages/star-control-provider/src/lib.rs`, `packages/star-control-execution/src/engine.rs`, `packages/star-control-execution/src/engine/provider.rs`, `packages/star-control-provider/src/fake/model/error.rs`, `packages/star-control-provider/src/fake/model/error/display.rs`, `apps/star-daemon/src/lib.rs`, `apps/star-daemon/tests/daemon_app.rs`, `apps/star-control-ui/app.js`, `apps/star-control-ui/index.html`, `apps/star-control-ui/README.md`, `apps/star-daemon/README.md`, `docs/implementation/provider-system.md`, `README.md`, `PLANS.md` |
+| P-0234 | 2026-07-09 | UI 주도 provider connection 관리 slice 추가. `star-daemon api`가 `/provider-connections` discovery/save/validate/select/healthcheck/run-request를 제공하고, 저장된 provider instance JSON을 CLI explicit `--provider-instance` path로 재사용하게 한다. static UI는 provider instance 등록/편집/검증/선택/저장 panel을 제공한다. raw credential 저장/출력, mock success, 승인 없는 cloud paid live call은 차단한다. 검증: `cargo fmt --check`, `cargo check --workspace --all-targets --locked`, `cargo test --workspace --all-targets --locked`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `node --test apps/star-control-ui/tests/app.test.mjs`, `python scripts/ci/productization_e2e_smoke.py`, `powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1`, `git diff --check` 통과 | `packages/star-control-api/**`, `apps/star-daemon/**`, `apps/star-control-ui/**`, `scripts/ci/productization_e2e_smoke.py`, `docs/implementation/cli-daemon-api-ui.md`, `docs/implementation/current-repository-map.md`, `docs/implementation/provider-system.md`, `README.md`, `PLANS.md` |

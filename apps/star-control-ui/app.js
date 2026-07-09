@@ -4,7 +4,10 @@ const DEFAULT_STATE = {
   selectedJobId: null,
   jobs: [],
   detail: null,
-  daemon: null
+  daemon: null,
+  providerConnections: null,
+  providerConnectionsError: null,
+  providerActionOutput: "No provider action run."
 };
 
 const state = { ...DEFAULT_STATE };
@@ -82,6 +85,54 @@ export function artifactEntries(artifacts) {
   return artifactValueEntries("artifact", artifacts);
 }
 
+export function providerConnectionSummary(connections) {
+  const providers = Array.isArray(connections?.providers) ? connections.providers.length : 0;
+  const instances = Array.isArray(connections?.instances) ? connections.instances.length : 0;
+  const selected =
+    connections?.selection?.selected_provider_instance_id ||
+    connections?.selection?.provider_instance_id ||
+    "";
+  return {
+    providers,
+    instances,
+    selected,
+    localAi: connections?.policy?.daemon_local_ai_live_connector || "disabled",
+    cloudAi: connections?.policy?.cloud_live_execution_without_approval || "blocked"
+  };
+}
+
+export function providerInstanceFromForm(values) {
+  const tags = splitCsv(values.routingTags || "");
+  const instance = {
+    id: values.instanceId || "",
+    provider: values.providerId || "",
+    enabled: values.enabled !== false,
+    limits: {
+      timeout_seconds: Number.parseInt(values.timeoutSeconds || "300", 10) || 300,
+      max_parallel_jobs: 1
+    },
+    routing_tags: tags.length ? tags : ["local"]
+  };
+  if (values.endpointBaseUrl || values.model) {
+    instance.endpoint = {};
+    if (values.endpointBaseUrl) instance.endpoint.base_url = values.endpointBaseUrl;
+    if (values.model) instance.endpoint.model = values.model;
+  }
+  if (values.credentialRef) {
+    instance.credential_ref = values.credentialRef;
+  }
+  if (values.commandExecutable) {
+    instance.command = { executable: values.commandExecutable };
+  }
+  if (values.providerId?.includes("codex-cli") && !instance.transport_config) {
+    instance.transport_config = {
+      auth_mode: "login_session",
+      privacy_handoff_approved: false
+    };
+  }
+  return instance;
+}
+
 function artifactValueEntries(section, value) {
   if (value == null) return [];
   if (Array.isArray(value)) {
@@ -140,10 +191,13 @@ async function refreshAll() {
   try {
     const daemon = await apiGet("/daemon/state");
     const jobs = await apiGet(`/projects/${encodeURIComponent(state.projectId)}/jobs`);
+    const providers = await optionalApiGet("/provider-connections");
     if (daemon.status === "failed") throw new Error(apiErrorMessage(daemon.error));
     if (jobs.status === "failed") throw new Error(apiErrorMessage(jobs.error));
     state.daemon = daemon.data.daemon_state;
     state.jobs = jobs.data.jobs || [];
+    state.providerConnections = providers.status === "success" ? providers.data : null;
+    state.providerConnectionsError = providers.status === "success" ? null : providers.error;
     if (!state.selectedJobId && state.jobs.length > 0) {
       state.selectedJobId = state.jobs[0].job_id;
     }
@@ -215,6 +269,7 @@ function render() {
   renderDetail();
   renderTimeline();
   renderActions();
+  renderProviderConnections();
   renderRelease();
   renderArtifacts();
 }
@@ -324,6 +379,47 @@ function renderActions() {
   text("action-hint", actionHint(availability, runState));
 }
 
+function renderProviderConnections() {
+  const summary = providerConnectionSummary(state.providerConnections);
+  text("provider-count", String(summary.providers));
+  text("provider-instance-count", String(summary.instances));
+  text("provider-selected", summary.selected || "None");
+  text("local-ai-state", summary.localAi);
+  text("cloud-ai-state", summary.cloudAi);
+  const stateNode = element("provider-state");
+  stateNode.textContent = state.providerConnectionsError
+    ? apiErrorMessage(state.providerConnectionsError)
+    : state.providerConnections
+      ? "Loaded"
+      : "Waiting for API";
+  stateNode.className = `status-pill ${state.providerConnectionsError ? "failed" : "muted"}`;
+
+  const select = element("provider-id");
+  const current = select.value || localStorage.getItem("star-control.providerId") || "";
+  const providers = Array.isArray(state.providerConnections?.providers)
+    ? state.providerConnections.providers
+    : [];
+  select.innerHTML = providers
+    .map(
+      (provider) =>
+        `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.id)} / ${escapeHtml(
+          provider.kind
+        )}</option>`
+    )
+    .join("");
+  if (providers.some((provider) => provider.id === current)) {
+    select.value = current;
+  } else if (providers.some((provider) => provider.id === "provider.local-openai-compatible")) {
+    select.value = "provider.local-openai-compatible";
+  }
+
+  const instanceId = element("provider-instance-id");
+  if (!instanceId.value) {
+    instanceId.value = localStorage.getItem("star-control.providerInstanceId") || "local-default";
+  }
+  element("provider-output").textContent = state.providerActionOutput;
+}
+
 function renderRelease() {
   const node = element("release-detail");
   const stateNode = element("release-state");
@@ -396,6 +492,77 @@ async function runAction(action) {
   );
   element("action-output").textContent = JSON.stringify(result, null, 2);
   await refreshAll();
+}
+
+async function runProviderAction(action) {
+  const instance = currentProviderInstance();
+  localStorage.setItem("star-control.providerId", instance.provider);
+  localStorage.setItem("star-control.providerInstanceId", instance.id);
+  const path =
+    action === "save"
+      ? "/provider-connections/instances"
+      : action === "validate"
+        ? "/provider-connections/validate"
+        : action === "select"
+          ? "/provider-connections/select"
+          : action === "healthcheck"
+            ? "/provider-connections/healthcheck"
+            : "/provider-connections/run-request";
+  const body = providerActionBody(action, instance);
+  element("provider-output").textContent = "Running provider action...";
+  try {
+    const response = await apiPost(path, body);
+    state.providerActionOutput = JSON.stringify(response, null, 2);
+    if (action === "save" || action === "select") {
+      const providers = await optionalApiGet("/provider-connections");
+      state.providerConnections = providers.status === "success" ? providers.data : state.providerConnections;
+      state.providerConnectionsError = providers.status === "success" ? null : providers.error;
+    }
+  } catch (error) {
+    state.providerActionOutput = apiErrorMessage(error);
+  }
+  render();
+}
+
+function providerActionBody(action, instance) {
+  if (action === "save" || action === "validate" || action === "healthcheck") {
+    return { instance };
+  }
+  if (action === "select") {
+    return { provider_instance_id: instance.id };
+  }
+  const body = {
+    provider_instance_id: instance.id,
+    mode: action === "live" ? "live" : "dry_run"
+  };
+  if (state.selectedJobId) {
+    body.project_id = state.projectId;
+    body.job_id = state.selectedJobId;
+  }
+  if (action === "dry-run" && !savedInstanceIds().includes(instance.id)) {
+    body.instance = instance;
+  }
+  return body;
+}
+
+function currentProviderInstance() {
+  return providerInstanceFromForm({
+    providerId: element("provider-id").value,
+    instanceId: element("provider-instance-id").value.trim(),
+    endpointBaseUrl: element("provider-endpoint").value.trim(),
+    model: element("provider-model").value.trim(),
+    credentialRef: element("provider-credential-ref").value.trim(),
+    commandExecutable: element("provider-command").value.trim(),
+    routingTags: element("provider-routing-tags").value.trim(),
+    timeoutSeconds: element("provider-timeout").value.trim(),
+    enabled: element("provider-enabled").checked
+  });
+}
+
+function savedInstanceIds() {
+  return Array.isArray(state.providerConnections?.instances)
+    ? state.providerConnections.instances.map((instance) => instance.id)
+    : [];
 }
 
 function threadMessages() {
@@ -590,6 +757,13 @@ function checkLabel(check) {
   return `${check.name || "check"}:${check.status || "unknown"}`;
 }
 
+function splitCsv(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function detailsBlock(label, value) {
   return `<details><summary>${escapeHtml(label)}</summary><pre class="json-snippet">${escapeHtml(
     JSON.stringify(value, null, 2)
@@ -664,6 +838,12 @@ function initBrowserApp() {
   element("approve-button").addEventListener("click", () => runAction("approve"));
   element("resume-button").addEventListener("click", () => runAction("resume"));
   element("cancel-button").addEventListener("click", () => runAction("cancel"));
+  element("provider-validate-button").addEventListener("click", () => runProviderAction("validate"));
+  element("provider-save-button").addEventListener("click", () => runProviderAction("save"));
+  element("provider-select-button").addEventListener("click", () => runProviderAction("select"));
+  element("provider-health-button").addEventListener("click", () => runProviderAction("healthcheck"));
+  element("provider-dry-run-button").addEventListener("click", () => runProviderAction("dry-run"));
+  element("provider-live-button").addEventListener("click", () => runProviderAction("live"));
   refreshAll();
 }
 

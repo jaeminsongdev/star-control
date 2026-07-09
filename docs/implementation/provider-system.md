@@ -140,7 +140,7 @@ openai_compatible
 
 - `fake_provider`/`manual`은 deterministic local artifact를 생성한다.
 - `local_process_model`/`process`는 allowlisted local process를 실행하고 stdout/stderr/cost metric artifact를 남긴다.
-- `local_openai_compatible_server`/`http`/`openai_compatible`은 명시 provider-instance 경로에서만 `http://127.0.0.1:*` 또는 `http://localhost:*` OpenAI-compatible endpoint를 호출한다. remote host, https endpoint, credential raw value 저장은 허용하지 않는다. 결과는 `request.json`, `http-request.json`, `raw-response.json`, `stdout.txt`, `stderr.txt`, `cost-metric.json`, `response.json`으로 정규화한다.
+- `local_openai_compatible_server`/`http`/`openai_compatible`은 명시 provider-instance 경로에서만 `http://127.0.0.1:*` 또는 `http://localhost:*` OpenAI-compatible endpoint를 호출한다. UI/API provider connection은 이 instance file을 만들고 loopback policy를 검증하지만 daemon scheduler live connector로 대신 실행하지 않는다. remote host, https endpoint, credential raw value 저장은 허용하지 않는다. 결과는 `request.json`, `http-request.json`, `raw-response.json`, `stdout.txt`, `stderr.txt`, `cost-metric.json`, `response.json`으로 정규화한다.
 - Cloud CLI/API live execution은 approval/preflight artifact 경계까지만 구현되어 있으며 실제 external live call은 별도 승인 slice 전까지 RESERVED다.
 
 ## CapabilityProfile
@@ -184,6 +184,7 @@ ProviderInstance는 특정 실행에서 사용할 provider 설정이다.
 ```text
 configs/provider-instances/*.example.yaml
 examples/provider-instances/*.yaml
+{daemon-config-root}/provider-instances/*.json
 ```
 
 필수 필드:
@@ -209,6 +210,14 @@ budget
 ```
 
 credential은 직접 저장하지 않는다. reference만 허용한다.
+
+UI/API managed provider instance:
+
+- `star-daemon api`의 `POST /provider-connections/instances`는 provider instance JSON을 schema/policy 검증 후 `{daemon-config-root}/provider-instances/{id}.json`에 저장한다.
+- 저장된 path는 기존 CLI explicit path인 `star-control run --provider <id> --provider-instance <path>`에서 그대로 재사용한다.
+- API는 raw credential field(`api_key`, `token`, `password`, `secret` 등)를 저장하거나 echo하지 않고 `credential_ref`만 허용한다.
+- `POST /provider-connections/healthcheck`는 기본적으로 offline policy check이며 network/process probe를 mock success로 만들지 않는다.
+- `POST /provider-connections/run-request`는 `fake-default`와 allowlisted local-process provider만 daemon queue request로 받을 수 있다. Local OpenAI-compatible live execution은 이 slice에서 CLI explicit provider-instance 경로로만 수행하며, Cloud live execution과 paid external call은 별도 명시 승인 전까지 blocked로 반환한다.
 
 ## ProviderRegistry
 

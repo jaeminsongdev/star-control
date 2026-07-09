@@ -57,15 +57,81 @@
           <div id="job-list" class="job-list" role="list"></div>
         </section>
 
-        <section class="connector-state" aria-label="AI connector state">
-          <h2>AI connectors</h2>
-          <div class="connector-row">
-            <span>Local AI</span>
-            <strong>Disabled</strong>
+        <section class="connector-state" aria-label="Provider connections">
+          <div class="provider-heading">
+            <h2>Provider connections</h2>
+            <span id="provider-state" class="status-pill muted">Waiting for API</span>
+          </div>
+          <div class="connector-grid">
+            <div>
+              <span>Providers</span>
+              <strong id="provider-count">0</strong>
+            </div>
+            <div>
+              <span>Instances</span>
+              <strong id="provider-instance-count">0</strong>
+            </div>
+            <div>
+              <span>Selected</span>
+              <strong id="provider-selected">None</strong>
+            </div>
           </div>
           <div class="connector-row">
-            <span>Cloud AI</span>
-            <strong>Disabled</strong>
+            <span>Local AI</span>
+            <strong id="local-ai-state">disabled</strong>
+          </div>
+          <div class="connector-row">
+            <span>Cloud live</span>
+            <strong id="cloud-ai-state">blocked</strong>
+          </div>
+          <div class="provider-form">
+            <label>
+              Provider
+              <select id="provider-id" name="providerId"></select>
+            </label>
+            <label>
+              Instance
+              <input id="provider-instance-id" name="providerInstanceId" value="local-default" />
+            </label>
+            <label>
+              Endpoint
+              <input id="provider-endpoint" name="providerEndpoint" placeholder="http://127.0.0.1:11434/v1" />
+            </label>
+            <label>
+              Model
+              <input id="provider-model" name="providerModel" placeholder="local-coder" />
+            </label>
+            <label>
+              Credential ref
+              <input id="provider-credential-ref" name="providerCredentialRef" placeholder="env:OPENAI_API_KEY" />
+            </label>
+            <label>
+              Command
+              <input id="provider-command" name="providerCommand" placeholder="codex" />
+            </label>
+            <div class="provider-form-row">
+              <label>
+                Timeout
+                <input id="provider-timeout" name="providerTimeout" value="300" />
+              </label>
+              <label class="checkbox-label">
+                <input id="provider-enabled" name="providerEnabled" type="checkbox" checked />
+                Enabled
+              </label>
+            </div>
+            <label>
+              Tags
+              <input id="provider-routing-tags" name="providerRoutingTags" value="local, private" />
+            </label>
+            <div class="provider-actions">
+              <button id="provider-validate-button" type="button">Validate</button>
+              <button id="provider-save-button" class="primary-button" type="button">Save</button>
+              <button id="provider-select-button" type="button">Select</button>
+              <button id="provider-health-button" type="button">Health</button>
+              <button id="provider-dry-run-button" type="button">Dry-run</button>
+              <button id="provider-live-button" type="button">Live</button>
+            </div>
+            <pre id="provider-output" class="output-pane provider-output">No provider action run.</pre>
           </div>
         </section>
       </aside>

@@ -64,9 +64,13 @@ pub fn api_service(
     schema_root: PathBuf,
     project: Option<(String, PathBuf)>,
 ) -> Result<DaemonApiService, String> {
-    let queue = DaemonQueue::open(DaemonConfig::local(config_root, schema_root.clone()))
-        .map_err(|source| source.to_string())?;
+    let queue = DaemonQueue::open(DaemonConfig::local(
+        config_root.clone(),
+        schema_root.clone(),
+    ))
+    .map_err(|source| source.to_string())?;
     let mut service = DaemonApiService::new(schema_root.clone());
+    service.register_config_root(config_root);
     service.register_daemon_queue(queue);
     if let Some((project_id, project_root)) = project {
         let store =
@@ -122,6 +126,7 @@ fn api_output(options: DaemonAppOptions, queue: DaemonQueue) -> Result<Value, St
     let max_requests = options.max_requests.unwrap_or(0);
     let project = options.project_id.clone().zip(options.project_root.clone());
     let mut service = DaemonApiService::new(options.schema_root.clone());
+    service.register_config_root(options.config_root.clone());
     service.register_daemon_queue(queue);
     if let Some((project_id, project_root)) = project {
         let store = StateStore::open(project_root, options.schema_root.clone())
@@ -179,6 +184,10 @@ impl DaemonApiService {
 
     pub fn register_daemon_queue(&mut self, daemon_queue: DaemonQueue) {
         self.control.register_daemon_queue(daemon_queue);
+    }
+
+    pub fn register_config_root(&mut self, config_root: impl Into<PathBuf>) {
+        self.control.register_config_root(config_root);
     }
 
     pub fn register_project_store(
@@ -489,15 +498,48 @@ fn error_body(code: &str, message: &str) -> Value {
 }
 
 fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
+    let mut raw = Vec::new();
     let mut buffer = [0u8; 8192];
-    let bytes_read = stream
-        .read(&mut buffer)
-        .map_err(|source| source.to_string())?;
-    if bytes_read == 0 {
-        return Err("empty HTTP request".to_string());
+    loop {
+        let bytes_read = stream
+            .read(&mut buffer)
+            .map_err(|source| source.to_string())?;
+        if bytes_read == 0 {
+            if raw.is_empty() {
+                return Err("empty HTTP request".to_string());
+            }
+            break;
+        }
+        raw.extend_from_slice(&buffer[..bytes_read]);
+        if http_request_body_complete(&raw)? {
+            break;
+        }
+        if raw.len() > 1024 * 1024 {
+            return Err("HTTP request exceeds 1 MiB limit".to_string());
+        }
     }
-    let raw = String::from_utf8_lossy(&buffer[..bytes_read]).to_string();
-    HttpRequest::parse(&raw)
+    HttpRequest::parse(&String::from_utf8_lossy(&raw))
+}
+
+fn http_request_body_complete(raw: &[u8]) -> Result<bool, String> {
+    let Some(header_end) = raw.windows(4).position(|window| window == b"\r\n\r\n") else {
+        return Ok(false);
+    };
+    let head = String::from_utf8_lossy(&raw[..header_end]);
+    let mut content_length = 0usize;
+    for line in head.lines().skip(1) {
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if name.eq_ignore_ascii_case("content-length") {
+            content_length = value
+                .trim()
+                .parse::<usize>()
+                .map_err(|_| "Content-Length must be a non-negative integer".to_string())?;
+        }
+    }
+    let body_start = header_end + 4;
+    Ok(raw.len().saturating_sub(body_start) >= content_length)
 }
 
 struct HttpRequest {

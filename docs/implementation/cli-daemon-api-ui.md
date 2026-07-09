@@ -281,6 +281,19 @@ POST /projects/{project_id}/jobs/{job_id}/cancel
 POST /projects/{project_id}/jobs/{job_id}/resume
 ```
 
+Provider connection endpoint:
+
+```text
+GET /provider-connections
+POST /provider-connections/instances
+POST /provider-connections/validate
+POST /provider-connections/select
+POST /provider-connections/healthcheck
+POST /provider-connections/run-request
+```
+
+Provider connection endpoint는 builtin manifest/capability discovery와 daemon config root의 provider instance 저장/검증/선택을 담당한다. 저장된 instance path는 CLI `run --provider <id> --provider-instance <path>`가 그대로 재사용한다. `healthcheck`는 offline policy check를 기본으로 하며 mock success를 만들지 않는다. `run-request`는 `fake-default`와 allowlisted local-process provider만 daemon queue request로 받고, Local OpenAI-compatible live execution은 CLI explicit provider-instance 경로로 안내한다. Cloud live execution, paid external calls, credential raw value materialization은 별도 명시 승인 전까지 blocked다.
+
 M7d는 먼저 `packages/star-control-api`의 in-process `ApiControlService`로 구현한다. `approve`, `cancel`, `resume`은 CLI control command와 같은 StateStore `.ai-runs/` artifact를 수정하고 `api-response.schema.json` envelope을 반환한다. Productization HTTP API slice는 approve/cancel/resume POST endpoint를 loopback-only로 노출하고 audit event를 기록한다. socket listener, auth/session, remote exposure는 아직 구현하지 않는다.
 
 ## API 응답 규칙
@@ -307,6 +320,7 @@ Validation result viewer
 Approval request viewer
 Review pack viewer
 Settings / provider registry
+Provider connection manager
 ```
 
 초기 UI는 `packages/star-control-ui`의 read-only view model부터 시작한다. 승인/취소/재개 mutation은 API와 CLI 안정화 이후 `UiBrowserShell`이 `ApiControlService`를 통해 수행한다.
@@ -343,6 +357,8 @@ M8b는 browser-oriented library model이며, TypeScript/Node package manager, so
 ## UI 금지 사항
 
 - UI가 직접 provider process를 실행하지 않는다.
+- UI가 credential raw value를 저장하거나 표시하지 않는다.
+- UI provider connection action은 `star-daemon api`를 통해 provider instance JSON과 policy result만 다룬다.
 - UI가 Star Sentinel rule을 직접 구현하지 않는다.
 - UI가 StateStore 파일을 임의로 수정하지 않는다.
 - UI가 secret raw value를 표시하지 않는다.

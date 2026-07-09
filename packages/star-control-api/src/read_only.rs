@@ -18,6 +18,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct ApiReadOnlyService {
     pub(crate) schema_root: PathBuf,
+    pub(crate) config_root: Option<PathBuf>,
     pub(crate) daemon_queue: Option<DaemonQueue>,
     pub(crate) projects: BTreeMap<String, StateStore>,
 }
@@ -26,9 +27,14 @@ impl ApiReadOnlyService {
     pub fn new(schema_root: impl Into<PathBuf>) -> Self {
         Self {
             schema_root: schema_root.into(),
+            config_root: None,
             daemon_queue: None,
             projects: BTreeMap::new(),
         }
+    }
+
+    pub fn register_config_root(&mut self, config_root: impl Into<PathBuf>) {
+        self.config_root = Some(config_root.into());
     }
 
     pub fn register_daemon_queue(&mut self, daemon_queue: DaemonQueue) {
@@ -69,6 +75,9 @@ impl ApiReadOnlyService {
         let segments = parsed.segments();
         match segments.as_slice() {
             ["daemon", "state"] => self.daemon_state_response(),
+            ["provider-connections"] | ["provider-connections", "instances"] => {
+                self.provider_connections_response()
+            }
             ["projects"] => self.projects_response(),
             ["projects", project_id, "jobs"] => self.jobs_response(project_id),
             ["projects", project_id, "jobs", job_id] => self.job_response(project_id, job_id),

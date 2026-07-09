@@ -37,6 +37,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -176,6 +177,8 @@ button:disabled {
 }
 
 .connection-form input,
+.provider-form input,
+.provider-form select,
 .reason-field textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -310,21 +313,109 @@ button:disabled {
 
 .connector-state {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   padding: 14px 16px;
   border-top: 1px solid var(--line);
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.provider-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.connector-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.connector-grid div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 7px 8px;
+}
+
+.connector-grid span,
+.connector-row {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.connector-grid span,
+.connector-grid strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connector-grid strong {
+  color: var(--text);
+  font-size: 12px;
 }
 
 .connector-row {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .connector-row strong {
   color: var(--amber);
+}
+
+.provider-form {
+  display: grid;
+  gap: 8px;
+}
+
+.provider-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.provider-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.checkbox-label {
+  min-height: 33px;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: start;
+  color: var(--text);
+}
+
+.checkbox-label input {
+  width: auto;
+}
+
+.provider-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.provider-actions button {
+  padding: 0 6px;
+  min-width: 0;
+}
+
+.provider-output {
+  max-height: 160px;
 }
 
 .thread-column {

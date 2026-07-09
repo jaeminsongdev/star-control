@@ -74,6 +74,25 @@ def http_get(port: int, path: str) -> dict:
     return json.loads(body)
 
 
+def http_post(port: int, path: str, body: dict) -> dict:
+    payload = json.dumps(body).encode("utf-8")
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        connection.request(
+            "POST",
+            path,
+            body=payload,
+            headers={"Content-Type": "application/json", "Content-Length": str(len(payload))},
+        )
+        response = connection.getresponse()
+        text = response.read().decode("utf-8")
+    finally:
+        connection.close()
+    if response.status != 200:
+        raise AssertionError(f"POST {path} returned HTTP {response.status}: {text}")
+    return json.loads(text)
+
+
 def http_get_with_retry(port: int, path: str) -> dict:
     deadline = time.time() + 10
     last_error: Exception | None = None
@@ -121,7 +140,16 @@ def assert_static_ui_surface() -> None:
         if not path.is_file():
             raise AssertionError(f"static UI file missing: {path}")
     app_text = app.read_text(encoding="utf-8")
-    for token in ["fetch", "/projects", "release-readiness", "approve", "cancel", "resume"]:
+    for token in [
+        "fetch",
+        "/projects",
+        "/provider-connections",
+        "providerInstanceFromForm",
+        "release-readiness",
+        "approve",
+        "cancel",
+        "resume",
+    ]:
         if token not in app_text:
             raise AssertionError(f"static UI app.js does not contain expected token {token!r}")
 
@@ -205,7 +233,7 @@ def run_daemon_api_smoke(config_root: Path, project: Path) -> None:
             "--bind",
             f"127.0.0.1:{port}",
             "--max-requests",
-            "2",
+            "5",
             "--project-id",
             "local",
             "--project-root",
@@ -222,6 +250,29 @@ def run_daemon_api_smoke(config_root: Path, project: Path) -> None:
     try:
         projects = http_get_with_retry(port, "/projects")
         jobs = http_get(port, "/projects/local/jobs")
+        save_provider = http_post(
+            port,
+            "/provider-connections/instances",
+            {
+                "instance": {
+                    "id": "productization-local",
+                    "provider": "provider.local-openai-compatible",
+                    "enabled": True,
+                    "limits": {"timeout_seconds": 10, "max_parallel_jobs": 1},
+                    "routing_tags": ["local", "ui"],
+                    "endpoint": {
+                        "base_url": "http://127.0.0.1:11434/v1",
+                        "model": "local-coder",
+                    },
+                }
+            },
+        )
+        provider_connections = http_get(port, "/provider-connections")
+        provider_live_request = http_post(
+            port,
+            "/provider-connections/run-request",
+            {"provider_instance_id": "productization-local", "mode": "live"},
+        )
         stdout, stderr = process.communicate(timeout=10)
     finally:
         if process.poll() is None:
@@ -229,12 +280,29 @@ def run_daemon_api_smoke(config_root: Path, project: Path) -> None:
     if process.returncode != 0:
         raise AssertionError(f"star-daemon api failed:\nstdout:\n{stdout}\nstderr:\n{stderr}")
     daemon_output = json.loads(stdout)
-    assert_eq(daemon_output["data"]["handled_requests"], 2, "daemon handled requests")
+    assert_eq(daemon_output["data"]["handled_requests"], 5, "daemon handled requests")
     assert_eq(daemon_output["data"]["process"]["remote_exposure_enabled"], False, "remote exposure")
     assert_eq(daemon_output["data"]["process"]["local_ai_live_connector"], "disabled", "local AI")
     assert_eq(daemon_output["data"]["process"]["cloud_ai_live_connector"], "disabled", "cloud AI")
     assert_eq(projects["status"], "success", "projects status")
     assert_eq(jobs["data"]["jobs"][0]["job_id"], "J-0001", "jobs response")
+    assert_eq(save_provider["status"], "success", "provider connection save")
+    assert_eq(save_provider["data"]["validation"]["ok"], True, "provider connection validation")
+    if not (config_root / "provider-instances" / "productization-local.json").is_file():
+        raise AssertionError("provider connection instance file was not saved")
+    assert_eq(provider_connections["status"], "success", "provider connections status")
+    assert_eq(
+        provider_connections["data"]["policy"]["live_calls_performed"],
+        False,
+        "provider connection live calls",
+    )
+    assert_eq(provider_live_request["status"], "blocked", "provider live request status")
+    assert_eq(
+        provider_live_request["error"]["code"],
+        "daemon_local_ai_live_connector_disabled",
+        "provider live request policy",
+    )
+    assert_eq(provider_live_request["data"]["live_calls_performed"], False, "provider live request calls")
 
 
 def main() -> int:
@@ -364,6 +432,7 @@ def main() -> int:
                 "local_ai_live_connector": "disabled",
                 "cloud_ai_live_connector": "disabled",
                 "provider_request_redaction_report": "written",
+                "provider_connection_management": "ui_api_saved",
                 "cli_report_redaction_report": "written",
                 "external_release_policy": "reserved",
                 "external_release_actions_performed": False,

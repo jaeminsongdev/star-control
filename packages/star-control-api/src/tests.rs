@@ -59,6 +59,12 @@ fn control_with_store(store: StateStore) -> ApiControlService {
     service
 }
 
+fn control_with_config_root(config_root: &Path) -> ApiControlService {
+    let mut service = ApiControlService::new(schema_root());
+    service.register_config_root(config_root.to_path_buf());
+    service
+}
+
 fn open_daemon_queue(config_root: &Path) -> DaemonQueue {
     DaemonQueue::open(DaemonConfig::local(config_root, schema_root())).expect("open daemon queue")
 }
