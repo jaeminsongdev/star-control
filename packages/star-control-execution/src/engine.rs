@@ -5,8 +5,8 @@ use crate::types::{ExecutionOutcome, ProviderAssignment};
 use serde_json::json;
 use star_control_provider::{
     CloudApiOfflineProviderAdapter, CloudCliProviderAdapter, CloudProviderPreflightAdapter,
-    FakeProviderAdapter, LocalProcessProviderAdapter, ProviderRegistry, ProviderRegistryError,
-    ProviderRunContext,
+    FakeProviderAdapter, LocalOpenAiCompatibleServerAdapter, LocalProcessProviderAdapter,
+    ProviderRegistry, ProviderRegistryError, ProviderRunContext,
 };
 use star_control_state::StateStore;
 use std::path::{Path, PathBuf};
@@ -22,6 +22,7 @@ pub struct ExecutionEngine<'a> {
     schema_root: PathBuf,
     fake_adapter: FakeProviderAdapter,
     local_process_adapter: LocalProcessProviderAdapter,
+    local_openai_compatible_adapter: LocalOpenAiCompatibleServerAdapter,
     cloud_cli_adapter: CloudCliProviderAdapter,
     cloud_api_adapter: CloudApiOfflineProviderAdapter,
     cloud_provider_adapter: CloudProviderPreflightAdapter,
@@ -39,6 +40,7 @@ impl<'a> ExecutionEngine<'a> {
             schema_root: schema_root.into(),
             fake_adapter: FakeProviderAdapter::success(),
             local_process_adapter: LocalProcessProviderAdapter,
+            local_openai_compatible_adapter: LocalOpenAiCompatibleServerAdapter,
             cloud_cli_adapter: CloudCliProviderAdapter,
             cloud_api_adapter: CloudApiOfflineProviderAdapter,
             cloud_provider_adapter: CloudProviderPreflightAdapter,

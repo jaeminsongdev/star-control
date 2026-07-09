@@ -73,6 +73,14 @@ impl fmt::Display for ProviderAdapterError {
                 "provider instance {} command policy denied: {}",
                 provider_instance_id, reason
             ),
+            Self::TransportFailed {
+                provider_instance_id,
+                message,
+            } => write!(
+                formatter,
+                "provider instance {} transport failed: {}",
+                provider_instance_id, message
+            ),
         }
     }
 }

@@ -404,33 +404,77 @@ fn ensure_local_bind(bind: &str) -> Result<(), String> {
 fn handle_http_stream(stream: &mut TcpStream, service: &mut DaemonApiService) -> String {
     let request = match read_http_request(stream) {
         Ok(value) => value,
-        Err(message) => return http_response(400, error_body("bad_request", &message)),
+        Err(message) => return http_response(400, error_body("bad_request", &message), None),
     };
+    let cors_origin = allowed_cors_origin(request.origin.as_deref());
+    if request.method == "OPTIONS" {
+        return http_response(204, Value::Null, cors_origin.as_deref());
+    }
     let api_request = match request.to_api_request() {
         Ok(value) => value,
-        Err(message) => return http_response(400, error_body("bad_request", &message)),
+        Err(message) => {
+            return http_response(
+                400,
+                error_body("bad_request", &message),
+                cors_origin.as_deref(),
+            )
+        }
     };
     match service.handle(api_request) {
-        Ok(value) => http_response(200, value),
-        Err(source) => http_response(500, error_body("api_error", &source.to_string())),
+        Ok(value) => http_response(200, value, cors_origin.as_deref()),
+        Err(source) => http_response(
+            500,
+            error_body("api_error", &source.to_string()),
+            cors_origin.as_deref(),
+        ),
     }
 }
 
-fn http_response(status_code: u16, body: Value) -> String {
+fn http_response(status_code: u16, body: Value, cors_origin: Option<&str>) -> String {
     let reason = match status_code {
         200 => "OK",
+        204 => "No Content",
         400 => "Bad Request",
         500 => "Internal Server Error",
         _ => "OK",
     };
-    let body = serde_json::to_string_pretty(&body).unwrap_or_else(|_| "{}".to_string());
+    let body = if status_code == 204 {
+        String::new()
+    } else {
+        serde_json::to_string_pretty(&body).unwrap_or_else(|_| "{}".to_string())
+    };
+    let cors_headers = cors_headers(cors_origin);
     format!(
-        "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\n{}Content-Length: {}\r\nConnection: close\r\n\r\n{}",
         status_code,
         reason,
+        cors_headers,
         body.len(),
         body
     )
+}
+
+fn cors_headers(origin: Option<&str>) -> String {
+    let Some(origin) = origin else {
+        return String::new();
+    };
+    format!(
+        "Access-Control-Allow-Origin: {}\r\nVary: Origin\r\nAccess-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nAccess-Control-Max-Age: 600\r\n",
+        origin
+    )
+}
+
+fn allowed_cors_origin(origin: Option<&str>) -> Option<String> {
+    let origin = origin?;
+    let lower = origin.to_ascii_lowercase();
+    if lower.starts_with("http://127.0.0.1:")
+        || lower.starts_with("http://localhost:")
+        || lower.starts_with("http://[::1]:")
+    {
+        Some(origin.to_string())
+    } else {
+        None
+    }
 }
 
 fn error_body(code: &str, message: &str) -> Value {
@@ -460,6 +504,7 @@ struct HttpRequest {
     method: String,
     path: String,
     body: Value,
+    origin: Option<String>,
 }
 
 impl HttpRequest {
@@ -480,11 +525,15 @@ impl HttpRequest {
             .next()
             .ok_or_else(|| "HTTP path missing".to_string())?
             .to_string();
-        let content_length = lines
-            .filter_map(|line| line.split_once(':'))
-            .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
-            .and_then(|(_, value)| value.trim().parse::<usize>().ok())
-            .unwrap_or(0);
+        let mut content_length = 0usize;
+        let mut origin = None;
+        for (name, value) in lines.filter_map(|line| line.split_once(':')) {
+            if name.eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse::<usize>().unwrap_or(0);
+            } else if name.eq_ignore_ascii_case("origin") {
+                origin = Some(value.trim().to_string());
+            }
+        }
         let body = if content_length == 0 {
             Value::Null
         } else {
@@ -494,7 +543,12 @@ impl HttpRequest {
                 .ok_or_else(|| "HTTP body shorter than content-length".to_string())?;
             serde_json::from_slice(body_slice).map_err(|source| source.to_string())?
         };
-        Ok(Self { method, path, body })
+        Ok(Self {
+            method,
+            path,
+            body,
+            origin,
+        })
     }
 
     fn to_api_request(&self) -> Result<ApiRequest, String> {

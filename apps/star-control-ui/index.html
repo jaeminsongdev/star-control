@@ -7,15 +7,15 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar" aria-label="Star-Control navigation">
-        <div class="brand">
+    <div class="app-shell" data-layout="codex-like-console">
+      <aside class="job-rail" aria-label="Project jobs">
+        <header class="brand">
           <span class="brand-mark" aria-hidden="true">SC</span>
           <div>
             <h1>Star-Control</h1>
-            <p>Control plane</p>
+            <p>Job console</p>
           </div>
-        </div>
+        </header>
 
         <form id="connection-form" class="connection-form">
           <label>
@@ -26,15 +26,36 @@
             Project
             <input id="project-id" name="projectId" value="local" />
           </label>
-          <button type="submit">Connect</button>
+          <button class="primary-button" type="submit">Connect</button>
         </form>
 
-        <nav class="nav-list" aria-label="Views">
-          <button class="nav-item active" type="button" data-view="overview">Overview</button>
-          <button class="nav-item" type="button" data-view="jobs">Jobs</button>
-          <button class="nav-item" type="button" data-view="approval">Approval</button>
-          <button class="nav-item" type="button" data-view="release">Release</button>
-        </nav>
+        <section class="runtime-block" aria-label="Runtime state">
+          <div>
+            <span>Daemon</span>
+            <strong id="daemon-status">Unknown</strong>
+          </div>
+          <div>
+            <span>Jobs</span>
+            <strong id="job-count">0</strong>
+          </div>
+          <div>
+            <span>Selected</span>
+            <strong id="selected-job">None</strong>
+          </div>
+        </section>
+
+        <section class="job-picker" aria-labelledby="jobs-heading">
+          <div class="rail-heading">
+            <h2 id="jobs-heading">Jobs</h2>
+            <span id="jobs-state">Waiting for API</span>
+          </div>
+          <div class="filter-row" aria-label="Job filters">
+            <button class="filter-chip active" type="button">All</button>
+            <button class="filter-chip" type="button">Waiting</button>
+            <button class="filter-chip" type="button">Blocked</button>
+          </div>
+          <div id="job-list" class="job-list" role="list"></div>
+        </section>
 
         <section class="connector-state" aria-label="AI connector state">
           <h2>AI connectors</h2>
@@ -49,84 +70,96 @@
         </section>
       </aside>
 
-      <main class="workspace">
-        <header class="topbar">
+      <main class="thread-column" aria-labelledby="page-title">
+        <header class="thread-topbar">
           <div>
-            <p class="section-label">Runtime</p>
-            <h2 id="page-title">Overview</h2>
+            <p class="section-label">Active job</p>
+            <h2 id="page-title">No job selected</h2>
           </div>
           <div class="topbar-actions">
-            <button id="refresh-button" type="button">Refresh</button>
             <span id="connection-state" class="status-pill muted">Not connected</span>
+            <button id="refresh-button" type="button">Refresh</button>
           </div>
         </header>
 
-        <section class="metric-strip" aria-label="Runtime summary">
+        <section class="next-action-strip" aria-label="Current execution state">
           <div>
-            <span>Daemon</span>
-            <strong id="daemon-status">Unknown</strong>
+            <span>State</span>
+            <strong id="thread-state">Unknown</strong>
           </div>
           <div>
-            <span>Jobs</span>
-            <strong id="job-count">0</strong>
+            <span>Stage</span>
+            <strong id="thread-stage">unknown</strong>
           </div>
           <div>
-            <span>Selected</span>
-            <strong id="selected-job">None</strong>
+            <span>Next action</span>
+            <strong id="thread-next-action">inspect</strong>
           </div>
           <div>
-            <span>Live calls</span>
-            <strong>Disabled</strong>
+            <span>Approval</span>
+            <strong id="thread-approval">Not required</strong>
           </div>
         </section>
 
-        <section class="content-grid">
-          <section class="panel job-list-panel" aria-labelledby="jobs-heading">
-            <div class="panel-heading">
-              <h3 id="jobs-heading">Jobs</h3>
-              <span id="jobs-state" class="panel-note">Waiting for API</span>
-            </div>
-            <div id="job-list" class="job-list" role="list"></div>
-          </section>
-
-          <section class="panel detail-panel" aria-labelledby="detail-heading">
-            <div class="panel-heading">
-              <h3 id="detail-heading">Job detail</h3>
-              <span id="detail-state" class="panel-note">No job selected</span>
-            </div>
-            <div id="job-detail" class="detail-body empty-state">
-              Select a job to inspect timeline, artifacts, approval, and release readiness.
-            </div>
-          </section>
+        <section class="thread-panel" aria-labelledby="timeline-heading">
+          <div class="thread-heading">
+            <h3 id="timeline-heading">Job thread</h3>
+            <span id="thread-note">Timeline, artifacts, validation, and next action</span>
+          </div>
+          <ol id="timeline" class="timeline"></ol>
         </section>
 
-        <section class="content-grid lower-grid">
-          <section class="panel" aria-labelledby="timeline-heading">
-            <div class="panel-heading">
-              <h3 id="timeline-heading">Timeline</h3>
-            </div>
-            <ol id="timeline" class="timeline"></ol>
-          </section>
-
-          <section class="panel" aria-labelledby="actions-heading">
-            <div class="panel-heading">
-              <h3 id="actions-heading">Actions</h3>
+        <section class="composer-panel" aria-labelledby="actions-heading">
+          <div class="composer-heading">
+            <div>
+              <h3 id="actions-heading">Control actions</h3>
+              <p id="action-hint">Select a job to inspect available actions.</p>
             </div>
             <div class="action-stack">
-              <button id="approve-button" type="button" disabled>Approve</button>
+              <button id="approve-button" class="primary-button" type="button" disabled>
+                Approve
+              </button>
               <button id="resume-button" type="button" disabled>Resume</button>
               <button id="cancel-button" type="button" disabled>Cancel</button>
             </div>
-            <label class="reason-field">
-              Approval reason
-              <textarea id="approval-reason" rows="4">Approved from Star-Control browser UI.</textarea>
-            </label>
-            <pre id="action-output" class="output-pane">No action run.</pre>
-          </section>
+          </div>
+          <label class="reason-field">
+            Approval reason
+            <textarea id="approval-reason" rows="3">Approved from Star-Control browser UI.</textarea>
+          </label>
+          <pre id="action-output" class="output-pane">No action run.</pre>
         </section>
       </main>
+
+      <aside class="inspector" aria-labelledby="detail-heading">
+        <section class="inspector-section">
+          <div class="section-heading">
+            <h3 id="detail-heading">Inspector</h3>
+            <span id="detail-state">No job selected</span>
+          </div>
+          <div id="job-detail" class="detail-body empty-state">
+            Select a job to inspect timeline, artifacts, approval, and release readiness.
+          </div>
+        </section>
+
+        <section class="inspector-section" aria-labelledby="release-heading">
+          <div class="section-heading">
+            <h3 id="release-heading">Release readiness</h3>
+            <span id="release-state">Not available</span>
+          </div>
+          <div id="release-detail" class="compact-list empty-state">No release readiness loaded.</div>
+        </section>
+
+        <section class="inspector-section" aria-labelledby="artifact-heading">
+          <div class="section-heading">
+            <h3 id="artifact-heading">Evidence</h3>
+            <span id="artifact-state">No artifacts</span>
+          </div>
+          <div id="artifact-detail" class="compact-list empty-state">No artifact paths loaded.</div>
+        </section>
+      </aside>
     </div>
 
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=20260709-live-evidence"></script>
   </body>
 </html>

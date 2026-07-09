@@ -47,6 +47,10 @@ pub enum ProviderAdapterError {
         provider_instance_id: String,
         reason: String,
     },
+    TransportFailed {
+        provider_instance_id: String,
+        message: String,
+    },
 }
 
 impl From<ProviderRegistryError> for ProviderAdapterError {

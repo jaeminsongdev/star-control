@@ -7,6 +7,7 @@ mod cloud_policy;
 mod cloud_sidecars;
 mod conformance;
 mod fake;
+mod local_openai_compatible;
 mod local_process;
 mod openai_compatible;
 mod provider_cost;
@@ -30,6 +31,9 @@ pub use fake::{
     load_execution_request, ExecutionRequest, FakeProviderAdapter, FakeProviderSimulation,
     ProviderAdapter, ProviderAdapterError, ProviderExecution, ProviderRunContext,
     ProviderRunResult,
+};
+pub use local_openai_compatible::{
+    is_local_openai_compatible_manifest, LocalOpenAiCompatibleServerAdapter,
 };
 pub use local_process::{LocalProcessCommandPolicy, LocalProcessProviderAdapter};
 pub use openai_compatible::{

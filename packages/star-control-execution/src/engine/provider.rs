@@ -2,8 +2,9 @@ use super::ExecutionEngine;
 use crate::constants::{FAKE_PROVIDER_ID, LOCAL_PROCESS_KIND, PROCESS_TRANSPORT};
 use crate::error::ExecutionError;
 use star_control_provider::{
-    is_cloud_api_manifest, is_cloud_cli_manifest, is_cloud_provider_manifest, ExecutionRequest,
-    ProviderAdapter, ProviderAdapterError, ProviderExecution, ProviderRunContext,
+    is_cloud_api_manifest, is_cloud_cli_manifest, is_cloud_provider_manifest,
+    is_local_openai_compatible_manifest, ExecutionRequest, ProviderAdapter, ProviderAdapterError,
+    ProviderExecution, ProviderRunContext,
 };
 
 impl<'a> ExecutionEngine<'a> {
@@ -20,6 +21,11 @@ impl<'a> ExecutionEngine<'a> {
         }
         if manifest.kind() == LOCAL_PROCESS_KIND && manifest.transport() == PROCESS_TRANSPORT {
             return Ok(self.local_process_adapter.execute(request, context)?);
+        }
+        if is_local_openai_compatible_manifest(manifest) {
+            return Ok(self
+                .local_openai_compatible_adapter
+                .execute(request, context)?);
         }
         if is_cloud_cli_manifest(manifest) {
             return Ok(self.cloud_cli_adapter.execute(request, context)?);

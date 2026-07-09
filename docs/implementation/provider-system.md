@@ -136,6 +136,13 @@ openai_compatible
 
 장기적으로 adapter 이름은 product name보다 protocol 또는 behavior 중심으로 둔다. 특정 제품명 adapter가 필요하면 core package가 아니라 provider package 또는 manifest 경계에 둔다.
 
+현재 구현된 live-capable adapter 경계:
+
+- `fake_provider`/`manual`은 deterministic local artifact를 생성한다.
+- `local_process_model`/`process`는 allowlisted local process를 실행하고 stdout/stderr/cost metric artifact를 남긴다.
+- `local_openai_compatible_server`/`http`/`openai_compatible`은 명시 provider-instance 경로에서만 `http://127.0.0.1:*` 또는 `http://localhost:*` OpenAI-compatible endpoint를 호출한다. remote host, https endpoint, credential raw value 저장은 허용하지 않는다. 결과는 `request.json`, `http-request.json`, `raw-response.json`, `stdout.txt`, `stderr.txt`, `cost-metric.json`, `response.json`으로 정규화한다.
+- Cloud CLI/API live execution은 approval/preflight artifact 경계까지만 구현되어 있으며 실제 external live call은 별도 승인 slice 전까지 RESERVED다.
+
 ## CapabilityProfile
 
 CapabilityProfile은 provider가 할 수 있는 일을 선언한다.

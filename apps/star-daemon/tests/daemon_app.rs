@@ -325,13 +325,26 @@ fn http_server_serves_api_control_service_get_requests() {
     )
     .expect("api service");
     let handle =
-        thread::spawn(move || star_daemon::serve_api_listener(listener, service, 3).unwrap());
+        thread::spawn(move || star_daemon::serve_api_listener(listener, service, 5).unwrap());
 
     let daemon_response = http_get(address, "/daemon/state");
     assert!(daemon_response.starts_with("HTTP/1.1 200 OK"));
     let daemon_json = response_json(&daemon_response);
     assert_eq!(daemon_json["status"], "success");
     assert_eq!(daemon_json["data"]["daemon_state"]["status"], "reserved");
+
+    let preflight_response = http_options(address, "/projects", "http://127.0.0.1:18788");
+    assert!(preflight_response.starts_with("HTTP/1.1 204 No Content"));
+    assert!(preflight_response.contains("Access-Control-Allow-Origin: http://127.0.0.1:18788"));
+    assert!(preflight_response
+        .contains("Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS"));
+    assert!(preflight_response.contains("Access-Control-Allow-Headers: Content-Type"));
+
+    let cors_get_response = http_get_with_origin(address, "/projects", "http://127.0.0.1:18788");
+    assert!(cors_get_response.starts_with("HTTP/1.1 200 OK"));
+    assert!(cors_get_response.contains("Access-Control-Allow-Origin: http://127.0.0.1:18788"));
+    let cors_get_json = response_json(&cors_get_response);
+    assert_eq!(cors_get_json["status"], "success");
 
     let projects_response = http_get(address, "/projects");
     assert!(projects_response.starts_with("HTTP/1.1 200 OK"));
@@ -345,7 +358,7 @@ fn http_server_serves_api_control_service_get_requests() {
     assert_eq!(post_json["status"], "failed");
     assert_eq!(post_json["error"]["code"], "state_read_failed");
 
-    assert_eq!(handle.join().expect("server join"), 3);
+    assert_eq!(handle.join().expect("server join"), 5);
     fs::remove_dir_all(config_root).ok();
     fs::remove_dir_all(project_root).ok();
 }
@@ -400,6 +413,30 @@ fn http_get(address: SocketAddr, path: &str) -> String {
     let request = format!(
         "GET {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
         path, address
+    );
+    stream.write_all(request.as_bytes()).expect("write request");
+    let mut response = String::new();
+    stream.read_to_string(&mut response).expect("read response");
+    response
+}
+
+fn http_get_with_origin(address: SocketAddr, path: &str, origin: &str) -> String {
+    let mut stream = TcpStream::connect(address).expect("connect api server");
+    let request = format!(
+        "GET {} HTTP/1.1\r\nHost: {}\r\nOrigin: {}\r\nConnection: close\r\n\r\n",
+        path, address, origin
+    );
+    stream.write_all(request.as_bytes()).expect("write request");
+    let mut response = String::new();
+    stream.read_to_string(&mut response).expect("read response");
+    response
+}
+
+fn http_options(address: SocketAddr, path: &str, origin: &str) -> String {
+    let mut stream = TcpStream::connect(address).expect("connect api server");
+    let request = format!(
+        "OPTIONS {} HTTP/1.1\r\nHost: {}\r\nOrigin: {}\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: Content-Type\r\nConnection: close\r\n\r\n",
+        path, address, origin
     );
     stream.write_all(request.as_bytes()).expect("write request");
     let mut response = String::new();

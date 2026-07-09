@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   actionAvailability,
   apiErrorMessage,
+  artifactEntries,
   endpoint,
+  eventKind,
   stateClass,
   summarizeJob,
   terminalState,
@@ -28,7 +30,10 @@ test("job summary maps API fields to UI row fields", () => {
       title: "Implement feature",
       state: "WAITING_APPROVAL",
       stage: "validate",
-      updatedAt: "unix:1"
+      updatedAt: "unix:1",
+      runDir: "",
+      approvalRequired: true,
+      nextAction: "approve"
     }
   );
 });
@@ -51,9 +56,28 @@ test("action availability follows API control contract", () => {
     resume: false,
     cancel: false
   });
+  assert.deepEqual(actionAvailability({ state: { state: "WAITING_APPROVAL", next_action: "resume" } }), {
+    approve: false,
+    resume: true,
+    cancel: true
+  });
 });
 
 test("API error messages prefer structured messages", () => {
   assert.equal(apiErrorMessage({ code: "MissingArtifact", message: "report missing" }), "report missing");
   assert.equal(apiErrorMessage("plain error"), "plain error");
+});
+
+test("event kind maps visible thread roles", () => {
+  assert.equal(eventKind({ type: "APPROVAL_REQUIRED", message: "Approval requested" }), "approval");
+  assert.equal(eventKind({ type: "VALIDATION_DONE", message: "Validation passed" }), "validation");
+  assert.equal(eventKind({ type: "PROVIDER_OUTPUT", message: "worker finished" }), "provider");
+  assert.equal(eventKind({ type: "STATE_CHANGED", message: "blocked by policy" }), "error");
+});
+
+test("artifact entries classify evidence paths", () => {
+  assert.deepEqual(artifactEntries({ route: "route.json", review: "review-packs/release-review-pack.md" }), [
+    { section: "route", path: "route.json", kind: "artifact" },
+    { section: "review", path: "review-packs/release-review-pack.md", kind: "review" }
+  ]);
 });
