@@ -1,0 +1,617 @@
+{
+  "$defs": {
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string"
+        },
+        "actor_type": {
+          "$ref": "#/$defs/ActorType"
+        },
+        "auth_source": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_type",
+        "actor_id",
+        "display_name",
+        "auth_source"
+      ],
+      "type": "object"
+    },
+    "ActorType": {
+      "enum": [
+        "user",
+        "codex",
+        "system",
+        "controller",
+        "mcp",
+        "tool"
+      ],
+      "type": "string"
+    },
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "DiagnosticConfidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "type": "string"
+    },
+    "DiagnosticSchemaId": {
+      "enum": [
+        "star.diagnostic"
+      ],
+      "type": "string"
+    },
+    "DiagnosticScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "goal_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "goal",
+              "type": "string"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "goal_id",
+            "revision"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "goal_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "run",
+              "type": "string"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "run_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "goal_id",
+            "run_id",
+            "revision"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "goal_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "stage",
+              "type": "string"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "run_id": {
+              "type": "string"
+            },
+            "stage_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "goal_id",
+            "run_id",
+            "stage_id",
+            "revision"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "validation_run",
+              "type": "string"
+            },
+            "validation_run_ref": {
+              "$ref": "#/$defs/ValidationRunRef"
+            }
+          },
+          "required": [
+            "kind",
+            "validation_run_ref"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DiagnosticSeverity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "DiagnosticStatus": {
+      "enum": [
+        "confirmed",
+        "suspected",
+        "unverified",
+        "suppressed",
+        "resolved"
+      ],
+      "type": "string"
+    },
+    "LocationRef": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextPosition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/ProjectPathRef"
+        },
+        "start": {
+          "$ref": "#/$defs/TextPosition"
+        },
+        "symbol": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "start"
+      ],
+      "type": "object"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "ProjectPathKind": {
+      "enum": [
+        "file",
+        "directory"
+      ],
+      "type": "string"
+    },
+    "ProjectPathRef": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "path_kind": {
+          "$ref": "#/$defs/ProjectPathKind"
+        },
+        "project_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "path",
+        "path_kind"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Remediation": {
+      "additionalProperties": false,
+      "properties": {
+        "action_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "automatic_fix_available": {
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "automatic_fix_available"
+      ],
+      "type": "object"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "SuppressionRef": {
+      "additionalProperties": false,
+      "properties": {
+        "approved_by": {
+          "$ref": "#/$defs/ActorRef"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "scope_revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "waiver_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "waiver_id",
+        "fingerprint",
+        "project_id",
+        "scope_revision",
+        "reason",
+        "approved_by",
+        "created_at"
+      ],
+      "type": "object"
+    },
+    "TextPosition": {
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "line": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "line",
+        "column"
+      ],
+      "type": "object"
+    },
+    "ValidationRunRef": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "validation_run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "validation_run_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.diagnostic:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "confidence": {
+      "$ref": "#/$defs/DiagnosticConfidence"
+    },
+    "diagnostic_id": {
+      "type": "string"
+    },
+    "evidence_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "type": "array"
+    },
+    "extensions": {
+      "additionalProperties": true,
+      "default": {},
+      "type": "object"
+    },
+    "fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "first_seen_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "last_seen_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "locations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/LocationRef"
+      },
+      "type": "array"
+    },
+    "message": {
+      "type": "string"
+    },
+    "producer": {
+      "$ref": "#/$defs/ProducerRef"
+    },
+    "remediation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Remediation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rule_id": {
+      "$ref": "#/$defs/CatalogRef"
+    },
+    "schema_id": {
+      "$ref": "#/$defs/DiagnosticSchemaId"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "scope": {
+      "$ref": "#/$defs/DiagnosticScope"
+    },
+    "sequence": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "severity": {
+      "$ref": "#/$defs/DiagnosticSeverity"
+    },
+    "status": {
+      "$ref": "#/$defs/DiagnosticStatus"
+    },
+    "suppression": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SuppressionRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "diagnostic_id",
+    "sequence",
+    "producer",
+    "rule_id",
+    "title",
+    "message",
+    "severity",
+    "confidence",
+    "status",
+    "scope",
+    "fingerprint",
+    "first_seen_at",
+    "last_seen_at"
+  ],
+  "title": "Diagnostic",
+  "type": "object"
+}

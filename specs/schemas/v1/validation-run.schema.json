@@ -1,0 +1,639 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Completeness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "DiagnosticRef": {
+      "additionalProperties": false,
+      "properties": {
+        "diagnostic_id": {
+          "type": "string"
+        },
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "diagnostic_id",
+        "sequence",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "EnvironmentValueRef": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "const": "literal",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "secret_ref": {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            "source": {
+              "const": "secret",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "secret_ref"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ObservedTool": {
+      "additionalProperties": false,
+      "properties": {
+        "executable_path": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "executable_path",
+        "version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "OutputLimits": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_bytes": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "stderr_bytes": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "stdout_bytes": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stdout_bytes",
+        "stderr_bytes",
+        "artifact_bytes"
+      ],
+      "type": "object"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "ProjectPathKind": {
+      "enum": [
+        "file",
+        "directory"
+      ],
+      "type": "string"
+    },
+    "ProjectPathRef": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "path_kind": {
+          "$ref": "#/$defs/ProjectPathKind"
+        },
+        "project_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "path",
+        "path_kind"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "TaskInvocation": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cwd": {
+          "$ref": "#/$defs/ProjectPathRef"
+        },
+        "env_refs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/EnvironmentValueRef"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "executable": {
+          "type": "string"
+        },
+        "expected_exit_codes": {
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "invocation_id": {
+          "type": "string"
+        },
+        "output_limits": {
+          "$ref": "#/$defs/OutputLimits"
+        },
+        "permission_action": {
+          "type": "string"
+        },
+        "stdin_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeout_ms": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "tool_ref": {
+          "$ref": "#/$defs/CatalogRef"
+        }
+      },
+      "required": [
+        "invocation_id",
+        "tool_ref",
+        "executable",
+        "cwd",
+        "timeout_ms",
+        "permission_action",
+        "idempotency_key",
+        "expected_exit_codes",
+        "output_limits"
+      ],
+      "type": "object"
+    },
+    "TerminationReason": {
+      "enum": [
+        "exited",
+        "timeout",
+        "cancelled",
+        "launch_error",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "ValidationCache": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_key": {
+          "type": "string"
+        },
+        "hit": {
+          "type": "boolean"
+        },
+        "source_validation_run_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValidationRunRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "hit",
+        "cache_key"
+      ],
+      "type": "object"
+    },
+    "ValidationOutcome": {
+      "enum": [
+        "pass",
+        "fail",
+        "not_run",
+        "error",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "ValidationRunRef": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "validation_run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "validation_run_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ValidationRunSchemaId": {
+      "enum": [
+        "star.validation-run"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.validation-run:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempt": {
+      "format": "uint32",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "cache": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ValidationCache"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "check_ref": {
+      "$ref": "#/$defs/CatalogRef"
+    },
+    "completeness": {
+      "$ref": "#/$defs/Completeness"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "diagnostic_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DiagnosticRef"
+      },
+      "type": "array"
+    },
+    "exit_code": {
+      "format": "int32",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "extensions": {
+      "additionalProperties": true,
+      "default": {},
+      "type": "object"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "invocation": {
+      "$ref": "#/$defs/TaskInvocation"
+    },
+    "observed_tool": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ObservedTool"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "outcome": {
+      "$ref": "#/$defs/ValidationOutcome"
+    },
+    "producer": {
+      "$ref": "#/$defs/ProducerRef"
+    },
+    "result_artifact_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "$ref": "#/$defs/ValidationRunSchemaId"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "started_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "stderr_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stdout_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "termination_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TerminationReason"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tool_ref": {
+      "$ref": "#/$defs/CatalogRef"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "validation_plan_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "validation_run_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "validation_run_id",
+    "revision",
+    "created_at",
+    "updated_at",
+    "producer",
+    "validation_plan_ref",
+    "check_ref",
+    "tool_ref",
+    "attempt",
+    "invocation",
+    "outcome",
+    "completeness"
+  ],
+  "title": "ValidationRun",
+  "type": "object"
+}

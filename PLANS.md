@@ -8,7 +8,7 @@
 
 ### 현재 목표
 
-- 정본 계약 v1에 따라 MCP Gateway·Local IPC·live Tool Registry·외부 EXE Runtime·관리 CLI와 170개 검증 매트릭스를 구현·검증한다.
+- adapter가 직접 소비할 validation·gate·evidence·diagnostic 공개 계약을 `star-contracts`에 구현하고 schema와 불변식을 검증한다.
 
 ### 반드시 지켜야 할 제약
 
@@ -33,7 +33,7 @@
 
 ### 아직 남은 것
 
-- P-0010 MCP P1 구현과 검증
+- P-0011 Star 공개 검증·증거 계약 구현과 검증
 
 ### 건드리면 안 되는 것
 
@@ -76,7 +76,7 @@
 
 | ID | 상태 | 목표 | 주요 파일 | 다음 조치 |
 |---|---|---|---|---|
-| - | 없음 | - | - | - |
+| P-0011 | 진행 중 | ValidationRun·GateDecision·EvidenceBundle·Diagnostic 공개 계약과 고정 schema를 제공 | crates/foundation/star-contracts/src/evidence.rs, specs/schemas/v1 | 전체 locked gate와 독립 변경 검토 |
 
 ## 열린 리스크
 
@@ -93,9 +93,9 @@
 
 ## 다음 작업 시작점
 
-- `star-contracts` type·generated Schema·valid/invalid fixture
-- `rmcp 2.2.0` fixed Gateway와 authenticated IPC의 fake Controller 수직 slice
-- live Registry·fake argv·JSON-STDIO runtime 뒤 MCP 검증 행렬 순차 통과
+- 공개 계약 전체 locked gate와 generated schema drift 검사
+- `not_run` 비통과 및 adapter 완료 판정 재계산 금지 회귀 확인
+- 변경 독립 검토와 PR CI
 
 ### P-0010 완료 검증 상태
 

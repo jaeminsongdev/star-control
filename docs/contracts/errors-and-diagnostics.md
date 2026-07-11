@@ -106,6 +106,8 @@ Registry 오류는 MCP 연결을 자동 종료하지 않는다. required core pa
 | `suppression` | optional SuppressionRef | 승인된 예외, 범위, 이유와 만료 |
 | `first_seen_at`, `last_seen_at` | UTC timestamp | 관찰 기간 |
 
+공개 Rust type과 `star.diagnostic` JSON Schema는 `crates/foundation/star-contracts`가 소유한다. adapter는 severity, confidence, status, suppression 의미를 다시 정의하거나 suppression으로 원래 severity를 변경하지 않는다.
+
 ### severity와 confidence
 
 - severity는 맞다고 가정했을 때의 영향이다.

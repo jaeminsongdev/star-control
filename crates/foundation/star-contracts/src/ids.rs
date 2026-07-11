@@ -13,9 +13,7 @@ pub enum IdError {
 
 macro_rules! prefixed_id {
     ($name:ident, $prefix:literal) => {
-        #[derive(
-            Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
-        )]
+        #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, JsonSchema)]
         #[serde(transparent)]
         pub struct $name(String);
 
@@ -41,6 +39,22 @@ macro_rules! prefixed_id {
                 &self.0
             }
         }
+        impl TryFrom<String> for $name {
+            type Error = IdError;
+
+            fn try_from(value: String) -> Result<Self, Self::Error> {
+                Self::parse(value)
+            }
+        }
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let value = String::deserialize(deserializer)?;
+                Self::parse(value).map_err(serde::de::Error::custom)
+            }
+        }
         impl Default for $name {
             fn default() -> Self {
                 Self::new()
@@ -59,6 +73,17 @@ prefixed_id!(OperationId, "opn_");
 prefixed_id!(ApprovalId, "apr_");
 prefixed_id!(ToolTrustId, "trt_");
 prefixed_id!(ToolCacheId, "trc_");
+prefixed_id!(ProjectId, "prj_");
+prefixed_id!(GoalId, "gol_");
+prefixed_id!(RunId, "run_");
+prefixed_id!(StageId, "stg_");
+prefixed_id!(ArtifactId, "art_");
+prefixed_id!(DiagnosticId, "dia_");
+prefixed_id!(ValidationRunId, "val_");
+prefixed_id!(GateId, "gat_");
+prefixed_id!(EvidenceBundleId, "evb_");
+prefixed_id!(TaskInvocationId, "inv_");
+prefixed_id!(WaiverId, "wav_");
 
 /// Monotonic process-local ULID source for IDs where clock regression must not
 /// reorder IDs created by this process.

@@ -1,0 +1,577 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ArtifactManifestEntry"
+          },
+          "type": "array"
+        },
+        "manifest_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "manifest_ref"
+      ],
+      "type": "object"
+    },
+    "ArtifactManifestEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "sha256",
+        "size_bytes",
+        "redaction_status"
+      ],
+      "type": "object"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "ChangeEvidenceRefs": {
+      "additionalProperties": false,
+      "properties": {
+        "after_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "before_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "change_set_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "changed_files_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "before_fingerprint",
+        "after_fingerprint",
+        "change_set_ref",
+        "changed_files_ref"
+      ],
+      "type": "object"
+    },
+    "Completeness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "DiagnosticRef": {
+      "additionalProperties": false,
+      "properties": {
+        "diagnostic_id": {
+          "type": "string"
+        },
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "diagnostic_id",
+        "sequence",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "DiagnosticSeverity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "EventRangeKind": {
+      "enum": [
+        "approval",
+        "retry",
+        "escalation",
+        "pause",
+        "recovery"
+      ],
+      "type": "string"
+    },
+    "EventRangeRef": {
+      "additionalProperties": false,
+      "properties": {
+        "first_sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/EventRangeKind"
+        },
+        "last_sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "kind",
+        "run_id",
+        "first_sequence",
+        "last_sequence",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "EvidenceBundleSchemaId": {
+      "enum": [
+        "star.evidence-bundle"
+      ],
+      "type": "string"
+    },
+    "GateDecisionRef": {
+      "additionalProperties": false,
+      "properties": {
+        "gate_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "gate_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "RiskRef": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "type": "array"
+        },
+        "risk_id": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/DiagnosticSeverity"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "risk_id",
+        "title",
+        "severity"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "StageEvidenceRefs": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "permission_plan_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "route_decision_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "stage_id": {
+          "type": "string"
+        },
+        "stage_result_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        }
+      },
+      "required": [
+        "stage_id",
+        "route_decision_ref",
+        "permission_plan_ref",
+        "stage_result_ref"
+      ],
+      "type": "object"
+    },
+    "ValidationRunRef": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "validation_run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "validation_run_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.evidence-bundle:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_manifest": {
+      "$ref": "#/$defs/ArtifactManifest"
+    },
+    "change_evidence": {
+      "$ref": "#/$defs/ChangeEvidenceRefs"
+    },
+    "completeness": {
+      "$ref": "#/$defs/Completeness"
+    },
+    "cost_record_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DocumentRef"
+      },
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "diagnostic_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DiagnosticRef"
+      },
+      "type": "array"
+    },
+    "event_ranges": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EventRangeRef"
+      },
+      "type": "array"
+    },
+    "evidence_bundle_id": {
+      "type": "string"
+    },
+    "extensions": {
+      "additionalProperties": true,
+      "default": {},
+      "type": "object"
+    },
+    "final_revision_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "gate_decision_ref": {
+      "$ref": "#/$defs/GateDecisionRef"
+    },
+    "goal_spec_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "handoff_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "merge_result_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "missing_reasons": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "producer": {
+      "$ref": "#/$defs/ProducerRef"
+    },
+    "remaining_risks": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RiskRef"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "$ref": "#/$defs/EvidenceBundleSchemaId"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "stage_evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/StageEvidenceRefs"
+      },
+      "type": "array"
+    },
+    "stage_graph_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "unmeasured_usage": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "validation_plan_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DocumentRef"
+      },
+      "type": "array"
+    },
+    "validation_run_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ValidationRunRef"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "evidence_bundle_id",
+    "revision",
+    "created_at",
+    "updated_at",
+    "producer",
+    "goal_spec_ref",
+    "stage_graph_ref",
+    "final_revision_ref",
+    "change_evidence",
+    "gate_decision_ref",
+    "artifact_manifest",
+    "completeness"
+  ],
+  "title": "EvidenceBundle",
+  "type": "object"
+}

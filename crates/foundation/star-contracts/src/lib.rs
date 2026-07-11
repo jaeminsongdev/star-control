@@ -5,6 +5,7 @@
 //! process, or transport dependency.
 
 pub mod canonical;
+pub mod evidence;
 pub mod fixed_mcp;
 pub mod ids;
 pub mod ipc;
@@ -16,7 +17,11 @@ pub mod strict_json;
 pub mod trust;
 
 pub use canonical::{Sha256Hash, canonical_sha256, jcs_bytes};
-pub use ids::{ApprovalId, OperationId, RequestId, ToolTrustId};
+pub use ids::{
+    ApprovalId, ArtifactId, DiagnosticId, EvidenceBundleId, GateId, GoalId, OperationId, ProjectId,
+    RequestId, RunId, StageId, TaskInvocationId, ToolCacheId, ToolTrustId, ValidationRunId,
+    WaiverId,
+};
 pub use manifest::{ToolPackageManifest, parse_manifest_v1};
 pub use strict_json::parse_no_duplicate_keys;
 
