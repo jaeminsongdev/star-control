@@ -1,0 +1,16 @@
+[package]
+name = "star-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "star"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+star-contracts = { path = "../../crates/foundation/star-contracts" }
+star-ipc = { path = "../../crates/adapters/star-ipc" }
+tokio.workspace = true

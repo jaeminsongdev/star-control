@@ -1,3 +1,0 @@
-event: after-worker
-description: changed_files 수집, report.json 검증
-steps: []

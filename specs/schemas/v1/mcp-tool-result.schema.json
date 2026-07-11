@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "McpResultStatus": {
+      "enum": [
+        "ok",
+        "accepted",
+        "question_required",
+        "approval_required",
+        "blocked",
+        "error"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.mcp.tool.result:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_refs": {
+      "default": [],
+      "items": true,
+      "type": "array"
+    },
+    "correlation_id": {
+      "type": "string"
+    },
+    "data": true,
+    "diagnostic_refs": {
+      "default": [],
+      "items": true,
+      "type": "array"
+    },
+    "error": true,
+    "next_actions": {
+      "default": [],
+      "items": true,
+      "type": "array"
+    },
+    "operation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/McpResultStatus"
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "status",
+    "summary",
+    "correlation_id"
+  ],
+  "title": "McpToolResult",
+  "type": "object"
+}

@@ -1,0 +1,49 @@
+{
+  "$defs": {
+    "ApprovalDecision": {
+      "enum": [
+        "approve",
+        "deny"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.mcp.star_approval_resolve.input:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "approval_id": {
+      "type": "string"
+    },
+    "conditions": {
+      "additionalProperties": true,
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "decision": {
+      "$ref": "#/$defs/ApprovalDecision"
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scope_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "approval_id",
+    "decision",
+    "scope_hash"
+  ],
+  "title": "ApprovalResolveInput",
+  "type": "object"
+}

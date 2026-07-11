@@ -1,0 +1,103 @@
+{
+  "$defs": {
+    "ExternalToolContext": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_directory": {
+          "type": "string"
+        },
+        "deadline_at": {
+          "type": "string"
+        },
+        "goal_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operation_id": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stage_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "temp_directory": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "deadline_at",
+        "artifact_directory",
+        "temp_directory"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:external-tool-request:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "arguments": true,
+    "context": {
+      "$ref": "#/$defs/ExternalToolContext"
+    },
+    "descriptor_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "frame": {
+      "type": "string"
+    },
+    "protocol_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "tool_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "frame",
+    "protocol_version",
+    "schema_id",
+    "schema_version",
+    "request_id",
+    "tool_id",
+    "descriptor_hash",
+    "arguments",
+    "context"
+  ],
+  "title": "ExternalToolRequest",
+  "type": "object"
+}

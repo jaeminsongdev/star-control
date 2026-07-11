@@ -1,0 +1,238 @@
+{
+  "$defs": {
+    "challenge": {
+      "$id": "urn:star-control:schema:ipc.challenge:v1",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "controller_instance_id": {
+          "type": "string"
+        },
+        "issued_at": {
+          "type": "string"
+        },
+        "protocol_major": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "server_nonce": {
+          "type": "string"
+        },
+        "server_pid": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "protocol_major",
+        "controller_instance_id",
+        "server_pid",
+        "server_nonce",
+        "issued_at"
+      ],
+      "title": "IpcChallenge",
+      "type": "object"
+    },
+    "handshake_error": {
+      "$id": "urn:star-control:schema:ipc.handshake-error:v1",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auth_tag": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "correlation_id": {
+          "type": "string"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supported_versions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "code",
+        "supported_versions",
+        "correlation_id",
+        "auth_tag"
+      ],
+      "title": "IpcHandshakeError",
+      "type": "object"
+    },
+    "request": {
+      "$id": "urn:star-control:schema:ipc.request:v1",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "actor": true,
+        "client_request_id": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "deadline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "idempotency_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": true,
+        "request_id": {
+          "type": "string"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "trace_context": true
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "request_id",
+        "command",
+        "payload",
+        "client_request_id",
+        "actor"
+      ],
+      "title": "IpcRequest",
+      "type": "object"
+    },
+    "response": {
+      "$defs": {
+        "ErrorEnvelope": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "retryable": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "message",
+            "retryable"
+          ],
+          "type": "object"
+        },
+        "IpcStatus": {
+          "enum": [
+            "ok",
+            "accepted",
+            "question_required",
+            "approval_required",
+            "blocked",
+            "error"
+          ],
+          "type": "string"
+        }
+      },
+      "$id": "urn:star-control:schema:ipc.response:v1",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "correlation_id": {
+          "type": "string"
+        },
+        "data": true,
+        "diagnostics": {
+          "default": [],
+          "items": true,
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorEnvelope"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registry_revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/IpcStatus"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "request_id",
+        "status",
+        "correlation_id"
+      ],
+      "title": "IpcResponse",
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:ipc:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

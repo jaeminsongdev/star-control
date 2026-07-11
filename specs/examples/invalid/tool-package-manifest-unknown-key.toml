@@ -1,0 +1,8 @@
+format_version = 1
+package_id = "user.fake.invalid"
+package_version = "1.0.0"
+display_name = "Invalid"
+description = "Unknown key fixture."
+enabled = false
+backend_kinds = ["process"]
+unexpected_key = true

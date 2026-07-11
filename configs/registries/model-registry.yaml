@@ -1,8 +1,0 @@
-schema_version: 0.1.0
-models:
-  - id: example-cloud-coding-agent
-    provider_kind: cloud_cli_agent
-    routing_tags: [cloud, coding-agent]
-  - id: example-local-draft-model
-    provider_kind: local_openai_compatible_server
-    routing_tags: [local, private, draft]

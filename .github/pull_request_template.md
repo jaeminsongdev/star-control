@@ -1,53 +1,34 @@
 ## 목표
 
-- EPIC/TASK:
+- 계획 ID:
 - 한 문장 요약:
 
 ## 변경 범위
 
-- [ ] docs only
-- [ ] schema/example contract
-- [ ] CI validator
-- [ ] runtime code
-- [ ] approval required change
-
-## 변경 파일
-
-- 
+- [ ] 계약·Schema
+- [ ] Gateway·IPC·Registry
+- [ ] Windows process·격리
+- [ ] CLI·운영
+- [ ] 문서만
 
 ## 검증
 
-실행 또는 확인한 항목:
-
 ```text
-
+cargo fmt --all -- --check
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo run --locked -p star-schema-gen -- --check
+cargo run --locked -p star-matrix-check
+git diff --check
 ```
 
-GitHub Actions:
+- [ ] `legacy/` 변경 없음
+- [ ] 실제 Codex 증거가 필요한 matrix 변경은 정규화 evidence와 연결됨
+- [ ] secret 원문·runtime log·`target/` 생성물을 추적하지 않음
+- [ ] dependency 또는 workflow 변경은 diff와 lockfile을 검토함
 
-- [ ] repository-policy-check
-- [ ] data-format-check
-- [ ] manifest-contract-check
-- [ ] naming-policy-check
-- [ ] schema-example-check
-- [ ] implementation-documentation-check
+## 위험과 후속 작업
 
-## 계약 준수
-
-- [ ] schema/example 계약을 약화하지 않음
-- [ ] tests/CI/policy를 약화하지 않음
-- [ ] package manager 또는 dependency 변경 없음 또는 승인됨
-- [ ] workflow 변경 없음 또는 승인됨
-- [ ] release/deploy/external account 변경 없음 또는 승인됨
-- [ ] Star-Control repo 내부에 `.ai-runs/` 실행 산출물 없음
-- [ ] secret raw value를 출력/저장하지 않음
-
-## 위험 / 승인 필요 여부
-
-- approval required change 여부:
-- 남은 risk:
-- 사람이 확인해야 하는 사항:
-
-## 다음 작업
-
-- 
+- 남은 위험:
+- 사람이 확인할 사항:
+- 후속 계획 ID:
