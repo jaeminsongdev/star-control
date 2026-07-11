@@ -1,6 +1,22 @@
 {
   "files": [
     {
+      "file": "validation-run.schema.json",
+      "hash": "sha256:8f3400299dc7a10ea2038f2057160291b3bd0d13cf4ba6ac26007974eef809a9"
+    },
+    {
+      "file": "gate-decision.schema.json",
+      "hash": "sha256:6e549c85220f1b10ad386bb391c324728598eb38299b4bdbb7476a05bae1bde7"
+    },
+    {
+      "file": "evidence-bundle.schema.json",
+      "hash": "sha256:880e08d3819bdf9aea16f47fb27e4d9b872d664e8a246730d5f96278aab6f75f"
+    },
+    {
+      "file": "diagnostic.schema.json",
+      "hash": "sha256:8fcb68e41fc2abd8fc765819e048d926a285207eddb148d1a50452146f07cf98"
+    },
+    {
       "file": "tool-package-manifest.schema.json",
       "hash": "sha256:4d609721b3775e8eb4ab970df8fad83830207d081d1df51716395ae7b468a112"
     },

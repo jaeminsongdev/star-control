@@ -14,9 +14,7 @@ pub enum CanonicalError {
 }
 
 /// Contract representation of a SHA-256 digest.  The prefix is always present.
-#[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct Sha256Hash(String);
 
@@ -61,6 +59,16 @@ impl FromStr for Sha256Hash {
         valid
             .then(|| Self(value.to_owned()))
             .ok_or(CanonicalError::InvalidHash)
+    }
+}
+
+impl<'de> Deserialize<'de> for Sha256Hash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::from_str(&value).map_err(serde::de::Error::custom)
     }
 }
 

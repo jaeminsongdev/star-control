@@ -2,6 +2,10 @@ use schemars::JsonSchema;
 use serde_json::{Map, Value};
 
 use crate::{
+    evidence::{
+        DIAGNOSTIC_SCHEMA_ID, Diagnostic, EVIDENCE_BUNDLE_SCHEMA_ID, EvidenceBundle,
+        GATE_DECISION_SCHEMA_ID, GateDecision, VALIDATION_RUN_SCHEMA_ID, ValidationRun,
+    },
     fixed_mcp::{
         ApprovalResolveInput, CallInput, DescribeInput, McpToolResult, OperationCancelInput,
         OperationGetInput, RegistryStatusInput, SearchInput,
@@ -29,6 +33,22 @@ pub fn schema_document<T: JsonSchema>(schema_id: &str) -> Value {
 
 pub fn generated_documents() -> Vec<(&'static str, Value)> {
     vec![
+        (
+            "validation-run.schema.json",
+            schema_document::<ValidationRun>(VALIDATION_RUN_SCHEMA_ID),
+        ),
+        (
+            "gate-decision.schema.json",
+            schema_document::<GateDecision>(GATE_DECISION_SCHEMA_ID),
+        ),
+        (
+            "evidence-bundle.schema.json",
+            schema_document::<EvidenceBundle>(EVIDENCE_BUNDLE_SCHEMA_ID),
+        ),
+        (
+            "diagnostic.schema.json",
+            schema_document::<Diagnostic>(DIAGNOSTIC_SCHEMA_ID),
+        ),
         (
             "tool-package-manifest.schema.json",
             schema_document::<ToolPackageManifest>("tool-package-manifest"),

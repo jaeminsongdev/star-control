@@ -122,6 +122,12 @@ GateDecision은 여러 ValidationRun과 Diagnostic을 완료 판단으로 모은
 - waiver 대상, revision, 만료와 사용자가 본 evidence hash가 달라지면 새 승인이 필요하다.
 - `human_review`는 차단도 성공도 아니며 RunSnapshot에 대기 상태로 나타난다.
 
+### 공개 구현과 소비 경계
+
+`crates/foundation/star-contracts`가 `ValidationRun`, `GateDecision`, `EvidenceBundle`, `Diagnostic`과 지원 ref·enum의 Rust 및 JSON Schema 정본을 소유한다. schema ID는 각각 `star.validation-run`, `star.gate-decision`, `star.evidence-bundle`, `star.diagnostic`으로 고정한다.
+
+하위 adapter는 `GateDecision::authoritative_state()`가 반환한 상태만 완료 판정으로 소비한다. `ValidationRun` 목록을 다시 집계해 `GateDecision`을 대체하거나 `not_run`을 통과로 바꿀 수 없다. `validate_against`는 이미 만들어진 결정의 참조와 불변식을 검증할 뿐 새 결정을 계산하지 않는다. adapter는 `StarValidationResult`, `CompletionEvidence` 같은 호환 DTO를 만들지 않고 이 공개 계약을 직접 사용한다.
+
 ## ArtifactRef 계약
 
 큰 출력과 파일은 계약에 복사하지 않고 ArtifactRef로 연결한다.
