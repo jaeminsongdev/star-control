@@ -1,0 +1,30 @@
+{
+  "$id": "urn:star-control:schema:star.mcp.star_tool_operation_cancel.input:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "force_after_ms": {
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "operation_id": {
+      "type": "string"
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "operation_id"
+  ],
+  "title": "OperationCancelInput",
+  "type": "object"
+}

@@ -1,0 +1,8 @@
+format_version = 1
+format_version = 1
+package_id = "user.fake.duplicate"
+package_version = "1.0.0"
+display_name = "Duplicate"
+description = "Duplicate key fixture."
+enabled = false
+backend_kinds = ["process"]

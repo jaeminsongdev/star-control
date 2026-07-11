@@ -1,8 +1,0 @@
-{
-  "schema_version": "1.0.0",
-  "event_id": "evt-0001",
-  "job_id": "J-0001",
-  "type": "STATE_CHANGED",
-  "created_at": "2026-06-28T00:00:00Z",
-  "message": "state changed"
-}

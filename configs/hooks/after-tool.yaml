@@ -1,3 +1,0 @@
-event: after-tool
-description: 명령 결과와 실패 로그 수집
-steps: []

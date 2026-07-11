@@ -1,0 +1,15 @@
+{
+  "$id": "urn:star-control:schema:star.mcp.star_tool_describe.input:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "tool_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "tool_id"
+  ],
+  "title": "DescribeInput",
+  "type": "object"
+}

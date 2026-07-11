@@ -1,0 +1,151 @@
+{
+  "$defs": {
+    "PackageSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "descriptors": {
+          "items": {
+            "$ref": "#/$defs/ToolDescriptor"
+          },
+          "type": "array"
+        },
+        "manifest_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "package_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_id",
+        "manifest_hash",
+        "descriptors"
+      ],
+      "type": "object"
+    },
+    "RegistrySource": {
+      "enum": [
+        "release",
+        "user",
+        "project"
+      ],
+      "type": "string"
+    },
+    "RiskLane": {
+      "enum": [
+        "read_closed",
+        "read_open",
+        "write_closed",
+        "destructive_closed",
+        "write_open",
+        "destructive_open"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "ToolDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "descriptor_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "input_schema": true,
+        "output_schema": true,
+        "package_id": {
+          "type": "string"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ToolReadiness"
+        },
+        "risk_lane": {
+          "$ref": "#/$defs/RiskLane"
+        },
+        "source": {
+          "$ref": "#/$defs/RegistrySource"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_kinds": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tool_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_id",
+        "package_id",
+        "display_name",
+        "summary",
+        "source",
+        "readiness",
+        "risk_lane",
+        "descriptor_hash",
+        "input_schema",
+        "output_schema"
+      ],
+      "type": "object"
+    },
+    "ToolReadiness": {
+      "enum": [
+        "ready",
+        "unavailable",
+        "untrusted",
+        "incompatible",
+        "degraded"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:tool-registry-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "packages": {
+      "additionalProperties": {
+        "$ref": "#/$defs/PackageSnapshot"
+      },
+      "type": "object"
+    },
+    "registry_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "snapshot_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "registry_revision",
+    "snapshot_hash",
+    "packages"
+  ],
+  "title": "RegistrySnapshot",
+  "type": "object"
+}

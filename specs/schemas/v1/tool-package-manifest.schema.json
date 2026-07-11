@@ -1,0 +1,937 @@
+{
+  "$defs": {
+    "ActionDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "argv": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ArgvBinding"
+          },
+          "type": "array"
+        },
+        "backend_kind": {
+          "$ref": "#/$defs/BackendKind"
+        },
+        "backend_ref": {
+          "type": "string"
+        },
+        "cancel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CancelContract"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cancel_mode": {
+          "default": "terminate_job",
+          "type": "string"
+        },
+        "concurrency": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConcurrencyContract"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "examples": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ManifestExample"
+          },
+          "type": "array"
+        },
+        "execution_mode": {
+          "default": "waitable",
+          "type": "string"
+        },
+        "exit_codes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExitCodes"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_duration_ms": {
+          "default": 1000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "idempotency": {
+          "default": "non_idempotent",
+          "type": "string"
+        },
+        "input_schema_file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OutputContract"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output_schema_file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "paid_action": {
+          "default": "no",
+          "type": "string"
+        },
+        "parameters": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ParameterDescriptor"
+          },
+          "type": "array"
+        },
+        "permission_actions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_kinds": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tool_id": {
+          "type": "string"
+        },
+        "when_not_to_use": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "when_to_use": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "tool_id",
+        "backend_kind",
+        "backend_ref",
+        "display_name",
+        "summary",
+        "description"
+      ],
+      "type": "object"
+    },
+    "ArgvBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "content_kind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "encoding": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "flag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "input": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inputs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "separator": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "suffix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "when_equals": true,
+        "when_input": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "when_present": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "BackendKind": {
+      "enum": [
+        "process",
+        "controller_command"
+      ],
+      "type": "string"
+    },
+    "CancelContract": {
+      "additionalProperties": false,
+      "properties": {
+        "grace_ms": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "grace_ms"
+      ],
+      "type": "object"
+    },
+    "ConcurrencyContract": {
+      "additionalProperties": false,
+      "properties": {
+        "exclusive_scope": {
+          "type": "string"
+        },
+        "lock_key_inputs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_parallel": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "queue_timeout_ms": {
+          "default": 30000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_parallel",
+        "exclusive_scope"
+      ],
+      "type": "object"
+    },
+    "EnvironmentValue": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "secret_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "ExecutableDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "architectures": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "authenticode_policy": {
+          "default": "record",
+          "type": "string"
+        },
+        "authenticode_subject": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "environment_allow": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "environment_mode": {
+          "default": "core",
+          "type": "string"
+        },
+        "environment_values": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EnvironmentValue"
+          },
+          "type": "array"
+        },
+        "executable_id": {
+          "type": "string"
+        },
+        "fixed_working_directory": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "integrity_files": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/IntegrityFile"
+          },
+          "type": "array"
+        },
+        "interface_version_req": {
+          "type": "string"
+        },
+        "isolation_compatibility": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "location_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "locator_kind": {
+          "$ref": "#/$defs/LocatorKind"
+        },
+        "max_memory_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_processes": {
+          "default": 16,
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_stderr_bytes": {
+          "default": 1048576,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_stdout_bytes": {
+          "default": 8388608,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minimum_windows_build": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "probe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProbeDescriptor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "product_version_req": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "protocol": {
+          "$ref": "#/$defs/ManifestProtocol"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startup_args": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "state_directories": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/StateDirectory"
+          },
+          "type": "array"
+        },
+        "timeout_ms": {
+          "default": 60000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "update_policy": {
+          "$ref": "#/$defs/UpdatePolicy"
+        },
+        "working_directory": {
+          "default": "stage_worktree",
+          "type": "string"
+        }
+      },
+      "required": [
+        "executable_id",
+        "locator_kind",
+        "update_policy",
+        "protocol",
+        "interface_version_req"
+      ],
+      "type": "object"
+    },
+    "ExitCodes": {
+      "additionalProperties": false,
+      "properties": {
+        "empty": {
+          "default": [],
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "retryable": {
+          "default": [],
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "success": {
+          "default": [],
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "warning": {
+          "default": [],
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "IntegrityFile": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "type": "boolean"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "LocatorKind": {
+      "enum": [
+        "absolute",
+        "anchor_relative",
+        "location_ref"
+      ],
+      "type": "string"
+    },
+    "ManifestExample": {
+      "additionalProperties": false,
+      "properties": {
+        "arguments": true,
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "arguments"
+      ],
+      "type": "object"
+    },
+    "ManifestProtocol": {
+      "enum": [
+        "argv_v1",
+        "star_json_stdio_v1"
+      ],
+      "type": "string"
+    },
+    "OutputContract": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "encoding": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "inline_limit_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_items": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "overflow": {
+          "type": "string"
+        },
+        "stderr_encoding": {
+          "type": "string"
+        },
+        "stderr_role": {
+          "type": "string"
+        },
+        "stdout_role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "format",
+        "encoding",
+        "stderr_encoding",
+        "inline_limit_bytes",
+        "overflow",
+        "stdout_role",
+        "stderr_role"
+      ],
+      "type": "object"
+    },
+    "ParameterDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "conflicts_with": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default": true,
+        "description": {
+          "type": "string"
+        },
+        "enum_values": {
+          "default": [],
+          "items": true,
+          "type": "array"
+        },
+        "max_items": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_length": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "maximum": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "min_length": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "minimum": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "must_exist": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "mutually_exclusive_group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "path_kind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "default": false,
+          "type": "boolean"
+        },
+        "requires": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "description"
+      ],
+      "type": "object"
+    },
+    "ProbeDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "output_format": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "default": 5000,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version_pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "output_format"
+      ],
+      "type": "object"
+    },
+    "ReplacementDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "package_id": {
+          "type": "string"
+        },
+        "version_req": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_id",
+        "version_req"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "StateDirectory": {
+      "additionalProperties": false,
+      "properties": {
+        "environment_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "retention": {
+          "default": "policy",
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "scope",
+        "location"
+      ],
+      "type": "object"
+    },
+    "UpdatePolicy": {
+      "enum": [
+        "pinned_hash",
+        "version_compatible",
+        "follow_path"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:tool-package-manifest:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ActionDescriptor"
+      },
+      "type": "array"
+    },
+    "backend_kinds": {
+      "items": {
+        "$ref": "#/$defs/BackendKind"
+      },
+      "type": "array"
+    },
+    "description": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "enabled": {
+      "default": true,
+      "type": "boolean"
+    },
+    "executables": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ExecutableDescriptor"
+      },
+      "type": "array"
+    },
+    "format_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "homepage": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "license": {
+      "default": "NOASSERTION",
+      "type": "string"
+    },
+    "package_id": {
+      "type": "string"
+    },
+    "package_version": {
+      "type": "string"
+    },
+    "publisher": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "replaces": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ReplacementDescriptor"
+      },
+      "type": "array"
+    },
+    "required": {
+      "default": false,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "format_version",
+    "package_id",
+    "package_version",
+    "display_name",
+    "description",
+    "backend_kinds"
+  ],
+  "title": "ToolPackageManifest",
+  "type": "object"
+}

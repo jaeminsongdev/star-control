@@ -1,0 +1,82 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "WaitMode": {
+      "enum": [
+        "auto",
+        "sync",
+        "accepted"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.mcp.star_tool_call.input:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "arguments": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "client_request_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "descriptor_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "expected_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "goal_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "idempotency_key": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "requested_timeout_ms": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "tool_id": {
+      "type": "string"
+    },
+    "wait_mode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WaitMode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "tool_id",
+    "descriptor_hash",
+    "arguments"
+  ],
+  "title": "CallInput",
+  "type": "object"
+}

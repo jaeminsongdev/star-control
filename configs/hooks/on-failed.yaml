@@ -1,3 +1,0 @@
-event: on-failed
-description: 실패 원인과 재시도 가능성 기록
-steps: []

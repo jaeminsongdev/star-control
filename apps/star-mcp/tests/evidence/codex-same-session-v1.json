@@ -1,0 +1,129 @@
+{
+  "schema_id": "star.codex-same-session-evidence",
+  "schema_version": 1,
+  "observed_at": "2026-07-11T17:42:43.271165Z",
+  "host": {
+    "kind": "actual_codex_cli_mcp_host",
+    "codex_cli_version": "0.144.0-alpha.4",
+    "codex_executable_sha256": "sha256:b88f944ef63556527caae2ad43f80b88b8be174dc09b09d9b037fc94240a0e91",
+    "mcp_server_version": "0.1.0",
+    "mcp_server_sha256": "sha256:76515c27dc4516f9a2c016f8a0a3379e152420e2684f27257bf5563162e79490",
+    "controller_sha256": "sha256:d4e01232f74b3092eb1bbc20d0729913203fbf8d567913fb734ad91efcdce992",
+    "fixed_tool_count": 12
+  },
+  "raw_evidence": [
+    {
+      "role": "c001_c007_same_turn",
+      "path": "target/codex-e2e-final/workspace/actual-codex.jsonl",
+      "bytes": 84709,
+      "lines": 124,
+      "sha256": "sha256:bae7c47683a3bb693b2e900e7ee1a724d934ba05a9d9a3e369d7758c148ff35b"
+    },
+    {
+      "role": "c008_kill_and_transport_close",
+      "path": "target/codex-e2e-final/workspace/actual-codex-c008.jsonl",
+      "bytes": 23447,
+      "lines": 39,
+      "sha256": "sha256:c4759c82d30db4d569746204b3c4cade23128b3dbe8c3d09bed340ddf9bd3e06"
+    },
+    {
+      "role": "c008_same_thread_reconnect",
+      "path": "target/codex-e2e-final/workspace/actual-codex-c008-resume.jsonl",
+      "bytes": 9037,
+      "lines": 13,
+      "sha256": "sha256:4dba3e435ef30d452aef9db24f2dd7e234a1cd7100f5cfb926eddb3779843164"
+    }
+  ],
+  "stable_processes": {
+    "codex_pid": 20116,
+    "gateway_pid": 2768,
+    "controller_pid": 20736,
+    "controller_instance_id": "ctl_4IfbPqYLXeCoTC8Nfjn-klnJ29IEuwxi9Lz_BTcOXMc"
+  },
+  "c001": {
+    "passed": true,
+    "registry_revision": 1,
+    "tool_id": "star.core.goal.start",
+    "descriptor_hash": "sha256:8227bf178b0914ec3a2b8b39ab11aa099c7ff600fb6ec4eea6ce9098919af709",
+    "trust_basis": "release_catalog",
+    "required_call_tool": "star_tool_call_write_closed"
+  },
+  "c002": {
+    "passed": true,
+    "registry_revision": 2,
+    "descriptor_hash": "sha256:1ec467aff6d48f56be6b9d08b128f24dbef8058897706ae578a2235837e6150b",
+    "stdout": "argv:c002\n",
+    "trust_basis": "personal_auto_user_manifest",
+    "pids_unchanged": true
+  },
+  "c003": {
+    "passed": true,
+    "registry_revision": 3,
+    "descriptor_hash": "sha256:cc4781c50eb7920c9843fac0a5efd8676dfc03c7c73d4b1c44d28d58a55b81df",
+    "stdout": "argv:c003\n",
+    "trust_basis": "personal_auto_user_manifest",
+    "pids_unchanged": true
+  },
+  "c004": {
+    "passed": true,
+    "registry_revision": 4,
+    "old_descriptor_hash": "sha256:cc4781c50eb7920c9843fac0a5efd8676dfc03c7c73d4b1c44d28d58a55b81df",
+    "new_descriptor_hash": "sha256:32db2798753c6ec459a21db6b571c6564062409a7ea21b82c3a7a813e06c1212",
+    "old_executable_sha256": "sha256:4afcad293205369f80afe539fdbe9f3e3dc70010d521ebbe983199428bfce8d8",
+    "new_executable_sha256": "sha256:f07d1bfb8a54995d7c18fbeffae476d33d31a61e0944247d7634192b3338f509",
+    "stale_error": "TOOL_DESCRIPTOR_STALE",
+    "stale_process_started": false,
+    "stdout": "argv:c004\n"
+  },
+  "c005": {
+    "passed": true,
+    "registry_revision": 4,
+    "diagnostic": "TOOL_MANIFEST_INVALID",
+    "active_manifest_sha256": "sha256:be4d4e40a247a58f1b2cab46c690890dd0b9fb5b496e88c3550af009c302986c",
+    "invalid_candidate_sha256": "sha256:5dd9cb2dbb8ba75f7ef3ef4daac6f859fd0586ce99aed66456da70b8f482f47d",
+    "descriptor_hash": "sha256:32db2798753c6ec459a21db6b571c6564062409a7ea21b82c3a7a813e06c1212",
+    "stdout": "argv:c005\n"
+  },
+  "c006": {
+    "passed": true,
+    "status": "approval_required",
+    "operation_id": "opn_01KX945QZ5PSZ2S9DBKW3Z9AGQ",
+    "approval_id": "apr_01KX945QZARNK8GK0C5M738GSV",
+    "side_effect_marker_exists": false,
+    "operation_phase": "approval_wait"
+  },
+  "c007": {
+    "passed": true,
+    "operation_id": "opn_01KX9462BKDWRFC5PXDG3DSC6J",
+    "terminal_status": "cancelled",
+    "cancel_effective": true,
+    "child_running_after_cancel": false,
+    "progress": [
+      "received",
+      "resolving",
+      "queued",
+      "starting",
+      "running",
+      "cancel_requested",
+      "cancelled"
+    ]
+  },
+  "c008": {
+    "passed": true,
+    "codex_thread_id": "019f5244-cb05-7631-902c-54c6c072bade",
+    "reconnect_mode": "codex_exec_resume_same_thread",
+    "transport_closed_before_reconnect": true,
+    "old_gateway_pid": 41092,
+    "new_gateway_pid": 15692,
+    "gateway_restart_count": 1,
+    "controller_pid_before": 20736,
+    "controller_pid_after": 20736,
+    "controller_instance_before": "ctl_4IfbPqYLXeCoTC8Nfjn-klnJ29IEuwxi9Lz_BTcOXMc",
+    "controller_instance_after": "ctl_4IfbPqYLXeCoTC8Nfjn-klnJ29IEuwxi9Lz_BTcOXMc",
+    "registry_revision_before": 4,
+    "registry_revision_after": 4,
+    "operation_id_before": "opn_01KX9462BKDWRFC5PXDG3DSC6J",
+    "operation_id_after": "opn_01KX9462BKDWRFC5PXDG3DSC6J",
+    "operation_status_after": "cancelled"
+  }
+}

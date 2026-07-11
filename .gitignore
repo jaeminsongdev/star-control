@@ -5,6 +5,7 @@ Thumbs.db
 .star-control/cache/
 .star-control/logs/
 .ai-runs/
+legacy/
 
 # Secrets
 *.secret

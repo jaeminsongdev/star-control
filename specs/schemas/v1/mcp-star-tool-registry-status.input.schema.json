@@ -1,0 +1,55 @@
+{
+  "$defs": {
+    "RegistrySource": {
+      "enum": [
+        "release",
+        "user",
+        "project"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.mcp.star_tool_registry_status.input:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "include_diagnostics": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "limit": {
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "package_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/RegistrySource"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    }
+  },
+  "title": "RegistryStatusInput",
+  "type": "object"
+}

@@ -1,0 +1,14 @@
+{
+  "schema_id": "star.ipc.hello",
+  "schema_version": 1,
+  "protocol_versions": ["1.0"],
+  "client_kind": "internal_test",
+  "client_version": "0.1.0",
+  "client_instance_id": "test-client",
+  "client_pid": 1,
+  "client_nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "server_nonce": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+  "auth_tag": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+  "capabilities": ["progress"],
+  "correlation_id": "req_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+}

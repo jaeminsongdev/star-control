@@ -1,0 +1,58 @@
+format_version = 1
+package_id = "user.fake.echo"
+package_version = "1.0.0"
+display_name = "Fake Echo"
+description = "Contract fixture process tool."
+enabled = true
+backend_kinds = ["process"]
+
+[[executables]]
+executable_id = "fake-echo"
+locator_kind = "absolute"
+path = "C:\\Tools\\fake-echo.exe"
+update_policy = "pinned_hash"
+sha256 = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+protocol = "argv_v1"
+interface_version_req = "*"
+architectures = ["x86_64"]
+
+[[actions]]
+tool_id = "user.fake.echo.run"
+backend_kind = "process"
+backend_ref = "fake-echo"
+display_name = "Run fake echo"
+summary = "Echoes a value."
+description = "Contract fixture action."
+permission_actions = ["local_read", "process_run"]
+
+[[actions.parameters]]
+name = "value"
+type = "string"
+description = "Value to echo"
+required = true
+
+[[actions.argv]]
+kind = "positional"
+input = "value"
+
+[actions.exit_codes]
+success = [0]
+empty = []
+warning = []
+retryable = []
+
+[actions.output]
+format = "text"
+encoding = "utf8"
+stderr_encoding = "utf8"
+inline_limit_bytes = 1024
+overflow = "artifact"
+stdout_role = "data"
+stderr_role = "log"
+
+[actions.concurrency]
+max_parallel = 1
+exclusive_scope = "none"
+
+[actions.cancel]
+grace_ms = 1000

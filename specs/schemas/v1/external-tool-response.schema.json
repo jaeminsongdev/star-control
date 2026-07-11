@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "ExternalToolArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "path",
+        "media_type",
+        "role",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ExternalToolResultStatus": {
+      "enum": [
+        "ok",
+        "cancelled",
+        "error"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:external-tool-response:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ExternalToolArtifact"
+      },
+      "type": "array"
+    },
+    "data": true,
+    "diagnostics": {
+      "default": [],
+      "items": true,
+      "type": "array"
+    },
+    "error": true,
+    "frame": {
+      "type": "string"
+    },
+    "protocol_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/ExternalToolResultStatus"
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "frame",
+    "protocol_version",
+    "schema_id",
+    "schema_version",
+    "request_id",
+    "status",
+    "summary"
+  ],
+  "title": "ExternalToolResponse",
+  "type": "object"
+}

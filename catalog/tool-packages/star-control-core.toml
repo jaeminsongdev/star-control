@@ -1,0 +1,139 @@
+format_version = 1
+package_id = "star.control.core"
+package_version = "1.0.0"
+display_name = "Star-Control Core"
+description = "Required release-owned typed Controller commands exposed through the live Tool Registry."
+required = true
+publisher = "Star-Control"
+license = "MIT"
+backend_kinds = ["controller_command"]
+
+[[actions]]
+tool_id = "star.core.goal.start"
+backend_kind = "controller_command"
+backend_ref = "goal.start"
+display_name = "Start Goal"
+summary = "Create and start a durable goal."
+description = "Starts a durable Star-Control goal through the typed Controller command."
+permission_actions = ["local_write"]
+idempotency = "non_idempotent"
+
+[[actions]]
+tool_id = "star.core.goal.answer"
+backend_kind = "controller_command"
+backend_ref = "goal.answer"
+display_name = "Answer Goal Question"
+summary = "Answer a typed question for a goal."
+description = "Records a typed answer for a goal that is waiting for user input."
+permission_actions = ["local_write"]
+idempotency = "non_idempotent"
+
+[[actions]]
+tool_id = "star.core.plan.get"
+backend_kind = "controller_command"
+backend_ref = "plan.get"
+display_name = "Get Plan"
+summary = "Read the current plan."
+description = "Reads the current durable plan without making a change."
+permission_actions = ["local_read"]
+idempotency = "read_only"
+
+[[actions]]
+tool_id = "star.core.plan.update"
+backend_kind = "controller_command"
+backend_ref = "plan.update"
+display_name = "Update Plan"
+summary = "Update the current plan."
+description = "Applies a typed update to the durable plan."
+permission_actions = ["local_write"]
+idempotency = "non_idempotent"
+
+[[actions]]
+tool_id = "star.core.run.continue"
+backend_kind = "controller_command"
+backend_ref = "run.continue"
+display_name = "Continue Run"
+summary = "Continue an approved run."
+description = "Continues a run after the Controller confirms its current policy scope."
+permission_actions = ["local_delete", "external_write"]
+idempotency = "non_idempotent"
+
+[[actions]]
+tool_id = "star.core.status.get"
+backend_kind = "controller_command"
+backend_ref = "goal.status"
+display_name = "Get Goal Status"
+summary = "Read goal status."
+description = "Reads the typed status of one durable goal."
+permission_actions = ["local_read"]
+idempotency = "read_only"
+
+[[actions]]
+tool_id = "star.core.goal.pause"
+backend_kind = "controller_command"
+backend_ref = "goal.pause"
+display_name = "Pause Goal"
+summary = "Pause a goal."
+description = "Requests a durable goal pause through the Controller."
+permission_actions = ["local_write"]
+idempotency = "idempotent"
+
+[[actions]]
+tool_id = "star.core.goal.resume"
+backend_kind = "controller_command"
+backend_ref = "goal.resume"
+display_name = "Resume Goal"
+summary = "Resume a goal."
+description = "Requests a durable goal resume through the Controller."
+permission_actions = ["local_write"]
+idempotency = "idempotent"
+
+[[actions]]
+tool_id = "star.core.goal.cancel"
+backend_kind = "controller_command"
+backend_ref = "goal.cancel"
+display_name = "Cancel Goal"
+summary = "Cancel a goal."
+description = "Requests cancellation of a durable goal and its authorized child work."
+permission_actions = ["local_delete", "external_write"]
+idempotency = "idempotent"
+
+[[actions]]
+tool_id = "star.core.evidence.get"
+backend_kind = "controller_command"
+backend_ref = "evidence.get"
+display_name = "Get Evidence"
+summary = "Read recorded evidence."
+description = "Reads evidence references and typed verification records."
+permission_actions = ["local_read"]
+idempotency = "read_only"
+
+[[actions]]
+tool_id = "star.core.merge.status"
+backend_kind = "controller_command"
+backend_ref = "merge.status"
+display_name = "Get Merge Status"
+summary = "Read merge status."
+description = "Reads the current merge readiness and conflict status."
+permission_actions = ["local_read"]
+idempotency = "read_only"
+
+[[actions]]
+tool_id = "star.core.handoff.get"
+backend_kind = "controller_command"
+backend_ref = "handoff.get"
+display_name = "Get Handoff"
+summary = "Read handoff information."
+description = "Reads the current typed handoff record for a goal."
+permission_actions = ["local_read"]
+idempotency = "read_only"
+
+[[actions]]
+tool_id = "star.core.doctor"
+backend_kind = "controller_command"
+backend_ref = "doctor.run"
+display_name = "Run Doctor"
+summary = "Run read-only diagnostics."
+description = "Runs typed read-only Controller diagnostics."
+permission_actions = ["local_read"]
+idempotency = "read_only"

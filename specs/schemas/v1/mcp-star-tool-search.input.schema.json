@@ -1,0 +1,115 @@
+{
+  "$defs": {
+    "RegistrySource": {
+      "enum": [
+        "release",
+        "user",
+        "project"
+      ],
+      "type": "string"
+    },
+    "RiskLane": {
+      "enum": [
+        "read_closed",
+        "read_open",
+        "write_closed",
+        "destructive_closed",
+        "write_open",
+        "destructive_open"
+      ],
+      "type": "string"
+    },
+    "ToolReadiness": {
+      "enum": [
+        "ready",
+        "unavailable",
+        "untrusted",
+        "incompatible",
+        "degraded"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.mcp.star_tool_search.input:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "limit": {
+      "format": "uint8",
+      "maximum": 255,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "namespaces": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "query": {
+      "type": "string"
+    },
+    "readiness": {
+      "items": {
+        "$ref": "#/$defs/ToolReadiness"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "risk_lanes": {
+      "items": {
+        "$ref": "#/$defs/RiskLane"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/RegistrySource"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "task_kinds": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "query"
+  ],
+  "title": "SearchInput",
+  "type": "object"
+}

@@ -1,3 +1,0 @@
-event: before-worker
-description: WorkSpec schema 검증, scope/policy 확인
-steps: []
