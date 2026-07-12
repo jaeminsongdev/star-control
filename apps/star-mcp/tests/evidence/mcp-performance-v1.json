@@ -1,0 +1,76 @@
+{
+  "schema_id": "star.mcp-performance-evidence",
+  "schema_version": 1,
+  "observed_at": "2026-07-12T11:42:45.7714815+00:00",
+  "host": {
+    "os": "Microsoft Windows NT 10.0.26200.0",
+    "os_build": 26200,
+    "architecture": "x86_64",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+  },
+  "binaries": {
+    "gateway_sha256": "sha256:64dec64e7f32094bdf0597b61f105695c9b7571914a838abfd804e3f270e6084",
+    "controller_sha256": "sha256:c646cafb3fd25279268babc3e9edc28c9e02bb9f74fbb6cab4034c31d084d49e"
+  },
+  "registry_capacity": {
+    "release_packages": 1,
+    "user_packages": 125,
+    "release_actions": 13,
+    "user_actions": 499,
+    "total_actions": 512,
+    "search_actions_verified": 499,
+    "search_pages_verified": 10
+  },
+  "latency_ms": {
+    "gateway_cold_initialize": {
+      "samples": 30,
+      "p95": 18.96,
+      "limit": 2000.0
+    },
+    "verified_controller_fallback_start": {
+      "samples": 30,
+      "p95": 296.91,
+      "limit": 5000.0
+    },
+    "running_controller_ipc_status": {
+      "samples": 30,
+      "p95": 32.72,
+      "limit": 250.0
+    },
+    "search_512_actions": {
+      "samples": 30,
+      "p95": 32.98,
+      "limit": 100.0
+    },
+    "describe": {
+      "samples": 30,
+      "p95": 27.73,
+      "limit": 50.0
+    },
+    "unchanged_invoke_preflight_without_child": {
+      "samples": 30,
+      "p95": 27.14,
+      "limit": 250.0
+    },
+    "stable_toml_save_to_search": {
+      "samples": 30,
+      "p95": 434.08,
+      "limit": 1000.0
+    }
+  },
+  "memory_mib": {
+    "gateway_idle_max": 7.67,
+    "gateway_512_action_working_set": 10.03,
+    "gateway_limit": 64.0,
+    "controller_baseline_working_set": 11.32,
+    "controller_512_action_working_set": 17.62,
+    "controller_512_action_increment": 6.3,
+    "controller_increment_limit": 128.0
+  },
+  "method": {
+    "ipc_measurement": "Fresh star.exe process plus authenticated IPC status and request demand scan.",
+    "preflight_measurement": "Correct live descriptor with a deliberately mismatched fixed lane; TOOL_LANE_MISMATCH proved the request was rejected before process creation.",
+    "save_measurement": "Thirty alternating stable add/path-change TOML saves in one live Gateway and Controller session; every search result descriptor changed.",
+    "capacity_measurement": "CLI pagination verified all 512 actions. MCP search pagination verified the 499 capacity-fixture actions across ten pages."
+  }
+}

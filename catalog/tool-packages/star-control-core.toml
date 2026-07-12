@@ -16,6 +16,7 @@ display_name = "Start Goal"
 summary = "Create and start a durable goal."
 description = "Starts a durable Star-Control goal through the typed Controller command."
 permission_actions = ["local_write"]
+paid_action = "no"
 idempotency = "non_idempotent"
 
 [[actions]]
@@ -26,6 +27,7 @@ display_name = "Answer Goal Question"
 summary = "Answer a typed question for a goal."
 description = "Records a typed answer for a goal that is waiting for user input."
 permission_actions = ["local_write"]
+paid_action = "no"
 idempotency = "non_idempotent"
 
 [[actions]]
@@ -36,6 +38,7 @@ display_name = "Get Plan"
 summary = "Read the current plan."
 description = "Reads the current durable plan without making a change."
 permission_actions = ["local_read"]
+paid_action = "no"
 idempotency = "read_only"
 
 [[actions]]
@@ -46,6 +49,7 @@ display_name = "Update Plan"
 summary = "Update the current plan."
 description = "Applies a typed update to the durable plan."
 permission_actions = ["local_write"]
+paid_action = "no"
 idempotency = "non_idempotent"
 
 [[actions]]
@@ -56,6 +60,7 @@ display_name = "Continue Run"
 summary = "Continue an approved run."
 description = "Continues a run after the Controller confirms its current policy scope."
 permission_actions = ["local_delete", "external_write"]
+paid_action = "no"
 idempotency = "non_idempotent"
 
 [[actions]]
@@ -66,6 +71,7 @@ display_name = "Get Goal Status"
 summary = "Read goal status."
 description = "Reads the typed status of one durable goal."
 permission_actions = ["local_read"]
+paid_action = "no"
 idempotency = "read_only"
 
 [[actions]]
@@ -76,6 +82,7 @@ display_name = "Pause Goal"
 summary = "Pause a goal."
 description = "Requests a durable goal pause through the Controller."
 permission_actions = ["local_write"]
+paid_action = "no"
 idempotency = "idempotent"
 
 [[actions]]
@@ -86,6 +93,7 @@ display_name = "Resume Goal"
 summary = "Resume a goal."
 description = "Requests a durable goal resume through the Controller."
 permission_actions = ["local_write"]
+paid_action = "no"
 idempotency = "idempotent"
 
 [[actions]]
@@ -96,6 +104,7 @@ display_name = "Cancel Goal"
 summary = "Cancel a goal."
 description = "Requests cancellation of a durable goal and its authorized child work."
 permission_actions = ["local_delete", "external_write"]
+paid_action = "no"
 idempotency = "idempotent"
 
 [[actions]]
@@ -106,6 +115,7 @@ display_name = "Get Evidence"
 summary = "Read recorded evidence."
 description = "Reads evidence references and typed verification records."
 permission_actions = ["local_read"]
+paid_action = "no"
 idempotency = "read_only"
 
 [[actions]]
@@ -116,6 +126,7 @@ display_name = "Get Merge Status"
 summary = "Read merge status."
 description = "Reads the current merge readiness and conflict status."
 permission_actions = ["local_read"]
+paid_action = "no"
 idempotency = "read_only"
 
 [[actions]]
@@ -126,6 +137,7 @@ display_name = "Get Handoff"
 summary = "Read handoff information."
 description = "Reads the current typed handoff record for a goal."
 permission_actions = ["local_read"]
+paid_action = "no"
 idempotency = "read_only"
 
 [[actions]]
@@ -136,4 +148,5 @@ display_name = "Run Doctor"
 summary = "Run read-only diagnostics."
 description = "Runs typed read-only Controller diagnostics."
 permission_actions = ["local_read"]
+paid_action = "no"
 idempotency = "read_only"

@@ -4,27 +4,36 @@
   "additionalProperties": false,
   "properties": {
     "force_after_ms": {
-      "format": "uint16",
-      "maximum": 65535,
-      "minimum": 0,
-      "type": [
-        "integer",
-        "null"
+      "anyOf": [
+        {
+          "maximum": 30000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "operation_id": {
+      "pattern": "^opn_[0-9A-HJKMNP-TV-Z]{26}$",
       "type": "string"
     },
     "reason": {
-      "type": [
-        "string",
-        "null"
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "pattern": "^[^\\u0000]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
       ]
     }
   },
   "required": [
     "operation_id"
   ],
-  "title": "OperationCancelInput",
   "type": "object"
 }

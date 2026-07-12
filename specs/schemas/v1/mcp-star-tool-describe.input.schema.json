@@ -4,12 +4,14 @@
   "additionalProperties": false,
   "properties": {
     "tool_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+){1,7}$",
       "type": "string"
     }
   },
   "required": [
     "tool_id"
   ],
-  "title": "DescribeInput",
   "type": "object"
 }

@@ -1,0 +1,51 @@
+{
+  "$id": "urn:star-control:schema:external-tool-progress:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "frame": {
+      "type": "string"
+    },
+    "message": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "progress": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "protocol_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "sequence": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "total": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "frame",
+    "protocol_version",
+    "request_id",
+    "sequence",
+    "progress"
+  ],
+  "title": "ExternalToolProgress",
+  "type": "object"
+}

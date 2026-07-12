@@ -272,6 +272,11 @@ mod tests {
         assert_eq!(mismatch.audit, KeyRecoveryAudit::RewroteLiveKey);
         assert_eq!(load(&path).unwrap().as_bytes(), first.as_bytes());
 
+        fs::write(&path, b"corrupt live DPAPI evidence").unwrap();
+        let repaired_corrupt = reconcile(&path, Some(&first)).unwrap();
+        assert_eq!(repaired_corrupt.audit, KeyRecoveryAudit::RewroteLiveKey);
+        assert_eq!(load(&path).unwrap().as_bytes(), first.as_bytes());
+
         fs::write(&path, b"corrupt DPAPI evidence").unwrap();
         let rotated = reconcile(&path, None).unwrap();
         let KeyRecoveryAudit::RotatedCorruptWithoutOwner { preserved_as } = rotated.audit else {

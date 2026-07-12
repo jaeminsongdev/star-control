@@ -24,6 +24,31 @@
       ],
       "type": "object"
     },
+    "ExternalToolError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "details": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "type": "object"
+    },
     "ExternalToolResultStatus": {
       "enum": [
         "ok",
@@ -54,7 +79,16 @@
       "items": true,
       "type": "array"
     },
-    "error": true,
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExternalToolError"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "frame": {
       "type": "string"
     },

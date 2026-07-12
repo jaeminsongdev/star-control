@@ -9,6 +9,7 @@ use std::{
     task::{Context, Poll},
 };
 
+use star_contracts::{ipc::IPC_MAX_FRAME_BYTES, parse_no_duplicate_keys};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf},
     net::windows::named_pipe::{
@@ -30,10 +31,11 @@ use windows::{
     core::{PWSTR, w},
 };
 
-use crate::{IpcCodecError, decode_frame, encode_frame};
+use crate::{IpcCodecError, encode_frame};
 
 pub const PIPE_BUFFER_BYTES: u32 = 64 * 1024;
 pub const PIPE_MAX_INSTANCES: usize = 16;
+const PIPE_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 type AcceptedPipe = std::io::Result<NamedPipeServer>;
 
@@ -257,27 +259,42 @@ pub async fn write_json(
 ) -> Result<(), IpcCodecError> {
     let json = serde_json::to_vec(value).map_err(|_| IpcCodecError::InvalidJson)?;
     let frame = encode_frame(&json)?;
-    pipe.write_all(&frame)
+    tokio::time::timeout(PIPE_IO_TIMEOUT, pipe.write_all(&frame))
         .await
+        .map_err(|_| IpcCodecError::Truncated)?
         .map_err(|_| IpcCodecError::Truncated)?;
-    pipe.flush().await.map_err(|_| IpcCodecError::Truncated)
+    tokio::time::timeout(PIPE_IO_TIMEOUT, pipe.flush())
+        .await
+        .map_err(|_| IpcCodecError::Truncated)?
+        .map_err(|_| IpcCodecError::Truncated)
 }
 
 pub async fn read_json(
     pipe: &mut (impl AsyncReadExt + Unpin),
 ) -> Result<serde_json::Value, IpcCodecError> {
+    read_json_with_timeout(pipe, PIPE_IO_TIMEOUT).await
+}
+
+pub async fn read_json_with_timeout(
+    pipe: &mut (impl AsyncReadExt + Unpin),
+    timeout: std::time::Duration,
+) -> Result<serde_json::Value, IpcCodecError> {
     let mut prefix = [0; 4];
-    pipe.read_exact(&mut prefix)
+    tokio::time::timeout(timeout, pipe.read_exact(&mut prefix))
         .await
+        .map_err(|_| IpcCodecError::Truncated)?
         .map_err(|_| IpcCodecError::Truncated)?;
     let length = u32::from_le_bytes(prefix) as usize;
-    let mut frame = Vec::with_capacity(length + 4);
-    frame.extend_from_slice(&prefix);
-    frame.resize(length + 4, 0);
-    pipe.read_exact(&mut frame[4..])
+    if length == 0 || length > IPC_MAX_FRAME_BYTES {
+        return Err(IpcCodecError::FrameTooLarge);
+    }
+    let mut payload = vec![0; length];
+    tokio::time::timeout(timeout, pipe.read_exact(&mut payload))
         .await
+        .map_err(|_| IpcCodecError::Truncated)?
         .map_err(|_| IpcCodecError::Truncated)?;
-    serde_json::from_slice(decode_frame(&frame)?).map_err(|_| IpcCodecError::InvalidJson)
+    let text = std::str::from_utf8(&payload).map_err(|_| IpcCodecError::InvalidJson)?;
+    parse_no_duplicate_keys(text).map_err(|_| IpcCodecError::InvalidJson)
 }
 
 #[cfg(test)]
@@ -356,5 +373,42 @@ mod tests {
             assert!(request_id < PIPE_MAX_INSTANCES, "response IDs never mix");
             assert!(expected < PIPE_MAX_INSTANCES);
         }
+    }
+
+    #[tokio::test]
+    // matrix: MCP-I005
+    async fn pipe_reader_rejects_bounds_truncation_and_duplicate_keys_before_dispatch() {
+        for invalid_length in [0_u32, (IPC_MAX_FRAME_BYTES as u32) + 1, u32::MAX] {
+            let (mut writer, mut reader) = tokio::io::duplex(16);
+            writer
+                .write_all(&invalid_length.to_le_bytes())
+                .await
+                .unwrap();
+            assert!(matches!(
+                read_json(&mut reader).await,
+                Err(IpcCodecError::FrameTooLarge)
+            ));
+        }
+
+        let duplicate = br#"{"request_id":1,"request_id":2}"#;
+        let (mut writer, mut reader) = tokio::io::duplex(128);
+        writer
+            .write_all(&(duplicate.len() as u32).to_le_bytes())
+            .await
+            .unwrap();
+        writer.write_all(duplicate).await.unwrap();
+        assert!(matches!(
+            read_json(&mut reader).await,
+            Err(IpcCodecError::InvalidJson)
+        ));
+
+        let (mut writer, mut reader) = tokio::io::duplex(16);
+        writer.write_all(&8_u32.to_le_bytes()).await.unwrap();
+        writer.write_all(b"{}").await.unwrap();
+        drop(writer);
+        assert!(matches!(
+            read_json(&mut reader).await,
+            Err(IpcCodecError::Truncated)
+        ));
     }
 }

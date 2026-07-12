@@ -1,0 +1,29 @@
+{
+  "$id": "urn:star-control:schema:external-tool-cancel:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "frame": {
+      "type": "string"
+    },
+    "protocol_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "frame",
+    "protocol_version",
+    "request_id",
+    "reason"
+  ],
+  "title": "ExternalToolCancel",
+  "type": "object"
+}

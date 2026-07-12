@@ -10,17 +10,25 @@ use std::{
     ffi::{OsStr, OsString},
     fs::File,
     io::{Read, Write},
-    os::windows::{ffi::OsStrExt, io::FromRawHandle},
+    os::windows::{
+        ffi::{OsStrExt, OsStringExt},
+        io::FromRawHandle,
+    },
     path::PathBuf,
-    ptr, thread,
+    ptr,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU8, Ordering},
+    },
+    thread,
     time::Instant,
 };
 
 use windows::{
     Win32::{
         Foundation::{
-            CloseHandle, HANDLE, HANDLE_FLAG_INHERIT, HLOCAL, LocalFree, SetHandleInformation,
-            WAIT_OBJECT_0,
+            CloseHandle, FILETIME, HANDLE, HANDLE_FLAG_INHERIT, HLOCAL, LocalFree,
+            SetHandleInformation, WAIT_OBJECT_0,
         },
         NetworkManagement::WindowsFirewall::NetworkIsolationGetAppContainerConfig,
         Security::{
@@ -39,39 +47,56 @@ use windows::{
             Threading::{
                 CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateProcessW,
                 DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess,
-                InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
+                GetProcessTimes, InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
                 PROC_THREAD_ATTRIBUTE_HANDLE_LIST, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
-                PROCESS_INFORMATION, ResumeThread, STARTF_USESTDHANDLES, STARTUPINFOEXW,
-                TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject,
+                PROCESS_INFORMATION, PROCESS_NAME_WIN32, QueryFullProcessImageNameW, ResumeThread,
+                STARTF_USESTDHANDLES, STARTUPINFOEXW, TerminateProcess, UpdateProcThreadAttribute,
+                WaitForSingleObject,
             },
         },
     },
     core::{HSTRING, PCWSTR, PWSTR},
 };
+use zeroize::Zeroize;
 
 use super::{
-    CapturedStream, DirectExeOutcome, DirectExeSpec, OperationJob, RuntimeCancellation,
-    RuntimeError,
+    CapturedStream, DirectExeOutcome, DirectExeSpec, OperationJob, ProcessEndEvidence,
+    ProcessEndObserver, ProcessStartEvidence, ProcessStartObserver, RuntimeCancellation,
+    RuntimeError, StdinCancelPlan,
 };
 
-pub async fn execute(
+pub(super) async fn execute(
     spec: DirectExeSpec,
     cancellation: Option<RuntimeCancellation>,
+    cancel_plan: Option<StdinCancelPlan>,
+    process_observer: Option<ProcessStartObserver>,
+    process_end_observer: Option<ProcessEndObserver>,
 ) -> Result<DirectExeOutcome, RuntimeError> {
     spec.validate()?;
-    tokio::task::spawn_blocking(move || execute_blocking(&spec, cancellation.as_ref()))
-        .await
-        .map_err(|_| RuntimeError::Start)?
+    tokio::task::spawn_blocking(move || {
+        execute_blocking(
+            &spec,
+            cancellation.as_ref(),
+            cancel_plan.as_ref(),
+            process_observer.as_ref(),
+            process_end_observer.as_ref(),
+        )
+    })
+    .await
+    .map_err(|_| RuntimeError::Start)?
 }
 
 fn execute_blocking(
     spec: &DirectExeSpec,
     cancellation: Option<&RuntimeCancellation>,
+    cancel_plan: Option<&StdinCancelPlan>,
+    process_observer: Option<&ProcessStartObserver>,
+    process_end_observer: Option<&ProcessEndObserver>,
 ) -> Result<DirectExeOutcome, RuntimeError> {
     if cancellation.is_some_and(RuntimeCancellation::is_cancelled) {
         return Err(RuntimeError::Cancelled);
     }
-    let job = OperationJob::new()?;
+    let job = OperationJob::new_with_limits(spec.max_memory_bytes, spec.max_processes)?;
     let (stdin_read, stdin_write) = anonymous_pipe()?;
     let (stdout_read, stdout_write) = match anonymous_pipe() {
         Ok(pipe) => pipe,
@@ -218,6 +243,7 @@ fn execute_blocking(
             &mut process,
         )
     };
+    environment.zeroize();
     unsafe { DeleteProcThreadAttributeList(list) };
     // Parent no longer owns the child ends. Closing them is required for EOF
     // detection in the drain threads.
@@ -230,6 +256,18 @@ fn execute_blocking(
             RuntimeError::Start
         });
     }
+    if process_image_path(process.hProcess)
+        .is_none_or(|actual| !same_windows_path(&actual, &spec.executable))
+    {
+        unsafe {
+            let _ = TerminateProcess(process.hProcess, 1);
+            let _ = CloseHandle(process.hThread);
+            let _ = WaitForSingleObject(process.hProcess, u32::MAX);
+            let _ = CloseHandle(process.hProcess);
+        }
+        close_many(&[stdin_write, stdout_read, stderr_read]);
+        return Err(RuntimeError::Start);
+    }
     if job.assign_handle(process.hProcess).is_err() {
         unsafe {
             let _ = TerminateProcess(process.hProcess, 1);
@@ -241,21 +279,88 @@ fn execute_blocking(
         close_many(&[stdin_write, stdout_read, stderr_read]);
         return Err(RuntimeError::Start);
     }
+    if let Some(observer) = process_observer {
+        let mut creation = FILETIME::default();
+        let mut exit = FILETIME::default();
+        let mut kernel = FILETIME::default();
+        let mut user = FILETIME::default();
+        let observed = unsafe {
+            GetProcessTimes(
+                process.hProcess,
+                &mut creation,
+                &mut exit,
+                &mut kernel,
+                &mut user,
+            )
+        }
+        .is_ok()
+            && observer(ProcessStartEvidence {
+                process_id: process.dwProcessId,
+                creation_time_100ns: ((creation.dwHighDateTime as u64) << 32)
+                    | creation.dwLowDateTime as u64,
+                job_id: format!("job_{}", star_ipc::nonce()),
+            });
+        if !observed {
+            let _ = job.terminate(1);
+            unsafe {
+                let _ = CloseHandle(process.hThread);
+                let _ = WaitForSingleObject(process.hProcess, u32::MAX);
+                let _ = CloseHandle(process.hProcess);
+            }
+            close_many(&[stdin_write, stdout_read, stderr_read]);
+            return Err(RuntimeError::Start);
+        }
+    }
 
     let stdout = unsafe { File::from_raw_handle(stdout_read.0 as _) };
     let stderr = unsafe { File::from_raw_handle(stderr_read.0 as _) };
     let stdin = unsafe { File::from_raw_handle(stdin_write.0 as _) };
     let stdout_limit = spec.max_stdout_bytes;
     let stderr_limit = spec.max_stderr_bytes;
-    let stdout_task = thread::spawn(move || drain_file(stdout, stdout_limit));
-    let stderr_task = thread::spawn(move || drain_file(stderr, stderr_limit));
+    let (final_sender, final_receiver) = std::sync::mpsc::channel();
+    let observe_final = cancel_plan
+        .and_then(|plan| plan.final_frame_exit_grace)
+        .map(|_| final_sender);
+    let stdout_line_observer =
+        cancel_plan.and_then(|plan| plan.stdout_line_observer.as_ref().cloned());
+    let stdout_task = thread::spawn(move || {
+        drain_file(stdout, stdout_limit, observe_final, stdout_line_observer)
+    });
+    let stderr_task = thread::spawn(move || drain_file(stderr, stderr_limit, None, None));
     let stdin_bytes = spec.stdin.clone();
+    let cancel_plan_for_stdin = cancel_plan.cloned();
+    let cancel_trigger = Arc::new(AtomicU8::new(0));
+    let cancel_trigger_for_stdin = Arc::clone(&cancel_trigger);
+    let process_done = Arc::new(AtomicBool::new(false));
+    let process_done_for_stdin = Arc::clone(&process_done);
     let stdin_task = thread::spawn(move || {
         let mut stdin = stdin;
-        if let Some(bytes) = stdin_bytes {
-            stdin.write_all(&bytes).map_err(|_| RuntimeError::Start)?;
+        if let Some(mut bytes) = stdin_bytes {
+            let written = stdin.write_all(&bytes);
+            bytes.zeroize();
+            written.map_err(|_| RuntimeError::Start)?;
         }
-        stdin.flush().map_err(|_| RuntimeError::Start)
+        stdin.flush().map_err(|_| RuntimeError::Start)?;
+        if let Some(plan) = cancel_plan_for_stdin {
+            while !process_done_for_stdin.load(Ordering::Acquire) {
+                let trigger = cancel_trigger_for_stdin.load(Ordering::Acquire);
+                let frame = match trigger {
+                    1 => plan.user_frame.as_ref(),
+                    2 => plan.deadline_frame.as_ref(),
+                    _ => None,
+                };
+                if let Some(frame) = frame {
+                    stdin.write_all(frame).map_err(|_| RuntimeError::Start)?;
+                    stdin.flush().map_err(|_| RuntimeError::Start)?;
+                    break;
+                }
+                if trigger != 0 {
+                    break;
+                }
+                thread::sleep(std::time::Duration::from_millis(5));
+            }
+        }
+        Ok(())
     });
 
     // Readers and the Job are established before the suspended primary thread
@@ -269,6 +374,7 @@ fn execute_blocking(
             let _ = WaitForSingleObject(process.hProcess, u32::MAX);
             let _ = CloseHandle(process.hProcess);
         }
+        process_done.store(true, Ordering::Release);
         let _ = stdin_task.join();
         let _ = stdout_task.join();
         let _ = stderr_task.join();
@@ -278,25 +384,60 @@ fn execute_blocking(
         let _ = CloseHandle(process.hThread);
     }
     let started = Instant::now();
-    let mut cancelled = false;
-    let timed_out = loop {
+    let mut cancel_started = None;
+    let mut final_frame_seen = None;
+    let termination_kind = loop {
         if unsafe { WaitForSingleObject(process.hProcess, 25) } == WAIT_OBJECT_0 {
-            break false;
+            break cancel_trigger.load(Ordering::Acquire);
         }
-        if cancellation.is_some_and(RuntimeCancellation::is_cancelled) {
-            unsafe {
-                let _ = TerminateProcess(process.hProcess, 1);
+        if let Some(plan) = cancel_plan {
+            if final_frame_seen.is_none()
+                && let Ok(seen_at) = final_receiver.try_recv()
+            {
+                final_frame_seen = Some(seen_at);
             }
-            let _ = unsafe { WaitForSingleObject(process.hProcess, u32::MAX) };
-            cancelled = true;
-            break false;
-        }
-        if started.elapsed() >= spec.timeout {
-            unsafe {
-                let _ = TerminateProcess(process.hProcess, 1);
+            if final_frame_seen.is_some_and(|seen| {
+                plan.final_frame_exit_grace
+                    .is_some_and(|grace| seen.elapsed() >= grace)
+            }) {
+                job.terminate(1)?;
+                let _ = unsafe { WaitForSingleObject(process.hProcess, u32::MAX) };
+                break 3;
             }
+            let trigger = if cancellation.is_some_and(RuntimeCancellation::is_cancelled) {
+                1
+            } else if started.elapsed() >= spec.timeout {
+                2
+            } else {
+                0
+            };
+            if trigger != 0 && cancel_trigger.load(Ordering::Acquire) == 0 {
+                cancel_trigger.store(trigger, Ordering::Release);
+                cancel_started = Some(Instant::now());
+            }
+            let effective_grace = if cancel_trigger.load(Ordering::Acquire) == 1 {
+                cancellation
+                    .and_then(RuntimeCancellation::force_after_ms)
+                    .map_or(plan.grace, |milliseconds| {
+                        std::time::Duration::from_millis(milliseconds.into())
+                    })
+            } else {
+                plan.grace
+            };
+            if cancel_started.is_some_and(|started| started.elapsed() >= effective_grace) {
+                let trigger = cancel_trigger.load(Ordering::Acquire);
+                job.terminate(1)?;
+                let _ = unsafe { WaitForSingleObject(process.hProcess, u32::MAX) };
+                break trigger;
+            }
+        } else if cancellation.is_some_and(RuntimeCancellation::is_cancelled) {
+            job.terminate(1)?;
             let _ = unsafe { WaitForSingleObject(process.hProcess, u32::MAX) };
-            break true;
+            break 1;
+        } else if started.elapsed() >= spec.timeout {
+            job.terminate(1)?;
+            let _ = unsafe { WaitForSingleObject(process.hProcess, u32::MAX) };
+            break 2;
         }
     };
     let mut exit_code = 0u32;
@@ -304,22 +445,45 @@ fn execute_blocking(
     unsafe {
         let _ = CloseHandle(process.hProcess);
     }
-    let _ = stdin_task.join().map_err(|_| RuntimeError::Start)?;
+    process_done.store(true, Ordering::Release);
+    let stdin_result = stdin_task.join().map_err(|_| RuntimeError::Start)?;
     let stdout = stdout_task.join().map_err(|_| RuntimeError::Start)?;
     let stderr = stderr_task.join().map_err(|_| RuntimeError::Start)?;
-    if timed_out {
+    let termination = match termination_kind {
+        1 => "cancelled",
+        2 => "timeout",
+        3 => "protocol_forced",
+        _ => "exited",
+    };
+    if process_end_observer.is_some_and(|observer| {
+        !observer(ProcessEndEvidence {
+            exit_code: Some(exit_code),
+            termination: termination.to_owned(),
+            stdout_bytes: stdout.total_bytes,
+            stderr_bytes: stderr.total_bytes,
+            stdout_limit_exceeded: stdout.exceeded_limit,
+            stderr_limit_exceeded: stderr.exceeded_limit,
+        })
+    }) {
+        return Err(RuntimeError::Start);
+    }
+    if termination_kind == 2 {
         return Err(RuntimeError::Timeout);
     }
-    if cancelled {
+    if termination_kind == 1 {
         return Err(RuntimeError::Cancelled);
     }
+    if termination_kind == 3 {
+        return Err(RuntimeError::ProtocolInvalid);
+    }
+    stdin_result?;
     if stdout.exceeded_limit || stderr.exceeded_limit {
         return Err(RuntimeError::OutputLimit);
     }
     Ok(DirectExeOutcome {
         stdout,
         stderr,
-        exit_code: Some(exit_code as i32),
+        exit_code: Some(exit_code),
     })
 }
 
@@ -415,6 +579,24 @@ pub fn appcontainer_profile_folder(profile: &str) -> Result<PathBuf, RuntimeErro
     path
 }
 
+pub fn appcontainer_profile_sid_string(profile: &str) -> Result<String, RuntimeError> {
+    let profile = HSTRING::from(profile);
+    let sid = create_or_open_appcontainer_sid(&profile)?;
+    let mut sid_text = PWSTR::null();
+    if unsafe { ConvertSidToStringSidW(sid, &mut sid_text) }.is_err() {
+        unsafe {
+            let _ = FreeSid(sid);
+        }
+        return Err(RuntimeError::IsolationUnavailable);
+    }
+    let value = unsafe { sid_text.to_string() }.map_err(|_| RuntimeError::IsolationUnavailable);
+    unsafe {
+        let _ = LocalFree(Some(HLOCAL(sid_text.0.cast())));
+        let _ = FreeSid(sid);
+    }
+    value
+}
+
 fn loopback_exempt(sid: PSID) -> Result<bool, RuntimeError> {
     let heap = unsafe { GetProcessHeap() }.map_err(|_| RuntimeError::IsolationUnavailable)?;
     let mut count = 0u32;
@@ -443,11 +625,18 @@ fn loopback_exempt(sid: PSID) -> Result<bool, RuntimeError> {
     Ok(exempt)
 }
 
-fn drain_file(mut file: File, limit: u64) -> CapturedStream {
+fn drain_file(
+    mut file: File,
+    limit: u64,
+    final_sender: Option<std::sync::mpsc::Sender<Instant>>,
+    line_observer: Option<super::StdoutLineObserver>,
+) -> CapturedStream {
     let mut captured = Vec::new();
     let mut total_bytes = 0u64;
     let mut exceeded_limit = false;
     let mut buffer = [0u8; 16 * 1024];
+    let mut pending_line = Vec::new();
+    let mut final_sent = false;
     loop {
         let read = match file.read(&mut buffer) {
             Ok(0) => break,
@@ -458,6 +647,39 @@ fn drain_file(mut file: File, limit: u64) -> CapturedStream {
         let remaining = limit.saturating_sub(captured.len() as u64) as usize;
         captured.extend_from_slice(&buffer[..read.min(remaining)]);
         exceeded_limit |= total_bytes > limit;
+        if (final_sender.is_some() || line_observer.is_some()) && !final_sent {
+            pending_line.extend_from_slice(&buffer[..read]);
+            while let Some(position) = pending_line.iter().position(|byte| *byte == b'\n') {
+                let line: Vec<_> = pending_line.drain(..=position).collect();
+                let line = &line[..line.len().saturating_sub(1)];
+                if line.len() <= 8 * 1024 * 1024 {
+                    if let Some(observer) = line_observer.as_ref() {
+                        observer(line);
+                    }
+                }
+                if let Some(final_sender) = final_sender.as_ref()
+                    && line.len() <= 8 * 1024 * 1024
+                    && serde_json::from_slice::<serde_json::Value>(line)
+                        .ok()
+                        .and_then(|value| {
+                            value
+                                .get("frame")
+                                .and_then(serde_json::Value::as_str)
+                                .map(str::to_owned)
+                        })
+                        .as_deref()
+                        == Some("result")
+                {
+                    let _ = final_sender.send(Instant::now());
+                    final_sent = true;
+                    pending_line.clear();
+                    break;
+                }
+            }
+            if pending_line.len() > 8 * 1024 * 1024 {
+                pending_line.clear();
+            }
+        }
     }
     CapturedStream {
         captured,
@@ -520,6 +742,39 @@ fn wide_nul(value: &OsStr) -> Result<Vec<u16>, RuntimeError> {
     Ok(value)
 }
 
+fn process_image_path(process: HANDLE) -> Option<PathBuf> {
+    let mut buffer = vec![0_u16; 32_768];
+    let mut length = buffer.len() as u32;
+    unsafe {
+        QueryFullProcessImageNameW(
+            process,
+            PROCESS_NAME_WIN32,
+            PWSTR(buffer.as_mut_ptr()),
+            &mut length,
+        )
+    }
+    .ok()?;
+    if length == 0 || length as usize >= buffer.len() {
+        return None;
+    }
+    buffer.truncate(length as usize);
+    Some(PathBuf::from(OsString::from_wide(&buffer)))
+}
+
+fn same_windows_path(left: &std::path::Path, right: &std::path::Path) -> bool {
+    left.as_os_str()
+        .to_string_lossy()
+        .replace('/', "\\")
+        .trim_start_matches(r"\\?\")
+        .eq_ignore_ascii_case(
+            right
+                .as_os_str()
+                .to_string_lossy()
+                .replace('/', "\\")
+                .trim_start_matches(r"\\?\"),
+        )
+}
+
 fn environment_block(spec: &DirectExeSpec) -> Result<Vec<u16>, RuntimeError> {
     let mut values = std::collections::BTreeMap::<String, OsString>::new();
     let system_root = std::env::var_os("SystemRoot").ok_or(RuntimeError::Start)?;
@@ -543,15 +798,28 @@ fn environment_block(spec: &DirectExeSpec) -> Result<Vec<u16>, RuntimeError> {
     values.insert("TEMP".to_owned(), temp.clone());
     values.insert("TMP".to_owned(), temp);
     for (key, value) in &spec.environment {
-        let key = key.to_string_lossy().to_ascii_uppercase();
+        let key = key
+            .to_str()
+            .ok_or(RuntimeError::ProtocolInvalid)?
+            .to_ascii_uppercase();
+        let value_utf16: Vec<_> = value.encode_wide().collect();
         if key.is_empty()
+            || key.len() > 128
+            || !key.chars().enumerate().all(|(index, character)| {
+                if index == 0 {
+                    character == '_' || character.is_ascii_alphabetic()
+                } else {
+                    character == '_' || character.is_ascii_alphanumeric()
+                }
+            })
             || key.starts_with('=')
             || key.contains('\0')
             || matches!(
                 key.as_str(),
                 "PATH" | "PATHEXT" | "COMSPEC" | "PSMODULEPATH" | "PROMPT"
             )
-            || value.encode_wide().any(|value| value == 0)
+            || value_utf16.contains(&0)
+            || String::from_utf16(&value_utf16).is_err()
         {
             return Err(RuntimeError::ProtocolInvalid);
         }
@@ -565,6 +833,10 @@ fn environment_block(spec: &DirectExeSpec) -> Result<Vec<u16>, RuntimeError> {
         block.push(0);
     }
     block.push(0);
+    if block.len() > 32_767 {
+        block.zeroize();
+        return Err(RuntimeError::ProtocolInvalid);
+    }
     Ok(block)
 }
 

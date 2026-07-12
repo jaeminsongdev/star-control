@@ -1,25 +1,141 @@
 {
   "$defs": {
-    "PackageSnapshot": {
+    "ExecutableIdentity": {
       "additionalProperties": false,
       "properties": {
-        "descriptors": {
-          "items": {
-            "$ref": "#/$defs/ToolDescriptor"
-          },
-          "type": "array"
+        "architecture": {
+          "type": "string"
         },
-        "manifest_hash": {
+        "file_id": {
+          "type": "string"
+        },
+        "interface_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_write": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
           "$ref": "#/$defs/Sha256Hash"
         },
-        "package_id": {
+        "signature_status": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "volume_serial": {
           "type": "string"
         }
       },
       "required": [
+        "volume_serial",
+        "file_id",
+        "size",
+        "last_write",
+        "sha256",
+        "architecture",
+        "signature_status"
+      ],
+      "type": "object"
+    },
+    "ExecutableSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "executable_id": {
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/ExecutableIdentity"
+        },
+        "locator_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "executable_id",
+        "locator_hash",
+        "identity"
+      ],
+      "type": "object"
+    },
+    "ExternalProtocol": {
+      "enum": [
+        "argv_v1",
+        "star_json_stdio_v1"
+      ],
+      "type": "string"
+    },
+    "IsolationProfile": {
+      "enum": [
+        "trusted_desktop",
+        "appcontainer_adapter"
+      ],
+      "type": "string"
+    },
+    "PackageSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "executable_identities": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "manifest_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "package_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "package_id": {
+          "type": "string"
+        },
+        "package_version": {
+          "type": "string"
+        },
+        "schema_hashes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/RegistrySource"
+        },
+        "tool_descriptor_hashes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "trust_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
         "package_id",
+        "package_version",
+        "source_kind",
         "manifest_hash",
-        "descriptors"
+        "package_hash"
       ],
       "type": "object"
     },
@@ -56,16 +172,70 @@
           },
           "type": "array"
         },
+        "backend_kind": {
+          "type": "string"
+        },
+        "backend_ref": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
         "descriptor_hash": {
           "$ref": "#/$defs/Sha256Hash"
         },
         "display_name": {
           "type": "string"
         },
+        "executable_identity_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution_contract": true,
+        "idempotency": {
+          "type": "string"
+        },
         "input_schema": true,
+        "invalid_examples": {
+          "default": [],
+          "items": true,
+          "type": "array"
+        },
+        "isolation": {
+          "$ref": "#/$defs/IsolationProfile"
+        },
         "output_schema": true,
         "package_id": {
           "type": "string"
+        },
+        "package_version": {
+          "type": "string"
+        },
+        "paid_action": {
+          "type": "string"
+        },
+        "permission_actions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "protocol": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExternalProtocol"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "readiness": {
           "$ref": "#/$defs/ToolReadiness"
@@ -95,19 +265,52 @@
         },
         "tool_id": {
           "type": "string"
+        },
+        "trust_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "valid_examples": {
+          "default": [],
+          "items": true,
+          "type": "array"
+        },
+        "when_not_to_use": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "when_to_use": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [
         "tool_id",
         "package_id",
+        "package_version",
         "display_name",
         "summary",
+        "description",
         "source",
         "readiness",
         "risk_lane",
         "descriptor_hash",
         "input_schema",
-        "output_schema"
+        "output_schema",
+        "paid_action",
+        "idempotency",
+        "isolation",
+        "backend_kind",
+        "backend_ref",
+        "execution_contract"
       ],
       "type": "object"
     },
@@ -125,11 +328,28 @@
   "$id": "urn:star-control:schema:tool-registry-snapshot:v1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "description": "Immutable live Registry snapshot. Diagnostics and creation time are\ncarried for status but are excluded from `snapshot_hash` by its producer.",
   "properties": {
-    "packages": {
+    "created_at": {
+      "type": "string"
+    },
+    "diagnostics": {
+      "default": [],
+      "items": true,
+      "type": "array"
+    },
+    "executable_snapshots": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ExecutableSnapshot"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "package_snapshots": {
       "additionalProperties": {
         "$ref": "#/$defs/PackageSnapshot"
       },
+      "default": {},
       "type": "object"
     },
     "registry_revision": {
@@ -137,14 +357,35 @@
       "minimum": 0,
       "type": "integer"
     },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "search_index_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
     "snapshot_hash": {
       "$ref": "#/$defs/Sha256Hash"
+    },
+    "tool_descriptors": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ToolDescriptor"
+      },
+      "default": {},
+      "type": "object"
     }
   },
   "required": [
+    "schema_id",
+    "schema_version",
     "registry_revision",
     "snapshot_hash",
-    "packages"
+    "search_index_hash",
+    "created_at"
   ],
   "title": "RegistrySnapshot",
   "type": "object"

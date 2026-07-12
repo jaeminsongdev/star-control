@@ -1,5 +1,113 @@
 {
   "$defs": {
+    "ErrorCategory": {
+      "enum": [
+        "config",
+        "contract",
+        "state",
+        "policy",
+        "route",
+        "tool",
+        "codex",
+        "validation",
+        "vcs",
+        "ipc",
+        "release",
+        "internal"
+      ],
+      "type": "string"
+    },
+    "ErrorEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_refs": {
+          "items": true,
+          "type": "array"
+        },
+        "category": {
+          "$ref": "#/$defs/ErrorCategory"
+        },
+        "caused_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "context": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "correlation_id": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "occurred_at": {
+          "type": "string"
+        },
+        "retry_after_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "user_action": true
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "code",
+        "category",
+        "message",
+        "retryable",
+        "context",
+        "correlation_id",
+        "artifact_refs",
+        "occurred_at",
+        "component"
+      ],
+      "type": "object"
+    },
+    "ErrorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "summary"
+      ],
+      "type": "object"
+    },
     "McpResultStatus": {
       "enum": [
         "ok",
@@ -30,7 +138,16 @@
       "items": true,
       "type": "array"
     },
-    "error": true,
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ErrorEnvelope"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "next_actions": {
       "default": [],
       "items": true,

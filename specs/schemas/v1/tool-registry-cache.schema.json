@@ -1,0 +1,173 @@
+{
+  "$defs": {
+    "PackageSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "executable_identities": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "manifest_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "package_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "package_id": {
+          "type": "string"
+        },
+        "package_version": {
+          "type": "string"
+        },
+        "schema_hashes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/RegistrySource"
+        },
+        "tool_descriptor_hashes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "trust_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "package_id",
+        "package_version",
+        "source_kind",
+        "manifest_hash",
+        "package_hash"
+      ],
+      "type": "object"
+    },
+    "RegistrySource": {
+      "enum": [
+        "release",
+        "user",
+        "project"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "SourceFileIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "type": "string"
+        },
+        "last_write": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "volume_serial": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "volume_serial",
+        "file_id",
+        "size",
+        "last_write"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:tool-registry-cache:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One durable last-known-good cache entry. The outer cache document owns its\nown JCS sidecar hash and therefore is intentionally a separate envelope.",
+  "properties": {
+    "cache_id": {
+      "type": "string"
+    },
+    "manifest_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "mcp_contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "package_id": {
+      "type": "string"
+    },
+    "package_snapshot": {
+      "$ref": "#/$defs/PackageSnapshot"
+    },
+    "package_version": {
+      "type": "string"
+    },
+    "product_version": {
+      "type": "string"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "source_content_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "source_file_identity": {
+      "$ref": "#/$defs/SourceFileIdentity"
+    },
+    "source_id_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "source_kind": {
+      "$ref": "#/$defs/RegistrySource"
+    },
+    "trust_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "validated_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "cache_id",
+    "package_id",
+    "package_version",
+    "source_kind",
+    "source_id_hash",
+    "source_file_identity",
+    "source_content_hash",
+    "manifest_hash",
+    "package_snapshot",
+    "mcp_contract_version",
+    "product_version",
+    "validated_at"
+  ],
+  "title": "ToolRegistryCache",
+  "type": "object"
+}

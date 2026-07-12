@@ -1,0 +1,68 @@
+format_version = 1
+package_id = "user.fake.compatible"
+package_version = "1.0.0"
+display_name = "Compatible Fake"
+description = "Version-compatible contract fixture."
+enabled = true
+backend_kinds = ["process"]
+
+[[executables]]
+executable_id = "fake-compatible"
+locator_kind = "absolute"
+path = "C:\\Tools\\fake-compatible.exe"
+update_policy = "version_compatible"
+protocol = "argv_v1"
+interface_version_req = "^1"
+product_version_req = "^1"
+architectures = ["x86_64"]
+authenticode_policy = "require_subject"
+authenticode_subject = "Example Publisher"
+
+[executables.probe]
+kind = "argv"
+args = ["--version"]
+output_format = "semver_line"
+version_pattern = "^(?<product>[0-9]+\\.[0-9]+\\.[0-9]+) interface=(?<interface>[0-9]+\\.[0-9]+\\.[0-9]+)$"
+
+[[actions]]
+tool_id = "user.fake.compatible.run"
+backend_kind = "process"
+backend_ref = "fake-compatible"
+display_name = "Run compatible fake"
+summary = "Runs a compatible fake executable."
+description = "Compatibility fixture action."
+permission_actions = ["local_read", "process_run"]
+paid_action = "no"
+idempotency = "read_only"
+
+[[actions.parameters]]
+name = "value"
+type = "string"
+description = "Value to echo"
+required = true
+
+[[actions.argv]]
+kind = "positional"
+input = "value"
+
+[actions.exit_codes]
+success = [0]
+empty = []
+warning = []
+retryable = []
+
+[actions.output]
+format = "text"
+encoding = "utf8"
+stderr_encoding = "utf8"
+inline_limit_bytes = 1024
+overflow = "artifact"
+stdout_role = "data"
+stderr_role = "log"
+
+[actions.concurrency]
+max_parallel = 1
+exclusive_scope = "none"
+
+[actions.cancel]
+grace_ms = 1000

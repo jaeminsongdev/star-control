@@ -48,6 +48,7 @@
 - 같은 target을 둘 이상의 active package가 replace하면 우선순위를 추측하지 않고 모두 conflict로 둔다.
 - target action은 search index에서 빠지지만 status와 provenance에는 남는다.
 - 같은 PackageId가 여러 source origin에 있으면 version이 달라도 conflict다. source 순서로 덮지 않는다.
+- `ToolId`는 effective Registry에서 전역 단일 owner를 가져야 한다. trusted replacement 적용 뒤에도 unrelated package가 같은 `ToolId`를 선언하면 해당 action은 fail-closed하며 PackageId 정렬 순서로 owner를 고르지 않는다. required release action의 frozen `ToolId`는 user·project package가 shadow할 수 없다.
 
 ## ExecutableDescriptor
 
@@ -384,6 +385,8 @@ custom lock key는 `{tool_id,selected_arguments}`의 arguments canonical hash다
 ## `star tools` 관리 CLI 동결
 
 모든 명령은 기본 human text, `--json`이면 해당 Controller result JSON을 stdout에 쓴다. mutation은 Controller IPC로만 수행한다.
+
+`list`와 `status`는 CLI가 Controller cursor를 내부적으로 끝까지 소비한다. public CLI syntax에 cursor option을 추가하지 않으며 Registry 상한 안의 전체 결과를 한 번 출력한다.
 
 | 명령 | exact syntax | 의미 |
 |---|---|---|

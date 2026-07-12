@@ -2,10 +2,10 @@ use std::{fs, path::PathBuf};
 
 use star_contracts::{
     canonical::{canonical_sha256, jcs_bytes},
-    fixed_mcp::{FIXED_TOOLS, RiskLane, fixed_tool},
+    fixed_mcp::{FIXED_TOOLS, RiskLane, fixed_input_valid, fixed_tool},
     ids::{ApprovalId, OperationId, RequestId, ToolCacheId, ToolTrustId},
     ipc::IpcHello,
-    manifest::{ManifestError, ManifestSource, parse_manifest_v1, risk_lane},
+    manifest::{ManifestError, ManifestSource, UpdatePolicy, parse_manifest_v1, risk_lane},
     schema::generated_documents,
 };
 
@@ -41,9 +41,9 @@ fn fixed_mcp_surface_is_exactly_twelve_tools_in_contract_order() {
 #[test]
 // matrix: MCP-M001 MCP-M004
 fn manifest_valid_invalid_and_duplicate_fixtures_are_stable() {
+    let fixture_root = root().join("specs/fixtures/mcp/manifests");
     let valid =
-        fs::read_to_string(root().join("specs/examples/valid/tool-package-manifest-v1.toml"))
-            .unwrap();
+        fs::read_to_string(fixture_root.join("valid/tool-package-manifest-v1.toml")).unwrap();
     let manifest = parse_manifest_v1(&valid, ManifestSource::User).unwrap();
     assert_eq!(manifest.actions.len(), 1);
     assert_eq!(manifest.actions[0].expected_duration_ms, 1_000);
@@ -60,10 +60,59 @@ fn manifest_valid_invalid_and_duplicate_fixtures_are_stable() {
         "tool-package-manifest-unknown-key.toml",
         "tool-package-manifest-duplicate-key.toml",
     ] {
-        let invalid = fs::read_to_string(root().join("specs/examples/invalid").join(name)).unwrap();
+        let invalid = fs::read_to_string(fixture_root.join("invalid").join(name)).unwrap();
         assert!(
             parse_manifest_v1(&invalid, ManifestSource::User).is_err(),
             "{name} must be rejected"
+        );
+    }
+    let compatible =
+        fs::read_to_string(fixture_root.join("valid/version-compatible-v1.toml")).unwrap();
+    let compatible = parse_manifest_v1(&compatible, ManifestSource::User).unwrap();
+    assert_eq!(
+        compatible.executables[0].update_policy,
+        UpdatePolicy::VersionCompatible
+    );
+
+    let future =
+        fs::read_to_string(fixture_root.join("invalid/tool-package-manifest-future-version.toml"))
+            .unwrap();
+    assert!(matches!(
+        parse_manifest_v1(&future, ManifestSource::User),
+        Err(ManifestError::FutureFormatVersion(2))
+    ));
+}
+
+#[test]
+fn manifest_nested_inline_and_array_table_keys_fail_closed() {
+    let valid = include_str!("../../../../specs/examples/valid/tool-package-manifest-v1.toml");
+    let cases = [
+        valid.replace(
+            "[actions.output]\n",
+            "[actions.output]\nunknown_output_key = true\n",
+        ),
+        valid.replace(
+            "format = \"text\"",
+            "format = \"text\"\nformat = \"json\"",
+        ),
+        valid.replace(
+            "backend_kinds = [\"process\"]",
+            "backend_kinds = [\"process\"]\nreplaces = [{ package_id = \"user.fake.old\", version_req = \"*\", unknown = true }]",
+        ),
+        valid.replace(
+            "backend_kinds = [\"process\"]",
+            "backend_kinds = [\"process\"]\nreplaces = [{ package_id = \"user.fake.old\", package_id = \"user.fake.other\", version_req = \"*\" }]",
+        ),
+        valid.replace(
+            "required = true",
+            "required = true\nunknown_parameter_key = true",
+        ),
+        valid.replace("name = \"value\"", "name = \"value\"\nname = \"other\""),
+    ];
+    for candidate in cases {
+        assert!(
+            parse_manifest_v1(&candidate, ManifestSource::User).is_err(),
+            "nested, inline and array-table unknown or duplicate keys must fail closed"
         );
     }
 }
@@ -119,6 +168,8 @@ display_name = "Run fake JSON"
 summary = "Returns JSON."
 description = "Contract fixture action."
 permission_actions = ["local_read", "process_run"]
+paid_action = "no"
+idempotency = "read_only"
 output_schema_file = "schemas/output.json"
 
 [actions.output]
@@ -149,7 +200,8 @@ display_name = "Start Goal"
 summary = "Start one goal."
 description = "Starts a durable Star-Control goal."
 permission_actions = ["local_write"]
-cancel_mode = "none"
+paid_action = "no"
+idempotency = "non_idempotent"
 "#;
     assert!(parse_manifest_v1(core, ManifestSource::Release).is_ok());
     assert!(parse_manifest_v1(core, ManifestSource::User).is_err());
@@ -266,16 +318,52 @@ fn manifest_rejects_future_and_project_unsafe_modes_but_allows_disabled_draft() 
 }
 
 #[test]
-// matrix: MCP-M007 MCP-M008 MCP-M009 MCP-M010 MCP-M011 MCP-M012 MCP-M013 MCP-M014 MCP-M020
-fn manifest_rejects_unsafe_locator_probe_and_binding_contracts() {
+// matrix: MCP-M007
+fn manifest_rejects_a_binding_to_an_unknown_parameter() {
     let valid = include_str!("../../../../specs/examples/valid/tool-package-manifest-v1.toml");
     assert!(
         parse_manifest_v1(
-            &valid.replace("C:\\\\Tools\\\\fake-echo.exe", "cmd.exe"),
+            &format!("{valid}\n[[actions.argv]]\nkind = \"positional\"\ninput = \"missing\"\n"),
             ManifestSource::User,
         )
         .is_err()
     );
+}
+
+#[test]
+// matrix: MCP-M008
+fn manifest_rejects_two_stdin_bindings_for_one_action() {
+    let source = argv_fixture().replace(
+        "[[actions.argv]]\nkind = \"positional\"\ninput = \"value\"",
+        "[[actions.argv]]\nkind = \"stdin_text\"\ninput = \"value\"\n\n[[actions.argv]]\nkind = \"stdin_text\"\ninput = \"value\"",
+    );
+    assert!(parse_manifest_v1(&source, ManifestSource::User).is_err());
+}
+
+#[test]
+// matrix: MCP-M009
+fn manifest_rejects_overlapping_exit_code_sets() {
+    let source = argv_fixture().replace("empty = []", "empty = [0]");
+    assert!(parse_manifest_v1(&source, ManifestSource::User).is_err());
+}
+
+#[test]
+// matrix: MCP-M010
+fn manifest_rejects_paid_metadata_permission_mismatches() {
+    let missing_permission =
+        argv_fixture().replace("paid_action = \"no\"", "paid_action = \"yes\"");
+    assert!(parse_manifest_v1(&missing_permission, ManifestSource::User).is_err());
+    let missing_metadata = argv_fixture().replace(
+        "permission_actions = [\"local_read\", \"process_run\"]",
+        "permission_actions = [\"local_read\", \"process_run\", \"paid_action\"]",
+    );
+    assert!(parse_manifest_v1(&missing_metadata, ManifestSource::User).is_err());
+}
+
+#[test]
+// matrix: MCP-M011
+fn manifest_rejects_unknown_permission_action_ids() {
+    let valid = argv_fixture();
     assert!(
         parse_manifest_v1(
             &valid.replace(
@@ -286,60 +374,94 @@ fn manifest_rejects_unsafe_locator_probe_and_binding_contracts() {
         )
         .is_err()
     );
-    assert!(parse_manifest_v1(
-        &valid.replace("update_policy = \"pinned_hash\"", "update_policy = \"version_compatible\"")
-            .replace("sha256 = \"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"\n", ""),
-        ManifestSource::User,
-    )
-    .is_err());
+}
+
+#[test]
+// matrix: MCP-M012
+fn manifest_rejects_shell_script_hosts_scripts_and_path_lookup() {
+    for path in [
+        r"C:\\Windows\\System32\\cmd.exe",
+        r"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        r"C:\\Windows\\System32\\wscript.exe",
+        r"C:\\Tools\\tool.ps1",
+        "cmd.exe",
+    ] {
+        let source = argv_fixture().replace(r"C:\\Tools\\fake-echo.exe", path);
+        assert!(
+            parse_manifest_v1(&source, ManifestSource::User).is_err(),
+            "forbidden shell or script path accepted: {path}"
+        );
+    }
+    let anchored_shell = argv_fixture()
+        .replace(
+            "locator_kind = \"absolute\"",
+            "locator_kind = \"anchor_relative\"",
+        )
+        .replace(
+            "path = \"C:\\\\Tools\\\\fake-echo.exe\"",
+            "path = \"cmd.exe\"\nanchor = \"program_files\"",
+        );
+    assert!(parse_manifest_v1(&anchored_shell, ManifestSource::User).is_err());
+}
+
+#[test]
+// matrix: MCP-M013
+fn manifest_rejects_invalid_locator_field_combinations() {
+    let absolute_with_anchor = argv_fixture().replace(
+        "path = \"C:\\\\Tools\\\\fake-echo.exe\"",
+        "path = \"C:\\\\Tools\\\\fake-echo.exe\"\nanchor = \"program_files\"",
+    );
+    assert!(parse_manifest_v1(&absolute_with_anchor, ManifestSource::User).is_err());
+
+    let anchor_without_anchor = argv_fixture()
+        .replace(
+            "locator_kind = \"absolute\"",
+            "locator_kind = \"anchor_relative\"",
+        )
+        .replace(
+            "path = \"C:\\\\Tools\\\\fake-echo.exe\"",
+            "path = \"tool.exe\"",
+        );
+    assert!(parse_manifest_v1(&anchor_without_anchor, ManifestSource::User).is_err());
+
+    let ref_with_path = argv_fixture()
+        .replace(
+            "locator_kind = \"absolute\"",
+            "locator_kind = \"location_ref\"",
+        )
+        .replace(
+            "path = \"C:\\\\Tools\\\\fake-echo.exe\"",
+            "path = \"C:\\\\Tools\\\\fake-echo.exe\"\nlocation_ref = \"tool.install\"",
+        );
+    assert!(parse_manifest_v1(&ref_with_path, ManifestSource::User).is_err());
+}
+
+#[test]
+// matrix: MCP-M014
+fn manifest_rejects_version_compatible_without_a_probe() {
+    let source = argv_fixture()
+        .replace("update_policy = \"pinned_hash\"", "update_policy = \"version_compatible\"")
+        .replace(
+            "sha256 = \"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"\n",
+            "authenticode_policy = \"require_subject\"\nauthenticode_subject = \"Example Publisher\"\n",
+        );
+    assert!(parse_manifest_v1(&source, ManifestSource::User).is_err());
+}
+
+#[test]
+// matrix: MCP-M020
+fn manifest_requires_output_contract_and_schema_for_json_and_jsonl() {
     assert!(
         parse_manifest_v1(
-            &valid.replace("[actions.output]", "# output removed"),
+            &argv_fixture().replace("[actions.output]", "# output removed"),
             ManifestSource::User,
         )
         .is_err()
     );
-    assert!(
-        parse_manifest_v1(
-            &valid.replace("format = \"text\"", "format = \"json\""),
-            ManifestSource::User,
-        )
-        .is_err()
-    );
-    assert!(
-        parse_manifest_v1(
-            &format!("{valid}\n[[actions.argv]]\nkind = \"positional\"\ninput = \"missing\"\n"),
-            ManifestSource::User,
-        )
-        .is_err()
-    );
-    assert!(
-        parse_manifest_v1(
-            &valid.replace("empty = []", "empty = [0]"),
-            ManifestSource::User,
-        )
-        .is_err()
-    );
-    assert!(
-        parse_manifest_v1(
-            &valid.replace(
-                "permission_actions = [\"local_read\", \"process_run\"]",
-                "permission_actions = [\"local_read\", \"process_run\"]\npaid_action = \"yes\""
-            ),
-            ManifestSource::User,
-        )
-        .is_err()
-    );
-    assert!(
-        parse_manifest_v1(
-            &valid.replace(
-                "permission_actions = [\"local_read\", \"process_run\"]",
-                "permission_actions = [\"local_read\", \"process_run\", \"paid_action\"]"
-            ),
-            ManifestSource::User,
-        )
-        .is_err()
-    );
+    for format in ["json", "jsonl"] {
+        let source = argv_fixture().replace("format = \"text\"", &format!("format = \"{format}\""));
+        assert!(parse_manifest_v1(&source, ManifestSource::User).is_err());
+    }
 }
 
 fn argv_fixture() -> &'static str {
@@ -357,6 +479,32 @@ fn json_stdio_fixture() -> String {
             "[[actions.argv]]\nkind = \"positional\"\ninput = \"value\"\n\n[actions.exit_codes]\nsuccess = [0]\nempty = []\nwarning = []\nretryable = []\n\n",
             "",
         )
+}
+
+#[test]
+fn appcontainer_adapter_contract_rejects_unbrokered_or_privileged_manifests() {
+    let valid = json_stdio_fixture().replace(
+        "interface_version_req = \"*\"",
+        "interface_version_req = \"*\"\nworking_directory = \"artifact_root\"\nisolation_compatibility = [\"appcontainer_adapter\"]",
+    );
+    assert!(parse_manifest_v1(&valid, ManifestSource::User).is_ok());
+    for invalid in [
+        valid.replace(
+            "protocol = \"star_json_stdio_v1\"",
+            "protocol = \"argv_v1\"",
+        ),
+        valid.replace(
+            "working_directory = \"artifact_root\"",
+            "working_directory = \"project_root\"",
+        ),
+        valid.replace(
+            "permission_actions = [\"local_read\", \"process_run\"]",
+            "permission_actions = [\"network_read\", \"process_run\"]",
+        ),
+        valid.replace("paid_action = \"no\"", "paid_action = \"yes\""),
+    ] {
+        assert!(parse_manifest_v1(&invalid, ManifestSource::User).is_err());
+    }
 }
 
 #[test]
@@ -577,15 +725,21 @@ fn permissions_calculate_contract_lanes() {
 
 #[test]
 // matrix: MCP-H001
-fn jcs_sorts_keys_and_hashes_canonical_bytes() {
-    let value = serde_json::json!({"b": 1, "a": 2});
+fn jcs_matches_the_rfc_8785_official_canonicalization_vector_and_hash() {
+    let fixture_root = root().join("specs/fixtures/mcp/canonicalization");
+    let value: serde_json::Value =
+        serde_json::from_slice(&fs::read(fixture_root.join("rfc8785-input.json")).unwrap())
+            .unwrap();
+    let expected = fs::read_to_string(fixture_root.join("rfc8785-expected.txt")).unwrap();
     assert_eq!(
         String::from_utf8(jcs_bytes(&value).unwrap()).unwrap(),
-        "{\"a\":2,\"b\":1}"
+        expected.trim_end()
     );
     assert_eq!(
         canonical_sha256(&value).unwrap().as_str(),
-        "sha256:d3626ac30a87e6f7a6428233b3c68299976865fa5508e4267c5415c76af7a772"
+        fs::read_to_string(fixture_root.join("rfc8785-sha256.txt"))
+            .unwrap()
+            .trim()
     );
 }
 
@@ -595,6 +749,26 @@ fn jcs_does_not_unicode_normalize_distinct_argument_strings() {
     let composed = canonical_sha256(&serde_json::json!({"value":"é"})).unwrap();
     let decomposed = canonical_sha256(&serde_json::json!({"value":"e\u{301}"})).unwrap();
     assert_ne!(composed, decomposed);
+}
+
+#[test]
+fn fixed_mcp_query_and_action_argument_bounds_match_the_advertised_surface() {
+    assert!(!fixed_input_valid(
+        "star_tool_search",
+        serde_json::json!({"query":format!("{}x", " ".repeat(256))}),
+    ));
+
+    let maximum = 4 * 1024 * 1024;
+    let inner = serde_json::json!({"value":"x".repeat(maximum - br#"{"value":""}"#.len())});
+    assert_eq!(jcs_bytes(&inner).unwrap().len(), maximum);
+    assert!(fixed_input_valid(
+        "star_tool_call_read_closed",
+        serde_json::json!({
+            "tool_id":"user.boundary.read",
+            "descriptor_hash":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "arguments":inner
+        }),
+    ));
 }
 
 #[test]

@@ -1,0 +1,7 @@
+format_version = 2
+package_id = "user.fake.future"
+package_version = "1.0.0"
+display_name = "Future"
+description = "Future format compatibility fixture."
+enabled = false
+backend_kinds = ["process"]

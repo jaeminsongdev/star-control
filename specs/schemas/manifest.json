@@ -18,11 +18,19 @@
     },
     {
       "file": "tool-package-manifest.schema.json",
-      "hash": "sha256:4d609721b3775e8eb4ab970df8fad83830207d081d1df51716395ae7b468a112"
+      "hash": "sha256:53730396ad887fe049116fc220e8ca0b2fedf3a9c086ba5256cb7283763d0ed7"
     },
     {
       "file": "tool-registry-snapshot.schema.json",
-      "hash": "sha256:afd48064fd650f90d2c4ef8ea6cf908ca43e420882793106e524a917da9323f1"
+      "hash": "sha256:de143e152a4f15425a884545418cc8a63443b5f02959b240ef8aca1da5daba3a"
+    },
+    {
+      "file": "tool-registry-cache.schema.json",
+      "hash": "sha256:feb665fb4a238515b84f3f7f2f5cbde67114fa5240588002d9e3db7d06a4473e"
+    },
+    {
+      "file": "tool-trust-record.schema.json",
+      "hash": "sha256:a71037f7f2b18592f45c2a2ef27f8eba89dfae9e7fdc8e2d24c802fc0afab2d8"
     },
     {
       "file": "external-tool-request.schema.json",
@@ -30,23 +38,47 @@
     },
     {
       "file": "external-tool-response.schema.json",
-      "hash": "sha256:40ade14ccfb024cc59913ad11411ae1c6e004d2d27aa62a4cfeafc3144add6e2"
+      "hash": "sha256:f688fb19d07818b4c275e1cc03f0df9bb7b18e9c6a2a078d83d1bd83b004bbf6"
+    },
+    {
+      "file": "external-tool-progress.schema.json",
+      "hash": "sha256:29bc66e2da93c2c5472f5cf96f431152594a4ea4bd1636100dcf30a11c5ed78f"
+    },
+    {
+      "file": "external-tool-cancel.schema.json",
+      "hash": "sha256:8b6e0ab2d1a13aec8541eb49117521cc4d035e2a39ca7055b59712dbab349d71"
+    },
+    {
+      "file": "external-tool-cancel-ack.schema.json",
+      "hash": "sha256:1572fdcca76b7cdb7adef3eec1f326c3063a8abcadb0779f96071b2f0dfcb3a4"
+    },
+    {
+      "file": "external-tool-probe-request.schema.json",
+      "hash": "sha256:8ff0d0d9eba03060afe12166c3e6162f6fbded8ca90b747d746caf4f9a715e94"
+    },
+    {
+      "file": "external-tool-probe-response.schema.json",
+      "hash": "sha256:44418159efcbba546e47c1822805b4eb105530794b92fd6f47a81ab039bd388b"
+    },
+    {
+      "file": "executable-identity.schema.json",
+      "hash": "sha256:66387ee0cf89b0b30f136d346e7f13546e69b2763629970eb376dc84b1dd1656"
     },
     {
       "file": "ipc.schema.json",
-      "hash": "sha256:f2fc14d504e87d191ec5ef408ef3d7b81b72c44697f96bd7243a619fdbc2d6f9"
+      "hash": "sha256:1f893e920c302c3f40a57755bc3fae11a999054ced5ed0473c4012c077be40cb"
     },
     {
       "file": "mcp-star-tool-search.input.schema.json",
-      "hash": "sha256:af356e5491d7b43cc181605bff1c07d49669a3cd6082aa0584ccf1892ecdea24"
+      "hash": "sha256:92f50024a583eee7d188c754512624a48fe122ef0b6b9099072bc6d5f351bc7d"
     },
     {
       "file": "mcp-star-tool-describe.input.schema.json",
-      "hash": "sha256:fc50c9ba5eb109c71aa490af5be4ba11ede16aec12472d237165bf25c790cda0"
+      "hash": "sha256:5129c9351aab84dd4678769a5b2ba3a2952bb6dfa0747b287e994b4490654c1b"
     },
     {
       "file": "mcp-star-tool-registry-status.input.schema.json",
-      "hash": "sha256:cb6161b7e8dc6838f789b041634369ae2e75ad27b6ccc1fded27641044801dbf"
+      "hash": "sha256:2db6265496c09e73e02b553ca037f70c9466aed9f7b70db2a5d96a1f9c232264"
     },
     {
       "file": "mcp-star-tool-call.input.schema.json",
@@ -54,19 +86,91 @@
     },
     {
       "file": "mcp-star-tool-operation-get.input.schema.json",
-      "hash": "sha256:a3124da8d6f29c28ef131c6b84fd4af371aa3d44d20cf290907d42e438f11799"
+      "hash": "sha256:c2c46191e75d5e881b2bf1af467f8db12be17e5e3bc88477a2c7b5a629de78c5"
     },
     {
       "file": "mcp-star-tool-operation-cancel.input.schema.json",
-      "hash": "sha256:fc65395f13a6e65298aaeab30c3d0778c1c6549abb21dcc951c8269b05bf365b"
+      "hash": "sha256:7ad4702bde26e0db92982232a0e5162ead269a421db4cd06a6b8068683172026"
     },
     {
       "file": "mcp-star-approval-resolve.input.schema.json",
-      "hash": "sha256:f500a7f892f8b8823994fdcf1aa310bded0606acd0bf24d122e8e50eba772a1c"
+      "hash": "sha256:71d2bb4e3557dcbd4316f24571d761de0f0430147bdbaf675682a8794158435c"
     },
     {
       "file": "mcp-tool-result.schema.json",
-      "hash": "sha256:9f996ef6d6bfdd8f5449f748e1f825209cb0f2312e0cb9d6761601a186d97003"
+      "hash": "sha256:47de23dba0ae25a4f60f4d50b489c1984a617367400af7be0d5ddca212628b26"
+    },
+    {
+      "file": "mcp-star-tool-call-read-closed.input.schema.json",
+      "hash": "sha256:6687d0472af39d133c3cee55b52d5ba4e76a4911e6b81cd4965c53dd5e77eec0"
+    },
+    {
+      "file": "mcp-star-tool-call-read-open.input.schema.json",
+      "hash": "sha256:9860a13b276ec77b7f88c7e6c6f56321bb54c92fff36a2417240c8764af75e75"
+    },
+    {
+      "file": "mcp-star-tool-call-write-closed.input.schema.json",
+      "hash": "sha256:ed19f164e03bb9b0dc4d441de9230975e51fde91fb76705b42636b93d400d700"
+    },
+    {
+      "file": "mcp-star-tool-call-destructive-closed.input.schema.json",
+      "hash": "sha256:b2dc1a320c2f2e6071a969ef50b28560b772928454ad6c1f6d0e9f5ee7470ed6"
+    },
+    {
+      "file": "mcp-star-tool-call-write-open.input.schema.json",
+      "hash": "sha256:fde881204144c5e71953e5cf0b4359b2c28d13208e5e0a650da273841a7267f1"
+    },
+    {
+      "file": "mcp-star-tool-call-destructive-open.input.schema.json",
+      "hash": "sha256:1e2644620e407a6255610b2ea66b4a937fa210ca6db5d817d0233a20e8889ebf"
+    },
+    {
+      "file": "mcp-star-tool-search.result.schema.json",
+      "hash": "sha256:5c5d64be6006ed047d7607f9f5e40e89c7bcebbb6afc3e9c489383e3e02e7034"
+    },
+    {
+      "file": "mcp-star-tool-describe.result.schema.json",
+      "hash": "sha256:b5f5e658a83903b1b24fb23bbfd43878121e10dbf90cd31fa14addbb4ccf77be"
+    },
+    {
+      "file": "mcp-star-tool-registry-status.result.schema.json",
+      "hash": "sha256:6aacf18e7b0a195d2b7511b77436022e3aa326e0ca8b0df428c17f9c50722aba"
+    },
+    {
+      "file": "mcp-star-tool-call-read-closed.result.schema.json",
+      "hash": "sha256:bd078533c631c276dd50b51590dfe160b7cfcb1f43b886e9e7531adb0fd15af0"
+    },
+    {
+      "file": "mcp-star-tool-call-read-open.result.schema.json",
+      "hash": "sha256:0b6a529c832b9174bd47c81811cb73b5a821c1232bcef0bf1427594be6ef5edf"
+    },
+    {
+      "file": "mcp-star-tool-call-write-closed.result.schema.json",
+      "hash": "sha256:99cc7a1f3c26e3bcbdb5b18487d40e2a37a4313383cb2e6a5075f2e332ce335b"
+    },
+    {
+      "file": "mcp-star-tool-call-destructive-closed.result.schema.json",
+      "hash": "sha256:0fc08e73ee1e8742b2504c312ad898bc4a1c70ccde726789643327798752187b"
+    },
+    {
+      "file": "mcp-star-tool-call-write-open.result.schema.json",
+      "hash": "sha256:f5483549cad9228a2c69fac8b719d03d4877e6a81c4068cb6edf78f94a477ed8"
+    },
+    {
+      "file": "mcp-star-tool-call-destructive-open.result.schema.json",
+      "hash": "sha256:e9c04e14fae6bccd22beb4c99665222b549bc7508a3eb8cb8a56b1c471c02540"
+    },
+    {
+      "file": "mcp-star-tool-operation-get.result.schema.json",
+      "hash": "sha256:f8315d64e597a06d42a41e98b77d92a284cc5f4468145f4a87e2cef09bd0a2af"
+    },
+    {
+      "file": "mcp-star-tool-operation-cancel.result.schema.json",
+      "hash": "sha256:dcf7e4ea4d9ab52ee6afdbe136bd8ebfbd443d6b9bec06af9f99d2572af55f86"
+    },
+    {
+      "file": "mcp-star-approval-resolve.result.schema.json",
+      "hash": "sha256:cb9ed61bde2c402adf87608bf4c182be0bf9ea147a81e4ece68f05b57ba798ea"
     }
   ],
   "schema_version": 1

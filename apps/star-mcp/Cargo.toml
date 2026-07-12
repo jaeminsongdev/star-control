@@ -10,6 +10,7 @@ name = "star-mcp"
 path = "src/main.rs"
 
 [dependencies]
+chrono.workspace = true
 rmcp.workspace = true
 schemars.workspace = true
 serde.workspace = true

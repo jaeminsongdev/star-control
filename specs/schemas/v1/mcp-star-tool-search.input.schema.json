@@ -1,15 +1,64 @@
 {
-  "$defs": {
-    "RegistrySource": {
-      "enum": [
-        "release",
-        "user",
-        "project"
-      ],
+  "$id": "urn:star-control:schema:star.mcp.star_tool_search.input:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cursor": {
+      "anyOf": [
+        {
+          "maxLength": 1024,
+          "pattern": "^[^\\u0000]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "limit": {
+      "default": 10,
+      "maximum": 50,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "namespaces": {
+      "default": [],
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+){0,7}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "query": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "\\S",
       "type": "string"
     },
-    "RiskLane": {
-      "enum": [
+    "readiness": {
+      "default": [
+        "ready"
+      ],
+      "items": {
+        "enum": [
+          "ready",
+          "unavailable",
+          "untrusted",
+          "incompatible",
+          "degraded"
+        ],
+        "type": "string"
+      },
+      "maxItems": 5,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "risk_lanes": {
+      "default": [
         "read_closed",
         "read_open",
         "write_closed",
@@ -17,99 +66,62 @@
         "write_open",
         "destructive_open"
       ],
-      "type": "string"
-    },
-    "ToolReadiness": {
-      "enum": [
-        "ready",
-        "unavailable",
-        "untrusted",
-        "incompatible",
-        "degraded"
-      ],
-      "type": "string"
-    }
-  },
-  "$id": "urn:star-control:schema:star.mcp.star_tool_search.input:v1",
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "properties": {
-    "cursor": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "limit": {
-      "format": "uint8",
-      "maximum": 255,
-      "minimum": 0,
-      "type": [
-        "integer",
-        "null"
-      ]
-    },
-    "namespaces": {
       "items": {
+        "enum": [
+          "read_closed",
+          "read_open",
+          "write_closed",
+          "destructive_closed",
+          "write_open",
+          "destructive_open"
+        ],
         "type": "string"
       },
-      "type": [
-        "array",
-        "null"
-      ]
-    },
-    "query": {
-      "type": "string"
-    },
-    "readiness": {
-      "items": {
-        "$ref": "#/$defs/ToolReadiness"
-      },
-      "type": [
-        "array",
-        "null"
-      ]
-    },
-    "risk_lanes": {
-      "items": {
-        "$ref": "#/$defs/RiskLane"
-      },
-      "type": [
-        "array",
-        "null"
-      ]
+      "maxItems": 6,
+      "type": "array",
+      "uniqueItems": true
     },
     "sources": {
+      "default": [
+        "release",
+        "user",
+        "project"
+      ],
       "items": {
-        "$ref": "#/$defs/RegistrySource"
+        "enum": [
+          "release",
+          "user",
+          "project"
+        ],
+        "type": "string"
       },
-      "type": [
-        "array",
-        "null"
-      ]
+      "maxItems": 3,
+      "type": "array",
+      "uniqueItems": true
     },
     "tags": {
+      "default": [],
       "items": {
+        "pattern": "^[a-z][a-z0-9_-]{0,31}$",
         "type": "string"
       },
-      "type": [
-        "array",
-        "null"
-      ]
+      "maxItems": 32,
+      "type": "array",
+      "uniqueItems": true
     },
     "task_kinds": {
+      "default": [],
       "items": {
+        "pattern": "^[a-z][a-z0-9_-]{0,31}$",
         "type": "string"
       },
-      "type": [
-        "array",
-        "null"
-      ]
+      "maxItems": 16,
+      "type": "array",
+      "uniqueItems": true
     }
   },
   "required": [
     "query"
   ],
-  "title": "SearchInput",
   "type": "object"
 }

@@ -1,0 +1,94 @@
+{
+  "$id": "urn:star-control:schema:star.mcp.star_tool_call_write_open.input:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "arguments": {
+      "type": "object"
+    },
+    "client_request_id": {
+      "anyOf": [
+        {
+          "pattern": "^req_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "descriptor_hash": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "expected_revision": {
+      "anyOf": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "goal_id": {
+      "anyOf": [
+        {
+          "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "idempotency_key": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[^\\u0000]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requested_timeout_ms": {
+      "anyOf": [
+        {
+          "maximum": 86400000,
+          "minimum": 100,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tool_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+){1,7}$",
+      "type": "string"
+    },
+    "wait_mode": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "sync",
+        "accepted"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "tool_id",
+    "descriptor_hash",
+    "arguments"
+  ],
+  "type": "object"
+}

@@ -86,6 +86,86 @@
       "title": "IpcHandshakeError",
       "type": "object"
     },
+    "hello": {
+      "$defs": {
+        "IpcClientKind": {
+          "enum": [
+            "cli",
+            "mcp",
+            "hook",
+            "internal_test"
+          ],
+          "type": "string"
+        }
+      },
+      "$id": "urn:star-control:schema:ipc.hello:v1",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auth_tag": {
+          "type": "string"
+        },
+        "capabilities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "client_instance_id": {
+          "type": "string"
+        },
+        "client_kind": {
+          "$ref": "#/$defs/IpcClientKind"
+        },
+        "client_nonce": {
+          "type": "string"
+        },
+        "client_pid": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "client_version": {
+          "type": "string"
+        },
+        "correlation_id": {
+          "type": "string"
+        },
+        "protocol_versions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "server_nonce": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "protocol_versions",
+        "client_kind",
+        "client_version",
+        "client_instance_id",
+        "client_pid",
+        "client_nonce",
+        "server_nonce",
+        "auth_tag",
+        "correlation_id"
+      ],
+      "title": "IpcHello",
+      "type": "object"
+    },
     "request": {
       "$id": "urn:star-control:schema:ipc.request:v1",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -138,23 +218,111 @@
     },
     "response": {
       "$defs": {
+        "ErrorCategory": {
+          "enum": [
+            "config",
+            "contract",
+            "state",
+            "policy",
+            "route",
+            "tool",
+            "codex",
+            "validation",
+            "vcs",
+            "ipc",
+            "release",
+            "internal"
+          ],
+          "type": "string"
+        },
         "ErrorEnvelope": {
           "additionalProperties": false,
           "properties": {
+            "artifact_refs": {
+              "items": true,
+              "type": "array"
+            },
+            "category": {
+              "$ref": "#/$defs/ErrorCategory"
+            },
+            "caused_by": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ErrorRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "code": {
+              "type": "string"
+            },
+            "component": {
+              "type": "string"
+            },
+            "context": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "correlation_id": {
               "type": "string"
             },
             "message": {
               "type": "string"
             },
+            "occurred_at": {
+              "type": "string"
+            },
+            "retry_after_ms": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "retryable": {
               "type": "boolean"
+            },
+            "schema_id": {
+              "type": "string"
+            },
+            "schema_version": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "user_action": true
+          },
+          "required": [
+            "schema_id",
+            "schema_version",
+            "code",
+            "category",
+            "message",
+            "retryable",
+            "context",
+            "correlation_id",
+            "artifact_refs",
+            "occurred_at",
+            "component"
+          ],
+          "type": "object"
+        },
+        "ErrorRef": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
             }
           },
           "required": [
             "code",
-            "message",
-            "retryable"
+            "summary"
           ],
           "type": "object"
         },
@@ -230,6 +398,83 @@
         "correlation_id"
       ],
       "title": "IpcResponse",
+      "type": "object"
+    },
+    "welcome": {
+      "$defs": {
+        "ControllerReadiness": {
+          "enum": [
+            "ready",
+            "degraded",
+            "recovering",
+            "blocked"
+          ],
+          "type": "string"
+        }
+      },
+      "$id": "urn:star-control:schema:ipc.welcome:v1",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "auth_tag": {
+          "type": "string"
+        },
+        "capabilities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "controller_instance_id": {
+          "type": "string"
+        },
+        "controller_version": {
+          "type": "string"
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ControllerReadiness"
+        },
+        "registry_revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "server_nonce": {
+          "type": "string"
+        },
+        "server_time": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "protocol_version",
+        "controller_version",
+        "controller_instance_id",
+        "session_id",
+        "server_nonce",
+        "auth_tag",
+        "readiness",
+        "registry_revision",
+        "server_time"
+      ],
+      "title": "IpcWelcome",
       "type": "object"
     }
   },

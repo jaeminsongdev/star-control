@@ -1,4 +1,7 @@
-use std::{fmt, sync::Mutex};
+use std::{
+    fmt,
+    sync::{Mutex, OnceLock},
+};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -26,6 +29,12 @@ macro_rules! prefixed_id {
                         kind: stringify!($name),
                         value: value.clone(),
                     })?;
+                if raw.len() != 26 || raw.bytes().any(|byte| byte.is_ascii_lowercase()) {
+                    return Err(IdError::Invalid {
+                        kind: stringify!($name),
+                        value,
+                    });
+                }
                 Ulid::from_string(raw).map_err(|_| IdError::Invalid {
                     kind: stringify!($name),
                     value: value.clone(),
@@ -33,7 +42,12 @@ macro_rules! prefixed_id {
                 Ok(Self(value))
             }
             pub fn new() -> Self {
-                Self(format!("{}{}", $prefix, Ulid::new()))
+                static SOURCE: OnceLock<MonotonicUlids> = OnceLock::new();
+                Self(format!(
+                    "{}{}",
+                    $prefix,
+                    SOURCE.get_or_init(MonotonicUlids::default).next()
+                ))
             }
             pub fn as_str(&self) -> &str {
                 &self.0

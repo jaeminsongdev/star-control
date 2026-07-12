@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+
+use chrono::{SecondsFormat, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -131,9 +134,91 @@ pub struct IpcResponse {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ErrorEnvelope {
+    pub schema_id: String,
+    pub schema_version: u32,
     pub code: String,
+    pub category: ErrorCategory,
     pub message: String,
     pub retryable: bool,
+    pub retry_after_ms: Option<u64>,
+    pub user_action: Option<serde_json::Value>,
+    pub context: BTreeMap<String, serde_json::Value>,
+    pub correlation_id: String,
+    pub caused_by: Option<ErrorRef>,
+    pub artifact_refs: Vec<serde_json::Value>,
+    pub occurred_at: String,
+    pub component: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorCategory {
+    Config,
+    Contract,
+    State,
+    Policy,
+    Route,
+    Tool,
+    Codex,
+    Validation,
+    Vcs,
+    Ipc,
+    Release,
+    Internal,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ErrorRef {
+    pub code: String,
+    pub summary: String,
+}
+
+impl ErrorEnvelope {
+    pub fn new(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        retryable: bool,
+        correlation_id: impl Into<String>,
+        component: impl Into<String>,
+    ) -> Self {
+        let code = code.into();
+        Self {
+            schema_id: "star.error".to_owned(),
+            schema_version: MCP_CONTRACT_VERSION,
+            category: ErrorCategory::for_code(&code),
+            code,
+            message: message.into(),
+            retryable,
+            retry_after_ms: None,
+            user_action: None,
+            context: BTreeMap::new(),
+            correlation_id: correlation_id.into(),
+            caused_by: None,
+            artifact_refs: Vec::new(),
+            occurred_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
+            component: component.into(),
+        }
+    }
+}
+
+impl ErrorCategory {
+    fn for_code(code: &str) -> Self {
+        match code.split_once('_').map(|(prefix, _)| prefix) {
+            Some("CONFIG") => Self::Config,
+            Some("CONTRACT") => Self::Contract,
+            Some("STATE") => Self::State,
+            Some("POLICY") => Self::Policy,
+            Some("ROUTE") => Self::Route,
+            Some("TOOL") => Self::Tool,
+            Some("CODEX") => Self::Codex,
+            Some("VALIDATION") => Self::Validation,
+            Some("VCS") => Self::Vcs,
+            Some("IPC") => Self::Ipc,
+            Some("RELEASE") => Self::Release,
+            _ => Self::Internal,
+        }
+    }
 }
 
 impl IpcChallenge {

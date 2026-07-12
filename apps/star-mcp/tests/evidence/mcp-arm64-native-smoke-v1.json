@@ -1,0 +1,116 @@
+{
+  "schema_id": "star.mcp-arm64-native-smoke-evidence",
+  "schema_version": 1,
+  "observed_at": "2026-07-12T10:13:59.6483600+00:00",
+  "workflow": {
+    "repository": "jaeminsongdev/star-control-mcp-arm64-evidence-20260712",
+    "visibility": "private",
+    "runner_label": "windows-11-arm",
+    "full_gate_run": {
+      "run_id": 29188151232,
+      "url": "https://github.com/jaeminsongdev/star-control-mcp-arm64-evidence-20260712/actions/runs/29188151232",
+      "head_sha": "23411d7b19954a0e4158119007fb6439ab08568c",
+      "overall_conclusion": "failure",
+      "native_workspace_tests": true,
+      "native_clippy": true,
+      "schema_matrix_format": true,
+      "native_release_build": true,
+      "initial_smoke": false,
+      "initial_smoke_fail_closed": true,
+      "initial_smoke_failure": "github_actions_outer_job_denied_verified_controller_breakaway"
+    },
+    "smoke_run": {
+      "run_id": 29188629756,
+      "url": "https://github.com/jaeminsongdev/star-control-mcp-arm64-evidence-20260712/actions/runs/29188629756",
+      "head_sha": "dd7135cc1c6f9e1a3ada8a99a67176dac3827d72",
+      "overall_conclusion": "success",
+      "native_release_build": true,
+      "native_gateway_ipc_registry_process_smoke": true
+    }
+  },
+  "host": {
+    "os": "Microsoft Windows NT 10.0.26200.0",
+    "display_version": "25H2",
+    "current_build": 26200,
+    "ubr": 8655,
+    "os_architecture": "Arm64",
+    "process_architecture": "Arm64",
+    "processor_architecture": "ARM64",
+    "runner_environment": "github-hosted",
+    "runner_image": "win11-arm64",
+    "minimum_supported_build": 26100,
+    "minimum_build_met": true,
+    "exact_24h2_baseline_executed": false
+  },
+  "binaries": {
+    "cli_sha256": "sha256:ee13699e706fb28ba7a474aa3f40765d83e624db1c53f44c6032e061d5a0f2f8",
+    "gateway_sha256": "sha256:f8341eb17c55626bd885141e23b49a06a7f6752f969225da889fc912c3898707",
+    "controller_sha256": "sha256:850b81b9501a62e103d0833d807c839ce48ffe8c81e05d099343b16384ed440f",
+    "fake_sha256": "sha256:516afc1144f308c7a3068ab1b5f4e5fdb876fbd614cf146787767a8ecb85a28c",
+    "pe_machine": "0xaa64"
+  },
+  "native_test_assertions": {
+    "named_pipe_dacl_dpapi_hmac": true,
+    "job_object_child_tree": true,
+    "appcontainer_adapter_acl_loopback": true,
+    "argv_json_stdio_output_handle": true,
+    "watcher_registry_lkg": true
+  },
+  "results": {
+    "controller_start": true,
+    "controller_launch_mode": "runner_prestarted_outer_job_bound",
+    "verified_existing_controller_identity": true,
+    "controller_instance_id": "ctl_R2yY2IezZHMddiYN_gMdaqgcENk_XBlwygiD1jiNBgM",
+    "controller_pid": 6512,
+    "protocol_version": "2025-11-25",
+    "fixed_tool_count": 12,
+    "only_tools_capability": true,
+    "authenticated_ipc": true,
+    "release_core_ready": true,
+    "user_manifest_trusted": true,
+    "search_ready": true,
+    "descriptor_architecture": "aarch64",
+    "external_process_outcome": "success",
+    "external_process_exit_code": 0,
+    "external_process_stdout": "argv:native-arm64\n",
+    "external_process_untrusted_output": true,
+    "gateway_pid": 1112
+  },
+  "raw_evidence": [
+    {
+      "role": "native_workspace_tests",
+      "path": "target/arm64-ci-artifact-run29188151232/cargo-test.log",
+      "bytes": 36281,
+      "lines": 705,
+      "sha256": "sha256:bbc4c64c471f9920aedfe10b001ca606a40d91b43c1bd5d110d2c0498d9de1d1"
+    },
+    {
+      "role": "native_clippy",
+      "path": "target/arm64-ci-artifact-run29188151232/cargo-clippy.log",
+      "bytes": 5399,
+      "lines": 140,
+      "sha256": "sha256:bad809c3faf01c96b095f549d577f33c9f23a795dc4f94fda5cc36413a7133f2"
+    },
+    {
+      "role": "outer_job_fail_closed",
+      "path": "target/arm64-ci-artifact-run29188151232/mcp-arm64-smoke.log",
+      "bytes": 61,
+      "lines": 1,
+      "sha256": "sha256:ac56b679cac917d96f70317237863bc11c38810ae60bf76ab43ec547398f5c1b"
+    },
+    {
+      "role": "native_smoke_json",
+      "path": "target/arm64-ci-artifact-run29188629756/mcp-arm64-native-smoke-v1.json",
+      "bytes": 1683,
+      "lines": 43,
+      "sha256": "sha256:bb2ba4d6e653c9a32578f516e50b048db2be75d33fb210393b38a920baf1c9bb"
+    },
+    {
+      "role": "native_smoke_log",
+      "path": "target/arm64-ci-artifact-run29188629756/mcp-arm64-smoke.log",
+      "bytes": 1684,
+      "lines": 43,
+      "sha256": "sha256:e3c8a239ed0563c393a2aab37aec2954c2ec97d24c87d2a731ab2bfd34fedffd"
+    }
+  ]
+}

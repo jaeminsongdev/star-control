@@ -1,0 +1,42 @@
+{
+  "$id": "urn:star-control:schema:external-tool-probe-response:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "capabilities": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "frame": {
+      "type": "string"
+    },
+    "interface_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "product_version": {
+      "type": "string"
+    },
+    "protocol_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "request_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "frame",
+    "protocol_version",
+    "request_id",
+    "product_version"
+  ],
+  "title": "ExternalToolProbeResponse",
+  "type": "object"
+}

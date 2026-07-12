@@ -8,9 +8,11 @@ use star_contracts::{
 #[cfg(windows)]
 use star_controller::process_runtime::appcontainer_profile_folder;
 use star_controller::process_runtime::{
-    DirectExeSpec, OperationJob, RuntimeCancellation, RuntimeError, execute_direct_exe,
-    execute_direct_exe_cancellable, execute_star_json_stdio, execute_star_json_stdio_cancellable,
-    lease_executable,
+    DirectExeSpec, JsonStdioExecutionOptions, OperationJob, RuntimeCancellation, RuntimeError,
+    execute_direct_exe, execute_direct_exe_cancellable, execute_direct_exe_cancellable_with_grace,
+    execute_star_json_probe, execute_star_json_stdio, execute_star_json_stdio_cancellable,
+    execute_star_json_stdio_cancellable_with_cancel_mode, lease_executable,
+    validate_star_json_stdio_output,
 };
 
 #[tokio::test]
@@ -84,6 +86,8 @@ fn spec(mode: &str) -> DirectExeSpec {
         timeout: Duration::from_secs(5),
         max_stdout_bytes: 1024 * 1024,
         max_stderr_bytes: 1024 * 1024,
+        max_memory_bytes: None,
+        max_processes: 16,
         appcontainer_profile: None,
     }
 }
@@ -127,7 +131,21 @@ async fn fake_argv_exe_receives_typed_args_without_a_shell() {
 // matrix: MCP-P008
 fn executable_lease_blocks_same_path_write_or_replacement_before_launch() {
     let executable = fake_exe();
-    let _lease = lease_executable(&executable).expect("fake executable leases");
+    let lease = lease_executable(&executable).expect("fake executable leases");
+    let identity = lease.identity().expect("leased identity is readable");
+    assert!(identity.stable_file_id);
+    assert_eq!(identity.volume_serial.len(), 16);
+    assert_eq!(identity.file_id.len(), 32);
+    assert_eq!(identity.size, std::fs::metadata(&executable).unwrap().len());
+    chrono::DateTime::parse_from_rfc3339(&identity.last_write).unwrap();
+    assert!(
+        lease
+            .final_path()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with(r"\\?\Volume{"),
+        "identity evidence must hash a normalized volume-GUID final path"
+    );
     assert!(
         std::fs::OpenOptions::new()
             .write(true)
@@ -229,6 +247,34 @@ async fn child_receives_minimal_environment_and_only_declared_values() {
     assert!(output.contains("PATH=<missing>"));
     assert!(output.contains("STAR_TEST_ALLOWED=yes"));
     assert!(output.contains("STAR_TEST_UNDECLARED=<missing>"));
+
+    let mut oversized = spec("env-probe");
+    oversized.environment = vec![(
+        OsString::from("STAR_TEST_LARGE"),
+        OsString::from("x".repeat(32_768)),
+    )];
+    assert!(matches!(
+        execute_direct_exe(&oversized).await,
+        Err(RuntimeError::ProtocolInvalid)
+    ));
+
+    let mut invalid = spec("env-probe");
+    invalid.environment = vec![(OsString::from("1INVALID"), OsString::from("value"))];
+    assert!(matches!(
+        execute_direct_exe(&invalid).await,
+        Err(RuntimeError::ProtocolInvalid)
+    ));
+
+    use std::os::windows::ffi::OsStringExt;
+    let mut invalid_unicode = spec("env-probe");
+    invalid_unicode.environment = vec![(
+        OsString::from("STAR_TEST_INVALID_UTF16"),
+        OsString::from_wide(&[0xD800]),
+    )];
+    assert!(matches!(
+        execute_direct_exe(&invalid_unicode).await,
+        Err(RuntimeError::ProtocolInvalid)
+    ));
 }
 
 #[tokio::test]
@@ -325,6 +371,20 @@ async fn fake_json_stdio_exe_returns_one_bound_result() {
 }
 
 #[tokio::test]
+// matrix: MCP-P011
+async fn fake_json_stdio_probe_returns_strict_versions_and_capabilities() {
+    let response = execute_star_json_probe(&spec("json-probe"), RequestId::new())
+        .await
+        .unwrap();
+    assert_eq!(response.product_version, "1.2.3");
+    assert_eq!(response.interface_version.as_deref(), Some("1.0.0"));
+    assert_eq!(
+        response.capabilities,
+        ["progress", "stdin_cancel", "artifact_output"]
+    );
+}
+
+#[tokio::test]
 // matrix: MCP-P014
 async fn json_stdio_accepts_monotonic_progress_before_one_final_result() {
     let request = request();
@@ -333,6 +393,67 @@ async fn json_stdio_accepts_monotonic_progress_before_one_final_result() {
         .expect("monotonic progress and final result succeed");
     assert_eq!(response.request_id, request.request_id);
     assert_eq!(response.summary, "fake progress result");
+}
+
+#[test]
+// matrix: MCP-P015
+fn json_stdio_rejects_empty_jsonl_records() {
+    let request = request();
+    let result = serde_json::json!({
+        "frame":"result",
+        "protocol_version":1,
+        "schema_id":"star.external-tool-response",
+        "schema_version":1,
+        "request_id":request.request_id,
+        "status":"ok",
+        "summary":"result",
+        "data":{"accepted":true},
+        "diagnostics":[],
+        "artifacts":[],
+        "error":null
+    });
+    assert!(matches!(
+        validate_star_json_stdio_output(&format!("\n{result}"), &request),
+        Err(RuntimeError::ProtocolInvalid)
+    ));
+    assert!(matches!(
+        validate_star_json_stdio_output(&format!("{result}\n\n"), &request),
+        Err(RuntimeError::ProtocolInvalid)
+    ));
+}
+
+#[tokio::test]
+// matrix: MCP-P014 MCP-G016
+async fn json_stdio_progress_observer_receives_a_frame_before_process_completion() {
+    let request = request();
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let observer = std::sync::Arc::new(
+        move |progress: star_contracts::runtime::ExternalToolProgress| {
+            sender.send(progress.sequence).is_ok()
+        },
+    );
+    let task = tokio::spawn(async move {
+        execute_star_json_stdio_cancellable_with_cancel_mode(
+            &spec("json-progress"),
+            &request,
+            JsonStdioExecutionOptions {
+                progress_observer: Some(observer),
+                ..Default::default()
+            },
+        )
+        .await
+    });
+    let first = tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+        .await
+        .expect("progress arrives while the adapter is running")
+        .expect("progress channel stays live");
+    assert_eq!(first, 1);
+    assert!(
+        !task.is_finished(),
+        "result must still be pending after progress"
+    );
+    let outcome = task.await.unwrap().unwrap();
+    assert_eq!(outcome.progress.len(), 2);
 }
 
 #[tokio::test]
@@ -364,10 +485,28 @@ async fn cancellation_terminates_the_job_bound_argv_process() {
         tokio::time::sleep(Duration::from_millis(75)).await;
         signal.cancel();
     });
+    let evidence = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let observed = std::sync::Arc::clone(&evidence);
+    let observer = std::sync::Arc::new(
+        move |value: star_controller::process_runtime::ProcessEndEvidence| {
+            *observed.lock().unwrap() = Some(value);
+            true
+        },
+    );
     assert!(matches!(
-        execute_direct_exe_cancellable(&spec("sleep"), Some(cancellation)).await,
+        execute_direct_exe_cancellable_with_grace(
+            &spec("sleep"),
+            Some(cancellation),
+            Duration::from_millis(25),
+            None,
+            Some(observer),
+        )
+        .await,
         Err(RuntimeError::Cancelled)
     ));
+    let evidence = evidence.lock().unwrap().clone().unwrap();
+    assert_eq!(evidence.termination, "cancelled");
+    assert!(evidence.exit_code.is_some());
 }
 
 #[tokio::test]

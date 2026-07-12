@@ -113,9 +113,7 @@ pub fn server_auth_tag_value(
     client_nonce: &str,
     mut unsigned_message: serde_json::Value,
 ) -> Result<String, IpcCodecError> {
-    let client_nonce = URL_SAFE_NO_PAD
-        .decode(client_nonce)
-        .map_err(|_| IpcCodecError::Authentication)?;
+    let client_nonce = decode_nonce(client_nonce)?;
     unsigned_message
         .as_object_mut()
         .expect("authenticated IPC message serializes as an object")
@@ -151,6 +149,44 @@ pub fn verify_auth_tag(expected: &str, received: &str) -> Result<(), IpcCodecErr
     bool::from(expected.ct_eq(&received))
         .then_some(())
         .ok_or(IpcCodecError::Authentication)
+}
+
+pub(crate) fn decode_nonce(value: &str) -> Result<[u8; 32], IpcCodecError> {
+    let decoded = URL_SAFE_NO_PAD
+        .decode(value)
+        .map_err(|_| IpcCodecError::Authentication)?;
+    if decoded.len() != 32 || URL_SAFE_NO_PAD.encode(&decoded) != value {
+        return Err(IpcCodecError::Authentication);
+    }
+    decoded
+        .try_into()
+        .map_err(|_| IpcCodecError::Authentication)
+}
+
+fn protocol_versions_valid(versions: &[String]) -> bool {
+    if versions.is_empty() {
+        return false;
+    }
+    let mut unique = std::collections::BTreeSet::new();
+    versions.iter().all(|version| {
+        let Some((major, minor)) = version.split_once('.') else {
+            return false;
+        };
+        if major.is_empty()
+            || minor.is_empty()
+            || !major.bytes().all(|byte| byte.is_ascii_digit())
+            || !minor.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return false;
+        }
+        let Ok(major_number) = major.parse::<u16>() else {
+            return false;
+        };
+        let Ok(minor_number) = minor.parse::<u16>() else {
+            return false;
+        };
+        format!("{major_number}.{minor_number}") == *version && unique.insert(version)
+    })
 }
 
 pub const IPC_PROTOCOL_VERSION: &str = "1.0";
@@ -245,9 +281,17 @@ impl<'a> ServerHandshake<'a> {
         if hello.schema_id != "star.ipc.hello"
             || hello.schema_version != 1
             || hello.server_nonce != challenge.server_nonce
+            || hello.client_pid == 0
+            || hello.client_version.is_empty()
+            || hello.client_instance_id.is_empty()
+            || hello.correlation_id.is_empty()
+            || decode_nonce(&hello.client_nonce).is_err()
+            || !protocol_versions_valid(&hello.protocol_versions)
         {
             return Err(IpcCodecError::Authentication);
         }
+        let expected = client_auth_tag(self.key, &challenge, hello)?;
+        verify_auth_tag(&expected, &hello.auth_tag)?;
         if !hello
             .protocol_versions
             .iter()
@@ -268,8 +312,6 @@ impl<'a> ServerHandshake<'a> {
             )?;
             return Ok(HandshakeOutcome::ProtocolMismatch(error));
         }
-        let expected = client_auth_tag(self.key, &challenge, hello)?;
-        verify_auth_tag(&expected, &hello.auth_tag)?;
         let mut welcome = IpcWelcome {
             schema_id: "star.ipc.welcome".to_owned(),
             schema_version: 1,
@@ -291,20 +333,40 @@ impl<'a> ServerHandshake<'a> {
 
 pub fn verify_welcome(
     key: &[u8],
+    challenge: &IpcChallenge,
     hello: &IpcHello,
     welcome: &IpcWelcome,
 ) -> Result<(), IpcCodecError> {
-    if welcome.schema_id != "star.ipc.welcome"
-        || welcome.schema_version != 1
-        || welcome.protocol_version != IPC_PROTOCOL_VERSION
-        || welcome.server_nonce != hello.server_nonce
-    {
+    if !welcome_shape_valid(challenge, hello, welcome) {
         return Err(IpcCodecError::Authentication);
     }
     verify_auth_tag(
         &server_auth_tag(key, &hello.client_nonce, welcome)?,
         &welcome.auth_tag,
     )
+}
+
+pub(crate) fn welcome_shape_valid(
+    challenge: &IpcChallenge,
+    hello: &IpcHello,
+    welcome: &IpcWelcome,
+) -> bool {
+    welcome.schema_id == "star.ipc.welcome"
+        && welcome.schema_version == 1
+        && welcome.protocol_version == IPC_PROTOCOL_VERSION
+        && welcome.controller_instance_id == challenge.controller_instance_id
+        && welcome.server_nonce == challenge.server_nonce
+        && welcome.server_nonce == hello.server_nonce
+        && !welcome.controller_version.is_empty()
+        && !welcome.session_id.is_empty()
+        && !welcome.server_time.is_empty()
+        && {
+            let mut unique = std::collections::BTreeSet::new();
+            welcome
+                .capabilities
+                .iter()
+                .all(|capability| !capability.is_empty() && unique.insert(capability))
+        }
 }
 
 /// Temporary holder for a DPAPI-unsealed per-user key.  The Windows adapter is
@@ -398,7 +460,30 @@ mod tests {
                 "2026-07-11T00:00:00.000Z".to_owned(),
             )
             .unwrap();
-        verify_welcome(b"01234567890123456789012345678901", &hello, &welcome).unwrap();
+        verify_welcome(
+            b"01234567890123456789012345678901",
+            &challenge,
+            &hello,
+            &welcome,
+        )
+        .unwrap();
+        let mut wrong_instance = welcome.clone();
+        wrong_instance.controller_instance_id = "different-controller".to_owned();
+        wrong_instance.auth_tag = server_auth_tag(
+            b"01234567890123456789012345678901",
+            &hello.client_nonce,
+            &wrong_instance,
+        )
+        .unwrap();
+        assert!(
+            verify_welcome(
+                b"01234567890123456789012345678901",
+                &challenge,
+                &hello,
+                &wrong_instance,
+            )
+            .is_err()
+        );
         assert!(
             server
                 .accept(
@@ -457,6 +542,90 @@ mod tests {
         )
         .unwrap();
         verify_auth_tag(&expected, &error.auth_tag).unwrap();
+    }
+    #[test]
+    fn unauthenticated_client_cannot_obtain_a_protocol_mismatch_response() {
+        let key = b"01234567890123456789012345678901";
+        let mut server = ServerHandshake::issue(
+            key,
+            "controller".to_owned(),
+            77,
+            "2026-07-11T00:00:00.000Z".to_owned(),
+            "0.1.0".to_owned(),
+            ControllerReadiness::Ready,
+            4,
+        );
+        let challenge = server.challenge().unwrap().clone();
+        let hello = IpcHello {
+            schema_id: "star.ipc.hello".to_owned(),
+            schema_version: 1,
+            protocol_versions: vec!["2.0".to_owned()],
+            client_kind: star_contracts::ipc::IpcClientKind::InternalTest,
+            client_version: "0.1.0".to_owned(),
+            client_instance_id: "client".to_owned(),
+            client_pid: 88,
+            client_nonce: nonce(),
+            server_nonce: challenge.server_nonce.clone(),
+            auth_tag: nonce(),
+            capabilities: vec![],
+            correlation_id: "req_01ARZ3NDEKTSV4RRFFQ69G5FAV".to_owned(),
+        };
+        assert!(matches!(
+            server.accept_negotiated(
+                &hello,
+                "session".to_owned(),
+                "2026-07-11T00:00:00.000Z".to_owned()
+            ),
+            Err(IpcCodecError::Authentication)
+        ));
+    }
+    #[test]
+    fn handshake_rejects_non_32_byte_nonce_and_duplicate_protocol_versions() {
+        let key = b"01234567890123456789012345678901";
+        for (client_nonce, protocol_versions) in [
+            ("AA".to_owned(), vec![IPC_PROTOCOL_VERSION.to_owned()]),
+            (
+                nonce(),
+                vec![
+                    IPC_PROTOCOL_VERSION.to_owned(),
+                    IPC_PROTOCOL_VERSION.to_owned(),
+                ],
+            ),
+        ] {
+            let mut server = ServerHandshake::issue(
+                key,
+                "controller".to_owned(),
+                77,
+                "2026-07-11T00:00:00.000Z".to_owned(),
+                "0.1.0".to_owned(),
+                ControllerReadiness::Ready,
+                4,
+            );
+            let challenge = server.challenge().unwrap().clone();
+            let mut hello = IpcHello {
+                schema_id: "star.ipc.hello".to_owned(),
+                schema_version: 1,
+                protocol_versions,
+                client_kind: star_contracts::ipc::IpcClientKind::InternalTest,
+                client_version: "0.1.0".to_owned(),
+                client_instance_id: "client".to_owned(),
+                client_pid: 88,
+                client_nonce,
+                server_nonce: challenge.server_nonce.clone(),
+                auth_tag: String::new(),
+                capabilities: vec![],
+                correlation_id: "req_01ARZ3NDEKTSV4RRFFQ69G5FAV".to_owned(),
+            };
+            hello.auth_tag = client_auth_tag(key, &challenge, &hello).unwrap();
+            assert!(matches!(
+                server.accept_negotiated(
+                    &hello,
+                    "session".to_owned(),
+                    "2026-07-11T00:00:00.000Z".to_owned()
+                ),
+                Err(IpcCodecError::Authentication)
+            ));
+        }
     }
     #[test]
     fn handshake_rejects_an_expired_challenge() {

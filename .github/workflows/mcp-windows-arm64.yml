@@ -1,0 +1,76 @@
+name: MCP Windows ARM64 verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_only:
+        description: Reuse prior full-run evidence and execute release build plus native smoke only
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-windows-arm64:
+    runs-on: windows-11-arm
+    timeout-minutes: 120
+    steps:
+      - name: Checkout isolated verification snapshot
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Select native Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+          rustc -vV
+          if ((rustc -vV | Select-String '^host: aarch64-pc-windows-msvc$').Count -ne 1) {
+            throw 'runner Rust host is not native aarch64-pc-windows-msvc'
+          }
+
+      - name: Native ARM64 workspace tests
+        if: ${{ !inputs.smoke_only }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path target/arm64-ci-evidence -Force | Out-Null
+          cargo test --workspace --locked 2>&1 | Tee-Object target/arm64-ci-evidence/cargo-test.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Native ARM64 clippy
+        if: ${{ !inputs.smoke_only }}
+        shell: pwsh
+        run: |
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings 2>&1 | Tee-Object target/arm64-ci-evidence/cargo-clippy.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Generated contract and matrix drift
+        if: ${{ !inputs.smoke_only }}
+        shell: pwsh
+        run: |
+          cargo run --locked -p star-schema-gen -- --check
+          cargo run --locked -p star-matrix-check -- --details
+          cargo fmt --all -- --check
+
+      - name: Native ARM64 release build
+        shell: pwsh
+        run: cargo build --workspace --release --locked
+
+      - name: Native ARM64 Gateway IPC Registry process smoke
+        shell: pwsh
+        run: |
+          ./tools/mcp-arm64-smoke.ps1 `
+            -RunRoot "$env:RUNNER_TEMP/star-control-mcp-arm64" `
+            -EvidencePath "target/arm64-ci-evidence/mcp-arm64-native-smoke-v1.json" `
+            -PrestartController `
+            2>&1 | Tee-Object target/arm64-ci-evidence/mcp-arm64-smoke.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload native ARM64 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mcp-windows-arm64-evidence
+          path: target/arm64-ci-evidence
+          if-no-files-found: error

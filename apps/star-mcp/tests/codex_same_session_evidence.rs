@@ -20,6 +20,7 @@ fn actual_codex_same_session_evidence_is_complete_and_internally_consistent() {
     assert_eq!(evidence["schema_version"], 1);
     assert_eq!(evidence["host"]["kind"], "actual_codex_cli_mcp_host");
     assert_eq!(evidence["host"]["fixed_tool_count"], 12);
+    assert_eq!(evidence["host"]["release_core_action_count"], 13);
     assert_eq!(evidence["host"]["mcp_server_version"], "0.1.0");
     sha256(&evidence["host"]["codex_executable_sha256"]);
     sha256(&evidence["host"]["mcp_server_sha256"]);
@@ -68,6 +69,19 @@ fn actual_codex_same_session_evidence_is_complete_and_internally_consistent() {
             "starting",
             "running",
             "cancel_requested",
+            "cancelled"
+        ])
+    );
+    assert_eq!(
+        evidence["c007"]["raw_progress"],
+        serde_json::json!([
+            "received",
+            "resolving",
+            "queued",
+            "starting",
+            "running",
+            "cancel_requested",
+            "process_exit_observed",
             "cancelled"
         ])
     );

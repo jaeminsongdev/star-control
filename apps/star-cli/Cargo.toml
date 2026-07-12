@@ -10,6 +10,7 @@ name = "star"
 path = "src/main.rs"
 
 [dependencies]
+chrono.workspace = true
 serde_json.workspace = true
 star-contracts = { path = "../../crates/foundation/star-contracts" }
 star-ipc = { path = "../../crates/adapters/star-ipc" }

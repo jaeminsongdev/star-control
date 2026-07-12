@@ -45,13 +45,14 @@ Codex
 - `star-mcp.exe`는 Controller를 필요할 때 한 번 시작할 수 있지만 상태·TOML·EXE를 직접 읽지 않는다.
 - Controller 한 instance가 current user의 Registry, trust, cache와 Operation을 쓴다.
 - Controller는 HTTP port, public named pipe와 Windows service를 만들지 않는다.
+- autostart된 Controller의 process cwd는 project identity가 아니다. 각 인증된 CLI·Gateway 요청의 final fixed-local `project_root`가 그 요청의 project `tools.d`, ProjectPathRef와 process cwd anchor를 선택하며 absolute 원문은 public evidence에 남기지 않는다.
 
 기본 설치는 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`의 `Star-Control` 값에 quoted absolute `star-controller.exe --background` command를 등록한다. 이는 개발 작업 예약 기능이 아니라 current-user logon 때 local control plane을 시작하는 수명주기다. uninstaller는 값의 owner·설치 path가 맞을 때만 제거하고 `star controller autostart enable|disable|status`가 같은 값을 관리한다. Task Scheduler와 Windows service는 사용하지 않는다.
 
 Gateway auto-start 순서:
 
 1. pipe connect를 250 ms 시도한다.
-2. 없으면 signed install manifest의 absolute Controller path·SHA-256·version을 final file handle에서 확인하고 write·delete share 없는 lease를 잡는다.
+2. 없으면 installer-owned install manifest의 absolute Controller path·SHA-256·version과 호출한 Gateway SHA-256을 fixed local volume의 final file handle에서 확인하고 write·delete share 없는 lease를 잡는다. v1 install manifest에는 독립 detached-signature 형식·key ID·trust anchor가 정의돼 있지 않으므로 runtime이 존재하지 않는 manifest signature를 검증했다고 주장하지 않는다. 배포 package 서명 검증은 installer 경계이고, runtime 정본은 strict manifest 형식과 설치 image의 full hash lease다.
 3. explicit application path로 `CreateProcessW`를 suspended·hidden/no-window 상태로 호출하고 실제 image path를 확인한 뒤 resume한다. Gateway가 outer Job 안이면 Controller에 한해서 `CREATE_BREAKAWAY_FROM_JOB`을 요청한다. image 생성 뒤 lease를 놓는다.
 4. 최대 `ipc.connect_timeout_ms=5000` 동안 authenticated pipe readiness를 기다린다.
 5. 동시에 여러 Gateway가 시작해도 Controller mutex를 얻은 process 하나만 남고 나머지는 정상 종료한다.
@@ -516,7 +517,7 @@ permission, backend, protocol, locator, Schema, isolation 또는 paid 상태가 
 | `product_version` | SemVer | writer version |
 | `validated_at` | timestamp | 마지막 full validation |
 
-cache outer document도 RFC 8785 JCS hash를 별도 sidecar manifest에 기록한다. secret value·EXE byte·raw absolute path는 저장하지 않는다. source 삭제, trust revoke, contract incompatibility에서는 cache를 active로 만들지 않는다.
+cache outer document도 RFC 8785 JCS hash를 별도 sidecar manifest에 기록한다. outer `ToolRegistryCache` entry와 sidecar에는 secret value·EXE byte·raw absolute path를 저장하지 않는다. 다만 이 표의 hash-only `PackageSnapshot`만으로는 invalid source 뒤 argv·Schema·resolved locator를 복원할 수 없으므로, last-known-good 실행 복구에 필요한 operational package snapshot은 current-user DPAPI로 봉인한 payload에만 저장하고 MCP·CLI·log에는 공개하지 않는다. source 삭제, trust revoke, contract incompatibility에서는 cache를 active로 만들지 않는다.
 
 ## 명시적으로 지원하지 않는 것
 

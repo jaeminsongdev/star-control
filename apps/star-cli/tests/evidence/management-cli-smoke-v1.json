@@ -1,0 +1,50 @@
+{
+  "schema_id": "star.management-cli-smoke-evidence",
+  "schema_version": 1,
+  "observed_at": "2026-07-12T11:41:22.3581073+00:00",
+  "host": {
+    "os": "Microsoft Windows NT 10.0.26200.0",
+    "os_build": 26200,
+    "architecture": "x86_64"
+  },
+  "binaries": {
+    "cli_sha256": "sha256:8f2ed1e49e937f207a27548bbbac5a2837dc8b8d205afffdd921a76ba7a25e7d",
+    "controller_sha256": "sha256:c646cafb3fd25279268babc3e9edc28c9e02bb9f74fbb6cab4034c31d084d49e",
+    "fake_sha256": "sha256:eedab7ddd4b5396efeba851a66b1ef24907d7aa99b25338c89b8a60efa15fa6c"
+  },
+  "results": {
+    "validate": true,
+    "trust": true,
+    "list_count": 3,
+    "describe_trust_basis": "explicit_trust_store",
+    "descriptor_hash": "sha256:091e4c3d3b0d4db782ea95f7a49edf3c6232d429618706dee8465418c8a502bc",
+    "probe_product_version": "1.2.3",
+    "probe_interface_version": "1.0.0",
+    "probe_network_access": false,
+    "probe_recorded": true,
+    "last_probe_at": "2026-07-12T11:41:21.761Z",
+    "revoke": true,
+    "revoked_list_count": 0,
+    "revoked_active_state": "last_known_good",
+    "revoked_candidate_state": "revoked",
+    "scaffold": true,
+    "scaffold_sha256": "sha256:eedab7ddd4b5396efeba851a66b1ef24907d7aa99b25338c89b8a60efa15fa6c",
+    "scaffold_validate": true,
+    "controller_start": true,
+    "controller_instance_id": "ctl_Mikb-0KDF6XSdx7Rx6Ys3907-H1Zt8R7crczcvNxNSk",
+    "autostart_initial_state": "disabled",
+    "autostart_enabled_state": "enabled",
+    "autostart_disabled_state": "disabled",
+    "autostart_value_kind": "String",
+    "autostart_exact_command": true,
+    "autostart_enable_idempotent": true,
+    "autostart_disable_idempotent": true,
+    "autostart_mutation_executed": true,
+    "autostart_original_state_restored": true
+  },
+  "method": {
+    "fixture": "tools/mcp-management-cli-fixture.ps1",
+    "management_flow": "validate -> trust -> list/describe -> probe -> revoke -> scaffold/validate -> controller start/status -> autostart enable/status/disable/status",
+    "autostart": "The initially absent exact HKCU Run value was enabled twice, checked as owned REG_SZ, disabled twice, and verified absent again."
+  }
+}

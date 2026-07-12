@@ -124,11 +124,13 @@ pub struct ExecutableDescriptor {
     pub update_policy: UpdatePolicy,
     pub sha256: Option<Sha256Hash>,
     pub protocol: ManifestProtocol,
+    #[serde(default = "interface_version_default")]
     pub interface_version_req: String,
     pub product_version_req: Option<String>,
     #[serde(default)]
     pub architectures: Vec<String>,
-    pub minimum_windows_build: Option<u32>,
+    #[serde(default = "minimum_windows_build_default")]
+    pub minimum_windows_build: u32,
     #[serde(default = "working_directory_default")]
     pub working_directory: String,
     pub fixed_working_directory: Option<String>,
@@ -147,7 +149,7 @@ pub struct ExecutableDescriptor {
     pub max_memory_bytes: Option<u64>,
     #[serde(default = "process_default")]
     pub max_processes: u16,
-    #[serde(default)]
+    #[serde(default = "isolation_compatibility_default")]
     pub isolation_compatibility: Vec<String>,
     #[serde(default = "authenticode_default")]
     pub authenticode_policy: String,
@@ -162,6 +164,15 @@ pub struct ExecutableDescriptor {
 }
 fn working_directory_default() -> String {
     "stage_worktree".to_owned()
+}
+fn interface_version_default() -> String {
+    "*".to_owned()
+}
+fn minimum_windows_build_default() -> u32 {
+    26_100
+}
+fn isolation_compatibility_default() -> Vec<String> {
+    vec!["trusted_desktop".to_owned()]
 }
 fn environment_mode_default() -> String {
     "core".to_owned()
@@ -187,7 +198,7 @@ pub struct ProbeDescriptor {
     pub kind: String,
     #[serde(default)]
     pub args: Vec<String>,
-    pub output_format: String,
+    pub output_format: Option<String>,
     pub version_pattern: Option<String>,
     #[serde(default = "probe_timeout_default")]
     pub timeout_ms: u32,
@@ -251,18 +262,14 @@ pub struct ActionDescriptor {
     pub when_to_use: Vec<String>,
     #[serde(default)]
     pub when_not_to_use: Vec<String>,
-    #[serde(default)]
     pub permission_actions: Vec<String>,
-    #[serde(default = "paid_default")]
     pub paid_action: String,
-    #[serde(default = "idempotency_default")]
     pub idempotency: String,
     #[serde(default = "execution_default")]
     pub execution_mode: String,
     #[serde(default = "expected_duration_default")]
     pub expected_duration_ms: u32,
-    #[serde(default = "cancel_default")]
-    pub cancel_mode: String,
+    pub cancel_mode: Option<String>,
     pub input_schema_file: Option<String>,
     pub output_schema_file: Option<String>,
     #[serde(default)]
@@ -276,20 +283,11 @@ pub struct ActionDescriptor {
     pub concurrency: Option<ConcurrencyContract>,
     pub cancel: Option<CancelContract>,
 }
-fn paid_default() -> String {
-    "no".to_owned()
-}
-fn idempotency_default() -> String {
-    "non_idempotent".to_owned()
-}
 fn execution_default() -> String {
     "waitable".to_owned()
 }
 fn expected_duration_default() -> u32 {
     1_000
-}
-fn cancel_default() -> String {
-    "terminate_job".to_owned()
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -311,9 +309,8 @@ pub struct ParameterDescriptor {
     pub enum_values: Vec<serde_json::Value>,
     pub min_length: Option<u32>,
     pub max_length: Option<u32>,
-    pub minimum: Option<f64>,
-    pub maximum: Option<f64>,
-    pub max_items: Option<u32>,
+    pub minimum: Option<i64>,
+    pub maximum: Option<i64>,
     pub pattern: Option<String>,
     pub path_kind: Option<String>,
     pub must_exist: Option<bool>,
@@ -329,7 +326,6 @@ pub struct ArgvBinding {
     pub kind: String,
     pub value: Option<String>,
     pub input: Option<String>,
-    pub prefix: Option<String>,
     pub flag: Option<String>,
     pub separator: Option<String>,
     pub when_present: Option<bool>,
@@ -344,37 +340,69 @@ pub struct ArgvBinding {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExitCodes {
+    #[serde(default = "exit_success_default")]
+    pub success: Vec<u32>,
     #[serde(default)]
-    pub success: Vec<i32>,
+    pub empty: Vec<u32>,
     #[serde(default)]
-    pub empty: Vec<i32>,
+    pub warning: Vec<u32>,
     #[serde(default)]
-    pub warning: Vec<i32>,
-    #[serde(default)]
-    pub retryable: Vec<i32>,
+    pub retryable: Vec<u32>,
+}
+fn exit_success_default() -> Vec<u32> {
+    vec![0]
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OutputContract {
     pub format: String,
+    #[serde(default = "output_encoding_default")]
     pub encoding: String,
+    #[serde(default = "output_encoding_default")]
     pub stderr_encoding: String,
+    #[serde(default = "inline_limit_default")]
     pub inline_limit_bytes: u64,
     pub max_items: Option<u32>,
+    #[serde(default = "overflow_default")]
     pub overflow: String,
+    #[serde(default = "stdout_role_default")]
     pub stdout_role: String,
+    #[serde(default = "stderr_role_default")]
     pub stderr_role: String,
     pub artifact_media_type: Option<String>,
+}
+fn output_encoding_default() -> String {
+    "utf8".to_owned()
+}
+fn inline_limit_default() -> u64 {
+    65_536
+}
+fn overflow_default() -> String {
+    "artifact".to_owned()
+}
+fn stdout_role_default() -> String {
+    "data".to_owned()
+}
+fn stderr_role_default() -> String {
+    "log".to_owned()
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ConcurrencyContract {
+    #[serde(default = "max_parallel_default")]
     pub max_parallel: u16,
+    #[serde(default = "exclusive_scope_default")]
     pub exclusive_scope: String,
     #[serde(default)]
     pub lock_key_inputs: Vec<String>,
     #[serde(default = "queue_timeout_default")]
     pub queue_timeout_ms: u32,
+}
+fn max_parallel_default() -> u16 {
+    1
+}
+fn exclusive_scope_default() -> String {
+    "none".to_owned()
 }
 fn queue_timeout_default() -> u32 {
     30_000
@@ -382,7 +410,11 @@ fn queue_timeout_default() -> u32 {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CancelContract {
+    #[serde(default = "cancel_grace_default")]
     pub grace_ms: u32,
+}
+fn cancel_grace_default() -> u32 {
+    2_000
 }
 
 pub const PERMISSION_ACTIONS: &[&str] = &[
@@ -572,6 +604,16 @@ pub fn validate_manifest_v1(
                         Some("program_files" | "local_app_data" | "user_tools" | "package_dir")
                     )
                     || !is_safe_relative_path(executable.path.as_deref().unwrap_or_default())
+                    || is_forbidden_executable_name(
+                        executable
+                            .path
+                            .as_deref()
+                            .unwrap_or_default()
+                            .replace('/', "\\")
+                            .rsplit('\\')
+                            .next()
+                            .unwrap_or_default(),
+                    )
                 {
                     return Err(ManifestError::Locator);
                 }
@@ -695,6 +737,8 @@ pub fn validate_manifest_v1(
                 if source != ManifestSource::Release
                     || manifest.package_id != "star.control.core"
                     || !CORE_CONTROLLER_COMMANDS.contains(&action.backend_ref.as_str())
+                    || action.cancel_mode.is_some()
+                    || action.cancel.is_some()
                 {
                     return Err(ManifestError::SourcePolicy);
                 }
@@ -744,7 +788,10 @@ pub fn validate_manifest_v1(
             match executable.protocol {
                 ManifestProtocol::ArgvV1
                     if action.exit_codes.is_none()
-                        || !matches!(action.cancel_mode.as_str(), "terminate_job" | "none") =>
+                        || !matches!(
+                            action.cancel_mode.as_deref().unwrap_or("terminate_job"),
+                            "terminate_job" | "none"
+                        ) =>
                 {
                     return Err(ManifestError::Binding);
                 }
@@ -752,7 +799,7 @@ pub fn validate_manifest_v1(
                     if !action.argv.is_empty()
                         || action.exit_codes.is_some()
                         || !matches!(
-                            action.cancel_mode.as_str(),
+                            action.cancel_mode.as_deref().unwrap_or("stdin_frame"),
                             "stdin_frame" | "terminate_job" | "none"
                         ) =>
                 {
@@ -777,28 +824,52 @@ pub fn validate_manifest_v1(
             validate_parameter(parameter, &parameter_names)?;
         }
         let mut stdin_bindings = 0;
+        let schema_backed = action.input_schema_file.is_some();
+        let mut terminator_seen = false;
         for binding in &action.argv {
             if matches!(binding.kind.as_str(), "stdin_text" | "stdin_json") {
                 stdin_bindings += 1;
             }
             if let Some(input) = &binding.input {
-                if !parameter_names.contains_key(input.as_str()) {
+                if (!schema_backed && !parameter_names.contains_key(input.as_str()))
+                    || (schema_backed && !is_parameter_name(input))
+                {
                     return Err(ManifestError::Binding);
                 }
             }
             if let Some(input) = &binding.when_input {
-                if !parameter_names.contains_key(input.as_str()) {
+                if (!schema_backed && !parameter_names.contains_key(input.as_str()))
+                    || (schema_backed && !is_parameter_name(input))
+                {
                     return Err(ManifestError::Binding);
                 }
             }
-            if binding
-                .inputs
-                .iter()
-                .any(|input| !parameter_names.contains_key(input.as_str()))
-            {
+            if binding.inputs.iter().any(|input| {
+                (!schema_backed && !parameter_names.contains_key(input.as_str()))
+                    || (schema_backed && !is_parameter_name(input))
+            }) {
                 return Err(ManifestError::Binding);
             }
-            validate_argv_binding(binding, &action.parameters)?;
+            if schema_backed {
+                validate_schema_backed_argv_binding(binding)?;
+            } else {
+                validate_argv_binding(binding, &action.parameters)?;
+                if matches!(binding.kind.as_str(), "positional" | "repeat")
+                    && binding.input.as_ref().is_some_and(|name| {
+                        action.parameters.iter().any(|parameter| {
+                            parameter.name == *name
+                                && matches!(
+                                    parameter.parameter_type.as_str(),
+                                    "project_path" | "project_path_array"
+                                )
+                        })
+                    })
+                    && !terminator_seen
+                {
+                    return Err(ManifestError::Binding);
+                }
+            }
+            terminator_seen |= binding.kind == "terminator";
         }
         if stdin_bindings > 1 {
             return Err(ManifestError::Binding);
@@ -816,6 +887,47 @@ pub fn validate_manifest_v1(
                     return Err(ManifestError::Binding);
                 }
             }
+        }
+    }
+    const APPCONTAINER_FORBIDDEN_PERMISSIONS: &[&str] = &[
+        "network_read",
+        "network_download",
+        "external_write",
+        "account_change",
+        "git_push",
+        "pull_request",
+        "release_publish",
+        "paid_action",
+        "system_change",
+    ];
+    for executable in manifest.executables.iter().filter(|executable| {
+        executable
+            .isolation_compatibility
+            .iter()
+            .any(|profile| profile == "appcontainer_adapter")
+    }) {
+        if executable.protocol != ManifestProtocol::StarJsonStdioV1
+            || executable.working_directory != "artifact_root"
+            || executable
+                .state_directories
+                .iter()
+                .any(|state| state.location == "tool_default")
+            || manifest.actions.iter().any(|action| {
+                action.backend_kind == BackendKind::Process
+                    && action.backend_ref == executable.executable_id
+                    && (action.paid_action != "no"
+                        || action.permission_actions.iter().any(|permission| {
+                            APPCONTAINER_FORBIDDEN_PERMISSIONS.contains(&permission.as_str())
+                        })
+                        || action.parameters.iter().any(|parameter| {
+                            matches!(
+                                parameter.parameter_type.as_str(),
+                                "project_path" | "project_path_array"
+                            ) && parameter.must_exist == Some(false)
+                        }))
+            })
+        {
+            return Err(ManifestError::SourcePolicy);
         }
     }
     let disabled_zero_action_draft = !manifest.enabled && manifest.actions.is_empty();
@@ -838,12 +950,55 @@ fn is_safe_absolute_exe(path: &str) -> bool {
     let normalized = path.replace('/', "\\");
     let lower = normalized.to_ascii_lowercase();
     normalized.len() >= 4
+        && normalized.as_bytes()[0].is_ascii_alphabetic()
         && normalized.as_bytes()[1] == b':'
         && normalized.as_bytes()[2] == b'\\'
         && !lower.starts_with("\\\\")
         && !lower.starts_with("\\\\?\\")
         && !normalized[3..].contains(':')
+        && normalized[3..].split('\\').all(is_safe_windows_component)
         && lower.ends_with(".exe")
+        && !is_forbidden_executable_name(normalized.rsplit('\\').next().unwrap_or_default())
+}
+
+/// Command interpreters and Windows script hosts are never valid external tool
+/// images.  Keeping this check in the contracts crate lets the manifest parser,
+/// Registry final-path validation, and the launch-time lease enforce the same
+/// frozen no-shell boundary.
+pub fn is_forbidden_executable_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "cmd.exe"
+            | "powershell.exe"
+            | "pwsh.exe"
+            | "wscript.exe"
+            | "cscript.exe"
+            | "mshta.exe"
+            | "sh.exe"
+            | "bash.exe"
+    )
+}
+
+fn is_safe_windows_component(component: &str) -> bool {
+    if component.is_empty()
+        || matches!(component, "." | "..")
+        || component.ends_with([' ', '.'])
+        || component.chars().any(|character| {
+            character < ' ' || matches!(character, '<' | '>' | '"' | '|' | '?' | '*')
+        })
+    {
+        return false;
+    }
+    let device = component
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches([' ', '.'])
+        .to_ascii_uppercase();
+    !matches!(device.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$")
+        && !(device.len() == 4
+            && (device.starts_with("COM") || device.starts_with("LPT"))
+            && matches!(device.as_bytes()[3], b'1'..=b'9'))
 }
 
 const CORE_CONTROLLER_COMMANDS: &[&str] = &[
@@ -872,10 +1027,7 @@ fn is_safe_relative_path(path: &str) -> bool {
         return false;
     }
     let normalized = path.replace('\\', "/");
-    !normalized.starts_with('/')
-        && normalized
-            .split('/')
-            .all(|part| !part.is_empty() && part != "." && part != "..")
+    !normalized.starts_with('/') && normalized.split('/').all(is_safe_windows_component)
 }
 
 fn is_safe_schema_path(path: &str) -> bool {
@@ -907,11 +1059,16 @@ fn is_reserved_environment(name: &str) -> bool {
 fn is_safe_absolute_directory(path: &str) -> bool {
     let normalized = path.replace('/', "\\");
     normalized.len() >= 3
+        && normalized.as_bytes()[0].is_ascii_alphabetic()
         && normalized.as_bytes()[1] == b':'
         && normalized.as_bytes()[2] == b'\\'
         && !normalized[3..].contains(':')
         && !normalized.starts_with("\\\\")
         && !normalized.starts_with("\\\\?\\")
+        && normalized[3..]
+            .split('\\')
+            .filter(|component| !component.is_empty())
+            .all(is_safe_windows_component)
 }
 
 fn validate_executable(
@@ -925,6 +1082,7 @@ fn validate_executable(
         || !(100..=86_400_000).contains(&executable.timeout_ms)
         || executable.max_stdout_bytes > 64 * 1024 * 1024
         || executable.max_stderr_bytes > 8 * 1024 * 1024
+        || executable.minimum_windows_build == 0
         || executable
             .max_memory_bytes
             .is_some_and(|bytes| bytes < 16 * 1024 * 1024)
@@ -1184,7 +1342,6 @@ fn validate_parameter(
             .is_some_and(|group| !is_local_id(group))
         || (!supports_length && (parameter.min_length.is_some() || parameter.max_length.is_some()))
         || (!supports_number && (parameter.minimum.is_some() || parameter.maximum.is_some()))
-        || (!is_array && parameter.max_items.is_some())
         || (!matches!(kind, "string" | "decimal_string") && parameter.pattern.is_some())
         || (!is_path && (parameter.path_kind.is_some() || parameter.must_exist.is_some()))
         || (is_path
@@ -1212,16 +1369,7 @@ fn validate_parameter(
         || parameter
             .minimum
             .zip(parameter.maximum)
-            .is_some_and(|(min, max)| {
-                !min.is_finite()
-                    || !max.is_finite()
-                    || min > max
-                    || min.fract() != 0.0
-                    || max.fract() != 0.0
-            })
-        || parameter
-            .max_items
-            .is_some_and(|value| value == 0 || value > 5_000)
+            .is_some_and(|(min, max)| min > max)
         || parameter
             .pattern
             .as_ref()
@@ -1275,11 +1423,7 @@ fn validate_argv_binding(
         }
         _ => false,
     };
-    if !conditional
-        || binding.inputs.len() > 128
-        || has_duplicate(binding.inputs.iter().cloned())
-        || binding.prefix.is_some()
-    {
+    if !conditional || binding.inputs.len() > 128 || has_duplicate(binding.inputs.iter().cloned()) {
         return Err(ManifestError::Binding);
     }
     let input = parameter_by_name(parameters, binding.input.as_deref());
@@ -1424,6 +1568,142 @@ fn validate_argv_binding(
     Ok(())
 }
 
+fn validate_schema_backed_argv_binding(binding: &ArgvBinding) -> Result<(), ManifestError> {
+    let conditional = match (
+        binding.when_present,
+        binding.when_input.as_deref(),
+        binding.when_equals.as_ref(),
+    ) {
+        (None, None, None) | (Some(true), None, None) => true,
+        (None, Some(_), Some(value))
+            if value.is_string() || value.is_number() || value.is_boolean() =>
+        {
+            true
+        }
+        _ => false,
+    };
+    let no_condition = binding.when_present.is_none() && binding.when_input.is_none();
+    let no_inputs = binding.inputs.is_empty();
+    let no_aux =
+        binding.encoding.is_none() && binding.suffix.is_none() && binding.content_kind.is_none();
+    let plain = binding
+        .value
+        .as_ref()
+        .is_some_and(|value| !value.contains('\0'));
+    let flag_ok = binding.flag.as_deref().is_some_and(is_safe_flag);
+    let has_input = binding.input.as_deref().is_some_and(is_parameter_name);
+    let valid = conditional
+        && binding.inputs.len() <= 128
+        && !has_duplicate(binding.inputs.iter().cloned())
+        && match binding.kind.as_str() {
+            "literal" => {
+                plain
+                    && binding.input.is_none()
+                    && binding.flag.is_none()
+                    && binding.separator.is_none()
+                    && no_inputs
+                    && no_aux
+                    && no_condition
+            }
+            "positional" => {
+                has_input
+                    && binding.value.is_none()
+                    && binding.flag.is_none()
+                    && binding.separator.is_none()
+                    && no_inputs
+                    && no_aux
+            }
+            "option" => {
+                has_input
+                    && flag_ok
+                    && binding.value.is_none()
+                    && binding.separator.is_none()
+                    && no_inputs
+                    && no_aux
+            }
+            "flag_if_true" | "flag_if_false" => {
+                has_input
+                    && flag_ok
+                    && binding.value.is_none()
+                    && binding.separator.is_none()
+                    && no_inputs
+                    && no_aux
+                    && no_condition
+            }
+            "repeat" => {
+                has_input
+                    && binding.value.is_none()
+                    && binding.separator.is_none()
+                    && no_inputs
+                    && no_aux
+                    && binding.flag.as_deref().is_none_or(is_safe_flag)
+            }
+            "joined" => {
+                has_input
+                    && flag_ok
+                    && binding.value.is_none()
+                    && matches!(binding.separator.as_deref(), Some("=" | ":"))
+                    && no_inputs
+                    && no_aux
+            }
+            "terminator" => {
+                binding.value.as_deref() == Some("--")
+                    && binding.input.is_none()
+                    && binding.flag.is_none()
+                    && binding.separator.is_none()
+                    && no_inputs
+                    && no_aux
+                    && no_condition
+            }
+            "stdin_text" => {
+                has_input
+                    && binding.value.is_none()
+                    && binding.flag.is_none()
+                    && binding.separator.is_none()
+                    && no_inputs
+                    && binding.suffix.is_none()
+                    && binding.content_kind.is_none()
+                    && binding
+                        .encoding
+                        .as_deref()
+                        .is_none_or(|value| matches!(value, "utf8" | "utf16le"))
+                    && no_condition
+            }
+            "stdin_json" => {
+                binding.value.is_none()
+                    && binding.input.is_none()
+                    && binding.flag.is_none()
+                    && binding.separator.is_none()
+                    && no_aux
+                    && no_condition
+            }
+            "temp_file" => {
+                has_input
+                    && binding.value.is_none()
+                    && binding.flag.is_none()
+                    && binding.separator.is_none()
+                    && no_inputs
+                    && binding.suffix.as_ref().is_none_or(|suffix| {
+                        regex::Regex::new(r"^\.[A-Za-z0-9][A-Za-z0-9._-]{0,15}$")
+                            .expect("static suffix regex")
+                            .is_match(suffix)
+                    })
+                    && matches!(
+                        binding.content_kind.as_deref().unwrap_or("text"),
+                        "text" | "json" | "base64"
+                    )
+                    && binding
+                        .encoding
+                        .as_deref()
+                        .is_none_or(|encoding| matches!(encoding, "utf8" | "utf16le"))
+                    && !(binding.content_kind.as_deref() == Some("base64")
+                        && binding.encoding.is_some())
+            }
+            _ => false,
+        };
+    valid.then_some(()).ok_or(ManifestError::Binding)
+}
+
 fn validate_probe(
     probe: &ProbeDescriptor,
     protocol: ManifestProtocol,
@@ -1434,19 +1714,18 @@ fn validate_probe(
     match (probe.kind.as_str(), protocol) {
         ("json_stdio", ManifestProtocol::StarJsonStdioV1) => {
             if !probe.args.is_empty()
-                || !probe.output_format.is_empty()
+                || probe.output_format.is_some()
                 || probe.version_pattern.is_some()
             {
                 return Err(ManifestError::Probe);
             }
         }
         ("argv", _) => {
-            if probe.args.len() > 16
-                || !matches!(probe.output_format.as_str(), "json" | "semver_line")
-            {
+            let output_format = probe.output_format.as_deref().ok_or(ManifestError::Probe)?;
+            if probe.args.len() > 16 || !matches!(output_format, "json" | "semver_line") {
                 return Err(ManifestError::Probe);
             }
-            match probe.output_format.as_str() {
+            match output_format {
                 "semver_line" => {
                     let pattern = probe
                         .version_pattern
@@ -1615,7 +1894,6 @@ fn validate_argv_binding_legacy_unused(
         let fields = [
             ("value", binding.value.is_some()),
             ("input", binding.input.is_some()),
-            ("prefix", binding.prefix.is_some()),
             ("flag", binding.flag.is_some()),
             ("separator", binding.separator.is_some()),
             ("when_present", binding.when_present.is_some()),

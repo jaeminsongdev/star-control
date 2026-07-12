@@ -1,14 +1,41 @@
 //! Test-only external EXE fixture.  It accepts no shell syntax and speaks the
 //! minimal two protocols needed by the Controller integration tests.
 
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
+
+fn read_json_request() -> serde_json::Value {
+    let mut input = String::new();
+    std::io::stdin()
+        .lock()
+        .read_line(&mut input)
+        .expect("JSON request line reads");
+    serde_json::from_str(input.trim_end()).expect("JSON request")
+}
 
 fn main() {
-    let mode = std::env::args().nth(1).unwrap_or_default();
+    let mode = std::env::args_os()
+        .nth(1)
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
     match mode.as_str() {
         "argv" => {
             let args: Vec<_> = std::env::args().skip(2).collect();
             println!("argv:{}", args.join("|"));
+        }
+        "argv-utf16" => {
+            use std::os::windows::ffi::OsStrExt;
+            let args: Vec<_> = std::env::args_os()
+                .skip(2)
+                .map(|argument| {
+                    argument
+                        .encode_wide()
+                        .map(|unit| format!("{unit:04x}"))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                })
+                .collect();
+            println!("{}", args.join("|"));
         }
         "env-probe" => {
             for name in ["PATH", "STAR_TEST_ALLOWED", "STAR_TEST_UNDECLARED"] {
@@ -23,12 +50,13 @@ fn main() {
                 .expect("raw handle argument")
                 .parse::<usize>()
                 .expect("numeric raw handle");
-            let mut flags = 0_u32;
+            // A raw handle number can be reused for an unrelated stdio pipe in
+            // the child. SetEvent verifies that this is the actual sentinel
+            // event rather than merely an occupied child handle-table slot.
             let inherited = unsafe {
-                windows::Win32::Foundation::GetHandleInformation(
-                    windows::Win32::Foundation::HANDLE(raw as *mut core::ffi::c_void),
-                    &mut flags,
-                )
+                windows::Win32::System::Threading::SetEvent(windows::Win32::Foundation::HANDLE(
+                    raw as *mut core::ffi::c_void,
+                ))
             }
             .is_ok();
             println!(
@@ -89,6 +117,8 @@ fn main() {
                 timeout: std::time::Duration::from_secs(60),
                 max_stdout_bytes: 1024,
                 max_stderr_bytes: 1024,
+                max_memory_bytes: None,
+                max_processes: 16,
                 appcontainer_profile: None,
             };
             let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -117,12 +147,7 @@ fn main() {
             stderr.join().expect("stderr writer joins");
         }
         "json" => {
-            let mut input = String::new();
-            std::io::stdin()
-                .read_to_string(&mut input)
-                .expect("stdin reads");
-            let request: serde_json::Value =
-                serde_json::from_str(input.trim()).expect("JSON request");
+            let request = read_json_request();
             let request_id = request["request_id"].clone();
             println!(
                 "{}",
@@ -142,12 +167,7 @@ fn main() {
             );
         }
         "json-progress" => {
-            let mut input = String::new();
-            std::io::stdin()
-                .read_to_string(&mut input)
-                .expect("stdin reads");
-            let request: serde_json::Value =
-                serde_json::from_str(input.trim()).expect("JSON request");
+            let request = read_json_request();
             let request_id = request["request_id"].clone();
             for (sequence, progress) in [(1, 1), (2, 2)] {
                 println!(
@@ -162,6 +182,8 @@ fn main() {
                         "message":format!("step {progress}")
                     })
                 );
+                std::io::stdout().flush().expect("progress flushes");
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
             println!(
                 "{}",
@@ -180,14 +202,24 @@ fn main() {
                 })
             );
         }
+        "json-probe" => {
+            let request = read_json_request();
+            assert_eq!(request["frame"], "probe");
+            println!(
+                "{}",
+                serde_json::json!({
+                    "frame":"probe_result",
+                    "protocol_version":1,
+                    "request_id":request["request_id"],
+                    "product_version":"1.2.3",
+                    "interface_version":"1.0.0",
+                    "capabilities":["progress","stdin_cancel","artifact_output"]
+                })
+            );
+        }
         "json-garbage" => println!("not-json"),
         "json-artifact-escape" => {
-            let mut input = String::new();
-            std::io::stdin()
-                .read_to_string(&mut input)
-                .expect("stdin reads");
-            let request: serde_json::Value =
-                serde_json::from_str(input.trim()).expect("JSON request");
+            let request = read_json_request();
             println!(
                 "{}",
                 serde_json::json!({
@@ -201,12 +233,7 @@ fn main() {
             );
         }
         "json-artifact-bad-hash" => {
-            let mut input = String::new();
-            std::io::stdin()
-                .read_to_string(&mut input)
-                .expect("stdin reads");
-            let request: serde_json::Value =
-                serde_json::from_str(input.trim()).expect("JSON request");
+            let request = read_json_request();
             let artifact_root = request["context"]["artifact_directory"]
                 .as_str()
                 .expect("artifact root");
@@ -240,11 +267,32 @@ fn main() {
         }
         "json-nonzero" => std::process::exit(7),
         "json-sleep" => {
-            let mut input = String::new();
+            let request = read_json_request();
+            let mut cancel = String::new();
             std::io::stdin()
-                .read_to_string(&mut input)
-                .expect("stdin reads");
-            std::thread::sleep(std::time::Duration::from_secs(2));
+                .lock()
+                .read_line(&mut cancel)
+                .expect("cancel frame reads");
+            let cancel: serde_json::Value =
+                serde_json::from_str(cancel.trim_end()).expect("cancel JSON");
+            assert_eq!(cancel["frame"], "cancel");
+            assert_eq!(cancel["request_id"], request["request_id"]);
+            println!(
+                "{}",
+                serde_json::json!({
+                    "frame":"result",
+                    "protocol_version":1,
+                    "schema_id":"star.external-tool-response",
+                    "schema_version":1,
+                    "request_id":request["request_id"],
+                    "status":"cancelled",
+                    "summary":"cancelled",
+                    "data":null,
+                    "diagnostics":[],
+                    "artifacts":[],
+                    "error":null
+                })
+            );
         }
         // The parent deliberately stays alive until its Operation Job is
         // terminated by the integration test; waiting here would invalidate

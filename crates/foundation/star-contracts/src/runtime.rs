@@ -4,6 +4,7 @@ use crate::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -53,6 +54,40 @@ pub struct ExternalToolProgress {
     pub total: Option<u64>,
     pub message: Option<String>,
 }
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalToolCancel {
+    pub frame: String,
+    pub protocol_version: u32,
+    pub request_id: RequestId,
+    pub reason: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalToolCancelAck {
+    pub frame: String,
+    pub protocol_version: u32,
+    pub request_id: RequestId,
+    pub accepted: bool,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalToolProbeRequest {
+    pub frame: String,
+    pub protocol_version: u32,
+    pub request_id: RequestId,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalToolProbeResponse {
+    pub frame: String,
+    pub protocol_version: u32,
+    pub request_id: RequestId,
+    pub product_version: String,
+    pub interface_version: Option<String>,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExternalToolResultStatus {
@@ -70,6 +105,15 @@ pub struct ExternalToolArtifact {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct ExternalToolError {
+    pub code: String,
+    pub message: String,
+    pub retryable: bool,
+    #[serde(default)]
+    pub details: BTreeMap<String, serde_json::Value>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ExternalToolResponse {
     pub frame: String,
     pub protocol_version: u32,
@@ -83,12 +127,27 @@ pub struct ExternalToolResponse {
     pub diagnostics: Vec<serde_json::Value>,
     #[serde(default)]
     pub artifacts: Vec<ExternalToolArtifact>,
-    pub error: Option<serde_json::Value>,
+    pub error: Option<ExternalToolError>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutableIdentity {
+    pub volume_serial: String,
+    pub file_id: String,
+    pub size: u64,
+    pub last_write: String,
+    pub sha256: Sha256Hash,
+    pub product_version: Option<String>,
+    pub interface_version: Option<String>,
+    pub architecture: String,
+    pub signature_status: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FileIdentityLease {
-    pub executable_hash: Sha256Hash,
-    pub file_identity: String,
+    pub final_path_hash: Sha256Hash,
+    pub identity: ExecutableIdentity,
     pub acquired_at: String,
 }

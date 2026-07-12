@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:executable-identity:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "architecture": {
+      "type": "string"
+    },
+    "file_id": {
+      "type": "string"
+    },
+    "interface_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_write": {
+      "type": "string"
+    },
+    "product_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "signature_status": {
+      "type": "string"
+    },
+    "size": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "volume_serial": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "volume_serial",
+    "file_id",
+    "size",
+    "last_write",
+    "sha256",
+    "architecture",
+    "signature_status"
+  ],
+  "title": "ExecutableIdentity",
+  "type": "object"
+}

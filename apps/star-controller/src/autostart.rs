@@ -5,7 +5,7 @@ use std::path::Path;
 use thiserror::Error;
 use windows::{
     Win32::{
-        Foundation::ERROR_SUCCESS,
+        Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS},
         System::Registry::{
             HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE, REG_SZ, REG_VALUE_TYPE, RegCloseKey,
             RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
@@ -143,7 +143,11 @@ fn read_value() -> Result<Option<String>, AutostartError> {
         unsafe {
             let _ = RegCloseKey(key);
         }
-        return Ok(None);
+        return if first == ERROR_FILE_NOT_FOUND {
+            Ok(None)
+        } else {
+            Err(AutostartError::Registry)
+        };
     }
     if kind != REG_SZ || bytes % 2 != 0 {
         unsafe {

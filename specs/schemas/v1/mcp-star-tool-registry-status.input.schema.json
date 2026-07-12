@@ -1,55 +1,62 @@
 {
-  "$defs": {
-    "RegistrySource": {
-      "enum": [
-        "release",
-        "user",
-        "project"
-      ],
-      "type": "string"
-    }
-  },
   "$id": "urn:star-control:schema:star.mcp.star_tool_registry_status.input:v1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
     "cursor": {
-      "type": [
-        "string",
-        "null"
+      "anyOf": [
+        {
+          "maxLength": 1024,
+          "pattern": "^[^\\u0000]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "include_diagnostics": {
-      "type": [
-        "boolean",
-        "null"
-      ]
+      "default": true,
+      "type": "boolean"
     },
     "limit": {
-      "format": "uint16",
-      "maximum": 65535,
-      "minimum": 0,
-      "type": [
-        "integer",
-        "null"
-      ]
+      "default": 50,
+      "maximum": 200,
+      "minimum": 1,
+      "type": "integer"
     },
     "package_id": {
-      "type": [
-        "string",
-        "null"
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+){1,7}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "sources": {
+      "default": [
+        "release",
+        "user",
+        "project"
+      ],
       "items": {
-        "$ref": "#/$defs/RegistrySource"
+        "enum": [
+          "release",
+          "user",
+          "project"
+        ],
+        "type": "string"
       },
-      "type": [
-        "array",
-        "null"
-      ]
+      "maxItems": 3,
+      "type": "array",
+      "uniqueItems": true
     }
   },
-  "title": "RegistryStatusInput",
+  "required": [],
   "type": "object"
 }

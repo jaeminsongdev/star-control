@@ -1,0 +1,116 @@
+{
+  "schema_id": "star.mcp-inspector-evidence",
+  "schema_version": 1,
+  "observed_at": "2026-07-12T09:32:24.0909038Z",
+  "host": {
+    "os": "Microsoft Windows NT 10.0.26200.0",
+    "os_build": 26200,
+    "architecture": "x86_64",
+    "node_version": "v24.16.0",
+    "node_sha256": "sha256:b3094d0b49f9ad602262a9921551737bb97637c05dd357a06ae98188d7290aa3",
+    "npm_version": "11.13.0"
+  },
+  "inspector": {
+    "package": "@modelcontextprotocol/inspector",
+    "version": "0.22.0",
+    "integrity": "sha512-HUyvF+6C3e/sL3wZSc71Li1SkuWysixblFpVdm8csJKBOlT2kNG5kWP0AAgdXRiRWRZ27ZajNtagYgwoJ+QBpQ==",
+    "package_json_sha256": "sha256:851b571c7b032765c1118d11e97aa8730f52ca1d07a4d5911fab44214c049743",
+    "cli_package": "@modelcontextprotocol/inspector-cli",
+    "cli_version": "0.22.0",
+    "cli_integrity": "sha512-Z3NHqa1zTjZyfcd3qJcpIwqiSG7QlR3YkYPFAIoMsPw3hId0AoHtlG4SRueJzymCsF9Rqein3NzUn3qT+aqUBw==",
+    "cli_entrypoint_sha256": "sha256:4ebed8a425d72fc8c8855f12165485f6fb1f33fe12e252541858dd4d2db0a4de",
+    "sdk_version": "1.29.0",
+    "sdk_integrity": "sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==",
+    "package_lock_sha256": "sha256:097f3695f79445c7d439216148011349bb37a98fe5f8c6e34563a5eab750d0c1",
+    "mode": "official_cli_stdio",
+    "cwd_workaround": "inspector-0.22.0-relative-package-json-resolution"
+  },
+  "binaries": {
+    "gateway_sha256": "sha256:bbef0e97aae2eddda92ef34a0d100ef5bb74ff7593a36faddb9979fedbfa50ab",
+    "controller_sha256": "sha256:d93d6e7060e77c8b2d9e8440ebccd5b177c98fcaa7701a1d2f5d1baf6e254cbd"
+  },
+  "results": {
+    "tools_list": true,
+    "fixed_tool_count": 12,
+    "fixed_tool_names": [
+      "star_tool_search",
+      "star_tool_describe",
+      "star_tool_registry_status",
+      "star_tool_call_read_closed",
+      "star_tool_call_read_open",
+      "star_tool_call_write_closed",
+      "star_tool_call_destructive_closed",
+      "star_tool_call_write_open",
+      "star_tool_call_destructive_open",
+      "star_tool_operation_get",
+      "star_tool_operation_cancel",
+      "star_approval_resolve"
+    ],
+    "fixed_titles_descriptions_annotations": true,
+    "fully_resolved_input_output_schemas": true,
+    "tools_list_exit_code": 0,
+    "registry_status": true,
+    "registry_status_exit_code": 0,
+    "controller_pid": 8976,
+    "controller_instance_id": "ctl_Du1PQtBELlrfhkhRudYtepbZXmR1JC2wdotMeVJgCMw",
+    "registry_revision": 1,
+    "release_package_id": "star.control.core",
+    "release_trust_basis": "release_catalog",
+    "search": true,
+    "search_exit_code": 0,
+    "search_query": "goal",
+    "search_result_count": 7,
+    "search_contains_goal_start": true,
+    "controller_pid_unchanged_between_calls": true
+  },
+  "raw_evidence": [
+    {
+      "role": "tools_list",
+      "duration_ms": 480.66,
+      "stdout": {
+        "path": "target/mcp-inspector-evidence-20260712-3/raw/tools-list.stdout.json",
+        "bytes": 213292,
+        "lines": 7081,
+        "sha256": "sha256:bab60b55de49b534dda46603d73c95e6ae264c09e0da5aeb0117657de2fb95e4"
+      },
+      "stderr": {
+        "path": "target/mcp-inspector-evidence-20260712-3/raw/tools-list.stderr.jsonl",
+        "bytes": 0,
+        "lines": 0,
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "role": "registry_status",
+      "duration_ms": 735.87,
+      "stdout": {
+        "path": "target/mcp-inspector-evidence-20260712-3/raw/registry-status.stdout.json",
+        "bytes": 2006,
+        "lines": 59,
+        "sha256": "sha256:c9b71bef64d87d19f1788fac6f1e5ea4f75ffaff11124e12166af9e5399e10c6"
+      },
+      "stderr": {
+        "path": "target/mcp-inspector-evidence-20260712-3/raw/registry-status.stderr.jsonl",
+        "bytes": 0,
+        "lines": 0,
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "role": "search",
+      "duration_ms": 521.53,
+      "stdout": {
+        "path": "target/mcp-inspector-evidence-20260712-3/raw/search.stdout.json",
+        "bytes": 3880,
+        "lines": 118,
+        "sha256": "sha256:a9ada727457673928e3ba1efc8c0b82892b98bd10967bfb450115c759a55f563"
+      },
+      "stderr": {
+        "path": "target/mcp-inspector-evidence-20260712-3/raw/search.stderr.jsonl",
+        "bytes": 0,
+        "lines": 0,
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

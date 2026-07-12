@@ -1,0 +1,206 @@
+{
+  "$defs": {
+    "IsolationProfile": {
+      "enum": [
+        "trusted_desktop",
+        "appcontainer_adapter"
+      ],
+      "type": "string"
+    },
+    "RegistrySource": {
+      "enum": [
+        "release",
+        "user",
+        "project"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "TrustMode": {
+      "enum": [
+        "exact",
+        "compatible",
+        "managed_path"
+      ],
+      "type": "string"
+    },
+    "TrustedExecutable": {
+      "additionalProperties": false,
+      "description": "Executable portion of one immutable code-trust grant.  Values that can\nreveal a local path are represented by a locator hash, never by the path.",
+      "properties": {
+        "config_revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "exact_hash": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executable_id": {
+          "type": "string"
+        },
+        "fixed_working_directory_hash": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "interface_version_req": {
+          "type": "string"
+        },
+        "locator_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "product_version_req": {
+          "type": "string"
+        },
+        "publisher_subject": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "update_policy": {
+          "$ref": "#/$defs/UpdatePolicy"
+        }
+      },
+      "required": [
+        "executable_id",
+        "locator_hash",
+        "update_policy",
+        "product_version_req",
+        "interface_version_req"
+      ],
+      "type": "object"
+    },
+    "UpdatePolicy": {
+      "enum": [
+        "pinned_hash",
+        "version_compatible",
+        "follow_path"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:tool-trust-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Frozen `star.tool-trust-record` v1 persisted by the Controller.",
+  "properties": {
+    "executables": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/TrustedExecutable"
+      },
+      "type": "array"
+    },
+    "expires_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "granted_at": {
+      "type": "string"
+    },
+    "granted_by": true,
+    "isolation_profiles": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/IsolationProfile"
+      },
+      "type": "array"
+    },
+    "manifest_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "package_id": {
+      "type": "string"
+    },
+    "package_version": {
+      "type": "string"
+    },
+    "permission_actions": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "revoke_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revoked_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_hashes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Sha256Hash"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "source_id_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "source_kind": {
+      "$ref": "#/$defs/RegistrySource"
+    },
+    "trust_id": {
+      "type": "string"
+    },
+    "trust_mode": {
+      "$ref": "#/$defs/TrustMode"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "trust_id",
+    "package_id",
+    "package_version",
+    "source_kind",
+    "source_id_hash",
+    "manifest_hash",
+    "trust_mode",
+    "granted_by",
+    "granted_at"
+  ],
+  "title": "ToolTrustRecord",
+  "type": "object"
+}

@@ -34,8 +34,10 @@
           ]
         },
         "cancel_mode": {
-          "default": "terminate_job",
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "concurrency": {
           "anyOf": [
@@ -81,7 +83,6 @@
           "type": "integer"
         },
         "idempotency": {
-          "default": "non_idempotent",
           "type": "string"
         },
         "input_schema_file": {
@@ -107,7 +108,6 @@
           ]
         },
         "paid_action": {
-          "default": "no",
           "type": "string"
         },
         "parameters": {
@@ -118,7 +118,6 @@
           "type": "array"
         },
         "permission_actions": {
-          "default": [],
           "items": {
             "type": "string"
           },
@@ -165,7 +164,10 @@
         "backend_ref",
         "display_name",
         "summary",
-        "description"
+        "description",
+        "permission_actions",
+        "paid_action",
+        "idempotency"
       ],
       "type": "object"
     },
@@ -205,12 +207,6 @@
         },
         "kind": {
           "type": "string"
-        },
-        "prefix": {
-          "type": [
-            "string",
-            "null"
-          ]
         },
         "separator": {
           "type": [
@@ -260,20 +256,19 @@
       "additionalProperties": false,
       "properties": {
         "grace_ms": {
+          "default": 2000,
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         }
       },
-      "required": [
-        "grace_ms"
-      ],
       "type": "object"
     },
     "ConcurrencyContract": {
       "additionalProperties": false,
       "properties": {
         "exclusive_scope": {
+          "default": "none",
           "type": "string"
         },
         "lock_key_inputs": {
@@ -284,6 +279,7 @@
           "type": "array"
         },
         "max_parallel": {
+          "default": 1,
           "format": "uint16",
           "maximum": 65535,
           "minimum": 0,
@@ -296,10 +292,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "max_parallel",
-        "exclusive_scope"
-      ],
       "type": "object"
     },
     "EnvironmentValue": {
@@ -387,10 +379,13 @@
           "type": "array"
         },
         "interface_version_req": {
+          "default": "*",
           "type": "string"
         },
         "isolation_compatibility": {
-          "default": [],
+          "default": [
+            "trusted_desktop"
+          ],
           "items": {
             "type": "string"
           },
@@ -433,12 +428,10 @@
           "type": "integer"
         },
         "minimum_windows_build": {
+          "default": 26100,
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "path": {
           "type": [
@@ -507,8 +500,7 @@
         "executable_id",
         "locator_kind",
         "update_policy",
-        "protocol",
-        "interface_version_req"
+        "protocol"
       ],
       "type": "object"
     },
@@ -518,7 +510,8 @@
         "empty": {
           "default": [],
           "items": {
-            "format": "int32",
+            "format": "uint32",
+            "minimum": 0,
             "type": "integer"
           },
           "type": "array"
@@ -526,15 +519,19 @@
         "retryable": {
           "default": [],
           "items": {
-            "format": "int32",
+            "format": "uint32",
+            "minimum": 0,
             "type": "integer"
           },
           "type": "array"
         },
         "success": {
-          "default": [],
+          "default": [
+            0
+          ],
           "items": {
-            "format": "int32",
+            "format": "uint32",
+            "minimum": 0,
             "type": "integer"
           },
           "type": "array"
@@ -542,7 +539,8 @@
         "warning": {
           "default": [],
           "items": {
-            "format": "int32",
+            "format": "uint32",
+            "minimum": 0,
             "type": "integer"
           },
           "type": "array"
@@ -609,12 +607,14 @@
           ]
         },
         "encoding": {
+          "default": "utf8",
           "type": "string"
         },
         "format": {
           "type": "string"
         },
         "inline_limit_bytes": {
+          "default": 65536,
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
@@ -628,26 +628,24 @@
           ]
         },
         "overflow": {
+          "default": "artifact",
           "type": "string"
         },
         "stderr_encoding": {
+          "default": "utf8",
           "type": "string"
         },
         "stderr_role": {
+          "default": "log",
           "type": "string"
         },
         "stdout_role": {
+          "default": "data",
           "type": "string"
         }
       },
       "required": [
-        "format",
-        "encoding",
-        "stderr_encoding",
-        "inline_limit_bytes",
-        "overflow",
-        "stdout_role",
-        "stderr_role"
+        "format"
       ],
       "type": "object"
     },
@@ -670,14 +668,6 @@
           "items": true,
           "type": "array"
         },
-        "max_items": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
         "max_length": {
           "format": "uint32",
           "minimum": 0,
@@ -687,9 +677,9 @@
           ]
         },
         "maximum": {
-          "format": "double",
+          "format": "int64",
           "type": [
-            "number",
+            "integer",
             "null"
           ]
         },
@@ -702,9 +692,9 @@
           ]
         },
         "minimum": {
-          "format": "double",
+          "format": "int64",
           "type": [
-            "number",
+            "integer",
             "null"
           ]
         },
@@ -771,7 +761,10 @@
           "type": "string"
         },
         "output_format": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "timeout_ms": {
           "default": 5000,
@@ -787,8 +780,7 @@
         }
       },
       "required": [
-        "kind",
-        "output_format"
+        "kind"
       ],
       "type": "object"
     },

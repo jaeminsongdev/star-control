@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('prepare', 'add', 'path-change', 'byte-swap', 'invalidate', 'snapshot', 'kill-gateway', 'marker-state')]
+    [ValidateSet('prepare', 'add', 'path-change', 'byte-swap', 'invalidate', 'performance-capacity', 'snapshot', 'kill-gateway', 'marker-state')]
     [string]$Phase,
 
     [Parameter(Mandatory = $true)]
@@ -196,9 +196,65 @@ grace_ms = 500
     [IO.File]::WriteAllText($manifestPath, $manifest, [Text.UTF8Encoding]::new($false))
 }
 
+function Write-PerformanceCapacityManifests {
+    Write-Manifest $toolA
+    $template = [IO.File]::ReadAllText($manifestPath)
+    $parts = $template.Split(@('[[actions]]'), [StringSplitOptions]::None)
+    if ($parts.Count -lt 2) {
+        throw 'capacity fixture template must contain at least one action'
+    }
+
+    $header = $parts[0]
+    $action = $parts[1]
+    for ($packageIndex = 0; $packageIndex -lt 125; $packageIndex++) {
+        $packageId = 'user.perf.p{0:d3}' -f $packageIndex
+        $actionCount = if ($packageIndex -eq 0) { 3 } else { 4 }
+        $contents = $header.Replace('user.codex-same-session', $packageId)
+        for ($actionIndex = 0; $actionIndex -lt $actionCount; $actionIndex++) {
+            $actionId = "$packageId.action$actionIndex"
+            $contents += '[[actions]]'
+            $contents += $action.Replace(
+                'user.codex-same-session.echo',
+                $actionId
+            )
+        }
+        $target = if ($packageIndex -eq 0) {
+            $manifestPath
+        } else {
+            Join-Path $manifestRoot ('perf-p{0:d3}.toml' -f $packageIndex)
+        }
+        [IO.File]::WriteAllText($target, $contents, [Text.UTF8Encoding]::new($false))
+    }
+
+    $configPath = Join-Path $appData 'Star-Control\config.toml'
+    [IO.File]::WriteAllText(
+        $configPath,
+        "schema_version = 1`npolicy_profile = `"star.policy-profile.personal-auto`"`n",
+        [Text.UTF8Encoding]::new($false)
+    )
+}
+
 switch ($Phase) {
     'prepare' {
         New-Item -ItemType Directory -Path $toolRoot, $manifestRoot -Force | Out-Null
+        $gateway = Join-Path $install 'star-mcp.exe'
+        $controller = Join-Path $install 'star-controller.exe'
+        if (-not (Test-Path -LiteralPath $gateway) -or -not (Test-Path -LiteralPath $controller)) {
+            throw 'isolated install must contain star-mcp.exe and star-controller.exe'
+        }
+        $installManifest = [ordered]@{
+            schema_id = 'star.controller-install-manifest'
+            schema_version = 1
+            product_version = '0.1.0'
+            gateway_sha256 = 'sha256:' + (Get-FileHash -LiteralPath $gateway -Algorithm SHA256).Hash.ToLowerInvariant()
+            controller_path = [IO.Path]::GetFullPath($controller)
+            controller_sha256 = 'sha256:' + (Get-FileHash -LiteralPath $controller -Algorithm SHA256).Hash.ToLowerInvariant()
+        } | ConvertTo-Json -Compress
+        [IO.File]::WriteAllText(
+            (Join-Path $install 'star-control-install.v1.json'),
+            $installManifest,
+            [Text.UTF8Encoding]::new($false)
+        )
         Copy-Item -LiteralPath (Join-Path $install 'star-fake-exe.exe') -Destination $toolA -Force
         Copy-Item -LiteralPath (Join-Path $install 'star-fake-exe.exe') -Destination $toolB -Force
         [pscustomobject]@{
@@ -232,6 +288,16 @@ switch ($Phase) {
             phase = $Phase
             executable = $toolB
             sha256 = 'sha256:' + (Get-FileHash -LiteralPath $toolB -Algorithm SHA256).Hash.ToLowerInvariant()
+        } | ConvertTo-Json -Compress
+    }
+    'performance-capacity' {
+        Write-PerformanceCapacityManifests
+        [pscustomobject]@{
+            phase = $Phase
+            package_count = 125
+            action_count = 499
+            expected_total_actions_with_core = 512
+            manifest_root = $manifestRoot
         } | ConvertTo-Json -Compress
     }
     'invalidate' {
