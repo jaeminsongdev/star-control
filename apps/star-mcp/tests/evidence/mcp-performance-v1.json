@@ -1,7 +1,7 @@
 {
   "schema_id": "star.mcp-performance-evidence",
   "schema_version": 1,
-  "observed_at": "2026-07-12T11:42:45.7714815+00:00",
+  "observed_at": "2026-07-12T12:00:34.5991799+00:00",
   "host": {
     "os": "Microsoft Windows NT 10.0.26200.0",
     "os_build": 26200,
@@ -9,8 +9,8 @@
     "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)"
   },
   "binaries": {
-    "gateway_sha256": "sha256:64dec64e7f32094bdf0597b61f105695c9b7571914a838abfd804e3f270e6084",
-    "controller_sha256": "sha256:c646cafb3fd25279268babc3e9edc28c9e02bb9f74fbb6cab4034c31d084d49e"
+    "gateway_sha256": "sha256:16798371e8d80f1e02edea49898dfb1d2f27e6da909cc87bece7d3aca483fe12",
+    "controller_sha256": "sha256:80958676f880e2d0d6ac8c863b3c13b50a242e026fbd20b829e0c19a4a7a0d2f"
   },
   "registry_capacity": {
     "release_packages": 1,
@@ -24,47 +24,47 @@
   "latency_ms": {
     "gateway_cold_initialize": {
       "samples": 30,
-      "p95": 18.96,
+      "p95": 163.89,
       "limit": 2000.0
     },
     "verified_controller_fallback_start": {
       "samples": 30,
-      "p95": 296.91,
+      "p95": 289.68,
       "limit": 5000.0
     },
     "running_controller_ipc_status": {
       "samples": 30,
-      "p95": 32.72,
+      "p95": 33.35,
       "limit": 250.0
     },
     "search_512_actions": {
       "samples": 30,
-      "p95": 32.98,
+      "p95": 41.26,
       "limit": 100.0
     },
     "describe": {
       "samples": 30,
-      "p95": 27.73,
+      "p95": 30.62,
       "limit": 50.0
     },
     "unchanged_invoke_preflight_without_child": {
       "samples": 30,
-      "p95": 27.14,
+      "p95": 33.28,
       "limit": 250.0
     },
     "stable_toml_save_to_search": {
       "samples": 30,
-      "p95": 434.08,
+      "p95": 423.05,
       "limit": 1000.0
     }
   },
   "memory_mib": {
-    "gateway_idle_max": 7.67,
-    "gateway_512_action_working_set": 10.03,
+    "gateway_idle_max": 7.61,
+    "gateway_512_action_working_set": 10.06,
     "gateway_limit": 64.0,
-    "controller_baseline_working_set": 11.32,
-    "controller_512_action_working_set": 17.62,
-    "controller_512_action_increment": 6.3,
+    "controller_baseline_working_set": 11.34,
+    "controller_512_action_working_set": 18.21,
+    "controller_512_action_increment": 6.87,
     "controller_increment_limit": 128.0
   },
   "method": {

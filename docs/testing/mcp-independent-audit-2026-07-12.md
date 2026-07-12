@@ -4,7 +4,7 @@
 
 최종 판정은 **BLOCK**이다. 고정 MCP 12-tool과 required core 13개의 ID·command·lane 표면은 exact 일치하지만, core 13개에 필요한 소유 command handler와 generated input·output Schema가 없다. 이전 구현은 이 action들을 `ready`로 노출한 뒤 실제 호출에서 process backend만 지원한다며 실패했다. 이번 감사에서는 허위 ready·invoke를 fail-closed `unavailable`로 바꿨지만, 제외 범위인 Planner·Goal application command를 임의로 구현하지 않았으므로 정본의 release 완료 조건은 여전히 충족하지 못한다.
 
-기존 Codex·Inspector·ARM64 JSON은 기록된 과거 실행과 raw hash가 일치해 조작 증거는 찾지 못했다. 그러나 Codex·Inspector는 이전 Gateway `sha256:bbef…`와 Controller `sha256:d93d…`를 가리키며, 현재 수정 release의 `sha256:64dec…`·`sha256:c646…` 증거가 아니다. 현재 binary로 다시 실행한 실제 Codex C001과 Inspector core search는 모두 ready core action 0개를 반환했다.
+기존 Codex·Inspector·ARM64 JSON은 기록된 과거 실행과 raw hash가 일치해 조작 증거는 찾지 못했다. 그러나 Codex·Inspector는 이전 Gateway `sha256:bbef…`와 Controller `sha256:d93d…`를 가리키며, 현재 통합 release의 `sha256:16798371…`·`sha256:80958676…` 증거가 아니다. 현재 binary로 다시 실행한 실제 Codex C001과 Inspector core search는 모두 ready core action 0개를 반환했다.
 
 ## 1. Findings
 
@@ -14,7 +14,7 @@
 
 - 계약: `docs/contracts/mcp-implementation-contract.md:482`, 특히 `:502`는 소유 command handler와 generated Schema mapping이 없으면 release build를 실패시키도록 요구한다.
 - 제품: `catalog/tool-packages/star-control-core.toml:11`~`:153`은 exact 13개를 선언하지만 action별 input·output Schema가 없다. `apps/star-controller/src/main.rs:543`의 등록된 Controller command 집합은 비어 있고, 실제 runtime도 `:6221`~`:6225`에서 process backend 외 실행을 거부한다.
-- 재현: 수정 전 official Inspector로 `star.core.goal.start`를 describe하면 빈 object input Schema와 null output Schema가 `ready`로 나왔고, invoke는 `TOOL_RUNTIME_UNAVAILABLE`/`Only process backends are available`로 끝났다. 수정 후 Inspector run `target/solmax-inspector-20260712-1`과 실제 Codex thread `019f5624-8cb0-7201-8771-6b7cb20ba9c6`의 release-ready `goal` search가 0개를 반환했다.
+- 재현: 수정 전 official Inspector로 `star.core.goal.start`를 describe하면 빈 object input Schema와 null output Schema가 `ready`로 나왔고, invoke는 `TOOL_RUNTIME_UNAVAILABLE`/`Only process backends are available`로 끝났다. 수정 후 통합 branch의 Inspector run `target/final-inspector-20260712-1`과 실제 Codex thread `019f5634-3df4-70c3-9fcb-fcbdb92f3a16`의 release-ready `goal` search가 0개를 반환했다.
 - 영향: C001의 “search·describe core action” 및 required core 업무 action 전체를 현재 제품으로 수행할 수 없다. 정본이 요구한 build-time release 차단도 구현되어 있지 않아 release build 자체는 통과한다.
 - 수정: 부분 수정. `apps/star-controller/src/main.rs:545`~`:578`, `:604`~`:607`, `:3112`~`:3117`에서 owning Schema와 등록 handler가 없는 core action을 search/describe/invoke 모두 fail-closed `unavailable`로 전환했다. 실제 handler·소유 Schema 구현은 범위 밖 application 계약이 필요하므로 남아 있다.
 
@@ -142,7 +142,7 @@ release property/fuzz는 실제로 다음을 실행했다.
 | Codex C001~C008 | old raw 3개 byte/line/SHA와 JSON이 일치하고 Codex isolated copy hash도 원본과 일치해 과거 실행은 genuine | FAIL/STALE. old Gateway·Controller hash. current actual Codex C001 release-ready goal search는 0개. C002~C008 current binary 미재생성 |
 | MCP Inspector 0.22.0 | exact package/CLI/lock integrity와 old raw hash는 genuine; 격리 CWD workaround는 upstream relative lookup 문제이며 제품 결함을 숨기지 않음 | PARTIAL/FAIL. current tools/list·registry status는 실행됐으나 core ready search assertion에서 실패 |
 | management CLI/autostart | current release로 실제 HKCU enable/status/disable/status와 idempotency 수행 | PASS. 최종 Run 값 없음, 잔존 star process 0, evidence 갱신 |
-| x64 | workspace test/clippy/schema/matrix/fmt/release 및 performance/CLI 실기 | PASS. Gateway `sha256:64dec64e…`, Controller `sha256:c646cafb…` |
+| x64 | workspace test/clippy/schema/matrix/fmt/release 및 performance/CLI 실기 | PASS. Gateway `sha256:16798371…`, Controller `sha256:80958676…` |
 | native ARM64 | old private run/artifact 자체는 genuine | STALE/SPLIT. full `29188151232`는 smoke 실패, smoke-only `29188629756`은 prestarted Controller 성공. current source는 ARM64 cross-build만 통과 |
 
 ## 6. 미검증 항목과 남은 위험
