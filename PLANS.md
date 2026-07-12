@@ -8,7 +8,7 @@
 
 ### 현재 목표
 
-- adapter가 직접 소비할 validation·gate·evidence·diagnostic 공개 계약을 `star-contracts`에 구현하고 schema와 불변식을 검증한다.
+- [MCP 독립 감사](docs/testing/mcp-independent-audit-2026-07-12.md)의 `BLOCK` finding을 기준으로 required core 13개 owning command handler·Schema와 current Codex·Inspector·native ARM64 evidence를 해소한다.
 
 ### 반드시 지켜야 할 제약
 
@@ -33,7 +33,9 @@
 
 ### 아직 남은 것
 
-- P-0011 Star 공개 검증·증거 계약 구현과 검증
+- required core 13개 owning command handler·fully resolved input/output Schema와 build-time release failure gate
+- current binary의 Codex C001~C008, MCP Inspector와 native ARM64 evidence
+- exact Windows 11 24H2 baseline smoke
 
 ### 건드리면 안 되는 것
 
@@ -70,13 +72,15 @@
 
 ### 현재 차단 요소
 
-- 없음
+- required core 13개는 ID·command·lane만 exact하고 owning handler·Schema가 없어 current search/describe/invoke에서 fail-closed `unavailable`이다.
+- 체크인 Codex·Inspector·ARM64 evidence test는 과거 JSON shape를 자기검증하며 current raw/binary provenance를 입증하지 않는다.
 
 ## 현재 활성 작업
 
 | ID | 상태 | 목표 | 주요 파일 | 다음 조치 |
 |---|---|---|---|---|
 | P-0011 | 진행 중 | ValidationRun·GateDecision·EvidenceBundle·Diagnostic 공개 계약과 고정 schema를 제공 | crates/foundation/star-contracts/src/evidence.rs, specs/schemas/v1 | 전체 locked gate와 독립 변경 검토 |
+| P-0012 | 감사 완료 — 판정 `BLOCK` | MCP 정본·제품·테스트·생성물·실행 evidence 독립 감사와 확인 결함 최소 수정 | docs/testing/mcp-independent-audit-2026-07-12.md | core owner 계약 구현 뒤 current Codex·Inspector·native ARM64 재검증 |
 
 ## 열린 리스크
 
@@ -90,9 +94,13 @@
 | R-0007 | Windows watcher 알림 유실·편집 중 파일·같은 path 교체가 race를 만들 수 있음 | 이전·새 descriptor와 EXE가 섞일 수 있음 | demand scan, stable-file 확인, immutable snapshot과 실행 lease 회귀 검사 |
 | R-0008 | `rmcp`·Codex MCP host 동작은 update될 수 있음 | 고정 Gateway conformance가 새 version에서 깨질 수 있음 | dependency exact pin, protocol golden과 실제 Codex E2E 뒤에만 update |
 | R-0009 | AppContainer adapter·ARM64 경계는 아직 제품 code와 실제 Windows 환경에서 실행되지 않음 | 설계와 OS 실제 동작 차이가 구현 때 드러날 수 있음 | P1에서 fake adapter, x64·ARM64와 loopback·path escape matrix를 먼저 통과 |
+| R-0010 | required core 13개가 owning handler·Schema 없이 선언됨 | core 업무 action 전체 실행 불가 | application command owner가 type·Schema·handler를 구현하고 release build gate에 연결 |
+| R-0011 | actual-host evidence test가 raw artifact와 current binary를 다시 읽지 않음 | stale JSON도 full gate에서 통과 | CI artifact provenance ingestion과 current binary hash binding 추가 |
 
 ## 다음 작업 시작점
 
+- required core 13개 owner command·Schema·handler 구현과 release build fail gate
+- current Codex·Inspector·native ARM64 evidence 재생성
 - 공개 계약 전체 locked gate와 generated schema drift 검사
 - `not_run` 비통과 및 adapter 완료 판정 재계산 금지 회귀 확인
 - 변경 독립 검토와 PR CI
