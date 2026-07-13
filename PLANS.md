@@ -8,9 +8,9 @@
 
 ### 현재 목표
 
-- P-0014 P0 하이브리드 관리 저장소와 공통 개발 관리 첫 수직 Slice를 최신 `origin/main`의 공개 validation/evidence 계약과 통합하고 FULL 검증한 뒤 승인된 `main`에 push한다.
-- 정본 계약 v1의 MCP Gateway·Local IPC·Live Tool Registry·외부 EXE Runtime·보안·복구·관리 CLI와 170개 검증 범위를 유지한다.
-- 후속 lifecycle 확장은 새 P-ID와 별도 승인 범위로 시작한다.
+- P-0015의 1단계 **읽기 전용 Project Catalog와 Code Index** 상세 설계와 정본 동기화는 완료했다.
+- scanner, parser, DB migration·cache·watcher와 CLI 제품 구현은 별도 승인·새 P-ID가 필요한 다음 범위다.
+- P-0012 MCP release blocker 해소는 이 설계와 독립된 활성 작업으로 유지한다.
 
 ### 반드시 지켜야 할 제약
 
@@ -18,24 +18,22 @@
 - 로컬 AI, 다른 AI 제공자, OpenAI API 직접 호출, HTTP MCP, 브라우저 UI와 자체 예약 실행을 추가하지 않는다.
 - raw shell·script host·PATH lookup을 외부 EXE 우회 수단으로 허용하지 않는다.
 - `legacy/`, 사용자 변경, 기존 미추적 `--check/`와 루트 `manifest.json`을 보존한다.
-- package 설치, 시스템 설정 변경, 파일 삭제, 외부 계정 변경은 별도 승인 없이는 하지 않는다. 현재 대화는 `origin/main` commit·push만 승인했다.
+- package 설치, 시스템 설정 변경, 파일 삭제, 원격 push와 외부 계정 변경은 별도 승인 없이는 하지 않는다.
 - DB backend 이름·SQL·filename은 public 계약·StarConfig·CLI·MCP에 노출하지 않고 `star-state` private adapter에만 둔다.
+- source, test, docs, config, schema, migration, generated, vendor, cache와 output을 구분하며 이 단계의 모든 application command는 project source에 `source_effect=none`이어야 한다.
 
 ### 이미 끝난 것
 
-- 고정 12-tool Gateway, authenticated IPC, live Registry/LKG, 외부 EXE Runtime, 보안·복구·관리 CLI를 구현했다. required core 13 action은 ID·command·lane 선언만 exact하며 owning handler·Schema는 아직 없다.
-- Schema·fixture·JCS·manifest parser, 170개 matrix ID와 의미 감사 회귀를 구현·검증했다.
-- P-0013에서 68개 inventory, P0 상세 계약, ADR-0006·ADR-0007을 문서 확정했다.
-- P-0014에서 21개 persisted type·generated Schema·fixture와 fingerprint golden을 구현했다.
-- `star-domain`, `star-ports`, `star-project`, `star-validation`, `star-execution`, `star-application`, `star-state`, `star-evidence`와 backend-neutral repository port를 추가했다. `rusqlite 0.40.1` bundled dependency는 `star-state` private adapter에만 둔다.
-- Controller 단일 Writer, CLI→IPC→application service, local-first 등록, deterministic scan·Finding, shared decision projection, preview·explicit patch apply·재검증, backup·integrity·retention·source rebuild plan/apply의 첫 수직 Slice를 구현했다.
-- 최신 `main`의 `evidence::GateDecision`과 `evidence::ArtifactRef`를 단일 공개 정본으로 유지하고, 관리 Slice의 ProjectRevision·WorkspaceSnapshot·decision 입력은 namespaced `star.management` extension으로 통합했다.
+- P-0013·P-0014 — 0단계 공통 관리 계약·하이브리드 DB·첫 Slice를 완료했다: [정본](docs/contracts/development-management.md), [로드맵](docs/roadmap/final-implementation.md), `0e94b23`.
+- 고정 MCP Gateway·IPC·Registry·외부 EXE Runtime 수직 Slice와 170개 검증 행은 유지한다. 정확한 release blocker는 [MCP 독립 감사](docs/testing/mcp-independent-audit-2026-07-12.md)가 소유한다.
+- Git source, local management projection·local-only state와 `.ai-runs` evidence의 정본·Writer 경계는 1단계 선행조건을 충족한다.
 
 ### 아직 남은 것
 
-- P-0014 통합 결과는 workspace FULL, x64·ARM64 release cross-build, Schema/matrix, 문서·diff gate를 통과했으며 승인된 `origin/main` 게시와 원격 정합성 확인만 남았다.
+- M1 제품 구현은 Project v1→v2 checkout migration·fixture·backup·rollback gate부터 시작해야 한다.
+- 첫 language syntax adapter와 corpus가 정해지기 전에는 언어별 정확도·성능·지원 범위를 완료로 표시할 수 없다.
+- 2단계 영향 분석은 fresh ProjectCatalogSnapshot·CodeIndexSnapshot과 tier·coverage·limitation을 소비해야 한다.
 - required core 13개 owning command handler·Schema, current Codex·Inspector·native ARM64 evidence, exact Windows 11 24H2 baseline은 MCP release blocker로 남는다.
-- corrupt/future store의 실제 restore candidate 준비·atomic generation activation과 과거 DB version migration fixture는 후속 lifecycle 확장이다.
 
 ### 건드리면 안 되는 것
 
@@ -46,42 +44,43 @@
 ### 먼저 확인할 파일
 
 - `docs/contracts/development-management.md`
+- `docs/contracts/project-catalog-and-code-index.md`
+- `docs/features/core-control.md`
+- `docs/features/profiles.md`
+- `docs/contracts/goal-and-stage.md`
+- `docs/contracts/config-and-catalog.md`
 - `docs/contracts/validation-and-evidence.md`
-- `docs/decisions/ADR-0006-공통-개발-관리와-로컬-관리-DB-경계.md`
-- `docs/decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md`
-- `docs/decisions/ADR-0008-P0-embedded-relational-backend.md`
-- `crates/foundation/star-contracts/src/evidence.rs`
-- `crates/foundation/star-contracts/src/management.rs`
-- `crates/infrastructure/star-state/src/lib.rs`
+- `docs/architecture/state-and-artifacts.md`
+- `docs/architecture/repository-layout.md`
+- `docs/roadmap/final-implementation.md`
 
 ### 먼저 실행할 명령
 
 - `git status --short --branch`
-- `cargo fmt --all -- --check`
-- `cargo test --workspace --locked`
-- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`
-- `cargo run --locked -p star-schema-gen -- --check`
-- `cargo run --locked -p star-matrix-check -- --details`
+- Markdown local link·code fence 검사
+- 문서별 구현/설계 상태와 read-only·no scheduler·CLI-only 용어 충돌 검사
+- `git diff --name-only`로 제품 코드 무변경 확인
 - `git diff --check`
 
 ### 현재 차단 요소
 
+- P-0015 문서 작업의 blocker는 없다. M1 제품 구현은 0단계 단일 `root_binding_id`를 `ProjectCheckout`으로 옮기는 승인된 migration 없이는 시작할 수 없다.
 - 제품 blocker는 required core 13개 owning command handler·Schema 부재다. current search/describe/invoke는 fail-closed `unavailable`이며 release 완료 조건을 충족하지 않는다.
 - current Codex·Inspector·native ARM64 evidence와 exact Windows 11 24H2 baseline이 없다.
-- P-0014 push 자체는 승인됐고 최종 FULL 검증을 통과했다. 게시 직전 `origin/main`을 다시 fetch해 fast-forward 가능성과 원격 정합성을 확인한다.
 
 ## 현재 활성 작업
 
 | ID | 상태 | 목표 | 근거 | 다음 조치 |
 |---|---|---|---|---|
 | P-0012 | IN PROGRESS — verdict BLOCK | MCP 정본·제품·테스트·생성물·실행 증거 독립 감사와 결함 해소 | `docs/testing/mcp-independent-audit-2026-07-12.md` | core owner 계약 구현 뒤 current evidence 재생성 |
-| P-0014 | READY TO PUBLISH — FULL PASS | P0 관리 계약·repository·embedded relational persistence·scan/Finding·patch/validation 첫 수직 Slice | local source commit `07a40fe`; 최신 `main` 공개 GateDecision·ArtifactRef 통합; FULL gate 통과 | commit → fetch/recheck → `origin/main` push |
 
 ## 최근 완료 작업
 
 | ID | 결과 | 근거 |
 |---|---|---|
 | P-0013 | DONE — P0 공통 개발 관리·local management DB 상세 설계와 정본 반영 | `docs/contracts/development-management.md`, ADR-0006·ADR-0007 |
+| P-0014 | DONE — P0 첫 수직 Slice를 최신 공개 evidence 계약과 통합·FULL 검증·`main` 게시 | `0e94b23`, `docs/roadmap/final-implementation.md` |
+| P-0015 | DONE — M1 read-only Project Catalog·Code Index 상세 설계와 정본 동기화 | `docs/contracts/project-catalog-and-code-index.md`, `docs/roadmap/final-implementation.md` |
 
 ## 열린 리스크
 
@@ -94,20 +93,24 @@
 | R-0017 | required core 13개 owning handler·Schema 부재 | fail-closed `unavailable` | application owner 계약·handler·release gate |
 | R-0018 | Codex·Inspector·ARM64 evidence provenance 미완료 | 독립 감사에서 stale evidence를 blocker로 유지 | current binary 실기 재실행 |
 | R-0019 | future/corrupt active store의 candidate restore·atomic activation 미구현 | 원본 overwrite 금지, read-only inspection | lifecycle 후속 Slice |
+| R-0020 | 언어별 syntax·semantic adapter 정확도 차이 | tier·coverage·limitation과 text fallback을 별도 기록 | 언어별 fixture·conformance는 구현 단계에서 추가 |
+| R-0021 | 복수 checkout 도입이 P0 Project v1 단일 root binding과 호환되지 않음 | Project identity와 local ProjectCheckout 분리, v1 자동 재해석 금지 | 구현 전 schema v2·migration fixture 확정 |
+| R-0022 | 큰 dirty/non-Git tree의 hash 비용과 partial 관찰 | bounded scope·content hash·incomplete 상태, 이전 complete generation 유지 | 실제 corpus로 limit·cache 기본값 검증 |
 
 ## 최신 검증 상태
 
-- 최신 `main` 통합본: `cargo fmt --all -- --check`, `cargo test --workspace --locked`, 경고 0 `cargo clippy`, Schema 재현성, 170/170 matrix 통과.
-- x64·`aarch64-pc-windows-msvc` workspace release build, `cargo audit --deny warnings`, `cargo deny check advisories` 통과.
-- Markdown 54개 local link·code fence, 공개 GateDecision·ArtifactRef 단일 정의, staged diff·legacy·비밀 패턴·backend 경계 검사를 통과했다.
-- 기존 Windows incremental finalize `os error 5` note는 명령 exit 0일 때 비차단 noise로 분류한다.
+- TARGETED PASS — 변경 대상은 `PLANS.md`와 `docs/**/*.md`뿐이며 staged·제품 code 변경은 없다. 기존 미추적 `--check/`·`manifest.json`은 보존했다.
+- PASS — 변경 문서 local link, target anchor, code fence와 Markdown table 열 수; `docs/README.md` 읽는 순서 1~40; 계약 Inventory 71개.
+- PASS — identity·discovery·classification·tier/fallback·hardcoding·full/incremental·freshness·read-only·2단계 입력 필수 계약 표식.
+- PASS — 문서에 기록한 Git `rev-parse`, `worktree --porcelain -z`, `status --porcelain=v2 -z` surface를 현재 저장소에서 read-only 실행.
+- PASS — `git diff --check`; STRICT 자체 검토에서 BLOCKER·MAJOR 없음.
 
 ## 다음 작업 시작점
 
-1. P-0014 통합본의 STRICT review와 local `main` commit을 완료한다.
-2. `origin/main` 재확인 뒤 fast-forward push하고 HEAD·remote hash 정합성을 확인한다.
-3. 후속 P0 lifecycle Slice는 backup-set 검증·candidate 준비·사용자 선택·active-set atomic switch와 이전 DB version migration fixture다.
-4. MCP release 재개는 required core 13개 owner command·Schema·handler와 current Codex·Inspector·native ARM64 evidence를 먼저 해소한다.
+1. M1 제품 구현을 승인받으면 새 P-ID를 만들고 [Version·Migration 정본](docs/contracts/versioning-and-migrations.md)의 Project v1→v2 checkout migration부터 수행한다.
+2. migration conformance 뒤 [M1 첫 read-only Slice](docs/roadmap/final-implementation.md#m1-읽기-전용-project-catalog와-code-index-설계-확정-구현-전)를 순서대로 구현한다.
+3. language adapter 선택은 corpus·dependency·license·offline·Windows 근거를 검토한 뒤 정하고 public 계약에 제품명을 넣지 않는다.
+4. 2단계 영향 분석은 fresh ProjectCatalogSnapshot·CodeIndexSnapshot, graph, tier·coverage·limitation만 입력으로 사용한다.
 
 ## Archive References
 
@@ -115,4 +118,4 @@
 - 독립 감사 판정: `docs/testing/mcp-independent-audit-2026-07-12.md`
 - Sol Max 상세 인계문: `docs/testing/sol-max-mcp-review-handoff.md`
 - 170개 정본 행: `docs/testing/mcp-verification-matrix.md`
-- P-0014 원본 보존 commit: `07a40fe`
+- P0 구현·통합 commit: `0e94b23`

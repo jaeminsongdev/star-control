@@ -4,7 +4,7 @@
 
 검사는 많이 하는 것이 목적이 아니다. 결과가 맞는지 판단하는 데 실제로 필요한 검사만 선택하고, 작업 흐름을 불필요하게 늦추지 않아야 한다.
 
-Project·ScanRun·Rule·Finding·Occurrence·ChangePlan·PatchSet·ValidationResult의 필드와 identity는 [공통 개발 관리와 로컬 관리 DB 계약](development-management.md)이 소유한다. 이 문서는 그 자료가 검사·완료·증거 판단으로 연결되는 방식을 소유한다.
+Project·ScanRun·Rule·Finding·Occurrence·ChangePlan·PatchSet·ValidationResult의 공통 필드와 identity는 [공통 개발 관리와 로컬 관리 DB 계약](development-management.md), ProjectCheckout·ProjectCatalogSnapshot·CodeIndexSnapshot과 tier·freshness 의미는 [Project Catalog·Code Index 계약](project-catalog-and-code-index.md)이 소유한다. 이 문서는 그 자료가 검사·완료·증거 판단으로 연결되는 방식을 소유한다.
 
 ## 공통 실행 계약
 
@@ -84,12 +84,14 @@ dirty workspace에서 PatchSet을 적용하려면 대상마다 exact before hash
 ## Scan·Finding·Patch 관계
 
 ```text
-ProjectRevision + WorkspaceSnapshot + EffectiveConfig + Rule set
+ProjectCatalogSnapshot + ProjectCheckout
+  -> ProjectRevision + WorkspaceSnapshot + EffectiveConfig + adapter set + Rule set
   -> ScanRun
+       -> CodeIndexSnapshot(inventory, text, syntax, semantic, graph, finding)
        -> Occurrence -> Finding
-            + Baseline
-            + Suppression
-            + Disposition
+             + Baseline
+             + Suppression
+             + Disposition
        -> ChangeRecipe -> ChangePlan -> PatchSet
             -> 적용 뒤 WorkspaceSnapshot + ChangeSet
             -> ValidationRun* -> ValidationResult
@@ -108,6 +110,73 @@ ProjectRevision + WorkspaceSnapshot + EffectiveConfig + Rule set
 8. scan이 `incomplete`이면 관찰되지 않은 기존 Finding을 resolved로 바꾸지 않으며 해당 범위의 GateDecision은 자동 통과할 수 없다.
 9. Suppression 기본 만료는 90일이며 permanent flag·justification·승인이 없는 무기한 suppression은 invalid다. Disposition은 local state이고 공유하려면 Baseline 또는 Suppression PatchSet을 만든다.
 10. secret·사용자 이름·raw 절대 경로·민감 literal 때문에 occurrence를 안전하게 저장하지 못하면 원문과 hash를 폐기하고 ScanRun·ValidationResult completeness를 낮춘다. redaction 누락을 pass로 해석하지 않는다.
+11. ScanRun은 사용한 ProjectCatalogSnapshot, CheckoutId, requested/effective scan mode, source 분석용 `analysis_input_fingerprint`, 판정 join용 `decision_projection_fingerprint`와 결과 CodeIndexSnapshot을 함께 고정한다. 두 fingerprint는 같은 값으로 합치지 않는다.
+12. dirty working tree에서는 default branch나 HEAD가 아니라 실제로 읽은 tracked modification·staged·untracked byte가 WorkspaceSnapshot과 Finding의 source 근거다.
+13. parse 실패, unsupported language, limit 초과, adapter unavailable과 no-result는 각각 상태·count·limitation으로 남기며 0건 성공 하나로 합치지 않는다.
+14. hardcoding Finding은 자동 결함 판정이 아니다. Rule이 만든 관찰과 `candidate`, `warning`, `review`, `allowed` assessment를 분리하고 assessment 변경은 원래 evidence를 수정하지 않는다.
+
+## Project Catalog·Code Index freshness 근거
+
+이 절은 1단계 read-only scan이 “현재 source를 얼마나 보았는가”를 검증 가능한 증거로 만드는 규칙을 소유한다. 구체적인 entity·partition 필드는 [Project Catalog·Code Index 계약](project-catalog-and-code-index.md)을 반복하지 않고 참조한다.
+
+아래 항목은 1단계 목표 evidence 계약이며 현재 ScanRun Schema나 DB에 구현된 것으로 읽지 않는다.
+
+### ScanRun evidence 최소 집합
+
+| 묶음 | 필수 근거 |
+|---|---|
+| 대상 | ProjectId, CheckoutId, ProjectCatalogSnapshotId, ProjectRevisionId, WorkspaceSnapshotId |
+| 계획 | `requested_mode`, `effective_mode`, full 승격 이유, normalized scope, required/max tier, limit과 required/optional expected partition |
+| 의미 입력 | EffectiveConfig, discovery·classification·scan·index·Rule·adapter set fingerprint, source 분석용 `analysis_input_fingerprint`, 판정 join용 `decision_projection_fingerprint` |
+| source 관찰 | Git object format·HEAD if any, porcelain status fingerprint, tracked·untracked actual content manifest, non-Git manifest fingerprint |
+| 결과 | CodeIndexSnapshotId, partition별 status·input/content fingerprint·count·coverage, 전체 completeness |
+| 품질 | 언어별 requested/used tier, parse·resolution count, ambiguous·unresolved·unsupported·excluded·quarantined count |
+| 실행 | started/finished time, adapter identity·version, batch ordinal·fingerprint, cache reuse provenance |
+| 실패 | stable error code, affected scope, previous current generation 유지 여부, retry 또는 full-scan requirement |
+
+`cache_hit=true`, process exit code 0 또는 Finding 0건만으로 complete를 증명하지 않는다. expected source와 partition을 모두 관찰했고 batch·reference 무결성, redaction과 limit 조건을 통과해야 `complete`다. incomplete·failed scan은 이전 complete generation의 current pointer를 바꾸지 않는다. 사용자가 incomplete snapshot을 조회하면 그 snapshot 자체와 이전 current snapshot을 구분해 반환한다.
+
+### freshness proof
+
+current 판정은 저장 시각의 나이만 비교하지 않고 index input과 **지금 관찰한 source**를 대조한다.
+
+```text
+indexed input
+  = checkout identity
+  + ProjectRevisionId
+  + WorkspaceSnapshotId와 entries fingerprint
+  + discovery·classification·scan·index·Rule·adapter fingerprints
+
+current probe
+  = 같은 checkout의 현재 HEAD/object format/status
+  + 영향 대상 file content hash 또는 bounded filesystem manifest
+  + 현재 effective fingerprint set
+```
+
+모든 의미 입력이 같고 probe가 complete일 때만 `current`다. 불일치는 각각 `stale_source`, `stale_config`, `stale_adapter`, `stale_catalog`로 분류한다. 일부 partition만 일치하면 snapshot 전체를 current로 올리지 않고 `partial`과 partition별 상태를 반환한다. root 접근 실패·Git status 실패·한도 초과처럼 비교 자체를 끝내지 못하면 `unverified`, attached checkout이 없으면 `unavailable`이다.
+
+stale evidence에는 최소 `indexed_value_ref`, redaction한 `observed_value_ref`, `detected_at`, affected partition, `required_action=incremental_scan|full_scan|reattach|adapter_restore`를 둔다. timestamp 차이만으로 stale reason을 만들지 않는다. 반대로 source/config가 달라졌는데 최근에 실행했다는 이유로 current를 유지하지 않는다.
+
+### query와 Finding 근거
+
+index query 결과는 `snapshot_ref`, `freshness`, `requested_tier`, `used_tier`, `coverage`, `resolution`, `confidence`, `limitations`를 항상 가진다. semantic이 syntax나 text로 fallback하면 실제 tier를 보존하고 semantic 결과처럼 gate·영향 분석에 사용하지 않는다. definition/reference 0건은 `confirmed_empty`, `partial`, `unsupported_language`, `semantic_unavailable`을 구분하며 query 실행 자체가 실패하면 빈 결과가 아니라 stable `query_error`를 반환한다.
+
+hardcoding Occurrence는 다음을 모두 가진다.
+
+- stable Rule ID·version·definition·parameter fingerprint
+- source class와 fixture·generated·vendor·docs-example facet, 그 classification provenance
+- secret을 제거한 source range·evidence kind·주변 symbol/config relation
+- candidate category, confidence, false-positive control과 limitation
+- assessment와 assessor·reason·revision; `allowed`도 관찰 evidence를 삭제하지 않음
+
+source literal이 secret·개인 path·민감 값일 수 있으면 원문과 그 hash를 저장하지 않는다. redacted category·위치·관계 근거만으로 identity를 만들 수 없으면 occurrence를 `quarantined`로 계수하고 scan completeness를 낮춘다.
+
+### gate 사용 규칙
+
+- gate policy가 요구한 scope·tier에서 `current + complete`인 required partition만 자동 gate의 positive evidence가 될 수 있다.
+- required evidence의 `stale_*`, `partial`, `unverified`, `unavailable`, fallback tier와 unresolved edge는 `human_review` 또는 재scan 요구 근거이며 자동 통과 근거가 아니다. optional tier limitation은 숨기지 않고 remaining risk로 남기되 policy가 요구하지 않았다면 그것만으로 전체 gate를 block하지 않는다.
+- hardcoding `candidate`는 그 자체로 block하지 않는다. 정책 threshold를 넘긴 `warning`, 명시적 `review`, 또는 별도 validator가 확정한 위반만 해당 gate policy에 따라 판단한다.
+- 2단계 영향 분석이 stale graph를 받으면 confirmed impact를 만들지 않고 최신 scan을 요구하거나 possible impact와 limitation만 반환한다.
 
 ## ValidationRun 계약
 
@@ -219,7 +288,7 @@ EvidenceBundle은 실행 사실을 기계가 읽는 정본으로 묶고 ReviewPa
 - GoalSpec, StageGraph와 최종 revision reference
 - 각 Stage의 RouteDecision, PermissionPlan, 결과와 Checkpoint
 - 변경 전·후 fingerprint와 변경 파일 목록
-- ScanRun·Finding decision, ChangePlan·PatchSet, ValidationPlan·ValidationRun·ValidationResult, Diagnostic과 GateDecision reference
+- ProjectCatalogSnapshot·CodeIndexSnapshot과 freshness proof, ScanRun·Finding decision, ChangePlan·PatchSet, ValidationPlan·ValidationRun·ValidationResult, Diagnostic과 GateDecision reference
 - approval, retry, escalation, pause와 recovery event 구간
 - CostRecord와 측정되지 않은 usage 항목
 - merge 결과, remaining risk와 Handoff

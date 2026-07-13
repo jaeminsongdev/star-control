@@ -4,7 +4,7 @@
 
 이 문서는 [구현 대상 기능](../features/README.md)의 A01~D03과 15개 작업 Profile을 모두 구현했을 때 Star-Control 저장소가 가져야 할 최종 물리 구조와 책임 경계를 정한다.
 
-문서 폴더 migration과 첫 MCP 수직 Slice의 `star-contracts`, `star-ipc`, `star-controller`, `star-mcp`, `star-cli`·검증 도구는 구현됐다. P0에서는 `star-domain`, `star-ports`, `star-project`, `star-validation`, `star-execution`, `star-application`, `star-state`, `star-evidence`의 최소 Package와 private persistence adapter를 만들었다. generated 관리 Schema·fixture와 실제 완료 판정은 [최종 구현 로드맵](../roadmap/final-implementation.md)·`PLANS.md`를 따른다. 아래 큰 module tree 중 P1 이후 module을 현재 존재하는 것으로 읽지 않는다.
+문서 폴더 migration과 첫 MCP 수직 Slice의 `star-contracts`, `star-ipc`, `star-controller`, `star-mcp`, `star-cli`·검증 도구는 구현됐다. P0에서는 `star-domain`, `star-ports`, `star-project`, `star-validation`, `star-execution`, `star-application`, `star-state`, `star-evidence`의 최소 Package와 private persistence adapter를 만들었다. 1단계 Project Catalog·Code Index의 상세 module과 계약은 현재 **설계만 확정하는 범위**이며 제품 code·Schema·DB migration은 아직 구현된 것으로 보지 않는다. generated 관리 Schema·fixture와 실제 완료 판정은 [최종 구현 로드맵](../roadmap/final-implementation.md)·`PLANS.md`를 따른다. 아래 큰 module tree 중 아직 구현하지 않은 module을 현재 존재하는 것으로 읽지 않는다.
 
 이 문서가 정하는 것은 다음과 같다.
 
@@ -142,12 +142,14 @@ CLI와 MCP는 모두 local IPC client다. Controller만 application use case를 
 crates/foundation/
 ├─ star-contracts/
 │  └─ src/
-│     ├─ ids.rs                     # Goal·Stage·ProjectRevision·Scan·Finding·Symbol·Artifact ID
+│     ├─ ids.rs                     # Goal·Stage·Project·Checkout·Catalog/Index snapshot·Finding·Symbol ID
 │     ├─ goal.rs                    # GoalSpec·TaskContract
 │     ├─ stage.rs                   # StageSpec·StageGraph
 │     ├─ route.rs                   # model_role·reasoning_effort·stage_mode·execution_mode·CapabilitySnapshot
 │     ├─ context.rs                 # ContextPack summary와 source reference
 │     ├─ management.rs              # Project·Revision·WorkspaceSnapshot·ScanRun·StoreStatus
+│     ├─ project_catalog.rs         # ProjectCheckout·ProjectCatalogSnapshot·discovery relation
+│     ├─ code_index.rs              # CodeIndexSnapshot·partition·tier·freshness·query quality
 │     ├─ source_graph.rs            # CanonicalSource·Symbol·SymbolReference
 │     ├─ finding.rs                 # Rule·Finding·Occurrence·Suppression·Baseline·Disposition
 │     ├─ change.rs                  # ChangePlan·PatchSet·ChangeRecipe·ValidationResult
@@ -226,18 +228,25 @@ crates/control/
 │     └─ completion/                # 단계·목표 완료 조건
 ├─ star-project/
 │  └─ src/
-│     ├─ roots/                     # project·workspace root 발견
-│     ├─ classify/                  # source·test·docs·generated 등
+│     ├─ discovery/                 # multi-root·nested repo·workspace·worktree·non-Git 후보
+│     ├─ identity/                  # stable Project와 local checkout/worktree identity
+│     ├─ inventory/                 # bounded source enumeration·hash·ignore provenance
+│     ├─ classify/                  # primary class·facet·conflict와 generated ownership
 │     ├─ toolchain/                 # 언어·build·package manager 발견
 │     ├─ guidance/                  # AGENTS·README·정본 우선순위
+│     ├─ text_index/                # 항상 가능한 exact text·token index
+│     ├─ syntax_index/              # language adapter의 definition·reference 후보
+│     ├─ semantic_index/            # 지원 환경에서만 symbol resolution; fallback 필수
+│     ├─ graph/                     # project·package·contract·dependency graph
+│     ├─ hardcoding/                # 근거 있는 candidate 생성, 결함 확정은 하지 않음
 │     ├─ context/                   # A03 Context Pack 선택
 │     ├─ impact/                    # A04 변경 영향
 │     ├─ risk_paths/                # 위험 경로와 confidence
-│     ├─ freshness/                 # revision·신선도·누락 가능성
+│     ├─ freshness/                 # partition probe·stale·partial·unverified
 │     ├─ revision/                  # ProjectRevision·WorkspaceSnapshot
-│     ├─ scan/                      # source enumeration·scan generation
+│     ├─ scan/                      # full/incremental plan·partition generation
 │     ├─ source_graph/              # CanonicalSource·Symbol·Reference
-│     └─ cache/                     # 선택적 discovery cache
+│     └─ cache_key/                 # backend-neutral cache key·reuse eligibility
 ├─ star-routing/
 │  └─ src/
 │     ├─ capability/                # Codex 지원 기능 snapshot 해석
@@ -303,6 +312,7 @@ crates/control/
 │     ├─ transaction/               # store-local event·projection·idempotency·revision
 │     ├─ coordination/              # cross-store operation·participant receipt·recovery
 │     ├─ scan_generation/           # invisible batch와 atomic visible publish
+│     ├─ index_cache/               # 재생성 가능한 content-addressed cache adapter
 │     ├─ journal/                   # append-only event
 │     ├─ artifacts/                 # content-addressed artifact
 │     ├─ atomic_write/              # 안전한 교체
@@ -384,7 +394,7 @@ crates/adapters/
 ├─ star-adapter-windows/
 │  └─ src/
 │     ├─ filesystem/                # Windows path·ACL·atomic file
-│     ├─ watcher/                   # ReadDirectoryChangesW·overflow rescan
+│     ├─ watcher/                   # Tool Registry 변화 감지; Project scan watcher는 M1 첫 Slice 제외
 │     ├─ identity/                  # final path·file ID·hash·Authenticode lease
 │     ├─ process/                   # suspended child·handle list·Job Object
 │     ├─ appcontainer/              # 호환 adapter brokered isolation
@@ -396,9 +406,9 @@ crates/adapters/
 │     └─ clock/
 ├─ star-adapter-git/
 │  └─ src/
-│     ├─ repository/
-│     ├─ status_diff/
-│     ├─ worktree/
+│     ├─ repository/                # top-level·git-dir·common-dir·object format 관찰
+│     ├─ status_diff/               # porcelain v2 -z, staged·unstaged·untracked 관찰
+│     ├─ worktree/                  # porcelain -z linked worktree identity 관찰
 │     ├─ branch_commit/
 │     ├─ merge_conflict/
 │     └─ capability/
@@ -446,7 +456,7 @@ star-evaluation ──> evidence·routing·validation의 공개 결과만 사용
 
 - `foundation`은 다른 workspace Package에 의존하지 않는다. 단, `star-ports`는 `star-contracts`와 `star-domain`만 사용할 수 있다.
 - `control`은 `foundation`과 같은 계층의 명시된 공개 Package에만 의존한다.
-- P0의 `star-project`는 read-only project filesystem·Git 관찰, `star-execution`은 exact-hash local patch effect를 소유하는 명시적 boundary Package다. 두 Package는 management DB, network, AI client와 사용자 root locator 저장소를 알 수 없다.
+- P0·1단계의 `star-project`는 read-only project filesystem·Git 관찰과 Catalog·Index 의미 계산, `star-execution`은 exact-hash local patch effect를 소유하는 명시적 boundary Package다. `star-project`는 `source_effect=none`인 port만 사용하며 두 Package 모두 management DB, network, AI client와 사용자 root locator 저장소를 알 수 없다.
 - `infrastructure`는 `star-ports`를 구현하고 concrete local dependency를 가질 수 있지만 application 판단을 소유하지 않는다.
 - `adapters`는 `star-ports`, `star-contracts`, 필요한 protocol library에만 의존한다.
 - `star-application`은 여러 engine을 조정할 수 있지만 engine 내부 type을 다시 소유하지 않는다.
@@ -469,25 +479,37 @@ star-evaluation ──> evidence·routing·validation의 공개 결과만 사용
 
 CI는 workspace dependency graph와 금지 import를 검사해 이 규칙을 기계적으로 지킨다.
 
-## 0단계 소유권과 repository abstraction
+## 0·1단계 소유권과 repository abstraction
 
 [공통 개발 관리 계약](../contracts/development-management.md)은 새 Package가 아니라 기존 책임에 다음처럼 배치한다.
 
 | 계약·행동 | 의미 소유 | persistence·I/O | 진입·조정 |
 |---|---|---|---|
-| Project·Revision·WorkspaceSnapshot·CanonicalSource | `star-contracts`, `star-domain`, `star-project` | `star-project` read-only filesystem·Git observer, project repository | `star-application` |
-| ScanRun·Symbol·Reference | `star-project` | `star-state` scan generation | `star-application` |
+| Project stable identity·Revision·WorkspaceSnapshot·CanonicalSource | `star-contracts`, `star-domain`, `star-project` | `star-project` read-only filesystem·Git observer, project repository | `star-application` |
+| ProjectCheckout·ProjectCatalogSnapshot | `star-contracts`, `star-domain`, `star-project` | protected root-binding port, `star-state` global projection | `star-application` |
+| ScanRun·CodeIndexSnapshot·partition·freshness | `star-contracts`, `star-project` | `star-state` project scan generation·cache adapter | `star-application` |
+| package·module·symbol·contract·dependency graph와 Symbol·Reference | `star-project` | `star-state` project scan generation | `star-application` |
 | Rule·Finding·Occurrence·Suppression·Baseline·Disposition | `star-validation` | `star-state` projection, `star-evidence` artifact | `star-application` |
 | ChangeRecipe·ChangePlan·PatchSet | `star-contracts`, `star-application`, `star-execution` | `star-state`, `star-evidence`, `star-execution` exact-hash filesystem effect | `star-application` |
 | ValidationResult·GateDecision·ArtifactRef | `star-validation`, `star-evidence` | `star-state`, ArtifactStore | `star-application` |
 | global Project directory·cross-project relation·coordination | `star-domain`, `star-application` | `star-state` global repository | `star-application` |
 | DB version·migration·backup·integrity·rebuild·retention | `star-state` | global/project private backend adapter | Controller lifecycle·application command |
 
-`star-ports::ManagementRepositorySet`은 `GlobalManagementRepository`, ProjectId별 `ProjectManagementRepository`, lifecycle, coordination, artifact와 root-binding port를 조립한다. 각 repository는 store-local transaction, project/source, scan generation, decision, change, event, cursor query와 retention operation만 노출한다. SQL row·table·connection·pragma·backend 오류는 port 밖으로 나오지 않는다. public input·result는 `star-contracts` type과 stable repository error category만 사용한다.
+### 1단계 index adapter 경계
+
+- `star-contracts`는 adapter 이름이 아니라 tier·partition·quality·limitation wire type만 소유한다.
+- `star-project`는 내부 `LanguageIndexAdapter`·`BuildMetadataAdapter` trait, capability 선택, input/output fingerprint, batch 정렬, fallback과 nondeterminism 검사를 소유한다.
+- 첫 M1 Slice의 concrete language adapter는 `star-project` 안의 private in-process module이다. bounded source byte와 manifest metadata만 받고 filesystem·process·network·DB handle을 받지 않는다.
+- adapter descriptor는 stable adapter ID·version, 지원 language/mode·tier, deterministic 여부, 최대 input, 생성 entity/edge 종류와 limitation code set을 선언한다. 이 descriptor fingerprint가 CodeIndexSnapshot input에 들어간다.
+- parser library type·AST·error와 library 이름은 `star-project` 밖 public contract, StarConfig, DB row와 CLI/MCP DTO에 노출하지 않는다. typed IndexBatch로 즉시 정규화한다.
+- external process, language-server protocol 또는 compiler service adapter는 첫 Slice에 없다. 필요성이 corpus로 확인되고 dependency·lifecycle·license·offline·Windows 검증을 거친 뒤에만 `crates/adapters/`의 새 bounded adapter 분리를 별도 구조 결정으로 검토한다.
+- Git·filesystem identity는 기존 `star-adapter-git`·`star-adapter-windows`가 read-only port로 제공하고, cache byte I/O는 `star-state/index_cache`가 맡는다. 어느 adapter도 current·gate·Finding assessment를 결정하지 않는다.
+
+`star-ports::ManagementRepositorySet`은 `GlobalManagementRepository`, ProjectId별 `ProjectManagementRepository`, lifecycle, coordination, artifact와 root-binding port를 조립한다. 각 repository는 store-local transaction, project/checkout/source, scan/index generation, decision, change, event, cursor query와 retention operation만 노출한다. cache port는 snapshot·partition·adapter fingerprint 기반 opaque byte와 hit metadata만 다루며 current 판정을 소유하지 않는다. SQL row·table·connection·pragma·backend 오류는 port 밖으로 나오지 않는다. public input·result는 `star-contracts` type과 stable repository error category만 사용한다.
 
 Controller의 single-store transaction 순서는 `artifact finalize -> repository begin -> expected revision·idempotency 검증 -> event+projection+store revision commit -> evidence export`다. DB commit에 실패한 artifact는 orphan으로 격리하고 성공 evidence로 노출하지 않는다. cross-store 작업은 `global prepared -> project participant transaction+receipt -> global completed` 순서이며 partial 상태를 ACID 성공으로 숨기지 않는다.
 
-CLI-only composition은 filesystem·Git·tool runner·repository·artifact port만 조립한다. `star-adapter-codex`, App Server, 다른 AI provider와 OpenAI API client를 생성하거나 lazy-load하지 않는다. 향후 Codex 연동은 같은 `ManagementApplicationService` command를 호출하는 별도 entry adapter이며 별도 writer나 별도 engine을 만들지 않는다.
+CLI-only composition은 read-only filesystem·Git·metadata tool runner, repository·cache·artifact port만 조립한다. 1단계의 discover·scan·index·query command graph에는 `star-execution`, source-write filesystem port, `star-adapter-codex`, App Server, 다른 AI provider와 OpenAI API client를 생성하거나 lazy-load하지 않는다. 향후 Codex 연동은 같은 `ManagementApplicationService` command를 호출하는 별도 entry adapter이며 별도 writer나 별도 engine을 만들지 않는다.
 
 ## Codex Integration 구조
 
@@ -1048,16 +1070,20 @@ source tree와 runtime 상태를 섞지 않는다.
 │  │     ├─ backups/
 │  │     └─ recovery/
 │  └─ backup-sets/                  # 호환 generation vector manifest
-├─ root-bindings/                   # current-user protected opaque root locator
+├─ root-bindings/                   # current-user protected opaque checkout locator
 ├─ worktrees/
 │  └─ <project-id>\<run-id>\<stage-id>\
-├─ cache/                           # 다시 만들 수 있는 discovery cache
+├─ cache/
+│  └─ project-index/
+│     └─ <project-id>/
+│        └─ <adapter-id>/
+│           └─ <cache-key>/         # 다시 만들 수 있는 partition intermediate
 ├─ logs/                            # 보존 정책과 redaction 적용
 ├─ updates/                         # update staging과 rollback metadata
 └─ recovery/                        # DB 밖 제품 lifecycle 복구본
 ```
 
-실제 DB filename, extension, connection string과 backend setting은 이 layout의 공개 계약이 아니다. directory name에는 ProjectId 외 project 이름·repository 이름·사용자 이름·source path를 넣지 않는다. 관리 DB에는 `root_binding_id`만 두고 raw project absolute path는 저장하지 않는다.
+실제 DB filename, extension, connection string과 backend setting은 이 layout의 공개 계약이 아니다. directory name에는 ProjectId·stable adapter ID·content fingerprint 외 project 이름·repository 이름·사용자 이름·source path를 넣지 않는다. 관리 DB에는 `root_binding_id`만 두고 raw project absolute path는 저장하지 않는다. cache는 active generation·backup에 포함되지 않고 삭제 뒤 재scan할 수 있어야 하며 source 전체 byte와 민감 literal을 저장하지 않는다.
 
 ### 대상 프로젝트 증거
 
@@ -1098,7 +1124,7 @@ source tree와 runtime 상태를 섞지 않는다.
 │        ├─ final-report.md
 │        └─ handoff.md
 └─ management/
-   ├─ scans/<scan-run-id>/
+   ├─ scans/<scan-run-id>/           # catalog/index refs·coverage·freshness evidence
    ├─ patches/<patch-set-id>/
    └─ validations/<validation-result-id>/
 ```
@@ -1113,7 +1139,7 @@ source tree와 runtime 상태를 섞지 않는다.
 | 생성 후 commit하는 계약 | `specs/schemas/`, `docs/generated/` | generator로만 갱신, drift 검사 |
 | test·평가 source | `tests/`, `corpus/`, `evals/` | version·출처·기대 결과 관리 |
 | build·release 생성물 | `target/`, `dist/`, coverage | Git 제외, 다시 생성 |
-| runtime 상태 | `%LOCALAPPDATA%`의 backend-neutral 관리 DB·root binding, 대상 repo `.ai-runs/` | source release와 분리 |
+| runtime 상태 | `%LOCALAPPDATA%`의 backend-neutral 관리 DB·root binding·재생성 index cache, 대상 repo `.ai-runs/` | source release와 분리; cache는 정본·backup 아님 |
 | local-only 과거 자료 | `legacy/` | 읽기 전용, 현재 설계와 package 입력 제외 |
 
 ## 23개 구현 기능의 소유 Package
@@ -1124,7 +1150,7 @@ source tree와 runtime 상태를 섞지 않는다.
 |---|---|---|
 | A01 목표·작업 계약 | `star-planning/task_contract` | `star-contracts`, `star-application` |
 | A02 단계 계획·재계획 | `star-planning/decompose·stage_graph·replan` | `star-domain`, `star-application` |
-| A03 프로젝트 이해·Context Pack | `star-project`의 revision·scan·source graph | `star-contracts`, `star-ports`, `catalog/profiles` |
+| A03 프로젝트 이해·Context Pack | `star-project`의 discovery·identity·inventory·classification·index tier·graph·freshness | `star-contracts`, `star-ports`, Git·Windows adapter, `catalog/profiles` |
 | A04 변경 영향·위험 | `star-project/impact·risk_paths`와 `star-validation/findings` | `star-checks/change_scope`, `star-adapter-git` |
 | A05 Codex 단계별 배정 | `star-routing` | `star-adapter-codex/capability`, `catalog/routing` |
 | A06 Codex 실행·터미널 제어 | `star-application`과 `star-execution` | `star-config/registry`, `apps/`, `star-ipc`, Codex·Windows adapter |
@@ -1162,8 +1188,9 @@ source tree와 runtime 상태를 섞지 않는다.
 | 실행 시 live tool 목록 | ToolRegistrySnapshot | Controller `registry_runtime` 한 process만 |
 | 정책·검사 metadata | `catalog/policies`, `catalog/validators` | 해당 정책·검사 변경 작업 |
 | 실행 중 Goal·Stage 상태 | Controller user-data state | `star-controller` 한 process만 |
-| Project directory·cross-project coordination | global management repository | Controller application transaction만 |
-| ProjectRevision·Scan·Symbol·Finding projection | ProjectId별 management repository | `star-controller`가 주입한 `star-state` adapter 한 process만 |
+| Project directory·ProjectCheckout·ProjectCatalogSnapshot·cross-project coordination | global management repository | Controller application transaction만 |
+| ProjectRevision·WorkspaceSnapshot·CodeIndexSnapshot·Symbol·Finding projection | ProjectId별 management repository | `star-controller`가 주입한 `star-state` adapter 한 process만 |
+| index intermediate cache | `%LOCALAPPDATA%\Star-Control\cache\project-index` | `star-state` cache adapter; semantic current 판단 권한 없음 |
 | local Suppression·Disposition·ChangePlan | ProjectId별 management repository | Controller application transaction만 |
 | DB backend·table·migration 구현 | `star-state` private adapter | 승인된 persistence 변경 작업 |
 | 프로젝트 실행 증거 | `.ai-runs/star-control/<run-id>` | Controller의 state·evidence transaction |
@@ -1333,6 +1360,7 @@ release
 |---|---|
 | D0 | 현재 설계 문서와 이 repository 구조 문서 |
 | P0 | management contract type·fixture, `ManagementRepositorySet` port·fake conformance, 승인된 embedded relational adapter, global/project lifecycle·coordination, Project scan·Finding·Patch·Validation application slice |
+| M1 | P0 Project v1→checkout-aware schema migration, read-only discovery·inventory·text index, 첫 syntax adapter, graph·hardcoding candidate, full/incremental generation·freshness와 CLI query Slice |
 | P1 | foundation 4개 Package, rmcp 2.2 고정 Gateway, authenticated IPC, live Registry·Win32 runtime, Schema·fixture와 MCP matrix 수직 slice |
 | P2 | Controller·CLI app skeleton, core Tool package, `integrations/codex-plugin` |
 | P3 | P0 `star-project`를 확장하고 `star-planning`, `star-routing`, `star-policy` 생성 |
@@ -1343,7 +1371,7 @@ release
 | P8 | `star-evaluation`, `evals/`, shadow comparison |
 | P9 | `packaging/windows`, release workflow와 최종 운영 문서 |
 
-P0의 backend·dependency는 별도 승인 뒤에만 추가한다. 이미 구현된 P1 MCP 수직 Slice는 그 역사와 검증 상태를 유지하지만 P0 관리 계약이 구현됐다는 근거가 되지 않는다. 각 단계는 다음 단계가 실제로 필요로 하는 공개 계약까지만 먼저 만들고 미래 Package의 빈 폴더와 사용되지 않는 추상화는 만들지 않는다.
+M1은 이 문서에서 **사용자 요청의 1단계 관리 확장**을 뜻하며 기존 제품 로드맵의 P1 번호와 다르다. 현재는 구조·계약 문서만 확정했고 위 module이나 migration을 구현하지 않았다. P0의 backend·dependency는 별도 승인 뒤에만 추가한다. 이미 구현된 P1 MCP 수직 Slice는 그 역사와 검증 상태를 유지하지만 P0·M1 관리 계약이 구현됐다는 근거가 되지 않는다. 각 단계는 다음 단계가 실제로 필요로 하는 공개 계약까지만 먼저 만들고 미래 Package의 빈 폴더와 사용되지 않는 추상화는 만들지 않는다.
 
 ## 구조 검증 항목
 
@@ -1355,6 +1383,10 @@ P0의 backend·dependency는 별도 승인 뒤에만 추가한다. 이미 구현
 - CLI·MCP·Codex entry adapter가 management DB·ArtifactStore를 직접 열지 않는지
 - CLI-only dependency graph와 E2E가 Codex·App Server·다른 AI·OpenAI API를 호출하지 않는지
 - 모든 project-scoped DB relation이 ProjectId partition과 project-relative path를 사용하는지
+- Project와 checkout identity가 분리되고 linked worktree가 common repository identity를 ProjectId로 오인하지 않는지
+- discover·scan·index·query dependency graph에 source-write port, scheduler, watcher, AI client가 들어오지 않는지
+- CodeIndexSnapshot의 current 판정이 revision·workspace·config·classification·adapter fingerprint를 모두 대조하는지
+- syntax·semantic 미지원·parse 실패·no-result가 text fallback과 limitation을 보존하는지
 - management store migration·backup·corruption·read-only recovery·rebuild fixture가 있는지
 - DB backend 이름·SQL type이 public contract와 StarConfig에 노출되지 않는지
 - `star-contracts` 밖에 중복 wire type이 없는지

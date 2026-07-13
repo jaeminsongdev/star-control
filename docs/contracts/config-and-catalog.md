@@ -219,9 +219,11 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 
 `RemoteWriteScope`는 `host`, canonical `repository_id`, 허용 action set(`external_write`, `git_push`, `pull_request`), optional protected branch set과 optional `expires_at`을 가진다. wildcard host·repository, credential이 포함된 URL, `release_publish`, `account_change`는 허용하지 않는다. scope는 사용자가 직접 관리하는 user config에서만 만들 수 있고 Project config·Catalog·CLI/MCP 일회성 override가 확대하지 못한다. 실제 remote·branch·action이 exact match하고 approval scope hash가 같을 때만 `personal_auto`의 해당 action을 `auto`로 계산한다. 그 외에는 `prompt`다.
 
-### `[management]`, `[scan]`
+### `[management]`, `[project_discovery]`, `[scan]`, `[index]`, `[index_cache]`
 
-0단계의 정확한 type·fingerprint·repository 경계는 [공통 개발 관리와 로컬 관리 DB 계약](development-management.md)이 소유한다. 설정은 backend가 아니라 동작과 resource 한도만 표현한다.
+0단계의 정확한 type·fingerprint·repository 경계는 [공통 개발 관리와 로컬 관리 DB 계약](development-management.md), 1단계의 Project discovery·source 분류·index tier·freshness 의미는 [Project Catalog·Code Index 계약](project-catalog-and-code-index.md)이 소유한다. 설정은 backend나 특정 parser/indexer가 아니라 동작, 분석 범위와 resource 한도만 표현한다.
+
+`project_discovery.*`, `index.*`, `index_cache.*`와 아래 확장된 `scan.*` key는 1단계 **목표 설정 계약**이다. 현재 제품에서 이미 parse·적용된다고 해석하지 않으며 구현 시 Schema version·invalid/unknown fixture와 EffectiveConfig golden을 함께 추가한다.
 
 | section.key | type | 기본값 | 병합 | 의미 |
 |---|---|---|---|---|
@@ -237,6 +239,16 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 | `management.migration_backup_min_count` | integer | `2` | `maximum_floor` | latest known-good 외 pre-migration backup 최소 수 |
 | `management.suppression_default_expiry_days` | integer | `90` | `minimum_limit` | expires_at 없는 non-permanent Suppression에 적용 |
 | `management.baseline_activation` | enum | `explicit_review` | `immutable` | complete ScanRun review 뒤 명시적 생성만 허용 |
+| `project_discovery.roots_add` | RootBindingRef set | 빈 값 | `union_local_roots` | CLI 또는 user config가 제공한 여러 discovery root; raw path는 설정 해석 뒤 persisted snapshot에 남기지 않음 |
+| `project_discovery.detect_nested_repositories` | boolean | `true` | `false_wins` | parent project 아래의 별도 repository 후보 발견 |
+| `project_discovery.detect_linked_worktrees` | boolean | `true` | `false_wins` | Git common directory가 공유되는 linked worktree 관찰 |
+| `project_discovery.detect_workspaces` | boolean | `true` | `false_wins` | manifest가 선언한 workspace와 member 관계 발견 |
+| `project_discovery.detect_non_git` | boolean | `true` | `false_wins` | manifest·toolchain marker가 있는 non-Git project 후보 발견 |
+| `project_discovery.follow_symlinks` | boolean | `false` | `false_wins` | discovery recursion의 symlink·junction 추적; root escape와 cycle 검증은 항상 적용 |
+| `project_discovery.max_depth` | integer | `16` | `minimum_limit` | 각 explicit root 아래 recursion 깊이 상한 |
+| `project_discovery.max_directories` | integer | `100000` | `minimum_limit` | 한 discovery에서 방문할 directory 상한 |
+| `project_discovery.exclude_paths_add` | project-relative glob set | built-in cache·vendor·output root set | `union` | nested root를 찾기 위해 내려가지 않을 subtree; explicit root 자체는 이 규칙보다 우선 |
+| `project_discovery.search_ignored_subtrees` | boolean | `false` | `explicit_widening` | ignored subtree 안의 nested project 탐색; 기본은 limitation count만 남김 |
 | `scan.incremental` | boolean | `true` | `false_wins` | content·input fingerprint가 같은 결과 재사용 |
 | `scan.include_untracked` | boolean | `true` | `replace` | Git untracked file을 WorkspaceSnapshot에 포함 |
 | `scan.include_ignored` | boolean | `false` | `explicit_widening` | ignored file 포함 |
@@ -250,8 +262,27 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 | `scan.rule_error_policy` | enum | `mark_incomplete` | `most_restrictive` | `mark_incomplete`, `fail_scan` |
 | `scan.include_paths` | project-relative glob array | 빈 값 | `intersection_scope` | 빈 값은 project 전체 |
 | `scan.exclude_paths_add` | project-relative glob set | `.git/**`, `.ai-runs/**` | `union` | scan recursion과 VCS 내부 자료 제외 |
+| `scan.classification_rules_add` | SourceClassificationRule array | 빈 값 | `append_unique_by_id` | source class·facet·생성 주체 override; 같은 ID의 다른 정의는 오류 |
 | `scan.rule_sets_add` | Catalog ID set | built-in required set | `union` | 실행할 Rule set 추가 |
-| `scan.rule_sets_remove` | Catalog ID set | 빈 값 | required Rule 제거 금지 | 선택 Rule만 제거 |
+| `scan.rule_sets_remove` | Catalog ID set | 빈 값 | `subtract_optional` | 선택 Rule만 제거하며 required Rule 제거는 오류 |
+| `scan.hardcoding_rules_enabled` | boolean | `true` | `false_wins` | 절대 경로·endpoint·수치 한도·raw command·error string·config 중복 후보 Rule 실행 |
+| `scan.hardcoding_include_tests` | boolean | `false` | `explicit_widening` | test primary class를 hardcoding Rule에 포함 |
+| `scan.hardcoding_include_fixtures` | boolean | `false` | `explicit_widening` | fixture facet을 hardcoding Rule에 포함 |
+| `scan.hardcoding_include_docs_examples` | boolean | `false` | `explicit_widening` | docs example facet을 hardcoding Rule에 포함 |
+| `scan.hardcoding_include_generated` | boolean | `false` | `explicit_widening` | generated source를 hardcoding Rule에 포함 |
+| `scan.hardcoding_include_vendor` | boolean | `false` | `explicit_widening` | vendor·third-party source를 hardcoding Rule에 포함 |
+| `index.required_tier` | enum | `text` | `maximum_requirement` | ScanRun complete에 필요한 최소 tier; `text < syntax < semantic` |
+| `index.max_tier` | enum | `semantic` | `most_restrictive` | 요청 가능한 최고 tier; `text < syntax < semantic` |
+| `index.fallback_to_lower_tier` | boolean | `true` | `immutable` | 상위 tier unavailable·partial이면 실제 lower tier와 limitation을 반환 |
+| `index.max_symbols` | integer | `5000000` | `minimum_limit` | 한 CodeIndexSnapshot의 symbol 상한 |
+| `index.max_references` | integer | `20000000` | `minimum_limit` | 한 CodeIndexSnapshot의 definition·reference edge 상한 |
+| `index.max_graph_edges` | integer | `25000000` | `minimum_limit` | project·package·contract·dependency graph 전체 edge 상한 |
+| `index.cross_project_edges` | boolean | `true` | `false_wins` | 같은 ProjectCatalogSnapshot 안에서 증거가 있는 cross-project edge 해석 |
+| `index_cache.enabled` | boolean | `true` | `false_wins` | content-addressed derived cache 사용; cache는 current truth가 아님 |
+| `index_cache.max_total_bytes` | integer | `2147483648` | `minimum_limit` | 모든 project index cache의 byte 상한 |
+| `index_cache.retention_days` | integer | `30` | `minimum_limit` | reference 없는 cache entry의 최대 보관 기간 |
+| `index_cache.reuse_partial` | boolean | `false` | `false_wins` | partial partition을 current 결과로 재사용하지 않음 |
+| `index_cache.store_source_bytes` | boolean | `false` | `immutable` | source file 전체 복사본을 cache에 저장하지 않음 |
 
 이 section의 추가 merge 전략은 다음처럼 고정한다.
 
@@ -260,13 +291,31 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 - `true_wins`: 하나라도 true면 true다.
 - `explicit_widening`: false→true는 새 Permission scope와 expected config fingerprint가 있을 때만 허용한다.
 - `intersection_scope`: 각 source가 허용한 project-relative scope의 교집합이며 빈 교집합은 오류다.
-- ordered `most_restrictive`: integrity는 `full > quick`, binary는 `skip > metadata_only`, Rule 오류는 `fail_scan > mark_incomplete` 순서다.
+- `union_local_roots`: user config와 해당 CLI 호출의 root binding 합집합이다. Project config·Catalog·MCP 입력은 새 local root를 추가할 수 없다.
+- `append_unique_by_id`: source 우선순위 순으로 rule을 이어 붙이되 같은 ID·같은 fingerprint만 중복 제거하고 다른 fingerprint는 `CONFIG_CLASSIFICATION_RULE_CONFLICT`다.
+- `subtract_optional`: 선택 항목에서만 빼며 built-in required ID가 들어오면 `CONFIG_REQUIRED_RULE_REMOVAL`이다.
+- ordered `most_restrictive`: integrity는 `full > quick`, binary는 `skip > metadata_only`, Rule 오류는 `fail_scan > mark_incomplete` 순서의 강한 제한을, `index.max_tier`는 `text < syntax < semantic` 중 가장 낮은 허용 상한을 선택한다.
+- `maximum_requirement`: 각 source가 요구한 index tier 중 가장 높은 값을 선택한다.
 
 하위 source가 보존 기간·개수를 줄여 상위 hold 정책을 약화할 수 없다.
+
+discovery·scan·index·cache 수치 기본값은 무제한 실행을 막는 초기 safety cap이지 처리 성능 SLO나 지원 규모 보장이 아니다. 실제 대형 Git/non-Git corpus에서 peak memory·disk·duration을 측정해 release 전에 조정한다. cap에 도달하면 범위를 임의 절단해 complete로 만들지 않고 해당 snapshot·partition을 `partial` 또는 ScanRun을 `incomplete`로 표시한다.
 
 `management.suppression_default_expiry_days`는 1~365 범위다. `permanent=true`는 이 값을 우회하는 암묵적 무기한이 아니라 별도 justification과 `local_write` 또는 source PatchSet permission을 요구한다. `management.baseline_activation`에 자동 생성 모드는 존재하지 않는다.
 
 store topology는 설정이 아니다. v1은 global store와 ProjectId별 project store를 사용하는 `hybrid`로 고정하며 `management.store_topology`, global/project DB path와 root-locator protection을 사용자 key로 노출하지 않는다. root locator는 Windows current-user protection을 사용하고 DB backup·export에서 제외한다.
+
+`project_discovery.exclude_paths_add`의 built-in set v1은 slash-normalized `**/.git/**`, `**/.ai-runs/**`, `**/node_modules/**`, `**/target/**`, `**/.venv/**`, `**/vendor/**`, `**/dist/**`, `**/build/**`, `**/.cache/**`, `**/coverage/**`다. 이 set은 **nested project discovery recursion만** 막는다. explicit discovery root로 직접 지정하면 그 root 자체는 검사하며, project source inventory는 `scan.exclude_paths_add`와 class 정책으로 별도 결정한다. resolved set과 built-in set version은 discovery fingerprint에 들어간다.
+
+`SourceClassificationRule`은 `rule_id`, project-relative `path_glob`, optional marker·VCS 상태 조건, 하나의 primary class, facet set, optional `generated_by`, optional `analysis_eligibility` map(`inventory|text|syntax|semantic|hardcoding`), 근거와 declaration fingerprint를 가진다. 절대 경로·shell expression·source literal은 허용하지 않는다. `generated_by`는 확인 가능한 manifest·generator ID이지 자유 형식 command가 아니다. 기본 class matrix보다 분석을 넓히는 `analysis_eligibility=true`는 explicit widening permission과 expected config fingerprint가 필요하다. immutable deny, `sensitive_candidate`, cache/output의 content 분석과 vendor의 hardcoding warning은 override할 수 없다. 서로 같은 우선순위 근거가 다른 primary class나 eligibility를 요구하면 임의로 하나를 고르지 않고 source를 `classification_conflict`로 표시한다.
+
+effective analysis eligibility는 전용 계약의 class matrix에서 시작한다. `scan.hardcoding_include_*`는 해당 class/facet 전체를 넓히고, SourceClassificationRule의 `analysis_eligibility`는 matching path만 좁히거나 명시적으로 넓힌다. 상위 설정의 `false` 제한과 immutable deny가 가장 우선하며, 같은 우선순위의 true/false 충돌은 `CONFIG_CLASSIFICATION_RULE_CONFLICT`다. 최종 class·facet·eligibility와 각 근거를 SourceEntry에 저장한다.
+
+`project_discovery.exclude_paths_add`는 discovery recursion만 제한하고 explicit root 자체를 무효화하지 않는다. `scan.exclude_paths_add`는 source inventory 범위다. Git tracked file은 Git ignore만으로 제거하지 않으며, ignored untracked file은 `scan.include_ignored=false`일 때 count와 provenance만 남긴다. `generated`, `vendor`, `cache`, `output`은 단순 path glob만으로 확정하지 않고 manifest·VCS 상태·adapter marker를 함께 기록한다. hardcoding widening key를 켜도 해당 class·facet이 normal source로 바뀌지는 않는다.
+
+최초 attached checkout에 complete snapshot이 없으면 `scan.incremental=true`여도 `full` plan을 만든다. 그 뒤에는 Git revision, current status와 file content hash로 incremental 후보를 계산하며 manifest·lockfile·toolchain·AGENTS·canonical docs·classification·adapter fingerprint가 넓게 바뀌어 안전한 영향 범위를 계산할 수 없으면 full로 승격한다. 이 결정은 command 결과에 `requested_mode`, `effective_mode`, `promotion_reason`으로 남긴다.
+
+`index.required_tier`는 `index.max_tier`보다 높을 수 없으며 위반은 `CONFIG_INDEX_TIER_RANGE`다. 기본 `required_tier=text`, `max_tier=semantic`은 eligible source의 text가 complete 조건이고 available syntax·semantic은 optional partition으로 시도한다는 뜻이다. required tier adapter·coverage가 실패하면 ScanRun은 `incomplete`; required보다 높은 tier가 unavailable이면 ScanRun은 성공할 수 있지만 그 partition·query에는 limitation과 fallback actual tier가 남는다. `max_tier=semantic` 자체는 semantic 결과를 보장하지 않는다. 해당 언어 adapter·toolchain·workspace 조건이 없으면 `semantic_unavailable`을 남기고 syntax, 다시 text로 내려간다. 1단계 index adapter는 generic process payload를 받지 않으며 package install, dependency resolution, build output 생성과 network access를 요구할 수 없다.
 
 다음 이름은 v1 StarConfig key가 아니며 나타나면 unknown key 오류다.
 
@@ -278,10 +327,24 @@ store topology는 설정이 아니다. v1은 global store와 ProjectId별 projec
 - `management.global_database_path`
 - `management.project_database_path`
 - backend별 pragma·pool·vacuum 설정
+- `project_discovery.schedule`, `project_discovery.cron`, `project_discovery.interval`
+- `scan.schedule`, `scan.cron`, `scan.interval`, `scan.on_change`, `scan.watcher`
+- `scan.auto_fix`, `scan.write_source`, `scan.apply_finding`
+- `index.backend`, `index.database_path`, `index.parser`, `index.indexer`
+- `index.ai`, `index.semantic_ai`, `index.model`
 
 P0에서 선택한 embedded relational backend와 그 build option은 `star-state` private adapter와 release build 설정에만 속한다. CLI, project config와 MCP 입력으로 backend를 선택하거나 SQL·pragma를 전달하지 않는다. concrete 선택 근거는 [ADR-0008](../decisions/ADR-0008-P0-embedded-relational-backend.md)에만 둔다.
 
-`scan_config_fingerprint`는 resolved path scope, symlink·ignored·binary policy, byte·file limits, completeness policy, redaction contract version, Rule ID·version·definition fingerprint와 effective Rule parameter를 JCS로 hash한다. retention, terminal render와 cleanup trigger는 포함하지 않는다. ScanRun에는 이 값과 전체 `EffectiveConfig.fingerprint`를 모두 기록한다.
+fingerprint는 다음처럼 분리한다.
+
+| fingerprint | 포함 | 제외 |
+|---|---|---|
+| `discovery_config_fingerprint` | protected root binding ID set, nested·worktree·workspace·non-Git policy, recursion·ignore·symlink limit, marker contract version | raw root path, 표시 이름, timestamp |
+| `classification_fingerprint` | ordered SourceClassificationRule, built-in marker contract, VCS·manifest evidence policy | source byte 자체, cache hit, render option |
+| `scan_config_fingerprint` | resolved path scope, ignored·binary·hardcoding 대상 policy, byte·file limit, completeness, redaction contract, Rule ID·version·definition·parameter fingerprint | retention, terminal render, cache eviction |
+| `index_config_fingerprint` | required/max tier, fallback contract version, symbol·reference·graph limit, cross-project policy와 adapter set fingerprint | cache location·hit, timestamp, backend·table |
+
+모든 값은 JCS로 hash한다. ScanRun에는 전체 `EffectiveConfig.fingerprint`, scan·index·classification fingerprint를, ProjectCatalogSnapshot에는 discovery fingerprint를 기록한다. persisted fingerprint payload에는 raw root path를 넣지 않는다. cache key는 snapshot과 index fingerprint를 사용하지만 cache budget·retention 변화만으로 semantic snapshot을 stale로 만들지 않는다.
 
 `management.*`와 scan resource·scope key는 사용자·project 설정에서 더 제한할 수 있다. Goal·CLI·MCP override가 scope나 resource를 넓히려면 일반 override가 아니라 새 Permission scope와 expected config fingerprint를 요구한다.
 

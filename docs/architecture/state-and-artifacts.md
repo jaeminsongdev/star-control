@@ -4,7 +4,7 @@
 
 앱을 닫거나 작업이 실패해도 처음부터 다시 조사하지 않도록 목표, 단계, source 관찰, 결과와 다음 행동을 안전하게 저장한다. 동시에 source code와 공유 선언이 로컬 DB에 갇히지 않게 정본·projection·evidence를 분리한다.
 
-Project·ScanRun·Finding·PatchSet과 관리 DB lifecycle은 [공통 개발 관리와 로컬 관리 DB 계약](../contracts/development-management.md), EventEnvelope, RunSnapshot, Checkpoint, Handoff와 전이 불변식은 [이벤트와 상태 계약](../contracts/events-and-state.md)이 소유한다.
+Project·ScanRun·Finding·PatchSet과 관리 DB lifecycle은 [공통 개발 관리와 로컬 관리 DB 계약](../contracts/development-management.md), ProjectCheckout·ProjectCatalogSnapshot·CodeIndexSnapshot과 freshness 의미는 [Project Catalog·Code Index 계약](../contracts/project-catalog-and-code-index.md), EventEnvelope, RunSnapshot, Checkpoint, Handoff와 전이 불변식은 [이벤트와 상태 계약](../contracts/events-and-state.md)이 소유한다.
 
 ## 작업 상태
 
@@ -33,8 +33,9 @@ Project·ScanRun·Finding·PatchSet과 관리 DB lifecycle은 [공통 개발 관
 | 위치 | 저장 내용 | 저장하지 않는 것 |
 |---|---|---|
 | 대상 Git repository | Project 선언, source, config, Rule·ChangeRecipe, shared suppression·baseline, Schema·Catalog | local scan projection, 개인 path, raw log |
-| `%LOCALAPPDATA%\Star-Control\management\global\` | Project directory, cross-project relation·coordination, global lifecycle summary | project scan detail, source file byte, raw project root |
-| `%LOCALAPPDATA%\Star-Control\management\projects\<project-id>\` | project별 query projection, local decision·operation·evidence index | 다른 project detail, 큰 diff·trace, raw project root |
+| `%LOCALAPPDATA%\Star-Control\management\global\` | Project directory, ProjectCheckout relation, ProjectCatalogSnapshot, cross-project relation·coordination, global lifecycle summary | project scan detail, source file byte, raw project root |
+| `%LOCALAPPDATA%\Star-Control\management\projects\<project-id>\` | project별 revision·workspace·CodeIndexSnapshot partition, graph·Finding query projection, local decision·operation·evidence index | 다른 project detail, 큰 diff·trace, raw project root |
+| `%LOCALAPPDATA%\Star-Control\cache\project-index\<project-id>\` | adapter·input fingerprint별 다시 만들 수 있는 content-addressed index intermediate | current pointer, source 전체 복사본, local decision, backup 대상 자료 |
 | `<project>\.ai-runs\star-control\` | hash가 있는 diff·patch·log·trace·report·canonical evidence export | DB backend file, secret, 다른 project 절대 path |
 
 Git source가 공유 정본이다. 관리 DB는 source-derived projection과 local-only 운영 상태를 함께 가지지만 source code의 유일한 정본이 아니다. `.ai-runs`는 큰 evidence byte를 소유하고 DB는 ArtifactRef만 저장한다.
@@ -64,11 +65,20 @@ Git source가 공유 정본이다. 관리 DB는 source-derived projection과 loc
         backups\
         recovery\
     backup-sets\           # 함께 복구할 generation vector manifest
-  root-bindings\          # current-user protected opaque project root binding
+  root-bindings\          # current-user protected opaque checkout root binding
+  cache\
+    project-index\
+      <project-id>\
+        <adapter-id>\
+          <cache-key>\     # snapshot·config·adapter fingerprint 기반 재생성 cache
   logs\                   # redaction·retention 적용
 ```
 
-global DB에는 Project directory·cross-project coordination만, ProjectId별 DB에는 source-derived index, event·projection, local decision과 application 상태를 둔다. raw project root는 어느 DB에도 저장하지 않고 `root_binding_id`만 둔다. 실제 root locator는 별도 adapter가 Windows current-user protection으로 암호화한 opaque locator를 해석하며 plaintext는 process memory 밖으로 노출하지 않는다. root binding은 management backup·export에 포함하지 않는다.
+global DB에는 Project directory·ProjectCheckout·ProjectCatalogSnapshot·cross-project coordination만, ProjectId별 DB에는 source-derived CodeIndexSnapshot partition, event·projection, local decision과 application 상태를 둔다. raw project root는 어느 DB에도 저장하지 않고 `root_binding_id`만 둔다. 실제 root locator는 별도 adapter가 Windows current-user protection으로 암호화한 opaque locator를 해석하며 plaintext는 process memory 밖으로 노출하지 않는다. root binding은 management backup·export에 포함하지 않는다.
+
+0단계 현재 `Project` schema v1은 Project 하나에 `root_binding_id` 하나를 둔다. 1단계 구현은 [Project Catalog·Code Index 계약의 선행 gap](../contracts/project-catalog-and-code-index.md#0단계-선행조건과-호환성-gap)에 따라 binding을 `ProjectCheckout`으로 이동하는 schema migration을 먼저 거친다. migration 전 row를 복수 checkout으로 추정 복제하지 않으며, migration이 끝나기 전에는 단일 attached checkout만 current로 취급한다. 이 문서 반영은 schema·DB 구현 완료를 뜻하지 않는다.
+
+cache는 store generation과 별도다. 삭제·miss·손상 시 같은 source와 fingerprint로 재생성해야 하며 `active-set.json`, backup-set, integrity 성공과 current 판정의 필수 자료가 아니다. cache key는 ProjectId·WorkspaceSnapshotId·partition·adapter fingerprint·index config fingerprint로 만들고 directory 이름에 project명·path·사용자명을 넣지 않는다. source 전체 byte, secret, 개인 절대 경로와 민감 literal은 cache에 저장하지 않는다.
 
 v1 management DB byte 전체를 암호화하지 않는다. 관리 directory, DB auxiliary file, backup과 recovery copy에는 current user와 SYSTEM만 허용하는 Windows ACL을 적용하고 persistence 전 redaction을 강제한다. 이 경계는 다른 일반 사용자에 대한 보호이며 관리자 또는 이미 침해된 current-user process에 대한 비밀 저장소를 주장하지 않는다.
 
@@ -115,7 +125,7 @@ Goal Run 밖의 CLI-only scan·change evidence는 별도 scope를 사용한다.
 
 ```text
 <project>\.ai-runs\star-control\management\
-  scans\<scan-run-id>\              # source manifest·scan report·tool output
+  scans\<scan-run-id>\              # catalog/index refs·source manifest·freshness·coverage·scan report
   patches\<patch-set-id>\           # diff·rollback·apply report
   validations\<validation-result-id>\ # log·trace·report
 ```
@@ -128,6 +138,8 @@ Goal Run 밖의 CLI-only scan·change evidence는 별도 scope를 사용한다.
 - event, projection, idempotency와 store revision은 같은 logical store 안에서 한 repository transaction으로 commit한다.
 - cross-store command는 global prepared operation, project participant receipt와 final completion으로 복구하며 하나의 DB transaction이라고 주장하지 않는다.
 - scan 결과는 invisible generation에 batch write한 뒤 complete finalization에서만 visible pointer를 바꾼다.
+- ProjectCatalogSnapshot과 CodeIndexSnapshot은 immutable content fingerprint를 가지며 current pointer와 freshness probe 결과를 snapshot 본문과 분리한다.
+- incomplete·failed generation, stale cache와 parse no-result는 이전 complete current generation을 교체하지 않는다.
 - 중요한 store generation과 evidence manifest는 중간 상태가 보이지 않게 안전하게 교체한다.
 - event export는 순서대로 추가하며 DB event revision과 hash를 기록한다.
 - 잘못된 상태는 조용히 무시하지 않는다.
@@ -174,7 +186,7 @@ Goal Run 밖의 CLI-only scan·change evidence는 별도 scope를 사용한다.
 - backend structural check, relation·partition, event/projection revision, fingerprint와 ArtifactRef hash를 계층적으로 검사한다.
 - 손상이 의심되면 read-write open을 중단한다. Controller recovery component가 제시한 read-only mode, verified restore 또는 rebuild 중 활성화할 generation은 사용자가 선택하며 자동 전환하지 않는다.
 - 손상 store를 덮어쓰지 않고 verified backup restore 또는 side-by-side rebuild를 수행한다.
-- Git 선언·source와 같은 scan 입력이 있으면 current ProjectRevision, WorkspaceSnapshot, Symbol, Reference와 Finding projection을 재구축할 수 있다.
+- Git 선언·source와 같은 scan 입력이 있으면 current ProjectCatalogSnapshot, ProjectRevision, WorkspaceSnapshot, CodeIndexSnapshot, Symbol, Reference와 Finding projection을 재구축할 수 있다.
 - `.ai-runs` canonical manifest가 남아 있으면 ValidationResult, GateDecision과 ArtifactRef relation을 제한적으로 reindex할 수 있다.
 - local-only Suppression·Disposition, 진행 상태, 과거 actor·timestamp와 idempotency는 backup·export가 없으면 복구할 수 없다고 보고한다.
 - 새 generation set 전체를 검증한 뒤에만 `active-set.json` pointer를 atomic replace하고 이전·손상 generation은 승인 전 삭제하지 않는다.

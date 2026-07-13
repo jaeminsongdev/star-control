@@ -12,37 +12,38 @@
 6. [모델·생각 깊이·실행 방식 배정](contracts/routing.md)
 7. [설정과 Catalog 계약](contracts/config-and-catalog.md)
 8. [공통 개발 관리와 로컬 관리 DB 계약](contracts/development-management.md) — 0단계 domain·repository·rebuild 정본
-9. [이벤트와 상태 계약](contracts/events-and-state.md)
-10. [검사·완료·증거](contracts/validation-and-evidence.md)
-11. [MCP 도구 계약](contracts/mcp-tools.md)
-12. [외부 Tool Registry와 고정형 MCP Gateway](contracts/external-tool-registry.md)
-13. [MCP 구현 동결 계약](contracts/mcp-implementation-contract.md) — 고정 tool·wire·hash·상태기계 정본
-14. [ToolPackageManifest Reference](contracts/tool-package-manifest-reference.md) — TOML 전체 문법
-15. [Windows Local IPC 계약](contracts/local-ipc.md)
-16. [오류와 진단 계약](contracts/errors-and-diagnostics.md)
-17. [Version과 Migration 계약](contracts/versioning-and-migrations.md)
-18. [Codex 통합과 진입 통제](architecture/codex-integration.md)
-19. [승인·권한·안전](architecture/security-and-permissions.md)
-20. [Windows Tool Runtime](architecture/windows-tool-runtime.md) — watcher·identity·process·격리 정본
-21. [상태 기록과 이어하기](architecture/state-and-artifacts.md)
-22. [병렬 작업과 병합](architecture/worktrees-and-merge.md)
-23. [기능 범위와 레거시 판정](product/scope.md)
-24. [설치와 공개 배포](operations/installation.md)
-25. [최종 구현 로드맵](roadmap/final-implementation.md)
-26. [MCP 구현 검증 행렬](testing/mcp-verification-matrix.md) — 실제 Codex same-session 완료 gate와 [현재 완료 감사](testing/mcp-completion-audit.md)
-27. [용어](product/glossary.md)
-28. [구현 대상 기능](features/README.md) — 23개 구현 기능과 15개 작업 Profile
-29. [최종 Repository·Package·문서 구조](architecture/repository-layout.md) — 물리 위치, Package 의존 방향, 확장 절차
-30. [레거시 기능 카탈로그](history/legacy-feature-catalogue.md) — 과거 자료의 사실 기록
-31. [구현 대상 선정 근거](history/source-selection-record.md) — 외부 자료·레거시 대응 기록
-32. [D0 최종 설계 결정](decisions/ADR-0001-최종-설계-기준.md)
-33. [데이터 계약·설정 정본 결정](decisions/ADR-0002-데이터-계약과-설정-정본.md) — P1 기계 계약의 고정 기준
-34. [외부 도구 Registry·MCP Gateway 과거 결정](decisions/ADR-0003-외부-도구-레지스트리와-MCP-Gateway.md) — ADR-0004로 대체됨
-35. [무재시작 고정 MCP·Live Tool Registry 결정](decisions/ADR-0004-무재시작-고정-MCP와-Live-Tool-Registry.md)
-36. [MCP 구현 계약 동결 결정](decisions/ADR-0005-MCP-구현-계약-동결.md) — Terra 구현의 현재 정본
-37. [공통 개발 관리와 로컬 관리 DB 결정](decisions/ADR-0006-공통-개발-관리와-로컬-관리-DB-경계.md) — P0 source·DB·evidence·Writer 경계
-38. [P0 하이브리드 저장소와 운영 정책 결정](decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md) — global/project store와 user-confirmed 기본값
-39. [P0 embedded relational backend 결정](decisions/ADR-0008-P0-embedded-relational-backend.md) — private `rusqlite` adapter와 검증 gate
+9. [읽기 전용 Project Catalog와 Code Index 계약](contracts/project-catalog-and-code-index.md) — 1단계 discovery·checkout·index·freshness·fallback 정본
+10. [이벤트와 상태 계약](contracts/events-and-state.md)
+11. [검사·완료·증거](contracts/validation-and-evidence.md)
+12. [MCP 도구 계약](contracts/mcp-tools.md)
+13. [외부 Tool Registry와 고정형 MCP Gateway](contracts/external-tool-registry.md)
+14. [MCP 구현 동결 계약](contracts/mcp-implementation-contract.md) — 고정 tool·wire·hash·상태기계 정본
+15. [ToolPackageManifest Reference](contracts/tool-package-manifest-reference.md) — TOML 전체 문법
+16. [Windows Local IPC 계약](contracts/local-ipc.md)
+17. [오류와 진단 계약](contracts/errors-and-diagnostics.md)
+18. [Version과 Migration 계약](contracts/versioning-and-migrations.md)
+19. [Codex 통합과 진입 통제](architecture/codex-integration.md)
+20. [승인·권한·안전](architecture/security-and-permissions.md)
+21. [Windows Tool Runtime](architecture/windows-tool-runtime.md) — watcher·identity·process·격리 정본
+22. [상태 기록과 이어하기](architecture/state-and-artifacts.md)
+23. [병렬 작업과 병합](architecture/worktrees-and-merge.md)
+24. [기능 범위와 레거시 판정](product/scope.md)
+25. [설치와 공개 배포](operations/installation.md)
+26. [최종 구현 로드맵](roadmap/final-implementation.md)
+27. [MCP 구현 검증 행렬](testing/mcp-verification-matrix.md) — 실제 Codex same-session 완료 gate와 [현재 완료 감사](testing/mcp-completion-audit.md)
+28. [용어](product/glossary.md)
+29. [구현 대상 기능](features/README.md) — 23개 구현 기능과 15개 작업 Profile
+30. [최종 Repository·Package·문서 구조](architecture/repository-layout.md) — 물리 위치, Package 의존 방향, 확장 절차
+31. [레거시 기능 카탈로그](history/legacy-feature-catalogue.md) — 과거 자료의 사실 기록
+32. [구현 대상 선정 근거](history/source-selection-record.md) — 외부 자료·레거시 대응 기록
+33. [D0 최종 설계 결정](decisions/ADR-0001-최종-설계-기준.md)
+34. [데이터 계약·설정 정본 결정](decisions/ADR-0002-데이터-계약과-설정-정본.md) — P1 기계 계약의 고정 기준
+35. [외부 도구 Registry·MCP Gateway 과거 결정](decisions/ADR-0003-외부-도구-레지스트리와-MCP-Gateway.md) — ADR-0004로 대체됨
+36. [무재시작 고정 MCP·Live Tool Registry 결정](decisions/ADR-0004-무재시작-고정-MCP와-Live-Tool-Registry.md)
+37. [MCP 구현 계약 동결 결정](decisions/ADR-0005-MCP-구현-계약-동결.md) — Terra 구현의 현재 정본
+38. [공통 개발 관리와 로컬 관리 DB 결정](decisions/ADR-0006-공통-개발-관리와-로컬-관리-DB-경계.md) — P0 source·DB·evidence·Writer 경계
+39. [P0 하이브리드 저장소와 운영 정책 결정](decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md) — global/project store와 user-confirmed 기본값
+40. [P0 embedded relational backend 결정](decisions/ADR-0008-P0-embedded-relational-backend.md) — private `rusqlite` adapter와 검증 gate
 
 ## 문서 상태 표현
 

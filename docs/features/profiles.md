@@ -9,7 +9,7 @@
 
 | Profile | 조합할 기능 | 기본 적용 경계 |
 |---|---|---|
-| `project_understanding` | root·문서·구조·도구 발견, 관련 파일 탐색, Context Pack | 새 프로젝트 또는 큰 범위 작업을 시작할 때 |
+| `project_understanding` | Project Catalog, checkout·workspace, source 분류, text/syntax/semantic index, graph·freshness, Context Pack | 새 프로젝트 또는 큰 범위 작업을 시작할 때 |
 | `change_planning` | 목표 계약, 영향 분석, 위험 경로, 단계 계획, 관련 검사 선택 | 여러 파일·계약에 걸친 변경 |
 | `refactor_codemod` | 기준 동작 고정, 변환 범위, 반복 가능한 외부 codemod, diff·회귀 검증 | 넓은 기계적 변경이 필요한 경우 |
 | `dependency_upgrade` | manifest·lockfile, 호환성·보안, 단계적 upgrade, rollback | dependency 또는 framework 변경 |
@@ -32,3 +32,9 @@
 - AI·RAG 기능이 있으면 prompt, retrieval, tool-use와 평가 자료 검증 연결
 - 고위험 계산·parser·protocol에는 property·fuzz·mutation 도구 연결
 - 여러 OS를 지원하는 대상 프로젝트만 해당 플랫폼 CI 결과 연결
+
+`project_understanding`의 첫 실행은 사용자가 시작한 manual full scan이다. 이후 같은 Profile은 Git revision·file hash 기반 incremental scan을 우선하고, source·config·adapter fingerprint가 달라 재사용할 수 없을 때만 full scan을 요구한다. 출력은 [읽기 전용 Project Catalog와 Code Index](../contracts/project-catalog-and-code-index.md)의 ProjectCatalogSnapshot·CodeIndexSnapshot, tier별 coverage·limitation과 [ContextPack](../contracts/goal-and-stage.md)이다.
+
+이 Profile은 CLI-only·source read-only다. project task·package script를 실행하거나 source를 수정하지 않으며 AI·embedding·LLM 의미 추론 자동화를 요구하지 않는다. semantic adapter가 없거나 parse가 실패하면 syntax·text fallback을 실제 tier로 표시하고, unsupported·partial·stale·no-result 이유를 ContextPack에서 보존한다.
+
+위 Project Catalog·Code Index 동작은 현재 1단계 목표 설계이며 제품 scanner·parser·DB·watcher가 구현됐다는 뜻이 아니다.

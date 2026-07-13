@@ -30,19 +30,24 @@ Star-Control은 자연어 요청을 바로 실행하지 않고 다음 내용을 
 
 ## A03. 프로젝트 이해와 Context Pack
 
-매 작업마다 전체 저장소를 다시 읽지 않도록 프로젝트의 최소 사실과 현재 작업에 필요한 자료를 묶는다.
+매 작업마다 전체 저장소를 다시 읽지 않도록 current checkout의 최소 사실과 현재 작업에 필요한 자료를 snapshot으로 묶는다. 상세 identity·discovery·index·freshness 계약은 [읽기 전용 Project Catalog와 Code Index](../contracts/project-catalog-and-code-index.md)가 소유한다.
 
-- Git·workspace·프로젝트 root와 중첩 프로젝트 발견
-- source, test, docs, config, schema, migration, generated, vendor, output 분류
+- 여러 explicit root, Git·non-Git Project, nested repository, submodule, build workspace와 linked worktree 발견
+- stable ProjectId와 local CheckoutId를 분리하고 같은 Project의 dirty worktree를 서로 다른 WorkspaceSnapshot으로 유지
+- source, test, docs, config, schema, migration, generated, vendor, cache, output과 fixture·docs example facet 분류
 - 언어, build system, package manager, toolchain, lockfile, 주요 명령 발견
-- AGENTS, README, 설계 문서, 정책과 프로젝트별 정본 우선순위 확인
-- Codex 검색, `rg`, LSP, build metadata, Git 정보를 이용한 관련 파일·심볼·테스트 탐색
+- 적용 scope가 있는 AGENTS, README, 설계 문서, 정책과 프로젝트별 정본 우선순위·충돌 확인
+- text search, syntax index와 available semantic index를 실제 tier·coverage·limitation과 함께 사용
+- package·module·symbol·definition·reference와 project·contract·dependency graph 탐색
+- config key, Schema ID, error code, 전역 상수, public surface와 hardcoding Finding 후보 탐색
 - 작업 유형별로 필요한 파일, 계약, 최근 변경과 검증 명령 선택
-- 각 Context 항목에 출처, revision, 포함 이유, 신선도와 누락 가능성 기록
+- 각 Context 항목에 ProjectId·CheckoutId, source hash, 포함 이유, source authority, index tier, freshness와 누락 가능성 기록
 - token·자료량 한도와 단계별 Context Profile
-- working tree의 미커밋 변경을 기준 자료보다 우선 반영
+- working tree의 staged·unstaged·untracked actual byte를 HEAD·default branch보다 최신 사실로 반영
 
-지속형 코드 그래프와 의미 검색은 기본 전제가 아니다. 실제 저장소에서 반복 탐색 비용이 확인될 때만 cache·index adapter를 추가할 수 있게 경계를 둔다.
+Project Catalog와 Code Index는 Git source를 대체하지 않는 derived projection이다. 최초 scan은 CLI에서 수동 실행하고 이후 Git revision·file hash 기반 incremental scan을 사용한다. semantic adapter가 없으면 syntax·text로 fallback하고 그 한계를 숨기지 않는다. 이 기능은 project source를 수정하거나 자체 scheduler·AI 호출을 요구하지 않는다.
+
+현재 A03의 이 확장은 **1단계 목표 설계**이며 scanner·parser·DB·watcher와 CLI 제품 구현 완료를 뜻하지 않는다.
 
 ## A04. 변경 영향·위험 분석
 
@@ -143,3 +148,5 @@ Star-Control 자신의 장시간 작업 상태는 로컬 파일에 안전하게 
 - 설정 계층과 project·user·run override
 - effective config 조회와 출처 설명
 - 설정·템플릿·정책 version과 변경 기록
+
+이 descriptor Catalog는 A03의 Project Catalog와 다르다. A03은 실제 Project·Checkout·source를 관찰한 snapshot이고, A10은 Task·Tool·Rule·Profile 선언의 정본이다. 발견한 manifest script·문서 명령은 provenance와 confidence를 가진 command 후보일 뿐 이 단계에서 실행하지 않는다. hardcoding detector threshold와 class별 제외 규칙은 versioned Rule·Policy로 선언하고 scanner code에 고정하지 않는다.
