@@ -154,18 +154,22 @@ Codex가 현재 단계에 필요한 자료만 모은 묶음이다.
 
 ### ProjectRef
 
+ProjectRef는 [공통 개발 관리 계약](development-management.md)의 Project를 Goal 안에서 가리키는 작은 view다. shared identity와 source metadata를 다시 소유하지 않는다.
+
 | 필드 | 필수 | 의미 |
 |---|---|---|
 | `project_id` | 예 | 경로와 분리된 stable ID |
 | `display_name` | 예 | 사용자 표시 이름 |
-| `root` | 예 | local-only path reference |
-| `repository_kind` | 예 | `git | none` |
+| `root_binding_id` | attached일 때 | current-user protected project root의 opaque binding |
+| `repository_kind` | 예 | `git \| none` |
 | `remote_identity` | 아니요 | secret 없는 host·owner·repo identity |
 | `base_revision` | 아니요 | 시작 기준 commit |
-| `role` | 예 | `primary | provider | consumer | auxiliary` |
+| `role` | 예 | `primary \| provider \| consumer \| auxiliary` |
 | `source_of_truth` | 예 | 이 목표에서 소유하는 계약·자료 |
 
 여러 프로젝트 목표에서는 `project_id`로만 연결하며 한 프로젝트의 절대 경로를 다른 프로젝트 evidence에 복제하지 않는다.
+
+raw root path는 persisted ProjectRef, event, DB와 evidence에 넣지 않는다. Windows adapter가 `root_binding_id`를 Controller process memory에서 해석한 뒤 ProjectPathRef를 실제 I/O에만 사용한다.
 
 ### SourceRecord
 
@@ -195,7 +199,7 @@ Codex가 현재 단계에 필요한 자료만 모은 묶음이다.
 | `goal_id` | 예 | 상위 GoalId |
 | `title` | 예 | 단계 표시 이름 |
 | `objective` | 예 | 이 단계가 끝내야 하는 한 가지 결과 |
-| `stage_mode` | 예 | `plan | execute | review` |
+| `stage_mode` | 예 | `plan \| execute \| review` |
 | `work_profile_id` | 예 | 적용할 작업 Profile |
 | `project_ids` | 예 | 대상 프로젝트 |
 | `included_work` | 예 | 단계 안에서 처리할 책임 |
@@ -285,7 +289,7 @@ action ID가 없거나 분류할 수 없는 동작은 `default_action`을 사용
 | `resolved_by` | 결정을 전달한 ActorRef |
 | `decision_reason` | 승인 조건 또는 거부 이유 |
 | `expires_at` | 승인 만료 |
-| `decision` | `pending | approved | denied | expired | superseded` |
+| `decision` | `pending \| approved \| denied \| expired \| superseded` |
 
 대상, 비용 범위, scope hash 또는 action ID가 달라지면 기존 승인을 재사용하지 않는다. MCP를 통해 전달된 사용자 결정은 Codex가 전달했다는 actor provenance를 보존한다.
 
@@ -328,7 +332,7 @@ StageResult는 한 Stage revision의 실제 실행과 수용 결과를 묶는다
 | `conflict_policy` | 자동·Codex 판단·사용자 판단 경계 |
 | `integration_validation_plan_ref` | 병합 후 검사 |
 | `rollback_ref` | 병합 실패 복구 기준 |
-| `status` | `draft | ready | merging | conflicted | validated | failed` |
+| `status` | `draft \| ready \| merging \| conflicted \| validated \| failed` |
 
 ## 불변식
 

@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "SourceRange": {
+      "additionalProperties": false,
+      "properties": {
+        "end_column": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_column": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_line",
+        "start_column",
+        "end_line",
+        "end_column"
+      ],
+      "type": "object"
+    },
+    "SymbolResolution": {
+      "enum": [
+        "resolved",
+        "ambiguous",
+        "unresolved",
+        "external"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.symbol-reference:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "from_range": {
+      "$ref": "#/$defs/SourceRange"
+    },
+    "from_source_id": {
+      "pattern": "^src_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "from_symbol_id": {
+      "pattern": "^sym_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "reference_kind": {
+      "type": "string"
+    },
+    "resolution": {
+      "$ref": "#/$defs/SymbolResolution"
+    },
+    "scan_run_id": {
+      "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.symbol-reference",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "symbol_reference_id": {
+      "pattern": "^srf_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "to_symbol_id": {
+      "pattern": "^sym_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "unresolved_target": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "symbol_reference_id",
+    "project_id",
+    "from_source_id",
+    "from_range",
+    "reference_kind",
+    "resolution",
+    "workspace_snapshot_id",
+    "scan_run_id"
+  ],
+  "title": "SymbolReference",
+  "type": "object"
+}

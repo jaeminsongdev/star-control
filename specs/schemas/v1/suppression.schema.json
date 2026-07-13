@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SuppressionScope": {
+      "enum": [
+        "shared",
+        "local"
+      ],
+      "type": "string"
+    },
+    "SuppressionStatus": {
+      "enum": [
+        "active",
+        "expired",
+        "revoked",
+        "stale"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.suppression:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "config_fingerprint_constraint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "justification": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "permanent": {
+      "type": "boolean"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "provenance": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.suppression",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_kind": {
+      "$ref": "#/$defs/SuppressionScope"
+    },
+    "selector": {
+      "type": "string"
+    },
+    "source_revision_constraint": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "$ref": "#/$defs/SuppressionStatus"
+    },
+    "suppression_id": {
+      "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "suppression_id",
+    "revision",
+    "scope_kind",
+    "project_id",
+    "selector",
+    "reason_code",
+    "reason",
+    "created_at",
+    "permanent",
+    "status",
+    "provenance"
+  ],
+  "title": "Suppression",
+  "type": "object"
+}

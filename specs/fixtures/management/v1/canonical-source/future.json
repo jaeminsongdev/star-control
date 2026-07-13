@@ -1,0 +1,9 @@
+{
+  "canonical_source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "generated_from_refs": [],
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.canonical-source",
+  "schema_version": 2,
+  "sensitivity": "public",
+  "source_kind": "file"
+}

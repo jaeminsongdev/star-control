@@ -1,0 +1,289 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "IntegrityState": {
+      "enum": [
+        "healthy",
+        "suspect",
+        "corrupt"
+      ],
+      "type": "string"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StoreOpenMode": {
+      "enum": [
+        "read_write",
+        "migration_required",
+        "read_only_recovery",
+        "quarantined"
+      ],
+      "type": "string"
+    },
+    "StoreScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "global",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-store-status:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "created_by_product_version": {
+      "type": "string"
+    },
+    "generation": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "integrity_state": {
+      "$ref": "#/$defs/IntegrityState"
+    },
+    "last_backup_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "last_clean_shutdown": {
+      "type": "boolean"
+    },
+    "last_opened_by_product_version": {
+      "type": "string"
+    },
+    "last_verified_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "management_store_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "min_reader_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "open_mode": {
+      "$ref": "#/$defs/StoreOpenMode"
+    },
+    "redaction_contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.management-store-status",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "store_id": {
+      "pattern": "^mst_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "store_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "store_scope": {
+      "$ref": "#/$defs/StoreScope"
+    },
+    "writer_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "store_id",
+    "store_scope",
+    "management_store_version",
+    "min_reader_version",
+    "writer_version",
+    "store_revision",
+    "generation",
+    "created_by_product_version",
+    "last_opened_by_product_version",
+    "last_clean_shutdown",
+    "integrity_state",
+    "open_mode",
+    "redaction_contract_version"
+  ],
+  "title": "ManagementStoreStatus",
+  "type": "object"
+}

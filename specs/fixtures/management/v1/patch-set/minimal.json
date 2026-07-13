@@ -1,0 +1,15 @@
+{
+  "affected_finding_ids": [],
+  "base_workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "change_plan_id": "cpl_00000000000000000000000000",
+  "change_plan_revision": 0,
+  "operations": [],
+  "patch_artifact_refs": [],
+  "patch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "patch_set_id": "pat_00000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "rollback_artifact_refs": [],
+  "schema_id": "star.patch-set",
+  "schema_version": 1,
+  "status": "proposed"
+}

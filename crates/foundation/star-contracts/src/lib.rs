@@ -9,6 +9,7 @@ pub mod evidence;
 pub mod fixed_mcp;
 pub mod ids;
 pub mod ipc;
+pub mod management;
 pub mod manifest;
 pub mod registry;
 pub mod runtime;
@@ -22,6 +23,7 @@ pub use ids::{
     RequestId, RunId, StageId, TaskInvocationId, ToolCacheId, ToolTrustId, ValidationRunId,
     WaiverId,
 };
+pub use management::{MANAGEMENT_STORE_VERSION, REDACTION_CONTRACT_VERSION};
 pub use manifest::{ToolPackageManifest, parse_manifest_v1};
 pub use strict_json::parse_no_duplicate_keys;
 

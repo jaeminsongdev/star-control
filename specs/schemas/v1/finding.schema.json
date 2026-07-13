@@ -1,0 +1,143 @@
+{
+  "$defs": {
+    "Confidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "type": "string"
+    },
+    "FindingLifecycle": {
+      "enum": [
+        "open",
+        "not_observed",
+        "resolved"
+      ],
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.finding:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active_disposition_id": {
+      "pattern": "^dsp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "active_suppression_ids": {
+      "items": {
+        "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "confidence": {
+      "$ref": "#/$defs/Confidence"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "current_occurrence_ids": {
+      "items": {
+        "pattern": "^occ_[a-z2-7]{52}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "finding_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "finding_id": {
+      "pattern": "^fnd_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "first_observed_scan_id": {
+      "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "identity_anchor": {
+      "type": "string"
+    },
+    "identity_tokens": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "last_observed_scan_id": {
+      "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/FindingLifecycle"
+    },
+    "message_code": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "rule_id": {
+      "type": "string"
+    },
+    "rule_version": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.finding",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "severity": {
+      "$ref": "#/$defs/Severity"
+    },
+    "title_code": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "finding_id",
+    "finding_fingerprint",
+    "project_id",
+    "rule_id",
+    "rule_version",
+    "identity_anchor",
+    "identity_tokens",
+    "title_code",
+    "message_code",
+    "severity",
+    "confidence",
+    "lifecycle",
+    "first_observed_scan_id",
+    "last_observed_scan_id",
+    "current_occurrence_ids",
+    "active_suppression_ids",
+    "content_fingerprint"
+  ],
+  "title": "Finding",
+  "type": "object"
+}

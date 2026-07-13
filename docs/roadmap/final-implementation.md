@@ -34,9 +34,136 @@
 - 문서 사이 기준 충돌 없음
 - 사용자가 최종 방향을 승인했고 [ADR-0001](../decisions/ADR-0001-최종-설계-기준.md)에 고정함
 
+## P0. 공통 개발 관리 계약과 로컬 관리 DB 기반
+
+### 현재 상태
+
+설계는 [공통 개발 관리와 로컬 관리 DB 계약](../contracts/development-management.md), [ADR-0006](../decisions/ADR-0006-공통-개발-관리와-로컬-관리-DB-경계.md)과 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)에 확정했다. 사용자가 P0 구현과 embedded relational backend dependency 추가를 승인했고 [ADR-0008](../decisions/ADR-0008-P0-embedded-relational-backend.md)에 private 선택을 기록했다. 0A~0E의 첫 수직 Slice는 workspace test·clippy·Schema·x64/ARM64 release cross-build까지 로컬 검증을 통과했다. 아래 전체 계약 중 후속 lifecycle 범위와 외부 gate는 `PLANS.md`에서 구분한다.
+
+기존 MCP Gateway·IPC·Registry·외부 EXE Runtime 수직 Slice와 P0 관리 수직 Slice는 서로 별도 범위다. 한쪽 검증 결과를 다른 쪽 완료 근거로 사용하지 않는다.
+
+### 목적
+
+모든 후속 scanner, validator, patch 도구, CLI와 Codex 진입점이 같은 project·source·finding·change·validation 의미와 로컬 상태를 사용하게 한다.
+
+```text
+Git 선언·Schema·Catalog·source
+  -> ProjectRevision + WorkspaceSnapshot
+  -> ScanRun + Symbol graph + Finding
+  -> ChangePlan + PatchSet
+  -> ValidationResult + GateDecision
+
+local management repository
+  = global directory·coordination store
+  + ProjectId별 derived projection·local operational store
+
+.ai-runs
+  = diff·patch·log·trace·report 같은 큰 evidence
+```
+
+### 0A. 계약 type과 deterministic fixture
+
+- Project, ProjectRevision, WorkspaceSnapshot
+- ScanRun, Rule, Finding, Occurrence
+- Symbol, SymbolReference, CanonicalSource
+- Suppression, Baseline, Disposition
+- ChangePlan, PatchSet, ChangeRecipe
+- ValidationResult, GateDecision, ArtifactRef, ManagementStoreStatus
+- typed ID, full SHA-256 fingerprint payload, ProjectPathRef와 redaction contract
+- minimal/full valid, invalid, future-version과 fingerprint golden fixture
+
+0A type·fixture 자체는 DB dependency에 의존하지 않는다. in-memory fake는 contract conformance용일 뿐 persistence 완료 근거가 아니며, concrete dependency는 0C의 private adapter에만 존재한다.
+
+### 0B. application service와 repository port
+
+- `ManagementApplicationService` command·query와 optimistic revision·idempotency
+- backend-neutral `ManagementRepositorySet`, global/project repository, `ArtifactStore`, `ProjectRootBinding` port
+- ProjectId partition과 cross-store `StoreVersionVector`
+- scan invisible generation·batch·atomic publish
+- store-local event·projection·idempotency·store revision transaction
+- global `CoordinatedOperation`과 project participant receipt 기반 crash recovery
+- CLI·MCP handler의 DB·artifact 직접 접근 금지
+- CLI-only composition의 Codex·App Server·다른 AI·OpenAI API dependency 0개
+
+첫 수직 Slice의 query는 current Project·latest Scan·Finding 목록에 한정한다. 대량 목록용 stable cursor와 arbitrary at-store-revision query는 P1 query 계약을 추가할 때 구현하며 P0 완료 근거에 포함하지 않는다.
+
+### 승인 gate — backend와 dependency
+
+사용자가 embedded relational 방향과 dependency 조사·추가를 승인했고 [ADR-0008](../decisions/ADR-0008-P0-embedded-relational-backend.md)은 private `rusqlite 0.40.1` bundled adapter를 선택했다. 0A·0B public contract는 계속 backend-neutral이어야 한다.
+
+- Windows x64·ARM64와 crash 내구성
+- single-writer transaction, consistent backup와 integrity 검사
+- side-by-side migration·read-only recovery
+- license, 보안 update, binary 크기와 유지보수
+- Rust error·cancellation·threading 경계
+
+선택 결과는 `star-state` private adapter에만 두고 public contract·StarConfig·CLI·MCP에 backend 이름을 노출하지 않는다. dependency를 추가한 뒤에는 lockfile, license·advisory, Windows x64·ARM64 build와 persistence conformance를 FULL gate로 검사한다.
+
+### 0C. persistence lifecycle
+
+- Controller exclusive writer lease와 startup StoreStatus
+- global store와 ProjectId별 project store generation·active pointer
+- cross-store prepared/participant/completed crash recovery와 호환 backup generation set
+- store version compatibility, migration plan과 pre-migration backup
+- backend structural·relation·fingerprint·artifact integrity 검사
+- future version과 suspect store의 read-only recovery
+- verified backup restore와 side-by-side rebuild·atomic active pointer
+- source-derived projection 재scan, `.ai-runs` reindex와 local-only state loss 보고
+- startup/manual retention plan과 hold·permission
+
+### 0D. project scan과 Finding vertical slice
+
+1. local-first 또는 shared ProjectId와 Windows current-user protected root binding 등록
+2. Git ProjectRevision과 dirty WorkspaceSnapshot 수집
+3. 하나의 deterministic Rule로 CanonicalSource·Symbol·Occurrence 생성
+4. scan generation finalize와 Finding projection
+5. reviewed Baseline, 90일 Suppression과 local Disposition stale 판정
+6. CLI project→scan→finding query E2E
+7. DB 삭제 뒤 source rescan rebuild와 redaction 검사
+
+### 0E. change·validation vertical slice
+
+1. Finding과 versioned ChangeRecipe에서 ChangePlan 생성
+2. base hash가 있는 immutable PatchSet과 `.ai-runs` patch artifact 생성
+3. explicit preview·apply와 dirty workspace exact before hash·overlap·permission precondition 확인
+4. 적용 뒤 실제 WorkspaceSnapshot을 재수집하고 같은 scan service로 재검사
+5. 실행한 검증을 ValidationResult로 정규화
+6. Baseline·Suppression·Disposition·policy를 포함한 GateDecision
+7. crash·partial apply·stale config·incomplete scan 회귀
+
+P0는 `ChangeSet`·`ValidationRun`이라는 별도 persisted type을 새로 만들지 않는다. P1에서 여러 effect와 validator 실행을 묶을 때 추가하되, 여기서 확정한 `PatchSet`·`WorkspaceSnapshot`·`ValidationResult` reference를 재사용한다.
+
+### Package 소유권
+
+- `star-contracts`: persisted type·ID·fingerprint payload
+- `star-domain`: invariant와 stable state
+- `star-ports`: repository·artifact·root binding interface
+- `star-project`: revision·snapshot·scan·source graph
+- `star-validation`: Rule·Finding·decision·ValidationResult·gate
+- `star-application`: 공통 command·query와 workflow
+- `star-execution`: patch effect·recovery
+- `star-state`: DB adapter·transaction·migration·backup·integrity·retention
+- `star-evidence`: redaction·diff·report와 `.ai-runs`
+- `star-controller`: concrete adapter 조립과 유일한 Writer
+
+### 완료 조건
+
+- Git 정본, DB projection·local state와 `.ai-runs` evidence가 byte·writer 수준으로 분리됨
+- 같은 source·Rule·scan config에서 derived ID·fingerprint golden 일치
+- global/project store 책임이 분리되고 모든 project-scoped relation이 ProjectId로 격리되며 raw 절대 경로를 복제하지 않음
+- secret, 사용자 이름, 개인 절대 경로와 민감 literal이 DB·event·fingerprint에 없음
+- scan crash 중 이전 visible generation을 유지하고 batch retry가 idempotent함
+- DB 손실 뒤 source-derived current projection을 재구축하고 복구 불가 local-only state를 명확히 보고함
+- migration backup·rollback, corruption quarantine와 read-only recovery 통과
+- 큰 diff·log·trace·report byte가 DB가 아니라 ArtifactRef로 연결됨
+- CLI와 MCP가 same application service를 사용하고 DB 파일을 직접 열지 않음
+- CLI-only E2E에서 Codex, App Server, 다른 AI와 OpenAI API 호출이 없음
+- backend conformance와 Windows x64·ARM64 persistence smoke 통과
+- dependency 선택·license·보안 근거와 사용자 승인 기록
+
 ## P1. 기초 계약과 설정
 
-계약 의미와 설정 병합 설계는 [데이터 계약 지도](../contracts/README.md), [ADR-0002](../decisions/ADR-0002-데이터-계약과-설정-정본.md), [ADR-0004](../decisions/ADR-0004-무재시작-고정-MCP와-Live-Tool-Registry.md)와 [ADR-0005](../decisions/ADR-0005-MCP-구현-계약-동결.md)로 확정했다. MCP exact field·hash·Win32 순서·검증 행렬은 문서 동결됐고 Rust type, generated Schema, fixture와 runtime 구현은 아직 시작하지 않았다.
+계약 의미와 설정 병합 설계는 [데이터 계약 지도](../contracts/README.md), [ADR-0002](../decisions/ADR-0002-데이터-계약과-설정-정본.md), [ADR-0004](../decisions/ADR-0004-무재시작-고정-MCP와-Live-Tool-Registry.md)와 [ADR-0005](../decisions/ADR-0005-MCP-구현-계약-동결.md)로 확정했다. MCP exact field·hash·Win32 순서·검증 행렬의 Rust type, generated Schema, fixture와 runtime 수직 Slice는 구현됐다. 공식 MCP Inspector와 native ARM64 Windows 11 25H2 build 26200 실기는 통과했고 exact 24H2 baseline과 독립 최종 검토가 남아 있으므로 P1 전체를 완료로 표시하지 않는다. 세부 판정은 [MCP 완료 감사](../testing/mcp-completion-audit.md)를 따른다. P1의 아직 미구현 공통 계약과 P2 이후 도구는 P0 관리 계약을 소비하며 별도 DB type을 만들지 않는다.
 
 ### 첫 수직 Slice
 
@@ -194,6 +321,7 @@
 - 프로젝트별 변경과 증거 분리
 - 제공하는 프로젝트를 먼저 처리
 - 원격 대상과 결과 추적
+- `safe_default` remote write는 항상 prompt, `personal_auto`도 user-only exact scope opt-in 전에는 prompt
 - 출처 없는 최신 정보 사용 방지
 
 ## P8. 비용·비교 시험·규칙 개선
@@ -217,6 +345,7 @@
 ### 구현
 
 - Windows 설치, 업데이트, 제거
+- installer-first 배포, 설명된 current-user Controller autostart 기본 활성화와 opt-out
 - Plugin 패키징
 - Hook 신뢰 안내
 - 상태와 기록 정리 명령
@@ -227,6 +356,7 @@
 ### 완료 조건
 
 - 깨끗한 Windows 환경에서 설치 가능
+- 관리자 권한 executor 없이 current-user install·autostart enable/disable 가능
 - safe_default 첫 작업 성공
 - personal_auto 설정 가능
 - 업데이트와 복구 성공
@@ -242,6 +372,7 @@
 
 - 문서 확정 전에 제품 코드 작성 금지
 - 상태와 계약보다 실행 자동화를 먼저 만들지 않음
+- P0 application·repository 계약과 승인 없이 DB dependency·backend를 먼저 고정하지 않음
 - 단일 실행이 안정되기 전에 병렬 병합을 기본값으로 만들지 않음
 - 검사와 증거 없이 원격 자동화를 완료로 보지 않음
 - 공개 안전 기본값 없이 personal_auto만 배포하지 않음

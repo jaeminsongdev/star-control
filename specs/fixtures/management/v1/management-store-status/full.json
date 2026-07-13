@@ -1,0 +1,39 @@
+{
+  "created_by_product_version": "fixture",
+  "generation": 0,
+  "integrity_state": "healthy",
+  "last_backup_ref": {
+    "artifact_id": "art_00000000000000000000000000",
+    "created_at": "2026-01-01T00:00:00Z",
+    "kind": "log",
+    "media_type": "fixture",
+    "producer": {
+      "build_id": "fixture",
+      "component": "fixture",
+      "platform": "fixture",
+      "product_version": "fixture"
+    },
+    "project_id": "prj_00000000000000000000000000",
+    "redaction_status": "not_needed",
+    "relative_path": "src/lib.rs",
+    "retention_class": "temporary",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "size_bytes": 0,
+    "source_artifact_ref": null
+  },
+  "last_clean_shutdown": false,
+  "last_opened_by_product_version": "fixture",
+  "last_verified_at": "2026-01-01T00:00:00Z",
+  "management_store_version": 0,
+  "min_reader_version": 0,
+  "open_mode": "read_write",
+  "redaction_contract_version": 0,
+  "schema_id": "star.management-store-status",
+  "schema_version": 1,
+  "store_id": "mst_00000000000000000000000000",
+  "store_revision": 0,
+  "store_scope": {
+    "kind": "global"
+  },
+  "writer_version": 0
+}

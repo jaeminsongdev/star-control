@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SourceRange": {
+      "additionalProperties": false,
+      "properties": {
+        "end_column": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_column": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_line",
+        "start_column",
+        "end_line",
+        "end_column"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.symbol:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonical_source_id": {
+      "pattern": "^src_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "declaration_range": {
+      "$ref": "#/$defs/SourceRange"
+    },
+    "language_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "qualified_name": {
+      "type": "string"
+    },
+    "scan_run_id": {
+      "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.symbol",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "signature_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "symbol_id": {
+      "pattern": "^sym_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "symbol_kind": {
+      "type": "string"
+    },
+    "visibility": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "symbol_id",
+    "project_id",
+    "canonical_source_id",
+    "language_id",
+    "symbol_kind",
+    "qualified_name",
+    "declaration_range",
+    "workspace_snapshot_id",
+    "scan_run_id",
+    "content_fingerprint"
+  ],
+  "title": "Symbol",
+  "type": "object"
+}

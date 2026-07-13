@@ -1,0 +1,24 @@
+{
+  "canonical_source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "evidence_refs": [],
+  "finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "location_path": "src/lib.rs",
+  "location_range": {
+    "end_column": 0,
+    "end_line": 0,
+    "start_column": 0,
+    "start_line": 0
+  },
+  "message_parameters": {},
+  "observed_at": "2026-01-01T00:00:00Z",
+  "occurrence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "occurrence_id": "occ_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "redaction_state": "not_needed",
+  "scan_run_id": "scn_00000000000000000000000000",
+  "schema_id": "star.occurrence",
+  "schema_version": 1,
+  "source_content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "unexpected": true,
+  "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

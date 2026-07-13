@@ -1,0 +1,253 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "ScanStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "incomplete",
+        "failed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.scan-run:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_refs": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "type": "array"
+    },
+    "counts": {
+      "additionalProperties": {
+        "format": "uint64",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "effective_config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "generation_id": {
+      "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "input_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "project_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "reused_from_scan_run_id": {
+      "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rule_set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "scan_config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "scan_run_id": {
+      "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.scan-run",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "started_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ScanStatus"
+    },
+    "workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "scan_run_id",
+    "project_id",
+    "project_revision_id",
+    "workspace_snapshot_id",
+    "effective_config_fingerprint",
+    "scan_config_fingerprint",
+    "rule_set_fingerprint",
+    "input_fingerprint",
+    "status",
+    "generation_id",
+    "started_at",
+    "counts",
+    "limitations",
+    "artifact_refs"
+  ],
+  "title": "ScanRun",
+  "type": "object"
+}

@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "BaselineScope": {
+      "enum": [
+        "shared",
+        "local"
+      ],
+      "type": "string"
+    },
+    "BaselineStatus": {
+      "enum": [
+        "active",
+        "superseded",
+        "invalid"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.baseline:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baseline_id": {
+      "pattern": "^bas_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "finding_fingerprints": {
+      "items": {
+        "$ref": "#/$defs/Sha256Hash"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "project_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reviewed": {
+      "type": "boolean"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rule_set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "scan_config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.baseline",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_kind": {
+      "$ref": "#/$defs/BaselineScope"
+    },
+    "set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "status": {
+      "$ref": "#/$defs/BaselineStatus"
+    },
+    "workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "baseline_id",
+    "revision",
+    "scope_kind",
+    "project_id",
+    "project_revision_id",
+    "workspace_snapshot_id",
+    "scan_config_fingerprint",
+    "rule_set_fingerprint",
+    "finding_fingerprints",
+    "set_fingerprint",
+    "created_at",
+    "reason",
+    "reviewed",
+    "status"
+  ],
+  "title": "Baseline",
+  "type": "object"
+}

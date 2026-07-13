@@ -1,0 +1,21 @@
+{
+  "canonical_source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "declaration_range": {
+    "end_column": 0,
+    "end_line": 0,
+    "start_column": 0,
+    "start_line": 0
+  },
+  "language_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "qualified_name": "fixture",
+  "scan_run_id": "scn_00000000000000000000000000",
+  "schema_id": "star.symbol",
+  "schema_version": 1,
+  "signature_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "symbol_id": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "symbol_kind": "sym_00000000000000000000000000",
+  "visibility": "fixture",
+  "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

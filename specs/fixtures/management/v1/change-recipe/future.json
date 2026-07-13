@@ -1,0 +1,17 @@
+{
+  "allowed_path_scope": [],
+  "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "finding_selectors": [],
+  "idempotency_contract": "fixture",
+  "parameter_schema_ref": "fixture",
+  "permission_actions": [],
+  "preconditions": [],
+  "recipe_id": "fixture",
+  "recipe_version": "fixture",
+  "risk_class": "fixture",
+  "rollback_contract": "fixture",
+  "schema_id": "star.change-recipe",
+  "schema_version": 2,
+  "transformer_ref": "fixture",
+  "validation_requirements": []
+}

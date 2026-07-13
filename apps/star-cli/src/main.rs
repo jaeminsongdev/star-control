@@ -23,6 +23,17 @@ star tools probe <package-id> [--executable <id>] [--json]\n\
 star tools trust <package-id> --manifest-hash <sha256> [--expires <rfc3339>] [--json]\n\
 star tools revoke <package-id> [--cancel-running] --reason <text> [--json]\n\
 star tools scaffold <exe-path> --output <toml-path>\n\
+star project register [--json]\n\
+star project list [--json]\n\
+star scan run <project-id> [--idempotency <key>] [--json]\n\
+star finding list <project-id> [--json]\n\
+star patch prepare <project-id> <finding-id> [--json]\n\
+star patch apply <project-id> <patch-set-id> --approve <sha256> [--json]\n\
+star management status [--json]\n\
+star management retention plan [--json]\n\
+star management retention apply --approve <sha256> [--json]\n\
+star management rebuild plan [--json]\n\
+star management rebuild apply --approve <sha256> [--json]\n\
 star controller start [--background]\n\
 star controller autostart enable|disable|status";
 
@@ -164,6 +175,161 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             Ok(Parsed {
                 command: "tool.scaffold".to_owned(),
                 payload: serde_json::json!({"executable_path":absolute_path(&positionals[0])?,"output_path":absolute_path(&required_option(&options,"--output")?)?}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "project" && second == "register" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 0, "project register")?;
+            Ok(Parsed {
+                command: "project.register".to_owned(),
+                payload: serde_json::json!({
+                    "idempotency_key":RequestId::new().as_str(),
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "project" && second == "list" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 0, "project list")?;
+            Ok(Parsed {
+                command: "project.list".to_owned(),
+                payload: serde_json::json!({}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "scan" && second == "run" => {
+            let (positionals, options) = parse_tail(tail, &["--idempotency"], &[])?;
+            require_positionals(&positionals, 1, "scan run")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "scan run requires a valid ProjectId".to_owned())?;
+            let idempotency_key = options
+                .get("--idempotency")
+                .and_then(Clone::clone)
+                .unwrap_or_else(|| RequestId::new().as_str().to_owned());
+            if idempotency_key.trim().is_empty()
+                || idempotency_key.chars().count() > 128
+                || idempotency_key.contains('\0')
+            {
+                return Err(
+                    "--idempotency must contain 1 through 128 non-NUL characters".to_owned(),
+                );
+            }
+            Ok(Parsed {
+                command: "scan.run".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "idempotency_key":idempotency_key,
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "finding" && second == "list" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "finding list")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "finding list requires a valid ProjectId".to_owned())?;
+            Ok(Parsed {
+                command: "finding.list".to_owned(),
+                payload: serde_json::json!({"project_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "patch" && second == "prepare" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "patch prepare")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "patch prepare requires a valid ProjectId".to_owned())?;
+            star_contracts::ids::FindingId::parse(positionals[1].clone())
+                .map_err(|_| "patch prepare requires a valid FindingId".to_owned())?;
+            Ok(Parsed {
+                command: "patch.prepare".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "finding_id":positionals[1],
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "patch" && second == "apply" => {
+            let (positionals, options) = parse_tail(tail, &["--approve"], &[])?;
+            require_positionals(&positionals, 2, "patch apply")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "patch apply requires a valid ProjectId".to_owned())?;
+            star_contracts::ids::PatchSetId::parse(positionals[1].clone())
+                .map_err(|_| "patch apply requires a valid PatchSetId".to_owned())?;
+            let approval = required_option(&options, "--approve")?;
+            approval
+                .parse::<star_contracts::Sha256Hash>()
+                .map_err(|_| "--approve must be the exact lowercase patch sha256".to_owned())?;
+            Ok(Parsed {
+                command: "patch.apply".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "patch_set_id":positionals[1],
+                    "approved_patch_fingerprint":approval,
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "management" && second == "status" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 0, "management status")?;
+            Ok(Parsed {
+                command: "management.status".to_owned(),
+                payload: serde_json::json!({}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "management" && second == "retention" && third == "plan" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 0, "management retention plan")?;
+            Ok(Parsed {
+                command: "management.retention.plan".to_owned(),
+                payload: serde_json::json!({}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "management" && second == "retention" && third == "apply" =>
+        {
+            let (positionals, options) = parse_tail(tail, &["--approve"], &[])?;
+            require_positionals(&positionals, 0, "management retention apply")?;
+            let approval = required_option(&options, "--approve")?;
+            approval
+                .parse::<star_contracts::Sha256Hash>()
+                .map_err(|_| "--approve must be the exact retention plan sha256".to_owned())?;
+            Ok(Parsed {
+                command: "management.retention.apply".to_owned(),
+                payload: serde_json::json!({"approved_plan_fingerprint":approval}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "management" && second == "rebuild" && third == "plan" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 0, "management rebuild plan")?;
+            Ok(Parsed {
+                command: "management.rebuild.plan".to_owned(),
+                payload: serde_json::json!({}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "management" && second == "rebuild" && third == "apply" =>
+        {
+            let (positionals, options) = parse_tail(tail, &["--approve"], &[])?;
+            require_positionals(&positionals, 0, "management rebuild apply")?;
+            let approval = required_option(&options, "--approve")?;
+            approval
+                .parse::<star_contracts::Sha256Hash>()
+                .map_err(|_| "--approve must be the exact source rebuild plan sha256".to_owned())?;
+            Ok(Parsed {
+                command: "management.rebuild.apply".to_owned(),
+                payload: serde_json::json!({"approved_plan_fingerprint":approval}),
                 json,
             })
         }
@@ -680,6 +846,91 @@ mod tests {
             ]))
             .unwrap_err()
             .contains("RFC 3339")
+        );
+    }
+
+    #[test]
+    fn p0_management_cli_maps_to_controller_commands_without_db_access() {
+        let project = star_contracts::ids::ProjectId::new();
+        let finding = star_contracts::ids::FindingId::new();
+        let patch = star_contracts::ids::PatchSetId::new();
+        let fingerprint = star_contracts::Sha256Hash::digest(b"patch").to_string();
+        let cases = [
+            (args(&["project", "register"]), "project.register"),
+            (args(&["project", "list"]), "project.list"),
+            (
+                vec!["scan".into(), "run".into(), project.to_string()],
+                "scan.run",
+            ),
+            (
+                vec!["finding".into(), "list".into(), project.to_string()],
+                "finding.list",
+            ),
+            (
+                vec![
+                    "patch".into(),
+                    "prepare".into(),
+                    project.to_string(),
+                    finding.to_string(),
+                ],
+                "patch.prepare",
+            ),
+            (
+                vec![
+                    "patch".into(),
+                    "apply".into(),
+                    project.to_string(),
+                    patch.to_string(),
+                    "--approve".into(),
+                    fingerprint.clone(),
+                ],
+                "patch.apply",
+            ),
+            (args(&["management", "status"]), "management.status"),
+            (
+                args(&["management", "retention", "plan"]),
+                "management.retention.plan",
+            ),
+            (
+                vec![
+                    "management".into(),
+                    "retention".into(),
+                    "apply".into(),
+                    "--approve".into(),
+                    fingerprint,
+                ],
+                "management.retention.apply",
+            ),
+            (
+                args(&["management", "rebuild", "plan"]),
+                "management.rebuild.plan",
+            ),
+            (
+                vec![
+                    "management".into(),
+                    "rebuild".into(),
+                    "apply".into(),
+                    "--approve".into(),
+                    star_contracts::Sha256Hash::digest(b"rebuild").to_string(),
+                ],
+                "management.rebuild.apply",
+            ),
+        ];
+        for (arguments, command) in cases {
+            assert_eq!(parse(&arguments).unwrap().command, command);
+        }
+
+        let oversized_key = "x".repeat(129);
+        assert!(
+            parse(&[
+                "scan".into(),
+                "run".into(),
+                project.to_string(),
+                "--idempotency".into(),
+                oversized_key,
+            ])
+            .unwrap_err()
+            .contains("1 through 128")
         );
     }
 

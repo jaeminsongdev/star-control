@@ -1,0 +1,138 @@
+{
+  "$defs": {
+    "Confidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "type": "string"
+    },
+    "RuleLifecycle": {
+      "enum": [
+        "active",
+        "deprecated",
+        "disabled"
+      ],
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SourceKind": {
+      "enum": [
+        "file",
+        "generated_unit",
+        "virtual"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.rule:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analyzer_ref": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "default_confidence": {
+      "$ref": "#/$defs/Confidence"
+    },
+    "default_severity": {
+      "$ref": "#/$defs/Severity"
+    },
+    "definition_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "identity_anchor": {
+      "type": "string"
+    },
+    "identity_contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/RuleLifecycle"
+    },
+    "parameter_schema_ref": {
+      "type": "string"
+    },
+    "redaction_contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "remediation_recipe_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "rule_id": {
+      "type": "string"
+    },
+    "rule_version": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.rule",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_kinds": {
+      "items": {
+        "$ref": "#/$defs/SourceKind"
+      },
+      "type": "array"
+    },
+    "supported_languages": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "rule_id",
+    "rule_version",
+    "definition_fingerprint",
+    "title",
+    "category",
+    "default_severity",
+    "default_confidence",
+    "supported_languages",
+    "source_kinds",
+    "analyzer_ref",
+    "parameter_schema_ref",
+    "identity_contract_version",
+    "identity_anchor",
+    "redaction_contract_version",
+    "remediation_recipe_refs",
+    "lifecycle"
+  ],
+  "title": "Rule",
+  "type": "object"
+}

@@ -1,0 +1,17 @@
+{
+  "decided_at": "2026-01-01T00:00:00Z",
+  "decision": "needs_action",
+  "disposition_id": "dsp_00000000000000000000000000",
+  "duplicate_of_finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "expires_at": "2026-01-01T00:00:00Z",
+  "finding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "provenance": "fixture",
+  "reason": "fixture",
+  "reason_code": "fixture",
+  "revision": 0,
+  "schema_id": "star.disposition",
+  "schema_version": 1,
+  "scope_revision": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "active"
+}

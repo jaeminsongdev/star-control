@@ -1,0 +1,19 @@
+{
+  "change_plan_id": "cpl_00000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "expected_paths": [],
+  "finding_refs": [],
+  "parameters": {},
+  "permission_plan_ref": "fixture",
+  "preconditions": [],
+  "project_id": "prj_00000000000000000000000000",
+  "recipe_refs": [],
+  "revision": 0,
+  "risk": "fixture",
+  "schema_id": "star.change-plan",
+  "schema_version": 1,
+  "status": "draft",
+  "target_workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "updated_at": "2026-01-01T00:00:00Z",
+  "validation_plan_ref": "fixture"
+}

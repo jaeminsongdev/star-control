@@ -1,0 +1,113 @@
+{
+  "$defs": {
+    "DispositionDecision": {
+      "enum": [
+        "needs_action",
+        "accepted_risk",
+        "false_positive",
+        "deferred",
+        "duplicate",
+        "fixed"
+      ],
+      "type": "string"
+    },
+    "DispositionStatus": {
+      "enum": [
+        "active",
+        "stale",
+        "revoked"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.disposition:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decided_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "decision": {
+      "$ref": "#/$defs/DispositionDecision"
+    },
+    "disposition_id": {
+      "pattern": "^dsp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "duplicate_of_finding_id": {
+      "pattern": "^fnd_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expires_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "finding_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "finding_id": {
+      "pattern": "^fnd_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "provenance": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.disposition",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_revision": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "$ref": "#/$defs/DispositionStatus"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "disposition_id",
+    "revision",
+    "finding_id",
+    "finding_fingerprint",
+    "decision",
+    "reason_code",
+    "reason",
+    "decided_at",
+    "provenance",
+    "status"
+  ],
+  "title": "Disposition",
+  "type": "object"
+}

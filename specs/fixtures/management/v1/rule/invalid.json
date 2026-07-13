@@ -1,0 +1,21 @@
+{
+  "analyzer_ref": "fixture",
+  "category": "fixture",
+  "default_confidence": "low",
+  "default_severity": "info",
+  "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "identity_anchor": "fixture",
+  "identity_contract_version": 0,
+  "lifecycle": "active",
+  "parameter_schema_ref": "fixture",
+  "redaction_contract_version": 0,
+  "remediation_recipe_refs": [],
+  "rule_id": "fixture",
+  "rule_version": "fixture",
+  "schema_id": "star.rule",
+  "schema_version": 1,
+  "source_kinds": [],
+  "supported_languages": [],
+  "title": "fixture",
+  "unexpected": true
+}

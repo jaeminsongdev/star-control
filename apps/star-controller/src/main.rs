@@ -3,10 +3,11 @@
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{SecondsFormat, Utc};
+use star_application::{ApplicationError, ManagementApplicationService};
 use star_contracts::{
     Sha256Hash,
     fixed_mcp::ApprovalDecision,
-    ids::{ApprovalId, DiagnosticId, OperationId, RequestId},
+    ids::{ApprovalId, DiagnosticId, FindingId, OperationId, PatchSetId, ProjectId, RequestId},
     ipc::{
         ControllerReadiness, ErrorEnvelope, IpcClientKind, IpcHello, IpcRequest, IpcResponse,
         IpcStatus,
@@ -19,12 +20,17 @@ use star_contracts::{
     parse_no_duplicate_keys,
     runtime::ExternalToolProgress,
 };
+use star_evidence::LocalArtifactStore;
 use star_ipc::{
     HandshakeOutcome, ServerHandshake,
     client::current_user_sid_hash,
     key_store::{KeyRecoveryAudit, default_key_path, reconcile},
     process_identity::verify_pipe_client_image,
     windows_pipe::{PipeAcceptPool, read_json, write_json},
+};
+use star_state::{
+    RecoveryInspection, SqliteManagementRepositorySet, WindowsProjectRootBindingStore,
+    inspect_management_root,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -2545,6 +2551,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let startup_project_directory = std::env::current_dir()?;
     let appdata =
         std::path::PathBuf::from(std::env::var_os("APPDATA").ok_or("APPDATA is unavailable")?);
+    let local_appdata = std::path::PathBuf::from(
+        std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA is unavailable")?,
+    );
+    let management_root = local_appdata.join("Star-Control/management");
+    let management_inspection = inspect_management_root(&management_root);
+    let management_service = if management_inspection
+        .is_some_and(|inspection| inspection != RecoveryInspection::Healthy)
+    {
+        None
+    } else {
+        let service = ManagementApplicationService::new(
+            Arc::new(SqliteManagementRepositorySet::open(
+                &management_root,
+                env!("CARGO_PKG_VERSION"),
+            )?),
+            Arc::new(WindowsProjectRootBindingStore::open(
+                local_appdata.join("Star-Control/root-bindings"),
+            )?),
+            Arc::new(LocalArtifactStore::default()),
+        );
+        let _ = service.recover_incomplete_registrations()?;
+        let startup_retention = service.plan_retention()?;
+        let _ = service.apply_retention(
+            &startup_retention,
+            startup_retention.plan_fingerprint.as_str(),
+        )?;
+        Some(service)
+    };
     let (initial_policy_profile, initial_tool_registry_config, policy_diagnostic) = match (
         UserPolicyProfile::load(&appdata),
         UserToolRegistryConfig::load(&appdata),
@@ -2716,6 +2750,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
+        if is_management_command(&request.command) {
+            let response = handle_management_command(
+                management_service.as_ref(),
+                management_inspection,
+                request,
+                &project_directory,
+                registry.revision,
+            );
+            let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+            continue;
+        }
         let (policy_profile, live_tool_registry_config, live_config_diagnostic) = match (
             UserPolicyProfile::load(&appdata),
             UserToolRegistryConfig::load(&appdata),
@@ -6837,6 +6882,252 @@ fn invalid_request_response(
         registry_revision: Some(registry_revision),
         correlation_id: request.client_request_id,
     }
+}
+
+fn is_management_command(command: &str) -> bool {
+    matches!(
+        command,
+        "project.register"
+            | "project.list"
+            | "scan.run"
+            | "finding.list"
+            | "patch.prepare"
+            | "patch.apply"
+            | "management.status"
+            | "management.retention.plan"
+            | "management.retention.apply"
+            | "management.rebuild.plan"
+            | "management.rebuild.apply"
+    )
+}
+
+fn handle_management_command(
+    service: Option<&ManagementApplicationService>,
+    recovery_inspection: Option<RecoveryInspection>,
+    request: IpcRequest,
+    project_directory: &std::path::Path,
+    registry_revision: u64,
+) -> IpcResponse {
+    let Some(service) = service else {
+        if request.command == "management.status" && payload_has_exact_keys(&request.payload, &[]) {
+            return IpcResponse {
+                schema_id: "star.ipc.response".to_owned(),
+                schema_version: 1,
+                request_id: request.request_id,
+                status: IpcStatus::Ok,
+                data: Some(serde_json::json!({
+                    "stores":[],
+                    "recovery_required":true,
+                    "inspection":recovery_inspection.unwrap_or(RecoveryInspection::Corrupt),
+                    "open_mode":"read_only_recovery",
+                    "available_commands":["management.status"],
+                    "required_user_choice":["verified_restore","source_rebuild"],
+                    "mutation_state":"blocked_until_recovery_candidate_activation",
+                })),
+                operation_id: None,
+                diagnostics: vec![],
+                error: None,
+                registry_revision: Some(registry_revision),
+                correlation_id: request.client_request_id,
+            };
+        }
+        return invalid_request_response(
+            request,
+            "MANAGEMENT_RECOVERY_REQUIRED",
+            "Management writes are disabled until the user selects verified restore or source rebuild.",
+            registry_revision,
+        );
+    };
+    let result = match request.command.as_str() {
+        "project.register" if payload_has_exact_keys(&request.payload, &["idempotency_key"]) => {
+            let idempotency_key = request
+                .idempotency_key
+                .as_deref()
+                .or_else(|| {
+                    request
+                        .payload
+                        .get("idempotency_key")
+                        .and_then(serde_json::Value::as_str)
+                })
+                .filter(|value| {
+                    !value.trim().is_empty()
+                        && value.chars().count() <= 128
+                        && !value.contains('\0')
+                });
+            idempotency_key
+                .ok_or(ApplicationError::Invalid)
+                .and_then(|key| service.register_project(project_directory, key))
+                .and_then(serialize_management_result)
+        }
+        "project.list" if payload_has_exact_keys(&request.payload, &[]) => service
+            .list_projects()
+            .and_then(|items| serialize_management_result(serde_json::json!({"items":items}))),
+        "scan.run"
+            if payload_has_exact_keys(&request.payload, &["project_id", "idempotency_key"]) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                request
+                    .payload
+                    .get("idempotency_key")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| {
+                        !value.trim().is_empty()
+                            && value.chars().count() <= 128
+                            && !value.contains('\0')
+                    })
+                    .ok_or(ApplicationError::Invalid)
+                    .and_then(|key| service.scan_project(&project_id, key))
+                    .and_then(serialize_management_result)
+            })
+        }
+        "finding.list" if payload_has_exact_keys(&request.payload, &["project_id"]) => {
+            management_project_id(&request.payload).and_then(|project_id| {
+                service.list_findings(&project_id).and_then(|items| {
+                    serialize_management_result(serde_json::json!({"items":items}))
+                })
+            })
+        }
+        "patch.prepare"
+            if payload_has_exact_keys(&request.payload, &["project_id", "finding_id"]) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                request
+                    .payload
+                    .get("finding_id")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(|value| FindingId::parse(value.to_owned()).ok())
+                    .ok_or(ApplicationError::Invalid)
+                    .and_then(|finding_id| service.prepare_patch(&project_id, &finding_id))
+                    .and_then(serialize_management_result)
+            })
+        }
+        "patch.apply"
+            if payload_has_exact_keys(
+                &request.payload,
+                &["project_id", "patch_set_id", "approved_patch_fingerprint"],
+            ) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                let patch_set_id = request
+                    .payload
+                    .get("patch_set_id")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(|value| PatchSetId::parse(value.to_owned()).ok())
+                    .ok_or(ApplicationError::Invalid)?;
+                let approval = request
+                    .payload
+                    .get("approved_patch_fingerprint")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(|value| Sha256Hash::from_str(value).ok())
+                    .ok_or(ApplicationError::Invalid)?;
+                service
+                    .apply_patch(&project_id, &patch_set_id, approval.as_str())
+                    .and_then(serialize_management_result)
+            })
+        }
+        "management.status" if payload_has_exact_keys(&request.payload, &[]) => service
+            .verify_stores()
+            .and_then(|stores| serialize_management_result(serde_json::json!({"stores":stores}))),
+        "management.retention.plan" if payload_has_exact_keys(&request.payload, &[]) => service
+            .plan_retention()
+            .and_then(serialize_management_result),
+        "management.retention.apply"
+            if payload_has_exact_keys(&request.payload, &["approved_plan_fingerprint"]) =>
+        {
+            request
+                .payload
+                .get("approved_plan_fingerprint")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|value| Sha256Hash::from_str(value).ok())
+                .ok_or(ApplicationError::Invalid)
+                .and_then(|approval| service.apply_current_retention(approval.as_str()))
+                .and_then(serialize_management_result)
+        }
+        "management.rebuild.plan" if payload_has_exact_keys(&request.payload, &[]) => service
+            .plan_source_rebuild()
+            .and_then(serialize_management_result),
+        "management.rebuild.apply"
+            if payload_has_exact_keys(&request.payload, &["approved_plan_fingerprint"]) =>
+        {
+            request
+                .payload
+                .get("approved_plan_fingerprint")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|value| Sha256Hash::from_str(value).ok())
+                .ok_or(ApplicationError::Invalid)
+                .and_then(|approval| service.apply_source_rebuild(approval.as_str()))
+                .and_then(serialize_management_result)
+        }
+        _ => Err(ApplicationError::Invalid),
+    };
+    match result {
+        Ok(data) => IpcResponse {
+            schema_id: "star.ipc.response".to_owned(),
+            schema_version: 1,
+            request_id: request.request_id,
+            status: IpcStatus::Ok,
+            data: Some(data),
+            operation_id: None,
+            diagnostics: vec![],
+            error: None,
+            registry_revision: Some(registry_revision),
+            correlation_id: request.client_request_id,
+        },
+        Err(error) => {
+            let (code, message) = match error {
+                ApplicationError::Invalid => (
+                    "MANAGEMENT_ARGUMENT_INVALID",
+                    "The management command arguments are invalid.",
+                ),
+                ApplicationError::NotFound => (
+                    "MANAGEMENT_NOT_FOUND",
+                    "The requested management object does not exist.",
+                ),
+                ApplicationError::Apply(_) => (
+                    "MANAGEMENT_PATCH_BLOCKED",
+                    "The PatchSet could not be applied under its exact preconditions.",
+                ),
+                ApplicationError::Repository(_) => (
+                    "MANAGEMENT_STORE_FAILED",
+                    "The Controller could not safely use the management store.",
+                ),
+                ApplicationError::Project(_) => (
+                    "MANAGEMENT_SCAN_FAILED",
+                    "The Controller could not safely observe the project.",
+                ),
+                ApplicationError::Validation(_) => (
+                    "MANAGEMENT_VALIDATION_FAILED",
+                    "The Controller could not evaluate the required validation.",
+                ),
+                ApplicationError::Execution(_) => (
+                    "MANAGEMENT_PATCH_PREPARE_FAILED",
+                    "The Controller could not prepare an immutable PatchSet.",
+                ),
+            };
+            invalid_request_response(request, code, message, registry_revision)
+        }
+    }
+}
+
+fn payload_has_exact_keys(payload: &serde_json::Value, allowed: &[&str]) -> bool {
+    let Some(object) = payload.as_object() else {
+        return false;
+    };
+    object.len() == allowed.len() && object.keys().all(|key| allowed.contains(&key.as_str()))
+}
+
+fn management_project_id(payload: &serde_json::Value) -> Result<ProjectId, ApplicationError> {
+    payload
+        .get("project_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| ProjectId::parse(value.to_owned()).ok())
+        .ok_or(ApplicationError::Invalid)
+}
+
+fn serialize_management_result(
+    result: impl serde::Serialize,
+) -> Result<serde_json::Value, ApplicationError> {
+    serde_json::to_value(result).map_err(|_| ApplicationError::Invalid)
 }
 
 #[cfg(test)]

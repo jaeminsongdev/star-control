@@ -1,0 +1,10 @@
+{
+  "captured_at": "2026-01-01T00:00:00Z",
+  "completeness": "complete",
+  "limitations": [],
+  "project_id": "prj_00000000000000000000000000",
+  "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "revision_kind": "git_commit",
+  "schema_id": "star.project-revision",
+  "schema_version": 2
+}

@@ -1,0 +1,20 @@
+{
+  "created_by_product_version": "fixture",
+  "generation": 0,
+  "integrity_state": "healthy",
+  "last_clean_shutdown": false,
+  "last_opened_by_product_version": "fixture",
+  "management_store_version": 0,
+  "min_reader_version": 0,
+  "open_mode": "read_write",
+  "redaction_contract_version": 0,
+  "schema_id": "star.management-store-status",
+  "schema_version": 1,
+  "store_id": "mst_00000000000000000000000000",
+  "store_revision": 0,
+  "store_scope": {
+    "kind": "global"
+  },
+  "unexpected": true,
+  "writer_version": 0
+}

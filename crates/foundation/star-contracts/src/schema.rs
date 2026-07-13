@@ -3,11 +3,16 @@ use serde_json::{Map, Value};
 
 use crate::{
     evidence::{
-        DIAGNOSTIC_SCHEMA_ID, Diagnostic, EVIDENCE_BUNDLE_SCHEMA_ID, EvidenceBundle,
+        ArtifactRef, DIAGNOSTIC_SCHEMA_ID, Diagnostic, EVIDENCE_BUNDLE_SCHEMA_ID, EvidenceBundle,
         GATE_DECISION_SCHEMA_ID, GateDecision, VALIDATION_RUN_SCHEMA_ID, ValidationRun,
     },
     fixed_mcp::{CallInput, McpToolResult, fixed_input_schema, fixed_result_schema},
     ipc::{IpcChallenge, IpcHandshakeError, IpcHello, IpcRequest, IpcResponse, IpcWelcome},
+    management::{
+        Baseline, CanonicalSource, ChangePlan, ChangeRecipe, CoordinatedOperation, Disposition,
+        Finding, ManagementStoreStatus, Occurrence, PatchSet, Project, ProjectRevision, Rule,
+        ScanRun, Suppression, Symbol, SymbolReference, ValidationResult, WorkspaceSnapshot,
+    },
     manifest::ToolPackageManifest,
     registry::{RegistrySnapshot, ToolRegistryCache},
     runtime::{
@@ -32,6 +37,148 @@ pub fn schema_document<T: JsonSchema>(schema_id: &str) -> Value {
     value
 }
 
+fn management_schema_document<T: JsonSchema>(schema_id: &str) -> Value {
+    let mut value = schema_document::<T>(schema_id);
+    let properties = value
+        .as_object_mut()
+        .and_then(|root| root.get_mut("properties"))
+        .and_then(Value::as_object_mut)
+        .expect("management contract schema has object properties");
+    properties.insert(
+        "schema_id".to_owned(),
+        serde_json::json!({"type":"string","const":schema_id}),
+    );
+    properties.insert(
+        "schema_version".to_owned(),
+        serde_json::json!({"type":"integer","const":1}),
+    );
+    strengthen_management_scalars(&mut value, None);
+    value
+}
+
+fn strengthen_management_scalars(value: &mut Value, property_name: Option<&str>) {
+    match value {
+        Value::Array(values) => {
+            for value in values {
+                strengthen_management_scalars(value, property_name);
+            }
+        }
+        Value::Object(object) => {
+            if property_name == Some("Sha256Hash") {
+                object.insert(
+                    "pattern".to_owned(),
+                    Value::String("^sha256:[0-9a-f]{64}$".to_owned()),
+                );
+            }
+            if let Some(name) = property_name
+                && let Some(prefix) = management_id_prefix(name)
+            {
+                let pattern = if management_id_is_source_derived(name) {
+                    format!("^{prefix}[a-z2-7]{{52}}$")
+                } else {
+                    format!("^{prefix}[0-9A-HJKMNP-TV-Z]{{26}}$")
+                };
+                if let Some(items) = object.get_mut("items") {
+                    if let Some(items) = items.as_object_mut() {
+                        items.insert("pattern".to_owned(), Value::String(pattern));
+                    }
+                } else {
+                    object.insert("pattern".to_owned(), Value::String(pattern));
+                }
+            }
+            if let Some(properties) = object.get_mut("properties").and_then(Value::as_object_mut) {
+                for (name, property) in properties {
+                    strengthen_management_scalars(property, Some(name));
+                }
+            }
+            if let Some(definitions) = object.get_mut("$defs").and_then(Value::as_object_mut) {
+                for (name, definition) in definitions {
+                    strengthen_management_scalars(definition, Some(name));
+                }
+            }
+            for keyword in ["items", "anyOf", "oneOf", "allOf"] {
+                if let Some(nested) = object.get_mut(keyword) {
+                    strengthen_management_scalars(nested, property_name);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn management_id_is_source_derived(name: &str) -> bool {
+    name.contains("project_revision")
+        || name.contains("source_revision")
+        || name == "scope_revision"
+        || name == "latest_revision_id"
+        || name.contains("workspace_snapshot")
+        || (name.contains("finding") && !name.contains("fingerprint"))
+        || (name.contains("occurrence") && !name.contains("fingerprint"))
+        || name.ends_with("symbol_id")
+        || name.contains("symbol_reference")
+        || name.contains("canonical_source")
+        || name.ends_with("source_id")
+        || name.contains("generated_from")
+}
+
+fn management_id_prefix(name: &str) -> Option<&'static str> {
+    if name == "project_id" {
+        Some("prj_")
+    } else if name.contains("project_revision")
+        || name.contains("source_revision")
+        || name == "scope_revision"
+        || name == "latest_revision_id"
+    {
+        Some("prv_")
+    } else if name.contains("workspace_snapshot") {
+        Some("wsp_")
+    } else if name.contains("scan_run")
+        || name.ends_with("scan_id")
+        || name.contains("observed_scan_id")
+    {
+        Some("scn_")
+    } else if name.contains("finding") && !name.contains("fingerprint") {
+        Some("fnd_")
+    } else if name.contains("occurrence") && !name.contains("fingerprint") {
+        Some("occ_")
+    } else if name.contains("symbol_reference") {
+        Some("srf_")
+    } else if name.ends_with("symbol_id") {
+        Some("sym_")
+    } else if name.contains("canonical_source")
+        || name.ends_with("source_id")
+        || name.contains("generated_from")
+    {
+        Some("src_")
+    } else if name.contains("suppression_id") {
+        Some("sup_")
+    } else if name.contains("baseline_id") {
+        Some("bas_")
+    } else if name.contains("disposition_id") {
+        Some("dsp_")
+    } else if name.contains("change_plan_id") {
+        Some("cpl_")
+    } else if name.contains("patch_set_id") {
+        Some("pat_")
+    } else if name.contains("validation_result_id") {
+        Some("vrs_")
+    } else if name.contains("gate_decision_id") {
+        Some("gtd_")
+    } else if name.contains("artifact_id") {
+        Some("art_")
+    } else if name.contains("root_binding_id") {
+        Some("rtb_")
+    } else if name.contains("generation_id") {
+        Some("gen_")
+    } else if name.contains("coordinated_operation_id") || name == "operation_id" {
+        Some("cop_")
+    } else if name.contains("store_id") {
+        Some("mst_")
+    } else {
+        None
+    }
+}
+
 pub fn generated_documents() -> Vec<(&'static str, Value)> {
     let mut documents = vec![
         (
@@ -49,6 +196,86 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "diagnostic.schema.json",
             schema_document::<Diagnostic>(DIAGNOSTIC_SCHEMA_ID),
+        ),
+        (
+            "artifact-ref.schema.json",
+            schema_document::<ArtifactRef>("star.artifact-ref"),
+        ),
+        (
+            "project.schema.json",
+            management_schema_document::<Project>("star.project"),
+        ),
+        (
+            "project-revision.schema.json",
+            management_schema_document::<ProjectRevision>("star.project-revision"),
+        ),
+        (
+            "workspace-snapshot.schema.json",
+            management_schema_document::<WorkspaceSnapshot>("star.workspace-snapshot"),
+        ),
+        (
+            "scan-run.schema.json",
+            management_schema_document::<ScanRun>("star.scan-run"),
+        ),
+        (
+            "rule.schema.json",
+            management_schema_document::<Rule>("star.rule"),
+        ),
+        (
+            "finding.schema.json",
+            management_schema_document::<Finding>("star.finding"),
+        ),
+        (
+            "occurrence.schema.json",
+            management_schema_document::<Occurrence>("star.occurrence"),
+        ),
+        (
+            "symbol.schema.json",
+            management_schema_document::<Symbol>("star.symbol"),
+        ),
+        (
+            "symbol-reference.schema.json",
+            management_schema_document::<SymbolReference>("star.symbol-reference"),
+        ),
+        (
+            "canonical-source.schema.json",
+            management_schema_document::<CanonicalSource>("star.canonical-source"),
+        ),
+        (
+            "suppression.schema.json",
+            management_schema_document::<Suppression>("star.suppression"),
+        ),
+        (
+            "baseline.schema.json",
+            management_schema_document::<Baseline>("star.baseline"),
+        ),
+        (
+            "disposition.schema.json",
+            management_schema_document::<Disposition>("star.disposition"),
+        ),
+        (
+            "change-plan.schema.json",
+            management_schema_document::<ChangePlan>("star.change-plan"),
+        ),
+        (
+            "patch-set.schema.json",
+            management_schema_document::<PatchSet>("star.patch-set"),
+        ),
+        (
+            "change-recipe.schema.json",
+            management_schema_document::<ChangeRecipe>("star.change-recipe"),
+        ),
+        (
+            "validation-result.schema.json",
+            management_schema_document::<ValidationResult>("star.validation-result"),
+        ),
+        (
+            "management-store-status.schema.json",
+            management_schema_document::<ManagementStoreStatus>("star.management-store-status"),
+        ),
+        (
+            "coordinated-operation.schema.json",
+            management_schema_document::<CoordinatedOperation>("star.coordinated-operation"),
         ),
         (
             "tool-package-manifest.schema.json",

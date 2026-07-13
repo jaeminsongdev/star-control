@@ -1,0 +1,21 @@
+{
+  "active_suppression_ids": [],
+  "confidence": "low",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "current_occurrence_ids": [],
+  "finding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "first_observed_scan_id": "scn_00000000000000000000000000",
+  "identity_anchor": "fixture",
+  "identity_tokens": [],
+  "last_observed_scan_id": "scn_00000000000000000000000000",
+  "lifecycle": "open",
+  "message_code": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "rule_id": "fixture",
+  "rule_version": "fixture",
+  "schema_id": "star.finding",
+  "schema_version": 1,
+  "severity": "info",
+  "title_code": "fixture"
+}

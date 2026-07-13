@@ -1,0 +1,20 @@
+{
+  "algorithm": "star.management-fingerprint-golden",
+  "contract_version": 1,
+  "derived_ids": {
+    "canonical_source_id": "src_ibuztdbftkekg4wbixtxooug2jzi733qrr6fopvcgnn5ayxkde2a",
+    "finding_id": "fnd_ibuztdbftkekg4wbixtxooug2jzi733qrr6fopvcgnn5ayxkde2a",
+    "occurrence_id": "occ_ibuztdbftkekg4wbixtxooug2jzi733qrr6fopvcgnn5ayxkde2a",
+    "symbol_id": "sym_ibuztdbftkekg4wbixtxooug2jzi733qrr6fopvcgnn5ayxkde2a"
+  },
+  "identity_fingerprint": "sha256:4069998c259a88a372c145e7773a86d2728fef708c7c573ea2335bd062ea1934",
+  "payload": {
+    "project_id": "prj_00000000000000000000000000",
+    "project_relative_path": "src/lib.rs",
+    "rule_id": "star.rule.trailing-whitespace",
+    "rule_version": "1.0.0",
+    "scan_config_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "source_content_sha256": "sha256:536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4"
+  },
+  "schema_version": 1
+}

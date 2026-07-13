@@ -1,0 +1,19 @@
+{
+  "config_fingerprint_constraint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2026-01-01T00:00:00Z",
+  "justification": "fixture",
+  "permanent": false,
+  "project_id": "prj_00000000000000000000000000",
+  "provenance": "fixture",
+  "reason": "fixture",
+  "reason_code": "fixture",
+  "revision": 0,
+  "schema_id": "star.suppression",
+  "schema_version": 1,
+  "scope_kind": "shared",
+  "selector": "fixture",
+  "source_revision_constraint": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "active",
+  "suppression_id": "sup_00000000000000000000000000"
+}

@@ -1,0 +1,260 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "Completeness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ValidationOutcome": {
+      "enum": [
+        "pass",
+        "fail",
+        "incomplete",
+        "error",
+        "cancelled"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.validation-result:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_refs": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "type": "array"
+    },
+    "completeness": {
+      "$ref": "#/$defs/Completeness"
+    },
+    "diagnostic_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "effective_config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "finding_refs": {
+      "items": {
+        "pattern": "^fnd_[a-z2-7]{52}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "outcome": {
+      "$ref": "#/$defs/ValidationOutcome"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "project_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "result_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.validation-result",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "started_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "subject_id": {
+      "type": "string"
+    },
+    "subject_kind": {
+      "type": "string"
+    },
+    "validation_plan_ref": {
+      "type": "string"
+    },
+    "validation_result_id": {
+      "pattern": "^vrs_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "validation_run_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "validation_result_id",
+    "subject_kind",
+    "subject_id",
+    "project_id",
+    "project_revision_id",
+    "workspace_snapshot_id",
+    "validation_plan_ref",
+    "validation_run_refs",
+    "effective_config_fingerprint",
+    "outcome",
+    "completeness",
+    "finding_refs",
+    "diagnostic_refs",
+    "artifact_refs",
+    "result_fingerprint",
+    "started_at",
+    "finished_at"
+  ],
+  "title": "ValidationResult",
+  "type": "object"
+}

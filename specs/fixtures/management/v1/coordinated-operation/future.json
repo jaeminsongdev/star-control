@@ -1,0 +1,23 @@
+{
+  "artifact_refs": [],
+  "command_kind": "fixture",
+  "coordinated_operation_id": "cop_00000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "diagnostic_refs": [],
+  "expected_version_vector": {
+    "global": {
+      "generation": 0,
+      "revision": 0,
+      "store_id": "mst_00000000000000000000000000"
+    },
+    "projects": []
+  },
+  "idempotency_key": "fixture",
+  "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "participants": [],
+  "permission_scope_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.coordinated-operation",
+  "schema_version": 2,
+  "state": "prepared",
+  "updated_at": "2026-01-01T00:00:00Z"
+}

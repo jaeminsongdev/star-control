@@ -1,0 +1,103 @@
+{
+  "$defs": {
+    "IdentityScope": {
+      "enum": [
+        "shared",
+        "local"
+      ],
+      "type": "string"
+    },
+    "RegistrationState": {
+      "enum": [
+        "attached",
+        "detached",
+        "invalid"
+      ],
+      "type": "string"
+    },
+    "RepositoryKind": {
+      "enum": [
+        "git",
+        "none"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.project:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "declaration_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "identity_scope": {
+      "$ref": "#/$defs/IdentityScope"
+    },
+    "latest_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "latest_workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "registration_state": {
+      "$ref": "#/$defs/RegistrationState"
+    },
+    "repository_kind": {
+      "$ref": "#/$defs/RepositoryKind"
+    },
+    "root_binding_id": {
+      "pattern": "^rtb_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_id": {
+      "const": "star.project",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_of_truth": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "project_id",
+    "identity_scope",
+    "display_name",
+    "repository_kind",
+    "source_of_truth",
+    "declaration_fingerprint",
+    "registration_state"
+  ],
+  "title": "Project",
+  "type": "object"
+}

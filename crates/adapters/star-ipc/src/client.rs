@@ -325,6 +325,12 @@ fn response_read_timeout(command: &str, payload: &serde_json::Value) -> Duration
         // probe (30 s maximum) after a stabilizing demand scan (5 s maximum).
         return DISCOVERY_PROBE_RESPONSE_BUDGET;
     }
+    if matches!(
+        command,
+        "scan.run" | "patch.apply" | "management.rebuild.apply"
+    ) {
+        return Duration::from_secs(10 * 60);
+    }
     // Every application command performs the bounded demand scan before
     // dispatch, so the transport must not expire at the exact 5 s stability
     // boundary and turn a valid response into an authentication-looking error.

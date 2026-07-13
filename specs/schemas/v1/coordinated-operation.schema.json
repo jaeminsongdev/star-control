@@ -1,0 +1,386 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "CoordinationParticipant": {
+      "additionalProperties": false,
+      "properties": {
+        "payload_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ParticipantReceipt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "#/$defs/ParticipantState"
+        }
+      },
+      "required": [
+        "project_id",
+        "required",
+        "payload_fingerprint",
+        "state"
+      ],
+      "type": "object"
+    },
+    "CoordinationState": {
+      "enum": [
+        "prepared",
+        "applying",
+        "completed",
+        "blocked",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "ParticipantReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "committed_store_revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "local_event_ref": {
+          "type": "string"
+        },
+        "operation_id": {
+          "pattern": "^cop_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "payload_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "result_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "project_id",
+        "operation_id",
+        "payload_fingerprint",
+        "result_fingerprint",
+        "committed_store_revision",
+        "local_event_ref"
+      ],
+      "type": "object"
+    },
+    "ParticipantState": {
+      "enum": [
+        "pending",
+        "committed",
+        "blocked",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "ProjectStorePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "point": {
+          "$ref": "#/$defs/StorePoint"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "point"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StorePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "store_id": {
+          "pattern": "^mst_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "store_id",
+        "generation",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "StoreVersionVector": {
+      "additionalProperties": false,
+      "properties": {
+        "global": {
+          "$ref": "#/$defs/StorePoint"
+        },
+        "projects": {
+          "items": {
+            "$ref": "#/$defs/ProjectStorePoint"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "global",
+        "projects"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.coordinated-operation:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_refs": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "type": "array"
+    },
+    "command_kind": {
+      "type": "string"
+    },
+    "committed_version_vector": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StoreVersionVector"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "coordinated_operation_id": {
+      "pattern": "^cop_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "diagnostic_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "expected_version_vector": {
+      "$ref": "#/$defs/StoreVersionVector"
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "input_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "participants": {
+      "items": {
+        "$ref": "#/$defs/CoordinationParticipant"
+      },
+      "type": "array"
+    },
+    "permission_scope_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "result_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_id": {
+      "const": "star.coordinated-operation",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/CoordinationState"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "coordinated_operation_id",
+    "idempotency_key",
+    "command_kind",
+    "input_fingerprint",
+    "permission_scope_fingerprint",
+    "expected_version_vector",
+    "participants",
+    "state",
+    "diagnostic_refs",
+    "artifact_refs",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "CoordinatedOperation",
+  "type": "object"
+}

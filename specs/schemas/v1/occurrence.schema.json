@@ -1,0 +1,274 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RedactionState": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SourceRange": {
+      "additionalProperties": false,
+      "properties": {
+        "end_column": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_column": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_line",
+        "start_column",
+        "end_line",
+        "end_column"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.occurrence:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonical_source_id": {
+      "pattern": "^src_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "type": "array"
+    },
+    "finding_id": {
+      "pattern": "^fnd_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "location_path": {
+      "minLength": 1,
+      "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+      "type": "string"
+    },
+    "location_range": {
+      "$ref": "#/$defs/SourceRange"
+    },
+    "message_parameters": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "occurrence_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "occurrence_id": {
+      "pattern": "^occ_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "project_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "redaction_state": {
+      "$ref": "#/$defs/RedactionState"
+    },
+    "scan_run_id": {
+      "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.occurrence",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_content_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "symbol_id": {
+      "pattern": "^sym_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "occurrence_id",
+    "occurrence_fingerprint",
+    "finding_id",
+    "scan_run_id",
+    "project_revision_id",
+    "workspace_snapshot_id",
+    "canonical_source_id",
+    "source_content_sha256",
+    "location_path",
+    "location_range",
+    "message_parameters",
+    "evidence_refs",
+    "observed_at",
+    "redaction_state"
+  ],
+  "title": "Occurrence",
+  "type": "object"
+}

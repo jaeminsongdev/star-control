@@ -1,0 +1,27 @@
+{
+  "allowed_path_scope": [
+    "src/lib.rs"
+  ],
+  "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "finding_selectors": [
+    "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "idempotency_contract": "fixture",
+  "parameter_schema_ref": "fixture",
+  "permission_actions": [
+    "fixture"
+  ],
+  "preconditions": [
+    "fixture"
+  ],
+  "recipe_id": "fixture",
+  "recipe_version": "fixture",
+  "risk_class": "fixture",
+  "rollback_contract": "fixture",
+  "schema_id": "star.change-recipe",
+  "schema_version": 1,
+  "transformer_ref": "fixture",
+  "validation_requirements": [
+    "fixture"
+  ]
+}

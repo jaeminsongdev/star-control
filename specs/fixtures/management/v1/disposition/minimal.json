@@ -1,0 +1,14 @@
+{
+  "decided_at": "2026-01-01T00:00:00Z",
+  "decision": "needs_action",
+  "disposition_id": "dsp_00000000000000000000000000",
+  "finding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "provenance": "fixture",
+  "reason": "fixture",
+  "reason_code": "fixture",
+  "revision": 0,
+  "schema_id": "star.disposition",
+  "schema_version": 1,
+  "status": "active"
+}

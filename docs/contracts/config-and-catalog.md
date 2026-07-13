@@ -77,7 +77,7 @@ EffectiveConfig는 다음 순서로 만든다.
 | `warnings` | Diagnostic ref array | 실행을 막지는 않는 설정 문제 |
 | `catalog_snapshot_ref` | ArtifactRef | 해석에 사용한 Catalog |
 | `capability_snapshot_ref` | ArtifactRef | capability 의존 값이 있을 때의 근거 |
-| `fingerprint` | SHA-256 | secret 값을 제외한 canonical values와 제약의 hash |
+| `fingerprint` | SHA-256 | secret·사용자 이름·raw 절대 경로를 제외한 canonical values와 제약의 hash |
 | `computed_at` | RFC 3339 UTC | 계산 완료 시각 |
 
 ConfigOrigin은 `source_kind`, source 문서 ID, 파일 경로를 가린 LocationRef, 선언 위치, 원래 값의 hash를 가진다. secret 값은 provenance와 fingerprint에 포함하지 않고 reference 식별자만 포함한다.
@@ -157,17 +157,17 @@ CLI와 사용자 문서에서는 `safe_default`, `personal_auto`를 각각 `star
 | `secret_access` | secret reference 해석 | `prompt` | `auto` |
 | `network_read` | 외부 읽기 요청 | `auto` | `auto` |
 | `network_download` | 파일·도구·자료 다운로드 | `prompt` | `auto` |
-| `external_write` | 외부 서비스 상태 변경 | `prompt` | `auto` |
-| `account_change` | 외부 계정·권한·resource 변경 | `prompt` | `auto` |
+| `external_write` | 외부 서비스 상태 변경 | `prompt` | `prompt` 또는 explicit remote opt-in 범위에서만 `auto` |
+| `account_change` | 외부 계정·권한·resource 변경 | `prompt` | `prompt` |
 | `plan_execute` | 현재 계획의 실행 시작 | `prompt` | `auto` |
 | `git_commit` | 로컬 commit 생성 | `prompt` | `auto` |
 | `git_merge` | branch·worktree 결과 통합 | `prompt` | `auto` |
-| `git_push` | 원격 push | `prompt` | `auto` |
-| `pull_request` | PR 생성·수정 | `prompt` | `auto` |
-| `release_publish` | 공개 release·배포 | `prompt` | `auto` |
+| `git_push` | 원격 push | `prompt` | `prompt` 또는 explicit remote opt-in 범위에서만 `auto` |
+| `pull_request` | PR 생성·수정 | `prompt` | `prompt` 또는 explicit remote opt-in 범위에서만 `auto` |
+| `release_publish` | 공개 release·배포 | `prompt` | `prompt` |
 | `paid_action` | 비용이 발생하거나 유료 한도를 쓰는 동작 | `prompt` | `prompt` |
 
-`personal_auto`도 목표 밖 경로, 제품의 deny, Codex approval·sandbox, 관리자 제한을 넘지 않는다. 비용 발생 여부를 판정할 근거가 없으면 `paid_action=prompt`로 취급한다.
+`personal_auto`도 목표 밖 경로, 제품의 deny, Codex approval·sandbox, 관리자 제한을 넘지 않는다. 비용 발생 여부를 판정할 근거가 없으면 `paid_action=prompt`로 취급한다. 공개 `safe_default`는 remote write를 opt-in으로 바꿀 수 없다. `personal_auto` remote write는 아래 user-only opt-in과 action permission을 모두 만족해야 하며 release publish와 account change는 항상 별도 prompt다.
 
 ### `[budgets]`
 
@@ -205,7 +205,8 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 | `vcs.worktree_root` | path | Controller data 아래 | source 기준으로 해석 |
 | `remote.allowed_hosts` | host set | 빈 값 | 상위 제한과 `intersection` |
 | `remote.require_clean_target` | boolean | `true` | 원격 변경 전 상태 검사 |
-| `state.artifact_root` | path | `<project>\.ai-runs\star-control` | 프로젝트 증거 위치 |
+| `remote.personal_auto_write_scopes` | RemoteWriteScope array | 빈 값 | 사용자 설정에서만 추가; project·Goal·MCP override 금지 |
+| `state.artifact_root` | project-relative path | `.ai-runs/star-control` | project root의 `.ai-runs/` 아래에만 허용하는 증거 위치 |
 | `state.checkpoint_interval_ms` | integer | `300000` | 긴 실행의 최대 checkpoint 간격 |
 | `state.completed_retention_days` | integer | `90` | 완료 run의 큰 원문·중간 artifact 보관 기간 |
 | `state.failed_retention_days` | integer | `180` | 해결된 실패의 재현 자료 보관 기간 |
@@ -213,6 +214,76 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 | `state.cleanup_trigger` | enum | `startup_and_manual` | `manual`, `startup_and_manual`. 자체 예약 실행은 없음 |
 
 보관 정책은 실행 중 자료, 최종 요약·manifest, 보존 hold와 미해결 실패 자료를 삭제 대상으로 만들 수 없다. 실제 삭제는 별도 permission과 audit event를 필요로 한다.
+
+`state.artifact_root`는 normalize 뒤 `.ai-runs/`를 벗어나거나 absolute·UNC·device path가 되면 오류다. DB에는 이 project-relative anchor와 ArtifactRef relative path만 저장한다.
+
+`RemoteWriteScope`는 `host`, canonical `repository_id`, 허용 action set(`external_write`, `git_push`, `pull_request`), optional protected branch set과 optional `expires_at`을 가진다. wildcard host·repository, credential이 포함된 URL, `release_publish`, `account_change`는 허용하지 않는다. scope는 사용자가 직접 관리하는 user config에서만 만들 수 있고 Project config·Catalog·CLI/MCP 일회성 override가 확대하지 못한다. 실제 remote·branch·action이 exact match하고 approval scope hash가 같을 때만 `personal_auto`의 해당 action을 `auto`로 계산한다. 그 외에는 `prompt`다.
+
+### `[management]`, `[scan]`
+
+0단계의 정확한 type·fingerprint·repository 경계는 [공통 개발 관리와 로컬 관리 DB 계약](development-management.md)이 소유한다. 설정은 backend가 아니라 동작과 resource 한도만 표현한다.
+
+| section.key | type | 기본값 | 병합 | 의미 |
+|---|---|---|---|---|
+| `management.integrity_check_on_unclean_start` | enum | `full` | `most_restrictive` | `quick`, `full`; unclean shutdown 뒤 검사 강도 |
+| `management.allow_read_only_recovery` | boolean | `true` | `immutable` | future·suspect store의 비변경 진단 허용 |
+| `management.auto_migrate_rebuildable` | boolean | `true` | `false_wins` | source-derived index만 바꾸는 non-destructive migration |
+| `management.backup_before_migration` | boolean | `true` | `immutable` | migration·repair 전 consistent backup |
+| `management.keep_latest_successful_scans` | integer | `2` | `maximum_floor` | project별 complete generation 최소 보존 수 |
+| `management.incomplete_staging_retention_days` | integer | `7` | `maximum_floor` | 열린 run이 아닌 staging generation |
+| `management.scan_detail_retention_days` | integer | `90` | `maximum_floor` | hold 없는 과거 ScanRun·Occurrence detail |
+| `management.resolved_finding_retention_days` | integer | `180` | `maximum_floor` | reference 없는 resolved Finding summary |
+| `management.local_decision_retention_days` | integer | `180` | `maximum_floor` | expired·revoked local decision의 최소 보존 |
+| `management.migration_backup_min_count` | integer | `2` | `maximum_floor` | latest known-good 외 pre-migration backup 최소 수 |
+| `management.suppression_default_expiry_days` | integer | `90` | `minimum_limit` | expires_at 없는 non-permanent Suppression에 적용 |
+| `management.baseline_activation` | enum | `explicit_review` | `immutable` | complete ScanRun review 뒤 명시적 생성만 허용 |
+| `scan.incremental` | boolean | `true` | `false_wins` | content·input fingerprint가 같은 결과 재사용 |
+| `scan.include_untracked` | boolean | `true` | `replace` | Git untracked file을 WorkspaceSnapshot에 포함 |
+| `scan.include_ignored` | boolean | `false` | `explicit_widening` | ignored file 포함 |
+| `scan.follow_symlinks` | boolean | `false` | `false_wins` | root escape·cycle 방지를 위한 기본값 |
+| `scan.binary_mode` | enum | `metadata_only` | `most_restrictive` | `skip`, `metadata_only`; source byte를 DB에 저장하지 않음 |
+| `scan.max_file_bytes` | integer | `16777216` | `minimum_limit` | 한 source file의 읽기 상한 |
+| `scan.max_files` | integer | `200000` | `minimum_limit` | 한 ScanRun source entry 상한 |
+| `scan.max_total_bytes` | integer | `8589934592` | `minimum_limit` | 한 ScanRun에서 hash·parse할 총 byte 상한 |
+| `scan.max_parallel_files` | integer | `4` | `minimum_limit` | file 분석 동시성 |
+| `scan.require_complete_for_gate` | boolean | `true` | `true_wins` | incomplete scan의 auto pass 금지 |
+| `scan.rule_error_policy` | enum | `mark_incomplete` | `most_restrictive` | `mark_incomplete`, `fail_scan` |
+| `scan.include_paths` | project-relative glob array | 빈 값 | `intersection_scope` | 빈 값은 project 전체 |
+| `scan.exclude_paths_add` | project-relative glob set | `.git/**`, `.ai-runs/**` | `union` | scan recursion과 VCS 내부 자료 제외 |
+| `scan.rule_sets_add` | Catalog ID set | built-in required set | `union` | 실행할 Rule set 추가 |
+| `scan.rule_sets_remove` | Catalog ID set | 빈 값 | required Rule 제거 금지 | 선택 Rule만 제거 |
+
+이 section의 추가 merge 전략은 다음처럼 고정한다.
+
+- `maximum_floor`: 보존 최소값 중 가장 큰 값을 선택한다.
+- `false_wins`: 하나라도 false면 false다.
+- `true_wins`: 하나라도 true면 true다.
+- `explicit_widening`: false→true는 새 Permission scope와 expected config fingerprint가 있을 때만 허용한다.
+- `intersection_scope`: 각 source가 허용한 project-relative scope의 교집합이며 빈 교집합은 오류다.
+- ordered `most_restrictive`: integrity는 `full > quick`, binary는 `skip > metadata_only`, Rule 오류는 `fail_scan > mark_incomplete` 순서다.
+
+하위 source가 보존 기간·개수를 줄여 상위 hold 정책을 약화할 수 없다.
+
+`management.suppression_default_expiry_days`는 1~365 범위다. `permanent=true`는 이 값을 우회하는 암묵적 무기한이 아니라 별도 justification과 `local_write` 또는 source PatchSet permission을 요구한다. `management.baseline_activation`에 자동 생성 모드는 존재하지 않는다.
+
+store topology는 설정이 아니다. v1은 global store와 ProjectId별 project store를 사용하는 `hybrid`로 고정하며 `management.store_topology`, global/project DB path와 root-locator protection을 사용자 key로 노출하지 않는다. root locator는 Windows current-user protection을 사용하고 DB backup·export에서 제외한다.
+
+다음 이름은 v1 StarConfig key가 아니며 나타나면 unknown key 오류다.
+
+- `management.backend`
+- `management.database_path`
+- `management.connection_string`
+- `management.journal_mode`
+- `management.store_topology`
+- `management.global_database_path`
+- `management.project_database_path`
+- backend별 pragma·pool·vacuum 설정
+
+P0에서 선택한 embedded relational backend와 그 build option은 `star-state` private adapter와 release build 설정에만 속한다. CLI, project config와 MCP 입력으로 backend를 선택하거나 SQL·pragma를 전달하지 않는다. concrete 선택 근거는 [ADR-0008](../decisions/ADR-0008-P0-embedded-relational-backend.md)에만 둔다.
+
+`scan_config_fingerprint`는 resolved path scope, symlink·ignored·binary policy, byte·file limits, completeness policy, redaction contract version, Rule ID·version·definition fingerprint와 effective Rule parameter를 JCS로 hash한다. retention, terminal render와 cleanup trigger는 포함하지 않는다. ScanRun에는 이 값과 전체 `EffectiveConfig.fingerprint`를 모두 기록한다.
+
+`management.*`와 scan resource·scope key는 사용자·project 설정에서 더 제한할 수 있다. Goal·CLI·MCP override가 scope나 resource를 넓히려면 일반 override가 아니라 새 Permission scope와 expected config fingerprint를 요구한다.
 
 ### `[catalog]`, `[tool_registry]`, `[mcp_gateway]`, `[logging]`, `[ipc]`
 
@@ -244,7 +315,7 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 | `tool_registry.project_update_policy` | enum | `pinned_hash` | project source는 실행 파일 hash 고정 필수 |
 | `tool_registry.verify_executable_identity_each_call` | boolean | `true` | 실행 직전 path·file identity·hash 재확인 |
 | `tool_registry.max_packages` | integer | `128` | resource 사용 상한 |
-| `tool_registry.max_tools` | integer | `512` | 검색 가능한 action 수 상한 |
+| `tool_registry.max_tools` | integer | `512` | active·probe pending·unavailable을 합친 검색 가능한 action 수 상한 |
 | `tool_registry.max_actions_per_package` | integer | `64` | 한 package action 상한 |
 | `tool_registry.max_watch_roots` | integer | `128` | unique final directory watcher 상한 |
 | `tool_registry.max_manifest_bytes` | integer | `1048576` | package TOML 크기 상한 |
@@ -266,8 +337,10 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 MCP·Tool Registry 설정의 source·병합 규칙은 다음으로 동결한다.
 
 - `tool_registry.user_root`, `tool_registry.locations`, `tool_registry.user_trust`, `tool_registry.allow_follow_path_user`는 사용자 설정에서만 선언할 수 있다. project·Goal·MCP·CLI override에서 나타나면 오류다.
-- `tool_registry.allow_path_lookup=false`, `tool_registry.live_reload=true`, `tool_registry.demand_scan=true`, `tool_registry.verify_executable_identity_each_call=true`, `tool_registry.project_update_policy=pinned_hash`, `mcp_gateway.contract_version=1`, `ipc.auth_required=true`는 v1 불변값이다.
+- `tool_registry.allow_path_lookup=false`, `tool_registry.live_reload=true`, `tool_registry.demand_scan=true`, `tool_registry.verify_executable_identity_each_call=true`, `tool_registry.project_update_policy=pinned_hash`, `mcp_gateway.contract_version=1`, `mcp_gateway.max_message_bytes=8388608`, `mcp_gateway.sync_budget_ms=30000`, `mcp_gateway.accepted_dispatch_ms=5000`, `mcp_gateway.progress_per_second=4`, `ipc.connect_timeout_ms=5000`, `ipc.max_frame_bytes=8388608`, `ipc.auth_required=true`는 v1 불변값이다. Gateway는 TOML을 읽지 않고 IPC v1에는 이 값을 협상하는 payload가 없으므로 다른 값은 받아 놓고 무시하지 않고 설정 오류로 거부한다.
 - `tool_registry.watch_files`만 진단 목적으로 false로 낮출 수 있다. 이 경우에도 request 전 demand scan은 유지된다.
+- demand scan은 이미 관찰 중인 package TOML과 같은-path 교체를 우선 보존하고, 그 밖의 새 TOML은 source 순서와 정렬된 path 순서로 전역 `tool_registry.max_packages` 범위 안에서만 읽는다. 초과 파일은 실행 후보로 읽지 않고 해당 root에 `TOOL_REGISTRY_LIMIT` 진단을 남긴다. 따라서 invalid·미신뢰 파일을 대량 배치해도 기존 active·candidate·last-known-good 확인과 요청 처리가 고갈되지 않는다.
+- v1 release catalog allowlist는 Controller build에 포함된 `catalog/tool-packages/star-control-core.toml`의 파일명과 raw SHA-256 하나다. checksum이 다르거나 allowlist에 없는 release TOML은 `TOOL_INTEGRITY_INVALID`로 거부하고 기존 last-known-good를 유지한다. release package set 변경은 검증된 Controller release와 함께 이루어지며 user·project package의 live 등록에는 영향을 주지 않는다.
 - `allowed_process_protocols`와 `allowed_isolation_profiles`는 `intersection`, 각 `max_*`와 timeout·byte limit은 `minimum_limit`이다. 하위 source는 범위를 넓힐 수 없다.
 - `tool_registry.locations` key는 package-local ID 형식이고 path는 local fixed volume의 absolute directory다. 값은 trust scope에 들어가며 project가 같은 이름으로 바꿀 수 없다.
 
@@ -330,6 +403,31 @@ Catalog는 실행 logic이 아니라 기계가 읽는 선언이다. built-in Cat
 - timeout, cache key input과 재실행 조건
 - Gate 기본값과 생성할 evidence 종류
 
+### Rule
+
+Rule은 source 관찰에서 Finding identity와 Occurrence를 만드는 versioned 선언이다.
+
+- stable RuleId, SemVer와 definition fingerprint
+- 적용 language·source kind·path scope와 analyzer reference
+- typed parameter Schema와 기본 severity·confidence
+- line 이동에 흔들리지 않는 identity anchor와 fingerprint contract version
+- message code, typed redaction parameter와 민감 값 저장 금지
+- 적용 가능한 ChangeRecipe reference와 lifecycle
+
+Rule 실행 code, raw source literal과 DB query를 Catalog에 넣지 않는다. built-in Rule은 `catalog/validators`, project Rule은 신뢰한 `.star-control` 선언이 정본이고 DB에는 resolved snapshot만 저장한다.
+
+### ChangeRecipe
+
+ChangeRecipe는 Finding에서 PatchSet을 만드는 반복 가능한 shared 선언이다.
+
+- stable Recipe ID, SemVer와 definition fingerprint
+- Finding selector, source·revision precondition과 typed parameter Schema
+- built-in transformer 또는 trusted ToolDescriptor reference
+- allowed project-relative path scope, idempotency와 rollback 계약
+- Permission action, risk class와 required validation
+
+Recipe에는 raw shell, 동적 script, AI prompt와 backend SQL을 넣지 않는다. 자세한 field는 [공통 개발 관리 계약](development-management.md)을 따른다.
+
 ### ProfileDescriptor
 
 ProfileDescriptor는 15개 개발 작업 유형을 표현한다.
@@ -364,6 +462,7 @@ PolicyProfileDescriptor는 작업 유형이 아니라 사용자의 자동 진행
 - source와 trust 상태
 - reference graph와 resolution 결과
 - 계획에 참조한 ToolId·capability 조건과 당시 ToolRegistrySnapshot ID·hash
+- scan·change 계획에 참조한 RuleId·ChangeRecipeId, version과 definition fingerprint
 - 무시되거나 충돌한 항목과 Diagnostic
 - snapshot 생성 시각과 제품 version
 
@@ -388,7 +487,7 @@ default_action = "prompt"
 local_read = "auto"
 local_write = "auto"
 local_delete = "auto"
-external_write = "auto"
+external_write = "prompt"
 paid_action = "prompt"
 
 [validation]
@@ -412,7 +511,7 @@ Star-Control 설정은 Codex 설정을 대체하지 않는다.
 
 | Codex 경계 | Star-Control 해석 |
 |---|---|
-| `approval_policy=untrusted | on-request | never | granular` | 질문 가능 여부와 command별 추가 승인 제약으로 정규화. `never`를 Star-Control `auto`로 해석하지 않음 |
+| `approval_policy=untrusted \| on-request \| never \| granular` | 질문 가능 여부와 command별 추가 승인 제약으로 정규화. `never`를 Star-Control `auto`로 해석하지 않음 |
 | `sandbox_mode=read-only` | 파일 write action을 실행 불가로 제한 |
 | `sandbox_mode=workspace-write` | Codex가 허용한 root와 Star-Control ProjectPathRef의 교집합만 사용 |
 | `sandbox_mode=danger-full-access` | Codex sandbox가 넓어도 Star-Control 목표·permission 범위는 유지 |

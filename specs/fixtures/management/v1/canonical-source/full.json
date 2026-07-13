@@ -1,0 +1,16 @@
+{
+  "canonical_source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "generated_from_refs": [
+    "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "language_id": "fixture",
+  "path": "src/lib.rs",
+  "project_id": "prj_00000000000000000000000000",
+  "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "schema_id": "star.canonical-source",
+  "schema_version": 1,
+  "sensitivity": "public",
+  "source_kind": "file",
+  "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

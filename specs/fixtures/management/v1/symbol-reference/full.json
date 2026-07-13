@@ -1,0 +1,20 @@
+{
+  "from_range": {
+    "end_column": 0,
+    "end_line": 0,
+    "start_column": 0,
+    "start_line": 0
+  },
+  "from_source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "from_symbol_id": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "project_id": "prj_00000000000000000000000000",
+  "reference_kind": "fixture",
+  "resolution": "resolved",
+  "scan_run_id": "scn_00000000000000000000000000",
+  "schema_id": "star.symbol-reference",
+  "schema_version": 1,
+  "symbol_reference_id": "srf_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "to_symbol_id": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "unresolved_target": "fixture",
+  "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

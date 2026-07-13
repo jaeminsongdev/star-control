@@ -1,0 +1,12 @@
+[package]
+name = "star-ports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+star-contracts = { path = "../star-contracts" }
+thiserror.workspace = true

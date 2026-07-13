@@ -1,0 +1,96 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.change-recipe:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allowed_path_scope": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "definition_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "finding_selectors": {
+      "items": {
+        "pattern": "^fnd_[a-z2-7]{52}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "idempotency_contract": {
+      "type": "string"
+    },
+    "parameter_schema_ref": {
+      "type": "string"
+    },
+    "permission_actions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "preconditions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "recipe_id": {
+      "type": "string"
+    },
+    "recipe_version": {
+      "type": "string"
+    },
+    "risk_class": {
+      "type": "string"
+    },
+    "rollback_contract": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.change-recipe",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "transformer_ref": {
+      "type": "string"
+    },
+    "validation_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "recipe_id",
+    "recipe_version",
+    "definition_fingerprint",
+    "finding_selectors",
+    "preconditions",
+    "parameter_schema_ref",
+    "transformer_ref",
+    "allowed_path_scope",
+    "idempotency_contract",
+    "validation_requirements",
+    "risk_class",
+    "permission_actions",
+    "rollback_contract"
+  ],
+  "title": "ChangeRecipe",
+  "type": "object"
+}

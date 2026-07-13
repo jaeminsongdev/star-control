@@ -1,0 +1,144 @@
+{
+  "blocking_diagnostic_refs": [
+    {
+      "diagnostic_id": "dia_00000000000000000000000000",
+      "sequence": 0,
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "created_at": "2026-01-01T00:00:00Z",
+  "decided_by": {
+    "actor_id": "fixture",
+    "actor_type": "user",
+    "auth_source": "fixture",
+    "display_name": "fixture"
+  },
+  "decision": "human_review",
+  "extensions": {},
+  "gate_id": "gat_00000000000000000000000000",
+  "omissions": [
+    {
+      "alternative_evidence_refs": [
+        {
+          "artifact_id": "art_00000000000000000000000000",
+          "created_at": "2026-01-01T00:00:00Z",
+          "kind": "log",
+          "media_type": "fixture",
+          "producer": {
+            "build_id": "fixture",
+            "component": "fixture",
+            "platform": "fixture",
+            "product_version": "fixture"
+          },
+          "project_id": "prj_00000000000000000000000000",
+          "redaction_status": "not_needed",
+          "relative_path": "src/lib.rs",
+          "retention_class": "temporary",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "size_bytes": 0,
+          "source_artifact_ref": null
+        }
+      ],
+      "check_ref": {
+        "catalog_id": "fixture",
+        "format_version": 0,
+        "item_version": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "impact": "none",
+      "reason": "fixture"
+    }
+  ],
+  "policy_snapshot": {
+    "policy_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "policy_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "thresholds": {}
+  },
+  "producer": {
+    "build_id": "fixture",
+    "component": "fixture",
+    "platform": "fixture",
+    "product_version": "fixture"
+  },
+  "remaining_risks": [
+    {
+      "evidence_refs": [
+        {
+          "artifact_id": "art_00000000000000000000000000",
+          "created_at": "2026-01-01T00:00:00Z",
+          "kind": "log",
+          "media_type": "fixture",
+          "producer": {
+            "build_id": "fixture",
+            "component": "fixture",
+            "platform": "fixture",
+            "product_version": "fixture"
+          },
+          "project_id": "prj_00000000000000000000000000",
+          "redaction_status": "not_needed",
+          "relative_path": "src/lib.rs",
+          "retention_class": "temporary",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "size_bytes": 0,
+          "source_artifact_ref": null
+        }
+      ],
+      "risk_id": "fixture",
+      "severity": "info",
+      "title": "fixture"
+    }
+  ],
+  "required_run_refs": [
+    {
+      "revision": 0,
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "validation_run_id": "val_00000000000000000000000000"
+    }
+  ],
+  "revision": 0,
+  "satisfied_run_refs": [
+    {
+      "revision": 0,
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "validation_run_id": "val_00000000000000000000000000"
+    }
+  ],
+  "schema_id": "star.gate-decision",
+  "schema_version": 1,
+  "scope": {
+    "goal_id": "gol_00000000000000000000000000",
+    "kind": "goal",
+    "revision": 0,
+    "run_id": "run_00000000000000000000000000"
+  },
+  "updated_at": "2026-01-01T00:00:00Z",
+  "waivers": [
+    {
+      "approved_at": "2026-01-01T00:00:00Z",
+      "approved_by": {
+        "actor_id": "fixture",
+        "actor_type": "user",
+        "auth_source": "fixture",
+        "display_name": "fixture"
+      },
+      "evidence_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "expires_at": "2026-01-01T00:00:00Z",
+      "reason": "fixture",
+      "scope_revision": 0,
+      "target": {
+        "kind": "validation_run",
+        "validation_run_ref": {
+          "revision": 0,
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "validation_run_id": "val_00000000000000000000000000"
+        }
+      },
+      "waiver_id": "wav_00000000000000000000000000"
+    }
+  ]
+}

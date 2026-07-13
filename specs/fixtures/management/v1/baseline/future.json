@@ -1,0 +1,18 @@
+{
+  "baseline_id": "bas_00000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "finding_fingerprints": [],
+  "project_id": "prj_00000000000000000000000000",
+  "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "reason": "fixture",
+  "reviewed": false,
+  "revision": 0,
+  "rule_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "scan_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.baseline",
+  "schema_version": 2,
+  "scope_kind": "shared",
+  "set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "status": "active",
+  "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

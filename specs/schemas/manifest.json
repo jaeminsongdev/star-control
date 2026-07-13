@@ -17,6 +17,86 @@
       "hash": "sha256:8fcb68e41fc2abd8fc765819e048d926a285207eddb148d1a50452146f07cf98"
     },
     {
+      "file": "artifact-ref.schema.json",
+      "hash": "sha256:eab8221ed3c0bc747298545c47ade8dfa480cacbbb9c644c2b1eb72805baefe1"
+    },
+    {
+      "file": "project.schema.json",
+      "hash": "sha256:9fe08282fbfbeaedf1bf4645380dfadccfcbfb29ff6a502ed7f6f927d93b12bd"
+    },
+    {
+      "file": "project-revision.schema.json",
+      "hash": "sha256:ce54d0ba01222126d425b4888041eb5ebff0d75c1837f8305aac0af04097fdb6"
+    },
+    {
+      "file": "workspace-snapshot.schema.json",
+      "hash": "sha256:43dd4cd9f1b2cc391a1ba8d6ad63f73ada5573f37c9d778aeac0b0ff0e7285ab"
+    },
+    {
+      "file": "scan-run.schema.json",
+      "hash": "sha256:7a627915c2a71d39c3e7951c27902e3d2ad8fc1a7a429b7f266039630265eb5c"
+    },
+    {
+      "file": "rule.schema.json",
+      "hash": "sha256:a5351e26ec5dfb50d88e03dd994d22ef2046083cf6daf916acce5fd16981ca7f"
+    },
+    {
+      "file": "finding.schema.json",
+      "hash": "sha256:d57f9d7b45d7a3984ffc2a2329b043a0e5052f6a1a3ba3da34befd107a4ab0e1"
+    },
+    {
+      "file": "occurrence.schema.json",
+      "hash": "sha256:ac204115c2e6ce80cddf1fd33b9f65ebc7a2ff5aed785edde36c0af38241aa70"
+    },
+    {
+      "file": "symbol.schema.json",
+      "hash": "sha256:40ad45ee3dd67bd55acc0ce3485ef479c6b82fa6c65d2294ff51a85b2bbea931"
+    },
+    {
+      "file": "symbol-reference.schema.json",
+      "hash": "sha256:fe01888274e66a2452390f25947896030ce894cfd3364ed1e067442f8581f49c"
+    },
+    {
+      "file": "canonical-source.schema.json",
+      "hash": "sha256:84b67bccd624a27248b4d61beab3f1cae466deb8a3935106f434e13d06f4aebf"
+    },
+    {
+      "file": "suppression.schema.json",
+      "hash": "sha256:1990b8acb035efd7c2cfb65301354d5125ceb37d800f857f261db1e93f0d4495"
+    },
+    {
+      "file": "baseline.schema.json",
+      "hash": "sha256:08db6831f7bebc3f21de99fc34a91c7a8e134502967c24ab40468d8fce6ee851"
+    },
+    {
+      "file": "disposition.schema.json",
+      "hash": "sha256:0d130668850cc36e99dc3b8a4126694a7f55a52b8d6f6f69bbee1bd6067317db"
+    },
+    {
+      "file": "change-plan.schema.json",
+      "hash": "sha256:0768919e11480bf1d37d504fbd3c2ebfeaafb2daab30b232c74c1ca064d7b1a0"
+    },
+    {
+      "file": "patch-set.schema.json",
+      "hash": "sha256:20773bc0d99cc0f7b7e30c4deebd3925c121fb2f78af108a1de833f31f8820b3"
+    },
+    {
+      "file": "change-recipe.schema.json",
+      "hash": "sha256:e5ebe84f6a2fa8410818ca05ddec5a80f67cdf9988cd2a074539ea3223e4a653"
+    },
+    {
+      "file": "validation-result.schema.json",
+      "hash": "sha256:cd22344d861e9504b447d7b6205ce8bd72f6a7bd3fac5c33ff0caf11d3ad82c7"
+    },
+    {
+      "file": "management-store-status.schema.json",
+      "hash": "sha256:d44ddf1d19d20b2c54249aacd9c9e25711a675362fe8f881e2d798120d96e64a"
+    },
+    {
+      "file": "coordinated-operation.schema.json",
+      "hash": "sha256:be25f0f83637a69c2d792e43c76b3b8c975918104c5501ff8f00b71654c767e6"
+    },
+    {
       "file": "tool-package-manifest.schema.json",
       "hash": "sha256:53730396ad887fe049116fc220e8ca0b2fedf3a9c086ba5256cb7283763d0ed7"
     },

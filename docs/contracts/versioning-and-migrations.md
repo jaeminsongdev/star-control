@@ -11,7 +11,7 @@
 | Star-Control 제품 | SemVer | 사용자 기능·호환성·수정 release |
 | 개별 데이터 계약 | positive integer `schema_version` | 직렬화 shape 또는 의미가 바뀔 때 |
 | 설정 | `star.config`의 독립 schema version | key·type·병합 의미가 바뀔 때 |
-| 상태 저장소 | store format integer | journal·index·snapshot 저장 방식이 바뀔 때 |
+| 로컬 관리 DB | positive integer `management_store_version` | global/project logical relation·coordination·invariant·redaction·projection 의미가 바뀔 때 |
 | Catalog descriptor | `format_version` integer | descriptor 형식이 바뀔 때 |
 | Catalog 항목 | `item_version` SemVer | 한 Task·Tool·Check·Profile의 내용이 바뀔 때 |
 | ToolPackageManifest | 독립 `format_version` integer | backend·binding·trust 형식이 바뀔 때 |
@@ -52,6 +52,8 @@ migration_id
 
 제품 시작, state 열기, IPC handshake와 Catalog load에서 이 manifest를 사용한다. 코드 곳곳에 version 비교를 복사하지 않는다.
 
+관리 DB 항목은 `global`과 `project` store kind별로 최소 `reader_min_store_version`, `reader_max_store_version`, `writer_store_version`, `migratable_from_store_versions`, `rebuildable_from_store_versions`와 migration chain을 가진다. 같은 `management_store_version`이라도 지원 store kind가 다르면 compatible하다고 추측하지 않는다. concrete backend schema version은 adapter private이며 public compatibility manifest에 backend 이름을 넣지 않는다.
+
 ## 기본 호환 행동
 
 | 입력 상태 | 읽기 | 실행·수정 | 행동 |
@@ -83,8 +85,82 @@ migration_id
 | Artifact manifest | artifact byte는 건드리지 않고 metadata manifest를 변환 |
 | Catalog | 원본 descriptor를 수정하지 않고 새 snapshot으로 다시 resolution |
 | Controller index | 재구축 가능한 index는 migration보다 rebuild 우선 |
+| 관리 DB | store별 backup+검증 migration 또는 side-by-side rebuild; 여러 store를 바꾸면 active generation set을 함께 검증 |
 
 Event history를 in-place로 다시 쓰지 않는다. 과거 payload decoder를 유지하거나 검증된 변환 copy와 원본 hash를 함께 보관한다.
+
+## 로컬 관리 DB version
+
+상세 저장 경계와 StoreStatus는 [공통 개발 관리와 로컬 관리 DB 계약](development-management.md)이 소유한다.
+
+### version 증가 기준
+
+다음 변경은 `management_store_version`을 올린다.
+
+- ProjectId partition, relation cardinality, uniqueness 또는 transaction 불변식 변경
+- global/project 책임 배치, `StoreVersionVector`, coordination receipt 또는 active generation set 의미 변경
+- Finding·Symbol identity와 fingerprint input 의미 변경
+- scan generation publish, event·projection commit 또는 idempotency 의미 변경
+- redaction contract가 저장 허용 field를 좁히거나 넓히는 변경
+- local Suppression·Baseline·Disposition와 ChangePlan 보존 의미 변경
+- backup·integrity·read-only recovery가 해석해야 하는 logical metadata 변경
+
+index 추가, query plan과 backend 내부 page layout처럼 public relation 의미를 바꾸지 않는 최적화는 logical version을 유지할 수 있다. 단, 같은 logical version의 store를 이전 binary가 안전하게 읽을 수 있어야 한다.
+
+### open mode
+
+| 상태 | open mode | 허용 동작 |
+|---|---|---|
+| 현재 version, integrity healthy | `read_write` | 정상 command·query |
+| 지원 과거 version | `migration_required` | status, migration plan, backup |
+| 읽을 수 있는 미래 version | `read_only_recovery` | 비민감 metadata·export, backup 선택 |
+| suspect | `read_only_recovery` | integrity·backup·side-by-side rebuild |
+| corrupt | `quarantined` | 원본 보존, verified backup restore만 |
+
+CLI·MCP는 open mode를 선택하거나 DB handle을 열지 않는다. Controller lifecycle이 mode를 결정하고 application service가 허용 command를 제한한다.
+
+global store와 각 project store는 별도 `ManagementStoreStatus`와 revision을 가진다. Controller는 top-level `active-set` manifest가 가리키는 `(store_id, generation, version, relative_locator, header_fingerprint)` 조합만 함께 연다. `header_fingerprint`는 immutable generation header·locator의 canonical hash이며 쓰기 중 변하는 live DB file byte hash가 아니다. manifest에 없는 directory를 최신이라는 이유로 자동 선택하지 않는다. 정지점이 고정된 backup·migration candidate에는 별도의 file `byte_sha256`을 반드시 기록한다.
+
+### migration class
+
+| class | 예 | 자동 적용 |
+|---|---|---:|
+| `rebuildable_projection` | index·Symbol edge·source-derived Finding projection 재계산 | backup 뒤 설정이 허용하면 가능 |
+| `lossless_local_state` | local decision field의 결정적 shape 변환 | 명시적 계획·backup·검증 필요 |
+| `semantic_local_state` | disposition·suppression 의미 또는 redaction 경계 변화 | 사용자 승인 필요 |
+| `unsupported` | 의미 손실, unknown extension, future version | 쓰기 금지 |
+
+각 migration은 전·후 StoreStatus, 예상 row·byte, 필요한 임시 공간, 영향받는 local-only state, rollback generation과 검증 항목을 dry-run 결과로 반환한다.
+
+### backup·교체·rollback
+
+- migration·repair 전 consistent backup과 byte hash manifest를 만든다.
+- backend가 전체 migration transaction을 보장하지 않으면 새 store generation을 만들고 변환·검증한 뒤 active pointer를 atomic replace한다.
+- 새 generation은 relation·partition·fingerprint·event/projection·ArtifactRef integrity를 통과해야 한다.
+- 교체 뒤 startup 검사에 실패하면 이전 active generation으로 돌아가고 실패 evidence를 남긴다.
+- backup, 손상 store와 이전 generation은 retention plan·permission 전 삭제하지 않는다.
+
+### rebuild
+
+관리 DB가 없거나 복구할 수 없으면 attached Project root, Git 선언·source, Catalog와 검증된 `.ai-runs` manifest에서 새 generation을 만든다.
+
+- source-derived ProjectRevision, WorkspaceSnapshot, Symbol, Reference, Finding은 새 scan으로 계산한다.
+- shared Suppression·Baseline은 Git 선언에서 import한다.
+- `.ai-runs`의 canonical ValidationResult·GateDecision·ArtifactRef는 hash를 확인한 뒤 reindex할 수 있다.
+- local-only Disposition, local Suppression, 과거 idempotency와 actor event는 backup·export가 없으면 복구하지 못했다고 명시한다.
+- rebuild는 과거 ScanRunId·timestamp를 재생성하지 않고 `reconstructed_from`과 completeness를 기록한다.
+
+### backend와 dependency gate
+
+public 계약은 특정 DB를 선택하지 않는다. P0 private adapter의 concrete 선택은 [ADR-0008](../decisions/ADR-0008-P0-embedded-relational-backend.md)에 따라 `star-state` 내부의 `rusqlite 0.40.1` bundled backend로 확정됐다. 선택 전에 다음 항목을 비교했고, dependency를 추가한 뒤에도 같은 항목을 release gate로 검사한다.
+
+- Windows x64·ARM64 지원과 process crash 내구성
+- single-writer transaction, consistent backup와 integrity 검사
+- side-by-side migration·read-only open 가능성
+- license, 보안 update, binary 크기와 유지보수 상태
+- Rust adapter의 오류·cancellation·threading 경계
+
+선정 결과는 `star-state` private adapter에만 반영한다. StarConfig, CLI, MCP와 persisted domain contract에는 backend 이름, SQL, pragma, connection string이나 DB filename을 추가하지 않는다. backend 교체는 repository conformance를 다시 통과해야 하지만 public document migration을 요구해서는 안 된다.
 
 ## Migration 절차
 
@@ -100,6 +176,21 @@ Event history를 in-place로 다시 쓰지 않는다. 과거 payload decoder를 
 10. **정리**: retention과 사용자 승인 전에는 backup을 삭제하지 않는다.
 
 실패하면 활성 pointer를 바꾸지 않는다. 교체 뒤 시작 검사에서 실패하면 backup으로 rollback하고 실패 evidence를 보존한다.
+
+### 하이브리드 store migration
+
+여러 store가 영향을 받는 migration은 다음 규칙을 추가한다.
+
+1. global store와 영향받는 ProjectId를 정렬하고 expected `StoreVersionVector`를 고정한다.
+2. 새 mutation을 quiesce하고 각 store의 consistent backup과 하나의 backup-set manifest를 만든다.
+3. project store를 side-by-side candidate generation으로 변환·검증하고, 그동안 기존 active set만 query에 노출한다.
+4. global store를 candidate generation으로 변환하고 모든 project receipt·relation·version compatibility를 검증한다.
+5. candidate 전체의 hash를 가진 새 `active-set` manifest를 작성·flush한 뒤 top-level pointer를 atomic replace한다.
+6. startup 재검증이 끝날 때까지 이전 active set과 backup set을 보존한다.
+
+부분 변환된 candidate directory는 active가 아니며 retention의 orphan candidate다. 자동 migration은 source-derived projection만 바꾸고 data loss·redaction 확대가 없는 경우에 한하며 항상 pre-migration backup을 먼저 만든다. local decision 의미, redaction 의미, Project identity 또는 cross-store relation을 바꾸는 migration은 dry-run 결과와 손실 가능성을 보여주고 명시적 승인을 받는다.
+
+손상·미래 version 또는 active-set 불일치를 발견하면 Controller는 read-write handle을 닫는다. read-only recovery, verified backup restore, source rebuild 중 어느 generation을 활성화할지는 진단을 제시한 뒤 사용자 선택을 받으며 자동 전환하지 않는다.
 
 ## Migration 구현 규칙
 
@@ -170,6 +261,8 @@ contract v1의 exact 기준은 [MCP 구현 동결 계약](mcp-implementation-con
 - 중단된 migration과 rollback sample
 
 검증은 schema generation drift, fixture round-trip, migration determinism, unknown 보존, event replay와 downgrade 거부를 포함한다.
+
+관리 DB fixture는 추가로 clean open, double-writer 거부, unclean shutdown, scan generation crash, future version read-only, corrupt backup restore, side-by-side rebuild, local-only state loss report, global/project partial migration, active-set atomic switch, incompatible backup-set 거부와 backend conformance를 포함한다.
 
 ## Downgrade와 rollback
 

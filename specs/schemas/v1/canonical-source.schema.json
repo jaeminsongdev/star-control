@@ -1,0 +1,108 @@
+{
+  "$defs": {
+    "Sensitivity": {
+      "enum": [
+        "public",
+        "internal",
+        "sensitive"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SourceKind": {
+      "enum": [
+        "file",
+        "generated_unit",
+        "virtual"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.canonical-source:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonical_source_id": {
+      "pattern": "^src_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "content_sha256": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "generated_from_refs": {
+      "items": {
+        "pattern": "^src_[a-z2-7]{52}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "language_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "path": {
+      "minLength": 1,
+      "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "project_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_id": {
+      "const": "star.canonical-source",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "sensitivity": {
+      "$ref": "#/$defs/Sensitivity"
+    },
+    "source_kind": {
+      "$ref": "#/$defs/SourceKind"
+    },
+    "workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "canonical_source_id",
+    "project_id",
+    "source_kind",
+    "generated_from_refs",
+    "sensitivity"
+  ],
+  "title": "CanonicalSource",
+  "type": "object"
+}

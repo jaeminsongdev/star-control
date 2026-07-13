@@ -1,0 +1,22 @@
+{
+  "artifact_refs": [],
+  "completeness": "complete",
+  "diagnostic_refs": [],
+  "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "finding_refs": [],
+  "finished_at": "2026-01-01T00:00:00Z",
+  "outcome": "pass",
+  "project_id": "prj_00000000000000000000000000",
+  "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.validation-result",
+  "schema_version": 1,
+  "started_at": "2026-01-01T00:00:00Z",
+  "subject_id": "fixture",
+  "subject_kind": "fixture",
+  "unexpected": true,
+  "validation_plan_ref": "fixture",
+  "validation_result_id": "vrs_00000000000000000000000000",
+  "validation_run_refs": [],
+  "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
