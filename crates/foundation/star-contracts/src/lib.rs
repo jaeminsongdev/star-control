@@ -8,6 +8,7 @@ pub mod canonical;
 pub mod evidence;
 pub mod fixed_mcp;
 pub mod ids;
+pub mod installation;
 pub mod ipc;
 pub mod management;
 pub mod manifest;
@@ -19,9 +20,9 @@ pub mod trust;
 
 pub use canonical::{Sha256Hash, canonical_sha256, jcs_bytes};
 pub use ids::{
-    ApprovalId, ArtifactId, DiagnosticId, EvidenceBundleId, GateId, GoalId, OperationId, ProjectId,
-    RequestId, RunId, StageId, TaskInvocationId, ToolCacheId, ToolTrustId, ValidationRunId,
-    WaiverId,
+    ApprovalId, ArtifactId, DiagnosticId, EvidenceBundleId, GateId, GoalId, InstallationId,
+    OperationId, ProjectId, RequestId, RunId, StageId, TaskInvocationId, ToolCacheId, ToolTrustId,
+    ValidationRunId, WaiverId,
 };
 pub use management::{MANAGEMENT_STORE_VERSION, REDACTION_CONTRACT_VERSION};
 pub use manifest::{ToolPackageManifest, parse_manifest_v1};

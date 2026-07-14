@@ -21,6 +21,18 @@
       "hash": "sha256:eab8221ed3c0bc747298545c47ade8dfa480cacbbb9c644c2b1eb72805baefe1"
     },
     {
+      "file": "release-file-manifest.schema.json",
+      "hash": "sha256:ae8c23dde10404e07cbd52c65dd2ab88e3c076db3e2e72233adb29ccb237de56"
+    },
+    {
+      "file": "installation-record.schema.json",
+      "hash": "sha256:576dea76240a9b2c4923a4420da81182a731bfd78243aea184be04b56204e2b5"
+    },
+    {
+      "file": "codex-integration-record.schema.json",
+      "hash": "sha256:d231722d1154060d907a49113cb74445ae350ca732f53aa65bd8e78afbf564fd"
+    },
+    {
       "file": "project.schema.json",
       "hash": "sha256:9fe08282fbfbeaedf1bf4645380dfadccfcbfb29ff6a502ed7f6f927d93b12bd"
     },

@@ -1,0 +1,102 @@
+{
+  "$defs": {
+    "PackageSigningState": {
+      "enum": [
+        "unsigned_local",
+        "signed"
+      ],
+      "type": "string"
+    },
+    "ReleaseFileEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "TargetArchitecture": {
+      "enum": [
+        "x64",
+        "arm64"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.release-file-manifest:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ReleaseFileEntry"
+      },
+      "type": "array"
+    },
+    "generated_files": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "product_version": {
+      "type": "string"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "set_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "signing": {
+      "$ref": "#/$defs/PackageSigningState"
+    },
+    "source_revision": {
+      "type": "string"
+    },
+    "target_architecture": {
+      "$ref": "#/$defs/TargetArchitecture"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "product_version",
+    "target_architecture",
+    "created_at",
+    "source_revision",
+    "files",
+    "generated_files",
+    "set_sha256",
+    "signing"
+  ],
+  "title": "ReleaseFileManifest",
+  "type": "object"
+}

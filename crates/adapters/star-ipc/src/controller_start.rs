@@ -7,8 +7,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::{Deserialize, Serialize};
-use star_contracts::{Sha256Hash, parse_no_duplicate_keys};
+use star_contracts::{
+    Sha256Hash, installation::ControllerInstallManifest, parse_no_duplicate_keys,
+};
 use thiserror::Error;
 use windows::{
     Win32::{
@@ -52,17 +53,6 @@ pub enum OuterJobPolicy {
     NotInJob,
     BreakawayAllowed,
     Denied,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ControllerInstallManifest {
-    pub schema_id: String,
-    pub schema_version: u32,
-    pub product_version: String,
-    pub gateway_sha256: Sha256Hash,
-    pub controller_path: String,
-    pub controller_sha256: Sha256Hash,
 }
 
 pub struct VerifiedControllerImage {

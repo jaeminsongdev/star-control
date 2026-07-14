@@ -86,7 +86,39 @@ Star-Control이 Codex 작업을 만들고 모델, 생각 깊이, 작업 폴더, 
 
 ## 작업 Profile
 
-프로젝트 이해, 변경 계획, migration처럼 개발 작업 성격에 맞춰 단계, Context와 검사를 조합하는 15개 유형이다. 권한을 넓히지는 않는다.
+프로젝트 이해, 변경 계획, migration과 Rust style 자동 교정처럼 개발 작업 성격에 맞춰 단계, Context와 검사를 조합하는 최종 16개 유형이다. 권한을 넓히지는 않는다.
+
+## CLI-only core
+
+Codex나 다른 AI 없이 `star` CLI가 같은 application command, 계약, Gate와 evidence를 사용해 결정적 계획·검사·상태 조회·승인된 동작을 수행하는 기본 제품 경로다. Codex 연동은 이 core의 선택 소비자다.
+
+## 검사 계층
+
+`local_quick`, `target`, `full`, `release` 순으로 범위와 환경 보증을 넓히는 검사 단계다. 모두 같은 Task·source revision·tool/config/Profile identity를 사용하며 계층 사이 identity가 바뀌면 새 candidate다.
+
+## Build once와 승격
+
+final release artifact를 한 번 build·package하고 immutable digest로 봉인한 뒤 같은 byte를 검사하고 승격하는 원칙이다. 검사나 publish를 위해 다시 build하면 같은 candidate가 아니다.
+
+## ready
+
+공개 전 required release Gate와 evidence가 통과해 승인 가능한 상태다. 사용자 승인이나 원격 publish 성공을 뜻하지 않는다.
+
+## approved
+
+exact ReleaseManifest revision, artifact digest, channel, provider, destination과 만료에 대해 사용자가 release action을 허용한 상태다. 원격 결과를 뜻하지 않는다.
+
+## published
+
+provider receipt와 후속 RemoteStateSnapshot이 exact version·source/tag·artifact digest를 확인한 상태다. 요청 접수, timeout 또는 화면 표시만으로 만들지 않는다.
+
+## EvaluationRun
+
+Rule·Check·Profile·Recipe 또는 routing/policy의 baseline과 candidate를 같은 case·protocol에서 비교하는 versioned 증거다. CLI-only와 Codex-integrated context를 분리하고 실제 결함·오탐·flaky·suppression·재작업·실패·검증된 비용을 기록한다.
+
+## Maintenance Radar
+
+dependency·rule·recipe·Profile 등 유지보수 항목의 current risk, 마지막 평가, replacement, owner, deadline과 다음 검토를 정렬하는 derived view다. 평가 결과가 Catalog source를 직접 수정하지 않는다.
 
 ## MCP Gateway
 

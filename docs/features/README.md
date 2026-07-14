@@ -50,7 +50,11 @@
   -> 주장·변경·검사 증거 대조
   -> 자동 통과·본인 확인·차단 판정
   -> worktree 결과 병합과 통합 검사
+  -> clean CI·package·install lifecycle과 artifact digest 검증
+  -> release ready 판정
+  -> 명시적 승인 뒤 publish·deploy, 원격 after-state 확인
   -> 최종 보고·이어하기·비용·평가 자료 기록
+  -> Rule·Check·Profile·Recipe baseline/candidate 평가와 review된 개선
 ```
 
 ## 구현 대상 요약
@@ -86,7 +90,16 @@
 
 - [핵심 관제 기능](core-control.md) — A01~A10
 - [검증과 개발 보조 기능](validation.md) — B01~B09
+- [3단계 공통 검증·품질 Gate 상세 설계](common-validation-gate.md) — B01~B07 공통 실행·Diagnostic·ratchet·Patch Gate
+- [4단계 안전한 Patch·Refactor·codemod 엔진 계약](../contracts/safe-patch-and-codemod.md) — Recipe·selector·rewrite assurance·dry-run·single-project apply·복구
+- [5단계 관리형 Symbol·상수·에러 코드 Registry 계약](../contracts/managed-symbol-registry.md) — 관리 분류·Git 정본·lifecycle·binding·consumer compatibility·M2/M4/M3 경계
+- [6단계 계약 호환성·문서·설정·개발 환경 관리](../contracts/contract-compatibility-and-environment.md) — B04/B07 baseline·drift·doctor와 dependency/security input
+- [7단계 실패 재현·보안·의존성 유지보수](../contracts/failure-security-and-dependency-maintenance.md) — B05/B06 failure identity·ReproductionPack·freshness·dependency PatchSet·Radar
+- [8단계 Migration·성능·언어·플랫폼](../contracts/migration-performance-and-platform.md) — B04/B06/B08 version chain·restore·comparable measurement·equivalence
+- [9단계 CrossRepo ChangeBundle](../contracts/cross-repo-change-bundle.md) — A09/D01 project별 worktree·merge·partial recovery·remote state·release handoff
+- [10단계 CI·Release·평가·최종 제품 완성](../contracts/ci-release-evaluation-and-product-completion.md) — B09/D02/D03 검사 계층·artifact 승격·설치 수명주기·평가·최종 소유권 감사
 - [개발 작업 Profile](profiles.md) — C01
+- [11단계 Rust 코드 스타일 자동 교정 Profile](rust-code-style-auto-fix.md) — C01의 16번째 `rust_style_auto_fix`, stable rustfmt·allowlisted Clippy·isolated PatchSet·`personal_auto`
 - [확장 운영 기능](operations.md) — D01~D03
 - [구현 대상 선정 근거](../history/source-selection-record.md) — 외부 자료·레거시 대응
 
@@ -98,9 +111,11 @@
 2. 각 단계가 A03~A05의 근거를 가지고 적절한 Codex 실행 방식에 배정된다.
 3. 실행, 질문, 승인, 중단과 재개가 A06~A09에서 상태 손실 없이 이어진다.
 4. 모든 결과가 B01 공통 관문과 필요한 B02~B09 검사를 통과하거나 미확인 이유를 남긴다.
-5. 15개 작업 유형이 별도 engine 복제가 아니라 C01 Profile로 같은 기반을 재사용한다.
+5. 최종 16개 작업 유형이 별도 engine 복제가 아니라 C01 Profile로 같은 기반을 재사용한다. 최초 입력 자료가 15개였다는 역사적 사실은 제품 Profile 수와 구분한다.
 6. 유료·외부·파괴적 행동은 정책에 따라 승인되고, 보통의 로컬 저위험 작업은 불필요한 질문 없이 진행된다.
 7. 여러 프로젝트, 원격 Git, 평가와 Windows 배포가 D01~D03에서 같은 Task ID와 증거 사슬을 유지한다.
 8. 전문 도구를 새로 흉내 내지 않고 기존 프로젝트 도구와 Codex 기능을 adapter로 연결한다.
+9. release `ready`, 외부 effect `approved`, 실제 원격 `published`가 분리되고 final artifact digest가 source revision에 결합한다.
+10. Rule·Check·Profile·Recipe 개선은 검증기 보호·실결함·오탐·재작업·시간 근거를 거쳐 review된 source change로만 반영한다.
 
 이 문서는 구현 대상을 확정하는 개념 목록이다. 각 기능의 물리 Package와 문서 정본은 [최종 Repository·Package·문서 구조](../architecture/repository-layout.md)에서 확인한다. 세부 기술, 공개 계약, 규칙 임계값과 외부 도구 선택은 각 구현 단계 전에 최신 공식 자료와 실제 대상 프로젝트를 다시 조사해 결정한다.

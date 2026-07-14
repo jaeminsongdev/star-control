@@ -7,6 +7,10 @@ use crate::{
         GATE_DECISION_SCHEMA_ID, GateDecision, VALIDATION_RUN_SCHEMA_ID, ValidationRun,
     },
     fixed_mcp::{CallInput, McpToolResult, fixed_input_schema, fixed_result_schema},
+    installation::{
+        CODEX_INTEGRATION_RECORD_SCHEMA_ID, CodexIntegrationRecord, INSTALLATION_RECORD_SCHEMA_ID,
+        InstallationRecord, RELEASE_FILE_MANIFEST_SCHEMA_ID, ReleaseFileManifest,
+    },
     ipc::{IpcChallenge, IpcHandshakeError, IpcHello, IpcRequest, IpcResponse, IpcWelcome},
     management::{
         Baseline, CanonicalSource, ChangePlan, ChangeRecipe, CoordinatedOperation, Disposition,
@@ -200,6 +204,18 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "artifact-ref.schema.json",
             schema_document::<ArtifactRef>("star.artifact-ref"),
+        ),
+        (
+            "release-file-manifest.schema.json",
+            schema_document::<ReleaseFileManifest>(RELEASE_FILE_MANIFEST_SCHEMA_ID),
+        ),
+        (
+            "installation-record.schema.json",
+            schema_document::<InstallationRecord>(INSTALLATION_RECORD_SCHEMA_ID),
+        ),
+        (
+            "codex-integration-record.schema.json",
+            schema_document::<CodexIntegrationRecord>(CODEX_INTEGRATION_RECORD_SCHEMA_ID),
         ),
         (
             "project.schema.json",

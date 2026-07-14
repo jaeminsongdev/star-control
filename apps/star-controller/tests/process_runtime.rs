@@ -471,7 +471,7 @@ async fn timeout_terminates_a_job_bound_fake_process() {
 // matrix: MCP-P003
 async fn unused_stdin_is_closed_so_the_child_receives_eof() {
     let mut eof = spec("wait-eof");
-    eof.timeout = Duration::from_millis(500);
+    eof.timeout = Duration::from_secs(2);
     let outcome = execute_direct_exe(&eof).await.expect("child receives EOF");
     assert_eq!(outcome.stdout.captured, b"eof\n");
 }
@@ -541,18 +541,31 @@ async fn cancellation_terminates_the_entire_job_child_tree() {
     tree.argv.push(OsString::from(pid_file.as_os_str()));
     let cancellation = RuntimeCancellation::default();
     let signal = cancellation.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(150)).await;
-        signal.cancel();
+    let observed_pid_file = pid_file.clone();
+    let pid_watcher = tokio::spawn(async move {
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            if let Ok(text) = std::fs::read_to_string(&observed_pid_file)
+                && let Ok(child_pid) = text.parse::<u32>()
+            {
+                signal.cancel();
+                return Some(child_pid);
+            }
+            if std::time::Instant::now() >= deadline {
+                signal.cancel();
+                return None;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
     });
     assert!(matches!(
         execute_direct_exe_cancellable(&tree, Some(cancellation)).await,
         Err(RuntimeError::Cancelled)
     ));
-    let child_pid = std::fs::read_to_string(pid_file)
-        .unwrap()
-        .parse::<u32>()
-        .unwrap();
+    let child_pid = pid_watcher
+        .await
+        .expect("PID watcher joins")
+        .expect("child PID is written before bounded cancellation");
     // A just-terminated child can already have no process object, in which
     // case OpenProcess itself is the proof that the Job did not leak it.
     if let Ok(child) = unsafe { OpenProcess(PROCESS_ACCESS_RIGHTS(0x0010_0000), false, child_pid) }

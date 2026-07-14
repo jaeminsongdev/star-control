@@ -21,6 +21,7 @@ base64.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 star-contracts = { path = "../../crates/foundation/star-contracts" }
+star-adapter-windows = { path = "../../crates/adapters/star-adapter-windows" }
 star-application = { path = "../../crates/control/star-application" }
 star-evidence = { path = "../../crates/infrastructure/star-evidence" }
 star-state = { path = "../../crates/infrastructure/star-state" }

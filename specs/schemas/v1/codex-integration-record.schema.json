@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "CodexRegistrationState": {
+      "enum": [
+        "registered",
+        "manual_action_required",
+        "removed",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.codex-integration-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "install_root": {
+      "type": "string"
+    },
+    "integration_root": {
+      "type": "string"
+    },
+    "manual_commands": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "marketplace_name": {
+      "type": "string"
+    },
+    "marketplace_root": {
+      "type": "string"
+    },
+    "plugin_name": {
+      "type": "string"
+    },
+    "plugin_version": {
+      "type": "string"
+    },
+    "product_version": {
+      "type": "string"
+    },
+    "registration_state": {
+      "$ref": "#/$defs/CodexRegistrationState"
+    },
+    "render_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "product_version",
+    "install_root",
+    "integration_root",
+    "marketplace_root",
+    "marketplace_name",
+    "plugin_name",
+    "plugin_version",
+    "render_sha256",
+    "registration_state",
+    "manual_commands",
+    "updated_at"
+  ],
+  "title": "CodexIntegrationRecord",
+  "type": "object"
+}

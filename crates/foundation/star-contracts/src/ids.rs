@@ -216,6 +216,7 @@ prefixed_id!(CoordinatedOperationId, "cop_");
 prefixed_id!(RootBindingId, "rtb_");
 prefixed_id!(GenerationId, "gen_");
 prefixed_id!(EventId, "evt_");
+prefixed_id!(InstallationId, "ins_");
 
 /// Monotonic process-local ULID source for IDs where clock regression must not
 /// reorder IDs created by this process.

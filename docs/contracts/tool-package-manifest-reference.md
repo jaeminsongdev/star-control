@@ -352,6 +352,65 @@ custom lock key는 `{tool_id,selected_arguments}`의 arguments canonical hash다
 
 `[actions.cancel]`의 `grace_ms` 기본 2000, 최대 30000이다. stdin cancel frame 뒤 grace가 지나면 Job Object를 종료한다. `none`은 cancel intent만 기록하고 timeout까지 기다리며 UI에 `not_cancellable`을 표시한다.
 
+## 4단계 codemod action conformance
+
+이 절은 `format_version=1`에 새 manifest key를 추가하지 않는다. 기존 ExecutableDescriptor·ToolActionDescriptor·Parameter·ArgumentBinding·Output·Concurrency·Cancel field를 [4단계 엔진 계약](safe-patch-and-codemod.md)이 안전하게 조합하기 위한 eligibility 규칙이다.
+
+ChangeRecipe가 external action을 `structured_patch_producer`로 사용할 때:
+
+- `backend_kind=process`, trusted exact ToolDescriptor와 executable identity가 필요하다.
+- input은 `input_schema_file` 또는 parameters로 완전하게 기술하고 Recipe의 typed input/selector mapping이 Schema를 통과해야 한다.
+- output은 `json|jsonl` 또는 executable protocol `star_json_stdio_v1`이고 `output_schema_file`이 필수다.
+- output Schema는 adapter가 M4 candidate operation/data로 정규화하는 데 필요한 path·operation·diagnostic·artifact identity를 구조화해야 한다.
+- `permission_actions`에는 최소 `local_read`, `process_run`을 두며 live project `local_write`를 허용하지 않는다.
+- materialized input과 artifact output만 사용하고 target checkout absolute path를 string parameter로 전달하지 않는다.
+
+ChangeRecipe가 action을 `isolated_workspace_mutator`로 사용할 때:
+
+- executable `working_directory`는 `stage_worktree`여야 하고 action은 `local_write`, `process_run`을 선언해야 한다.
+- project path parameter는 Controller가 isolated preview worktree 안의 ProjectPathRef로 resolve한다.
+- `network_read|network_download|external_write|account_change|system_change|secret_access|paid_action`이 있으면 M4 automatic Recipe eligibility가 없다.
+- output은 structured completion contract를 가져야 하며 Controller가 stdout 보고와 별도로 worktree full before/after manifest를 수집한다.
+- formatter·generator가 넓힐 수 있는 output path는 Recipe allowed path와 declared generator output set 안에 있어야 한다.
+- `idempotency=idempotent`만으로 Recipe semantic idempotence가 증명되지 않는다. M4가 expected-after fresh preview에서 replay no-op을 별도로 확인한다.
+
+두 mode 공통으로 `execution_mode=detachable`은 허용할 수 있지만 Operation terminal result·workspace reconciliation 전에는 RecipeExecution success나 PatchSet을 만들 수 없다. `cancel_mode=none`인 mutator는 cancel 불가 사실을 preview 전에 표시하고, timeout·cancel·outcome unknown 뒤에는 isolated workspace diff를 성공 output으로 사용하지 않는다.
+
+다음 manifest/action은 정적 Schema가 valid해도 M4 automatic codemod에는 부적격이다.
+
+- text output만 있고 Patch candidate 또는 structured completion을 검증할 output Schema가 없음
+- source path를 raw string·environment variable·shell expansion으로 받음
+- `working_directory=project_root`에서 write action을 수행함
+- target과 preview root를 구분할 수 없거나 cwd 밖 write가 필요함
+- automatic retry를 tool 내부에서 숨기거나 attempt 결과를 한 final success로 합침
+- executable version/hash·generator input/output manifest를 evidence에 고정할 수 없음
+
+부적격은 Tool Registry 전체 등록 실패와 다르다. 다른 read-only 용도로는 사용할 수 있지만 M4 Recipe transformer binding에는 사용할 수 없다.
+
+## 11단계 Rust style action 연결
+
+이 절은 `format_version=1`에 새 manifest key·protocol·permission을 추가하지 않는다. [Rust 코드 스타일 자동 교정](../features/rust-code-style-auto-fix.md)의 네 Tool role은 기존 `argv_v1`, ExecutableDescriptor, typed parameter/argv binding, cwd, output, concurrency와 cancel 계약으로 충분히 표현된다. Rust 전용 raw command field나 `shell=true`를 추가하지 않는다.
+
+| Tool role | 기존 manifest 조합 | 추가 host-side conformance |
+|---|---|---|
+| rustfmt check | cargo ExecutableDescriptor + `argv_v1`, read-only action, `stage_worktree`, text/log output | fixed adapter가 package/workspace와 `--check`만 typed binding하고 complete source manifest diff 0 확인 |
+| rustfmt isolated rewrite | 같은 cargo identity, `local_write|process_run`, `stage_worktree` | M4 `isolated_workspace_mutator`, handwritten `.rs` allowed scope와 step diff 검사 |
+| Clippy Diagnostic check | cargo/clippy probe, JSON/JSONL data + stderr log, coverage-cell typed parameter | rustc JSON normalizer version, build script/proc macro trusted-project execution, owned `CARGO_TARGET_DIR` |
+| Clippy allowlisted isolated fix | `local_write|process_run`, `stage_worktree`, structured completion | exact `MachineApplicable` suggestion manifest, actual hunk mapping, unallowed side-effect 전체 거부 |
+
+manifest에는 `package_id`, feature/target/cfg matrix, rustfmt option, lint allowlist와 style policy를 literal argv로 복제하지 않는다. action input은 normalized scope/coverage ref를 받고 bounded host adapter가 fixed flag ordering으로 materialize한다. ToolPackageManifest는 executable/process interface 정본이고 Rust config·lint policy 정본은 Git source와 versioned Profile/Catalog metadata다.
+
+Rust conformance의 추가 불변식은 다음과 같다.
+
+- executable probe가 cargo/rustc/rustfmt/clippy-driver의 resolved version·opaque file identity·redacted locator·full hash와 required component/target availability를 Evidence에 bind할 수 있어야 한다. final absolute path는 process memory 밖에 저장하지 않는다.
+- `working_directory=project_root`인 fmt/fix action은 automatic eligibility가 없다. live target path를 argv, env와 response file로 전달하지 않는다.
+- network/download/system/dependency action, PATH lookup, user shell string, arbitrary trailing compiler flag와 automatic retry를 선언하면 부적격이다.
+- `--all-features`는 literal startup arg나 default binding으로 넣지 않는다. exact feature set은 Catalog coverage cell에서 온 typed repeat parameter만 사용한다.
+- `cargo clippy --fix --allow-dirty`는 general manifest option이 아니다. fixed adapter가 isolated preview의 staged byte 0과 prior rustfmt dirty manifest 일치를 확인한 한 invocation에만 materialize한다. `--allow-staged`, `--broken-code`, `--allow-no-vcs`는 금지한다.
+- process exit 0·manifest `idempotency=idempotent`는 `AUTO_PASS`가 아니다. M11이 complete diff, coverage, side effect, replay와 M3 Gate를 별도로 확인한다.
+
+따라서 M11 구현 때문에 ToolPackageManifest major format을 올리지 않는다. 기존 field로 표현할 수 없는 문제가 실제 Corpus에서 확인될 때만 일반 process 계약의 필요성을 별도 ADR로 검토하며, Rust 하나를 위한 특수 top-level field를 먼저 추가하지 않는다.
+
 ## Source·update policy 규칙
 
 | source | 허용 update policy | trust |
@@ -390,10 +449,10 @@ custom lock key는 `{tool_id,selected_arguments}`의 arguments canonical hash다
 
 | 명령 | exact syntax | 의미 |
 |---|---|---|
-| list | `star tools list [--source release|user|project] [--readiness <value>] [--json]` | active action 조회 |
+| list | `star tools list [--source release\|user\|project] [--readiness <value>] [--json]` | active action 조회 |
 | describe | `star tools describe <tool-id> [--json]` | effective descriptor·hash·provenance |
 | status | `star tools status [<package-id>] [--json]` | watcher·candidate·LKG·diagnostic |
-| validate | `star tools validate <manifest-path> --source user|project [--json]` | publish·trust·probe 없이 단계 1~9의 정적 검사 |
+| validate | `star tools validate <manifest-path> --source user\|project [--json]` | publish·trust·probe 없이 단계 1~9의 정적 검사 |
 | probe | `star tools probe <package-id> [--executable <id>] [--json]` | 선언된 side-effect-free probe만 실행 |
 | trust | `star tools trust <package-id> --manifest-hash <sha256> [--expires <rfc3339>] [--json]` | 현재 candidate scope trust |
 | revoke | `star tools revoke <package-id> [--cancel-running] --reason <text> [--json]` | 새 invoke 차단, 선택 running cancel |
@@ -570,3 +629,4 @@ grace_ms = 2000
 - [무재시작 외부 Tool Registry](external-tool-registry.md)
 - [Windows Tool Runtime](../architecture/windows-tool-runtime.md)
 - [MCP 검증 행렬](../testing/mcp-verification-matrix.md)
+- [Rust 코드 스타일 자동 교정 Profile](../features/rust-code-style-auto-fix.md)

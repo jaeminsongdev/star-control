@@ -1,0 +1,16 @@
+[package]
+name = "star-adapter-codex"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+chrono.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+star-adapter-windows = { path = "../star-adapter-windows" }
+star-contracts = { path = "../../foundation/star-contracts" }
+thiserror.workspace = true
+windows.workspace = true

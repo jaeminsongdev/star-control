@@ -4,7 +4,7 @@
 
 Star-Control은 목표를 아주 작은 할 일 목록으로 분해하지 않는다. 다른 모델이나 다른 실행 방식이 필요한 지점에서 단계를 나눈다.
 
-단계 안의 세부 코딩 순서는 해당 단계에 배정된 Codex가 프로젝트 상황에 맞게 정한다.
+Codex 실행 단계 안의 세부 코딩 순서는 해당 단계에 배정된 Codex가 프로젝트 상황에 맞게 정한다. Project scan·index와 CLI-only change planning 같은 deterministic local 단계는 별도 model plan 없이 typed application 계약을 실행한다.
 
 ## 새 단계가 필요한 조건
 
@@ -34,13 +34,13 @@ Star-Control은 목표를 아주 작은 할 일 목록으로 분해하지 않는
 
 ## 기본 흐름
 
-    목표
+    사용자 TaskSpec 또는 GoalSpec
       ↓
     질문과 완료 기준 확정
       ↓
     단계 목록
       ↓
-    단계별 배정
+    단계별 executor 확정과 Codex 단계 RouteDecision
       ↓
     계획 승인
       ↓
@@ -49,6 +49,10 @@ Star-Control은 목표를 아주 작은 할 일 목록으로 분해하지 않는
     증거와 이어하기 기록
 
 ## 핵심 기록
+
+### TaskSpec
+
+사용자가 한 변경 계획에 직접 입력한 목표, Project, 포함·제외 범위와 완료 조건을 저장한다. CLI-only 계획의 유일한 의도 입력이며 Codex가 대신 생성하지 않는다.
 
 ### GoalSpec
 
@@ -61,6 +65,8 @@ Star-Control은 목표를 아주 작은 할 일 목록으로 분해하지 않는
 - 하지 말아야 할 일
 - 비용 한도
 - 사용자 설정
+
+여러 Project write 목표는 GoalSpec을 직접 확장해 mutable 실행 상태를 넣지 않는다. exact GoalSpec·TaskSpec을 [9단계 정본](cross-repo-change-bundle.md)의 `MultiProjectGoal`로 정규화하고 project relation·step DAG·compatibility window·completion target을 별도 fingerprint로 고정한다.
 
 ### StageSpec
 
@@ -78,7 +84,7 @@ Star-Control은 목표를 아주 작은 할 일 목록으로 분해하지 않는
 
 ### RouteDecision
 
-해당 단계에 무엇을 배정했는지와 이유를 저장한다.
+Codex 실행 단계에 무엇을 배정했는지와 이유를 저장한다. `executor_kind=deterministic_local` 단계에는 RouteDecision을 만들지 않는다.
 
 - 모델 역할: `sol | terra | luna`
 - 실제로 선택된 Codex 모델 ID
@@ -116,6 +122,10 @@ Codex가 현재 단계에 필요한 자료만 모은 묶음이다.
 
 현재 단계에서 실제로 필요한 검사를 저장한다.
 
+### ScopeRevision
+
+사용자 requested scope, read-only analysis scope, planned change scope와 validation scope의 한 revision을 저장한다.
+
 ### EvidenceBundle
 
 변경과 검사 결과를 저장한다.
@@ -132,6 +142,38 @@ Codex가 현재 단계에 필요한 자료만 모은 묶음이다.
 
 실행 시점에 Codex가 실제로 지원한 모델, 생각 깊이, 작업 방식, 권한 기능을 저장한다.
 
+## TaskSpec 상세 계약
+
+TaskSpec은 Goal보다 작은 한 변경 계획 입력이다. 장기 Goal 안에 여러 TaskSpec이 있을 수 있고, 독립 CLI-only 계획은 Goal 없이 TaskSpec부터 만들 수 있다. `TaskSpec`은 `star.task-spec` top-level document다.
+
+| 필드 | 필수 | 의미 |
+|---|---:|---|
+| `task_spec_id`, `revision` | 예 | stable ID와 사용자 입력 revision |
+| `goal_id` | 아니요 | 기존 Goal에 속할 때의 GoalId |
+| `title` | 예 | 짧은 사용자 표시 이름 |
+| `objective` | 예 | 사용자가 얻으려는 변경 결과 |
+| `project_targets` | 예 | 하나 이상의 ProjectTarget. ProjectRef·CheckoutId·target role과 사용자 이유 |
+| `included_scope` | 예 | 포함 path·package·symbol·contract selector |
+| `excluded_scope` | 예 | selector, `applies_to`, 사용자 이유. 축별 자동 확대 금지 범위 |
+| `intended_changes` | 예 | 사용자가 예상한 add·modify·delete·rename·contract change unit. 아직 source를 바꿨다는 뜻이 아님 |
+| `success_criteria` | 예 | ID, 설명, 확인 방법과 required 여부 |
+| `constraints` | 예 | 기술·안전·운영·permission 제약 |
+| `forbidden_actions` | 예 | cross-repo write·merge·dependency change 등 하지 않을 행동 |
+| `baseline_policy` | 예 | `current_workspace`, `explicit_revision`, `previous_success`와 필요한 ref |
+| `requested_checks` | 예 | 사용자가 강제한 Check ID·family. 없으면 빈 목록 |
+| `check_overrides` | 예 | 추가·승격·생략 요청과 사용자 이유. 없으면 빈 목록 |
+| `assumptions` | 예 | 사용자가 현재 사실로 둔 검증 가능한 가정 |
+| `created_by` | 예 | user ActorRef 또는 사용자의 의도를 전달한 provenance |
+| `created_at` | 예 | audit 시각, identity에는 제외 |
+
+`excluded_scope.applies_to`는 `analysis`, `planned_change`, `validation`, `all` 중 하나다. 생략 기본값은 `planned_change`이며, 민감 source처럼 읽기 자체를 금지하려면 사용자가 `analysis` 또는 `all`을 명시한다. analysis exclusion이 graph closure를 자르면 이를 영향 없음으로 해석하지 않고 limitation과 validation fallback 근거로 남긴다.
+
+`ProjectTarget.role`은 `planned_change`, `read_only_impact`, `validation_only` 중 하나다. CheckoutId는 planning에 사용할 actual working copy를 명시하며 표시 이름이나 default branch로 대체하지 않는다. 최소 하나의 `planned_change` target이 필요하고 자동 downstream 발견은 새 planned-change target을 만들지 않는다.
+
+TaskSpec은 필수 값이 빠졌을 때 자연어로 추측 보완하지 않는다. interactive CLI가 사용자의 답을 받을 수는 있지만 저장된 field source는 계속 `user`다. path·이름 selector가 여러 entity와 일치하면 stable Project·package·symbol·contract key를 사용자가 고르기 전까지 plan readiness는 blocked다. 사용자 원문이라도 secret·credential·개인 절대 path를 직렬화하지 않으며 SecretRef·root binding·ProjectPathRef 또는 redacted category로 정규화할 수 없는 입력은 저장 전에 거부한다.
+
+revision은 사용자가 의도 field를 바꿀 때만 증가한다. source scan 결과, 자동 impact expansion과 fallback은 TaskSpec을 수정하지 않고 ScopeRevision에 기록한다. 같은 revision의 내용을 덮어쓰거나 자동 계산이 excluded scope를 제거하면 안 된다.
+
 ## GoalSpec 상세 계약
 
 | 필드 | 필수 | 의미 |
@@ -147,12 +189,29 @@ Codex가 현재 단계에 필요한 자료만 모은 묶음이다.
 | `constraints` | 예 | 기술·안전·운영 제약 |
 | `assumptions` | 예 | 현재 사실로 두되 검증 가능한 가정 |
 | `questions` | 예 | 질문, 답변, 상태와 결정 영향 |
+| `task_spec_refs` | 아니요 | Goal 안의 사용자 change-planning 입력 revision 목록 |
 | `requested_work_profile` | 아니요 | 사용자 지정 작업 Profile ID |
 | `budget_limit` | 아니요 | 비용·시간 상한 참조 |
 | `status` | 예 | Goal 상태 |
 | `created_by` | 예 | 사용자·Codex·system ActorRef |
 
+GoalSpec이 실행 가능한 변경 계획을 포함하면 TaskSpec ref 목록으로 사용자 입력 revision을 가리킨다. GoalSpec의 자연어 objective를 TaskSpec의 exact include/exclude selector로 자동 승격하지 않는다.
+
 `success_criteria`의 각 항목은 ID, 설명, 확인 방법과 `required` 여부를 가진다. 단순 문장 목록만 저장하면 최종 Gate가 어느 조건을 확인했는지 연결할 수 없으므로 EvidenceRef를 붙일 수 있어야 한다.
+
+### MultiProjectGoal 연결 계약
+
+`MultiProjectGoal`은 `star.multi-project-goal` top-level document이며 exact GoalSpec revision을 다음 9단계 입력으로 바꾼다.
+
+- stable ProjectId별 required 여부와 `provider|consumer|data_owner|tooling|validation_only` role set
+- M1/M2/M5/M6 evidence에 연결된 directed `ProjectRelation`
+- 같은 provider가 compatibility open과 close에 다시 등장할 수 있는 `BundleStepGraph` DAG
+- provider open → consumer 전환 → provider removal을 표현하는 finite `CompatibilityWindow`
+- project별 completion과 전체 Goal completion을 구분하는 `completion_target`
+- worktree·process·validation·merge·remote 동시성 및 disk/memory/artifact/time budget
+- unresolved relation·cycle·stale/partial evidence와 사용자 질문
+
+source effect가 있는 StageSpec은 한 ProjectId·CheckoutId만 가진다. 여러 ProjectId를 가진 coordinator Stage는 plan·status·Gate aggregation만 수행하고 PatchSet·Git·remote effect를 직접 실행하지 않는다. exact field와 fingerprint는 [CrossRepo ChangeBundle 정본](cross-repo-change-bundle.md#multiprojectgoal)이 소유한다.
 
 ### ProjectRef
 
@@ -199,15 +258,45 @@ raw root path는 persisted ProjectRef, event, DB와 evidence에 넣지 않는다
 
 최신성이나 원문 접근을 확인하지 못한 주장은 `verified_at`을 만들지 않고 `unverified` limitation을 둔다. SourceRecord는 외부 내용을 현재 설계 정본으로 자동 승격하지 않는다.
 
+## ScopeRevision 상세 계약
+
+`ScopeRevision`은 `star.scope-revision` top-level document다. TaskSpec의 사용자 의도를 바꾸지 않고 분석·변경·검증 범위가 왜 달라졌는지 한 revision으로 고정한다.
+
+| 필드 | 필수 | 의미 |
+|---|---:|---|
+| `scope_revision_id`, `revision` | 예 | immutable revision identity |
+| `task_spec_ref` | 예 | 정확한 TaskSpec revision·hash |
+| `previous_scope_revision_ref` | revision > 1 | 이전 revision |
+| `reason_code`, `reason` | 예 | initial, user_edit, unexpected_impact, new_risk, source_changed, check_fallback 등 |
+| `requested_scope` | 예 | 사용자 include/exclude와 Project target의 normalized form |
+| `analysis_scope` | 예 | graph·index를 read-only 탐색할 범위 |
+| `planned_change_scope` | 예 | 다음 write 단계가 제안할 수 있는 범위 |
+| `validation_scope` | 예 | package·workspace·project별 검사 범위 floor |
+| `source_snapshot_refs` | 예 | ProjectCatalog·Revision·Workspace·CodeIndex ref와 freshness |
+| `derived_additions` | 예 | impact·risk·fallback이 추가한 항목과 근거 |
+| `user_decisions` | 예 | accepted·rejected·overridden candidate와 actor·reason |
+| `changed_fields` | 예 | 이전 revision과 달라진 canonical field path |
+| `approval_state` | 예 | `accepted`, `proposed`, `rejected`, `superseded` |
+| `scope_hash` | 예 | 의미 field의 JCS SHA-256 |
+| `created_by`, `created_at` | 예 | provenance와 audit 시각 |
+
+`scope_hash`에는 TaskSpec ref, 네 scope, source snapshot ref, derived addition, user decision과 reason code를 넣고 timestamp·표시 이름은 제외한다. ChangeSet은 이 ScopeRevision을 입력으로 수집되는 다음 document이므로 ScopeRevision이 ChangeSet을 역참조하지 않는다. analysis·validation scope 자동 확대는 허용하지만 planned change scope 확대는 사용자 결정 없이는 `proposed`로만 만들 수 있다.
+
+같은 scope 축에서 include/exclude selector가 겹치거나 user-excluded 범위를 automatic planned change scope가 포함하면 revision을 만들지 않고 `PLANNING_SCOPE_CONFLICT`다. 사용자가 possible impact나 Check 생략을 선택하면 그 결정이 자동 계산보다 우선하지만 remaining risk와 필요한 Waiver·human review를 함께 남긴다.
+
 ## StageSpec 상세 계약
 
 | 필드 | 필수 | 의미 |
 |---|---|---|
 | `stage_id` | 예 | StageId |
+| `revision` | 예 | StageSpec의 monotonic revision |
 | `goal_id` | 예 | 상위 GoalId |
+| `task_spec_ref` | change planning일 때 | 사용자 입력 TaskSpec revision |
+| `scope_revision_ref` | scope가 정해졌을 때 | accepted 또는 명시적 proposed ScopeRevision |
 | `title` | 예 | 단계 표시 이름 |
 | `objective` | 예 | 이 단계가 끝내야 하는 한 가지 결과 |
 | `stage_mode` | 예 | `plan \| execute \| review` |
+| `executor_kind` | 예 | `deterministic_local \| codex`; CLI-only M1/M2 계산은 전자 |
 | `work_profile_id` | 예 | 적용할 작업 Profile |
 | `project_ids` | 예 | 대상 프로젝트 |
 | `included_work` | 예 | 단계 안에서 처리할 책임 |
@@ -217,12 +306,14 @@ raw root path는 persisted ProjectRef, event, DB와 evidence에 넣지 않는다
 | `parallel_group` | 아니요 | 함께 실행 가능한 group ID |
 | `completion_criteria` | 예 | 단계 전용 완료 조건 |
 | `failure_policy` | 예 | retry·replan·block·rollback |
-| `route_decision_ref` | 아니요 | 계획 뒤 생성되는 RouteDecision |
+| `route_decision_ref` | Codex Stage | 계획 뒤 생성되는 RouteDecision. deterministic local에는 금지 |
 | `permission_plan_ref` | 아니요 | 실행 전 확정되는 PermissionPlan |
 | `validation_plan_ref` | 아니요 | 실행 전 확정되는 ValidationPlan |
+| `impact_analysis_ref` | change planning 뒤 | 영향 계산 근거 |
+| `change_plan_refs` | change planning 뒤 | planned-change Project별 다음 변경 단계 입력 배열 |
 | `state` | 예 | Stage 상태 |
 
-StageSpec은 실행 중 조용히 덮어쓰지 않는다. 범위나 완료 조건이 달라지면 revision을 올리고 `stage.replanned` event에 이전 revision과 이유를 남긴다.
+StageSpec은 실행 중 조용히 덮어쓰지 않는다. 범위나 완료 조건이 달라지면 revision을 올리고 `stage.replanned` event에 이전 revision과 이유를 남긴다. `work_profile_id=change_planning`인 Stage는 실행 가능해지기 전에 TaskSpec과 ScopeRevision을 가져야 하며, 완료 결과는 같은 revision을 참조하는 ImpactAnalysis·ChangePlan·ValidationPlan을 제공해야 한다. CLI-only M2 Stage는 `executor_kind=deterministic_local`이고 RouteDecision·CapabilitySnapshot·Codex thread를 만들지 않는다.
 
 ### StageGraph
 
@@ -248,6 +339,7 @@ ProjectCatalogSnapshot·CodeIndexSnapshot·quality/freshness field는 1단계 v2
 |---|---|
 | `context_pack_id` | stable ID |
 | `stage_id` | 대상 Stage |
+| `task_spec_ref`, `scope_revision_ref` | 자료 선택의 사용자 의도와 effective scope |
 | `project_inputs` | ProjectRef 목록과 각 checkout·revision·workspace snapshot |
 | `project_catalog_snapshot_ref` | multi-project·workspace 관계를 선택한 snapshot |
 | `code_index_snapshot_refs` | project별 index snapshot과 partition fingerprint |
@@ -318,11 +410,11 @@ StageResult는 한 Stage revision의 실제 실행과 수용 결과를 묶는다
 | `stage_result_id` | 문서 ID |
 | `goal_id`, `run_id`, `stage_id`, `stage_revision` | 대상 Stage |
 | `outcome` | `succeeded`, `failed`, `blocked`, `cancelled` |
-| `attempts` | AttemptId, RouteDecision, 시작·종료, 결과·오류 reference |
+| `attempts` | AttemptId, Codex면 RouteDecision·local이면 application operation ref, 시작·종료, 결과·오류 reference |
 | `accepted_attempt_id` | 결과로 채택한 attempt. 성공일 때 필수 |
 | `context_pack_ref` | 실제 입력 자료 |
 | `permission_plan_ref` | 실제 권한 범위 |
-| `codex_thread_refs` | adapter가 정규화한 opaque thread·turn reference |
+| `codex_thread_refs` | Codex Stage일 때 adapter가 정규화한 opaque thread·turn reference; deterministic local에는 생략 |
 | `result_summary` | 완료 조건 기준의 짧은 결과 |
 | `output_artifact_refs` | 생성 문서·파일·report |
 | `change_set_ref` | 실제 변경 목록 |
@@ -337,26 +429,40 @@ StageResult는 한 Stage revision의 실제 실행과 수용 결과를 묶는다
 
 ## MergePlan 상세 계약
 
+MergePlan은 project-local 계약이다. 여러 repository input을 한 MergePlan에 넣지 않으며 9단계는 ProjectId별 MergePlan v2를 `CrossRepoChangeBundle`에서 참조한다.
+
 | 필드 | 의미 |
 |---|---|
-| `merge_plan_id` | MergePlan ID |
-| `goal_id` | 상위 Goal |
-| `base_revision` | 병합 기준 revision |
+| `merge_plan_id`, `revision` | MergePlan identity와 immutable revision |
+| `goal_id`, `change_bundle_ref`, `participant_ref` | 상위 Goal과 9단계 bundle이면 exact global/project ref |
+| `project_id`, `repository_fingerprint` | owning Project와 opaque Git common repository identity. v2 필수 |
+| `integration_worktree_ref` | Star-owned project integration worktree |
+| `target_ref`, `target_base_commit_oid` | local integration target와 계획 시 exact tip. remote target 아님 |
 | `inputs` | stage·worktree·commit·evidence 참조 |
-| `order` | 병합 순서와 이유 |
-| `overlap_analysis` | 파일·symbol·contract 겹침 |
+| `order`, `dependency_refs` | queue 순서와 provider/consumer·검증 선행 근거 |
+| `overlap_analysis_ref` | 최신 file·symbol·contract·generated·lockfile 겹침 결과 |
 | `conflict_policy` | 자동·Codex 판단·사용자 판단 경계 |
-| `integration_validation_plan_ref` | 병합 후 검사 |
-| `rollback_ref` | 병합 실패 복구 기준 |
-| `status` | `draft \| ready \| merging \| conflicted \| validated \| failed` |
+| `validation_plan_ref` | `phase=merge` 병합 후 검사 |
+| `rollback_plan_ref` | discard·revert·roll-forward 복구 기준 |
+| `permission_plan_ref` | commit·local merge·branch update action 범위 |
+| `status` | v2 `draft \| ready \| queued \| stale \| integrating \| conflicted \| validating \| completed \| held \| failed` |
+| `plan_fingerprint` | base·input·order·overlap·policy의 canonical hash |
+
+상세 MergeQueue·Conflict·ProjectMergeResult와 base stale 규칙은 [9단계 정본](cross-repo-change-bundle.md#project-local-mergeplan-v2와-merge-queue)이 소유한다. conflict를 해결하면 기존 MergePlan을 조용히 계속하지 않고 양쪽 intent·contract를 참조한 새 M4 resolution PatchSet과 merge Gate를 요구한다.
 
 ## 불변식
 
 - Goal에는 하나 이상의 ProjectRef와 하나 이상의 required 성공 조건이 있어야 한다.
+- CLI-only change planning TaskSpec에는 하나 이상의 Project target, required 성공 조건과 모순 없는 include/exclude가 있어야 한다.
+- ScopeRevision의 analysis·validation 자동 확대는 해당 축의 TaskSpec excluded scope를 넘거나 planned change scope를 암묵적으로 바꾸지 않는다.
 - StageGraph의 모든 Stage는 같은 Goal에 속하고 dependency cycle이 없어야 한다.
-- 실행 가능한 Stage는 확정 RouteDecision, PermissionPlan과 ValidationPlan을 가져야 한다.
+- `executor_kind=codex`인 실행 가능한 Stage는 확정 RouteDecision, PermissionPlan과 ValidationPlan을 가져야 한다.
+- `executor_kind=deterministic_local`인 Stage는 RouteDecision을 만들지 않고 TaskDescriptor·application operation·EffectiveConfig·ValidationPlan 또는 output validation contract를 가져야 한다.
+- `change_planning` Stage의 ImpactAnalysis·ChangePlan·ValidationPlan은 같은 TaskSpec·ScopeRevision·ChangeSet fingerprint를 참조해야 한다.
 - Stage가 완료되면 result, EvidenceBundle과 Checkpoint reference가 있어야 한다.
 - Goal 완료 시 모든 required Stage와 성공 조건이 evidence로 연결돼야 한다.
+- MultiProjectGoal의 source effect Stage는 project-local이고 BundleStepGraph가 acyclic이어야 한다. required participant 하나라도 partial·rollback required·held·outcome unknown이면 Goal을 완료할 수 없다.
+- local merge, remote push·PR·check·merge와 release publish를 한 상태로 축약하지 않는다.
 - 취소·실패·차단 상태를 완료로 변환하려면 새 event와 근거가 필요하다.
 
 ## 계획 수정
@@ -364,9 +470,13 @@ StageResult는 한 Stage revision의 실제 실행과 수용 결과를 묶는다
 사용자는 실행 전 단계 내용과 순서를 바꿀 수 있다. 실행 중 새로운 사실이 발견되면 Star-Control은 다음처럼 처리한다.
 
 - 결과에 영향이 없는 세부 변경은 단계 안에서 처리하고 기록한다.
-- 같은 성격의 필수 작업은 단계 범위를 넓히고 이유를 기록한다.
+- 같은 성격의 필수 analysis·validation 확대는 새 ScopeRevision과 Stage revision으로 기록한다.
+- planned change scope 확대, exclude 변경과 완료 조건 변경은 사용자 결정이 있는 새 TaskSpec 또는 accepted ScopeRevision을 요구한다.
 - 모델, 권한, 비용, 완료 조건이 달라지면 새 단계로 나눈다.
 - 유료 동작이나 설정상 승인 대상이 생기면 중단하고 묻는다.
+- 예상 밖 영향, 새 risk path, stale snapshot과 required Check 부재는 기존 plan을 수정하지 않고 `replan_required`로 invalidation한다.
+
+사용자가 수정한 계획이 자동 영향 계산보다 우선한다. 자동 계산은 그 결정과 다른 영향·위험을 remaining risk로 보고할 수 있지만 user-selected scope와 Check를 조용히 되돌리지 않는다.
 
 ## 단계 완료
 

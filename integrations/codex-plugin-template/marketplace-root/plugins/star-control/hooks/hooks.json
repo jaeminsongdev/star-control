@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "star hook session-start",
+            "commandWindows": "star hook session-start",
+            "timeout": 10,
+            "statusMessage": "Loading the Star-Control workflow"
+          }
+        ]
+      }
+    ]
+  }
+}

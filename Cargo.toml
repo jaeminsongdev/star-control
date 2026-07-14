@@ -10,11 +10,14 @@ members = [
     "crates/infrastructure/star-state",
     "crates/infrastructure/star-evidence",
     "crates/adapters/star-ipc",
+    "crates/adapters/star-adapter-windows",
+    "crates/adapters/star-adapter-codex",
     "apps/star-mcp",
     "apps/star-cli",
     "apps/star-controller",
     "tools/matrix-check",
     "tools/schema-gen",
+    "tools/package-release",
 ]
 resolver = "3"
 

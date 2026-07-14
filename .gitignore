@@ -23,3 +23,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Preserved local output from an earlier schema-generator check invocation
+/--check/
+/manifest.json

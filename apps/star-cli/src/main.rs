@@ -3,6 +3,8 @@
 //! Parsing and rendering live here; package state, trust mutation and process
 //! lifecycle are always requested through authenticated Controller IPC.
 
+mod local_commands;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
@@ -34,6 +36,12 @@ star management retention plan [--json]\n\
 star management retention apply --approve <sha256> [--json]\n\
 star management rebuild plan [--json]\n\
 star management rebuild apply --approve <sha256> [--json]\n\
+star installation finalize --architecture x64|arm64 [--replace-existing] [--json]\n\
+star installation status [--json]\n\
+star integration install|repair [--codex <exe>] [--skip-register] [--json]\n\
+star integration status [--json]\n\
+star integration uninstall [--codex <exe>] [--json]\n\
+star hook session-start\n\
 star controller start [--background]\n\
 star controller autostart enable|disable|status";
 
@@ -613,6 +621,9 @@ async fn main() {
         println!("{HELP}");
         return;
     }
+    if let Some(exit) = local_commands::dispatch(&raw) {
+        std::process::exit(exit);
+    }
     let parsed = match parse(&raw) {
         Ok(parsed) => parsed,
         Err(error) => {
@@ -804,7 +815,7 @@ mod tests {
                 let _ = command;
                 let start = line.find('\x60')? + 1;
                 let end = start + line[start..].find('\x60')?;
-                Some(line[start..end].to_owned())
+                Some(line[start..end].replace("\\|", "|"))
             })
             .collect();
         assert_eq!(

@@ -1,0 +1,99 @@
+{
+  "$defs": {
+    "CodexIntegrationSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "record_path": {
+          "type": "string"
+        },
+        "registration_state": {
+          "$ref": "#/$defs/CodexRegistrationState"
+        }
+      },
+      "required": [
+        "record_path",
+        "registration_state"
+      ],
+      "type": "object"
+    },
+    "CodexRegistrationState": {
+      "enum": [
+        "registered",
+        "manual_action_required",
+        "removed",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "TargetArchitecture": {
+      "enum": [
+        "x64",
+        "arm64"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.installation-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "codex_integration": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CodexIntegrationSummary"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "install_root": {
+      "type": "string"
+    },
+    "installation_id": {
+      "type": "string"
+    },
+    "installed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "product_version": {
+      "type": "string"
+    },
+    "release_manifest_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "target_architecture": {
+      "$ref": "#/$defs/TargetArchitecture"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "installation_id",
+    "product_version",
+    "target_architecture",
+    "install_root",
+    "release_manifest_sha256",
+    "installed_at",
+    "updated_at"
+  ],
+  "title": "InstallationRecord",
+  "type": "object"
+}

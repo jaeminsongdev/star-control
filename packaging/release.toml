@@ -1,0 +1,25 @@
+format_version = 1
+version_source = "Cargo.toml:[workspace.package].version"
+primary_distribution = "inno_setup_current_user"
+portable_distribution = "development_and_recovery_only"
+
+[windows]
+default_install_directory = "%LOCALAPPDATA%\\Programs\\Star-Control"
+selectable_install_directory = true
+install_scope = "current_user"
+service = false
+architectures = ["x64", "arm64"]
+
+[windows.x64]
+rust_target = "x86_64-pc-windows-msvc"
+installer_name = "star-control-windows-x64-{version}-setup.exe"
+
+[windows.arm64]
+rust_target = "aarch64-pc-windows-msvc"
+installer_name = "star-control-windows-arm64-{version}-setup.exe"
+
+[supply_chain]
+local_signing = "unsigned_local"
+public_signing = "required_gate"
+sbom = "required_before_public_release"
+provenance = "required_before_public_release"

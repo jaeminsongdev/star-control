@@ -7526,13 +7526,15 @@ mod tests {
         assert!(durable.get("project_root_hash").is_some());
         let private = private_actor_view(&actor);
         assert_eq!(private["project_root"], root);
+        let selected_install_mcp =
+            std::path::Path::new(r"X:\selected-install\Star-Control\star-mcp.exe");
         assert!(installed_client_kind_matches(
             &IpcClientKind::Mcp,
-            std::path::Path::new(r"C:\Program Files\Star-Control\star-mcp.exe")
+            selected_install_mcp
         ));
         assert!(!installed_client_kind_matches(
             &IpcClientKind::Cli,
-            std::path::Path::new(r"C:\Program Files\Star-Control\star-mcp.exe")
+            selected_install_mcp
         ));
 
         let correlation = RequestId::new().to_string();

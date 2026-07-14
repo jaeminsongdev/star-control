@@ -19,11 +19,13 @@
 
 이를 확실하게 보장하려면 외부 EXE마다 새로운 MCP tool 이름을 노출하면 안 된다. Codex가 처음부터 알고 있는 **고정 generic MCP tool**만 두고, 실제 개발 도구 목록·Schema·실행법은 Controller의 live Registry에서 조회한다. 정확한 v1 field·기본값·state machine은 [MCP 구현 동결 계약](mcp-implementation-contract.md)과 [ToolPackageManifest Reference](tool-package-manifest-reference.md)가 소유한다.
 
-Codex에는 Gateway 하나만 한 번 등록한다.
+Codex에는 Gateway 하나만 한 번 등록한다. 아래 `command`는 고정 설치 경로가 아니라
+Installer가 사용자가 선택한 실제 설치 경로를 넣어 생성하는 값이다. 생성·등록·복구의
+정확한 소유권은 [Windows 설치와 Codex 연동 계약](windows-installation-and-codex-integration.md)이 소유한다.
 
 ```toml
 [mcp_servers.star_control]
-command = 'C:\Program Files\Star-Control\star-mcp.exe'
+command = '<설치 시 선택한 실제 경로>\star-mcp.exe'
 required = true
 startup_timeout_sec = 20
 tool_timeout_sec = 600
@@ -453,6 +455,99 @@ custom tool과 adapter EXE의 권장 protocol이다. stdin·stdout UTF-8 JSONL, 
 | redaction | MCP result·log·artifact 저장 전에 적용 |
 
 결과에는 tool ID, descriptor hash, Registry revision, 실제 executable file identity·hash·version, redaction한 args, cwd anchor, exit code, duration과 completeness를 함께 남긴다.
+
+## 4단계 external codemod 경계
+
+[안전한 Patch·Refactor·codemod 엔진](safe-patch-and-codemod.md)은 특정 언어 tool을 core dependency로 고정하지 않고 Registry action을 transformer adapter로 사용할 수 있다. 이때 Tool Registry는 process 실행만 담당하고 Recipe target resolution, PatchSet, 영향 분석, Gate와 완료 판단을 소유하지 않는다.
+
+허용 integration mode는 다음 둘뿐이다.
+
+| mode | Tool action 역할 | source effect 경계 |
+|---|---|---|
+| `structured_patch_producer` | typed input에서 Schema-valid candidate operation/data 생성 | live target write 없음. materialized input·artifact만 읽음 |
+| `isolated_workspace_mutator` | exact base의 preview worktree에서 codemod·formatter·generator 실행 | `local_write`는 isolated `stage_worktree`에만. live target path 전달 금지 |
+
+M4 automatic Recipe에 bind할 action은 다음을 모두 만족해야 한다.
+
+- current ToolRegistrySnapshot에서 trusted·available하고 exact descriptor hash가 Recipe execution binding과 일치
+- `argv_v1` typed binding 또는 `star_json_stdio_v1`만 사용하고 shell·script·PATH lookup을 사용하지 않음
+- input·output Schema와 exit/result semantics가 complete하며 text log parsing을 Patch content 정본으로 사용하지 않음
+- ProjectPathRef·ArtifactRef·typed parameter만 받고 target absolute path를 manifest string이나 free-form argument로 받지 않음
+- mutator는 `working_directory=stage_worktree`, `permission_actions`에 `local_write`와 모든 실제 effect를 선언
+- network·external write·account·paid·system change·secret access 없이 offline preview 가능
+- no automatic retry, bounded timeout·output·target·operation 수와 declared cancellation
+- tool output과 별도로 Controller가 isolated workspace의 full before/after manifest를 다시 수집할 수 있음
+
+`task_kinds`·tag에 codemod라고 적힌 사실만으로 위 eligibility를 만들지 않는다. ChangeRecipe가 exact ToolDescriptor ref와 typed input mapping·expected output·path scope를 고정하고 M4 conformance가 이를 검증해야 한다.
+
+success라도 output Schema 실패, extra final frame, output limit, undeclared file, scope 밖 path, actual diff 수집 partial 또는 executable identity drift가 있으면 RecipeExecution은 incomplete/failed이고 PatchSet을 만들지 않는다. timeout·cancel·crash 뒤 isolated diff가 남아도 useful patch로 승격하거나 external EXE를 자동 재시도하지 않는다.
+
+실행 evidence에는 RecipeExecution ref와 함께 Tool ID·descriptor hash·Registry revision, executable file identity·version·full hash, redacted typed input/argv, cwd anchor, environment fingerprint, start/termination/exit, stdout·stderr·result artifact hash와 actual preview ChangeSet을 남긴다. raw 개인 path와 source secret은 저장하지 않는다.
+
+## 11단계 Rust style Tool 경계
+
+[Rust 코드 스타일 자동 교정](../features/rust-code-style-auto-fix.md)은 위 M4 external mutator 계약을 네 개의 fixed Tool role로 소비한다. 새 protocol, shell runner 또는 네 번째 runtime executable을 만들지 않는다.
+
+| stable Tool ID | process 역할 | source effect |
+|---|---|---|
+| `star.rust.style.rustfmt.check` | stable `cargo fmt` check | 없음 |
+| `star.rust.style.rustfmt.rewrite` | stable `cargo fmt` rewrite | isolated preview의 `.rs` candidate만 |
+| `star.rust.style.clippy.check` | coverage cell별 Clippy JSON Diagnostic | source 없음. Cargo build output은 owned target dir |
+| `star.rust.style.clippy.fix` | project lint policy 아래 `cargo clippy --fix` 후 exact allowlist/hunk 검증 | isolated preview의 허용 `.rs` candidate만 |
+
+### probe와 toolchain binding
+
+`star-project`가 project toolchain/config 후보를 발견하고 Registry probe가 실행 identity를 확인한다. probe는 typed `--version`/verbose identity query와 file identity collector를 사용한다. final absolute executable path는 process memory에서만 resolve하고, persisted result에는 cargo, rustc, rustfmt, clippy-driver 각각의 version, opaque file identity, redacted locator label, byte hash/signature·trust, resolved toolchain source와 component/target availability를 반환한다. PATH 첫 executable이나 moving `stable` alias만으로 automatic binding을 만들지 않는다.
+
+auto apply binding은 project-pinned stable toolchain이어야 한다. nightly/beta, unresolved override, missing component/target와 unstable rustfmt option은 unavailable/unsupported다. Registry는 `rustup component add`, `rustup target add`, toolchain install/update, package manager와 network download를 자동 실행하지 않는다. inspect/check는 unpinned identity를 limitation과 함께 실행할 수 있지만 그 result로 automatic permit을 만들 수 없다.
+
+tool executable, ToolDescriptor, parser, config, style edition 또는 target가 바뀌면 lease와 RustToolchainBinding fingerprint가 달라져 기존 TaskInvocation·PatchSet·Gate는 stale이다. 같은 path의 byte 교체도 일반 executable identity lease 규칙을 따른다.
+
+### typed request와 argv
+
+Rust adapter input은 raw string array가 아니라 다음 normalized field만 받는다.
+
+- exact Project/Checkout/worktree ref와 `working_directory=stage_worktree`
+- operation `fmt_check|fmt_rewrite|clippy_check|clippy_fix`
+- package ID set 또는 explicit workspace selector
+- target kind/target name selector와 required-feature resolution
+- exact feature set, default-feature boolean과 target triple
+- locked/offline requirement, source 밖 owned `CARGO_TARGET_DIR`
+- RustToolchainBinding·RustStylePolicySnapshot·coverage cell fingerprint
+- fix step의 selected suggestion manifest와 allowed lint ID set
+
+host adapter가 위 field를 fixed cargo subcommand/flag ordering으로 변환한다. Project/Catalog가 shell, command string, response file, arbitrary environment와 raw trailing rustc/Clippy flag를 주입하지 못한다. `--all-features`는 built-in default가 아니며 Catalog가 한 coverage cell의 exact feature list를 제공한다. `--all-targets`도 selected package/feature/triple 안의 target coverage일 뿐 cross-target complete 표시는 아니다.
+
+rustfmt operation은 direct rustfmt보다 cargo fmt를 우선하고 selected package/workspace와 `--check` 여부만 typed policy로 바꾼다. stable config와 resolved style edition은 Git config/rustfmt resolution 결과를 사용하며 adapter가 option 값을 복제하지 않는다.
+
+Clippy operation은 Cargo/rustc JSON stream을 stdout/stderr와 분리해 수집하고 project Cargo/source lint level을 유지한다. adapter는 `clippy::pedantic|restriction|nursery` group이나 suppression attribute를 임의 활성화·추가하지 않는다. fix allowlist는 process가 어떤 lint를 발견할지 숨기는 filter가 아니라, 사전 수집한 exact `MachineApplicable` suggestion 중 어떤 actual hunk만 Patch 후보가 될 수 있는지 제한하는 postcondition이다. 허용되지 않은 actual hunk 하나라도 있으면 전체 cell output을 거부한다.
+
+`cargo clippy --fix --allow-dirty`가 첫 rustfmt step 때문에 필요하면 다음 조건을 모두 확인한 isolated preview에서만 typed adapter가 추가할 수 있다.
+
+- staged byte 0
+- source manifest의 dirty operation 전체가 바로 전 `rustfmt_first` step artifact와 byte-exact 일치
+- live target path가 argv/env/cwd/write scope에 없음
+- `--allow-staged`, `--broken-code`, `--allow-no-vcs` 사용 안 함
+
+조건이 없으면 fix step을 실행하지 않는다. Cargo flag가 fix 동작을 넓힌다는 이유로 inactive feature, 다른 target/cfg 또는 unobserved code를 검사했다고 주장하지 않는다.
+
+### trusted project와 child process
+
+Clippy check/fix는 compilation 중 project build script와 procedural macro code를 실행할 수 있으므로 `text_read`가 아니라 trusted-project `process_run`이다. project trust, exact source/worktree, child process tree, time/resource limit와 network `deny`를 PermissionPlan에 고정한다. `CARGO_TARGET_DIR`은 source root 밖 Star-Control-owned per-run path이고 Cargo home/cache는 read-only/offline policy를 따른다.
+
+Job Object·token·environment 제한은 process-tree와 resource를 통제하지만 임의 project code에 대한 완전한 filesystem sandbox라고 주장하지 않는다. 실행 전·후 source root complete manifest로 build script/proc macro의 source/config/lockfile/generated/vendor write를 감지한다. target dir 이외 undeclared write, network 요구, child escape 또는 outcome unknown이면 candidate를 만들지 않는다.
+
+### output normalization과 evidence
+
+normalizer version은 fixed adapter fingerprint에 포함한다. raw JSON/JSONL, stdout/stderr, exit code, process-tree termination과 output completeness를 artifact로 보존하고 다음을 구조화한다.
+
+- cargo package/target/compiler-artifact/build-script association
+- rustc/Clippy Diagnostic code·level·message·span·expansion origin
+- suggestion replacement·applicability(`MachineApplicable|MaybeIncorrect|HasPlaceholders|Unspecified`)
+- coverage cell 실행/건너뜀/unavailable reason
+- process 전·후 filesystem manifest와 step diff
+
+unknown/truncated/mixed schema는 record를 버리지 않고 parser limitation을 남기며 coverage를 `unverified`로 낮춘다. exit 0만으로 success/AUTO_PASS를 만들지 않고 Diagnostic policy, complete coverage, actual diff, side-effect와 selected Check를 M3가 판정한다. fixed `cargo fmt <typed-scope> -- --check`의 text output도 exit code와 complete source diff를 함께 보존해 path/message parsing 하나에 의존하지 않는다.
 
 ## Working directory·경로·임시 파일
 

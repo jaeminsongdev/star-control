@@ -74,6 +74,12 @@ Star Sentinel을 별도 제품과 별도 이름으로 유지하지 않는다.
 
 사용자가 직접 실행할 필요가 있는 기능은 star check와 star review 명령으로 제공한다.
 
+## CLI-only 본체와 Codex 선택 연동
+
+Star-Control의 개발 관리·검증·release·평가 본체는 `star` CLI와 Controller application service만으로 실행할 수 있어야 한다. Project Catalog·Code Index, 영향 분석, Patch/Gate, ChangeBundle, release readiness와 Rule·Profile 평가는 Codex·AI 호출을 선행조건으로 삼지 않는다. 결정적 도구로 확정할 수 없는 의미 판단은 CLI-only에서 성공으로 바꾸지 않고 `HUMAN_REVIEW`로 남긴다.
+
+Codex Plugin·MCP·App Server는 자연어 목표, Codex 작업 실행·병렬화와 선택적 독립 검토를 같은 application command에 연결하는 소비자다. 여기서 **Codex 전용**은 지원하는 AI 연동이 Codex 하나라는 뜻이지, 모든 `star` 명령이 Codex를 호출한다는 뜻이 아니다. CLI-only core와 Codex 연동 효용은 [10단계 정본](../contracts/ci-release-evaluation-and-product-completion.md#cli-only와-codex-연동-효용-분리)에서 별도 cohort로 측정한다.
+
 ## 최종 범위에 포함
 
 - Codex 앱 자연어 목표 입력
@@ -97,6 +103,10 @@ Star Sentinel을 별도 제품과 별도 이름으로 유지하지 않는다.
 - 비교 시험과 배정 규칙 보정
 - 공개 설치와 업데이트
 - 배포 준비 확인
+- local quick·target·full·release 검사 계층과 build-once artifact 승격
+- `ready`·`approved`·`published`를 분리한 공개 release·deploy 상태
+- install·safe_default 첫 실행·update·rollback·uninstall과 사용자 자료 보존
+- Rule·Check·Profile·Recipe의 평가·trial·deprecation·migration
 
 ## 최종 범위에서 제외
 
@@ -112,6 +122,9 @@ Star Sentinel을 별도 제품과 별도 이름으로 유지하지 않는다.
 | 여러 AI 사이 장애 대체 | Codex 전용 원칙과 충돌 |
 | 브라우저 Star-Control UI | Codex 앱과 터미널로 충분함 |
 | 자체 예약 실행 | Codex 기본 예약 기능과 중복 |
+| 자체 CI runner·build farm·artifact registry | 기존 CI·build·registry를 adapter로 연결하고 상태·증거·승격만 관리함 |
+| 자체 installer·signing·PKI·deploy service | 외부 전문 도구의 typed invocation·receipt·검증만 관리함 |
+| compiler·scanner·debugger·profiler·package manager 재구현 | 프로젝트 전문 도구를 등록된 adapter로 호출함 |
 | 범용 운영 플랫폼 | 개인 개발 제어와 검사 범위를 벗어남 |
 
 ## 보류하지 않는 원칙
