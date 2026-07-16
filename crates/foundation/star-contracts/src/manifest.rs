@@ -830,19 +830,17 @@ pub fn validate_manifest_v1(
             if matches!(binding.kind.as_str(), "stdin_text" | "stdin_json") {
                 stdin_bindings += 1;
             }
-            if let Some(input) = &binding.input {
-                if (!schema_backed && !parameter_names.contains_key(input.as_str()))
-                    || (schema_backed && !is_parameter_name(input))
-                {
-                    return Err(ManifestError::Binding);
-                }
+            if let Some(input) = &binding.input
+                && ((!schema_backed && !parameter_names.contains_key(input.as_str()))
+                    || (schema_backed && !is_parameter_name(input)))
+            {
+                return Err(ManifestError::Binding);
             }
-            if let Some(input) = &binding.when_input {
-                if (!schema_backed && !parameter_names.contains_key(input.as_str()))
-                    || (schema_backed && !is_parameter_name(input))
-                {
-                    return Err(ManifestError::Binding);
-                }
+            if let Some(input) = &binding.when_input
+                && ((!schema_backed && !parameter_names.contains_key(input.as_str()))
+                    || (schema_backed && !is_parameter_name(input)))
+            {
+                return Err(ManifestError::Binding);
             }
             if binding.inputs.iter().any(|input| {
                 (!schema_backed && !parameter_names.contains_key(input.as_str()))
@@ -1015,6 +1013,10 @@ const CORE_CONTROLLER_COMMANDS: &[&str] = &[
     "merge.status",
     "handoff.get",
     "doctor.run",
+    "project.list",
+    "project.status",
+    "validation.plan",
+    "validation.run",
 ];
 
 fn is_tag(value: &str) -> bool {
@@ -1198,11 +1200,11 @@ fn validate_executable(
         {
             return Err(ManifestError::Environment);
         }
-        if let Some(name) = &state.environment_name {
-            if is_reserved_environment(name) || !environment_names.insert(name.to_ascii_uppercase())
-            {
-                return Err(ManifestError::Environment);
-            }
+        if let Some(name) = &state.environment_name
+            && (is_reserved_environment(name)
+                || !environment_names.insert(name.to_ascii_uppercase()))
+        {
+            return Err(ManifestError::Environment);
         }
     }
     Ok(())
@@ -1248,8 +1250,8 @@ fn validate_action_details(action: &ActionDescriptor) -> Result<(), ManifestErro
         return Err(ManifestError::Binding);
     }
 
-    if let Some(concurrency) = &action.concurrency {
-        if !(1..=64).contains(&concurrency.max_parallel)
+    if let Some(concurrency) = &action.concurrency
+        && (!(1..=64).contains(&concurrency.max_parallel)
             || !matches!(
                 concurrency.exclusive_scope.as_str(),
                 "none" | "project" | "worktree" | "custom"
@@ -1257,10 +1259,9 @@ fn validate_action_details(action: &ActionDescriptor) -> Result<(), ManifestErro
             || concurrency.queue_timeout_ms > 86_400_000
             || concurrency.lock_key_inputs.len() > 16
             || has_duplicate(concurrency.lock_key_inputs.iter().cloned())
-            || (concurrency.exclusive_scope == "custom") == concurrency.lock_key_inputs.is_empty()
-        {
-            return Err(ManifestError::Binding);
-        }
+            || (concurrency.exclusive_scope == "custom") == concurrency.lock_key_inputs.is_empty())
+    {
+        return Err(ManifestError::Binding);
     }
     if action
         .cancel
@@ -1766,8 +1767,8 @@ fn validate_action_details_legacy_unused(action: &ActionDescriptor) -> Result<()
             return Err(ManifestError::Binding);
         }
     }
-    if let Some(output) = &action.output {
-        if !matches!(output.format.as_str(), "text" | "json" | "jsonl" | "binary")
+    if let Some(output) = &action.output
+        && (!matches!(output.format.as_str(), "text" | "json" | "jsonl" | "binary")
             || !matches!(
                 output.encoding.as_str(),
                 "utf8" | "oem" | "utf16le" | "binary"
@@ -1780,22 +1781,21 @@ fn validate_action_details_legacy_unused(action: &ActionDescriptor) -> Result<()
             || output.stdout_role != "data"
             || output.stderr_role != "log"
             || (output.format == "binary" && output.encoding != "binary")
-            || (output.format != "binary" && output.encoding == "binary")
-        {
-            return Err(ManifestError::Binding);
-        }
+            || (output.format != "binary" && output.encoding == "binary"))
+    {
+        return Err(ManifestError::Binding);
     }
-    if let Some(concurrency) = &action.concurrency {
-        if !(1..=64).contains(&concurrency.max_parallel)
+    if let Some(concurrency) = &action.concurrency
+        && (!(1..=64).contains(&concurrency.max_parallel)
             || !matches!(
                 concurrency.exclusive_scope.as_str(),
                 "none" | "project" | "worktree" | "custom"
             )
             || concurrency.queue_timeout_ms > 86_400_000
-            || ((concurrency.exclusive_scope == "custom") == concurrency.lock_key_inputs.is_empty())
-        {
-            return Err(ManifestError::Binding);
-        }
+            || ((concurrency.exclusive_scope == "custom")
+                == concurrency.lock_key_inputs.is_empty()))
+    {
+        return Err(ManifestError::Binding);
     }
     if action
         .cancel
@@ -1864,8 +1864,8 @@ fn validate_parameter_legacy_unused(
     if (parameter.parameter_type == "enum") == parameter.enum_values.is_empty() {
         return Err(ManifestError::Binding);
     }
-    if let Some(pattern) = &parameter.pattern {
-        if pattern.len() > 256
+    if let Some(pattern) = &parameter.pattern
+        && (pattern.len() > 256
             || !matches!(
                 parameter.parameter_type.as_str(),
                 "string" | "decimal_string"
@@ -1873,10 +1873,9 @@ fn validate_parameter_legacy_unused(
             || regex::RegexBuilder::new(pattern)
                 .size_limit(1024 * 1024)
                 .build()
-                .is_err()
-        {
-            return Err(ManifestError::Binding);
-        }
+                .is_err())
+    {
+        return Err(ManifestError::Binding);
     }
     Ok(())
 }

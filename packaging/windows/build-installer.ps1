@@ -13,6 +13,56 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+function Invoke-PackagingProcessCapture {
+    param(
+        [Parameter(Mandatory)][string]$Executable,
+        [string[]]$Arguments = @(),
+        [Parameter(Mandatory)][string]$WorkingDirectory,
+        [switch]$EchoOutput
+    )
+
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Executable
+    $startInfo.WorkingDirectory = $WorkingDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
+    $startInfo.StandardErrorEncoding = [Text.UTF8Encoding]::new($false)
+    foreach ($argument in $Arguments) {
+        [void]$startInfo.ArgumentList.Add([string]$argument)
+    }
+
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        [void]$process.Start()
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        if ($EchoOutput) {
+            if (-not [string]::IsNullOrEmpty($stdout)) {
+                [Console]::Out.Write($stdout)
+            }
+            if (-not [string]::IsNullOrEmpty($stderr)) {
+                [Console]::Error.Write($stderr)
+            }
+        }
+        return [pscustomobject]@{
+            ExitCode = $process.ExitCode
+            Stdout = $stdout
+            Stderr = $stderr
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $cargoToml = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'Cargo.toml')
 $versionMatch = [regex]::Match($cargoToml, '(?ms)^\[workspace\.package\].*?^version\s*=\s*"([^"]+)"')
@@ -22,11 +72,16 @@ if (-not $versionMatch.Success) {
 $version = $versionMatch.Groups[1].Value
 
 if ([string]::IsNullOrWhiteSpace($SourceRevision)) {
-    $commit = (& git -C $repoRoot rev-parse HEAD 2>$null)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
+    $revisionResult = Invoke-PackagingProcessCapture -Executable 'git' -Arguments @('-C', $repoRoot, 'rev-parse', 'HEAD') -WorkingDirectory $repoRoot
+    $commit = $revisionResult.Stdout.Trim()
+    if ($revisionResult.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
         throw 'SourceRevision을 지정하거나 Git commit을 확인할 수 있어야 합니다.'
     }
-    $dirty = & git -C $repoRoot status --porcelain --untracked-files=no
+    $statusResult = Invoke-PackagingProcessCapture -Executable 'git' -Arguments @('-C', $repoRoot, 'status', '--porcelain', '--untracked-files=no') -WorkingDirectory $repoRoot
+    if ($statusResult.ExitCode -ne 0) {
+        throw 'Git worktree 상태를 확인할 수 없습니다.'
+    }
+    $dirty = $statusResult.Stdout.Trim()
     $SourceRevision = if ($dirty) { "dirty:$commit" } else { $commit }
 }
 
@@ -56,12 +111,12 @@ if (Test-Path -LiteralPath $stageDir) {
 
 Push-Location $repoRoot
 try {
-    & cargo build --locked --release --target $target -p star-cli --bin star
-    if ($LASTEXITCODE -ne 0) { throw 'star.exe build failed' }
-    & cargo build --locked --release --target $target -p star-controller --bin star-controller
-    if ($LASTEXITCODE -ne 0) { throw 'star-controller.exe build failed' }
-    & cargo build --locked --release --target $target -p star-mcp --bin star-mcp
-    if ($LASTEXITCODE -ne 0) { throw 'star-mcp.exe build failed' }
+    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-cli', '--bin', 'star') -WorkingDirectory $repoRoot -EchoOutput
+    if ($result.ExitCode -ne 0) { throw 'star.exe build failed' }
+    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-controller', '--bin', 'star-controller') -WorkingDirectory $repoRoot -EchoOutput
+    if ($result.ExitCode -ne 0) { throw 'star-controller.exe build failed' }
+    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-mcp', '--bin', 'star-mcp') -WorkingDirectory $repoRoot -EchoOutput
+    if ($result.ExitCode -ne 0) { throw 'star-mcp.exe build failed' }
 
     $stageArgs = @(
         'run', '--locked', '-p', 'star-package-release', '--', 'stage',
@@ -70,8 +125,8 @@ try {
         '--output', $stageDir,
         '--source-revision', $SourceRevision
     )
-    & cargo @stageArgs
-    if ($LASTEXITCODE -ne 0) { throw 'release stage generation failed' }
+    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments $stageArgs -WorkingDirectory $repoRoot -EchoOutput
+    if ($result.ExitCode -ne 0) { throw 'release stage generation failed' }
 
     if ([string]::IsNullOrWhiteSpace($IsccPath)) {
         $candidates = @(
@@ -94,8 +149,8 @@ try {
         "/DOutputDir=$outputDir",
         $iss
     )
-    & $IsccPath @isccArgs
-    if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
+    $result = Invoke-PackagingProcessCapture -Executable $IsccPath -Arguments $isccArgs -WorkingDirectory $repoRoot -EchoOutput
+    if ($result.ExitCode -ne 0) { throw 'Inno Setup compilation failed' }
 
     $installer = Join-Path $outputDir "star-control-windows-$Architecture-$version-setup.exe"
     if (-not (Test-Path -LiteralPath $installer)) {

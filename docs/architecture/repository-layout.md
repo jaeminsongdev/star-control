@@ -6,6 +6,8 @@
 
 문서 폴더 migration과 첫 MCP 수직 Slice의 `star-contracts`, `star-ipc`, `star-controller`, `star-mcp`, `star-cli`·검증 도구는 구현됐다. P0에서는 `star-domain`, `star-ports`, `star-project`, `star-validation`, `star-execution`, `star-application`, `star-state`, `star-evidence`의 최소 Package와 private persistence adapter를 만들었다. M1 Project Catalog·Code Index, M2 변경 계획·affected 선택, M3 공통 검증·품질 Gate, M4 안전한 Patch·Refactor·codemod 엔진, M5 관리형 Symbol Registry, M6 API·계약·문서·설정·개발 환경 관리, M7 실패 재현·보안·의존성 유지보수, M8 migration·performance·language/platform, 9단계 CrossRepo ChangeBundle, 10단계 CI·Release·평가·최종 제품 완성과 M11 Rust 코드 스타일 자동 교정의 상세 module·target 계약은 현재 **설계만 확정하는 범위**이며 제품 code·Schema·DB migration·validator·runner·rewrite·worktree·merge queue·ChangeBundle·remote writer·release/evaluation/Rust style engine·Registry/contract/release manifest·generator·codemod·doctor·clean-room runner·debugger·scanner·dependency updater·network client·Corpus는 아직 구현된 것으로 보지 않는다. generated 관리 Schema·fixture와 실제 완료 판정은 [최종 구현 로드맵](../roadmap/final-implementation.md)·`PLANS.md`를 따른다. 아래 큰 module tree 중 아직 구현하지 않은 module을 현재 존재하는 것으로 읽지 않는다.
 
+P-0031의 예외 범위는 `.star-control/project.toml`, `star-contracts::evidence::ValidationPlan` v1, `star-validation::planning` pure policy와 Controller `validation_planning` read-only adapter뿐이다. 이는 아래 full M2/M3 module tree, runner·cache store·evidence writer가 구현됐다는 뜻이 아니다.
+
 [7단계 의미 정본](../contracts/failure-security-and-dependency-maintenance.md)은 이 문서의 M7 module·Schema·Catalog·evidence 위치가 구현해야 할 failure/security/dependency/Radar 계약을 소유한다.
 
 [9단계 의미 정본](../contracts/cross-repo-change-bundle.md)은 `MultiProjectGoal`, project-local worktree/merge, 비원자적 participant coordination, remote snapshot/approval과 10단계 release handoff 계약을 소유한다.
@@ -659,8 +661,8 @@ integrations/
             ├─ .codex-plugin/
             │  └─ plugin.json       # 필수 Plugin manifest
             ├─ skills/
-            │  └─ star-control-workflow/
-            │     └─ SKILL.md        # 개발 작업을 Star-Control로 시작하는 절차
+            │  └─ star-control-operations/
+            │     └─ SKILL.md        # ready action 실행과 native fallback 절차
             ├─ hooks/
             │  └─ hooks.json         # SessionStart와 star hook 명령 연결
             └─ .mcp.json             # 설치 때 실제 star-mcp 절대 경로로 렌더링

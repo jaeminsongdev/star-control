@@ -64,6 +64,13 @@ pub enum OutputEncoding {
     Binary,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ChildEnvironmentMode {
+    Restricted,
+    InheritTrustedInternal,
+    InheritTrustedPowerShell,
+}
+
 #[derive(Clone, Debug)]
 pub struct DirectExeSpec {
     pub executable: PathBuf,
@@ -775,6 +782,16 @@ fn push_arg(argv: &mut Vec<OsString>, value: &str) -> Result<(), RuntimeError> {
 
 impl DirectExeSpec {
     pub fn validate(&self) -> Result<(), RuntimeError> {
+        self.validate_for_environment(ChildEnvironmentMode::Restricted)
+    }
+
+    fn validate_for_environment(
+        &self,
+        environment_mode: ChildEnvironmentMode,
+    ) -> Result<(), RuntimeError> {
+        let executable_name = self.executable.file_name().and_then(|name| name.to_str());
+        let trusted_powershell = environment_mode == ChildEnvironmentMode::InheritTrustedPowerShell
+            && executable_name.is_some_and(|name| name.eq_ignore_ascii_case("pwsh.exe"));
         if !self.executable.is_absolute()
             || !self.executable.is_file()
             || !self
@@ -782,11 +799,9 @@ impl DirectExeSpec {
                 .extension()
                 .and_then(|value| value.to_str())
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
-            || self
-                .executable
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_none_or(star_contracts::manifest::is_forbidden_executable_name)
+            || executable_name.is_none_or(|name| {
+                star_contracts::manifest::is_forbidden_executable_name(name) && !trusted_powershell
+            })
             || !self.working_directory.is_dir()
             || self.max_stdout_bytes == 0
             || self.max_stderr_bytes == 0
@@ -800,6 +815,58 @@ impl DirectExeSpec {
 
 pub async fn execute_direct_exe(spec: &DirectExeSpec) -> Result<DirectExeOutcome, RuntimeError> {
     execute_direct_exe_cancellable(spec, None).await
+}
+
+/// Runs a Controller-owned project command with the authenticated user's
+/// environment while retaining the same hidden-window, Job Object, timeout,
+/// output-limit, and cancellation guarantees as external tool execution.
+///
+/// This is intentionally separate from package process actions: untrusted
+/// manifests cannot request inherited `PATH` or other ambient variables.
+pub async fn execute_trusted_internal_exe_cancellable(
+    spec: &DirectExeSpec,
+    cancellation: Option<RuntimeCancellation>,
+) -> Result<DirectExeOutcome, RuntimeError> {
+    if !spec.environment.is_empty() || spec.appcontainer_profile.is_some() {
+        return Err(RuntimeError::ProtocolInvalid);
+    }
+    execute_direct_exe_with_cancel_plan(
+        spec,
+        cancellation,
+        None,
+        None,
+        None,
+        ChildEnvironmentMode::InheritTrustedInternal,
+    )
+    .await
+}
+
+/// Runs the Controller-owned PowerShell 7 validation host. `pwsh.exe` remains
+/// forbidden for package actions and for every other direct-EXE path; this
+/// narrow entrypoint exists only for tracked project validation scripts.
+pub async fn execute_trusted_internal_powershell_cancellable(
+    spec: &DirectExeSpec,
+    cancellation: Option<RuntimeCancellation>,
+) -> Result<DirectExeOutcome, RuntimeError> {
+    if !spec.environment.is_empty()
+        || spec.appcontainer_profile.is_some()
+        || spec
+            .executable
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_none_or(|name| !name.eq_ignore_ascii_case("pwsh.exe"))
+    {
+        return Err(RuntimeError::ExecutableInvalid);
+    }
+    execute_direct_exe_with_cancel_plan(
+        spec,
+        cancellation,
+        None,
+        None,
+        None,
+        ChildEnvironmentMode::InheritTrustedPowerShell,
+    )
+    .await
 }
 
 #[cfg(windows)]
@@ -816,7 +883,15 @@ pub async fn execute_direct_exe_cancellable(
     spec: &DirectExeSpec,
     cancellation: Option<RuntimeCancellation>,
 ) -> Result<DirectExeOutcome, RuntimeError> {
-    execute_direct_exe_with_cancel_plan(spec, cancellation, None, None, None).await
+    execute_direct_exe_with_cancel_plan(
+        spec,
+        cancellation,
+        None,
+        None,
+        None,
+        ChildEnvironmentMode::Restricted,
+    )
+    .await
 }
 
 pub async fn execute_direct_exe_cancellable_with_grace(
@@ -838,6 +913,7 @@ pub async fn execute_direct_exe_cancellable_with_grace(
         }),
         process_observer,
         process_end_observer,
+        ChildEnvironmentMode::Restricted,
     )
     .await
 }
@@ -848,6 +924,7 @@ async fn execute_direct_exe_with_cancel_plan(
     cancel_plan: Option<StdinCancelPlan>,
     process_observer: Option<ProcessStartObserver>,
     process_end_observer: Option<ProcessEndObserver>,
+    environment_mode: ChildEnvironmentMode,
 ) -> Result<DirectExeOutcome, RuntimeError> {
     #[cfg(windows)]
     {
@@ -857,6 +934,7 @@ async fn execute_direct_exe_with_cancel_plan(
             cancel_plan,
             process_observer,
             process_end_observer,
+            environment_mode,
         )
         .await
     }
@@ -866,20 +944,24 @@ async fn execute_direct_exe_with_cancel_plan(
         let _ = cancellation;
         let _ = process_observer;
         let _ = process_end_observer;
-        execute_direct_exe_portable(spec).await
+        execute_direct_exe_portable(spec, environment_mode).await
     }
 }
 
 #[cfg(not(windows))]
 async fn execute_direct_exe_portable(
     spec: &DirectExeSpec,
+    environment_mode: ChildEnvironmentMode,
 ) -> Result<DirectExeOutcome, RuntimeError> {
-    spec.validate()?;
+    spec.validate_for_environment(environment_mode)?;
     let mut command = Command::new(&spec.executable);
     command
         .args(&spec.argv)
-        .current_dir(&spec.working_directory)
-        .env_clear()
+        .current_dir(&spec.working_directory);
+    if environment_mode == ChildEnvironmentMode::Restricted {
+        command.env_clear();
+    }
+    command
         .envs(spec.environment.iter().map(|(key, value)| (key, value)))
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -1229,6 +1311,7 @@ pub async fn execute_star_json_stdio_cancellable_with_cancel_mode(
         }),
         process_observer,
         process_end_observer,
+        ChildEnvironmentMode::Restricted,
     )
     .await?;
     if live_progress_invalid.load(Ordering::Acquire) {
@@ -1354,6 +1437,7 @@ pub async fn execute_star_json_probe(
         }),
         None,
         None,
+        ChildEnvironmentMode::Restricted,
     )
     .await?;
     if outcome.exit_code != Some(0) {

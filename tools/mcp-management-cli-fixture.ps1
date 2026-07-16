@@ -86,6 +86,8 @@ foreach ($name in @('star.exe', 'star-mcp.exe', 'star-controller.exe', 'star-fak
 }
 Copy-Item -LiteralPath (Join-Path $repo 'catalog\tool-packages\star-control-core.toml') `
     -Destination (Join-Path $install 'catalog\tool-packages\star-control-core.toml')
+Copy-Item -LiteralPath (Join-Path $repo 'catalog\tool-packages\schemas') `
+    -Destination (Join-Path $install 'catalog\tool-packages\schemas') -Recurse
 
 $null = & $codexFixture -Phase prepare -RunRoot $run
 $null = & $codexFixture -Phase add -RunRoot $run

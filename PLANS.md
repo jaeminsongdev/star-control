@@ -7,7 +7,7 @@
 ## 현재 최종 설계 상태
 
 - 0~10단계 전용 정본, 기능 요약, 계약·아키텍처·설치 문서, roadmap와 ADR이 서로 연결됐다. 선행 단계 누락은 없으며 상세 판정은 [10단계 gap matrix](docs/contracts/ci-release-evaluation-and-product-completion.md#09단계-선행-정본-gap-matrix)에 있다.
-- 구현된 제품 범위는 MCP 기반 수직 Slice, P0 공통 개발 관리 첫 수직 Slice와 P-0026 Windows 설치 transport다. M1~M10 본체의 type·Schema·migration·engine·CLI·Corpus·release/provider adapter는 구현 전이다.
+- 구현된 제품 범위는 MCP 기반 수직 Slice, P0 공통 개발 관리 첫 수직 Slice, P-0026 Windows 설치 transport, P-0030 추적 allowlist, P-0031 tracked-path ValidationPlan과 P-0035 native validator 실행·evidence 조회 precursor다. M1 stable Checkout·persisted Catalog/Index와 full M2~M10 본체의 type·Schema·migration·engine·CLI·Corpus·release/provider adapter는 구현 전이다.
 - 10단계는 local_quick·target·full·release, build-once artifact 승격, ready/approved/published 분리, Windows x64·ARM64 설치 수명주기와 EvaluationRun v2·Catalog lifecycle을 설계했다.
 - 이번 P-0025는 M11 Rust 코드 스타일 자동 교정 Profile의 문서 설계 전용이다. build, test, package, installer, signing, publish, deploy, release 생성, 원격 계정 변경과 제품/generated 파일 변경을 수행하지 않는다.
 - 이번 P-0026는 사용자가 별도로 승인한 Windows 설치·Codex Plugin 연동 수직 Slice다. 선택형 current-user 설치 경로, 설치 기록, Inno Setup 패키지, 로컬 Marketplace와 MCP/Hook 렌더링, 설치·복구·제거 검증까지만 구현하며 원격 공개·유료 서명은 수행하지 않는다.
@@ -17,9 +17,9 @@
 | 단계 | 정본 | 현재 상태 | 다음 제품 Gate |
 |---:|---|---|---|
 | 0 | [공통 개발 관리·로컬 관리 DB](docs/contracts/development-management.md) | P0 첫 수직 Slice 구현, 전체 lifecycle 미완 | Project v1→v2 migration과 repository compatibility |
-| 1 | [Project Catalog·Code Index](docs/contracts/project-catalog-and-code-index.md) | 설계 확정·구현 전 | current Project/Checkout graph·freshness·query |
-| 2 | [변경 계획·영향 분석](docs/contracts/change-planning-and-impact.md) | 설계 확정·구현 전 | TaskSpec→ready ValidationPlan pure engine |
-| 3 | [공통 검증·품질 Gate](docs/features/common-validation-gate.md) | 설계 확정·구현 전 | exact subject/evidence binding과 validator guard |
+| 1 | [Project Catalog·Code Index](docs/contracts/project-catalog-and-code-index.md) | 추적 allowlist·exact-root status precursor 구현, M1 본체 구현 전 | current Project/Checkout graph·freshness·query |
+| 2 | [변경 계획·영향 분석](docs/contracts/change-planning-and-impact.md) | tracked-path ValidationPlan precursor 구현, full M2 구현 전 | TaskSpec→ready ValidationPlan full engine |
+| 3 | [공통 검증·품질 Gate](docs/features/common-validation-gate.md) | native validator 실행·evidence 조회 precursor 구현, M3 본체 구현 전 | exact subject/evidence binding과 validator guard |
 | 4 | [안전한 Patch·Refactor·codemod](docs/contracts/safe-patch-and-codemod.md) | 설계 확정·구현 전 | immutable preview·single-Project apply·recovery |
 | 5 | [Managed Registry](docs/contracts/managed-symbol-registry.md) | 설계 확정·구현 전 | Git source Registry·consumer compatibility |
 | 6 | [계약·문서·설정·환경](docs/contracts/contract-compatibility-and-environment.md) | 설계 확정·구현 전 | comparator·trace·doctor·clean-room readiness |
@@ -36,7 +36,7 @@
 - canonical source·manifest·Catalog·policy가 정본이고 management DB·Project Catalog·Code Index·Finding projection은 derived state다.
 - Controller application만 persisted current projection의 writer다. CLI·MCP·Codex·CI·installer·provider adapter는 직접 DB·Gate·release status를 쓰지 않는다.
 - `legacy/`와 사용자 변경을 보존한다. 과거 Schema 생성 명령이 만든 로컬 `--check/`와 루트 `manifest.json`은 삭제하지 않되 Git 정본·commit 대상에서 제외하며, Schema 정본은 `specs/schemas/`만 사용한다.
-- package/dependency 설치, system setting, 파일 삭제·대량 이동, commit/push/PR, publish/deploy/withdrawal/rollback과 외부 account effect는 action별 명시적 승인 없이는 실행하지 않는다.
+- package/dependency 설치, system setting·PATH 변경, 파일 삭제·대량 이동은 action별 명시적 승인 없이는 실행하지 않는다. 검증된 명시 범위의 local commit은 별도 승인 없이 가능하되 사용자 변경을 숨기거나 섞지 않는다. push/PR, publish/deploy/withdrawal/rollback과 외부 account effect는 별도 승인을 받는다.
 - release 계층은 같은 Task ID, source revision, Tool version, config·Catalog·Profile fingerprint를 사용한다. final artifact는 한 번 build·package하고 같은 digest를 승격한다.
 - `ready`, `approved`, `published`, `publish_outcome_unknown`, `rollback_required`를 합치지 않는다. verified remote after-state 없이 published로 표시하지 않는다.
 - EvaluationRun은 새/worsened 결함 방지를 우선하며 required validator·Corpus·ratchet을 약화해 통과율을 올리지 않는다. CLI-only와 Codex-integrated cohort를 합산하지 않는다.
@@ -49,7 +49,7 @@
 | 안전한 변경 | M4~M6 Patch/Recipe, Registry, compatibility·doctor | single-Project recovery, consumer migration, clean-room evidence |
 | 유지보수·migration | M7~M9 failure/supply-chain/Radar, migration/performance/language, ChangeBundle | fake adapter conformance 뒤 실제 target·Git·remote corpus |
 | 최종 제품 | M10 ReleaseManifest/EvaluationRun/Catalog lifecycle, release/evaluation engine, package/install/provider adapter | M1~M9 current evidence와 required core owner 완료 뒤 구현 |
-| MCP release blocker | required core 13개 owning command handler·Schema와 current evidence | [독립 감사](docs/testing/mcp-independent-audit-2026-07-12.md)의 BLOCK 해소·재검증 |
+| MCP release blocker | required core 17개 중 6개 action ready, 11개 owning handler·Schema와 current evidence 미완 | [독립 감사](docs/testing/mcp-independent-audit-2026-07-12.md)의 BLOCK 해소·재검증 |
 | Windows 환경 | Windows 11 24H2 build 26100+ x64·native ARM64 clean environment | build/runtime/IPC/install/update/rollback/uninstall 실기 evidence |
 | 배포 기술 | Inno Setup local transport 이후 CI/artifact registry/release/deploy provider | channel 정책 확정, adapter conformance와 비용 승인 |
 | 공급망 | channel별 SBOM·provenance·signing 필요성 | 법적·조직 policy 판정, credential/PKI·비용 승인과 evidence |
@@ -59,6 +59,16 @@
 
 | ID | 상태 | 목표 | 근거·다음 조치 |
 |---|---|---|---|
+| P-0036 | DONE — cleanup | P-0011 구 체계 정리 | 사용자 결정에 따라 `.스타`, Star-Workflow·로컬_AI checkout, Star-Control ignored `legacy/`, 구 PATH를 제거하고 하나_프로젝트는 source를 보존한 채 nested Git·false-green workflow만 제거; 13개 allowlist·생태계 정본·언어 validator·Star-Control FULL과 잔여 process/terminal 0건 확인 |
+| P-0035 | DONE — install | P-0010 repair 설치와 PATH 전환 | Attempt11 offline repair 완료; x64 program·manifest hash, PATH 우선순위, integration verified/registered와 installed MCP doctor·catalog·validation·evidence E2E를 확인했고 FULL 10/10·표시 터미널 0건을 기록함; Hook 신뢰는 사용자 검토 경계로 보존 |
+| P-0034 | DONE — implementation | P-0005 Pilot explicit-unit resolver 복구 | Star-Control·개발도구 resolver가 closure 밖 사용자 함수를 찾던 결함을 self-contained function capture로 교체; 두 contract test 통과와 실제 `-Unit docs` 호출의 policy `partial` 도달 확인, Star-Control FULL 10/10 PASS; 개발도구 FULL은 resolver가 아니라 dirty Core dependency Gate에서 FAIL |
+| P-0033 | DONE — governance | P-0009 AGENTS 프로젝트별 확산 | active canonical 13개를 30~80줄 소유권·역할·ready-only/native fallback·TARGET/FULL·승인 경계로 정렬하고 동결 2개를 읽기 전용화; 언어는 향후 code unit 활성화 조건을 포함하고 `래거시/하나_프로젝트`·LAWOS·참고본은 제외; CI gate·등록·설치·push 없음 |
+| P-0032 | IN PROGRESS — shadow observation | P-0008 CI·Hook shadow 전환 | Star-Control·개발도구 기존 gate를 authority로 복원하고 `validate.ps1` unit·명령·결과 비교를 non-gating으로 추가; P-0036에서 레거시 `하나_프로젝트` workflow를 제거; 실제 PR/main 반복 관측과 server Gate 확인 뒤에만 승격·중복 제거 |
+| P-0031 | DONE — implementation | P-0007 영향도·cache·evidence precursor | sealed `ValidationPlan` v1, path/package/reverse-consumer profile 선택, strict success-only cache policy와 AI evidence compression, read-only CLI/MCP action 구현; runner·cache store·evidence writer·설치 repair 없음 |
+| P-0030 | DONE — implementation | P-0006 최소 read-only action과 프로젝트 catalog | Git 추적 allowlist에 검증된 13개 active canonical만 고정하고 `doctor`, project `list/status` handler·Schema·action별 readiness·CLI/MCP 계약 구현; register·DB write 없음 |
+| P-0029 | DONE — implementation | P-0005 프로젝트 공통 검증 pilot | `scripts/validate.ps1`에 adaptive `quick\|target\|full\|release`, unit·BaseRef·JSON evidence 계약을 구현하고 Rust 1.96.0 pin·CI를 동일 진입점으로 정렬; Star-Control FULL 10 checks PASS |
+| P-0028 | DONE — implementation | P-0004 Plugin·Hook·MCP 지침 실제 표면 정렬 | fixed MCP 12개 유지; `star-control-operations`로 source·renderer 계약 교체; ready-only 호출·native fallback·Hook snapshot 검증; 설치본 repair는 후속 Gate |
+| P-0027 | DONE — governance | P-0003 작업트리·구현 경계 정리 | `main@19379fe` clean 기준선에서 AGENTS 실행 경계 갱신; ready action 부재 시 native fallback, ignored 생성물·linked worktree·`legacy/` 보존; commit·push 없음 |
 | P-0026 | DONE — implementation | 사용자 선택형 Windows 설치와 Codex Plugin/MCP/Hook 연동 수직 Slice | [로컬 실증](docs/testing/windows-installation-evidence-2026-07-14.md): x64/ARM64 패키지·`D:\도구\Star-Control` repair·Codex 앱 Plugin 설치·최종 검증 PASS; 외부 Gate는 아래 위험으로 분리 |
 | P-0025 | IN PROGRESS — docs only | M11 `rust_style_auto_fix` Profile 설계와 정본 연결 | 공식 Rust 근거 재확인 → 신규 기능 정본·ADR·기존 계약/아키텍처/roadmap 반영 → Markdown 검증 |
 | P-0024 | DONE — docs only, M10 제품 구현 전 | 10단계 상세 설계와 0~10단계 최종 감사 | [10단계 정본](docs/contracts/ci-release-evaluation-and-product-completion.md), [ADR-0010](docs/decisions/ADR-0010-Build-Once-승격과-Release-평가-Gate-경계.md), 아래 최종 문서 검증 |
@@ -79,21 +89,30 @@
 
 ## 최신 검증 상태
 
-- PRECHECK PASS — 기존 사용자 변경을 보존했고, 로컬 `--check/`·루트 `manifest.json`은 생성물로 확인해 삭제 없이 Git 정본·commit 대상에서 제외했으며 `legacy/` diff·status는 0건이다.
-- FULL PASS — `cargo fmt --all -- --check`, workspace all-target `check`, workspace `test`, all-target/all-feature `clippy -D warnings`, generated Schema check와 MCP matrix 170/170을 통과했다.
-- PACKAGE PASS — x64·ARM64 stage는 각각 77개 파일의 exact set·PE machine·hash 검증을 통과했다. stage set SHA-256은 각각 `64b65da4f62e8c810c4d0a6577dc28566aa90130a586c5390aa540f0f863bf9b`, `189d646185d1998018d59ffde887732da88a7660111a50fa63a0f4a9bed6e049`다. Inno Setup 6.7.3으로 만든 두 `unsigned_local` installer의 x64/ARM64 SHA-256은 각각 `fcf092bd7d244a463d2c6295242c81207348a9529a5d35aac632e1982605a88f`, `ecc042ad0e712726b2e339498f66eb6ee56b425d7f32f264669903262ead78c7`다.
-- INSTALL PASS — x64를 `D:\도구\Star-Control`에 repair 설치했고 program hash, installation record, 실제 경로가 렌더링된 MCP·Hook, exact-owned HKCU 자동 시작, Hook 성공/거부와 rendered Plugin validator를 확인했다. Codex 앱에 Plugin을 실제 설치해 `MCP 서버 1`과 활성 Skill을 확인했고 Hook은 신뢰하지 않은 `검토 필요` 상태로 보존했다. Store 앱 CLI 실행 제약을 뜻하는 제품 record의 `manual_action_required`는 임의로 바꾸지 않았다. 상세 값은 [Windows 설치·Codex Plugin 로컬 실증](docs/testing/windows-installation-evidence-2026-07-14.md)에 있다.
+- UNIT RESOLVER PASS — Star-Control·개발도구 validation contract test가 각각 exit 0이고 실제 docs unit 호출은 runner error 없이 validator 변경의 FULL 요구를 `partial`로 보존했다. 무제한 FULL에서 Star-Control 10/10은 PASS, 개발도구는 기존 dirty `D:/개발/코어`를 dependency-lock이 거부해 FAIL했으며 Core를 수정·정리하지 않았다.
+- AGENTS ROLLOUT PASS — active canonical 13개 root AGENTS가 30~80줄, 사용자/AI 역할, ready-only action과 native fallback, TARGET/FULL, 승인 경계를 충족하고 구 도구명·구 운영 경로 0건이다. 구 관제·로컬 AI checkout은 제거했고 하나_프로젝트는 nested Git 없는 읽기 전용 source로만 남겼으며 LAWOS는 제외 상태다.
+- SHADOW BASELINE — Star-Control FULL 후보는 기존 7개 gate의 unit·명령·결과 비교를 통과했고, 후보 partial은 authority를 바꾸지 않는 negative test도 통과했다. 개발도구 FULL 후보는 모든 mapping command가 일치하고 cargo fmt/check/test/clippy가 통과했으나 기존 `core` revision mismatch를 정직하게 fail로 남겼다. 생태계_정본은 HEAD에 CI·script가 없어 제거할 legacy gate가 없는 신규 pilot이며 현재 FULL 5/5가 통과했다. 서버는 Star-Control protection 없음·ruleset 0개, private 개발도구·Canonical은 plan 제한 403, `one-project`는 404라 승격 조건이 충족되지 않았다.
+- VALIDATION ENTRYPOINT PASS — adaptive profile·unit partial·`pass/fail/not_run/partial/unverified/flaky` 결과 계약, hash-pinned PyYAML과 stateless evidence를 계약 테스트로 확인했고 Rust 1.96.0에서 Star-Control FULL 10 checks를 통과했다.
+- VALIDATION PLAN PASS — changed file/source/class, direct unit·reverse consumer, adaptive profile·fallback, validator-inclusive cache key, immutable run/ref 일치가 필요한 success-only reuse와 evidence-derived AI 압축을 pure tests와 direct CLI/MCP action contract로 확인했다. 현재 cache candidate reader가 없어 모든 check는 정직하게 `execute`다.
+- ACTION SOURCE PASS — tracked allowlist parser·exact-root probe, handler/Schema/readiness mismatch guard, CLI direct IPC와 fixed MCP wire `doctor`·`project list/status`·`validation plan`·`validation run`·`evidence get` dispatch를 확인했다. `validation.run`은 sealed plan과 exact tracked `scripts/validate.ps1` report를 대조하고 non-pass 상태를 성공으로 승격하지 않으며, `evidence.get`은 같은 report hash를 검증한다. 관리 DB·cache store·GateDecision writer는 추가하지 않았고 설치본 전환은 P-0035에서 완료했다.
+- PLUGIN PASS — 새 Skill·Plugin validator, Hook exact snapshot, 고정 MCP 도구명 positive/negative 계약, 소유 package TARGET과 workspace FULL 검증을 통과했다. 설치본·Plugin cache·runtime state는 migration하지 않았다.
+- POLICY PASS — P-0003 AGENTS QUICK Gate에서 변경 파일·필수 정책·heading·56줄 제한과 `git diff --check`를 확인했고, staged·untracked 0건 및 `manifest.json` hash·`--check/` 13개·등록 worktree 3개 불변을 확인했다.
+- LEGACY CLEANUP PASS — 삭제 전 절대경로·reparse·HEAD·dirty fingerprint를 기록한 뒤 `.스타`, 구 checkout 2개, 하나_프로젝트 nested Git, ignored `legacy/`, 빈 `.codex`와 구 PATH를 제거했다. 하나_프로젝트 source 2,048개는 보존됐고 언어 FINDINGS=0, 생태계 FULL PASS, legacy 이름 directory·old process·validation process·표시 terminal은 모두 0건이며 `config.toml` SHA-256은 불변이다.
+- FULL/PROCESS PASS — P-0036 정본·allowlist 변경 뒤 Star-Control native FULL이 38.6초에 10/10 PASS했고 evidence `target/validation/20260716T170713374Z-14220/report.json`을 남겼다. `partial`·`unverified`·`flaky`·`not_run` 성공 승격은 없고 검증 종료 뒤 cargo/rustc process와 표시 terminal은 0건이다.
+- PACKAGE PASS — P-0035 x64 stage는 91-file exact set과 SHA-256 `73b802da21eaac2a20e1d3cee61a9cdf0394304e3e7a1dd9159a54a746f3d4cc`, Inno Setup installer는 `a62c712e3e0a558290fe7108a1d67797c459c7c5da1485392e4fffd1d0e5400e`를 확인했다. native ARM64 실행·설치 증거는 기존 경계로 남는다.
+- INSTALL PASS — x64를 `D:\도구\Star-Control`에 offline repair 설치해 세 runtime과 manifest hash, `where.exe star` 첫 경로, installation verified, integration verified/registered·manual command 0건, Codex CLI의 Plugin installed/enabled를 확인했다. rendered Marketplace와 Plugin cache 4개 파일은 byte-identical하고 Skill·Hook·MCP 운영 표면의 구 identifier는 0건이다. Hook snapshot smoke는 통과했으며 지속 신뢰는 사용자 검토 경계로 보존한다.
 - DOC PASS — 현재 Markdown 72개, Markdown link 929개에서 local file target 오류 0건, `docs/README.md` 읽는 순서 1~55 연속, `git diff --check` PASS다.
-- 미검증 경계 — native ARM64 실행·설치, 실제 uninstall·`/PURGEDATA`, code signing·공개 배포는 각각 환경·삭제·비용/외부 영향 승인이 필요한 별도 Gate다.
+- 미검증 경계 — native ARM64 실행·설치, `/PURGEDATA`, code signing·공개 배포는 각각 환경·삭제·비용/외부 영향 승인이 필요한 별도 Gate다.
 
-## 실제 구현을 시작할 첫 수직 Slice
+## 다음 수직 Slice
 
-1. 별도 제품 작업 승인과 새 P-ID를 만든다.
-2. P0 `Project` v1→v2 checkout migration의 old/future/invalid fixture와 repository compatibility를 구현한다.
-3. read-only Project discovery를 stable `ProjectCheckout`으로 attach하고 current `ProjectCatalogSnapshot`을 만든다.
-4. 동일 `WorkspaceSnapshot`에서 minimal `CodeIndexSnapshot`과 file/symbol/query surface를 만든다.
-5. source/manifest canonical, DB/index derived, Controller single writer와 stale/freshness fail-closed를 unit·repository·CLI-only E2E로 검증한다.
-6. 이 M1 Gate가 통과하기 전 M2 planning, source rewrite, cross-project effect와 M10 release 구현을 시작하지 않는다.
+1. P-0032의 실제 PR·main shadow run을 반복 수집하고 누락 check·command·result mismatch 0건과 server required-check 경계를 확인한 뒤 별도 P-ID에서 gate 승격 여부를 결정한다.
+2. 별도 P-ID에서 allowlist membership을 강제하는 idempotent `project register` handler·Schema·CLI/MCP E2E를 구현하고, 승인된 전환에서만 `registration_enabled`를 연다.
+3. 등록 결과는 `catalog/projects.toml`을 정본으로 가져온 derived management projection으로 만들며 임의 재귀 탐색과 인접 checkout 자동 등록을 금지한다.
+4. 이어서 P0 `Project` v1→v2 checkout migration의 old/future/invalid fixture와 repository compatibility를 구현한다.
+5. stable `ProjectCheckout`과 current `ProjectCatalogSnapshot`, 같은 `WorkspaceSnapshot`의 minimal `CodeIndexSnapshot`을 구현한다.
+6. source/manifest canonical, DB/index derived, Controller single writer와 stale/freshness fail-closed를 unit·repository·CLI-only E2E로 검증한다.
+7. P-0031 tracked-path precursor를 full M2 완료로 승격하지 않는다. 이 M1 Gate가 통과하기 전 full M2 graph planning, source rewrite, cross-project effect와 M10 release 구현을 시작하지 않는다.
 
 ## Archive References
 

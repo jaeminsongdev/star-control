@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use chrono::{DateTime, Utc};
 use star_contracts::{
     ArtifactId, EvidenceBundleId, GateId, GoalId, ProjectId, RunId, Sha256Hash, TaskInvocationId,
-    ValidationRunId,
+    ValidationPlanId, ValidationRunId,
     evidence::{
         ActorRef, ActorType, ArtifactKind, ArtifactManifest, ArtifactManifestEntry, ArtifactRef,
         AuthoritativeGateState, CatalogRef, ChangeEvidenceRefs, Completeness,
@@ -187,6 +187,10 @@ fn schema_ids_are_exact_singletons_and_wrong_values_are_rejected() {
         .map(|(name, value)| (name, value["$id"].as_str().unwrap().to_owned()))
         .collect();
     assert_eq!(
+        ids["validation-plan.schema.json"],
+        "urn:star-control:schema:star.validation-plan:v1"
+    );
+    assert_eq!(
         ids["validation-run.schema.json"],
         "urn:star-control:schema:star.validation-run:v1"
     );
@@ -206,6 +210,9 @@ fn schema_ids_are_exact_singletons_and_wrong_values_are_rejected() {
 
 #[test]
 fn typed_ids_reject_a_different_contract_prefix_during_deserialization() {
+    let validation_plan_id = ValidationPlanId::new();
+    let plan_suffix = &validation_plan_id.as_str()[4..];
+    assert!(serde_json::from_str::<ValidationPlanId>(&format!("\"val_{plan_suffix}\"")).is_err());
     let validation_run_id = ValidationRunId::new();
     let suffix = &validation_run_id.as_str()[4..];
     let wrong = format!("\"req_{suffix}\"");

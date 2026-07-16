@@ -17,6 +17,7 @@ use star_contracts::{
 use star_ipc::client::{ControllerClient, ControllerClientError, cli_client_config};
 use star_ipc::controller_start::VerifiedControllerImage;
 
+const VERSION: &str = concat!("Star-Control ", env!("CARGO_PKG_VERSION"));
 const HELP: &str = "star tools list [--source release|user|project] [--readiness <value>] [--json]\n\
 star tools describe <tool-id> [--json]\n\
 star tools status [<package-id>] [--json]\n\
@@ -25,8 +26,13 @@ star tools probe <package-id> [--executable <id>] [--json]\n\
 star tools trust <package-id> --manifest-hash <sha256> [--expires <rfc3339>] [--json]\n\
 star tools revoke <package-id> [--cancel-running] --reason <text> [--json]\n\
 star tools scaffold <exe-path> --output <toml-path>\n\
+star doctor [--json]\n\
 star project register [--json]\n\
 star project list [--json]\n\
+star project status <project-key> [--json]\n\
+star validation plan <project-key> [--profile quick|target|full|release] [--unit <unit>] [--json]\n\
+star validation run <project-key> [--profile quick|target|full|release] [--unit <unit>] [--timeout-ms <milliseconds>] [--json]\n\
+star evidence get <project-key> <evidence-ref> [--json]\n\
 star scan run <project-id> [--idempotency <key>] [--json]\n\
 star finding list <project-id> [--json]\n\
 star patch prepare <project-id> <finding-id> [--json]\n\
@@ -186,6 +192,15 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                 json,
             })
         }
+        [first, tail @ ..] if first == "doctor" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 0, "doctor")?;
+            Ok(Parsed {
+                command: "doctor.run".to_owned(),
+                payload: serde_json::json!({}),
+                json,
+            })
+        }
         [first, second, tail @ ..] if first == "project" && second == "register" => {
             let (positionals, _) = parse_tail(tail, &[], &[])?;
             require_positionals(&positionals, 0, "project register")?;
@@ -203,6 +218,116 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             Ok(Parsed {
                 command: "project.list".to_owned(),
                 payload: serde_json::json!({}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "project" && second == "status" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "project status")?;
+            Ok(Parsed {
+                command: "project.status".to_owned(),
+                payload: serde_json::json!({"project_key":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "validation" && second == "plan" => {
+            let (positionals, options) = parse_tail(tail, &["--profile", "--unit"], &[])?;
+            require_positionals(&positionals, 1, "validation plan")?;
+            let mut payload = serde_json::Map::from_iter([(
+                "project_key".to_owned(),
+                serde_json::Value::String(positionals[0].clone()),
+            )]);
+            if let Some(profile) = options.get("--profile").and_then(Clone::clone) {
+                if !matches!(profile.as_str(), "quick" | "target" | "full" | "release") {
+                    return Err("--profile must be quick, target, full, or release".to_owned());
+                }
+                payload.insert(
+                    "requested_profile".to_owned(),
+                    serde_json::Value::String(profile),
+                );
+            }
+            if let Some(unit) = options.get("--unit").and_then(Clone::clone) {
+                if unit.is_empty()
+                    || unit.len() > 128
+                    || !unit
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+                {
+                    return Err("--unit contains an invalid unit identifier".to_owned());
+                }
+                payload.insert("unit".to_owned(), serde_json::Value::String(unit));
+            }
+            Ok(Parsed {
+                command: "validation.plan".to_owned(),
+                payload: serde_json::Value::Object(payload),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "validation" && second == "run" => {
+            let (positionals, options) =
+                parse_tail(tail, &["--profile", "--unit", "--timeout-ms"], &[])?;
+            require_positionals(&positionals, 1, "validation run")?;
+            let mut payload = serde_json::Map::from_iter([(
+                "project_key".to_owned(),
+                serde_json::Value::String(positionals[0].clone()),
+            )]);
+            if let Some(profile) = options.get("--profile").and_then(Clone::clone) {
+                if !matches!(profile.as_str(), "quick" | "target" | "full" | "release") {
+                    return Err("--profile must be quick, target, full, or release".to_owned());
+                }
+                payload.insert(
+                    "requested_profile".to_owned(),
+                    serde_json::Value::String(profile),
+                );
+            }
+            if let Some(unit) = options.get("--unit").and_then(Clone::clone) {
+                if unit.is_empty()
+                    || unit.len() > 128
+                    || !unit
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+                {
+                    return Err("--unit contains an invalid unit identifier".to_owned());
+                }
+                payload.insert("unit".to_owned(), serde_json::Value::String(unit));
+            }
+            if let Some(timeout) = options.get("--timeout-ms").and_then(Clone::clone) {
+                let timeout = timeout
+                    .parse::<u64>()
+                    .map_err(|_| "--timeout-ms must be an integer".to_owned())?;
+                if !(1_000..=3_600_000).contains(&timeout) {
+                    return Err("--timeout-ms must be between 1000 and 3600000".to_owned());
+                }
+                payload.insert("timeout_ms".to_owned(), timeout.into());
+            }
+            Ok(Parsed {
+                command: "validation.run".to_owned(),
+                payload: serde_json::Value::Object(payload),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "evidence" && second == "get" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "evidence get")?;
+            let evidence_ref = &positionals[1];
+            let parts: Vec<_> = evidence_ref.split('/').collect();
+            if parts.len() != 4
+                || parts[0] != "target"
+                || parts[1] != "validation"
+                || parts[2].is_empty()
+                || !parts[2]
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+                || parts[3] != "report.json"
+            {
+                return Err("evidence-ref must be target/validation/<run>/report.json".to_owned());
+            }
+            Ok(Parsed {
+                command: "evidence.get".to_owned(),
+                payload: serde_json::json!({
+                    "project_key":positionals[0],
+                    "evidence_ref":evidence_ref,
+                }),
                 json,
             })
         }
@@ -613,6 +738,10 @@ async fn call_controller_command(
 #[tokio::main]
 async fn main() {
     let raw: Vec<_> = std::env::args().skip(1).collect();
+    if raw.len() == 1 && matches!(raw[0].as_str(), "--version" | "-V") {
+        println!("{VERSION}");
+        return;
+    }
     if raw
         .first()
         .is_some_and(|arg| arg == "--help" || arg == "help")
@@ -867,8 +996,46 @@ mod tests {
         let patch = star_contracts::ids::PatchSetId::new();
         let fingerprint = star_contracts::Sha256Hash::digest(b"patch").to_string();
         let cases = [
+            (args(&["doctor"]), "doctor.run"),
             (args(&["project", "register"]), "project.register"),
             (args(&["project", "list"]), "project.list"),
+            (
+                args(&["project", "status", "star-control"]),
+                "project.status",
+            ),
+            (
+                args(&[
+                    "validation",
+                    "plan",
+                    "star-control",
+                    "--profile",
+                    "full",
+                    "--unit",
+                    "star-contracts",
+                ]),
+                "validation.plan",
+            ),
+            (
+                args(&[
+                    "validation",
+                    "run",
+                    "star-control",
+                    "--profile",
+                    "target",
+                    "--timeout-ms",
+                    "60000",
+                ]),
+                "validation.run",
+            ),
+            (
+                args(&[
+                    "evidence",
+                    "get",
+                    "star-control",
+                    "target/validation/run-1/report.json",
+                ]),
+                "evidence.get",
+            ),
             (
                 vec!["scan".into(), "run".into(), project.to_string()],
                 "scan.run",
@@ -930,6 +1097,7 @@ mod tests {
         for (arguments, command) in cases {
             assert_eq!(parse(&arguments).unwrap().command, command);
         }
+        assert_eq!(VERSION, concat!("Star-Control ", env!("CARGO_PKG_VERSION")));
 
         let oversized_key = "x".repeat(129);
         assert!(

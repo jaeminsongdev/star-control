@@ -174,6 +174,8 @@ foreach ($name in @('star.exe', 'star-mcp.exe', 'star-controller.exe', 'star-fak
 }
 Copy-Item -LiteralPath (Join-Path $repo 'catalog\tool-packages\star-control-core.toml') `
     -Destination (Join-Path $catalog 'star-control-core.toml')
+Copy-Item -LiteralPath (Join-Path $repo 'catalog\tool-packages\schemas') `
+    -Destination (Join-Path $catalog 'schemas') -Recurse
 $null = & $fixture -Phase prepare -RunRoot $run
 
 $inspectorPackages = @(

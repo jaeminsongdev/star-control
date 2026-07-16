@@ -20,6 +20,9 @@ use crate::{
     },
 };
 
+mod validation_plan;
+pub use validation_plan::*;
+
 pub const VALIDATION_RUN_SCHEMA_ID: &str = "star.validation-run";
 pub const GATE_DECISION_SCHEMA_ID: &str = "star.gate-decision";
 pub const EVIDENCE_BUNDLE_SCHEMA_ID: &str = "star.evidence-bundle";

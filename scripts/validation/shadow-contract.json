@@ -1,0 +1,63 @@
+{
+  "schema_id": "star.validation-shadow-contract",
+  "schema_version": 1,
+  "project_id": "star-control",
+  "mappings": [
+    {
+      "legacy_id": "cargo-fmt",
+      "legacy_unit": "workspace",
+      "candidate_id": "cargo-fmt",
+      "profiles": ["target", "full", "release"],
+      "expected_units_by_profile": {"full": ["workspace"], "release": ["workspace"]},
+      "command": {"executable": "cargo", "required_arguments": ["fmt", "--", "--check"]}
+    },
+    {
+      "legacy_id": "cargo-check",
+      "legacy_unit": "workspace",
+      "candidate_id": "cargo-check",
+      "profiles": ["target", "full", "release"],
+      "expected_units_by_profile": {"full": ["workspace"], "release": ["workspace"]},
+      "command": {"executable": "cargo", "required_arguments": ["check", "--all-targets", "--locked"]}
+    },
+    {
+      "legacy_id": "cargo-test",
+      "legacy_unit": "workspace",
+      "candidate_id": "cargo-test",
+      "profiles": ["target", "full", "release"],
+      "expected_units_by_profile": {"full": ["workspace"], "release": ["workspace"]},
+      "command": {"executable": "cargo", "required_arguments": ["test", "--locked"]}
+    },
+    {
+      "legacy_id": "cargo-clippy",
+      "legacy_unit": "workspace",
+      "candidate_id": "cargo-clippy",
+      "profiles": ["target", "full", "release"],
+      "expected_units_by_profile": {"full": ["workspace"], "release": ["workspace"]},
+      "command": {"executable": "cargo", "required_arguments": ["clippy", "--all-targets", "--", "-D", "warnings"]}
+    },
+    {
+      "legacy_id": "schema-check",
+      "legacy_unit": "contracts",
+      "candidate_id": "schema-check",
+      "profiles": ["full", "release"],
+      "expected_units_by_profile": {"full": ["contracts"], "release": ["contracts"]},
+      "command": {"executable": "cargo", "required_arguments": ["run", "--locked", "-p", "star-schema-gen", "--", "--check"]}
+    },
+    {
+      "legacy_id": "mcp-matrix",
+      "legacy_unit": "contracts",
+      "candidate_id": "mcp-matrix",
+      "profiles": ["full", "release"],
+      "expected_units_by_profile": {"full": ["contracts"], "release": ["contracts"]},
+      "command": {"executable": "cargo", "required_arguments": ["run", "--locked", "-p", "star-matrix-check"]}
+    },
+    {
+      "legacy_id": "diff-worktree",
+      "legacy_unit": "project",
+      "candidate_id": "diff-worktree",
+      "profiles": ["target", "full", "release"],
+      "expected_units_by_profile": {"full": ["project"], "release": ["project"]},
+      "command": {"executable": "git", "required_arguments": ["diff", "--check"]}
+    }
+  ]
+}

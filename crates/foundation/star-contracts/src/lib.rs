@@ -22,7 +22,7 @@ pub use canonical::{Sha256Hash, canonical_sha256, jcs_bytes};
 pub use ids::{
     ApprovalId, ArtifactId, DiagnosticId, EvidenceBundleId, GateId, GoalId, InstallationId,
     OperationId, ProjectId, RequestId, RunId, StageId, TaskInvocationId, ToolCacheId, ToolTrustId,
-    ValidationRunId, WaiverId,
+    ValidationPlanId, ValidationRunId, WaiverId,
 };
 pub use management::{MANAGEMENT_STORE_VERSION, REDACTION_CONTRACT_VERSION};
 pub use manifest::{ToolPackageManifest, parse_manifest_v1};

@@ -1,6 +1,10 @@
 {
   "files": [
     {
+      "file": "validation-plan.schema.json",
+      "hash": "sha256:fcc9d0210f9eb3e53b4b20e71bca1078b5045f74d9d171e70b0266719d4ecc71"
+    },
+    {
       "file": "validation-run.schema.json",
       "hash": "sha256:8f3400299dc7a10ea2038f2057160291b3bd0d13cf4ba6ac26007974eef809a9"
     },

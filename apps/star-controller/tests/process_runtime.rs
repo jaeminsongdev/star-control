@@ -11,7 +11,8 @@ use star_controller::process_runtime::{
     DirectExeSpec, JsonStdioExecutionOptions, OperationJob, RuntimeCancellation, RuntimeError,
     execute_direct_exe, execute_direct_exe_cancellable, execute_direct_exe_cancellable_with_grace,
     execute_star_json_probe, execute_star_json_stdio, execute_star_json_stdio_cancellable,
-    execute_star_json_stdio_cancellable_with_cancel_mode, lease_executable,
+    execute_star_json_stdio_cancellable_with_cancel_mode, execute_trusted_internal_exe_cancellable,
+    execute_trusted_internal_powershell_cancellable, lease_executable,
     validate_star_json_stdio_output,
 };
 
@@ -180,8 +181,10 @@ async fn running_executable_keeps_its_image_identity_against_same_path_replaceme
 async fn running_image_keeps_its_lease_and_the_next_call_observes_new_bytes() {
     use std::io::Write as _;
 
-    let directory =
-        std::env::temp_dir().join(format!("star-running-identity-{}", star_ipc::nonce()));
+    let directory = std::env::temp_dir()
+        .canonicalize()
+        .unwrap()
+        .join(format!("star-running-identity-{}", star_ipc::nonce()));
     std::fs::create_dir_all(&directory).unwrap();
     let live = directory.join("live.exe");
     std::fs::copy(fake_exe(), &live).unwrap();
@@ -274,6 +277,29 @@ async fn child_receives_minimal_environment_and_only_declared_values() {
     assert!(matches!(
         execute_direct_exe(&invalid_unicode).await,
         Err(RuntimeError::ProtocolInvalid)
+    ));
+}
+
+#[tokio::test]
+async fn trusted_internal_child_inherits_path_without_opening_package_environment() {
+    let probe = spec("env-probe");
+    let outcome = execute_trusted_internal_exe_cancellable(&probe, None)
+        .await
+        .expect("trusted internal environment probe runs");
+    let output = String::from_utf8(outcome.stdout.captured).unwrap();
+    assert!(output.contains("PATH="));
+    assert!(!output.contains("PATH=<missing>"));
+
+    let mut invalid = spec("env-probe");
+    invalid.environment = vec![(OsString::from("STAR_TEST_ALLOWED"), OsString::from("yes"))];
+    assert!(matches!(
+        execute_trusted_internal_exe_cancellable(&invalid, None).await,
+        Err(RuntimeError::ProtocolInvalid)
+    ));
+
+    assert!(matches!(
+        execute_trusted_internal_powershell_cancellable(&probe, None).await,
+        Err(RuntimeError::ExecutableInvalid)
     ));
 }
 

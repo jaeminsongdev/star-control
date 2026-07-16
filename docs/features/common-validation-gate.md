@@ -2,7 +2,7 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 3단계인 **공통 검증·품질 Gate**의 실행 의미와 구현 순서를 소유한다. 현재 상태는 **설계 확정 대상, 제품 구현 전**이다. 이 문서를 추가했다고 validator, test runner, Corpus, DB Schema, migration, CLI 또는 제품 code가 구현된 것으로 표시하지 않는다.
+이 문서는 Star-Control 3단계인 **공통 검증·품질 Gate**의 실행 의미와 구현 순서를 소유한다. generic M3 CheckGraph runner·Gate·EvidenceBundle writer 제품은 구현 전이다. P-0031은 runner 입력이 될 tracked-path ValidationPlan, immutable run/ref를 대조하는 cache 재사용 pure policy와 EvidenceBundle 이후 AI 압축 함수를 구현했다. P-0035는 bounded precursor로 exact tracked `scripts/validate.ps1`을 실행하고 sealed plan과 native report를 대조하며 report evidence를 조회한다. 이 경로는 persisted cache, Diagnostic normalization, GateDecision 또는 EvidenceBundle을 만들지 않는다.
 
 3단계는 제품 로드맵 [P5 검사·증거·이어하기](../roadmap/final-implementation.md#p5-검사증거이어하기)의 첫 공통 수직 Slice다. 이 문서에서는 이를 `M3`라고 부른다. 기존 P0의 Finding·ValidationResult·GateDecision 수직 Slice를 폐기하지 않고, M1 Project Catalog·Code Index와 M2 ChangeSet·ImpactAnalysis·ValidationPlan을 소비할 수 있도록 versioned target으로 확장한다.
 
@@ -56,7 +56,7 @@ M3 자체는 다음을 만들지 않는다.
 |---|---|---|
 | P0 공통 ID·Finding·Scan·Evidence·Gate 기반 | source/DB/evidence 분리, immutable snapshot, Controller 단일 Writer | 첫 수직 Slice 구현. 그대로 재사용 |
 | M1 ProjectCatalogSnapshot·CodeIndexSnapshot | 대상 partition의 current/partial/stale와 coverage를 exact ref로 조회 | 설계 확정·제품 구현 전. M3 제품 구현 blocker |
-| M2 TaskSpec·ScopeRevision·ChangeSet·ImpactAnalysis·ValidationPlan | `readiness=ready`, accepted scope, bound TaskInvocation과 current fingerprint | 설계 확정·제품 구현 전. M3 제품 구현 blocker |
+| M2 TaskSpec·ScopeRevision·ChangeSet·ImpactAnalysis·ValidationPlan | `readiness=ready`, accepted scope, bound TaskInvocation과 current fingerprint | P-0031 tracked-path precursor만 구현. full M2 제품 Gate는 계속 blocker |
 | Baseline·Suppression | Finding과 모든 Diagnostic의 existing/new/worsened·active/expired 구분 | P0 v1은 Finding 중심. M3 target v2와 migration 필요 |
 | ValidationRun evidence binding | subject revision·workspace·ChangeSet·config·Catalog·Check·Tool identity exact 결합 | M3 target field와 invalidation rule 필요 |
 | Validator Registry | stable Rule/Check mapping, fingerprint contract, fixture manifest | 목표 Catalog 계약과 conformance 필요 |

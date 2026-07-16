@@ -223,18 +223,18 @@ impl OperationStore {
             idempotency_key,
             invocation_hash,
         } = request;
-        if let Some(key) = idempotency_key.as_deref() {
-            if let Some(existing) = self.file.idempotency.get(key) {
-                if existing.invocation_hash != invocation_hash {
-                    return Err(OperationStoreError::IdempotencyConflict);
-                }
-                return self
-                    .file
-                    .operations
-                    .get(existing.operation_id.as_str())
-                    .cloned()
-                    .ok_or(OperationStoreError::Corrupt);
+        if let Some(key) = idempotency_key.as_deref()
+            && let Some(existing) = self.file.idempotency.get(key)
+        {
+            if existing.invocation_hash != invocation_hash {
+                return Err(OperationStoreError::IdempotencyConflict);
             }
+            return self
+                .file
+                .operations
+                .get(existing.operation_id.as_str())
+                .cloned()
+                .ok_or(OperationStoreError::Corrupt);
         }
         let operation_id = OperationId::new();
         let timestamp = now();

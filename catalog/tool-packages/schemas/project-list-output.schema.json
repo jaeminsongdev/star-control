@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/project-list-output-v1",
+  "$defs": {
+    "projectStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_id",
+        "schema_version",
+        "project_key",
+        "display_name",
+        "relative_path",
+        "declared_role",
+        "repository_kind",
+        "availability",
+        "checkout_kind",
+        "identity_status",
+        "origin_status",
+        "git_common_dir_status",
+        "limitations"
+      ],
+      "properties": {
+        "schema_id": { "const": "star.project-status-view" },
+        "schema_version": { "const": 1 },
+        "project_key": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$" },
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "relative_path": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "declared_role": {
+          "enum": [
+            "active_canonical",
+            "linked_worktree",
+            "read_only_migration_source",
+            "backup",
+            "sandbox",
+            "bootstrap_checkout"
+          ]
+        },
+        "repository_kind": { "enum": ["git", "directory"] },
+        "availability": {
+          "enum": ["available", "unavailable_root", "not_git", "git_probe_failed", "top_level_mismatch"]
+        },
+        "checkout_kind": {
+          "enum": ["canonical_worktree", "linked_worktree", "directory", "unavailable", "unknown"]
+        },
+        "identity_status": { "enum": ["match", "mismatch", "unverified"] },
+        "origin_status": { "enum": ["match", "mismatch", "unavailable", "not_applicable"] },
+        "git_common_dir_status": { "enum": ["match", "mismatch", "unavailable", "not_applicable"] },
+        "limitations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "catalog_id",
+    "source_fingerprint",
+    "registration_enabled",
+    "summary",
+    "items"
+  ],
+  "properties": {
+    "schema_id": { "const": "star.project-catalog-view" },
+    "schema_version": { "const": 1 },
+    "catalog_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "source_fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "registration_enabled": { "type": "boolean" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_projects",
+        "active_canonical_projects",
+        "available_projects",
+        "unavailable_projects",
+        "identity_mismatches",
+        "identity_unverified"
+      ],
+      "properties": {
+        "total_projects": { "type": "integer", "minimum": 0 },
+        "active_canonical_projects": { "type": "integer", "minimum": 0 },
+        "available_projects": { "type": "integer", "minimum": 0 },
+        "unavailable_projects": { "type": "integer", "minimum": 0 },
+        "identity_mismatches": { "type": "integer", "minimum": 0 },
+        "identity_unverified": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/projectStatus" }
+    }
+  }
+}

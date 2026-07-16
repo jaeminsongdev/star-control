@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/doctor-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "status",
+    "catalog_source_fingerprint",
+    "implemented_controller_commands",
+    "checks"
+  ],
+  "properties": {
+    "schema_id": { "const": "star.doctor-report" },
+    "schema_version": { "const": 1 },
+    "status": { "enum": ["pass", "warning", "fail"] },
+    "catalog_source_fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "implemented_controller_commands": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "status", "summary"],
+        "properties": {
+          "check_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "status": { "enum": ["pass", "warning", "fail"] },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@ use crate::{ApprovalId, OperationId, RequestId, Sha256Hash};
 pub const SERVER_NAME: &str = "star-control";
 pub const SERVER_TITLE: &str = "Star-Control";
 pub const SERVER_DESCRIPTION: &str = "Fixed MCP gateway for the Star-Control live tool registry.";
-pub const SERVER_INSTRUCTIONS: &str = "개발 작업과 외부 도구 사용은 먼저 `star_tool_search`로 action을 찾고 `star_tool_describe`로 현재 Schema, 위험 lane과 `descriptor_hash`를 확인한다. 반환된 `required_call_tool`에 `tool_id`, hash와 `arguments`를 전달한다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`와 `question_required`를 완료로 간주하지 않는다. 장기 실행은 Operation ID로 조회·취소한다.";
+pub const SERVER_INSTRUCTIONS: &str = "Star-Control action을 사용할 때는 `star_tool_search`로 현재 registry를 검색하고 action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 확인한다. describe에서 현재 Schema, 위험 lane, `descriptor_hash`, `required_call_tool`을 받은 뒤 그 tool에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. package나 manifest의 ready 상태는 action readiness가 아니다. 검색 결과가 없거나 action이 non-ready이거나 MCP 연결이 실패하면 일반 Codex 개발 작업을 막지 말고 프로젝트 native 도구를 사용하며 fallback 사실과 이유를 결과에 기록한다. `star_tool_registry_status`는 진단용이며 필수 선행 Gate가 아니다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`, `question_required`와 Operation ID 반환은 완료가 아니다.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

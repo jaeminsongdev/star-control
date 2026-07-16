@@ -1,20 +1,20 @@
 {
   "name": "star-control",
   "version": "0.0.0+codex.template",
-  "description": "Route Codex development goals through the local Star-Control runtime.",
+  "description": "Expose ready Star-Control operations to Codex with a native project-tool fallback.",
   "author": {
     "name": "Star-Control contributors"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Star Control",
-    "shortDescription": "Plan and run development goals through Star-Control.",
-    "longDescription": "Connects Codex to the installed Star-Control MCP gateway and injects its goal workflow at session start.",
+    "shortDescription": "Use ready Star-Control operations with native fallback.",
+    "longDescription": "Connects Codex to the installed Star-Control MCP gateway, invokes only ready actions, and keeps normal development work available through native project tools when Star-Control cannot act.",
     "developerName": "Star-Control contributors",
     "category": "Productivity",
-    "capabilities": ["Local MCP", "Development workflow"],
+    "capabilities": ["Local MCP", "Development operations"],
     "defaultPrompt": [
-      "Start this development goal through Star-Control."
+      "Use ready Star-Control operations for this task; otherwise continue with native project tools."
     ]
   },
   "mcpServers": "./.mcp.json"

@@ -18,6 +18,56 @@ const MISSING_SOURCE_DEBOUNCE: Duration = Duration::from_millis(500);
 const REQUIRED_RELEASE_MANIFEST_NAME: &str = "star-control-core.toml";
 const REQUIRED_RELEASE_MANIFEST: &str =
     include_str!("../../../catalog/tool-packages/star-control-core.toml");
+const REQUIRED_RELEASE_RESOURCES: &[(&str, &str)] = &[
+    (
+        "schemas/doctor-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/doctor-input.schema.json"),
+    ),
+    (
+        "schemas/doctor-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/doctor-output.schema.json"),
+    ),
+    (
+        "schemas/project-list-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/project-list-input.schema.json"),
+    ),
+    (
+        "schemas/project-list-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/project-list-output.schema.json"),
+    ),
+    (
+        "schemas/project-status-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/project-status-input.schema.json"),
+    ),
+    (
+        "schemas/project-status-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/project-status-output.schema.json"),
+    ),
+    (
+        "schemas/validation-plan-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/validation-plan-input.schema.json"),
+    ),
+    (
+        "schemas/validation-plan-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/validation-plan-output.schema.json"),
+    ),
+    (
+        "schemas/validation-run-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/validation-run-input.schema.json"),
+    ),
+    (
+        "schemas/validation-run-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/validation-run-output.schema.json"),
+    ),
+    (
+        "schemas/evidence-get-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/evidence-get-input.schema.json"),
+    ),
+    (
+        "schemas/evidence-get-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/evidence-get-output.schema.json"),
+    ),
+];
 
 use star_contracts::{
     ToolTrustId,
@@ -1788,6 +1838,14 @@ fn release_manifest_integrity_matches(path: &Path, text: &str) -> bool {
         .is_some_and(|name| name.eq_ignore_ascii_case(REQUIRED_RELEASE_MANIFEST_NAME))
         && Sha256Hash::digest(text.as_bytes())
             == Sha256Hash::digest(REQUIRED_RELEASE_MANIFEST.as_bytes())
+        && path.parent().is_some_and(|directory| {
+            REQUIRED_RELEASE_RESOURCES
+                .iter()
+                .all(|(relative, expected)| {
+                    fs::read(directory.join(relative))
+                        .is_ok_and(|observed| observed == expected.as_bytes())
+                })
+        })
 }
 
 fn same_probe_candidate(left: &ActivePackage, right: &ActivePackage) -> bool {
@@ -2724,6 +2782,17 @@ mod tests {
         ));
         fs::create_dir_all(&directory).unwrap();
         directory
+    }
+
+    fn write_required_release_catalog(directory: &Path) -> PathBuf {
+        let manifest = directory.join(REQUIRED_RELEASE_MANIFEST_NAME);
+        fs::write(&manifest, REQUIRED_RELEASE_MANIFEST).unwrap();
+        for (relative, source) in REQUIRED_RELEASE_RESOURCES {
+            let path = directory.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, source).unwrap();
+        }
+        manifest
     }
 
     #[test]
@@ -3737,8 +3806,9 @@ mod tests {
     fn fixed_working_directory_final_path_is_hashed_and_unsafe_paths_are_rejected() {
         let mut manifest = parse_manifest_v1(&fixture(), ManifestSource::User).unwrap();
         manifest.executables[0].working_directory = "fixed".to_owned();
+        let fixed_directory = std::env::temp_dir().canonicalize().unwrap();
         manifest.executables[0].fixed_working_directory =
-            Some(std::env::temp_dir().display().to_string());
+            Some(fixed_directory.display().to_string());
         let hashes = resolve_fixed_working_directory_hashes(&manifest).unwrap();
         assert!(hashes.contains_key("fake-echo"));
 
@@ -4205,11 +4275,7 @@ mod tests {
 
         let release = temp_root("tool-id-required-release");
         let user = temp_root("tool-id-required-user");
-        fs::write(
-            release.join(REQUIRED_RELEASE_MANIFEST_NAME),
-            REQUIRED_RELEASE_MANIFEST,
-        )
-        .unwrap();
+        write_required_release_catalog(&release);
         fs::write(
             user.join("shadow.toml"),
             search_fixture(
@@ -4242,8 +4308,7 @@ mod tests {
     #[test]
     fn release_catalog_requires_the_embedded_raw_checksum_and_keeps_lkg_on_tamper() {
         let directory = temp_root("release-integrity");
-        let path = directory.join(REQUIRED_RELEASE_MANIFEST_NAME);
-        fs::write(&path, REQUIRED_RELEASE_MANIFEST).unwrap();
+        let path = write_required_release_catalog(&directory);
         let root = RegistrySourceRoot {
             source: ManifestSource::Release,
             directory,

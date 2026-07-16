@@ -1,0 +1,91 @@
+schema_version = 1
+project_key = "star-control"
+default_profile = "target"
+workspace_unit = "workspace"
+validation_entrypoint = "scripts/validate.ps1"
+policy_schema_version = 1
+evidence_schema_version = 1
+
+[limits]
+max_git_output_bytes = 67108864
+max_untracked_file_bytes = 8388608
+max_untracked_total_bytes = 33554432
+
+[classification]
+security_prefixes = [
+    "crates/adapters/star-ipc/src/key_store",
+    "apps/star-controller/src/authenticode",
+    "apps/star-controller/src/trust_store",
+    "docs/contracts/trust",
+]
+data_prefixes = [
+    "crates/infrastructure/star-state/",
+    "docs/contracts/failure-security-and-dependency-maintenance",
+]
+workflow_release_prefixes = [".github/", "packaging/", "tools/package-release/"]
+validator_policy_prefixes = [
+    ".star-control/",
+    "scripts/validate.ps1",
+    "scripts/validation/",
+    "crates/control/star-validation/",
+]
+public_contract_prefixes = [
+    "Cargo.toml",
+    "catalog/",
+    "specs/",
+    "integrations/",
+    "docs/contracts/",
+    "docs/features/",
+    "crates/foundation/star-contracts/",
+    "crates/foundation/star-ports/",
+]
+toolchain_paths = ["rust-toolchain.toml"]
+lockfile_paths = ["Cargo.lock"]
+documentation_extensions = ["md"]
+configuration_extensions = ["json", "jsonl", "toml", "yaml", "yml"]
+code_extensions = ["rs"]
+
+[[unit_mappings]]
+prefix = ".star-control/"
+unit = "validation"
+
+[[unit_mappings]]
+prefix = "docs/"
+unit = "docs"
+
+[[unit_mappings]]
+prefix = "catalog/"
+unit = "contracts"
+
+[[unit_mappings]]
+prefix = "specs/"
+unit = "contracts"
+
+[[unit_mappings]]
+prefix = "integrations/"
+unit = "integrations"
+
+[[unit_mappings]]
+prefix = "scripts/"
+unit = "validation"
+
+[[unit_mappings]]
+prefix = ".github/"
+unit = "workspace"
+
+[fingerprints]
+toolchain_paths = ["rust-toolchain.toml"]
+lockfile_paths = ["Cargo.lock"]
+validation_script_paths = [
+    "scripts/validate.ps1",
+    "scripts/validation/common.ps1",
+    "scripts/validation/project.ps1",
+    "scripts/validation/contract-tests.ps1",
+    "scripts/validation/check_files.py",
+    "scripts/validation/project-validation-report.schema.json",
+    "scripts/validation/requirements-validation.txt",
+    "scripts/validation/invoke-shadow-validation.ps1",
+    "scripts/validation/shadow_compare.py",
+    "scripts/validation/shadow-contract.json",
+]
+config_paths = ["Cargo.toml", ".github/workflows/full.yml"]

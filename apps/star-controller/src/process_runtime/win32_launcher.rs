@@ -60,9 +60,9 @@ use windows::{
 use zeroize::Zeroize;
 
 use super::{
-    CapturedStream, DirectExeOutcome, DirectExeSpec, OperationJob, ProcessEndEvidence,
-    ProcessEndObserver, ProcessStartEvidence, ProcessStartObserver, RuntimeCancellation,
-    RuntimeError, StdinCancelPlan,
+    CapturedStream, ChildEnvironmentMode, DirectExeOutcome, DirectExeSpec, OperationJob,
+    ProcessEndEvidence, ProcessEndObserver, ProcessStartEvidence, ProcessStartObserver,
+    RuntimeCancellation, RuntimeError, StdinCancelPlan,
 };
 
 pub(super) async fn execute(
@@ -71,8 +71,9 @@ pub(super) async fn execute(
     cancel_plan: Option<StdinCancelPlan>,
     process_observer: Option<ProcessStartObserver>,
     process_end_observer: Option<ProcessEndObserver>,
+    environment_mode: ChildEnvironmentMode,
 ) -> Result<DirectExeOutcome, RuntimeError> {
-    spec.validate()?;
+    spec.validate_for_environment(environment_mode)?;
     tokio::task::spawn_blocking(move || {
         execute_blocking(
             &spec,
@@ -80,6 +81,7 @@ pub(super) async fn execute(
             cancel_plan.as_ref(),
             process_observer.as_ref(),
             process_end_observer.as_ref(),
+            environment_mode,
         )
     })
     .await
@@ -92,6 +94,7 @@ fn execute_blocking(
     cancel_plan: Option<&StdinCancelPlan>,
     process_observer: Option<&ProcessStartObserver>,
     process_end_observer: Option<&ProcessEndObserver>,
+    environment_mode: ChildEnvironmentMode,
 ) -> Result<DirectExeOutcome, RuntimeError> {
     if cancellation.is_some_and(RuntimeCancellation::is_cancelled) {
         return Err(RuntimeError::Cancelled);
@@ -182,8 +185,8 @@ fn execute_blocking(
         close_many(&pipe_handles);
         return Err(RuntimeError::Start);
     }
-    if let Some(appcontainer) = appcontainer.as_ref() {
-        if unsafe {
+    if let Some(appcontainer) = appcontainer.as_ref()
+        && unsafe {
             UpdateProcThreadAttribute(
                 list,
                 0,
@@ -195,11 +198,10 @@ fn execute_blocking(
             )
         }
         .is_err()
-        {
-            unsafe { DeleteProcThreadAttributeList(list) };
-            close_many(&pipe_handles);
-            return Err(RuntimeError::IsolationUnavailable);
-        }
+    {
+        unsafe { DeleteProcThreadAttributeList(list) };
+        close_many(&pipe_handles);
+        return Err(RuntimeError::IsolationUnavailable);
     }
 
     let prepared = (|| {
@@ -207,7 +209,11 @@ fn execute_blocking(
             wide_nul(spec.executable.as_os_str())?,
             wide_nul(spec.working_directory.as_os_str())?,
             command_line(spec)?,
-            environment_block(spec)?,
+            match environment_mode {
+                ChildEnvironmentMode::Restricted => Some(environment_block(spec)?),
+                ChildEnvironmentMode::InheritTrustedInternal
+                | ChildEnvironmentMode::InheritTrustedPowerShell => None,
+            },
         ))
     })();
     let (application, current_directory, mut command_line, mut environment) = match prepared {
@@ -237,13 +243,15 @@ fn execute_blocking(
                 | CREATE_UNICODE_ENVIRONMENT
                 | CREATE_NO_WINDOW
                 | EXTENDED_STARTUPINFO_PRESENT,
-            Some(environment.as_mut_ptr().cast()),
+            environment.as_ref().map(|block| block.as_ptr().cast()),
             PCWSTR::from_raw(current_directory.as_ptr()),
             (&raw const startup.StartupInfo),
             &mut process,
         )
     };
-    environment.zeroize();
+    if let Some(environment) = environment.as_mut() {
+        environment.zeroize();
+    }
     unsafe { DeleteProcThreadAttributeList(list) };
     // Parent no longer owns the child ends. Closing them is required for EOF
     // detection in the drain threads.
@@ -652,10 +660,10 @@ fn drain_file(
             while let Some(position) = pending_line.iter().position(|byte| *byte == b'\n') {
                 let line: Vec<_> = pending_line.drain(..=position).collect();
                 let line = &line[..line.len().saturating_sub(1)];
-                if line.len() <= 8 * 1024 * 1024 {
-                    if let Some(observer) = line_observer.as_ref() {
-                        observer(line);
-                    }
+                if line.len() <= 8 * 1024 * 1024
+                    && let Some(observer) = line_observer.as_ref()
+                {
+                    observer(line);
                 }
                 if let Some(final_sender) = final_sender.as_ref()
                     && line.len() <= 8 * 1024 * 1024

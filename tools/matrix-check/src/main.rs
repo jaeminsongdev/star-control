@@ -80,10 +80,10 @@ fn scan_rust(
         let path = entry.path();
         if path.is_dir() {
             scan_rust(&path, pattern, mapped, invalid_tests);
-        } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
-            if let Ok(source) = fs::read_to_string(&path) {
-                scan_source(&path, &source, pattern, mapped, invalid_tests);
-            }
+        } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs")
+            && let Ok(source) = fs::read_to_string(&path)
+        {
+            scan_source(&path, &source, pattern, mapped, invalid_tests);
         }
     }
 }

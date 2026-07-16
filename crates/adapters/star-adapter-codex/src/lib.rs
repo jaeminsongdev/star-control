@@ -20,6 +20,7 @@ use star_adapter_windows::{
 };
 use star_contracts::{
     Sha256Hash, canonical_sha256,
+    fixed_mcp::FIXED_TOOLS,
     installation::{
         CODEX_INTEGRATION_RECORD_SCHEMA_ID, CodexIntegrationRecord, CodexIntegrationSummary,
         CodexRegistrationState, INSTALLATION_SCHEMA_VERSION,
@@ -40,7 +41,14 @@ const PLUGIN_ROOT_RELATIVE: &str = "plugins/star-control";
 const PLUGIN_MANIFEST_RELATIVE: &str = "plugins/star-control/.codex-plugin/plugin.json";
 const MCP_RELATIVE: &str = "plugins/star-control/.mcp.json";
 const HOOKS_RELATIVE: &str = "plugins/star-control/hooks/hooks.json";
-const SKILL_RELATIVE: &str = "plugins/star-control/skills/star-control-workflow/SKILL.md";
+const SKILL_RELATIVE: &str = "plugins/star-control/skills/star-control-operations/SKILL.md";
+const SKILL_NAME: &str = "star-control-operations";
+const PLUGIN_DESCRIPTION: &str =
+    "Expose ready Star-Control operations to Codex with a native project-tool fallback.";
+const PLUGIN_SHORT_DESCRIPTION: &str = "Use ready Star-Control operations with native fallback.";
+const PLUGIN_LONG_DESCRIPTION: &str = "Connects Codex to the installed Star-Control MCP gateway, invokes only ready actions, and keeps normal development work available through native project tools when Star-Control cannot act.";
+const PLUGIN_DEFAULT_PROMPT: &str = "Use ready Star-Control operations for this task; otherwise continue with native project tools.";
+const HOOK_STATUS_MESSAGE: &str = "Loading Star-Control operations";
 const SOURCE_FILE_MAX_BYTES: u64 = 512 * 1024;
 const CODEX_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -54,6 +62,12 @@ pub enum CodexAdapterError {
     InvalidRenderedPlugin,
     #[error("Codex integration ownership could not be proven")]
     Ownership,
+    #[error(
+        "Codex desktop is running; close every Codex window and retry from a separate terminal"
+    )]
+    ActiveCodexDesktop,
+    #[error("Codex desktop activity could not be verified safely")]
+    CodexDesktopCheck,
     #[error("Codex integration I/O failed: {0}")]
     Io(#[from] std::io::Error),
     #[error("Codex integration JSON failed: {0}")]
@@ -146,6 +160,7 @@ impl CodexIntegrationManager {
         install_root: &Path,
         codex_executable: Option<&Path>,
     ) -> Result<IntegrationResult, CodexAdapterError> {
+        ensure_codex_desktop_inactive()?;
         let installation = self.installation.status(install_root)?;
         let Some(summary) = installation.codex_integration else {
             return Ok(IntegrationResult {
@@ -238,6 +253,7 @@ impl CodexIntegrationManager {
         install_root: &Path,
         options: &IntegrationOptions,
     ) -> Result<IntegrationResult, CodexAdapterError> {
+        ensure_codex_desktop_inactive()?;
         let installation = self.installation.status(install_root)?;
         let install_root = canonical_fixed_directory(Path::new(&installation.install_root))?;
         let rendered_install_root = normal_windows_path(&install_root);
@@ -445,6 +461,7 @@ fn validate_rendered(
         || plugin.get("version").and_then(|value| value.as_str()) != Some(plugin_version)
         || plugin.get("mcpServers").and_then(|value| value.as_str()) != Some("./.mcp.json")
         || plugin.contains_key("hooks")
+        || !plugin_metadata_valid(&plugin)
     {
         return Err(CodexAdapterError::InvalidRenderedPlugin);
     }
@@ -467,7 +484,7 @@ fn validate_rendered(
         "\"{}\" hook session-start",
         install_root.join("star.exe").to_string_lossy()
     );
-    if hooks
+    let hook = hooks
         .get("hooks")
         .and_then(|value| value.get("SessionStart"))
         .and_then(|value| value.as_array())
@@ -475,16 +492,17 @@ fn validate_rendered(
         .and_then(|group| group.get("hooks"))
         .and_then(|value| value.as_array())
         .and_then(|handlers| handlers.first())
-        .and_then(|handler| handler.get("commandWindows"))
-        .and_then(|value| value.as_str())
-        != Some(expected_hook.as_str())
+        .and_then(|handler| handler.as_object())
+        .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+    if hook.get("commandWindows").and_then(|value| value.as_str()) != Some(expected_hook.as_str())
+        || hook.get("statusMessage").and_then(|value| value.as_str()) != Some(HOOK_STATUS_MESSAGE)
     {
         return Err(CodexAdapterError::InvalidRenderedPlugin);
     }
     let skill = rendered
         .get(SKILL_RELATIVE)
         .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
-    if !skill.starts_with(b"---\n") && !skill.starts_with(b"---\r\n") {
+    if !skill_content_valid(skill) {
         return Err(CodexAdapterError::InvalidRenderedPlugin);
     }
     Ok(())
@@ -542,6 +560,59 @@ fn strict_object(
         .as_object()
         .cloned()
         .ok_or(CodexAdapterError::InvalidTemplate)
+}
+
+fn plugin_metadata_valid(plugin: &serde_json::Map<String, serde_json::Value>) -> bool {
+    let Some(interface) = plugin.get("interface").and_then(|value| value.as_object()) else {
+        return false;
+    };
+    let capabilities_valid = interface
+        .get("capabilities")
+        .and_then(|value| value.as_array())
+        .is_some_and(|values| {
+            values.len() == 2
+                && values[0].as_str() == Some("Local MCP")
+                && values[1].as_str() == Some("Development operations")
+        });
+    let prompts_valid = interface
+        .get("defaultPrompt")
+        .and_then(|value| value.as_array())
+        .is_some_and(|values| {
+            values.len() == 1 && values[0].as_str() == Some(PLUGIN_DEFAULT_PROMPT)
+        });
+    plugin.get("description").and_then(|value| value.as_str()) == Some(PLUGIN_DESCRIPTION)
+        && interface
+            .get("shortDescription")
+            .and_then(|value| value.as_str())
+            == Some(PLUGIN_SHORT_DESCRIPTION)
+        && interface
+            .get("longDescription")
+            .and_then(|value| value.as_str())
+            == Some(PLUGIN_LONG_DESCRIPTION)
+        && capabilities_valid
+        && prompts_valid
+}
+
+fn skill_content_valid(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let expected_name = format!("name: {SKILL_NAME}");
+    let mut lines = text.lines();
+    let frontmatter_valid = lines.next() == Some("---")
+        && lines.next() == Some(expected_name.as_str())
+        && lines
+            .next()
+            .is_some_and(|line| line.starts_with("description: "))
+        && lines.next() == Some("---");
+    frontmatter_valid
+        && text.contains("프로젝트 native 도구")
+        && text.contains("fallback")
+        && !text.contains(concat!("star-control-", "workflow"))
+        && text
+            .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+            .filter(|token| token.starts_with("star_"))
+            .all(|token| FIXED_TOOLS.iter().any(|tool| tool.name == token))
 }
 
 fn pretty_json_object(
@@ -621,6 +692,33 @@ fn run_codex(executable: Option<&Path>, args: &[String]) -> bool {
             }
         }
     }
+}
+
+fn ensure_codex_desktop_inactive() -> Result<(), CodexAdapterError> {
+    let system_root = std::env::var_os("SystemRoot").ok_or(CodexAdapterError::CodexDesktopCheck)?;
+    let tasklist = PathBuf::from(system_root)
+        .join("System32")
+        .join("tasklist.exe");
+    let output = Command::new(tasklist)
+        .args(["/FI", "IMAGENAME eq ChatGPT.exe", "/FO", "CSV", "/NH"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW.0)
+        .output()?;
+    if !output.status.success() {
+        return Err(CodexAdapterError::CodexDesktopCheck);
+    }
+    if tasklist_reports_codex_desktop(&output.stdout) {
+        return Err(CodexAdapterError::ActiveCodexDesktop);
+    }
+    Ok(())
+}
+
+fn tasklist_reports_codex_desktop(output: &[u8]) -> bool {
+    const IMAGE_NAME: &[u8] = b"ChatGPT.exe";
+    output
+        .windows(IMAGE_NAME.len())
+        .any(|window| window.eq_ignore_ascii_case(IMAGE_NAME))
 }
 
 fn display_codex_command(executable: Option<&Path>, args: &[String]) -> String {
@@ -769,6 +867,19 @@ mod tests {
     }
 
     #[test]
+    fn active_codex_tasklist_output_is_detected_without_locale_assumptions() {
+        assert!(tasklist_reports_codex_desktop(
+            br#""ChatGPT.exe","18168","Console","1","100 K""#
+        ));
+        assert!(tasklist_reports_codex_desktop(
+            br#""chatgpt.EXE","18168","Console","1","100 K""#
+        ));
+        assert!(!tasklist_reports_codex_desktop(
+            "정보: 실행 중인 작업이 없습니다.".as_bytes()
+        ));
+    }
+
+    #[test]
     fn renderer_changes_only_owned_runtime_fields() {
         let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../integrations/codex-plugin-template/marketplace-root");
@@ -812,6 +923,19 @@ mod tests {
         let plugin = strict_object(&source, PLUGIN_MANIFEST_RELATIVE).unwrap();
         assert!(!plugin.contains_key("hooks"));
         assert_eq!(plugin.get("mcpServers").unwrap(), "./.mcp.json");
+        assert!(plugin_metadata_valid(&plugin));
+        let skill = source.get(SKILL_RELATIVE).unwrap();
+        assert!(skill_content_valid(skill));
+        let invalid = std::str::from_utf8(skill)
+            .unwrap()
+            .replace("star_tool_search", concat!("star_", "goal_start"));
+        assert!(!skill_content_valid(invalid.as_bytes()));
+        let invalid = format!(
+            "{}\n{}",
+            std::str::from_utf8(skill).unwrap(),
+            concat!("star-control-", "workflow")
+        );
+        assert!(!skill_content_valid(invalid.as_bytes()));
     }
 
     #[test]

@@ -1,0 +1,109 @@
+schema_version = 1
+catalog_id = "star-control-development-projects"
+registration_enabled = false
+root_env = "STAR_DEVELOPMENT_ROOT"
+default_root = "D:/개발"
+
+[[projects]]
+project_key = "star-control"
+display_name = "Star-Control"
+relative_path = "관제/Star-Control"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/star-control.git"
+
+[[projects]]
+project_key = "devtools"
+display_name = "개발도구"
+relative_path = "개발도구"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/devtools"
+
+[[projects]]
+project_key = "content"
+display_name = "콘텐츠"
+relative_path = "콘텐츠"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/content.git"
+
+[[projects]]
+project_key = "danpung"
+display_name = "단풍"
+relative_path = "게임/단풍"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/maple.git"
+
+[[projects]]
+project_key = "emulink"
+display_name = "EmuLink"
+relative_path = "게임/EmuLink"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/emulink.git"
+
+[[projects]]
+project_key = "format"
+display_name = "포맷"
+relative_path = "포맷"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/format.git"
+
+[[projects]]
+project_key = "adapter"
+display_name = "어댑터"
+relative_path = "어댑터"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/adapter"
+
+[[projects]]
+project_key = "mod-foundry"
+display_name = "mod-foundry"
+relative_path = "게임/mod-foundry"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/mod-foundry.git"
+
+[[projects]]
+project_key = "language"
+display_name = "언어"
+relative_path = "언어"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/language.git"
+
+[[projects]]
+project_key = "storage"
+display_name = "저장소"
+relative_path = "저장소"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/storage.git"
+
+[[projects]]
+project_key = "ecosystem-canonical"
+display_name = "생태계 정본"
+relative_path = "정본/생태계_정본"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/Canonical.git"
+
+[[projects]]
+project_key = "knowledge"
+display_name = "지식"
+relative_path = "지식"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/knowledge.git"
+
+[[projects]]
+project_key = "core"
+display_name = "코어"
+relative_path = "코어"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/core.git"

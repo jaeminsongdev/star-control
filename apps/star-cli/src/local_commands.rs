@@ -5,9 +5,12 @@ use star_adapter_windows::autostart::{self, AutostartError, AutostartState};
 #[cfg(test)]
 use star_adapter_windows::compiled_architecture;
 use star_adapter_windows::{InstallationManager, WindowsAdapterError};
-use star_contracts::{installation::TargetArchitecture, parse_no_duplicate_keys};
+use star_contracts::{
+    fixed_mcp::SERVER_INSTRUCTIONS, installation::TargetArchitecture, parse_no_duplicate_keys,
+};
 
 const HOOK_INPUT_MAX_BYTES: u64 = 1024 * 1024;
+const SESSION_START_SKILL_NAME: &str = "star-control-operations";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum LocalCommand {
@@ -292,6 +295,18 @@ fn current_install_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "star.exe has no installation directory".to_owned())
 }
 
+fn session_start_hook_output() -> serde_json::Value {
+    serde_json::json!({
+        "continue": true,
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": format!(
+                "`{SESSION_START_SKILL_NAME}` 지침을 따른다. {SERVER_INSTRUCTIONS}"
+            )
+        }
+    })
+}
+
 fn run_session_start_hook() -> i32 {
     let mut input = Vec::new();
     if std::io::stdin()
@@ -320,13 +335,7 @@ fn run_session_start_hook() -> i32 {
         eprintln!("hook_event_name must be SessionStart");
         return 2;
     }
-    let output = serde_json::json!({
-        "continue": true,
-        "hookSpecificOutput": {
-            "hookEventName": "SessionStart",
-            "additionalContext": "Star-Control 연동이 활성화되어 있다. 개발 변경 목표는 Star-Control MCP의 star_goal_start로 시작하고 반환된 단계·승인·검증 상태를 통해 계속 관리한다. MCP를 사용할 수 없으면 우회하지 말고 연결 실패를 사용자에게 알린다."
-        }
-    });
+    let output = session_start_hook_output();
     println!(
         "{}",
         serde_json::to_string(&output).expect("hook output serializes")
@@ -367,6 +376,7 @@ fn print_windows_error(error: WindowsAdapterError) -> i32 {
 
 fn print_codex_error(error: CodexAdapterError) -> i32 {
     let exit = match &error {
+        CodexAdapterError::ActiveCodexDesktop => 7,
         CodexAdapterError::Installation(WindowsAdapterError::ArchitectureMismatch) => 6,
         CodexAdapterError::Installation(WindowsAdapterError::InstallationConflict) => 3,
         CodexAdapterError::InvalidTemplate | CodexAdapterError::InvalidRenderedPlugin => 2,
@@ -389,9 +399,39 @@ fn print_autostart_error(error: AutostartError) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use star_contracts::fixed_mcp::FIXED_TOOLS;
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| (*value).to_owned()).collect()
+    }
+
+    fn unknown_fixed_tool_references(value: &str) -> Vec<&str> {
+        value
+            .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+            .filter(|token| {
+                token.starts_with("star_") && !FIXED_TOOLS.iter().any(|tool| tool.name == *token)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn session_start_hook_output_matches_operations_snapshot() {
+        let output = session_start_hook_output();
+        let serialized = serde_json::to_string(&output).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"continue":true,"hookSpecificOutput":{"additionalContext":"`star-control-operations` 지침을 따른다. Star-Control action을 사용할 때는 `star_tool_search`로 현재 registry를 검색하고 action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 확인한다. describe에서 현재 Schema, 위험 lane, `descriptor_hash`, `required_call_tool`을 받은 뒤 그 tool에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. package나 manifest의 ready 상태는 action readiness가 아니다. 검색 결과가 없거나 action이 non-ready이거나 MCP 연결이 실패하면 일반 Codex 개발 작업을 막지 말고 프로젝트 native 도구를 사용하며 fallback 사실과 이유를 결과에 기록한다. `star_tool_registry_status`는 진단용이며 필수 선행 Gate가 아니다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`, `question_required`와 Operation ID 반환은 완료가 아니다.","hookEventName":"SessionStart"}}"#
+        );
+        let context = output["hookSpecificOutput"]["additionalContext"]
+            .as_str()
+            .unwrap();
+        assert!(unknown_fixed_tool_references(context).is_empty());
+        assert_eq!(
+            unknown_fixed_tool_references(concat!("call `star_", "goal_start`")),
+            [concat!("star_", "goal_start")]
+        );
+        assert!(context.contains("프로젝트 native 도구"));
+        assert!(context.contains("fallback 사실과 이유"));
     }
 
     #[test]

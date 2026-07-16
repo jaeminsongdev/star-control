@@ -1,5 +1,9 @@
 //! Project discovery and deterministic scan input construction.
 
+pub mod catalog;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -680,8 +684,15 @@ fn project_revision(
     })
 }
 
+pub(crate) fn hidden_command(executable: &str) -> Command {
+    let mut command = Command::new(executable);
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000);
+    command
+}
+
 fn git_text(root: &Path, arguments: &[&str]) -> Result<String, ProjectError> {
-    let output = Command::new("git")
+    let output = hidden_command("git")
         .arg("-C")
         .arg(root)
         .args(arguments)
@@ -700,7 +711,7 @@ fn git_paths(
     include_untracked: bool,
     include_ignored: bool,
 ) -> Result<Vec<PathBuf>, ProjectError> {
-    let mut command = Command::new("git");
+    let mut command = hidden_command("git");
     command
         .arg("-C")
         .arg(root)
@@ -779,7 +790,7 @@ fn relative_path(root: &Path, path: &Path) -> Result<ProjectPathRef, ProjectErro
 }
 
 fn git_dirty_summary(root: &Path) -> Result<BTreeMap<String, u64>, ProjectError> {
-    let output = Command::new("git")
+    let output = hidden_command("git")
         .arg("-C")
         .arg(root)
         .args(["status", "--porcelain=v1", "-z"])

@@ -2,9 +2,18 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 1단계인 **읽기 전용 Project Catalog와 Code Index**의 설계 정본이다. 현재 상태는 **설계 확정 대상, 제품 구현 전**이다. 이 문서 변경만으로 scanner, parser, DB schema, cache, watcher 또는 CLI command가 구현됐다고 표시하지 않는다.
+이 문서는 Star-Control 1단계인 **읽기 전용 Project Catalog와 Code Index**의 설계 정본이다. stable `ProjectCheckout`, `ProjectCatalogSnapshot`, `CodeIndexSnapshot`, DB migration·cache·watcher까지 포함한 M1 본체는 **설계 확정, 제품 구현 전**이다. 다만 P-0030에서 아래의 추적 allowlist 기반 운영 precursor와 read-only CLI/MCP action만 구현했다.
 
 이 문서에서 **Project Catalog**는 사용자가 관리하는 project·checkout·workspace와 그 관계의 관찰 snapshot을 뜻한다. [설정과 Catalog 계약](config-and-catalog.md)의 built-in Task·Tool·Rule·Profile descriptor Catalog 및 `CatalogSnapshot`과 다른 domain이다. 이름 충돌을 피하기 위해 wire type은 항상 `ProjectCatalogSnapshot`을 사용한다.
+
+### P-0030 추적 allowlist precursor 경계
+
+- `catalog/projects.toml`은 현재 운영 대상의 Git 추적 정본이다. 정확히 13개 `active_canonical` 프로젝트만 명시하며 `registration_enabled=false`로 고정한다.
+- P-0011에서 폐기한 구 관제 저장소·로컬 AI 실험, 하나_프로젝트의 nested Git, `임시문서`, `legacy/`·`래거시/`, backup·sandbox·bootstrap checkout, linked worktree와 Git 정본이 아닌 LAWOS는 명시적 제외 대상이다. 제외 대상은 인접 경로 탐색으로 다시 등록하지 않는다.
+- `star.core.project.list`, `star.core.project.status`, `star.core.doctor`는 이 파일에 선언된 정확한 경로만 읽는다. discovery root 재귀 탐색, 인접 checkout 자동 등록, 관리 DB write는 수행하지 않는다.
+- probe는 root 존재, Git top-level, checkout kind, origin, `git-common-dir`를 독립 상태로 보고한다. role schema는 `active_canonical`, `linked_worktree`, `read_only_migration_source`, `backup`, `sandbox`, `bootstrap_checkout`을 구분할 수 있지만 현재 운영 allowlist에는 `active_canonical`만 존재하며 unavailable·identity mismatch를 성공으로 숨기지 않는다.
+- 출력 `star.project-catalog-view`와 `star.project-status-view`는 P-0030 운영 view이며 M1의 persisted `ProjectCatalogSnapshot`이 아니다. 이후 DB projection을 추가하더라도 Git manifest가 정본이고 DB는 재생성 가능한 파생 상태다.
+- `project register`는 이 precursor를 DB에 쓰지 않으며 후속 Slice에서 allowlist membership, idempotency와 13개 활성 목록을 다시 검증한 뒤에만 연다.
 
 책임은 다음처럼 나눈다.
 

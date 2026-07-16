@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schemas/project-validation-report-v1.json",
+  "title": "Star project validation report",
+  "type": "object",
+  "required": [
+    "schema_id",
+    "schema_version",
+    "project_id",
+    "requested_profile",
+    "required_profile",
+    "effective_profile",
+    "status",
+    "outcome",
+    "completeness",
+    "stability",
+    "started_at",
+    "finished_at",
+    "duration_ms",
+    "input_fingerprint",
+    "environment",
+    "impact",
+    "summary",
+    "checks",
+    "artifact_refs"
+  ],
+  "properties": {
+    "schema_id": {
+      "const": "star.project-validation-report"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "required_profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "effective_profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "unit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "base_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "outcome": {
+      "$ref": "#/$defs/outcome"
+    },
+    "completeness": {
+      "$ref": "#/$defs/completeness"
+    },
+    "stability": {
+      "$ref": "#/$defs/stability"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "input_fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "revision",
+        "branch",
+        "rust",
+        "cargo",
+        "python",
+        "pyyaml",
+        "git",
+        "powershell",
+        "platform"
+      ]
+    },
+    "impact": {
+      "type": "object",
+      "required": [
+        "changed_paths",
+        "affected_units",
+        "whole_project",
+        "scope_partial"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "total",
+        "passed",
+        "failed",
+        "not_run",
+        "partial",
+        "unverified",
+        "flaky",
+        "failure_summary"
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "profile": {
+      "enum": [
+        "quick",
+        "target",
+        "full",
+        "release"
+      ]
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail",
+        "not_run",
+        "partial",
+        "unverified",
+        "flaky"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "pass",
+        "fail",
+        "not_run",
+        "error",
+        "cancelled"
+      ]
+    },
+    "completeness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ]
+    },
+    "stability": {
+      "enum": [
+        "stable",
+        "flaky",
+        "not_evaluated"
+      ]
+    },
+    "check": {
+      "type": "object",
+      "required": [
+        "id",
+        "unit",
+        "required",
+        "status",
+        "outcome",
+        "completeness",
+        "stability",
+        "command",
+        "exit_code",
+        "started_at",
+        "finished_at",
+        "duration_ms",
+        "failure_summary",
+        "log_ref"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "outcome": {
+          "$ref": "#/$defs/outcome"
+        },
+        "completeness": {
+          "$ref": "#/$defs/completeness"
+        },
+        "stability": {
+          "$ref": "#/$defs/stability"
+        },
+        "command": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failure_summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "log_ref": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

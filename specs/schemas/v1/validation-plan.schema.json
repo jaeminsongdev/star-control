@@ -1,0 +1,552 @@
+{
+  "$defs": {
+    "AffectedUnit": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/AffectedUnitKind"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "unit_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit_id",
+        "kind",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "AffectedUnitKind": {
+      "enum": [
+        "unit",
+        "workspace",
+        "project"
+      ],
+      "type": "string"
+    },
+    "EvidenceFlowStage": {
+      "enum": [
+        "validation_plan",
+        "validation_run_diagnostic_result",
+        "gate_decision",
+        "evidence_bundle",
+        "ai_compressed_summary"
+      ],
+      "type": "string"
+    },
+    "IndependentReviewRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "triggers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/IndependentReviewTrigger"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "required"
+      ],
+      "type": "object"
+    },
+    "IndependentReviewTrigger": {
+      "enum": [
+        "security",
+        "data_migration",
+        "public_contract",
+        "release",
+        "repeated_failure"
+      ],
+      "type": "string"
+    },
+    "PlannedCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_key": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "cache_key_inputs": {
+          "$ref": "#/$defs/ValidationCacheKeyInputs"
+        },
+        "check_id": {
+          "type": "string"
+        },
+        "command": {
+          "$ref": "#/$defs/ValidationCommand"
+        },
+        "disposition": {
+          "$ref": "#/$defs/PlannedCheckDisposition"
+        },
+        "selection_reason": {
+          "type": "string"
+        },
+        "source_validation_run_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValidationRunRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "check_id",
+        "unit_id",
+        "command",
+        "disposition",
+        "selection_reason",
+        "cache_key_inputs",
+        "cache_key"
+      ],
+      "type": "object"
+    },
+    "PlannedCheckDisposition": {
+      "enum": [
+        "execute",
+        "reuse"
+      ],
+      "type": "string"
+    },
+    "ProfileReasonCode": {
+      "enum": [
+        "explicit_quick",
+        "explicit_target",
+        "explicit_full",
+        "explicit_release",
+        "documentation_only",
+        "internal_unit_change",
+        "public_contract_change",
+        "validator_or_policy_change",
+        "toolchain_or_lockfile_change",
+        "security_or_data_change",
+        "workflow_or_release_change",
+        "missing_unit_mapping",
+        "impact_uncertain"
+      ],
+      "type": "string"
+    },
+    "ReverseConsumer": {
+      "additionalProperties": false,
+      "properties": {
+        "consumer_unit_id": {
+          "type": "string"
+        },
+        "dependency_path": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "provider_unit_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_unit_id",
+        "consumer_unit_id",
+        "dependency_path",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "ValidationCacheKeyInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "inputs": {
+          "$ref": "#/$defs/ValidationInputFingerprintComponents"
+        }
+      },
+      "required": [
+        "inputs",
+        "command"
+      ],
+      "type": "object"
+    },
+    "ValidationCapabilityLevel": {
+      "enum": [
+        "tracked_path_precursor"
+      ],
+      "type": "string"
+    },
+    "ValidationChangeClass": {
+      "enum": [
+        "documentation",
+        "internal_code",
+        "public_contract",
+        "configuration",
+        "toolchain",
+        "lockfile",
+        "validator_policy",
+        "security",
+        "data_migration",
+        "workflow_release",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "ValidationChangeSource": {
+      "enum": [
+        "staged",
+        "unstaged",
+        "untracked"
+      ],
+      "type": "string"
+    },
+    "ValidationChangedFile": {
+      "additionalProperties": false,
+      "properties": {
+        "change_class": {
+          "$ref": "#/$defs/ValidationChangeClass"
+        },
+        "direct_unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ValidationChangeSource"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "sources",
+        "change_class"
+      ],
+      "type": "object"
+    },
+    "ValidationCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "executable": {
+          "type": "string"
+        },
+        "expected_exit_codes": {
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "working_directory": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "executable",
+        "working_directory",
+        "expected_exit_codes"
+      ],
+      "type": "object"
+    },
+    "ValidationEscalation": {
+      "enum": [
+        "expand_to_workspace",
+        "expand_to_project_full",
+        "human_review"
+      ],
+      "type": "string"
+    },
+    "ValidationInputFingerprintComponents": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evidence_schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lockfile": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "policy_schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project_manifest": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "staged_diff": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "toolchain": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "unstaged_diff": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "untracked_content": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "validation_scripts": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "revision",
+        "staged_diff",
+        "unstaged_diff",
+        "untracked_content",
+        "toolchain",
+        "lockfile",
+        "project_manifest",
+        "validation_scripts",
+        "config",
+        "policy_schema_version",
+        "evidence_schema_version"
+      ],
+      "type": "object"
+    },
+    "ValidationPlanReadiness": {
+      "enum": [
+        "ready",
+        "human_review",
+        "blocked"
+      ],
+      "type": "string"
+    },
+    "ValidationPlanSchemaId": {
+      "enum": [
+        "star.validation-plan"
+      ],
+      "type": "string"
+    },
+    "ValidationProfile": {
+      "enum": [
+        "quick",
+        "target",
+        "full",
+        "release"
+      ],
+      "type": "string"
+    },
+    "ValidationProfileSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/ProfileReasonCode"
+          },
+          "type": "array"
+        },
+        "requested": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ValidationProfile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "$ref": "#/$defs/ValidationProfile"
+        },
+        "selected": {
+          "$ref": "#/$defs/ValidationProfile"
+        }
+      },
+      "required": [
+        "required",
+        "selected",
+        "reasons"
+      ],
+      "type": "object"
+    },
+    "ValidationRunRef": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "validation_run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "validation_run_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ValidationUncertainty": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ValidationUncertaintyCode"
+        },
+        "escalation": {
+          "$ref": "#/$defs/ValidationEscalation"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "summary",
+        "escalation"
+      ],
+      "type": "object"
+    },
+    "ValidationUncertaintyCode": {
+      "enum": [
+        "impact_unavailable",
+        "unit_mapping_missing",
+        "reverse_consumer_graph_incomplete",
+        "untracked_content_unavailable",
+        "fingerprint_input_unavailable",
+        "toolchain_unavailable",
+        "release_environment_unavailable"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.validation-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "capability_level": {
+      "$ref": "#/$defs/ValidationCapabilityLevel"
+    },
+    "changed_files": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ValidationChangedFile"
+      },
+      "type": "array"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/PlannedCheck"
+      },
+      "type": "array"
+    },
+    "direct_units": {
+      "items": {
+        "$ref": "#/$defs/AffectedUnit"
+      },
+      "type": "array"
+    },
+    "evidence_flow": {
+      "items": {
+        "$ref": "#/$defs/EvidenceFlowStage"
+      },
+      "type": "array"
+    },
+    "independent_review": {
+      "$ref": "#/$defs/IndependentReviewRequirement"
+    },
+    "input_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "profile": {
+      "$ref": "#/$defs/ValidationProfileSelection"
+    },
+    "project_key": {
+      "type": "string"
+    },
+    "readiness": {
+      "$ref": "#/$defs/ValidationPlanReadiness"
+    },
+    "reverse_consumers": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ReverseConsumer"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "type": "string"
+    },
+    "schema_id": {
+      "$ref": "#/$defs/ValidationPlanSchemaId"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "uncertainties": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ValidationUncertainty"
+      },
+      "type": "array"
+    },
+    "validation_plan_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "validation_plan_id",
+    "capability_level",
+    "project_key",
+    "revision",
+    "direct_units",
+    "profile",
+    "checks",
+    "independent_review",
+    "readiness",
+    "evidence_flow",
+    "input_fingerprint",
+    "plan_fingerprint"
+  ],
+  "title": "ValidationPlan",
+  "type": "object"
+}

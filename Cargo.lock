@@ -1329,6 +1329,7 @@ dependencies = [
  "star-contracts",
  "star-evidence",
  "star-ipc",
+ "star-project",
  "star-state",
  "thiserror",
  "tokio",

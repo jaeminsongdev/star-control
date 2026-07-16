@@ -1,9 +1,13 @@
 #![cfg(windows)]
 #![windows_subsystem = "windows"]
 
+mod validation_execution;
+mod validation_planning;
+
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{SecondsFormat, Utc};
 use star_application::{ApplicationError, ManagementApplicationService};
+use star_contracts::evidence::ValidationProfile;
 use star_contracts::{
     Sha256Hash,
     fixed_mcp::ApprovalDecision,
@@ -27,6 +31,10 @@ use star_ipc::{
     key_store::{KeyRecoveryAudit, default_key_path, reconcile},
     process_identity::verify_pipe_client_image,
     windows_pipe::{PipeAcceptPool, read_json, write_json},
+};
+use star_project::catalog::{
+    ProjectCatalogManifest, ProjectCatalogView, inspect_project_catalog,
+    inspect_project_catalog_entry, parse_project_catalog, resolve_project_catalog_root,
 };
 use star_state::{
     RecoveryInspection, SqliteManagementRepositorySet, WindowsProjectRootBindingStore,
@@ -73,6 +81,10 @@ use star_controller::{
     },
     registry_watcher::RegistryWatcher,
 };
+use validation_execution::{
+    ValidationExecutionError, read_project_validation_evidence, run_project_validation,
+};
+use validation_planning::{ValidationPlanningObservationError, build_project_validation_plan};
 
 fn now() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
@@ -277,6 +289,8 @@ type DurableProcessProgressObserver = Arc<dyn Fn(ExternalToolProgress, bool) -> 
 type DurableProcessEndObserver = Arc<dyn Fn(ProcessEndEvidence) -> bool + Send + Sync>;
 type RuntimeFailure = (&'static str, &'static str);
 type ProbeVersions = (String, Option<String>, Vec<String>);
+
+const PROJECT_CATALOG_SOURCE: &str = include_str!("../../../catalog/projects.toml");
 
 fn probe_capability_enabled(
     package: &ActivePackage,
@@ -541,18 +555,392 @@ fn revoked_package_ids(registry: &RegistryRuntime, trust: &TrustStore) -> BTreeS
         .collect()
 }
 
-// Controller-command handlers and their owning generated Schemas must be
-// registered together. The current bounded MCP implementation contains no
-// Planner/Goal application handlers, so the release core package must remain
-// unavailable instead of advertising placeholder empty-object Schemas as
-// executable commands.
-const IMPLEMENTED_CONTROLLER_COMMANDS: &[&str] = &[];
+type SyncControllerCommandHandler =
+    fn(&serde_json::Value) -> Result<serde_json::Value, RuntimeFailure>;
+
+#[derive(Clone, Copy)]
+enum ControllerCommandHandler {
+    Sync(SyncControllerCommandHandler),
+    ValidationRun,
+}
+
+#[derive(Clone, Copy)]
+struct ControllerCommandRegistration {
+    backend_ref: &'static str,
+    handler: ControllerCommandHandler,
+}
+
+// Readiness requires all three surfaces to agree: this list, the concrete
+// handler registry below, and both resolved action Schemas. Tests fail if any
+// surface drifts. Goal/plan/register actions deliberately remain unavailable.
+// `validation.run` is the bounded native-entrypoint precursor, not the full M3
+// persisted runner or GateDecision/EvidenceBundle writer.
+const IMPLEMENTED_CONTROLLER_COMMANDS: &[&str] = &[
+    "evidence.get",
+    "doctor.run",
+    "project.list",
+    "project.status",
+    "validation.plan",
+    "validation.run",
+];
+const CONTROLLER_COMMAND_HANDLERS: &[ControllerCommandRegistration] = &[
+    ControllerCommandRegistration {
+        backend_ref: "evidence.get",
+        handler: ControllerCommandHandler::Sync(run_evidence_get_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "doctor.run",
+        handler: ControllerCommandHandler::Sync(run_doctor_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "project.list",
+        handler: ControllerCommandHandler::Sync(run_project_list_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "project.status",
+        handler: ControllerCommandHandler::Sync(run_project_status_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "validation.plan",
+        handler: ControllerCommandHandler::Sync(run_validation_plan_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "validation.run",
+        handler: ControllerCommandHandler::ValidationRun,
+    },
+];
+
+fn controller_command_registration(
+    backend_ref: &str,
+) -> Option<&'static ControllerCommandRegistration> {
+    CONTROLLER_COMMAND_HANDLERS
+        .iter()
+        .find(|registration| registration.backend_ref == backend_ref)
+}
+
+fn controller_command_registry_consistent() -> bool {
+    IMPLEMENTED_CONTROLLER_COMMANDS.len() == CONTROLLER_COMMAND_HANDLERS.len()
+        && IMPLEMENTED_CONTROLLER_COMMANDS.iter().all(|backend_ref| {
+            CONTROLLER_COMMAND_HANDLERS
+                .iter()
+                .filter(|registration| registration.backend_ref == *backend_ref)
+                .count()
+                == 1
+        })
+        && CONTROLLER_COMMAND_HANDLERS
+            .iter()
+            .all(|registration| IMPLEMENTED_CONTROLLER_COMMANDS.contains(&registration.backend_ref))
+}
+
+fn load_project_catalog_manifest_and_root()
+-> Result<(ProjectCatalogManifest, std::path::PathBuf), RuntimeFailure> {
+    let manifest = parse_project_catalog(PROJECT_CATALOG_SOURCE).map_err(|_| {
+        (
+            "PROJECT_CATALOG_INVALID",
+            "The tracked project catalog manifest is invalid.",
+        )
+    })?;
+    let root = resolve_project_catalog_root(&manifest).map_err(|_| {
+        (
+            "PROJECT_CATALOG_ROOT_INVALID",
+            "The project catalog root is not an absolute local path.",
+        )
+    })?;
+    Ok((manifest, root))
+}
+
+fn load_project_catalog_view() -> Result<ProjectCatalogView, RuntimeFailure> {
+    let (manifest, root) = load_project_catalog_manifest_and_root()?;
+    Ok(inspect_project_catalog(
+        &manifest,
+        PROJECT_CATALOG_SOURCE,
+        &root,
+    ))
+}
+
+fn tracked_project_registration_enabled() -> bool {
+    parse_project_catalog(PROJECT_CATALOG_SOURCE)
+        .is_ok_and(|manifest| manifest.registration_enabled)
+}
+
+fn run_project_list_command(
+    _arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    serde_json::to_value(load_project_catalog_view()?).map_err(|_| {
+        (
+            "PROJECT_CATALOG_SERIALIZATION_FAILED",
+            "The project catalog view could not be serialized.",
+        )
+    })
+}
+
+fn run_project_status_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let project_key = arguments
+        .get("project_key")
+        .and_then(serde_json::Value::as_str)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "project_key must identify one tracked catalog entry.",
+        ))?;
+    let (manifest, root) = load_project_catalog_manifest_and_root()?;
+    let status = inspect_project_catalog_entry(&manifest, &root, project_key).ok_or((
+        "PROJECT_NOT_FOUND",
+        "The project key is not present in the tracked catalog.",
+    ))?;
+    serde_json::to_value(status).map_err(|_| {
+        (
+            "PROJECT_CATALOG_SERIALIZATION_FAILED",
+            "The project status view could not be serialized.",
+        )
+    })
+}
+
+fn run_validation_plan_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let project_key = validation_project_key(arguments)?;
+    let requested_profile = validation_requested_profile(arguments)?;
+    let requested_unit = validation_requested_unit(arguments);
+    let (catalog, root) = load_project_catalog_manifest_and_root()?;
+    let plan = build_project_validation_plan(
+        &catalog,
+        &root,
+        project_key,
+        requested_profile,
+        requested_unit,
+    )
+    .map_err(map_validation_planning_error)?;
+    serde_json::to_value(plan).map_err(|_| {
+        (
+            "VALIDATION_PLAN_SERIALIZATION_FAILED",
+            "The validated plan could not be serialized.",
+        )
+    })
+}
+
+fn validation_project_key(arguments: &serde_json::Value) -> Result<&str, RuntimeFailure> {
+    arguments
+        .get("project_key")
+        .and_then(serde_json::Value::as_str)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "project_key must identify one tracked catalog entry.",
+        ))
+}
+
+fn validation_requested_profile(
+    arguments: &serde_json::Value,
+) -> Result<Option<ValidationProfile>, RuntimeFailure> {
+    arguments
+        .get("requested_profile")
+        .and_then(serde_json::Value::as_str)
+        .map(|value| match value {
+            "quick" => Ok(ValidationProfile::Quick),
+            "target" => Ok(ValidationProfile::Target),
+            "full" => Ok(ValidationProfile::Full),
+            "release" => Ok(ValidationProfile::Release),
+            _ => Err((
+                "TOOL_ARGUMENT_INVALID",
+                "requested_profile must be quick, target, full, or release.",
+            )),
+        })
+        .transpose()
+}
+
+fn validation_requested_unit(arguments: &serde_json::Value) -> Option<String> {
+    arguments
+        .get("unit")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+}
+
+fn map_validation_planning_error(error: ValidationPlanningObservationError) -> RuntimeFailure {
+    match error {
+        ValidationPlanningObservationError::ProjectBoundary => (
+            "VALIDATION_PROJECT_UNAVAILABLE",
+            "The project is not an available identity-matched active canonical Git root.",
+        ),
+        ValidationPlanningObservationError::ProjectManifest => (
+            "VALIDATION_CONFIG_UNAVAILABLE",
+            "The project has no valid current .star-control/project.toml.",
+        ),
+        ValidationPlanningObservationError::RequestedUnit => (
+            "VALIDATION_UNIT_INVALID",
+            "The requested unit is unknown or conflicts with the observed change set.",
+        ),
+        ValidationPlanningObservationError::GitObservation
+        | ValidationPlanningObservationError::ObservationLimit => (
+            "VALIDATION_OBSERVATION_UNAVAILABLE",
+            "The bounded Git change observation could not be completed.",
+        ),
+        ValidationPlanningObservationError::Planning => (
+            "VALIDATION_PLAN_FAILED",
+            "The observed inputs could not produce a valid closed ValidationPlan.",
+        ),
+    }
+}
+
+fn map_validation_execution_error(error: ValidationExecutionError) -> RuntimeFailure {
+    match error {
+        ValidationExecutionError::Planning(error) => map_validation_planning_error(error),
+        ValidationExecutionError::TimeoutArgument => (
+            "TOOL_ARGUMENT_INVALID",
+            "timeout_ms must be between 1000 and 3600000.",
+        ),
+        ValidationExecutionError::PowerShellUnavailable => (
+            "VALIDATION_TOOL_UNAVAILABLE",
+            "PowerShell 7 could not be resolved to an absolute executable.",
+        ),
+        ValidationExecutionError::Runtime(
+            star_controller::process_runtime::RuntimeError::Timeout,
+        ) => (
+            "VALIDATION_TIMEOUT",
+            "The native validation process exceeded its bounded timeout.",
+        ),
+        ValidationExecutionError::Runtime(
+            star_controller::process_runtime::RuntimeError::Cancelled,
+        ) => (
+            "VALIDATION_CANCELLED",
+            "The native validation process was cancelled and its Job Object was terminated.",
+        ),
+        ValidationExecutionError::Runtime(_) => (
+            "VALIDATION_PROCESS_FAILED",
+            "The native validation process could not produce bounded execution evidence.",
+        ),
+        ValidationExecutionError::ExitCode => (
+            "VALIDATION_RESULT_UNAVAILABLE",
+            "The native validation process returned an unsupported result code.",
+        ),
+        ValidationExecutionError::ReportInvalid => (
+            "VALIDATION_EVIDENCE_INVALID",
+            "The native validation report is malformed or promotes an incomplete result.",
+        ),
+        ValidationExecutionError::PlanMismatch => (
+            "VALIDATION_PLAN_MISMATCH",
+            "The native validation report does not match the sealed current plan.",
+        ),
+        ValidationExecutionError::EvidenceBoundary => (
+            "VALIDATION_EVIDENCE_BOUNDARY",
+            "The evidence reference is outside target/validation for the selected project.",
+        ),
+        ValidationExecutionError::EvidenceUnavailable => (
+            "VALIDATION_EVIDENCE_UNAVAILABLE",
+            "The bounded validation evidence file is unavailable.",
+        ),
+    }
+}
+
+async fn run_validation_run_command(
+    arguments: &serde_json::Value,
+    cancellation: Option<RuntimeCancellation>,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let project_key = validation_project_key(arguments)?;
+    let requested_profile = validation_requested_profile(arguments)?;
+    let requested_unit = validation_requested_unit(arguments);
+    let timeout_ms = arguments
+        .get("timeout_ms")
+        .and_then(serde_json::Value::as_u64);
+    let (catalog, root) = load_project_catalog_manifest_and_root()?;
+    run_project_validation(
+        &catalog,
+        &root,
+        project_key,
+        requested_profile,
+        requested_unit,
+        timeout_ms,
+        cancellation,
+    )
+    .await
+    .map_err(map_validation_execution_error)
+}
+
+fn run_evidence_get_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let project_key = validation_project_key(arguments)?;
+    let evidence_ref = arguments
+        .get("evidence_ref")
+        .and_then(serde_json::Value::as_str)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "evidence_ref must identify one target/validation report.",
+        ))?;
+    let (catalog, root) = load_project_catalog_manifest_and_root()?;
+    read_project_validation_evidence(&catalog, &root, project_key, evidence_ref)
+        .map_err(map_validation_execution_error)
+}
+
+fn run_doctor_command(_arguments: &serde_json::Value) -> Result<serde_json::Value, RuntimeFailure> {
+    let catalog = load_project_catalog_view()?;
+    let handlers_consistent = controller_command_registry_consistent();
+    let active_count_valid = catalog.summary.active_canonical_projects == 13;
+    let catalog_clean = catalog.summary.unavailable_projects == 0
+        && catalog.summary.identity_mismatches == 0
+        && catalog.summary.identity_unverified == 0;
+    let registration_disabled = !catalog.registration_enabled;
+    let checks = vec![
+        serde_json::json!({
+            "check_id":"controller_command_contracts",
+            "status":if handlers_consistent { "pass" } else { "fail" },
+            "summary":if handlers_consistent {
+                "Implemented command names and concrete handlers agree."
+            } else {
+                "Implemented command names and concrete handlers disagree."
+            }
+        }),
+        serde_json::json!({
+            "check_id":"project_catalog_active_set",
+            "status":if active_count_valid { "pass" } else { "fail" },
+            "summary":format!(
+                "The tracked catalog declares {} active canonical projects.",
+                catalog.summary.active_canonical_projects
+            )
+        }),
+        serde_json::json!({
+            "check_id":"project_catalog_identity",
+            "status":if catalog_clean { "pass" } else { "warning" },
+            "summary":format!(
+                "{} roots are unavailable, {} identities mismatch, and {} identities are unverified.",
+                catalog.summary.unavailable_projects,
+                catalog.summary.identity_mismatches,
+                catalog.summary.identity_unverified
+            )
+        }),
+        serde_json::json!({
+            "check_id":"project_registration_gate",
+            "status":if registration_disabled { "pass" } else { "fail" },
+            "summary":if registration_disabled {
+                "Project registration remains disabled for the read-only catalog slice."
+            } else {
+                "Project registration was enabled before the registration slice was implemented."
+            }
+        }),
+    ];
+    let status = if !handlers_consistent || !active_count_valid || !registration_disabled {
+        "fail"
+    } else if !catalog_clean {
+        "warning"
+    } else {
+        "pass"
+    };
+    Ok(serde_json::json!({
+        "schema_id":"star.doctor-report",
+        "schema_version":1,
+        "status":status,
+        "catalog_source_fingerprint":catalog.source_fingerprint,
+        "implemented_controller_commands":IMPLEMENTED_CONTROLLER_COMMANDS,
+        "checks":checks
+    }))
+}
 
 fn action_runtime_contract_ready(package: &ActivePackage, action: &ActionDescriptor) -> bool {
     match action.backend_kind {
         BackendKind::Process => true,
         BackendKind::ControllerCommand => {
             IMPLEMENTED_CONTROLLER_COMMANDS.contains(&action.backend_ref.as_str())
+                && controller_command_registration(&action.backend_ref).is_some()
                 && package
                     .resources
                     .action_schemas
@@ -585,9 +973,36 @@ fn effective_core_ready(
             })
 }
 
+fn effective_controller_readiness(
+    registry: &RegistryRuntime,
+    trust: &TrustStore,
+    policy_profile: UserPolicyProfile,
+) -> ControllerReadiness {
+    if effective_core_ready(registry, trust, policy_profile) {
+        return ControllerReadiness::Ready;
+    }
+    let has_ready_action = registry
+        .active()
+        .get("star.control.core")
+        .is_some_and(|package| {
+            effective_trust_state(package, trust, policy_profile) == "trusted"
+                && package
+                    .manifest
+                    .actions
+                    .iter()
+                    .any(|action| action_runtime_contract_ready(package, action))
+        });
+    if has_ready_action {
+        ControllerReadiness::Degraded
+    } else {
+        ControllerReadiness::Blocked
+    }
+}
+
 fn search_readiness(
     registry: &RegistryRuntime,
     package: &ActivePackage,
+    action: &ActionDescriptor,
     trust: &TrustStore,
     policy_profile: UserPolicyProfile,
 ) -> &'static str {
@@ -607,9 +1022,7 @@ fn search_readiness(
     }
     if effective_trust_state(package, trust, policy_profile) != "trusted" {
         "untrusted"
-    } else if package.manifest.package_id == "star.control.core"
-        && !core_runtime_contracts_ready(package)
-    {
+    } else if !action_runtime_contract_ready(package, action) {
         "unavailable"
     } else if candidate_state.is_some_and(|state| state != "ready") {
         "degraded"
@@ -733,7 +1146,7 @@ fn search_snapshot_hash(
                 hit.action.tool_id.clone(),
                 serde_json::json!({
                     "descriptor_hash":RegistryRuntime::descriptor_hash(hit.package, hit.action),
-                    "readiness":search_readiness(registry, hit.package, trust, policy_profile),
+                    "readiness":search_readiness(registry, hit.package, hit.action, trust, policy_profile),
                     "candidate_state":registry.candidate_observation(&hit.package.manifest.package_id).map(|candidate| candidate.state),
                     "source":source_name(hit.package.source)
                 }),
@@ -1046,6 +1459,11 @@ impl RuntimeScopeIds {
     }
 }
 
+fn resolved_controller_temp_directory() -> Option<std::path::PathBuf> {
+    let final_path = std::env::temp_dir().canonicalize().ok()?;
+    (final_path.is_dir() && safe_user_config_path(&final_path)).then_some(final_path)
+}
+
 fn create_runtime_directories(
     operation_id: &OperationId,
     appcontainer_profile: Option<&str>,
@@ -1075,7 +1493,11 @@ fn create_runtime_directories(
         )
     } else {
         (
-            std::env::temp_dir()
+            resolved_controller_temp_directory()
+                .ok_or((
+                    "TOOL_WORKING_DIRECTORY_INVALID",
+                    "The Controller temp root is not a safe fixed local path.",
+                ))?
                 .join("Star-Control")
                 .join("operations")
                 .join(operation_id.as_str()),
@@ -1300,7 +1722,11 @@ fn materialize_controller_artifact(
     role: &str,
     file_name: &str,
 ) -> Result<serde_json::Value, (&'static str, &'static str)> {
-    let directory = std::env::temp_dir()
+    let directory = resolved_controller_temp_directory()
+        .ok_or((
+            "TOOL_OUTPUT_LIMIT",
+            "The output artifact temp root is not a safe fixed local path.",
+        ))?
         .join("Star-Control")
         .join("artifacts")
         .join(star_ipc::nonce());
@@ -1719,7 +2145,12 @@ fn build_child_environment(
             "A Controller-owned state directory has no child environment name.",
         ))?;
         let root = if state.location == "controller_temp" {
-            std::env::temp_dir().join("Star-Control/tool-state")
+            resolved_controller_temp_directory()
+                .ok_or((
+                    "TOOL_STATE_DIRECTORY_INVALID",
+                    "The Controller temp root is not a safe fixed local path.",
+                ))?
+                .join("Star-Control/tool-state")
         } else if state.location == "controller_data" {
             std::env::var_os("LOCALAPPDATA")
                 .map(std::path::PathBuf::from)
@@ -1834,7 +2265,14 @@ fn build_child_environment(
 fn cleanup_success_state_directories(
     paths: &[std::path::PathBuf],
 ) -> Result<(), (&'static str, &'static str)> {
-    let mut roots = vec![std::env::temp_dir().join("Star-Control/tool-state")];
+    let mut roots = vec![
+        resolved_controller_temp_directory()
+            .ok_or((
+                "TOOL_STATE_DIRECTORY_INVALID",
+                "The Controller temp root is not a safe fixed local path.",
+            ))?
+            .join("Star-Control/tool-state"),
+    ];
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
         roots.push(std::path::PathBuf::from(local).join("Star-Control/tool-state"));
     }
@@ -2675,11 +3113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::id(),
             now(),
             env!("CARGO_PKG_VERSION").to_owned(),
-            if effective_core_ready(&registry, &trust, initial_policy_profile) {
-                ControllerReadiness::Ready
-            } else {
-                ControllerReadiness::Blocked
-            },
+            effective_controller_readiness(&registry, &trust, initial_policy_profile),
             registry.revision,
         );
         let challenge = serde_json::to_value(handshake.challenge().expect("fresh challenge"))?;
@@ -2750,6 +3184,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
+        if request.command == "project.register" && !tracked_project_registration_enabled() {
+            let response = invalid_request_response(
+                request,
+                "PROJECT_REGISTRATION_DISABLED",
+                "Project registration remains disabled until the tracked allowlist registration slice is implemented and approved.",
+                registry.revision,
+            );
+            let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+            continue;
+        }
         if is_management_command(&request.command) {
             let response = handle_management_command(
                 management_service.as_ref(),
@@ -2910,6 +3354,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &registry_cache_path,
             &mut last_persisted_registry_cache_state,
         );
+        if is_direct_core_command(&request.command) {
+            let response = handle_direct_core_command(
+                &registry,
+                &trust,
+                policy_profile,
+                request,
+                registry.revision,
+            )
+            .await;
+            let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+            continue;
+        }
         if request.command == "controller.start" {
             let response = IpcResponse {
                 schema_id: "star.ipc.response".to_owned(),
@@ -2987,7 +3443,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some((package, action)) => {
                     let descriptor_hash = RegistryRuntime::descriptor_hash(package, action);
                     let trust_state = effective_trust_state(package, &trust, policy_profile);
-                    let readiness = search_readiness(&registry, package, &trust, policy_profile);
+                    let readiness =
+                        search_readiness(&registry, package, action, &trust, policy_profile);
                     let risk_lane = risk_lane(&action.permission_actions)?;
                     let schemas = package.resources.action_schemas.get(&action.tool_id);
                     let input_schema = schemas
@@ -3440,7 +3897,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         let _ = store.transition(
                                                             operation_id.as_str(),
                                                             "starting",
-                                                            "process_create",
+                                                            if action.backend_kind
+                                                                == BackendKind::ControllerCommand
+                                                            {
+                                                                "controller_command_dispatch"
+                                                            } else {
+                                                                "process_create"
+                                                            },
                                                         );
                                                     }
                                                     let process_started =
@@ -3457,7 +3920,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         Arc::clone(&operation_store),
                                                         operation_id.clone(),
                                                     );
-                                                    let result = run_authorized_process(
+                                                    let result = run_authorized_action(
                                                         AuthorizedProcessRequest {
                                                             package: &package,
                                                             action: &action,
@@ -3592,7 +4055,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     registry.revision,
                                 )
                             } else {
-                                let response = match run_authorized_process(
+                                let response = match run_authorized_action(
                                     AuthorizedProcessRequest {
                                         package,
                                         action,
@@ -3617,7 +4080,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         request_id: request.request_id,
                                         status: IpcStatus::Ok,
                                         data: Some(
-                                            serde_json::json!({"tool_id":action.tool_id,"descriptor_hash":current_hash,"registry_revision":registry.revision,"result":result,"output_provenance":{"package_id":package.manifest.package_id,"source":source_name(package.source),"external_untrusted_content":true}}),
+                                            serde_json::json!({"tool_id":action.tool_id,"descriptor_hash":current_hash,"registry_revision":registry.revision,"result":result,"output_provenance":output_provenance(package, action)}),
                                         ),
                                         operation_id: None,
                                         diagnostics: vec![],
@@ -3760,15 +4223,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .request_cancel(operation_id, reason)
                 {
                     Ok(operation) => {
-                        if operation.cancel_requested && operation.cancellable {
-                            if let Some(token) = cancellation_tokens
+                        if operation.cancel_requested
+                            && operation.cancellable
+                            && let Some(token) = cancellation_tokens
                                 .lock()
                                 .expect("cancellation mutex is not poisoned")
                                 .get(operation.operation_id.as_str())
                                 .cloned()
-                            {
-                                token.cancel_with_force_after(force_after_ms);
-                            }
+                        {
+                            token.cancel_with_force_after(force_after_ms);
                         }
                         IpcResponse {
                             schema_id: "star.ipc.response".to_owned(),
@@ -4034,7 +4497,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         Arc::clone(&operation_store),
                                                         operation_id.clone(),
                                                     );
-                                                    let result = run_authorized_process(
+                                                    let result = run_authorized_action(
                                                         AuthorizedProcessRequest {
                                                             package: &package,
                                                             action: &action,
@@ -4818,7 +5281,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ) {
                 let package = hit.package;
                 let action = hit.action;
-                let readiness = search_readiness(&registry, package, &trust, policy_profile);
+                let readiness =
+                    search_readiness(&registry, package, action, &trust, policy_profile);
                 if !readiness_filter.iter().any(|filter| filter == readiness) {
                     continue;
                 }
@@ -5043,10 +5507,10 @@ fn normalize_action_arguments(
         }
     }
     for parameter in &action.parameters {
-        if !arguments.contains_key(&parameter.name) {
-            if let Some(default) = &parameter.default {
-                arguments.insert(parameter.name.clone(), default.clone());
-            }
+        if !arguments.contains_key(&parameter.name)
+            && let Some(default) = &parameter.default
+        {
+            arguments.insert(parameter.name.clone(), default.clone());
         }
         let value = arguments.get(&parameter.name);
         if parameter.required && value.is_none() {
@@ -5101,27 +5565,24 @@ fn normalize_action_arguments(
             .as_i64()
             .map(i128::from)
             .or_else(|| value.as_u64().map(i128::from))
-        {
-            if parameter
+            && (parameter
                 .minimum
                 .is_some_and(|minimum| number < i128::from(minimum))
                 || parameter
                     .maximum
-                    .is_some_and(|maximum| number > i128::from(maximum))
-            {
-                return Err("Tool numeric argument violates its bounds.");
-            }
+                    .is_some_and(|maximum| number > i128::from(maximum)))
+        {
+            return Err("Tool numeric argument violates its bounds.");
         }
-        if let Some(array) = value.as_array() {
-            if parameter
+        if let Some(array) = value.as_array()
+            && (parameter
                 .min_length
                 .is_some_and(|minimum| array.len() < minimum as usize)
                 || parameter
                     .max_length
-                    .is_some_and(|maximum| array.len() > maximum as usize)
-            {
-                return Err("Tool array argument exceeds its item limit.");
-            }
+                    .is_some_and(|maximum| array.len() > maximum as usize))
+        {
+            return Err("Tool array argument exceeds its item limit.");
         }
     }
     for parameter in &action.parameters {
@@ -6245,6 +6706,58 @@ struct AuthorizedProcessRequest<'a> {
     process_end: Option<DurableProcessEndObserver>,
 }
 
+async fn run_authorized_controller_command(
+    package: &ActivePackage,
+    action: &ActionDescriptor,
+    arguments: Option<&serde_json::Value>,
+    cancellation: Option<RuntimeCancellation>,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let registration = controller_command_registration(&action.backend_ref).ok_or((
+        "TOOL_RUNTIME_UNAVAILABLE",
+        "The Controller command has no concrete handler.",
+    ))?;
+    let arguments = arguments
+        .filter(|value| value.is_object())
+        .ok_or(("TOOL_ARGUMENT_INVALID", "Tool arguments must be an object."))?;
+    let result = match registration.handler {
+        ControllerCommandHandler::Sync(handler) => handler(arguments)?,
+        ControllerCommandHandler::ValidationRun => {
+            run_validation_run_command(arguments, cancellation).await?
+        }
+    };
+    let output_schema = package
+        .resources
+        .action_schemas
+        .get(&action.tool_id)
+        .and_then(|schemas| schemas.output.as_ref())
+        .ok_or((
+            "TOOL_RUNTIME_UNAVAILABLE",
+            "The Controller command output Schema is unavailable.",
+        ))?;
+    validate_schema_instance(output_schema, &result).map_err(|_| {
+        (
+            "TOOL_PROTOCOL_INVALID",
+            "The Controller command result does not satisfy its declared output Schema.",
+        )
+    })?;
+    Ok(result)
+}
+
+async fn run_authorized_action(
+    request: AuthorizedProcessRequest<'_>,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    if request.action.backend_kind == BackendKind::ControllerCommand {
+        return run_authorized_controller_command(
+            request.package,
+            request.action,
+            request.arguments,
+            request.cancellation,
+        )
+        .await;
+    }
+    run_authorized_process(request).await
+}
+
 async fn run_authorized_process(
     request: AuthorizedProcessRequest<'_>,
 ) -> Result<serde_json::Value, RuntimeFailure> {
@@ -6507,16 +7020,14 @@ async fn run_authorized_process(
             ));
         }
         if let (Some(observer), Some(last)) = (process_progress.as_ref(), execution.progress.last())
-        {
-            if last.message.as_ref().is_some_and(|message| {
+            && (last.message.as_ref().is_some_and(|message| {
                 contains_secret_bytes(message.as_bytes(), secret_values.as_slice())
-            }) || !observer(last.clone(), true)
-            {
-                return Err((
-                    "TOOL_PROTOCOL_INVALID",
-                    "The JSON-STDIO progress stream could not be persisted safely.",
-                ));
-            }
+            }) || !observer(last.clone(), true))
+        {
+            return Err((
+                "TOOL_PROTOCOL_INVALID",
+                "The JSON-STDIO progress stream could not be persisted safely.",
+            ));
         }
         let mut response = execution.response;
         match response.status {
@@ -6884,11 +7395,99 @@ fn invalid_request_response(
     }
 }
 
+fn is_direct_core_command(command: &str) -> bool {
+    matches!(
+        command,
+        "doctor.run"
+            | "project.list"
+            | "project.status"
+            | "validation.plan"
+            | "validation.run"
+            | "evidence.get"
+    )
+}
+
+async fn handle_direct_core_command(
+    registry: &RegistryRuntime,
+    trust: &TrustStore,
+    policy_profile: UserPolicyProfile,
+    request: IpcRequest,
+    registry_revision: u64,
+) -> IpcResponse {
+    let Some(package) = registry.active().get("star.control.core") else {
+        return invalid_request_response(
+            request,
+            "TOOL_RUNTIME_UNAVAILABLE",
+            "The required release core package is not active.",
+            registry_revision,
+        );
+    };
+    let Some(action) = package
+        .manifest
+        .actions
+        .iter()
+        .find(|action| action.backend_ref == request.command)
+    else {
+        return invalid_request_response(
+            request,
+            "TOOL_RUNTIME_UNAVAILABLE",
+            "The requested read-only Controller command is not declared.",
+            registry_revision,
+        );
+    };
+    if effective_trust_state(package, trust, policy_profile) != "trusted"
+        || !action_runtime_contract_ready(package, action)
+    {
+        return invalid_request_response(
+            request,
+            "TOOL_RUNTIME_UNAVAILABLE",
+            "The requested action has no trusted handler and resolved owning Schemas.",
+            registry_revision,
+        );
+    }
+    let input_schema = package
+        .resources
+        .action_schemas
+        .get(&action.tool_id)
+        .and_then(|schemas| schemas.input.as_ref());
+    let arguments = match normalize_action_arguments(action, input_schema, Some(&request.payload)) {
+        Ok(arguments) => arguments,
+        Err(message) => {
+            return invalid_request_response(
+                request,
+                "TOOL_ARGUMENT_INVALID",
+                message,
+                registry_revision,
+            );
+        }
+    };
+    match run_authorized_controller_command(package, action, Some(&arguments), None).await {
+        Ok(result) => IpcResponse {
+            schema_id: "star.ipc.response".to_owned(),
+            schema_version: 1,
+            request_id: request.request_id,
+            status: IpcStatus::Ok,
+            data: Some(serde_json::json!({
+                "tool_id":action.tool_id,
+                "descriptor_hash":RegistryRuntime::descriptor_hash(package, action),
+                "registry_revision":registry_revision,
+                "result":result,
+                "output_provenance":output_provenance(package, action)
+            })),
+            operation_id: None,
+            diagnostics: vec![],
+            error: None,
+            registry_revision: Some(registry_revision),
+            correlation_id: request.client_request_id,
+        },
+        Err((code, message)) => invalid_request_response(request, code, message, registry_revision),
+    }
+}
+
 fn is_management_command(command: &str) -> bool {
     matches!(
         command,
         "project.register"
-            | "project.list"
             | "scan.run"
             | "finding.list"
             | "patch.prepare"
@@ -7133,6 +7732,232 @@ fn serialize_management_result(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use star_project::catalog::CatalogProjectRole;
+
+    fn write_release_core_fixture(directory: &std::path::Path) -> &'static str {
+        let manifest = include_str!("../../../catalog/tool-packages/star-control-core.toml");
+        std::fs::write(directory.join("star-control-core.toml"), manifest).unwrap();
+        for (relative, source) in [
+            (
+                "schemas/doctor-input.schema.json",
+                include_str!("../../../catalog/tool-packages/schemas/doctor-input.schema.json"),
+            ),
+            (
+                "schemas/doctor-output.schema.json",
+                include_str!("../../../catalog/tool-packages/schemas/doctor-output.schema.json"),
+            ),
+            (
+                "schemas/project-list-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/project-list-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/project-list-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/project-list-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/project-status-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/project-status-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/project-status-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/project-status-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/validation-plan-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/validation-plan-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/validation-plan-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/validation-plan-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/validation-run-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/validation-run-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/validation-run-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/validation-run-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/evidence-get-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/evidence-get-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/evidence-get-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/evidence-get-output.schema.json"
+                ),
+            ),
+        ] {
+            let path = directory.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, source).unwrap();
+        }
+        manifest
+    }
+
+    fn release_core_registry_fixture() -> (RegistryRuntime, TrustStore, std::path::PathBuf) {
+        let root =
+            std::env::temp_dir().join(format!("star-read-only-core-actions-{}", star_ipc::nonce()));
+        std::fs::create_dir_all(&root).unwrap();
+        write_release_core_fixture(&root);
+        let mut registry = RegistryRuntime::default();
+        registry.demand_scan(&[RegistrySourceRoot {
+            source: ManifestSource::Release,
+            directory: root.clone(),
+        }]);
+        assert!(registry.active().contains_key("star.control.core"));
+        let trust = TrustStore::load(root.join("trust.json")).unwrap();
+        (registry, trust, root)
+    }
+
+    fn direct_core_request(command: &str, payload: serde_json::Value) -> IpcRequest {
+        IpcRequest {
+            schema_id: "star.ipc.request".to_owned(),
+            schema_version: 1,
+            request_id: RequestId::new(),
+            command: command.to_owned(),
+            payload,
+            client_request_id: RequestId::new().to_string(),
+            idempotency_key: None,
+            deadline: None,
+            actor: serde_json::json!({"kind":"internal_test"}),
+            trace_context: None,
+        }
+    }
+
+    #[test]
+    fn read_only_core_readiness_requires_manifest_handler_and_both_schemas() {
+        let (registry, trust, _root) = release_core_registry_fixture();
+        let package = &registry.active()["star.control.core"];
+        assert!(controller_command_registry_consistent());
+        let ready: Vec<_> = package
+            .manifest
+            .actions
+            .iter()
+            .filter(|action| action_runtime_contract_ready(package, action))
+            .map(|action| action.backend_ref.as_str())
+            .collect();
+        assert_eq!(ready, IMPLEMENTED_CONTROLLER_COMMANDS);
+        assert!(matches!(
+            effective_controller_readiness(&registry, &trust, UserPolicyProfile::SafeDefault),
+            ControllerReadiness::Degraded
+        ));
+        assert!(!effective_core_ready(
+            &registry,
+            &trust,
+            UserPolicyProfile::SafeDefault
+        ));
+
+        let doctor = package
+            .manifest
+            .actions
+            .iter()
+            .find(|action| action.backend_ref == "doctor.run")
+            .unwrap();
+        let mut missing_schema = package.clone();
+        missing_schema
+            .resources
+            .action_schemas
+            .remove(&doctor.tool_id);
+        assert!(!action_runtime_contract_ready(&missing_schema, doctor));
+        let mut missing_handler = doctor.clone();
+        missing_handler.backend_ref = "doctor.missing".to_owned();
+        assert!(!action_runtime_contract_ready(package, &missing_handler));
+    }
+
+    #[tokio::test]
+    async fn cli_precursor_commands_and_controller_handlers_return_typed_results() {
+        let (registry, trust, _root) = release_core_registry_fixture();
+        for (command, payload, expected_schema) in [
+            ("doctor.run", serde_json::json!({}), "star.doctor-report"),
+            (
+                "project.list",
+                serde_json::json!({}),
+                "star.project-catalog-view",
+            ),
+            (
+                "project.status",
+                serde_json::json!({"project_key":"star-control"}),
+                "star.project-status-view",
+            ),
+            (
+                "validation.plan",
+                serde_json::json!({"project_key":"star-control"}),
+                "star.validation-plan",
+            ),
+        ] {
+            let response = handle_direct_core_command(
+                &registry,
+                &trust,
+                UserPolicyProfile::SafeDefault,
+                direct_core_request(command, payload),
+                registry.revision,
+            )
+            .await;
+            assert_eq!(response.status, IpcStatus::Ok, "{command}");
+            assert_eq!(
+                response.data.as_ref().unwrap()["result"]["schema_id"],
+                expected_schema,
+                "{command}"
+            );
+            assert_eq!(
+                response.data.as_ref().unwrap()["output_provenance"]["external_untrusted_content"],
+                false
+            );
+        }
+        let manifest = parse_project_catalog(PROJECT_CATALOG_SOURCE).unwrap();
+        assert_eq!(
+            manifest
+                .projects
+                .iter()
+                .filter(|project| project.role == CatalogProjectRole::ActiveCanonical)
+                .count(),
+            13
+        );
+        assert!(!manifest.registration_enabled);
+        assert!(!tracked_project_registration_enabled());
+        let plan: star_contracts::evidence::ValidationPlan = serde_json::from_value(
+            run_validation_plan_command(&serde_json::json!({"project_key":"star-control"}))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            plan.profile.selected,
+            star_contracts::evidence::ValidationProfile::Full
+        );
+        assert!(!plan.changed_files.is_empty());
+        assert!(
+            plan.checks.iter().all(|check| check.disposition
+                == star_contracts::evidence::PlannedCheckDisposition::Execute)
+        );
+        assert!(plan.validate().is_ok());
+        assert_eq!(
+            run_project_status_command(&serde_json::json!({"project_key":"missing"})),
+            Err((
+                "PROJECT_NOT_FOUND",
+                "The project key is not present in the tracked catalog."
+            ))
+        );
+    }
 
     fn active_test_package(
         manifest: star_contracts::manifest::ToolPackageManifest,
@@ -7241,11 +8066,7 @@ mod tests {
         let root =
             std::env::temp_dir().join(format!("star-release-core-revoke-{}", star_ipc::nonce()));
         std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(
-            root.join("star-control-core.toml"),
-            include_str!("../../../catalog/tool-packages/star-control-core.toml"),
-        )
-        .unwrap();
+        write_release_core_fixture(&root);
         let mut registry = RegistryRuntime::default();
         registry.demand_scan(&[RegistrySourceRoot {
             source: ManifestSource::Release,
@@ -7341,8 +8162,7 @@ mod tests {
             std::env::temp_dir().join(format!("star-search-discovery-hash-{}", star_ipc::nonce()));
         std::fs::create_dir_all(&root).unwrap();
         let manifest_path = root.join("star-control-core.toml");
-        let valid = include_str!("../../../catalog/tool-packages/star-control-core.toml");
-        std::fs::write(&manifest_path, valid).unwrap();
+        let valid = write_release_core_fixture(&root);
         let source = RegistrySourceRoot {
             source: ManifestSource::Release,
             directory: root.clone(),
@@ -7376,11 +8196,17 @@ mod tests {
             search_snapshot_hash(&registry, &trust, UserPolicyProfile::SafeDefault, &trusted);
         assert_eq!(registry.revision, revision);
         assert_ne!(ready, degraded);
-        let (package, _) = registry
+        let (package, action) = registry
             .find_effective_action("star.core.goal.start", &trusted)
             .unwrap();
         assert_eq!(
-            search_readiness(&registry, package, &trust, UserPolicyProfile::SafeDefault),
+            search_readiness(
+                &registry,
+                package,
+                action,
+                &trust,
+                UserPolicyProfile::SafeDefault,
+            ),
             "unavailable"
         );
     }
@@ -7388,8 +8214,9 @@ mod tests {
     #[test]
     // matrix: MCP-M025
     fn scaffold_is_an_atomic_disabled_zero_action_draft_with_observed_metadata() {
-        let directory =
-            std::env::temp_dir().join(format!("star-scaffold-contract-{}", star_ipc::nonce()));
+        let directory = resolved_controller_temp_directory()
+            .unwrap()
+            .join(format!("star-scaffold-contract-{}", star_ipc::nonce()));
         std::fs::create_dir_all(&directory).unwrap();
         let output = directory.join("draft.toml");
         let result = scaffold_disabled_manifest(&std::env::current_exe().unwrap(), &output)
@@ -8083,7 +8910,12 @@ mod tests {
 
         let mut fixed = stage_worktree.clone();
         fixed.working_directory = "fixed".to_owned();
-        fixed.fixed_working_directory = Some(std::env::temp_dir().display().to_string());
+        fixed.fixed_working_directory = Some(
+            resolved_controller_temp_directory()
+                .unwrap()
+                .display()
+                .to_string(),
+        );
         assert!(
             resolve_working_directory(&fixed, &directories, &project_directory)
                 .unwrap()

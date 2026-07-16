@@ -190,14 +190,14 @@ pub fn reconcile(
 ) -> Result<KeyRecovery, KeyStoreError> {
     match load(path) {
         Ok(disk_key) => {
-            if let Some(live_key) = live_owner_key {
-                if disk_key.as_bytes() != live_key.as_bytes() {
-                    store_atomic(path, live_key)?;
-                    return Ok(KeyRecovery {
-                        key: IpcKey::from_unsealed(live_key.as_bytes().to_vec()),
-                        audit: KeyRecoveryAudit::RewroteLiveKey,
-                    });
-                }
+            if let Some(live_key) = live_owner_key
+                && disk_key.as_bytes() != live_key.as_bytes()
+            {
+                store_atomic(path, live_key)?;
+                return Ok(KeyRecovery {
+                    key: IpcKey::from_unsealed(live_key.as_bytes().to_vec()),
+                    audit: KeyRecoveryAudit::RewroteLiveKey,
+                });
             }
             Ok(KeyRecovery {
                 key: disk_key,

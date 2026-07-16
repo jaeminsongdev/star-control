@@ -9,7 +9,7 @@
             "command": "star hook session-start",
             "commandWindows": "star hook session-start",
             "timeout": 10,
-            "statusMessage": "Loading the Star-Control workflow"
+            "statusMessage": "Loading Star-Control operations"
           }
         ]
       }

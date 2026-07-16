@@ -4,7 +4,8 @@ use serde_json::{Map, Value};
 use crate::{
     evidence::{
         ArtifactRef, DIAGNOSTIC_SCHEMA_ID, Diagnostic, EVIDENCE_BUNDLE_SCHEMA_ID, EvidenceBundle,
-        GATE_DECISION_SCHEMA_ID, GateDecision, VALIDATION_RUN_SCHEMA_ID, ValidationRun,
+        GATE_DECISION_SCHEMA_ID, GateDecision, VALIDATION_PLAN_SCHEMA_ID, VALIDATION_RUN_SCHEMA_ID,
+        ValidationPlan, ValidationRun,
     },
     fixed_mcp::{CallInput, McpToolResult, fixed_input_schema, fixed_result_schema},
     installation::{
@@ -185,6 +186,10 @@ fn management_id_prefix(name: &str) -> Option<&'static str> {
 
 pub fn generated_documents() -> Vec<(&'static str, Value)> {
     let mut documents = vec![
+        (
+            "validation-plan.schema.json",
+            schema_document::<ValidationPlan>(VALIDATION_PLAN_SCHEMA_ID),
+        ),
         (
             "validation-run.schema.json",
             schema_document::<ValidationRun>(VALIDATION_RUN_SCHEMA_ID),

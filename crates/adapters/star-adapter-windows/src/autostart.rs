@@ -152,7 +152,7 @@ fn read_value() -> Result<Option<String>, AutostartError> {
             Err(AutostartError::Registry)
         };
     }
-    if kind != REG_SZ || bytes % 2 != 0 {
+    if kind != REG_SZ || !bytes.is_multiple_of(2) {
         unsafe {
             let _ = RegCloseKey(key);
         }

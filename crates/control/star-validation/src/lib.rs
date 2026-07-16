@@ -1,5 +1,7 @@
 //! Rule, Finding, ValidationResult, and GateDecision semantics.
 
+pub mod planning;
+
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};

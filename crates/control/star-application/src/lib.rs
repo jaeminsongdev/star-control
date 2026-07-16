@@ -31,6 +31,13 @@ use star_project::{
     ProjectError, ProjectSeed, ScanPolicy, SharedDecisionDeclarations, load_shared_decisions,
     observe_project,
 };
+pub use star_validation::planning::{
+    AiEvidenceSummary, AiValidationRunSummary, CacheMissReason, CacheReuseDecision,
+    CacheValidationStability, EvidenceCompressionError, UnitDependency, ValidationCacheCandidate,
+    ValidationCheckDefinition, ValidationEvidenceDiagnostic, ValidationEvidenceRun,
+    ValidationPlanningError, ValidationPlanningInput, build_validation_plan,
+    compress_evidence_for_ai, evaluate_cache_reuse,
+};
 use star_validation::{
     ValidationError, analyze_trailing_whitespace, apply_decision_projection, evaluate_decisions,
     validate_patch_result,

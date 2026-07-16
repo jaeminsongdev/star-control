@@ -113,7 +113,7 @@ fn local_schema_reference_resolver_arbitrary_mutations_never_escape_or_panic() {
         });
         assert!(result.is_ok(), "Schema resolver panicked at case {cases}");
 
-        if cases % 32 == 0 {
+        if cases.is_multiple_of(32) {
             std::fs::write(&schema_path, valid).unwrap();
             assert!(load_manifest_resources(&manifest, &manifest_path).is_ok());
         }

@@ -192,17 +192,17 @@ impl Gateway {
             );
         }
         let mut progress = ProgressLimiter::default();
-        if let (Some(context), Some(token)) = (&context, progress_token.clone()) {
-            if progress.should_emit(0.0, std::time::Instant::now()) {
-                let _ = context
-                    .peer
-                    .notify_progress(
-                        ProgressNotificationParam::new(token, 0.0)
-                            .with_total(1.0)
-                            .with_message("Controller dispatch started"),
-                    )
-                    .await;
-            }
+        if let (Some(context), Some(token)) = (&context, progress_token.clone())
+            && progress.should_emit(0.0, std::time::Instant::now())
+        {
+            let _ = context
+                .peer
+                .notify_progress(
+                    ProgressNotificationParam::new(token, 0.0)
+                        .with_total(1.0)
+                        .with_message("Controller dispatch started"),
+                )
+                .await;
         }
         let (progress_sender, mut progress_receiver) =
             tokio::sync::mpsc::unbounded_channel::<ControllerProgress>();
@@ -247,17 +247,17 @@ impl Gateway {
         } else {
             controller_call.await
         };
-        if let (Some(context), Some(token)) = (&context, progress_token) {
-            if progress.should_emit(1.0, std::time::Instant::now()) {
-                let _ = context
-                    .peer
-                    .notify_progress(
-                        ProgressNotificationParam::new(token, 1.0)
-                            .with_total(1.0)
-                            .with_message("Controller dispatch completed"),
-                    )
-                    .await;
-            }
+        if let (Some(context), Some(token)) = (&context, progress_token)
+            && progress.should_emit(1.0, std::time::Instant::now())
+        {
+            let _ = context
+                .peer
+                .notify_progress(
+                    ProgressNotificationParam::new(token, 1.0)
+                        .with_total(1.0)
+                        .with_message("Controller dispatch completed"),
+                )
+                .await;
         }
         progress.complete();
         let result = match outcome {
@@ -1008,6 +1008,16 @@ mod tests {
         transport::{IntoTransport, Transport},
     };
     use star_contracts::fixed_mcp::{FIXED_TOOLS, SERVER_NAME};
+
+    fn unknown_fixed_tool_references(value: &str) -> Vec<&str> {
+        value
+            .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+            .filter(|token| {
+                token.starts_with("star_") && !FIXED_TOOLS.iter().any(|tool| tool.name == *token)
+            })
+            .collect()
+    }
+
     struct Fake;
     impl ControllerGateway for Fake {
         fn call<'a>(
@@ -1046,6 +1056,14 @@ mod tests {
         assert_eq!(info.server_info.name, SERVER_NAME);
         assert_eq!(info.instructions.as_deref(), Some(SERVER_INSTRUCTIONS));
         assert!(!SERVER_INSTRUCTIONS.contains("ignore previous instructions"));
+        assert!(SERVER_INSTRUCTIONS.contains("required_call_tool"));
+        assert!(SERVER_INSTRUCTIONS.contains("프로젝트 native 도구"));
+        assert!(SERVER_INSTRUCTIONS.contains("fallback 사실과 이유"));
+        assert!(unknown_fixed_tool_references(SERVER_INSTRUCTIONS).is_empty());
+        assert_eq!(
+            unknown_fixed_tool_references(concat!("call `star_", "goal_start`")),
+            [concat!("star_", "goal_start")]
+        );
         assert!(info.capabilities.tools.is_some());
         assert!(info.capabilities.resources.is_none());
         let tools = server.fixed_tools_in_contract_order();
@@ -1115,6 +1133,115 @@ mod tests {
             serde_json::json!({"query":"core"})
         );
         assert_eq!(result.is_error, Some(false));
+    }
+
+    #[tokio::test]
+    async fn ready_precursor_actions_reach_tool_invoke_through_the_fixed_mcp_wire_surface() {
+        let (server_transport, client_transport) = tokio::io::duplex(16 * 1024);
+        let server = Gateway::new(Arc::new(Fake));
+        let task = tokio::spawn(async move {
+            let service = server.serve(server_transport).await.unwrap();
+            service.waiting().await
+        });
+        let mut client = IntoTransport::<rmcp::RoleClient, _, _>::into_transport(client_transport);
+        client.send(initialize("2025-11-25")).await.unwrap();
+        assert!(matches!(
+            client.receive().await.unwrap(),
+            ServerJsonRpcMessage::Response(_)
+        ));
+        client
+            .send(wire_message(
+                r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+            ))
+            .await
+            .unwrap();
+        for (request_id, mcp_tool_name, risk_lane, tool_id, arguments) in [
+            (
+                2,
+                "star_tool_call_read_closed",
+                "read_closed",
+                "star.core.doctor",
+                serde_json::json!({}),
+            ),
+            (
+                3,
+                "star_tool_call_read_closed",
+                "read_closed",
+                "star.core.project.list",
+                serde_json::json!({}),
+            ),
+            (
+                4,
+                "star_tool_call_read_closed",
+                "read_closed",
+                "star.core.project.status",
+                serde_json::json!({"project_key":"star-control"}),
+            ),
+            (
+                5,
+                "star_tool_call_read_closed",
+                "read_closed",
+                "star.core.validation.plan",
+                serde_json::json!({"project_key":"star-control"}),
+            ),
+            (
+                6,
+                "star_tool_call_read_closed",
+                "read_closed",
+                "star.core.evidence.get",
+                serde_json::json!({
+                    "project_key":"star-control",
+                    "evidence_ref":"target/validation/run-1/report.json"
+                }),
+            ),
+            (
+                7,
+                "star_tool_call_write_closed",
+                "write_closed",
+                "star.core.validation.run",
+                serde_json::json!({"project_key":"star-control"}),
+            ),
+        ] {
+            client
+                .send(
+                    serde_json::from_value(serde_json::json!({
+                        "jsonrpc":"2.0",
+                        "id":request_id,
+                        "method":"tools/call",
+                        "params":{
+                            "name":mcp_tool_name,
+                            "arguments":{
+                                "tool_id":tool_id,
+                                "descriptor_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                                "arguments":arguments,
+                                "wait_mode":"sync"
+                            }
+                        }
+                    }))
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            let response =
+                tokio::time::timeout(std::time::Duration::from_secs(2), client.receive())
+                    .await
+                    .unwrap()
+                    .unwrap();
+            let value = serde_json::to_value(response).unwrap();
+            assert_eq!(
+                value["result"]["structuredContent"]["summary"],
+                "tool.invoke"
+            );
+            let data = &value["result"]["structuredContent"]["data"];
+            assert_eq!(data["tool_id"], tool_id);
+            assert_eq!(data["arguments"], arguments);
+            assert_eq!(data["mcp_tool_name"], mcp_tool_name);
+            assert_eq!(data["mcp_risk_lane"], risk_lane);
+            assert_eq!(data["mcp_request_id"], request_id);
+            assert!(data["client_info"].is_object());
+        }
+        drop(client);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(1), task).await;
     }
 
     fn wire_message(raw: &str) -> ClientJsonRpcMessage {

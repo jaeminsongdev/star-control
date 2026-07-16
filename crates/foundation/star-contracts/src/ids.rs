@@ -192,6 +192,7 @@ prefixed_id!(RunId, "run_");
 prefixed_id!(StageId, "stg_");
 prefixed_id!(ArtifactId, "art_");
 prefixed_id!(DiagnosticId, "dia_");
+prefixed_id!(ValidationPlanId, "vpl_");
 prefixed_id!(ValidationRunId, "val_");
 prefixed_id!(GateId, "gat_");
 prefixed_id!(EvidenceBundleId, "evb_");

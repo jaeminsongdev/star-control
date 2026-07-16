@@ -1,6 +1,6 @@
 format_version = 1
 package_id = "star.control.core"
-package_version = "1.0.0"
+package_version = "1.3.0"
 display_name = "Star-Control Core"
 description = "Required release-owned typed Controller commands exposed through the live Tool Registry."
 required = true
@@ -117,6 +117,8 @@ description = "Reads evidence references and typed verification records."
 permission_actions = ["local_read"]
 paid_action = "no"
 idempotency = "read_only"
+input_schema_file = "schemas/evidence-get-input.schema.json"
+output_schema_file = "schemas/evidence-get-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.merge.status"
@@ -150,3 +152,59 @@ description = "Runs typed read-only Controller diagnostics."
 permission_actions = ["local_read"]
 paid_action = "no"
 idempotency = "read_only"
+input_schema_file = "schemas/doctor-input.schema.json"
+output_schema_file = "schemas/doctor-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.project.list"
+backend_kind = "controller_command"
+backend_ref = "project.list"
+display_name = "List Projects"
+summary = "Inspect the tracked project catalog."
+description = "Reads the Git-tracked project allowlist and probes only its declared roots without registration or recursive discovery."
+permission_actions = ["local_read"]
+paid_action = "no"
+idempotency = "read_only"
+input_schema_file = "schemas/project-list-input.schema.json"
+output_schema_file = "schemas/project-list-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.project.status"
+backend_kind = "controller_command"
+backend_ref = "project.status"
+display_name = "Get Project Status"
+summary = "Inspect one allowlisted project."
+description = "Reads one tracked catalog entry and reports its exact-root availability, checkout kind, origin, and git-common-dir identity state."
+permission_actions = ["local_read"]
+paid_action = "no"
+idempotency = "read_only"
+input_schema_file = "schemas/project-status-input.schema.json"
+output_schema_file = "schemas/project-status-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.validation.plan"
+backend_kind = "controller_command"
+backend_ref = "validation.plan"
+display_name = "Plan Validation"
+summary = "Plan impact-based validation."
+description = "Observes one identity-matched tracked project root and returns a sealed tracked-path ValidationPlan without running commands or mutating cache state."
+permission_actions = ["local_read"]
+paid_action = "no"
+idempotency = "read_only"
+input_schema_file = "schemas/validation-plan-input.schema.json"
+output_schema_file = "schemas/validation-plan-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.validation.run"
+backend_kind = "controller_command"
+backend_ref = "validation.run"
+display_name = "Run Validation"
+summary = "Run the tracked native validation entrypoint."
+description = "Builds a current tracked-path plan, invokes the identity-matched project's scripts/validate.ps1 in a bounded Job Object, and returns the native report without promoting partial, unverified, or flaky evidence to pass."
+permission_actions = ["local_write"]
+paid_action = "no"
+idempotency = "non_idempotent"
+execution_mode = "detachable"
+expected_duration_ms = 600000
+input_schema_file = "schemas/validation-run-input.schema.json"
+output_schema_file = "schemas/validation-run-output.schema.json"

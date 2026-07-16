@@ -32,7 +32,8 @@ Codex CLI 등록이 실행 환경에서 허용되지 않으면 설치 자체는 
 ## update·repair·제거
 
 - update·repair는 같은 installer를 다시 실행하고 이전 선택 경로를 재사용한다.
-- update 중 실행 중인 Star-Control 제품 process는 Inno Setup이 닫으며, Controller의 미완료 operation은 기존 recovery 계약에 따라 강제 종료로 관찰된다.
+- update·repair·제거 전에 Codex 앱을 완전히 종료하고, Codex 밖의 별도 PowerShell에서 installer를 실행한다. 실행 중인 Codex 작업 안에서 installer를 호출하지 않는다.
+- Installer는 실행 중인 Codex나 Star-Control process를 강제로 닫지 않는다. 설치 전 WMI preflight가 `ChatGPT.exe`, `star-controller.exe`, `star-mcp.exe`를 확인하며, 실행 중이거나 확인할 수 없으면 파일을 변경하기 전에 중단한다. integration install·repair·uninstall도 `ChatGPT.exe`가 실행 중이면 쓰기 전에 실패한다.
 - 기본 제거는 program payload, installation record와 exact-owned 자동 시작 entry를 제거한다. 사용자 설정·runtime state·Project 자료는 보존한다.
 - `/PURGEDATA` 제거는 `%APPDATA%\Star-Control`과 `%LOCALAPPDATA%\Star-Control`을 추가로 제거하는 명시적 파괴 동작이다. Project의 `.star-control`과 `.ai-runs`는 대상이 아니다.
 

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/validation-run-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "project_key",
+    "validation_plan_id",
+    "plan_fingerprint",
+    "plan_readiness",
+    "requested_profile",
+    "selected_profile",
+    "process_exit_code",
+    "evidence_ref",
+    "evidence_sha256",
+    "report"
+  ],
+  "properties": {
+    "schema_id": { "const": "star.validation-run-view" },
+    "schema_version": { "const": 1 },
+    "project_key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+    },
+    "validation_plan_id": {
+      "type": "string",
+      "pattern": "^vpl_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "plan_fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "plan_readiness": { "enum": ["ready", "human_review", "blocked"] },
+    "requested_profile": { "$ref": "#/$defs/profile" },
+    "selected_profile": { "$ref": "#/$defs/profile" },
+    "process_exit_code": { "enum": [0, 1, 3] },
+    "evidence_ref": { "$ref": "#/$defs/evidence_ref" },
+    "evidence_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "report": { "$ref": "#/$defs/report" }
+  },
+  "$defs": {
+    "profile": { "enum": ["quick", "target", "full", "release"] },
+    "evidence_ref": {
+      "type": "string",
+      "pattern": "^target/validation/[A-Za-z0-9._-]+/report\\.json$"
+    },
+    "report": {
+      "type": "object",
+      "required": [
+        "schema_id",
+        "schema_version",
+        "project_id",
+        "requested_profile",
+        "required_profile",
+        "effective_profile",
+        "status",
+        "outcome",
+        "completeness",
+        "stability",
+        "input_fingerprint",
+        "impact",
+        "summary",
+        "artifact_refs"
+      ],
+      "properties": {
+        "schema_id": { "const": "star.project-validation-report" },
+        "schema_version": { "const": 1 },
+        "project_id": { "type": "string", "minLength": 1 },
+        "requested_profile": { "$ref": "#/$defs/profile" },
+        "required_profile": { "$ref": "#/$defs/profile" },
+        "effective_profile": { "$ref": "#/$defs/profile" },
+        "status": {
+          "enum": ["pass", "fail", "not_run", "partial", "unverified", "flaky"]
+        },
+        "outcome": { "enum": ["pass", "fail", "not_run", "error", "cancelled"] },
+        "completeness": { "enum": ["complete", "partial", "unverified"] },
+        "stability": { "enum": ["stable", "flaky", "not_evaluated"] },
+        "input_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "impact": { "type": "object" },
+        "summary": { "type": "object" },
+        "artifact_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -38,6 +38,10 @@ ValidationPlan은 무엇을 왜 검사할지 실행 전에 정한다.
 
 아래 `task_spec_ref`부터 `readiness`까지의 확장은 2단계 **목표 계약**이며 현재 P0 관리 Slice나 test runner에 구현됐다는 뜻이 아니다. 2단계 계산 규칙은 [변경 계획·영향 분석 정본](change-planning-and-impact.md)이 소유한다.
 
+P-0031은 같은 schema ID의 v1 `capability_level=tracked_path_precursor`만 구현했다. 이 bounded contract는 changed file/source/class, direct unit, reverse consumer, adaptive profile과 이유, exact planned command, cache key 구성요소·execute/reuse 판정, uncertainty, independent-review trigger와 canonical evidence flow를 담는다. cache reuse와 AI 압축은 ValidationRun·GateDecision·EvidenceBundle·Diagnostic의 immutable ID·revision/sequence·canonical hash를 대조하며, 자유 문자열로 명령·종료 코드·소요시간을 바꾸지 않고 ValidationRun에서 파생한다. 아래 full M2 target field를 모두 구현했거나 `readiness=ready` full M2 plan을 만든다는 뜻은 아니다.
+
+precursor의 목표 evidence 순서는 `ValidationPlan -> ValidationRun/Diagnostic/ValidationResult -> GateDecision -> EvidenceBundle -> AI compressed summary`로 고정한다. AI summary는 EvidenceBundle과 GateDecision의 exact ref가 검증된 뒤 명령, 종료 코드, 소요시간, 실패 요약과 남은 위험 수만 노출하며 raw log나 artifact 내용을 재판정하지 않는다. P-0035의 bounded `validation.run`은 exact tracked `scripts/validate.ps1`을 실행해 sealed plan과 native report를 대조하고, `evidence.get`은 그 immutable report path·hash를 재검증한다. 이 둘은 ready precursor지만 persisted cache, Diagnostic·ValidationResult normalization, GateDecision·EvidenceBundle writer는 아직 unavailable이다.
+
 | 필드 | 형식 | 의미 |
 |---|---|---|
 | `goal_id`, `run_id`, `stage_id` | optional typed ID | 관리 Goal/Run/Stage에 연결할 때의 범위. 독립 TaskSpec planning이면 모두 생략 가능 |

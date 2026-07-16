@@ -199,6 +199,8 @@ foreach ($name in $binaries) {
 }
 Copy-Item -LiteralPath (Join-Path $repo 'catalog\tool-packages\star-control-core.toml') `
     -Destination (Join-Path $catalog 'star-control-core.toml')
+Copy-Item -LiteralPath (Join-Path $repo 'catalog\tool-packages\schemas') `
+    -Destination (Join-Path $catalog 'schemas') -Recurse
 $null = & $fixture -Phase prepare -RunRoot $run
 
 $fakePath = Join-Path $workspace 'fixture-tools\star-fake-a.exe'

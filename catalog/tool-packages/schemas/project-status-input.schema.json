@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/project-status-input-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project_key"],
+  "properties": {
+    "project_key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+    }
+  }
+}

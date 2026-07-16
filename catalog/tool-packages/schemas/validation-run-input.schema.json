@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/validation-run-input-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project_key"],
+  "properties": {
+    "project_key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+    },
+    "requested_profile": {
+      "enum": ["quick", "target", "full", "release"]
+    },
+    "unit": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 3600000
+    }
+  }
+}

@@ -617,7 +617,11 @@ mod tests {
     use star_contracts::installation::PackageSigningState;
 
     fn fixture_root(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
+        let temp_root = std::env::temp_dir();
+        // Codex may expose TEMP through a junction. Keep the production reparse-point
+        // rejection intact while placing test fixtures under the resolved fixed volume.
+        let temp_root = temp_root.canonicalize().unwrap_or(temp_root);
+        let root = temp_root.join(format!(
             "star-adapter-windows-{name}-{}-{}",
             std::process::id(),
             InstallationId::new()

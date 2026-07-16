@@ -2,7 +2,7 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 2단계인 **변경 계획, 영향 분석과 affected 검사 선택**의 설계 정본이다. 현재 상태는 **설계 확정, 제품 구현 전**이다. 이 문서 변경만으로 planner, graph engine, check selector, test runner, CLI command, DB Schema 또는 migration이 구현됐다고 표시하지 않는다.
+이 문서는 Star-Control 2단계인 **변경 계획, 영향 분석과 affected 검사 선택**의 설계 정본이다. 전체 M2 제품은 아직 구현 전이다. P-0031은 Git 추적 allowlist의 exact root와 project-local manifest만 읽는 `tracked_path_precursor`를 구현했으며, M1 persisted Catalog·Index, symbol/contract graph, TaskSpec·ScopeRevision·ChangePlan v2와 multi-project planning을 대신하지 않는다.
 
 2단계는 사용자가 직접 입력한 목표와 범위를 1단계의 read-only Project Catalog·Code Index에 결합해 다음 산출물을 만든다.
 
@@ -45,7 +45,15 @@
 | ChangeSet·ValidationPlan | 기존 설계 계약 | 2단계 target field와 선택 근거를 확장 |
 | ChangePlan v1 | P0 Finding·Recipe 수직 Slice 구현 | 일반 사용자 변경 계획을 수용하는 v2 target migration 필요 |
 
-0단계와 1단계의 의미 충돌은 없다. P0의 clean ProjectRevision과 dirty WorkspaceSnapshot 분리, M1의 actual workspace byte 우선, partition freshness와 `confirmed_empty` 구분은 그대로 유지한다. M1 migration과 graph/query surface가 구현되기 전에는 M2 제품 구현을 시작하지 않는다.
+0단계와 1단계의 의미 충돌은 없다. P0의 clean ProjectRevision과 dirty WorkspaceSnapshot 분리, M1의 actual workspace byte 우선, partition freshness와 `confirmed_empty` 구분은 그대로 유지한다. P-0031 precursor는 이 선행 Gate 밖에서 source를 쓰거나 M2 완료를 주장하지 않는다. M1 migration과 graph/query surface가 구현되기 전에는 full M2 graph/query 제품 구현을 시작하지 않는다.
+
+### P-0031 tracked-path precursor 경계
+
+현재 구현은 `.star-control/project.toml`이 있는 identity-matched active canonical Git root 하나에서만 동작한다. `revision`, staged diff, unstaged diff, untracked content, toolchain, lockfile, project manifest, validation script, config, command, policy/evidence Schema version을 각각 해시해 plan과 check별 cache key를 봉인한다. fingerprint 입력이 없거나 bounded read와 tool identity 확인을 완료하지 못하면 cache reuse를 끄고 project `FULL`·`human_review`로 승격한다. directory 재귀 탐색, 관리 DB write, 명령 실행, cache persistence와 EvidenceBundle writer는 하지 않는다.
+
+변경 path는 staged·unstaged·untracked source를 분리하고 Cargo workspace package와 명시 unit mapping에 연결한다. mapping이 없으면 workspace, impact 또는 untracked content 관찰이 불완전하면 project `FULL`과 `human_review`, public contract이면 transitive reverse consumer와 workspace `FULL`로 확대한다. `quick|target` 요청은 영향 기준으로 적응하며 `full|release`만 명시적 하한이다.
+
+cache reuse pure policy는 같은 key의 `pass + complete + stable`, suppression 없음, artifact 존재, current policy/evidence version이면서 immutable ValidationRun의 ID·revision·canonical hash와 일치하는 ValidationRunRef만 허용한다. `partial`, `unverified`, `flaky`, suppression 적용, 증거 ref 불일치, toolchain·lockfile·project manifest·validator/config/command drift와 artifact 소실은 모두 execute로 되돌린다. 현재 action에는 cache store reader가 연결되지 않았으므로 생성되는 check는 전부 `execute`이며 cache hit를 가장하지 않는다.
 
 ## 목표와 제외 범위
 

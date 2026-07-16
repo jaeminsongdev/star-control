@@ -498,8 +498,12 @@ release의 `star-control-core.toml`은 다음 action을 정확히 선언한다. 
 | `star.core.merge.status` | `merge.status` | read_closed |
 | `star.core.handoff.get` | `handoff.get` | read_closed |
 | `star.core.doctor` | `doctor.run` | read_closed |
+| `star.core.project.list` | `project.list` | read_closed |
+| `star.core.project.status` | `project.status` | read_closed |
+| `star.core.validation.plan` | `validation.plan` | read_closed |
+| `star.core.validation.run` | `validation.run` | write_closed |
 
-core action의 input·output 의미는 각 application command의 소유 계약을 그대로 사용한다. MCP package가 필드를 새로 만들거나 축약하지 않는다. build 단계에서 소유 계약의 generated Schema를 가져와 remote `$ref` 없는 fully resolved inline Schema로 만들고, command가 없거나 Schema version mapping이 없으면 release build를 실패시킨다. 이 13개 action의 ToolId·command·lane만 이 문서가 소유한다.
+core action의 input·output 의미는 각 application command의 소유 계약을 그대로 사용한다. MCP package가 필드를 새로 만들거나 축약하지 않는다. build 단계에서 소유 계약의 generated Schema 또는 package-owned local Schema를 가져와 remote `$ref` 없는 fully resolved inline Schema로 만들고, command가 없거나 Schema version mapping이 없으면 release build를 실패시킨다. 이 17개 action의 ToolId·command·lane만 이 문서가 소유한다. action별 readiness는 package/manifest readiness와 분리하며, concrete handler와 input·output Schema가 모두 연결된 action만 `ready`다.
 
 ## Codex MCP 설정 정본
 

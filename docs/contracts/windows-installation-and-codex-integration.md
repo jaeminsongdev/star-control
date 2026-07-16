@@ -133,10 +133,12 @@ integrations/codex-plugin-template/
          ├─ .codex-plugin/plugin.json
          ├─ .mcp.json
          ├─ hooks/hooks.json
-         └─ skills/star-control-workflow/SKILL.md
+         └─ skills/star-control-operations/SKILL.md
 ```
 
 source template은 Plugin validator를 통과하는 중립 authoring 값(`0.0.0+codex.template`, `star-mcp`, `star hook session-start`)을 가진다. 렌더러는 JSON을 strict parse한 뒤 허용된 typed field인 Plugin version, MCP `command`, Hook `commandWindows`만 바꾸고 다시 serialize한다. 문자열 token 치환이나 shell 문자열 연결은 사용하지 않는다. source tree의 나머지 파일과 unknown component를 임의로 복사하지 않고 allowlist file set만 렌더링한다.
+
+현재 Skill identifier는 `star-control-operations` 하나로 고정한다. 이 source 변경은 이미 설치된 rendered Marketplace나 Codex Plugin cache를 직접 바꾸지 않으며 실제 설치 상태 전환은 후속 package·repair Gate가 담당한다.
 
 ### rendered Marketplace
 
@@ -150,7 +152,7 @@ source template은 Plugin validator를 통과하는 중립 authoring 값(`0.0.0+
          ├─ .codex-plugin/plugin.json
          ├─ .mcp.json
          ├─ hooks/hooks.json
-         └─ skills/star-control-workflow/SKILL.md
+         └─ skills/star-control-operations/SKILL.md
 ```
 
 Marketplace name은 `star-control-local`, Plugin name은 `star-control`로 고정한다. Plugin version은 제품 SemVer에 `+codex.<render-hash-prefix>` cachebuster를 붙인다. `plugin.json`에는 실제 `.mcp.json`이 있을 때만 `mcpServers`를 둔다. `hooks` manifest field는 쓰지 않고 기본 `hooks/hooks.json` discovery를 사용한다.
@@ -166,12 +168,12 @@ P-0026의 Hook은 `SessionStart` 하나다. `startup|resume|clear|compact`에서
   "continue": true,
   "hookSpecificOutput": {
     "hookEventName": "SessionStart",
-    "additionalContext": "Star-Control MCP를 통해 개발 목표를 시작하고 단계 상태를 이어서 관리한다."
+    "additionalContext": "`star-control-operations` 지침을 따른다. Star-Control action을 사용할 때는 `star_tool_search`로 현재 registry를 검색하고 action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 확인한다. describe에서 현재 Schema, 위험 lane, `descriptor_hash`, `required_call_tool`을 받은 뒤 그 tool에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. package나 manifest의 ready 상태는 action readiness가 아니다. 검색 결과가 없거나 action이 non-ready이거나 MCP 연결이 실패하면 일반 Codex 개발 작업을 막지 말고 프로젝트 native 도구를 사용하며 fallback 사실과 이유를 결과에 기록한다. `star_tool_registry_status`는 진단용이며 필수 선행 Gate가 아니다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`, `question_required`와 Operation ID 반환은 완료가 아니다."
   }
 }
 ```
 
-Hook은 작업을 직접 실행하거나 결제를 승인하지 않는다. 잘못된 입력에는 non-zero로 종료하고 stdout에 성공 JSON을 쓰지 않는다. Plugin 설치 뒤 사용자는 Codex `/hooks`에서 exact Hook을 검토·신뢰한다.
+Hook은 작업을 직접 실행하거나 결제를 승인하지 않는다. ready action이 없거나 MCP 연결이 실패해도 일반 개발 작업을 차단하지 않고 native fallback과 이유를 안내한다. 잘못된 입력에는 non-zero로 종료하고 stdout에 성공 JSON을 쓰지 않는다. Plugin 설치 뒤 사용자는 Codex `/hooks`에서 exact Hook을 검토·신뢰한다.
 
 ## CLI 계약
 
@@ -196,6 +198,7 @@ star hook session-start
 | 3 | 명시적 사용자 조치 필요 |
 | 4 | local I/O·process 실패 |
 | 6 | version·architecture 불일치 |
+| 7 | Codex desktop 실행 중인 offline-only integration 변경 시도 |
 
 Codex CLI 실행 실패는 program 설치와 local Marketplace 렌더링을 되돌리지 않는다. 결과는 `registration_state=manual_action_required`, 실패 단계와 secret 없는 `manual_commands[]`를 반환한다.
 
@@ -215,7 +218,8 @@ update·repair에서 task를 해제하면 자동 시작은 exact owned value를 
 ### update와 repair
 
 - 같은 AppId가 이전 경로를 재사용한다.
-- 먼저 실행 중인 세 binary를 닫고 같은 root의 file set을 교체한다.
+- 사용자는 Codex 앱을 완전히 종료한 뒤 Codex 밖의 별도 PowerShell에서 installer를 실행한다.
+- Installer는 실행 중인 Codex나 Star-Control process를 강제로 닫지 않는다. 설치 전 WMI preflight가 `ChatGPT.exe`, `star-controller.exe`, `star-mcp.exe`를 확인하며, 실행 중이거나 확인할 수 없으면 파일을 변경하기 전에 중단한다. integration install·repair·uninstall도 `ChatGPT.exe`가 실행 중이면 어떤 source·record도 쓰기 전에 exit 7로 실패한다.
 - 새 version의 finalize가 전부 성공한 뒤 record를 바꾼다.
 - Codex template hash 또는 install path가 바뀌면 `integration repair`가 새 version source를 렌더링하고 공식 add command를 다시 실행한다.
 - 실패한 setup은 Inno Setup의 transaction rollback을 사용한다. 성공 뒤 이전 version으로 돌아가려면 보관한 이전 installer를 명시적으로 다시 실행한다.
@@ -237,6 +241,7 @@ update·repair에서 task를 해제하면 자동 시작은 exact owned value를 
 - fake Codex CLI로 marketplace add·plugin add·marketplace remove argv를 정확히 검사
 - 실제 Codex CLI를 실행할 수 없는 환경에서 `manual_action_required`가 되는지 검사
 - rendered Plugin validator와 JSON parse
+- SessionStart exact snapshot, 고정 MCP tool reference와 ready action 0건의 native fallback 검사
 - `cargo fmt --check`, target crate tests, workspace tests, package script check, `git diff --check`
 - `legacy/` 무변경과 사용자 변경 보존 확인
 

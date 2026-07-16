@@ -209,7 +209,7 @@ idempotency = "non_idempotent"
 
 #[test]
 // matrix: MCP-M003
-fn required_release_core_package_declares_exactly_thirteen_owned_actions() {
+fn required_release_core_package_declares_exactly_seventeen_owned_actions() {
     let source =
         fs::read_to_string(root().join("catalog/tool-packages/star-control-core.toml")).unwrap();
     let manifest = parse_manifest_v1(&source, ManifestSource::Release).unwrap();
@@ -270,6 +270,26 @@ fn required_release_core_package_declares_exactly_thirteen_owned_actions() {
             ),
             ("star.core.handoff.get", "handoff.get", RiskLane::ReadClosed),
             ("star.core.doctor", "doctor.run", RiskLane::ReadClosed),
+            (
+                "star.core.project.list",
+                "project.list",
+                RiskLane::ReadClosed
+            ),
+            (
+                "star.core.project.status",
+                "project.status",
+                RiskLane::ReadClosed
+            ),
+            (
+                "star.core.validation.plan",
+                "validation.plan",
+                RiskLane::ReadClosed
+            ),
+            (
+                "star.core.validation.run",
+                "validation.run",
+                RiskLane::WriteClosed
+            ),
         ]
     );
 }
