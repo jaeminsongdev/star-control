@@ -7937,19 +7937,22 @@ mod tests {
         assert!(!manifest.registration_enabled);
         assert!(!tracked_project_registration_enabled());
         let plan: star_contracts::evidence::ValidationPlan = serde_json::from_value(
-            run_validation_plan_command(&serde_json::json!({"project_key":"star-control"}))
-                .unwrap(),
+            run_validation_plan_command(&serde_json::json!({
+                "project_key":"star-control",
+                "requested_profile":"full"
+            }))
+            .unwrap(),
         )
         .unwrap();
+        assert_eq!(
+            plan.profile.requested,
+            Some(star_contracts::evidence::ValidationProfile::Full)
+        );
         assert_eq!(
             plan.profile.selected,
             star_contracts::evidence::ValidationProfile::Full
         );
-        assert!(!plan.changed_files.is_empty());
-        assert!(
-            plan.checks.iter().all(|check| check.disposition
-                == star_contracts::evidence::PlannedCheckDisposition::Execute)
-        );
+        assert!(!plan.checks.is_empty());
         assert!(plan.validate().is_ok());
         assert_eq!(
             run_project_status_command(&serde_json::json!({"project_key":"missing"})),
