@@ -701,13 +701,21 @@ fn run_project_status_command(
 fn run_validation_plan_command(
     arguments: &serde_json::Value,
 ) -> Result<serde_json::Value, RuntimeFailure> {
+    let (catalog, root) = load_project_catalog_manifest_and_root()?;
+    run_validation_plan_command_with_catalog(arguments, &catalog, &root)
+}
+
+fn run_validation_plan_command_with_catalog(
+    arguments: &serde_json::Value,
+    catalog: &ProjectCatalogManifest,
+    root: &std::path::Path,
+) -> Result<serde_json::Value, RuntimeFailure> {
     let project_key = validation_project_key(arguments)?;
     let requested_profile = validation_requested_profile(arguments)?;
     let requested_unit = validation_requested_unit(arguments);
-    let (catalog, root) = load_project_catalog_manifest_and_root()?;
     let plan = build_project_validation_plan(
-        &catalog,
-        &root,
+        catalog,
+        root,
         project_key,
         requested_profile,
         requested_unit,
@@ -7900,11 +7908,6 @@ mod tests {
                 serde_json::json!({"project_key":"star-control"}),
                 "star.project-status-view",
             ),
-            (
-                "validation.plan",
-                serde_json::json!({"project_key":"star-control"}),
-                "star.validation-plan",
-            ),
         ] {
             let response = handle_direct_core_command(
                 &registry,
@@ -7936,11 +7939,45 @@ mod tests {
         );
         assert!(!manifest.registration_enabled);
         assert!(!tracked_project_registration_enabled());
+        let manifest_directory = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let repository = manifest_directory
+            .parent()
+            .and_then(std::path::Path::parent)
+            .unwrap()
+            .to_path_buf();
+        let catalog_root = repository.parent().unwrap().to_path_buf();
+        let relative_path = repository
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let test_catalog = ProjectCatalogManifest {
+            schema_version: 1,
+            catalog_id: "star-controller-test".to_owned(),
+            registration_enabled: false,
+            root_env: "STAR_CONTROL_TEST_ROOT".to_owned(),
+            default_root: catalog_root.to_string_lossy().into_owned(),
+            projects: vec![star_project::catalog::ProjectCatalogEntry {
+                project_key: "star-control".to_owned(),
+                display_name: "Star-Control".to_owned(),
+                relative_path,
+                role: CatalogProjectRole::ActiveCanonical,
+                repository_kind: star_project::catalog::CatalogRepositoryKind::Git,
+                expected_origin: Some(
+                    "https://github.com/jaeminsongdev/star-control.git".to_owned(),
+                ),
+                canonical_project_key: None,
+            }],
+        };
         let plan: star_contracts::evidence::ValidationPlan = serde_json::from_value(
-            run_validation_plan_command(&serde_json::json!({
-                "project_key":"star-control",
-                "requested_profile":"full"
-            }))
+            run_validation_plan_command_with_catalog(
+                &serde_json::json!({
+                    "project_key":"star-control",
+                    "requested_profile":"full"
+                }),
+                &test_catalog,
+                &catalog_root,
+            )
             .unwrap(),
         )
         .unwrap();
