@@ -132,7 +132,7 @@ Assert-ValidationContract -Condition ($requirements -match "PyYAML==6\.0\.3") -M
 Assert-ValidationContract -Condition (([regex]::Matches($requirements, "sha256:[0-9a-f]{64}")).Count -ge 2) -Message "PyYAML hashes"
 
 $workflow = Get-Content -LiteralPath (Join-Path $repositoryRoot ".github/workflows/full.yml") -Raw -Encoding UTF8
-Assert-ValidationContract -Condition ($workflow.Contains("./scripts/validate.ps1 @arguments")) -Message "native validator is the CI gate"
+Assert-ValidationContract -Condition ($workflow.Contains("./scripts/validate.ps1 @parameters")) -Message "native validator is the CI gate"
 Assert-ValidationContract -Condition (([regex]::Matches($workflow, "\./scripts/validate\.ps1")).Count -eq 1) -Message "native validator runs once"
 Assert-ValidationContract -Condition (-not $workflow.Contains("continue-on-error: true")) -Message "validation gate must be authoritative"
 foreach ($removedDuplicate in @(

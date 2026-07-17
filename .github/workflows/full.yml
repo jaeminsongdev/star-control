@@ -56,8 +56,11 @@ jobs:
       - name: Run native validation
         shell: pwsh
         run: |
-          $arguments = @("-Profile", $env:VALIDATION_PROFILE, "-OutputFormat", "text")
-          if ($env:VALIDATION_BASE_REF -and $env:VALIDATION_BASE_REF -notmatch "^0+$") {
-            $arguments += @("-BaseRef", $env:VALIDATION_BASE_REF)
+          $parameters = @{
+            Profile = $env:VALIDATION_PROFILE
+            OutputFormat = "text"
           }
-          ./scripts/validate.ps1 @arguments
+          if ($env:VALIDATION_BASE_REF -and $env:VALIDATION_BASE_REF -notmatch "^0+$") {
+            $parameters.BaseRef = $env:VALIDATION_BASE_REF
+          }
+          ./scripts/validate.ps1 @parameters
