@@ -220,7 +220,7 @@ M1 구현은 다음 gate를 먼저 통과해야 한다.
 
 ## M2. 변경 계획·영향 분석·affected 검사 선택 — tracked-path precursor 구현, full M2 구현 전
 
-M2는 사용자가 지정한 **2단계 개발 관리 확장**이다. 의미 정본은 [변경 계획·영향 분석 계약](../contracts/change-planning-and-impact.md)이다. P-0031은 exact Git root의 tracked/staged/unstaged/untracked path, Cargo package graph와 `.star-control/project.toml`만 사용하는 `ValidationPlan` v1 precursor, cache reuse pure policy, CLI/MCP read-only action을 구현했다. P-0035는 이 sealed plan을 exact tracked `scripts/validate.ps1` 실행과 report evidence 조회에 연결했다. TaskSpec·ScopeRevision·ImpactAnalysis·ChangePlan v2, persisted M1 graph, multi-project planning, cache store와 DB migration은 구현하지 않았다.
+M2는 사용자가 지정한 **2단계 개발 관리 확장**이다. 의미 정본은 [변경 계획·영향 분석 계약](../contracts/change-planning-and-impact.md)이다. P-0031은 exact Git root의 tracked/staged/unstaged/untracked path, Cargo package graph와 `.star-control/project.toml`만 사용하는 `ValidationPlan` v1 precursor, cache reuse pure policy, CLI/MCP read-only action을 구현했다. P-0035는 이 sealed plan을 exact tracked `scripts/validate.ps1` 실행과 report evidence 조회에 연결했고, 후속 전환은 성공 evidence 전용 프로젝트별 derived cache를 연결했다. TaskSpec·ScopeRevision·ImpactAnalysis·ChangePlan v2, persisted M1 graph, multi-project planning과 management DB migration은 구현하지 않았다.
 
 ### 선행 gate와 migration gap
 
@@ -382,7 +382,7 @@ P3는 M2의 change impact·affected selector를 다시 구현하지 않는다. M
 
 ### 현재 상태
 
-사용자가 지정한 3단계 `M3 공통 검증·품질 Gate`는 [상세 설계](../features/common-validation-gate.md), [검사·증거 계약](../contracts/validation-and-evidence.md), [오류·Diagnostic](../contracts/errors-and-diagnostics.md)과 [설정·Validator Registry](../contracts/config-and-catalog.md)에 목표 계약을 확정했다. P-0031은 tracked-path ValidationPlan·cache eligibility·AI evidence compression precursor를, P-0035는 project-owned native validator 실행과 immutable report evidence 조회 precursor를 구현했다. generic CheckGraph runner, persisted cache, GateDecision/EvidenceBundle writer, Corpus, Rule·Baseline·Suppression·Disposition·Diagnostic migration과 DB Schema는 구현하지 않았다.
+사용자가 지정한 3단계 `M3 공통 검증·품질 Gate`는 [상세 설계](../features/common-validation-gate.md), [검사·증거 계약](../contracts/validation-and-evidence.md), [오류·Diagnostic](../contracts/errors-and-diagnostics.md)과 [설정·Validator Registry](../contracts/config-and-catalog.md)에 목표 계약을 확정했다. P-0031은 tracked-path ValidationPlan·cache eligibility·AI evidence compression precursor를, P-0035는 project-owned native validator 실행과 immutable report evidence 조회 precursor를 구현했다. 후속 전환은 성공 evidence 전용 프로젝트별 derived cache를 추가했다. generic CheckGraph runner, authoritative GateDecision/EvidenceBundle writer, Corpus, Rule·Baseline·Suppression·Disposition·Diagnostic migration과 DB Schema는 구현하지 않았다.
 
 P0의 Finding·ValidationResult·GateDecision 첫 수직 Slice는 유지하지만 M3 전체 Diagnostic ratchet·subject binding·runner·ReviewPack 구현 완료 근거가 아니다.
 

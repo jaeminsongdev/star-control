@@ -15,6 +15,7 @@
     "process_exit_code",
     "evidence_ref",
     "evidence_sha256",
+    "cache",
     "report"
   ],
   "properties": {
@@ -41,6 +42,25 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hit", "stored", "cache_key", "source_validation_run_ref"],
+      "properties": {
+        "hit": { "type": "boolean" },
+        "stored": { "type": "boolean" },
+        "cache_key": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "source_validation_run_ref": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/validation_run_ref" }
+          ]
+        }
+      }
+    },
     "report": { "$ref": "#/$defs/report" }
   },
   "$defs": {
@@ -48,6 +68,22 @@
     "evidence_ref": {
       "type": "string",
       "pattern": "^target/validation/[A-Za-z0-9._-]+/report\\.json$"
+    },
+    "validation_run_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validation_run_id", "revision", "sha256"],
+      "properties": {
+        "validation_run_id": {
+          "type": "string",
+          "pattern": "^val_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "revision": { "type": "integer", "minimum": 1 },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
     },
     "report": {
       "type": "object",

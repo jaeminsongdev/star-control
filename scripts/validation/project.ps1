@@ -167,9 +167,6 @@ function New-ProjectValidationConfig {
             "scripts/validation/project.ps1",
             "scripts/validation/project-validation-report.schema.json",
             "scripts/validation/requirements-validation.txt",
-            "scripts/validation/invoke-shadow-validation.ps1",
-            "scripts/validation/shadow_compare.py",
-            "scripts/validation/shadow-contract.json",
             ".github/workflows/full.yml"
         )
         ClassifyPath = { param($Path) Get-StarValidationImpact -Path $Path }

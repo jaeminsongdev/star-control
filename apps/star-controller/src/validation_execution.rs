@@ -2,7 +2,9 @@
 //!
 //! This module intentionally delegates check selection and reporting to each
 //! project's tracked `scripts/validate.ps1`. It does not claim to implement the
-//! persisted M3 runner, cache store, GateDecision, or EvidenceBundle writer.
+//! persisted M3 runner, authoritative GateDecision, or EvidenceBundle writer.
+//! Complete stable pass evidence may be reused through the project-local
+//! derived cache owned by `validation_cache`.
 
 use std::{
     collections::BTreeSet,
@@ -16,7 +18,7 @@ use std::{
 use serde_json::Value;
 use star_contracts::{
     Sha256Hash,
-    evidence::{ValidationPlan, ValidationProfile},
+    evidence::{PlannedCheckDisposition, ValidationPlan, ValidationProfile},
 };
 use star_controller::process_runtime::{
     DirectExeSpec, RuntimeCancellation, RuntimeError,
@@ -39,6 +41,7 @@ use windows::{
     core::PCWSTR,
 };
 
+use crate::validation_cache::{read_cached_validation_evidence, store_successful_validation_cache};
 use crate::validation_planning::{
     ValidationPlanningObservationError, build_project_validation_plan,
     resolve_project_validation_target,
@@ -85,7 +88,7 @@ pub async fn run_project_validation(
     if !(MIN_TIMEOUT_MS..=MAX_TIMEOUT_MS).contains(&timeout_ms) {
         return Err(ValidationExecutionError::TimeoutArgument);
     }
-    let plan = build_project_validation_plan(
+    let mut plan = build_project_validation_plan(
         catalog,
         catalog_root,
         project_key,
@@ -93,8 +96,61 @@ pub async fn run_project_validation(
         requested_unit.clone(),
     )?;
     let target = resolve_project_validation_target(catalog, catalog_root, project_key)?;
-    let pwsh = resolve_pwsh_executable().ok_or(ValidationExecutionError::PowerShellUnavailable)?;
     let requested_profile = requested_profile.unwrap_or(ValidationProfile::Target);
+    let mut refreshed_plan = None;
+    if let Some(check) = plan.checks.first()
+        && plan.checks.len() == 1
+        && check.disposition == PlannedCheckDisposition::Reuse
+        && let Some(source) = check.source_validation_run_ref.as_ref()
+        && let Ok(cached) =
+            read_cached_validation_evidence(&target.project_root, project_key, check, source)
+    {
+        let cached_report_is_bound = validate_report(&cached.report, project_key, Some(0))
+            .is_ok_and(|evidence_ref| evidence_ref == cached.evidence_ref)
+            && validate_plan_equivalence(
+                &plan,
+                requested_profile,
+                requested_unit.as_deref(),
+                &cached.report,
+            )
+            .is_ok();
+        if cached_report_is_bound {
+            let confirmed_plan = build_project_validation_plan(
+                catalog,
+                catalog_root,
+                project_key,
+                Some(requested_profile),
+                requested_unit.clone(),
+            )?;
+            if same_cache_binding(&plan, &confirmed_plan) {
+                return Ok(serde_json::json!({
+                    "schema_id":"star.validation-run-view",
+                    "schema_version":1,
+                    "project_key":project_key,
+                    "validation_plan_id":plan.validation_plan_id,
+                    "plan_fingerprint":plan.plan_fingerprint,
+                    "plan_readiness":plan.readiness,
+                    "requested_profile":requested_profile,
+                    "selected_profile":plan.profile.selected,
+                    "process_exit_code":0,
+                    "evidence_ref":cached.evidence_ref,
+                    "evidence_sha256":Sha256Hash::digest(&cached.evidence_bytes),
+                    "cache":{
+                        "hit":true,
+                        "stored":false,
+                        "cache_key":check.cache_key,
+                        "source_validation_run_ref":cached.source_validation_run_ref,
+                    },
+                    "report":cached.report,
+                }));
+            }
+            refreshed_plan = Some(confirmed_plan);
+        }
+    }
+    if let Some(confirmed_plan) = refreshed_plan {
+        plan = confirmed_plan;
+    }
+    let pwsh = resolve_pwsh_executable().ok_or(ValidationExecutionError::PowerShellUnavailable)?;
     let mut argv = vec![
         OsString::from("-NoLogo"),
         OsString::from("-NoProfile"),
@@ -106,7 +162,7 @@ pub async fn run_project_validation(
         OsString::from("-OutputFormat"),
         OsString::from("json"),
     ];
-    if let Some(unit) = requested_unit {
+    if let Some(unit) = requested_unit.as_ref() {
         argv.push(OsString::from("-Unit"));
         argv.push(OsString::from(unit));
     }
@@ -136,12 +192,33 @@ pub async fn run_project_validation(
     let report: Value = serde_json::from_slice(&outcome.stdout.captured)
         .map_err(|_| ValidationExecutionError::ReportInvalid)?;
     let evidence_ref = validate_report(&report, project_key, Some(exit_code))?;
-    validate_plan_equivalence(&plan, requested_profile, &report)?;
+    validate_plan_equivalence(&plan, requested_profile, requested_unit.as_deref(), &report)?;
     let (evidence_bytes, evidence_report) =
         read_evidence_report(&target.project_root, &evidence_ref)?;
     if evidence_report != report {
         return Err(ValidationExecutionError::ReportInvalid);
     }
+    let check = plan
+        .checks
+        .first()
+        .ok_or(ValidationExecutionError::PlanMismatch)?;
+    let confirmed_plan = build_project_validation_plan(
+        catalog,
+        catalog_root,
+        project_key,
+        Some(requested_profile),
+        requested_unit,
+    )?;
+    let stored = same_cache_binding(&plan, &confirmed_plan)
+        && store_successful_validation_cache(
+            &target.project_root,
+            project_key,
+            &plan,
+            &evidence_ref,
+            &report,
+            timeout_ms,
+        )
+        .is_ok();
 
     Ok(serde_json::json!({
         "schema_id":"star.validation-run-view",
@@ -155,8 +232,27 @@ pub async fn run_project_validation(
         "process_exit_code":exit_code,
         "evidence_ref":evidence_ref,
         "evidence_sha256":Sha256Hash::digest(&evidence_bytes),
+        "cache":{
+            "hit":false,
+            "stored":stored,
+            "cache_key":check.cache_key,
+            "source_validation_run_ref":Value::Null,
+        },
         "report":report,
     }))
+}
+
+fn same_cache_binding(current: &ValidationPlan, confirmed: &ValidationPlan) -> bool {
+    let Some(current_check) = current.checks.first() else {
+        return false;
+    };
+    let Some(confirmed_check) = confirmed.checks.first() else {
+        return false;
+    };
+    current.checks.len() == 1
+        && confirmed.checks.len() == 1
+        && current_check.check_id == confirmed_check.check_id
+        && current_check.cache_key == confirmed_check.cache_key
 }
 
 pub fn read_project_validation_evidence(
@@ -187,12 +283,23 @@ pub fn read_project_validation_evidence(
 fn validate_plan_equivalence(
     plan: &ValidationPlan,
     requested_profile: ValidationProfile,
+    requested_unit: Option<&str>,
     report: &Value,
 ) -> Result<(), ValidationExecutionError> {
     if report["requested_profile"].as_str() != Some(profile_name(requested_profile))
+        || report["required_profile"].as_str() != Some(profile_name(plan.profile.required))
         || report["effective_profile"].as_str() != Some(profile_name(plan.profile.selected))
     {
         return Err(ValidationExecutionError::PlanMismatch);
+    }
+    match requested_unit {
+        Some(unit) if report["unit"].as_str() != Some(unit) => {
+            return Err(ValidationExecutionError::PlanMismatch);
+        }
+        None if !report["unit"].is_null() => {
+            return Err(ValidationExecutionError::PlanMismatch);
+        }
+        _ => {}
     }
     let planned: BTreeSet<_> = plan
         .changed_files
@@ -518,6 +625,57 @@ fn powershell_script_argument(path: &Path) -> OsString {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use star_application::{
+        ValidationCheckDefinition, ValidationPlanningInput, build_validation_plan,
+    };
+    use star_contracts::evidence::{
+        EVIDENCE_CONTRACT_SCHEMA_VERSION, VALIDATION_POLICY_SCHEMA_VERSION, ValidationCommand,
+        ValidationInputFingerprintComponents,
+    };
+
+    fn cache_binding_plan(seed: &str) -> ValidationPlan {
+        let hash = |value: &str| Sha256Hash::digest(value.as_bytes());
+        build_validation_plan(ValidationPlanningInput {
+            project_key: "star-control".to_owned(),
+            revision: "a".repeat(40),
+            requested_profile: Some(ValidationProfile::Target),
+            requested_unit: None,
+            requested_unit_required_profile: None,
+            workspace_unit_id: "workspace".to_owned(),
+            changed_files: Vec::new(),
+            dependencies: Vec::new(),
+            checks: vec![ValidationCheckDefinition {
+                profile: ValidationProfile::Target,
+                check_id: "native-validation".to_owned(),
+                unit_id: "workspace".to_owned(),
+                command: ValidationCommand {
+                    executable: "pwsh".to_owned(),
+                    args: vec!["scripts/validate.ps1".to_owned()],
+                    working_directory: ".".to_owned(),
+                    expected_exit_codes: BTreeSet::from([0, 1, 3]),
+                },
+                selection_reason: "test".to_owned(),
+            }],
+            cache_candidates: Vec::new(),
+            fingerprints: ValidationInputFingerprintComponents {
+                revision: "a".repeat(40),
+                staged_diff: hash(seed),
+                unstaged_diff: hash("unstaged"),
+                untracked_content: hash("untracked"),
+                toolchain: hash("toolchain"),
+                lockfile: hash("lockfile"),
+                project_manifest: hash("manifest"),
+                validation_scripts: hash("scripts"),
+                config: hash("config"),
+                policy_schema_version: VALIDATION_POLICY_SCHEMA_VERSION,
+                evidence_schema_version: EVIDENCE_CONTRACT_SCHEMA_VERSION,
+            },
+            fingerprints_complete: true,
+            impact_complete: true,
+            repeated_failures: false,
+        })
+        .unwrap()
+    }
 
     fn report(status: &str, partial: u64, unverified: u64, flaky: u64) -> Value {
         serde_json::json!({
@@ -565,6 +723,51 @@ mod tests {
                 Err(ValidationExecutionError::ReportInvalid)
             ));
         }
+    }
+
+    #[test]
+    fn cache_binding_requires_one_identical_post_observation_key() {
+        let current = cache_binding_plan("staged");
+        let identical = cache_binding_plan("staged");
+        let changed = cache_binding_plan("changed-staged");
+        assert!(same_cache_binding(&current, &identical));
+        assert!(!same_cache_binding(&current, &changed));
+
+        let mut multiple = identical;
+        multiple.checks.push(multiple.checks[0].clone());
+        assert!(!same_cache_binding(&current, &multiple));
+    }
+
+    #[test]
+    fn native_report_must_match_required_profile_and_explicit_unit() {
+        let plan = cache_binding_plan("staged");
+        let mut observed = serde_json::json!({
+            "requested_profile":"target",
+            "required_profile":"target",
+            "effective_profile":"target",
+            "unit":null,
+            "impact":{"changed_paths":[]}
+        });
+        assert!(
+            validate_plan_equivalence(&plan, ValidationProfile::Target, None, &observed).is_ok()
+        );
+
+        observed["required_profile"] = Value::String("quick".to_owned());
+        assert!(matches!(
+            validate_plan_equivalence(&plan, ValidationProfile::Target, None, &observed),
+            Err(ValidationExecutionError::PlanMismatch)
+        ));
+
+        observed["required_profile"] = Value::String("target".to_owned());
+        observed["unit"] = Value::String("docs".to_owned());
+        assert!(
+            validate_plan_equivalence(&plan, ValidationProfile::Target, Some("docs"), &observed)
+                .is_ok()
+        );
+        assert!(matches!(
+            validate_plan_equivalence(&plan, ValidationProfile::Target, None, &observed),
+            Err(ValidationExecutionError::PlanMismatch)
+        ));
     }
 
     #[cfg(windows)]

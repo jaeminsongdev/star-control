@@ -43,6 +43,13 @@ const MCP_RELATIVE: &str = "plugins/star-control/.mcp.json";
 const HOOKS_RELATIVE: &str = "plugins/star-control/hooks/hooks.json";
 const SKILL_RELATIVE: &str = "plugins/star-control/skills/star-control-operations/SKILL.md";
 const SKILL_NAME: &str = "star-control-operations";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RegistrationMode {
+    Preserve,
+    Register,
+    ManualActionRequired,
+}
 const PLUGIN_DESCRIPTION: &str =
     "Expose ready Star-Control operations to Codex with a native project-tool fallback.";
 const PLUGIN_SHORT_DESCRIPTION: &str = "Use ready Star-Control operations with native fallback.";
@@ -280,6 +287,15 @@ impl CodexIntegrationManager {
         let integration_root =
             ensure_fixed_directory(&self.integration_root(&installation.product_version))?;
         let marketplace_path = integration_root.join("marketplace-root");
+        let record_path = integration_root.join(INTEGRATION_RECORD_FILE);
+        let preserve_registration = existing_registration_matches_target(
+            installation.codex_integration.as_ref(),
+            &record_path,
+            &installation.product_version,
+            &install_root,
+            &integration_root,
+            &marketplace_path,
+        );
         if marketplace_path.exists() {
             remove_owned_tree(&marketplace_path, self.installation.local_data_root())?;
         }
@@ -288,17 +304,23 @@ impl CodexIntegrationManager {
         let render_sha256 = rendered_hash(&rendered)?;
         let rendered_marketplace_root = normal_windows_path(&marketplace_root);
         let commands = registration_commands(&rendered_marketplace_root);
-        let registration_state = if options.skip_register {
-            CodexRegistrationState::ManualActionRequired
-        } else {
-            let marketplace_added = run_codex(options.codex_executable.as_deref(), &commands[0]);
-            let plugin_added = run_codex(options.codex_executable.as_deref(), &commands[1]);
-            if marketplace_added && plugin_added {
-                CodexRegistrationState::Registered
-            } else {
-                CodexRegistrationState::ManualActionRequired
-            }
-        };
+        let registration_state =
+            match registration_mode(preserve_registration, options.skip_register) {
+                RegistrationMode::Preserve => CodexRegistrationState::Registered,
+                RegistrationMode::ManualActionRequired => {
+                    CodexRegistrationState::ManualActionRequired
+                }
+                RegistrationMode::Register => {
+                    let marketplace_added =
+                        run_codex(options.codex_executable.as_deref(), &commands[0]);
+                    let plugin_added = run_codex(options.codex_executable.as_deref(), &commands[1]);
+                    if marketplace_added && plugin_added {
+                        CodexRegistrationState::Registered
+                    } else {
+                        CodexRegistrationState::ManualActionRequired
+                    }
+                }
+            };
         let manual_commands = if registration_state == CodexRegistrationState::Registered {
             Vec::new()
         } else {
@@ -307,7 +329,6 @@ impl CodexIntegrationManager {
                 .map(|args| display_codex_command(options.codex_executable.as_deref(), args))
                 .collect()
         };
-        let record_path = integration_root.join(INTEGRATION_RECORD_FILE);
         let record = CodexIntegrationRecord {
             schema_id: CODEX_INTEGRATION_RECORD_SCHEMA_ID.to_owned(),
             schema_version: INSTALLATION_SCHEMA_VERSION,
@@ -350,6 +371,61 @@ impl CodexIntegrationManager {
             .join("codex")
             .join(product_version)
     }
+}
+
+fn registration_mode(preserve_registration: bool, skip_register: bool) -> RegistrationMode {
+    if preserve_registration {
+        RegistrationMode::Preserve
+    } else if skip_register {
+        RegistrationMode::ManualActionRequired
+    } else {
+        RegistrationMode::Register
+    }
+}
+
+fn existing_registration_matches_target(
+    summary: Option<&CodexIntegrationSummary>,
+    expected_record_path: &Path,
+    product_version: &str,
+    install_root: &Path,
+    integration_root: &Path,
+    marketplace_root: &Path,
+) -> bool {
+    let Some(summary) = summary else {
+        return false;
+    };
+    if summary.registration_state != CodexRegistrationState::Registered
+        || !paths_equal(Path::new(&summary.record_path), expected_record_path)
+    {
+        return false;
+    }
+    let Ok(record) = load_codex_integration_record(expected_record_path) else {
+        return false;
+    };
+    registered_target_matches(
+        &record,
+        product_version,
+        install_root,
+        integration_root,
+        marketplace_root,
+    )
+}
+
+fn registered_target_matches(
+    record: &CodexIntegrationRecord,
+    product_version: &str,
+    install_root: &Path,
+    integration_root: &Path,
+    marketplace_root: &Path,
+) -> bool {
+    record.registration_state == CodexRegistrationState::Registered
+        && record.manual_commands.is_empty()
+        && record.product_version == product_version
+        && record.marketplace_name == MARKETPLACE_NAME
+        && record.plugin_name == PLUGIN_NAME
+        && paths_equal(Path::new(&record.install_root), install_root)
+        && paths_equal(Path::new(&record.integration_root), integration_root)
+        && paths_equal(Path::new(&record.marketplace_root), marketplace_root)
 }
 
 fn read_source_files(source_root: &Path) -> Result<BTreeMap<String, Vec<u8>>, CodexAdapterError> {
@@ -832,6 +908,52 @@ fn paths_equal(left: &Path, right: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn matching_registered_target_preserves_registration_without_writes() {
+        assert_eq!(registration_mode(true, false), RegistrationMode::Preserve);
+        assert_eq!(registration_mode(true, true), RegistrationMode::Preserve);
+        assert_eq!(
+            registration_mode(false, true),
+            RegistrationMode::ManualActionRequired
+        );
+        assert_eq!(registration_mode(false, false), RegistrationMode::Register);
+
+        let install_root = Path::new(r"D:\도구\Star-Control");
+        let integration_root = Path::new(r"D:\state\integrations\codex\0.1.0");
+        let marketplace_root = integration_root.join("marketplace-root");
+        let mut record = CodexIntegrationRecord {
+            schema_id: CODEX_INTEGRATION_RECORD_SCHEMA_ID.to_owned(),
+            schema_version: INSTALLATION_SCHEMA_VERSION,
+            product_version: "0.1.0".to_owned(),
+            install_root: install_root.to_string_lossy().into_owned(),
+            integration_root: integration_root.to_string_lossy().into_owned(),
+            marketplace_root: marketplace_root.to_string_lossy().into_owned(),
+            marketplace_name: MARKETPLACE_NAME.to_owned(),
+            plugin_name: PLUGIN_NAME.to_owned(),
+            plugin_version: "0.1.0+codex.0123456789ab".to_owned(),
+            render_sha256: Sha256Hash::digest(b"rendered"),
+            registration_state: CodexRegistrationState::Registered,
+            manual_commands: Vec::new(),
+            updated_at: Utc::now(),
+        };
+        assert!(registered_target_matches(
+            &record,
+            "0.1.0",
+            install_root,
+            integration_root,
+            &marketplace_root,
+        ));
+
+        record.marketplace_root = r"D:\state\other-marketplace".to_owned();
+        assert!(!registered_target_matches(
+            &record,
+            "0.1.0",
+            install_root,
+            integration_root,
+            &marketplace_root,
+        ));
+    }
 
     #[test]
     fn registration_argv_is_exact_and_quotes_unicode_space_paths() {

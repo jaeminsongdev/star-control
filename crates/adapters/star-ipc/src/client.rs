@@ -25,6 +25,8 @@ use crate::{
 const RESPONSE_IO_GRACE: Duration = Duration::from_secs(5);
 const DEMAND_SCAN_RESPONSE_BUDGET: Duration = Duration::from_secs(10);
 const DISCOVERY_PROBE_RESPONSE_BUDGET: Duration = Duration::from_secs(40);
+const VALIDATION_RUN_DEFAULT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+const VALIDATION_RUN_MAX_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
 
 #[derive(Debug, Error)]
 pub enum ControllerClientError {
@@ -316,6 +318,14 @@ fn response_read_timeout(command: &str, payload: &serde_json::Value) -> Duration
             .unwrap_or(0)
             .min(30_000);
         return RESPONSE_IO_GRACE + Duration::from_millis(wait_ms);
+    }
+    if command == "validation.run" {
+        let execution_timeout = payload
+            .get("timeout_ms")
+            .and_then(serde_json::Value::as_u64)
+            .map(|timeout_ms| Duration::from_millis(timeout_ms.min(VALIDATION_RUN_MAX_TIMEOUT_MS)))
+            .unwrap_or(VALIDATION_RUN_DEFAULT_TIMEOUT);
+        return RESPONSE_IO_GRACE + execution_timeout;
     }
     if matches!(
         command,
@@ -642,6 +652,21 @@ mod tests {
         assert_eq!(
             response_read_timeout("tool.invoke", &serde_json::json!({"wait_mode":"accepted"})),
             Duration::from_secs(10)
+        );
+        assert_eq!(
+            response_read_timeout("validation.run", &serde_json::json!({"timeout_ms":180_000})),
+            Duration::from_secs(185)
+        );
+        assert_eq!(
+            response_read_timeout("validation.run", &serde_json::json!({})),
+            Duration::from_secs(60 * 60 + 5)
+        );
+        assert_eq!(
+            response_read_timeout(
+                "validation.run",
+                &serde_json::json!({"timeout_ms":86_400_000})
+            ),
+            Duration::from_secs(60 * 60 + 5)
         );
     }
 

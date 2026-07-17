@@ -5,6 +5,7 @@ workspace_unit = "workspace"
 validation_entrypoint = "scripts/validate.ps1"
 policy_schema_version = 1
 evidence_schema_version = 1
+cargo_workspaces = ["."]
 
 [limits]
 max_git_output_bytes = 67108864
@@ -84,8 +85,15 @@ validation_script_paths = [
     "scripts/validation/check_files.py",
     "scripts/validation/project-validation-report.schema.json",
     "scripts/validation/requirements-validation.txt",
-    "scripts/validation/invoke-shadow-validation.ps1",
-    "scripts/validation/shadow_compare.py",
-    "scripts/validation/shadow-contract.json",
 ]
-config_paths = ["Cargo.toml", ".github/workflows/full.yml"]
+config_paths = [
+    "Cargo.toml",
+    "catalog/projects.toml",
+    "catalog/project-exclusions.toml",
+    "catalog/tool-packages/star-control-core.toml",
+    "catalog/tool-packages/schemas/validation-run-output.schema.json",
+    "apps/star-controller/src/validation_cache.rs",
+    "apps/star-controller/src/validation_execution.rs",
+    "apps/star-controller/src/validation_planning.rs",
+    ".github/workflows/full.yml",
+]

@@ -19,7 +19,7 @@ use star_contracts::{
     evidence::{
         EVIDENCE_CONTRACT_SCHEMA_VERSION, VALIDATION_POLICY_SCHEMA_VERSION, ValidationChangeClass,
         ValidationChangeSource, ValidationChangedFile, ValidationCommand, ValidationPlan,
-        ValidationProfile,
+        ValidationPlanReadiness, ValidationProfile,
     },
 };
 use star_project::catalog::{
@@ -27,6 +27,8 @@ use star_project::catalog::{
     ProjectCatalogManifest, inspect_project_catalog_entry,
 };
 use thiserror::Error;
+
+use crate::validation_cache::load_validation_cache_candidates;
 
 const PROJECT_MANIFEST: &str = ".star-control/project.toml";
 const MAX_PROJECT_MANIFEST_BYTES: u64 = 1_048_576;
@@ -61,6 +63,7 @@ struct ProjectValidationManifest {
     evidence_schema_version: u32,
     limits: ObservationLimits,
     classification: ClassificationPolicy,
+    cargo_workspaces: Vec<String>,
     unit_mappings: Vec<UnitMapping>,
     fingerprints: FingerprintPolicy,
 }
@@ -166,7 +169,7 @@ pub fn build_project_validation_plan(
         manifest.limits.max_git_output_bytes,
     )?;
 
-    let cargo = load_cargo_workspace(&project_root);
+    let cargo = load_cargo_workspaces(&project_root, &manifest.cargo_workspaces);
     let (untracked_content, untracked_complete) =
         hash_untracked(&project_root, &untracked_paths, &manifest.limits)?;
     let mut changed = merge_changed_paths(
@@ -239,14 +242,20 @@ pub fn build_project_validation_plan(
             ValidationProfile::Target
         }
     });
-    let checks = check_definitions(&changed, &cargo, &fingerprints, requested_unit.as_deref())?;
+    let checks = check_definitions(requested_unit.as_deref());
     let public_graph_complete = changed.iter().all(|file| {
         file.change_class != ValidationChangeClass::PublicContract
             || file.direct_unit.as_ref().is_some_and(|unit| {
-                unit == &manifest.workspace_unit || cargo.unit_names.contains(unit)
+                unit == &manifest.workspace_unit
+                    || cargo.unit_names.contains(unit)
+                    || manifest
+                        .unit_mappings
+                        .iter()
+                        .any(|mapping| &mapping.unit == unit)
             })
     });
-    build_validation_plan(ValidationPlanningInput {
+    let unit_mapping_complete = changed.iter().all(|file| file.direct_unit.is_some());
+    let mut input = ValidationPlanningInput {
         project_key: project_key.to_owned(),
         revision,
         requested_profile,
@@ -259,10 +268,23 @@ pub fn build_project_validation_plan(
         cache_candidates: Vec::new(),
         fingerprints,
         fingerprints_complete,
-        impact_complete: cargo.complete && untracked_complete && public_graph_complete,
+        impact_complete: cargo.complete
+            && unit_mapping_complete
+            && untracked_complete
+            && public_graph_complete,
         repeated_failures: false,
-    })
-    .map_err(|_| ValidationPlanningObservationError::Planning)
+    };
+    let provisional = build_validation_plan(input.clone())
+        .map_err(|_| ValidationPlanningObservationError::Planning)?;
+    if validation_cache_reuse_allowed(provisional.readiness) {
+        input.cache_candidates =
+            load_validation_cache_candidates(&project_root, project_key, &provisional.checks);
+    }
+    build_validation_plan(input).map_err(|_| ValidationPlanningObservationError::Planning)
+}
+
+const fn validation_cache_reuse_allowed(readiness: ValidationPlanReadiness) -> bool {
+    !matches!(readiness, ValidationPlanReadiness::Blocked)
 }
 
 pub fn resolve_project_validation_target(
@@ -328,6 +350,12 @@ fn validate_manifest(
         .chain(manifest.fingerprints.lockfile_paths.iter())
         .chain(manifest.fingerprints.validation_script_paths.iter())
         .chain(manifest.fingerprints.config_paths.iter())
+        .chain(
+            manifest
+                .cargo_workspaces
+                .iter()
+                .filter(|path| path.as_str() != "."),
+        )
         .chain(manifest.unit_mappings.iter().map(|item| &item.prefix));
     if manifest.schema_version != 1
         || manifest.project_key != project_key
@@ -345,6 +373,12 @@ fn validate_manifest(
             .unit_mappings
             .iter()
             .any(|item| item.unit.trim().is_empty())
+        || manifest.cargo_workspaces.is_empty()
+            && manifest
+                .classification
+                .code_extensions
+                .iter()
+                .any(|extension| extension == "rs")
     {
         return Err(ValidationPlanningObservationError::ProjectManifest);
     }
@@ -566,34 +600,66 @@ fn resolve_unit(
     None
 }
 
-fn load_cargo_workspace(root: &Path) -> CargoWorkspace {
+fn load_cargo_workspaces(root: &Path, workspace_roots: &[String]) -> CargoWorkspace {
+    if workspace_roots.is_empty() {
+        return CargoWorkspace {
+            units_by_prefix: Vec::new(),
+            unit_names: BTreeSet::new(),
+            dependencies: Vec::new(),
+            complete: true,
+        };
+    }
     let result = (|| {
-        let root_bytes =
-            read_bounded_project_file(root, "Cargo.toml", MAX_CARGO_MANIFEST_BYTES).ok()?;
-        let root_value: toml::Value =
-            toml::from_str(std::str::from_utf8(&root_bytes).ok()?).ok()?;
-        let members = root_value.get("workspace")?.get("members")?.as_array()?;
-        if members.len() > 512 {
+        if workspace_roots.len() > 64 {
             return None;
         }
         let mut units = Vec::new();
         let mut manifests = Vec::new();
-        for member in members {
-            let relative = member.as_str()?.replace('\\', "/");
-            if !safe_relative_path(&relative) {
+        for workspace_root in workspace_roots {
+            if workspace_root != "." && !safe_relative_path(workspace_root) {
                 return None;
             }
-            let manifest_path = format!("{}/Cargo.toml", relative.trim_end_matches('/'));
-            let manifest_bytes =
-                read_bounded_project_file(root, &manifest_path, MAX_CARGO_MANIFEST_BYTES).ok()?;
-            let value: toml::Value =
-                toml::from_str(std::str::from_utf8(&manifest_bytes).ok()?).ok()?;
-            let name = value.get("package")?.get("name")?.as_str()?.to_owned();
-            units.push((format!("{}/", relative.trim_end_matches('/')), name.clone()));
-            manifests.push((name, value));
+            let workspace_prefix = if workspace_root == "." {
+                String::new()
+            } else {
+                format!("{}/", workspace_root.trim_end_matches('/'))
+            };
+            let root_manifest_path = format!("{workspace_prefix}Cargo.toml");
+            let root_bytes =
+                read_bounded_project_file(root, &root_manifest_path, MAX_CARGO_MANIFEST_BYTES)
+                    .ok()?;
+            let root_value: toml::Value =
+                toml::from_str(std::str::from_utf8(&root_bytes).ok()?).ok()?;
+            let members = root_value.get("workspace")?.get("members")?.as_array()?;
+            if members.len() > 512 || units.len().saturating_add(members.len()) > 2_048 {
+                return None;
+            }
+            for member in members {
+                let member_relative = member.as_str()?.replace('\\', "/");
+                if !safe_relative_path(&member_relative) {
+                    return None;
+                }
+                let relative = format!(
+                    "{}{}",
+                    workspace_prefix,
+                    member_relative.trim_end_matches('/')
+                );
+                let manifest_path = format!("{relative}/Cargo.toml");
+                let manifest_bytes =
+                    read_bounded_project_file(root, &manifest_path, MAX_CARGO_MANIFEST_BYTES)
+                        .ok()?;
+                let value: toml::Value =
+                    toml::from_str(std::str::from_utf8(&manifest_bytes).ok()?).ok()?;
+                let name = value.get("package")?.get("name")?.as_str()?.to_owned();
+                units.push((format!("{relative}/"), name.clone()));
+                manifests.push((name, value));
+            }
         }
         units.sort_by(|left, right| right.0.len().cmp(&left.0.len()).then(left.0.cmp(&right.0)));
         let names: BTreeSet<_> = manifests.iter().map(|(name, _)| name.clone()).collect();
+        if names.len() != manifests.len() {
+            return None;
+        }
         let mut dependencies = BTreeSet::new();
         for (consumer, manifest) in &manifests {
             for table_name in ["dependencies", "dev-dependencies", "build-dependencies"] {
@@ -749,20 +815,8 @@ fn canonical_hash(
     canonical_sha256(value).map_err(|_| ValidationPlanningObservationError::Planning)
 }
 
-fn check_definitions(
-    changed: &[ValidationChangedFile],
-    cargo: &CargoWorkspace,
-    fingerprints: &star_contracts::evidence::ValidationInputFingerprintComponents,
-    requested_unit: Option<&str>,
-) -> Result<Vec<ValidationCheckDefinition>, ValidationPlanningObservationError> {
-    let paths_file = format!(
-        "target/validation-plan/{}/changed-paths.txt",
-        fingerprints
-            .fingerprint()
-            .map_err(|_| ValidationPlanningObservationError::Planning)?
-            .as_str()
-            .trim_start_matches("sha256:")
-    );
+fn check_definitions(requested_unit: Option<&str>) -> Vec<ValidationCheckDefinition> {
+    let unit = requested_unit.unwrap_or("workspace");
     let mut definitions = Vec::new();
     for profile in [
         ValidationProfile::Quick,
@@ -770,195 +824,38 @@ fn check_definitions(
         ValidationProfile::Full,
         ValidationProfile::Release,
     ] {
-        definitions.extend(base_checks(profile, &paths_file));
-    }
-    let mut affected_packages: BTreeSet<_> = changed
-        .iter()
-        .filter_map(|file| file.direct_unit.as_ref())
-        .filter(|unit| cargo.unit_names.contains(*unit))
-        .cloned()
-        .collect();
-    if let Some(unit) = requested_unit.filter(|unit| cargo.unit_names.contains(*unit)) {
-        affected_packages.insert(unit.to_owned());
-    }
-    let affected_packages: Vec<_> = affected_packages.into_iter().collect();
-    definitions.extend(target_cargo_checks(&affected_packages));
-    definitions.extend(full_cargo_checks(ValidationProfile::Full));
-    definitions.extend(full_cargo_checks(ValidationProfile::Release));
-    definitions.push(check(
-        ValidationProfile::Release,
-        "cargo-release-build",
-        "workspace",
-        "cargo",
-        &["build", "--workspace", "--release", "--locked"],
-        "RELEASE requires a clean release build; external platform gates remain an uncertainty.",
-    ));
-    Ok(definitions)
-}
-
-fn base_checks(profile: ValidationProfile, paths_file: &str) -> Vec<ValidationCheckDefinition> {
-    vec![
-        check_owned(
+        let mut args = vec![
+            "-NoLogo".to_owned(),
+            "-NoProfile".to_owned(),
+            "-NonInteractive".to_owned(),
+            "-File".to_owned(),
+            "scripts/validate.ps1".to_owned(),
+            "-Profile".to_owned(),
+            validation_profile_name(profile).to_owned(),
+        ];
+        if let Some(requested_unit) = requested_unit {
+            args.extend(["-Unit".to_owned(), requested_unit.to_owned()]);
+        }
+        args.extend(["-OutputFormat".to_owned(), "json".to_owned()]);
+        definitions.push(check_owned(
             profile,
-            "static-files",
-            "project",
-            "python",
-            vec![
-                "-X".to_owned(),
-                "utf8".to_owned(),
-                "scripts/validation/check_files.py".to_owned(),
-                "--root".to_owned(),
-                ".".to_owned(),
-                "--paths-file".to_owned(),
-                paths_file.to_owned(),
-            ],
-            "Parse and validate exactly the changed paths materialized for this plan.",
-        ),
-        check(
-            profile,
-            "diff-staged",
-            "project",
-            "git",
-            &["diff", "--cached", "--check"],
-            "Reject staged whitespace errors.",
-        ),
-        check(
-            profile,
-            "diff-worktree",
-            "project",
-            "git",
-            &["diff", "--check"],
-            "Reject worktree whitespace errors.",
-        ),
-    ]
-}
-
-fn target_cargo_checks(packages: &[String]) -> Vec<ValidationCheckDefinition> {
-    let mut package_args = Vec::new();
-    for package in packages {
-        package_args.extend(["-p".to_owned(), package.clone()]);
-    }
-    let unit = if packages.is_empty() {
-        "workspace"
-    } else {
-        "affected-units"
-    };
-    let mut fmt = vec!["fmt".to_owned()];
-    fmt.extend(package_args.clone());
-    fmt.extend(["--".to_owned(), "--check".to_owned()]);
-    let mut check_args = vec!["check".to_owned()];
-    check_args.extend(package_args.clone());
-    check_args.extend(["--all-targets".to_owned(), "--locked".to_owned()]);
-    let mut test = vec!["test".to_owned()];
-    test.extend(package_args.clone());
-    test.push("--locked".to_owned());
-    let mut clippy = vec!["clippy".to_owned()];
-    clippy.extend(package_args);
-    clippy.extend([
-        "--all-targets".to_owned(),
-        "--locked".to_owned(),
-        "--".to_owned(),
-        "-D".to_owned(),
-        "warnings".to_owned(),
-    ]);
-    [
-        ("cargo-fmt", fmt),
-        ("cargo-check", check_args),
-        ("cargo-test", test),
-        ("cargo-clippy", clippy),
-    ]
-    .into_iter()
-    .map(|(id, args)| {
-        check_owned(
-            ValidationProfile::Target,
-            id,
+            "native-validation",
             unit,
-            "cargo",
+            "pwsh",
             args,
-            "TARGET validates the directly affected Rust packages.",
-        )
-    })
-    .collect()
+            "Invoke the project's tracked native validator; its report owns the exact commands, exit codes, durations, logs, and non-pass states.",
+        ));
+    }
+    definitions
 }
 
-fn full_cargo_checks(profile: ValidationProfile) -> Vec<ValidationCheckDefinition> {
-    vec![
-        check(
-            profile,
-            "cargo-fmt",
-            "workspace",
-            "cargo",
-            &["fmt", "--all", "--", "--check"],
-            "FULL validates workspace formatting.",
-        ),
-        check(
-            profile,
-            "cargo-check",
-            "workspace",
-            "cargo",
-            &["check", "--workspace", "--all-targets", "--locked"],
-            "FULL checks all workspace targets.",
-        ),
-        check(
-            profile,
-            "cargo-test",
-            "workspace",
-            "cargo",
-            &["test", "--workspace", "--locked"],
-            "FULL tests the workspace.",
-        ),
-        check(
-            profile,
-            "cargo-clippy",
-            "workspace",
-            "cargo",
-            &[
-                "clippy",
-                "--workspace",
-                "--all-targets",
-                "--all-features",
-                "--locked",
-                "--",
-                "-D",
-                "warnings",
-            ],
-            "FULL lints all workspace targets and features.",
-        ),
-        check(
-            profile,
-            "schema-check",
-            "contracts",
-            "cargo",
-            &["run", "--locked", "-p", "star-schema-gen", "--", "--check"],
-            "FULL checks generated public Schemas.",
-        ),
-        check(
-            profile,
-            "mcp-matrix",
-            "contracts",
-            "cargo",
-            &["run", "--locked", "-p", "star-matrix-check"],
-            "FULL checks MCP conformance coverage.",
-        ),
-    ]
-}
-
-fn check(
-    profile: ValidationProfile,
-    id: &str,
-    unit: &str,
-    executable: &str,
-    args: &[&str],
-    reason: &str,
-) -> ValidationCheckDefinition {
-    check_owned(
-        profile,
-        id,
-        unit,
-        executable,
-        args.iter().map(|value| (*value).to_owned()).collect(),
-        reason,
-    )
+const fn validation_profile_name(profile: ValidationProfile) -> &'static str {
+    match profile {
+        ValidationProfile::Quick => "quick",
+        ValidationProfile::Target => "target",
+        ValidationProfile::Full => "full",
+        ValidationProfile::Release => "release",
+    }
 }
 
 fn check_owned(
@@ -986,6 +883,58 @@ fn check_owned(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn complete_cached_evidence_remains_reusable_during_human_review() {
+        assert!(validation_cache_reuse_allowed(
+            ValidationPlanReadiness::Ready
+        ));
+        assert!(validation_cache_reuse_allowed(
+            ValidationPlanReadiness::HumanReview
+        ));
+        assert!(!validation_cache_reuse_allowed(
+            ValidationPlanReadiness::Blocked
+        ));
+    }
+
+    #[test]
+    fn planned_commands_delegate_to_the_tracked_native_validator() {
+        let checks = check_definitions(Some("docs"));
+        assert_eq!(checks.len(), 4);
+        for check in checks {
+            assert_eq!(check.check_id, "native-validation");
+            assert_eq!(check.unit_id, "docs");
+            assert_eq!(check.command.executable, "pwsh");
+            assert!(
+                check
+                    .command
+                    .args
+                    .iter()
+                    .any(|arg| arg == "scripts/validate.ps1")
+            );
+            assert!(
+                check
+                    .command
+                    .args
+                    .windows(2)
+                    .any(|args| args[0] == "-Unit" && args[1] == "docs")
+            );
+            assert!(
+                !check
+                    .command
+                    .args
+                    .iter()
+                    .any(|arg| arg == "star-schema-gen")
+            );
+            assert!(
+                !check
+                    .command
+                    .args
+                    .iter()
+                    .any(|arg| arg == "star-matrix-check")
+            );
+        }
+    }
 
     #[test]
     fn machine_readable_contract_paths_are_not_downgraded_by_extension() {

@@ -2,7 +2,7 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 3단계인 **공통 검증·품질 Gate**의 실행 의미와 구현 순서를 소유한다. generic M3 CheckGraph runner·Gate·EvidenceBundle writer 제품은 구현 전이다. P-0031은 runner 입력이 될 tracked-path ValidationPlan, immutable run/ref를 대조하는 cache 재사용 pure policy와 EvidenceBundle 이후 AI 압축 함수를 구현했다. P-0035는 bounded precursor로 exact tracked `scripts/validate.ps1`을 실행하고 sealed plan과 native report를 대조하며 report evidence를 조회한다. 이 경로는 persisted cache, Diagnostic normalization, GateDecision 또는 EvidenceBundle을 만들지 않는다.
+이 문서는 Star-Control 3단계인 **공통 검증·품질 Gate**의 실행 의미와 구현 순서를 소유한다. generic M3 CheckGraph runner·Gate·EvidenceBundle writer 제품은 구현 전이다. P-0031은 runner 입력이 될 tracked-path ValidationPlan, immutable run/ref를 대조하는 cache 재사용 pure policy와 EvidenceBundle 이후 AI 압축 함수를 구현했다. P-0035는 bounded precursor로 exact tracked `scripts/validate.ps1`을 실행하고 sealed plan과 native report를 대조하며 report evidence를 조회한다. 현재 precursor는 프로젝트별 ignored derived cache를 읽고 쓰지만 Diagnostic normalization, GateDecision 또는 EvidenceBundle은 만들지 않는다.
 
 3단계는 제품 로드맵 [P5 검사·증거·이어하기](../roadmap/final-implementation.md#p5-검사증거이어하기)의 첫 공통 수직 Slice다. 이 문서에서는 이를 `M3`라고 부른다. 기존 P0의 Finding·ValidationResult·GateDecision 수직 Slice를 폐기하지 않고, M1 Project Catalog·Code Index와 M2 ChangeSet·ImpactAnalysis·ValidationPlan을 소비할 수 있도록 versioned target으로 확장한다.
 

@@ -49,11 +49,11 @@
 
 ### P-0031 tracked-path precursor 경계
 
-현재 구현은 `.star-control/project.toml`이 있는 identity-matched active canonical Git root 하나에서만 동작한다. `revision`, staged diff, unstaged diff, untracked content, toolchain, lockfile, project manifest, validation script, config, command, policy/evidence Schema version을 각각 해시해 plan과 check별 cache key를 봉인한다. fingerprint 입력이 없거나 bounded read와 tool identity 확인을 완료하지 못하면 cache reuse를 끄고 project `FULL`·`human_review`로 승격한다. directory 재귀 탐색, 관리 DB write, 명령 실행, cache persistence와 EvidenceBundle writer는 하지 않는다.
+현재 구현은 `.star-control/project.toml`이 있는 identity-matched active canonical Git root 하나에서만 동작한다. `revision`, staged diff, unstaged diff, untracked content, toolchain, lockfile, project manifest, validation script, config, command, policy/evidence Schema version을 각각 해시해 plan과 check별 cache key를 봉인한다. fingerprint 입력이 없거나 bounded read와 tool identity 확인을 완료하지 못하면 cache reuse를 끄고 project `FULL`·`human_review`로 승격한다. M2 planner 자체는 directory 재귀 탐색, 관리 DB write, 명령 실행 또는 authoritative EvidenceBundle write를 하지 않는다. 별도 bounded execution layer만 같은 binding을 재관찰한 complete·stable pass를 프로젝트의 ignored derived cache에 보존한다.
 
 변경 path는 staged·unstaged·untracked source를 분리하고 Cargo workspace package와 명시 unit mapping에 연결한다. mapping이 없으면 workspace, impact 또는 untracked content 관찰이 불완전하면 project `FULL`과 `human_review`, public contract이면 transitive reverse consumer와 workspace `FULL`로 확대한다. `quick|target` 요청은 영향 기준으로 적응하며 `full|release`만 명시적 하한이다.
 
-cache reuse pure policy는 같은 key의 `pass + complete + stable`, suppression 없음, artifact 존재, current policy/evidence version이면서 immutable ValidationRun의 ID·revision·canonical hash와 일치하는 ValidationRunRef만 허용한다. `partial`, `unverified`, `flaky`, suppression 적용, 증거 ref 불일치, toolchain·lockfile·project manifest·validator/config/command drift와 artifact 소실은 모두 execute로 되돌린다. 현재 action에는 cache store reader가 연결되지 않았으므로 생성되는 check는 전부 `execute`이며 cache hit를 가장하지 않는다.
+cache reuse policy는 같은 key의 `pass + complete + stable`, suppression 없음, artifact 존재, current policy/evidence version이면서 immutable ValidationRun의 ID·revision·canonical hash와 일치하는 ValidationRunRef만 허용한다. `partial`, `unverified`, `flaky`, suppression 적용, 증거 ref 불일치, toolchain·lockfile·project manifest·validator/config/command drift와 artifact 소실은 모두 execute로 되돌린다. bounded precursor는 성공한 native report와 모든 artifact hash를 프로젝트의 ignored `target/validation/star-control-cache/`에 derived state로 저장하고 plan 시 다시 검증한다. canonical source나 management DB를 cache 정본으로 만들지 않는다.
 
 ## 목표와 제외 범위
 

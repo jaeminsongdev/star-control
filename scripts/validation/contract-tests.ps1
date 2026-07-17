@@ -131,28 +131,21 @@ $requirements = Get-Content -LiteralPath (Join-Path $PSScriptRoot "requirements-
 Assert-ValidationContract -Condition ($requirements -match "PyYAML==6\.0\.3") -Message "PyYAML pin"
 Assert-ValidationContract -Condition (([regex]::Matches($requirements, "sha256:[0-9a-f]{64}")).Count -ge 2) -Message "PyYAML hashes"
 
-& python -X utf8 (Join-Path $PSScriptRoot "shadow_compare.py") --self-test
-Assert-ValidationContract -Condition ($LASTEXITCODE -eq 0) -Message "shadow comparison self-test"
-
 $workflow = Get-Content -LiteralPath (Join-Path $repositoryRoot ".github/workflows/full.yml") -Raw -Encoding UTF8
-$shadowPosition = $workflow.IndexOf("Observe validate.ps1 shadow", [StringComparison]::Ordinal)
-Assert-ValidationContract -Condition ($shadowPosition -ge 0) -Message "shadow workflow step"
-Assert-ValidationContract -Condition ($workflow.Contains("continue-on-error: true")) -Message "non-gating shadow workflow"
-foreach ($authorityCommand in @(
+Assert-ValidationContract -Condition ($workflow.Contains("./scripts/validate.ps1 @arguments")) -Message "native validator is the CI gate"
+Assert-ValidationContract -Condition (([regex]::Matches($workflow, "\./scripts/validate\.ps1")).Count -eq 1) -Message "native validator runs once"
+Assert-ValidationContract -Condition (-not $workflow.Contains("continue-on-error: true")) -Message "validation gate must be authoritative"
+foreach ($removedDuplicate in @(
         "cargo fmt --all -- --check",
         "cargo check --workspace --all-targets --locked",
         "cargo test --workspace --locked",
         "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
         "cargo run --locked -p star-schema-gen -- --check",
         "cargo run --locked -p star-matrix-check",
-        "git diff --check"
+        "Observe validate.ps1 shadow"
     )) {
-    $position = $workflow.IndexOf($authorityCommand, [StringComparison]::Ordinal)
-    Assert-ValidationContract -Condition ($position -ge 0 -and $position -lt $shadowPosition) -Message "authority gate before shadow: $authorityCommand"
+    Assert-ValidationContract -Condition (-not $workflow.Contains($removedDuplicate)) -Message "duplicate CI command removed: $removedDuplicate"
 }
-$shadowContract = Get-Content -LiteralPath (Join-Path $PSScriptRoot "shadow-contract.json") -Raw -Encoding UTF8 | ConvertFrom-Json
-Assert-ValidationContract -Condition ($shadowContract.schema_id -eq "star.validation-shadow-contract") -Message "shadow contract schema id"
-Assert-ValidationContract -Condition (@($shadowContract.mappings).Count -eq 7) -Message "shadow authority mapping count"
 
 $commonSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot "common.ps1") -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($commonSource.Contains('$startInfo.CreateNoWindow = $true')) -Message "validator child processes must not allocate console windows"
@@ -162,11 +155,18 @@ Assert-ValidationContract -Condition ($commonSource.Contains('$process.Dispose()
 $projectSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "crates/control/star-project/src/lib.rs") -Raw -Encoding UTF8
 $projectCatalogSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "crates/control/star-project/src/catalog.rs") -Raw -Encoding UTF8
 $planningSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "apps/star-controller/src/validation_planning.rs") -Raw -Encoding UTF8
+$cacheSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "apps/star-controller/src/validation_cache.rs") -Raw -Encoding UTF8
+$runOutputSchema = Get-Content -LiteralPath (Join-Path $repositoryRoot "catalog/tool-packages/schemas/validation-run-output.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 Assert-ValidationContract -Condition ($projectSource.Contains('command.creation_flags(0x0800_0000)')) -Message "project Git observation must hide child consoles"
 Assert-ValidationContract -Condition (([regex]::Matches($projectSource, 'Command::new')).Count -eq 1) -Message "project commands must use the hidden command factory"
 Assert-ValidationContract -Condition (([regex]::Matches($projectCatalogSource, 'Command::new')).Count -eq 0) -Message "catalog Git commands must use the shared hidden command factory"
 Assert-ValidationContract -Condition ($planningSource.Contains('command.creation_flags(0x0800_0000)')) -Message "validation planning observations must hide child consoles"
 Assert-ValidationContract -Condition (([regex]::Matches($planningSource, 'Command::new')).Count -eq 1) -Message "validation planning commands must use the hidden command factory"
+Assert-ValidationContract -Condition ($cacheSource.Contains('target/validation/star-control-cache')) -Message "cache stays under ignored validation artifacts"
+Assert-ValidationContract -Condition ($cacheSource.Contains('artifact_hashes')) -Message "cache binds every native artifact hash"
+Assert-ValidationContract -Condition ($cacheSource.Contains('ValidationOutcome::Pass')) -Message "cache requires a pass ValidationRun"
+Assert-ValidationContract -Condition ('cache' -in @($runOutputSchema.required)) -Message "validation run output reports cache disposition"
+Assert-ValidationContract -Condition ($runOutputSchema.properties.cache.properties.hit.type -eq 'boolean') -Message "cache hit is machine readable"
 
 $packagingSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "packaging/windows/build-installer.ps1") -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($packagingSource.Contains('$startInfo.CreateNoWindow = $true')) -Message "packaging child processes must not allocate console windows"

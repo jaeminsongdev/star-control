@@ -1,4 +1,4 @@
-name: Star-Control full
+name: Star-Control validation
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       profile:
-        description: Shadow validation profile
+        description: Validation profile
         type: choice
         required: true
         default: full
@@ -20,98 +20,44 @@ permissions:
   contents: read
 
 concurrency:
-  group: star-control-full-${{ github.ref }}
+  group: star-control-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  full:
-    name: Windows full gate
+  validation:
+    name: Native validation
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
-      VALIDATION_PROFILE: ${{ github.event_name == 'pull_request' && 'target' || (github.event.inputs.profile || 'full') }}
+      VALIDATION_PROFILE: ${{ github.event_name == 'pull_request' && 'target' || (github.event_name == 'push' && 'full' || inputs.profile) }}
       VALIDATION_BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.96.0
-        with:
-          components: rustfmt, clippy
-
-      # Authority gates remain unchanged during shadow observation.
-      - name: Check formatting
-        id: legacy_fmt
-        run: cargo fmt --all -- --check
-
-      - name: Check all targets
-        id: legacy_check
-        run: cargo check --workspace --all-targets --locked
-
-      - name: Test workspace
-        id: legacy_test
-        run: cargo test --workspace --locked
-
-      - name: Lint workspace
-        id: legacy_clippy
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-
-      - name: Check generated schemas
-        id: legacy_schema
-        run: cargo run --locked -p star-schema-gen -- --check
-
-      - name: Check 170-item MCP matrix
-        id: legacy_matrix
-        run: cargo run --locked -p star-matrix-check
-
-      - name: Check patch whitespace
-        id: legacy_diff
-        shell: pwsh
-        run: git diff --check
-
-      # Candidate setup and comparison are deliberately non-authoritative.
-      - name: Prepare shadow Python
-        if: always()
-        continue-on-error: true
+      - name: Install validation Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.13.13"
           cache: pip
           cache-dependency-path: scripts/validation/requirements-validation.txt
 
-      - name: Prepare shadow dependencies
-        if: always()
-        continue-on-error: true
+      - name: Install validation dependencies
         run: "python -m pip install --only-binary=:all: --require-hashes -r scripts/validation/requirements-validation.txt"
 
-      - name: Observe validate.ps1 shadow
-        if: always()
-        continue-on-error: true
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Run native validation
         shell: pwsh
         run: |
-          $outcomes = @(
-            "${{ steps.legacy_fmt.outcome }}",
-            "${{ steps.legacy_check.outcome }}",
-            "${{ steps.legacy_test.outcome }}",
-            "${{ steps.legacy_clippy.outcome }}",
-            "${{ steps.legacy_schema.outcome }}",
-            "${{ steps.legacy_matrix.outcome }}",
-            "${{ steps.legacy_diff.outcome }}"
-          )
-          $legacyResult = if ($outcomes -contains "failure") {
-            "fail"
-          } elseif ($outcomes -contains "cancelled") {
-            "cancelled"
-          } elseif ($outcomes -contains "skipped") {
-            "skipped"
-          } else {
-            "pass"
-          }
-          $arguments = @("-Profile", $env:VALIDATION_PROFILE, "-LegacyResult", $legacyResult)
+          $arguments = @("-Profile", $env:VALIDATION_PROFILE, "-OutputFormat", "text")
           if ($env:VALIDATION_BASE_REF -and $env:VALIDATION_BASE_REF -notmatch "^0+$") {
             $arguments += @("-BaseRef", $env:VALIDATION_BASE_REF)
           }
-          ./scripts/validation/invoke-shadow-validation.ps1 @arguments
+          ./scripts/validate.ps1 @arguments

@@ -1,0 +1,35 @@
+schema_version = 1
+policy_id = "star-control-development-project-exclusions"
+catalog_source = "catalog/projects.toml"
+selection_mode = "deny_by_default"
+
+# Only exact entries in projects.toml are active. These rules document why nearby
+# roots must not be promoted by recursive discovery.
+[[exclusions]]
+id = "retired-control-systems"
+relative_paths = ["관제/Star-Workflow", "검토예정/로컬_AI"]
+reason = "retired migration sources removed from PATH and active catalog"
+disposition = "preserve external backups only when separately approved"
+
+[[exclusions]]
+id = "absorbed-one-project"
+relative_paths = ["언어/래거시/하나_프로젝트"]
+reason = "read-only source absorbed by the language repository; nested Git and standalone CI are forbidden"
+disposition = "keep source inside language, never register as a project"
+
+[[exclusions]]
+id = "lawos-non-git"
+relative_paths = ["LAWOS"]
+reason = "not a canonical Git repository"
+disposition = "exclude until an explicit Git canonicalization decision"
+
+[[exclusions]]
+id = "derived-and-reference-roots"
+candidate_path_segments = ["임시문서", "legacy", "래거시", "backup", "sandbox", "bootstrap", "target", ".worktrees"]
+reason = "reference, derived, copied, or linked-worktree locations are not canonical project roots"
+disposition = "deny recursive registration; an exact future allowlist entry requires review"
+
+[[exclusions]]
+id = "unlisted-roots"
+reason = "the tracked active allowlist is closed"
+disposition = "all roots absent from catalog/projects.toml remain excluded"

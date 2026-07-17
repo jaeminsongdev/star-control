@@ -53,6 +53,7 @@
 
 ## 검증과 증거
 
+- 기본 TARGET 진입점은 `pwsh ./scripts/validate.ps1 -Profile target`이며 CI와 Star-Control도 같은 추적 스크립트를 호출한다.
 - 코드 작업의 기본 검증은 `TARGET`이며 영향받은 package·unit과 필요한 smoke·lint만 실행한다.
 - 순수 정책·문서 변경은 `QUICK`으로 포맷, 링크, 구조, 범위와 diff를 확인한다.
 - 공개 API, Schema, lockfile, 공통 코어, release 변경은 `FULL`로 영향 범위를 검증한다.

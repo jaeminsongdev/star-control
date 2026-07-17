@@ -39,14 +39,14 @@ Unit은 프로젝트가 선언한 Cargo package 또는 논리 unit이다. 선택
 - 3: not_run, partial, unverified, flaky
 - 4: runner 내부 오류
 
-runner는 이전 보고서나 로그를 읽어 성공을 재사용하지 않는다. input_fingerprint는 revision, dirty patch, profile·unit·BaseRef·선택 파일, Rust/Cargo/Python/PyYAML/Git/PowerShell/platform, lock/config와 실제 command를 묶는다. 매 실행마다 달라지는 artifact ID와 checkout 절대 경로는 정규화하며, fingerprint는 캐시 키 자료일 뿐이다. 조직 전체 캐시는 후속 Star-Control 계층이 소유한다.
+runner는 stateless하며 이전 보고서나 로그를 직접 재사용하지 않는다. input_fingerprint는 revision, dirty patch, profile·unit·BaseRef·선택 파일, Rust/Cargo/Python/PyYAML/Git/PowerShell/platform, lock/config와 실제 command를 묶는다. 매 실행마다 달라지는 artifact ID와 checkout 절대 경로는 정규화한다. Star-Control은 별도 cache key로 동일 입력의 complete·stable pass와 모든 artifact hash를 확인한 경우에만 프로젝트의 ignored derived cache를 재사용한다.
 
 YAML은 PyYAML 6.0.3을 사용한다. CI는 hash가 고정된 requirements-validation.txt를 설치한다. 로컬에 정확한 버전이 없으면 자동 설치하지 않고 해당 check를 unverified로 남긴다.
 
 fixtures 또는 examples 아래 invalid 경로의 파일은 실패 입력 자체가 계약 증거이므로 UTF-8·NUL 검사만 하고 성공 입력 parser로 다시 해석하지 않는다. 해당 입력의 거부 여부는 소유 package test가 검증한다.
 
-## Shadow 전환
+## CI 승격
 
-기존 CI gate는 authority로 유지하고 `invoke-shadow-validation.ps1`이 같은 revision에서 후보 `validate.ps1`을 비차단으로 실행한다. `shadow_compare.py`는 기존 check와 후보 check의 선택 unit, 실제 명령, 결과를 `target/validation-shadow/`에 기록한다. 후보 실패·누락·명령 불일치는 경고와 비교 실패로 남지만 기존 gate 결과를 바꾸지 않는다.
+PR은 `target`, main은 `full`, 수동 release는 `release` profile로 이 진입점을 한 번 호출한다. Cargo·Schema·MCP matrix·diff 검사는 `project.ps1`이 선택하며 workflow가 같은 명령을 별도로 반복하지 않는다.
 
-shadow 비교 한 건은 승격 증거가 아니다. 비교 결과는 항상 `promotion_eligible=false`이며, PR·main의 반복 관측에서 누락 검사가 없고 서버의 required check·ruleset 상태까지 별도로 확인된 뒤에만 후속 P-ID에서 후보 gate 승격을 검토한다.
+Star-Control의 ValidationPlan은 이 추적된 진입점을 단일 명령으로 계획하고, 실제 세부 명령·종료 코드·소요시간·로그는 native report를 증거로 사용한다. partial·unverified·flaky·not_run은 CI 성공이나 cache 재사용 대상으로 승격하지 않는다.

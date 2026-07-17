@@ -1147,12 +1147,49 @@ mod tests {
             inputs: fingerprints(),
             command: hash("command"),
         };
-        let mut validator_changed = base.clone();
-        validator_changed.inputs.validation_scripts = hash("changed-validator");
-        assert_ne!(
-            base.fingerprint().unwrap(),
-            validator_changed.fingerprint().unwrap()
-        );
+        let base_key = base.fingerprint().unwrap();
+        let mut changed_inputs = Vec::new();
+
+        let mut changed = base.clone();
+        changed.inputs.revision = "b".repeat(40);
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.staged_diff = hash("changed-staged");
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.unstaged_diff = hash("changed-unstaged");
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.untracked_content = hash("changed-untracked");
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.toolchain = hash("changed-toolchain");
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.lockfile = hash("changed-lockfile");
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.project_manifest = hash("changed-manifest");
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.validation_scripts = hash("changed-validator");
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.config = hash("changed-config");
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.policy_schema_version += 1;
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.inputs.evidence_schema_version += 1;
+        changed_inputs.push(changed);
+        let mut changed = base.clone();
+        changed.command = hash("changed-command");
+        changed_inputs.push(changed);
+
+        for changed in changed_inputs {
+            assert_ne!(base_key, changed.fingerprint().unwrap());
+        }
     }
 
     fn document(schema_id: &str, document_id: &str) -> DocumentRef {
