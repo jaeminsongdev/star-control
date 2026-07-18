@@ -10,7 +10,10 @@ use crate::{
     fixed_mcp::{CallInput, McpToolResult, fixed_input_schema, fixed_result_schema},
     installation::{
         CODEX_INTEGRATION_RECORD_SCHEMA_ID, CodexIntegrationRecord, INSTALLATION_RECORD_SCHEMA_ID,
-        InstallationRecord, RELEASE_FILE_MANIFEST_SCHEMA_ID, ReleaseFileManifest,
+        InstallationRecord, RELEASE_FILE_MANIFEST_SCHEMA_ID, RUNTIME_ACTIVATION_RECORD_SCHEMA_ID,
+        RUNTIME_CANDIDATE_REVIEW_SCHEMA_ID, RUNTIME_GENERATION_MANIFEST_SCHEMA_ID,
+        ReleaseFileManifest, RuntimeActivationRecord, RuntimeCandidateReview,
+        RuntimeGenerationManifest,
     },
     ipc::{IpcChallenge, IpcHandshakeError, IpcHello, IpcRequest, IpcResponse, IpcWelcome},
     management::{
@@ -221,6 +224,18 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "codex-integration-record.schema.json",
             schema_document::<CodexIntegrationRecord>(CODEX_INTEGRATION_RECORD_SCHEMA_ID),
+        ),
+        (
+            "runtime-generation-manifest.schema.json",
+            schema_document::<RuntimeGenerationManifest>(RUNTIME_GENERATION_MANIFEST_SCHEMA_ID),
+        ),
+        (
+            "runtime-activation-record.schema.json",
+            schema_document::<RuntimeActivationRecord>(RUNTIME_ACTIVATION_RECORD_SCHEMA_ID),
+        ),
+        (
+            "runtime-candidate-review.schema.json",
+            schema_document::<RuntimeCandidateReview>(RUNTIME_CANDIDATE_REVIEW_SCHEMA_ID),
         ),
         (
             "project.schema.json",

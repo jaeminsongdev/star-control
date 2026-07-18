@@ -3,7 +3,7 @@
 #![cfg(windows)]
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     ffi::OsStr,
     fs::{File, OpenOptions},
     io::{self, Read, Write},
@@ -21,10 +21,13 @@ use star_contracts::{
     installation::{
         CODEX_INTEGRATION_RECORD_SCHEMA_ID, CodexIntegrationRecord, CodexIntegrationSummary,
         ControllerInstallManifest, INSTALLATION_RECORD_SCHEMA_ID, INSTALLATION_SCHEMA_VERSION,
-        InstallationRecord, RELEASE_FILE_MANIFEST_SCHEMA_ID, ReleaseFileEntry, ReleaseFileManifest,
-        TargetArchitecture,
+        InstallationRecord, RELEASE_FILE_MANIFEST_SCHEMA_ID, RUNTIME_ACTIVATION_RECORD_SCHEMA_ID,
+        RUNTIME_GENERATION_MANIFEST_SCHEMA_ID, ReleaseFileEntry, ReleaseFileManifest,
+        RuntimeActivationRecord, RuntimeCandidateReview, RuntimeGenerationManifest,
+        RuntimeGenerationRef, RuntimeUpdateClass, TargetArchitecture,
     },
-    parse_no_duplicate_keys,
+    manifest::{ManifestSource, risk_lane},
+    parse_manifest_v1, parse_no_duplicate_keys,
 };
 use thiserror::Error;
 use windows::{
@@ -40,6 +43,7 @@ const LOCAL_RECORD_MAX_BYTES: u64 = 64 * 1024;
 pub const RELEASE_MANIFEST_FILE: &str = "release-manifest.json";
 pub const INSTALLATION_RECORD_FILE: &str = "installation-record.v1.json";
 pub const CONTROLLER_INSTALL_MANIFEST_FILE: &str = "star-control-install.v1.json";
+pub const RUNTIME_ACTIVATION_RECORD_FILE: &str = "active-runtime.v1.json";
 
 pub mod autostart;
 
@@ -59,6 +63,12 @@ pub enum WindowsAdapterError {
     InvalidInstallationRecord,
     #[error("Codex integration record is malformed or unsupported")]
     InvalidIntegrationRecord,
+    #[error("Runtime activation record is malformed, unsupported, or outside the install root")]
+    InvalidRuntimeActivation,
+    #[error("Runtime generation is malformed, unsupported, or fails identity verification")]
+    InvalidRuntimeGeneration,
+    #[error("runtime generation is already staged and cannot be overwritten")]
+    RuntimeGenerationExists,
     #[error("required current-user environment variable is unavailable")]
     Environment,
     #[error("Windows installation I/O failed: {0}")]
@@ -103,6 +113,156 @@ impl InstallationManager {
             .join(INSTALLATION_RECORD_FILE)
     }
 
+    pub fn runtime_activation_record_path(&self) -> PathBuf {
+        self.local_data_root
+            .join("installation")
+            .join(RUNTIME_ACTIVATION_RECORD_FILE)
+    }
+
+    /// Atomically publishes the selector consumed by a Bootstrap Bridge v2.
+    /// This does not start a Controller; the durable update supervisor owns
+    /// drain, process handoff, postcheck, and rollback around this write.
+    pub fn write_runtime_activation_record(
+        &self,
+        install_root: &Path,
+        record: &RuntimeActivationRecord,
+    ) -> Result<(), WindowsAdapterError> {
+        let install_root = canonical_fixed_directory(install_root)?;
+        validate_runtime_activation_record(&install_root, record)?;
+        atomic_write_json(&self.runtime_activation_record_path(), record)
+    }
+
+    pub fn load_runtime_activation_record(
+        &self,
+        install_root: &Path,
+    ) -> Result<RuntimeActivationRecord, WindowsAdapterError> {
+        let install_root = canonical_fixed_directory(install_root)?;
+        let record = load_runtime_activation_record(&self.runtime_activation_record_path())?;
+        validate_runtime_activation_record(&install_root, &record)?;
+        Ok(record)
+    }
+
+    /// Verifies an independently staged runtime generation and copies it into
+    /// the fixed install tree without changing the active selector. A failed
+    /// or repeated stage never overwrites an existing generation.
+    pub fn stage_runtime_generation(
+        &self,
+        install_root: &Path,
+        source_generation_root: &Path,
+    ) -> Result<RuntimeGenerationRef, WindowsAdapterError> {
+        let install_root = canonical_fixed_directory(install_root)?;
+        let source_root = canonical_fixed_directory(source_generation_root)?;
+        let generation = load_runtime_generation_manifest(&source_root)?;
+        validate_runtime_generation(&source_root, &generation)?;
+
+        let generations_root =
+            ensure_fixed_directory(&install_root.join("runtime").join("generations"))?;
+        let destination = generations_root.join(&generation.generation.generation_id);
+        if destination.exists() {
+            return Err(WindowsAdapterError::RuntimeGenerationExists);
+        }
+        std::fs::create_dir(&destination)?;
+        copy_runtime_generation(&source_root, &destination, &generation)?;
+        let copied = load_runtime_generation_manifest(&destination)?;
+        validate_runtime_generation(&destination, &copied)?;
+        if copied.generation != generation.generation {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+
+        Ok(RuntimeGenerationRef {
+            generation_id: generation.generation.generation_id,
+            runtime_root: normal_windows_path(&destination)
+                .to_string_lossy()
+                .into_owned(),
+            release_manifest_sha256: generation.generation.release_manifest_sha256,
+        })
+    }
+
+    /// Returns a deterministic, non-mutating review of a staged candidate.
+    /// In particular, it never treats a package declaration as proof that a
+    /// newly introduced Controller handler exists.
+    pub fn inspect_runtime_candidate(
+        &self,
+        install_root: &Path,
+        generation_id: &str,
+    ) -> Result<RuntimeCandidateReview, WindowsAdapterError> {
+        let install_root = canonical_fixed_directory(install_root)?;
+        if generation_id.trim().is_empty()
+            || Path::new(generation_id)
+                .components()
+                .any(|component| !matches!(component, Component::Normal(_)))
+        {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+        let candidate_root = install_root
+            .join("runtime")
+            .join("generations")
+            .join(generation_id);
+        let candidate_manifest = load_runtime_generation_manifest(&candidate_root)?;
+        validate_runtime_generation(&candidate_root, &candidate_manifest)?;
+        let candidate = RuntimeGenerationRef {
+            generation_id: candidate_manifest.generation.generation_id.clone(),
+            runtime_root: normal_windows_path(&candidate_root.canonicalize()?)
+                .to_string_lossy()
+                .into_owned(),
+            release_manifest_sha256: candidate_manifest
+                .generation
+                .release_manifest_sha256
+                .clone(),
+        };
+        let candidate_actions = load_generation_actions(&candidate_root, &candidate_manifest)?;
+
+        let active = self
+            .runtime_activation_record_path()
+            .exists()
+            .then(|| self.load_runtime_activation_record(&install_root))
+            .transpose()?;
+        let active_actions = match active.as_ref() {
+            Some(active) => {
+                let root = PathBuf::from(&active.active.runtime_root);
+                let manifest = load_runtime_generation_manifest(&root)?;
+                validate_runtime_generation(&root, &manifest)?;
+                load_generation_actions(&root, &manifest)?
+            }
+            None => BTreeMap::new(),
+        };
+        let comparison = compare_generation_actions(&active_actions, &candidate_actions)?;
+        let handler_ready = comparison.added.is_empty() && comparison.changed.is_empty();
+        let review_scope = serde_json::json!({
+            "candidate": candidate,
+            "update_class": RuntimeUpdateClass::RuntimeGeneration,
+            "added_actions": comparison.added,
+            "removed_actions": comparison.removed,
+            "changed_actions": comparison.changed,
+            "breaking_schema": comparison.breaking_schema,
+            "risk_lane_widened": comparison.risk_lane_widened,
+            "permission_widened": comparison.permission_widened,
+            "handler_ready": handler_ready,
+            "bridge_contract_version": candidate_manifest.bridge_contract_version,
+            "active_generation_id": active.as_ref().map(|record| &record.active.generation_id),
+        });
+        Ok(RuntimeCandidateReview {
+            schema_id: "star.runtime-candidate-review".to_owned(),
+            schema_version: 1,
+            candidate,
+            update_class: RuntimeUpdateClass::RuntimeGeneration,
+            added_actions: comparison.added,
+            removed_actions: comparison.removed,
+            changed_actions: comparison.changed,
+            breaking_schema: comparison.breaking_schema,
+            risk_lane_widened: comparison.risk_lane_widened,
+            permission_widened: comparison.permission_widened,
+            handler_ready,
+            bridge_compatible: candidate_manifest.bridge_contract_version == 2,
+            rollback_available: active.is_some(),
+            requires_codex_restart: false,
+            requires_new_task: false,
+            hook_review_required: false,
+            approval_scope_sha256: canonical_sha256(&review_scope)
+                .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?,
+        })
+    }
+
     pub fn finalize(
         &self,
         install_root: &Path,
@@ -130,7 +290,7 @@ impl InstallationManager {
         if previous.is_some() && !same_root && !replace_existing {
             return Err(WindowsAdapterError::InstallationConflict);
         }
-        write_controller_manifest(&install_root, &manifest)?;
+        write_controller_manifest(&install_root, &manifest, None)?;
         let now = Utc::now();
         let record = InstallationRecord {
             schema_id: INSTALLATION_RECORD_SCHEMA_ID.to_owned(),
@@ -180,7 +340,25 @@ impl InstallationManager {
             &install_root.join(CONTROLLER_INSTALL_MANIFEST_FILE),
             LOCAL_RECORD_MAX_BYTES,
         )?;
-        parse_controller_manifest(&controller_manifest, &install_root, &manifest)?;
+        let controller_manifest =
+            parse_controller_manifest(&controller_manifest, &install_root, &manifest)?;
+        match (
+            controller_manifest
+                .runtime_activation_record_path
+                .as_deref(),
+            controller_manifest.bridge_contract_version,
+        ) {
+            (None, None) => {}
+            (Some(path), Some(_))
+                if paths_equal_case_insensitive(
+                    Path::new(path),
+                    &self.runtime_activation_record_path(),
+                ) =>
+            {
+                self.load_runtime_activation_record(&install_root)?;
+            }
+            _ => return Err(WindowsAdapterError::FileIdentityMismatch),
+        }
         Ok(InstallationStatus {
             verified: true,
             install_root: normal_windows_path(&install_root)
@@ -196,6 +374,96 @@ impl InstallationManager {
             target_architecture: record.target_architecture,
             codex_integration: record.codex_integration,
         })
+    }
+
+    /// Enables Bootstrap Bridge v2 only after a validated active Runtime
+    /// Generation exists. The activation record is written first; if the
+    /// Bridge manifest write fails, the existing v1 bridge remains active.
+    pub fn activate_runtime_bridge(
+        &self,
+        install_root: &Path,
+        record: &RuntimeActivationRecord,
+        bridge_contract_version: u32,
+    ) -> Result<(), WindowsAdapterError> {
+        if bridge_contract_version == 0 {
+            return Err(WindowsAdapterError::InvalidRuntimeActivation);
+        }
+        let install_root = canonical_fixed_directory(install_root)?;
+        let manifest_bytes = read_regular_bounded(
+            &install_root.join(RELEASE_MANIFEST_FILE),
+            RELEASE_MANIFEST_MAX_BYTES,
+        )?;
+        let release = parse_release_manifest(&manifest_bytes)?;
+        validate_release_manifest(&release, compiled_architecture()?)?;
+        verify_release_files(&install_root, &release)?;
+        if record.bridge_contract_version != bridge_contract_version {
+            return Err(WindowsAdapterError::InvalidRuntimeActivation);
+        }
+        verify_activation_generation(&record.active)?;
+        if let Some(previous) = &record.previous {
+            verify_activation_generation(previous)?;
+        }
+        self.write_runtime_activation_record(&install_root, record)?;
+        write_controller_manifest(
+            &install_root,
+            &release,
+            Some((
+                &self.runtime_activation_record_path(),
+                bridge_contract_version,
+            )),
+        )
+    }
+
+    /// One-time offline Bootstrap Bridge v2 migration. The installer has
+    /// already copied one verified Runtime Generation into the release tree
+    /// and stopped Codex/MCP before calling this method. Routine updates must
+    /// use `stage_runtime_generation` plus the stable CLI supervisor instead.
+    pub fn initialize_runtime_bridge(
+        &self,
+        install_root: &Path,
+        state_generation_id: &str,
+    ) -> Result<RuntimeActivationRecord, WindowsAdapterError> {
+        if state_generation_id.trim().is_empty() || state_generation_id.chars().count() > 128 {
+            return Err(WindowsAdapterError::InvalidRuntimeActivation);
+        }
+        let install_root = canonical_fixed_directory(install_root)?;
+        if self.runtime_activation_record_path().exists() {
+            let record = self.load_runtime_activation_record(&install_root)?;
+            self.activate_runtime_bridge(&install_root, &record, record.bridge_contract_version)?;
+            return Ok(record);
+        }
+        let generations_root =
+            canonical_fixed_directory(&install_root.join("runtime").join("generations"))?;
+        let mut generations = std::fs::read_dir(&generations_root)?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir())
+            .collect::<Vec<_>>();
+        generations.sort();
+        if generations.len() != 1 {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+        let runtime_root = canonical_fixed_directory(&generations[0])?;
+        let manifest = load_runtime_generation_manifest(&runtime_root)?;
+        validate_runtime_generation(&runtime_root, &manifest)?;
+        let record = RuntimeActivationRecord {
+            schema_id: RUNTIME_ACTIVATION_RECORD_SCHEMA_ID.to_owned(),
+            schema_version: 1,
+            activation_revision: 1,
+            active: RuntimeGenerationRef {
+                generation_id: manifest.generation.generation_id,
+                runtime_root: normal_windows_path(&runtime_root)
+                    .to_string_lossy()
+                    .into_owned(),
+                release_manifest_sha256: manifest.generation.release_manifest_sha256,
+            },
+            previous: None,
+            state_generation_id: state_generation_id.to_owned(),
+            bridge_contract_version: manifest.bridge_contract_version,
+            activated_at: Utc::now(),
+        };
+        self.activate_runtime_bridge(&install_root, &record, manifest.bridge_contract_version)?;
+        Ok(record)
     }
 
     pub fn set_codex_integration(
@@ -272,6 +540,325 @@ pub fn load_codex_integration_record(
         return Err(WindowsAdapterError::InvalidIntegrationRecord);
     }
     Ok(record)
+}
+
+pub fn load_runtime_activation_record(
+    path: &Path,
+) -> Result<RuntimeActivationRecord, WindowsAdapterError> {
+    let bytes = read_regular_bounded(path, LOCAL_RECORD_MAX_BYTES)
+        .map_err(|_| WindowsAdapterError::InvalidRuntimeActivation)?;
+    let value = strict_value(&bytes).map_err(|_| WindowsAdapterError::InvalidRuntimeActivation)?;
+    let record: RuntimeActivationRecord =
+        serde_json::from_value(value).map_err(|_| WindowsAdapterError::InvalidRuntimeActivation)?;
+    if record.schema_id != RUNTIME_ACTIVATION_RECORD_SCHEMA_ID
+        || record.schema_version != 1
+        || record.activation_revision == 0
+        || record.bridge_contract_version == 0
+        || record.state_generation_id.trim().is_empty()
+        || record.active.generation_id.trim().is_empty()
+        || record.active.runtime_root.trim().is_empty()
+    {
+        return Err(WindowsAdapterError::InvalidRuntimeActivation);
+    }
+    if record
+        .previous
+        .as_ref()
+        .is_some_and(|previous| previous.generation_id == record.active.generation_id)
+    {
+        return Err(WindowsAdapterError::InvalidRuntimeActivation);
+    }
+    Ok(record)
+}
+
+fn validate_runtime_activation_record(
+    install_root: &Path,
+    record: &RuntimeActivationRecord,
+) -> Result<(), WindowsAdapterError> {
+    let runtime_root = canonical_fixed_directory(Path::new(&record.active.runtime_root))?;
+    let generations_root =
+        canonical_fixed_directory(&install_root.join("runtime").join("generations"))?;
+    if !path_is_within(&runtime_root, &generations_root) {
+        return Err(WindowsAdapterError::InvalidRuntimeActivation);
+    }
+    if let Some(previous) = &record.previous {
+        let previous_root = canonical_fixed_directory(Path::new(&previous.runtime_root))?;
+        if !path_is_within(&previous_root, &generations_root) {
+            return Err(WindowsAdapterError::InvalidRuntimeActivation);
+        }
+    }
+    Ok(())
+}
+
+fn verify_activation_generation(
+    reference: &RuntimeGenerationRef,
+) -> Result<(), WindowsAdapterError> {
+    let root = canonical_fixed_directory(Path::new(&reference.runtime_root))
+        .map_err(|_| WindowsAdapterError::InvalidRuntimeActivation)?;
+    let manifest = load_runtime_generation_manifest(&root)
+        .map_err(|_| WindowsAdapterError::InvalidRuntimeActivation)?;
+    validate_runtime_generation(&root, &manifest)
+        .map_err(|_| WindowsAdapterError::InvalidRuntimeActivation)?;
+    if manifest.generation.generation_id != reference.generation_id
+        || manifest.generation.release_manifest_sha256 != reference.release_manifest_sha256
+    {
+        return Err(WindowsAdapterError::InvalidRuntimeActivation);
+    }
+    Ok(())
+}
+
+pub fn load_runtime_generation_manifest(
+    runtime_root: &Path,
+) -> Result<RuntimeGenerationManifest, WindowsAdapterError> {
+    let bytes = read_regular_bounded(
+        &runtime_root.join("runtime-generation.v1.json"),
+        LOCAL_RECORD_MAX_BYTES,
+    )
+    .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+    let value = strict_value(&bytes).map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+    let manifest: RuntimeGenerationManifest =
+        serde_json::from_value(value).map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+    if manifest.schema_id != RUNTIME_GENERATION_MANIFEST_SCHEMA_ID
+        || manifest.schema_version != 1
+        || manifest.generation.generation_id.trim().is_empty()
+        || manifest.generation.runtime_root != "."
+        || semver::Version::parse(&manifest.product_version).is_err()
+        || manifest.target_architecture != compiled_architecture()?
+        || manifest.controller_path != "star-controller.exe"
+        || manifest.cli_runtime_path != "star-cli-runtime.exe"
+        || manifest.catalog_path != "catalog"
+        || manifest.schemas_root != "schemas/v1"
+        || manifest.bridge_contract_version != 2
+    {
+        return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+    }
+    Ok(manifest)
+}
+
+fn validate_runtime_generation(
+    runtime_root: &Path,
+    generation: &RuntimeGenerationManifest,
+) -> Result<(), WindowsAdapterError> {
+    let root = canonical_fixed_directory(runtime_root)?;
+    if root.file_name().and_then(OsStr::to_str) != Some(&generation.generation.generation_id) {
+        return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+    }
+    let release_bytes = read_regular_bounded(
+        &root.join("runtime-release-manifest.json"),
+        RELEASE_MANIFEST_MAX_BYTES,
+    )
+    .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+    if Sha256Hash::digest(&release_bytes) != generation.generation.release_manifest_sha256 {
+        return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+    }
+    let release = parse_release_manifest(&release_bytes)
+        .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+    validate_runtime_release_manifest(&release, generation.target_architecture)?;
+    verify_release_files(&root, &release)
+        .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+
+    let controller = root.join(&generation.controller_path);
+    if Sha256Hash::digest_reader(
+        open_regular_local_file(&controller)
+            .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?,
+    )
+    .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?
+        != generation.controller_sha256
+    {
+        return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+    }
+    for required in [
+        &generation.controller_path,
+        &generation.cli_runtime_path,
+        &generation.catalog_path,
+        &generation.schemas_root,
+    ] {
+        let path = root.join(required.replace('/', "\\\\"));
+        if !path.exists() || has_reparse_ancestor(&path) {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+    }
+    Ok(())
+}
+
+fn validate_runtime_release_manifest(
+    manifest: &ReleaseFileManifest,
+    requested_architecture: TargetArchitecture,
+) -> Result<(), WindowsAdapterError> {
+    if manifest.schema_id != RELEASE_FILE_MANIFEST_SCHEMA_ID
+        || manifest.schema_version != INSTALLATION_SCHEMA_VERSION
+        || semver::Version::parse(&manifest.product_version).is_err()
+        || manifest.source_revision.is_empty()
+        || manifest.source_revision.len() > 256
+        || manifest.target_architecture != requested_architecture
+        || manifest.signing != star_contracts::installation::PackageSigningState::UnsignedLocal
+        || manifest.generated_files != ["runtime-generation.v1.json"]
+        || manifest.files.is_empty()
+    {
+        return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+    }
+    let mut previous: Option<&str> = None;
+    let mut casefolded = BTreeSet::new();
+    for entry in &manifest.files {
+        if !valid_manifest_relative_path(&entry.path)
+            || previous.is_some_and(|value| value >= entry.path.as_str())
+            || !casefolded.insert(entry.path.to_ascii_lowercase())
+        {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+        previous = Some(&entry.path);
+    }
+    for required in ["star-cli-runtime.exe", "star-controller.exe"] {
+        if !manifest.files.iter().any(|entry| entry.path == required) {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+    }
+    let value = serde_json::to_value(&manifest.files)?;
+    if canonical_sha256(&value).map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?
+        != manifest.set_sha256
+    {
+        return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+    }
+    Ok(())
+}
+
+fn copy_runtime_generation(
+    source_root: &Path,
+    destination_root: &Path,
+    generation: &RuntimeGenerationManifest,
+) -> Result<(), WindowsAdapterError> {
+    let release_bytes = read_regular_bounded(
+        &source_root.join("runtime-release-manifest.json"),
+        RELEASE_MANIFEST_MAX_BYTES,
+    )?;
+    let release = parse_release_manifest(&release_bytes)?;
+    for entry in &release.files {
+        copy_regular_file_new(
+            &source_root.join(entry.path.replace('/', "\\\\")),
+            &destination_root.join(entry.path.replace('/', "\\\\")),
+        )?;
+    }
+    for name in [
+        "runtime-release-manifest.json",
+        "runtime-generation.v1.json",
+    ] {
+        copy_regular_file_new(&source_root.join(name), &destination_root.join(name))?;
+    }
+    let copied = load_runtime_generation_manifest(destination_root)?;
+    if copied.generation != generation.generation {
+        return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+    }
+    Ok(())
+}
+
+fn copy_regular_file_new(source: &Path, destination: &Path) -> Result<(), WindowsAdapterError> {
+    let mut input = open_regular_local_file(source)?;
+    let parent = destination
+        .parent()
+        .ok_or(WindowsAdapterError::UnsafePath)?;
+    let parent = ensure_fixed_directory(parent)?;
+    let destination = parent.join(
+        destination
+            .file_name()
+            .ok_or(WindowsAdapterError::UnsafePath)?,
+    );
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)?;
+    io::copy(&mut input, &mut output)?;
+    output.sync_all()?;
+    Ok(())
+}
+
+#[derive(Default)]
+struct ActionComparison {
+    added: Vec<String>,
+    removed: Vec<String>,
+    changed: Vec<String>,
+    breaking_schema: bool,
+    risk_lane_widened: bool,
+    permission_widened: bool,
+}
+
+fn load_generation_actions(
+    runtime_root: &Path,
+    generation: &RuntimeGenerationManifest,
+) -> Result<BTreeMap<String, star_contracts::manifest::ActionDescriptor>, WindowsAdapterError> {
+    let package_root = runtime_root
+        .join(&generation.catalog_path)
+        .join("tool-packages");
+    let package_root = canonical_fixed_directory(&package_root)
+        .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+    let mut actions = BTreeMap::new();
+    for entry in std::fs::read_dir(package_root)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(OsStr::to_str) != Some("toml") {
+            continue;
+        }
+        let bytes = read_regular_bounded(&path, LOCAL_RECORD_MAX_BYTES)
+            .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+        let text = std::str::from_utf8(&bytes)
+            .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+        let manifest = parse_manifest_v1(text, ManifestSource::Release)
+            .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+        for action in manifest.actions {
+            let action_id = format!("{}:{}", manifest.package_id, action.tool_id);
+            if actions.insert(action_id, action).is_some() {
+                return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+            }
+        }
+    }
+    Ok(actions)
+}
+
+fn compare_generation_actions(
+    active: &BTreeMap<String, star_contracts::manifest::ActionDescriptor>,
+    candidate: &BTreeMap<String, star_contracts::manifest::ActionDescriptor>,
+) -> Result<ActionComparison, WindowsAdapterError> {
+    let mut comparison = ActionComparison::default();
+    for (id, candidate_action) in candidate {
+        let Some(active_action) = active.get(id) else {
+            comparison.added.push(id.clone());
+            comparison.permission_widened |= !candidate_action.permission_actions.is_empty();
+            comparison.risk_lane_widened |= !candidate_action.permission_actions.is_empty();
+            continue;
+        };
+        let active_value = serde_json::to_value(active_action)?;
+        let candidate_value = serde_json::to_value(candidate_action)?;
+        if canonical_sha256(&active_value)
+            .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?
+            != canonical_sha256(&candidate_value)
+                .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?
+        {
+            comparison.changed.push(id.clone());
+        }
+        comparison.breaking_schema |= active_action.input_schema_file
+            != candidate_action.input_schema_file
+            || active_action.output_schema_file != candidate_action.output_schema_file;
+        let active_permissions = active_action
+            .permission_actions
+            .iter()
+            .collect::<BTreeSet<_>>();
+        let candidate_permissions = candidate_action
+            .permission_actions
+            .iter()
+            .collect::<BTreeSet<_>>();
+        if !candidate_permissions.is_subset(&active_permissions) {
+            comparison.permission_widened = true;
+            comparison.risk_lane_widened |= risk_lane(&candidate_action.permission_actions)
+                .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?
+                != risk_lane(&active_action.permission_actions)
+                    .map_err(|_| WindowsAdapterError::InvalidRuntimeGeneration)?;
+        }
+    }
+    for id in active.keys() {
+        if !candidate.contains_key(id) {
+            comparison.removed.push(id.clone());
+            comparison.breaking_schema = true;
+        }
+    }
+    Ok(comparison)
 }
 
 pub fn atomic_write_json(path: &Path, value: &impl Serialize) -> Result<(), WindowsAdapterError> {
@@ -450,6 +1037,7 @@ fn verify_release_files(
 fn write_controller_manifest(
     install_root: &Path,
     release: &ReleaseFileManifest,
+    runtime_activation: Option<(&Path, u32)>,
 ) -> Result<(), WindowsAdapterError> {
     let entry = |name: &str| -> Result<&ReleaseFileEntry, WindowsAdapterError> {
         release
@@ -471,6 +1059,9 @@ fn write_controller_manifest(
             .to_string_lossy()
             .into_owned(),
         controller_sha256: entry("star-controller.exe")?.sha256.clone(),
+        runtime_activation_record_path: runtime_activation
+            .map(|(path, _)| normal_windows_path(path).to_string_lossy().into_owned()),
+        bridge_contract_version: runtime_activation.map(|(_, version)| version),
     };
     atomic_write_json(
         &install_root.join(CONTROLLER_INSTALL_MANIFEST_FILE),
@@ -570,6 +1161,11 @@ fn paths_equal_case_insensitive(left: &Path, right: &Path) -> bool {
     left.as_os_str()
         .to_string_lossy()
         .eq_ignore_ascii_case(&right.as_os_str().to_string_lossy())
+}
+
+fn path_is_within(path: &Path, root: &Path) -> bool {
+    path.ancestors()
+        .any(|ancestor| paths_equal_case_insensitive(ancestor, root))
 }
 
 fn read_regular_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, WindowsAdapterError> {
@@ -673,6 +1269,74 @@ mod tests {
         manifest
     }
 
+    fn write_runtime_generation_fixture(root: &Path, generation_id: &str) -> PathBuf {
+        let runtime = root.join(generation_id);
+        std::fs::create_dir_all(runtime.join("catalog")).unwrap();
+        std::fs::create_dir_all(runtime.join("catalog/tool-packages")).unwrap();
+        std::fs::create_dir_all(runtime.join("schemas/v1")).unwrap();
+        std::fs::write(runtime.join("catalog/projects.toml"), b"fixture = true\n").unwrap();
+        std::fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../catalog/tool-packages/star-control-core.toml"),
+            runtime.join("catalog/tool-packages/star-control-core.toml"),
+        )
+        .unwrap();
+        std::fs::write(runtime.join("schemas/v1/fixture.schema.json"), b"{}\n").unwrap();
+        let binary = std::env::current_exe().unwrap();
+        for name in ["star-cli-runtime.exe", "star-controller.exe"] {
+            std::fs::copy(&binary, runtime.join(name)).unwrap();
+        }
+        let mut files = Vec::new();
+        for relative in [
+            "catalog/projects.toml",
+            "catalog/tool-packages/star-control-core.toml",
+            "schemas/v1/fixture.schema.json",
+            "star-cli-runtime.exe",
+            "star-controller.exe",
+        ] {
+            let bytes = std::fs::read(runtime.join(relative.replace('/', "\\\\"))).unwrap();
+            files.push(ReleaseFileEntry {
+                path: relative.to_owned(),
+                size: bytes.len() as u64,
+                sha256: Sha256Hash::digest(&bytes),
+            });
+        }
+        let release = ReleaseFileManifest {
+            schema_id: RELEASE_FILE_MANIFEST_SCHEMA_ID.to_owned(),
+            schema_version: 1,
+            product_version: env!("CARGO_PKG_VERSION").to_owned(),
+            target_architecture: compiled_architecture().unwrap(),
+            created_at: Utc::now(),
+            source_revision: "test:runtime-generation".to_owned(),
+            set_sha256: canonical_sha256(&serde_json::to_value(&files).unwrap()).unwrap(),
+            files,
+            generated_files: vec!["runtime-generation.v1.json".to_owned()],
+            signing: PackageSigningState::UnsignedLocal,
+        };
+        atomic_write_json(&runtime.join("runtime-release-manifest.json"), &release).unwrap();
+        let release_bytes = std::fs::read(runtime.join("runtime-release-manifest.json")).unwrap();
+        let controller_bytes = std::fs::read(runtime.join("star-controller.exe")).unwrap();
+        let generation = RuntimeGenerationManifest {
+            schema_id: RUNTIME_GENERATION_MANIFEST_SCHEMA_ID.to_owned(),
+            schema_version: 1,
+            generation: RuntimeGenerationRef {
+                generation_id: generation_id.to_owned(),
+                runtime_root: ".".to_owned(),
+                release_manifest_sha256: Sha256Hash::digest(&release_bytes),
+            },
+            product_version: env!("CARGO_PKG_VERSION").to_owned(),
+            target_architecture: compiled_architecture().unwrap(),
+            controller_path: "star-controller.exe".to_owned(),
+            controller_sha256: Sha256Hash::digest(&controller_bytes),
+            cli_runtime_path: "star-cli-runtime.exe".to_owned(),
+            catalog_path: "catalog".to_owned(),
+            schemas_root: "schemas/v1".to_owned(),
+            bridge_contract_version: 2,
+        };
+        atomic_write_json(&runtime.join("runtime-generation.v1.json"), &generation).unwrap();
+        runtime
+    }
+
     #[test]
     fn finalize_status_and_tamper_detection() {
         let root = fixture_root("lifecycle");
@@ -693,6 +1357,34 @@ mod tests {
         assert!(matches!(
             manager.status(&root),
             Err(WindowsAdapterError::FileIdentityMismatch)
+        ));
+    }
+
+    #[test]
+    fn staging_a_runtime_generation_verifies_then_never_overwrites_it() {
+        let container = fixture_root("runtime-stage");
+        let source = write_runtime_generation_fixture(&container, "rt_fixture");
+        let install_root = container.join("install");
+        std::fs::create_dir_all(&install_root).unwrap();
+        let manager = InstallationManager::new(fixture_root("runtime-stage-data"));
+
+        let staged = manager
+            .stage_runtime_generation(&install_root, &source)
+            .unwrap();
+        assert_eq!(staged.generation_id, "rt_fixture");
+        let copied = PathBuf::from(&staged.runtime_root);
+        assert!(copied.join("runtime-generation.v1.json").exists());
+        assert!(matches!(
+            manager.stage_runtime_generation(&install_root, &source),
+            Err(WindowsAdapterError::RuntimeGenerationExists)
+        ));
+
+        std::fs::write(source.join("star-controller.exe"), b"tampered").unwrap();
+        let tampered = write_runtime_generation_fixture(&container, "rt_tampered");
+        std::fs::write(tampered.join("star-controller.exe"), b"tampered").unwrap();
+        assert!(matches!(
+            manager.stage_runtime_generation(&install_root, &tampered),
+            Err(WindowsAdapterError::InvalidRuntimeGeneration)
         ));
     }
 
@@ -754,5 +1446,185 @@ mod tests {
             Err(WindowsAdapterError::UnsafePath)
         ));
         assert!(!relative.exists());
+    }
+
+    #[test]
+    fn runtime_activation_record_is_atomic_and_rejects_a_generation_outside_install_root() {
+        use star_contracts::installation::RuntimeGenerationRef;
+
+        let root = fixture_root("runtime-activation");
+        let data = fixture_root("runtime-activation-data");
+        let active_root = root.join("runtime").join("generations").join("rt_active");
+        let previous_root = root.join("runtime").join("generations").join("rt_previous");
+        std::fs::create_dir_all(&active_root).unwrap();
+        std::fs::create_dir_all(&previous_root).unwrap();
+        let record = RuntimeActivationRecord {
+            schema_id: RUNTIME_ACTIVATION_RECORD_SCHEMA_ID.to_owned(),
+            schema_version: 1,
+            activation_revision: 4,
+            active: RuntimeGenerationRef {
+                generation_id: "rt_active".to_owned(),
+                runtime_root: active_root.canonicalize().unwrap().display().to_string(),
+                release_manifest_sha256: Sha256Hash::digest(b"active"),
+            },
+            previous: Some(RuntimeGenerationRef {
+                generation_id: "rt_previous".to_owned(),
+                runtime_root: previous_root.canonicalize().unwrap().display().to_string(),
+                release_manifest_sha256: Sha256Hash::digest(b"previous"),
+            }),
+            state_generation_id: "state_4".to_owned(),
+            bridge_contract_version: 2,
+            activated_at: Utc::now(),
+        };
+        let manager = InstallationManager::new(data);
+        manager
+            .write_runtime_activation_record(&root, &record)
+            .unwrap();
+        assert_eq!(
+            manager
+                .load_runtime_activation_record(&root)
+                .unwrap()
+                .activation_revision,
+            4
+        );
+
+        let mut outside = record;
+        outside.active.runtime_root = root.canonicalize().unwrap().display().to_string();
+        assert!(matches!(
+            manager.write_runtime_activation_record(&root, &outside),
+            Err(WindowsAdapterError::InvalidRuntimeActivation)
+        ));
+    }
+
+    #[test]
+    fn bridge_v2_migration_keeps_the_root_gateway_and_binds_the_activation_record() {
+        let root = fixture_root("bridge-v2");
+        let data = fixture_root("bridge-v2-data");
+        write_release_fixture(&root);
+        let manager = InstallationManager::new(data);
+        manager
+            .finalize(&root, compiled_architecture().unwrap(), false)
+            .unwrap();
+        let source_container = fixture_root("bridge-v2-source");
+        let active_source = write_runtime_generation_fixture(&source_container, "rt_active");
+        let previous_source = write_runtime_generation_fixture(&source_container, "rt_previous");
+        let active = manager
+            .stage_runtime_generation(&root, &active_source)
+            .unwrap();
+        let previous = manager
+            .stage_runtime_generation(&root, &previous_source)
+            .unwrap();
+        let record = RuntimeActivationRecord {
+            schema_id: RUNTIME_ACTIVATION_RECORD_SCHEMA_ID.to_owned(),
+            schema_version: 1,
+            activation_revision: 1,
+            active,
+            previous: Some(previous),
+            state_generation_id: "state_1".to_owned(),
+            bridge_contract_version: 2,
+            activated_at: Utc::now(),
+        };
+        manager.activate_runtime_bridge(&root, &record, 2).unwrap();
+        let bytes =
+            read_regular_bounded(&root.join(CONTROLLER_INSTALL_MANIFEST_FILE), 64 * 1024).unwrap();
+        let release = parse_release_manifest(
+            &read_regular_bounded(
+                &root.join(RELEASE_MANIFEST_FILE),
+                RELEASE_MANIFEST_MAX_BYTES,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let manifest =
+            parse_controller_manifest(&bytes, &root.canonicalize().unwrap(), &release).unwrap();
+        assert_eq!(manifest.bridge_contract_version, Some(2));
+        let expected_activation_path =
+            normal_windows_path(&manager.runtime_activation_record_path())
+                .to_string_lossy()
+                .into_owned();
+        assert_eq!(
+            manifest.runtime_activation_record_path.as_deref(),
+            Some(expected_activation_path.as_str())
+        );
+        assert!(manager.status(&root).unwrap().verified);
+    }
+
+    #[test]
+    fn offline_bootstrap_initialization_selects_the_single_staged_generation() {
+        let root = fixture_root("bridge-initialize");
+        let data = fixture_root("bridge-initialize-data");
+        write_release_fixture(&root);
+        let manager = InstallationManager::new(data);
+        manager
+            .finalize(&root, compiled_architecture().unwrap(), false)
+            .unwrap();
+        let source_container = fixture_root("bridge-initialize-source");
+        let source = write_runtime_generation_fixture(&source_container, "rt_initial");
+        manager.stage_runtime_generation(&root, &source).unwrap();
+
+        let record = manager
+            .initialize_runtime_bridge(&root, "bootstrap_v2")
+            .unwrap();
+        assert_eq!(record.active.generation_id, "rt_initial");
+        assert!(record.previous.is_none());
+        assert_eq!(
+            manager
+                .load_runtime_activation_record(&root)
+                .unwrap()
+                .state_generation_id,
+            "bootstrap_v2"
+        );
+        assert_eq!(
+            manager
+                .initialize_runtime_bridge(&root, "ignored_after_initialize")
+                .unwrap()
+                .activation_revision,
+            1
+        );
+    }
+
+    #[test]
+    fn candidate_review_compares_release_manifests_without_authorizing_mutation() {
+        let root = fixture_root("candidate-review");
+        let data = fixture_root("candidate-review-data");
+        write_release_fixture(&root);
+        let manager = InstallationManager::new(data);
+        manager
+            .finalize(&root, compiled_architecture().unwrap(), false)
+            .unwrap();
+        let source_container = fixture_root("candidate-review-source");
+        let active_source = write_runtime_generation_fixture(&source_container, "rt_active");
+        let candidate_source = write_runtime_generation_fixture(&source_container, "rt_candidate");
+        let active = manager
+            .stage_runtime_generation(&root, &active_source)
+            .unwrap();
+        let candidate = manager
+            .stage_runtime_generation(&root, &candidate_source)
+            .unwrap();
+        manager
+            .activate_runtime_bridge(
+                &root,
+                &RuntimeActivationRecord {
+                    schema_id: RUNTIME_ACTIVATION_RECORD_SCHEMA_ID.to_owned(),
+                    schema_version: 1,
+                    activation_revision: 1,
+                    active,
+                    previous: Some(candidate),
+                    state_generation_id: "state_fixture".to_owned(),
+                    bridge_contract_version: 2,
+                    activated_at: Utc::now(),
+                },
+                2,
+            )
+            .unwrap();
+        let review = manager
+            .inspect_runtime_candidate(&root, "rt_candidate")
+            .unwrap();
+        assert!(review.added_actions.is_empty());
+        assert!(review.removed_actions.is_empty());
+        assert!(review.changed_actions.is_empty());
+        assert!(review.handler_ready);
+        assert!(review.rollback_available);
+        assert!(!review.requires_codex_restart);
     }
 }

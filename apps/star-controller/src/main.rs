@@ -2903,13 +2903,37 @@ fn acquire_single_instance() -> Result<Option<ControllerMutex>, windows::core::E
     Ok(Some(ControllerMutex(mutex)))
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct ControllerProcessArgs {
+    background: bool,
+    bootstrap_install_root: Option<std::path::PathBuf>,
+}
+
 fn parse_controller_process_args(
     arguments: impl IntoIterator<Item = std::ffi::OsString>,
-) -> Result<bool, &'static str> {
+) -> Result<ControllerProcessArgs, &'static str> {
     let arguments: Vec<_> = arguments.into_iter().collect();
     match arguments.as_slice() {
-        [] => Ok(false),
-        [argument] if argument == "--background" => Ok(true),
+        [] => Ok(ControllerProcessArgs {
+            background: false,
+            bootstrap_install_root: None,
+        }),
+        [argument] if argument == "--background" => Ok(ControllerProcessArgs {
+            background: true,
+            bootstrap_install_root: None,
+        }),
+        [background, flag, root]
+            if background == "--background" && flag == "--bootstrap-install-root" =>
+        {
+            let root = std::path::PathBuf::from(root);
+            if !root.is_absolute() {
+                return Err("bootstrap install root must be an absolute path");
+            }
+            Ok(ControllerProcessArgs {
+                background: true,
+                bootstrap_install_root: Some(root),
+            })
+        }
         _ => Err("star-controller accepts only the optional --background flag"),
     }
 }
@@ -2973,7 +2997,7 @@ async fn graceful_controller_shutdown(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _background = parse_controller_process_args(std::env::args_os().skip(1))?;
+    let process_args = parse_controller_process_args(std::env::args_os().skip(1))?;
     let Some(_single_instance) = acquire_single_instance()? else {
         return Ok(());
     };
@@ -2982,6 +3006,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parent()
         .ok_or("star-controller executable has no installation directory")?
         .to_path_buf();
+    let bootstrap_install_directory = process_args
+        .bootstrap_install_root
+        .as_deref()
+        .map(std::fs::canonicalize)
+        .transpose()?
+        .unwrap_or_else(|| install_directory.clone());
     let key_path = default_key_path()?;
     let key_recovery = reconcile(&key_path, None)?;
     emit_ipc_key_recovery_audit(&key_recovery.audit);
@@ -3135,11 +3165,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(hello) => hello,
             Err(_) => continue,
         };
-        let _client_image =
-            match verify_pipe_client_image(&server, hello.client_pid, &install_directory) {
-                Ok(image) if installed_client_kind_matches(&hello.client_kind, &image) => image,
-                _ => continue,
-            };
+        let _client_image = match verify_pipe_client_image(
+            &server,
+            hello.client_pid,
+            &[&install_directory, &bootstrap_install_directory],
+        ) {
+            Ok(image) if installed_client_kind_matches(&hello.client_kind, &image) => image,
+            _ => continue,
+        };
         let handshake_outcome = match handshake.accept_negotiated(
             &hello,
             format!("ses_{}", star_ipc::nonce()),
@@ -3390,6 +3423,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
             continue;
+        }
+        if request.command == "controller.shutdown" {
+            if !matches!(hello.client_kind, IpcClientKind::Cli)
+                || !payload_has_exact_keys(&request.payload, &[])
+            {
+                let response = invalid_request_response(
+                    request,
+                    "CONTROLLER_SHUTDOWN_FORBIDDEN",
+                    "Controller shutdown is available only to the authenticated local CLI.",
+                    registry.revision,
+                );
+                let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                continue;
+            }
+            let response = IpcResponse {
+                schema_id: "star.ipc.response".to_owned(),
+                schema_version: 1,
+                request_id: request.request_id,
+                status: IpcStatus::Ok,
+                data: Some(serde_json::json!({"shutting_down":true,"instance_id":instance_id})),
+                operation_id: None,
+                diagnostics: vec![],
+                error: None,
+                registry_revision: Some(registry.revision),
+                correlation_id: request.client_request_id,
+            };
+            let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+            graceful_controller_shutdown(
+                &operations,
+                &cancellation_tokens,
+                std::time::Duration::from_secs(10),
+                std::time::Duration::from_secs(2),
+            )
+            .await;
+            break;
         }
         if let Some(action) = request.command.strip_prefix("controller.autostart.") {
             let controller_path = install_directory.join("star-controller.exe");
@@ -8033,8 +8101,32 @@ mod tests {
     #[test]
     // matrix: MCP-I013 MCP-I015
     fn controller_background_flag_never_becomes_a_pipe_endpoint() {
-        assert!(!parse_controller_process_args(Vec::new()).unwrap());
-        assert!(parse_controller_process_args([std::ffi::OsString::from("--background")]).unwrap());
+        assert_eq!(
+            parse_controller_process_args(Vec::new()).unwrap(),
+            ControllerProcessArgs {
+                background: false,
+                bootstrap_install_root: None,
+            }
+        );
+        assert_eq!(
+            parse_controller_process_args([std::ffi::OsString::from("--background")]).unwrap(),
+            ControllerProcessArgs {
+                background: true,
+                bootstrap_install_root: None,
+            }
+        );
+        assert_eq!(
+            parse_controller_process_args([
+                std::ffi::OsString::from("--background"),
+                std::ffi::OsString::from("--bootstrap-install-root"),
+                std::ffi::OsString::from(r"D:\\Star-Control"),
+            ])
+            .unwrap(),
+            ControllerProcessArgs {
+                background: true,
+                bootstrap_install_root: Some(std::path::PathBuf::from(r"D:\\Star-Control")),
+            }
+        );
         assert!(
             parse_controller_process_args([std::ffi::OsString::from(
                 r"\\.\pipe\attacker-selected"

@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "RuntimeGenerationRef": {
+      "additionalProperties": false,
+      "description": "A content-addressed Runtime Generation that can be selected by the stable\nBootstrap Bridge without changing the MCP or Plugin entrypoints.",
+      "properties": {
+        "generation_id": {
+          "type": "string"
+        },
+        "release_manifest_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "runtime_root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation_id",
+        "runtime_root",
+        "release_manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "RuntimeUpdateClass": {
+      "enum": [
+        "tool_hot_reload",
+        "runtime_generation",
+        "bridge_update",
+        "plugin_update"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.runtime-candidate-review:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Public candidate review used by both the stable CLI and Registry actions.\nIt intentionally describes a candidate without authorizing its mutation.",
+  "properties": {
+    "added_actions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "approval_scope_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "breaking_schema": {
+      "type": "boolean"
+    },
+    "bridge_compatible": {
+      "type": "boolean"
+    },
+    "candidate": {
+      "$ref": "#/$defs/RuntimeGenerationRef"
+    },
+    "changed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "handler_ready": {
+      "type": "boolean"
+    },
+    "hook_review_required": {
+      "type": "boolean"
+    },
+    "permission_widened": {
+      "type": "boolean"
+    },
+    "removed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "requires_codex_restart": {
+      "type": "boolean"
+    },
+    "requires_new_task": {
+      "type": "boolean"
+    },
+    "risk_lane_widened": {
+      "type": "boolean"
+    },
+    "rollback_available": {
+      "type": "boolean"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "update_class": {
+      "$ref": "#/$defs/RuntimeUpdateClass"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "candidate",
+    "update_class",
+    "added_actions",
+    "removed_actions",
+    "changed_actions",
+    "breaking_schema",
+    "risk_lane_widened",
+    "permission_widened",
+    "handler_ready",
+    "bridge_compatible",
+    "rollback_available",
+    "requires_codex_restart",
+    "requires_new_task",
+    "hook_review_required",
+    "approval_scope_sha256"
+  ],
+  "title": "RuntimeCandidateReview",
+  "type": "object"
+}

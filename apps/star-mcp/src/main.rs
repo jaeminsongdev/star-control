@@ -10,8 +10,16 @@ use star_ipc::controller_start::{ControllerStartError, VerifiedControllerImage};
 use star_mcp::{ControllerGateway, ControllerProgress, Gateway, GatewayError};
 
 struct IpcControllerGateway {
-    client: ControllerClient,
     gateway_path: std::path::PathBuf,
+}
+
+impl IpcControllerGateway {
+    fn client_for_bootstrap(
+        bootstrap: &VerifiedControllerImage,
+    ) -> Result<ControllerClient, GatewayError> {
+        let config = mcp_client_config(bootstrap.path().to_path_buf()).map_err(map_client_error)?;
+        Ok(ControllerClient::new(config))
+    }
 }
 impl ControllerGateway for IpcControllerGateway {
     fn call<'a>(
@@ -30,8 +38,8 @@ impl ControllerGateway for IpcControllerGateway {
             let poll_accepted = should_poll_accepted_operation(&command, &arguments);
             let bootstrap = VerifiedControllerImage::from_install_manifest(&self.gateway_path)
                 .map_err(map_bootstrap_error)?;
-            let mut response = self
-                .client
+            let client = Self::client_for_bootstrap(&bootstrap)?;
+            let mut response = client
                 .call_with_verified_start_and_mcp_tool(
                     &bootstrap,
                     &command,
@@ -50,8 +58,7 @@ impl ControllerGateway for IpcControllerGateway {
                 let mut after_sequence = 0_u64;
                 while started.elapsed() < std::time::Duration::from_secs(30) {
                     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-                    let polled = self
-                        .client
+                    let polled = client
                         .call_with_verified_start_and_mcp_tool(
                             &bootstrap,
                             "operation.get",
@@ -95,7 +102,7 @@ impl ControllerGateway for IpcControllerGateway {
         Box::pin(async move {
             let bootstrap = VerifiedControllerImage::from_install_manifest(&self.gateway_path)
                 .map_err(map_bootstrap_error)?;
-            self.client
+            Self::client_for_bootstrap(&bootstrap)?
                 .call_with_verified_start(
                     &bootstrap,
                     "request.cancel",
@@ -478,7 +485,8 @@ fn map_bootstrap_error(error: ControllerStartError) -> GatewayError {
         }
         ControllerStartError::IdentityMismatch
         | ControllerStartError::Lease(_)
-        | ControllerStartError::InstallManifest => GatewayError::ServerIdentityMismatch,
+        | ControllerStartError::InstallManifest
+        | ControllerStartError::RuntimeActivation => GatewayError::ServerIdentityMismatch,
     }
 }
 
@@ -527,14 +535,7 @@ async fn main() {
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let binary = std::env::current_exe()?;
-    let controller = binary
-        .parent()
-        .ok_or("star-mcp executable has no installation directory")?
-        .join("star-controller.exe");
-    let config = mcp_client_config(controller)
-        .map_err(|error| format!("cannot prepare Controller IPC client: {error}"))?;
     let server = Gateway::new(Arc::new(IpcControllerGateway {
-        client: ControllerClient::new(config),
         gateway_path: binary,
     }));
     star_mcp::serve_supervised_stdio(server).await?;

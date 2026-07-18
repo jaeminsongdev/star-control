@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "RuntimeGenerationRef": {
+      "additionalProperties": false,
+      "description": "A content-addressed Runtime Generation that can be selected by the stable\nBootstrap Bridge without changing the MCP or Plugin entrypoints.",
+      "properties": {
+        "generation_id": {
+          "type": "string"
+        },
+        "release_manifest_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "runtime_root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation_id",
+        "runtime_root",
+        "release_manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.runtime-activation-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The only persisted selector read by the stable bridge.  The activation\nwriter replaces this record atomically after the old Controller quiesces.",
+  "properties": {
+    "activated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "activation_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "active": {
+      "$ref": "#/$defs/RuntimeGenerationRef"
+    },
+    "bridge_contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "previous": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RuntimeGenerationRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "state_generation_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "activation_revision",
+    "active",
+    "state_generation_id",
+    "bridge_contract_version",
+    "activated_at"
+  ],
+  "title": "RuntimeActivationRecord",
+  "type": "object"
+}

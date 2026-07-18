@@ -280,7 +280,8 @@ fn map_start_error(error: ControllerStartError) -> ControllerClientError {
         }
         ControllerStartError::IdentityMismatch
         | ControllerStartError::Lease(_)
-        | ControllerStartError::InstallManifest => ControllerClientError::ServerIdentityMismatch,
+        | ControllerStartError::InstallManifest
+        | ControllerStartError::RuntimeActivation => ControllerClientError::ServerIdentityMismatch,
     }
 }
 

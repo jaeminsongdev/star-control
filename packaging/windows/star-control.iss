@@ -178,6 +178,12 @@ begin
       'Star-Control installation manifest finalization failed'
     ) then
       exit;
+    if not RunRequired(
+      ExpandConstant('{app}\star.exe'),
+      'installation bridge initialize --state-generation bootstrap_v2 --json',
+      'Star-Control Bootstrap Bridge v2 initialization failed'
+    ) then
+      exit;
     if WizardIsTaskSelected('codexintegration') then
     begin
       if not RunRequired(

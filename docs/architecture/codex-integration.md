@@ -58,6 +58,8 @@ MCP adapter는 이 책임을 직접 구현하지 않고 [Windows Local IPC](../c
 
 Controller는 watcher와 호출 직전 demand scan으로 TOML·Schema·EXE 변경을 반영한다. 새 EXE 추가, path 수정과 같은 path의 EXE 교체는 MCP rebuild·재등록·process 재시작과 Codex 재시작 없이 다음 호출부터 적용한다.
 
+`star-mcp.exe`와 Hook의 `star.exe`는 설치 루트에 남는 Bootstrap Bridge다. Bridge는 `%LOCALAPPDATA%\\Star-Control\\installation\\active-runtime.v1.json`이 가리키는 Runtime Generation의 Controller만 선택한다. Runtime Generation 교체는 Controller를 drain하고 다시 연결할 수 있지만 Codex·ChatGPT·MCP stdio process의 재시작이나 Plugin/MCP 설정 변경을 요구하지 않는다. Bridge/Plugin 자체를 바꾸는 최초 migration은 별도 재시작·새 작업·Hook 검토 경계다. persisted shape와 후보 검토는 [Runtime update와 activation 계약](../contracts/runtime-update-and-activation.md)을 따른다.
+
 ## 실행 전후 검사
 
 ### 사용자 입력 시

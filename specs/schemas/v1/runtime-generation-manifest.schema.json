@@ -1,0 +1,94 @@
+{
+  "$defs": {
+    "RuntimeGenerationRef": {
+      "additionalProperties": false,
+      "description": "A content-addressed Runtime Generation that can be selected by the stable\nBootstrap Bridge without changing the MCP or Plugin entrypoints.",
+      "properties": {
+        "generation_id": {
+          "type": "string"
+        },
+        "release_manifest_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "runtime_root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "generation_id",
+        "runtime_root",
+        "release_manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "TargetArchitecture": {
+      "enum": [
+        "x64",
+        "arm64"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.runtime-generation-manifest:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Files and compatibility facts that a staged Runtime Generation must expose\nbefore it can become the active Controller/CLI runtime.",
+  "properties": {
+    "bridge_contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "catalog_path": {
+      "type": "string"
+    },
+    "cli_runtime_path": {
+      "type": "string"
+    },
+    "controller_path": {
+      "type": "string"
+    },
+    "controller_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "generation": {
+      "$ref": "#/$defs/RuntimeGenerationRef"
+    },
+    "product_version": {
+      "type": "string"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schemas_root": {
+      "type": "string"
+    },
+    "target_architecture": {
+      "$ref": "#/$defs/TargetArchitecture"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "generation",
+    "product_version",
+    "target_architecture",
+    "controller_path",
+    "controller_sha256",
+    "cli_runtime_path",
+    "catalog_path",
+    "schemas_root",
+    "bridge_contract_version"
+  ],
+  "title": "RuntimeGenerationManifest",
+  "type": "object"
+}

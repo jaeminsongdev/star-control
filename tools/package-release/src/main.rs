@@ -10,7 +10,8 @@ use star_contracts::{
     Sha256Hash, canonical_sha256,
     installation::{
         INSTALLATION_SCHEMA_VERSION, PackageSigningState, RELEASE_FILE_MANIFEST_SCHEMA_ID,
-        ReleaseFileEntry, ReleaseFileManifest, TargetArchitecture,
+        RUNTIME_GENERATION_MANIFEST_SCHEMA_ID, ReleaseFileEntry, ReleaseFileManifest,
+        RuntimeGenerationManifest, RuntimeGenerationRef, TargetArchitecture,
     },
     parse_no_duplicate_keys,
 };
@@ -204,6 +205,15 @@ fn stage_release(
         copy_tree(&migrations, &output.join("migrations"))?;
     }
 
+    stage_runtime_generation(
+        workspace,
+        binary_dir,
+        output,
+        architecture,
+        source_revision,
+        signing,
+    )?;
+
     let files = collect_release_entries(output)?;
     let set_sha256 = canonical_sha256(&serde_json::to_value(&files)?)?;
     let manifest = ReleaseFileManifest {
@@ -221,6 +231,91 @@ fn stage_release(
     let mut bytes = serde_json::to_vec_pretty(&manifest)?;
     bytes.push(b'\n');
     write_new_file(&output.join("release-manifest.json"), &bytes)?;
+    Ok(())
+}
+
+fn stage_runtime_generation(
+    workspace: &Path,
+    binary_dir: &Path,
+    output: &Path,
+    architecture: TargetArchitecture,
+    source_revision: &str,
+    signing: PackageSigningState,
+) -> DynResult<()> {
+    let digest = Sha256Hash::digest(
+        format!(
+            "{}:{}:{}",
+            env!("CARGO_PKG_VERSION"),
+            architecture,
+            source_revision
+        )
+        .as_bytes(),
+    );
+    let generation_id = format!("rt_{}", &digest.as_str()[7..23]);
+    let generation = output
+        .join("runtime")
+        .join("generations")
+        .join(&generation_id);
+    fs::create_dir_all(&generation)?;
+    copy_file(
+        &binary_dir.join("star-controller.exe"),
+        &generation.join("star-controller.exe"),
+    )?;
+    copy_file(
+        &binary_dir.join("star.exe"),
+        &generation.join("star-cli-runtime.exe"),
+    )?;
+    copy_tree(&workspace.join("catalog"), &generation.join("catalog"))?;
+    copy_tree(
+        &workspace.join("specs/schemas/v1"),
+        &generation.join("schemas/v1"),
+    )?;
+    let runtime_files = collect_release_entries(&generation)?;
+    let runtime_set_sha256 = canonical_sha256(&serde_json::to_value(&runtime_files)?)?;
+    let runtime_release = ReleaseFileManifest {
+        schema_id: RELEASE_FILE_MANIFEST_SCHEMA_ID.to_owned(),
+        schema_version: INSTALLATION_SCHEMA_VERSION,
+        product_version: env!("CARGO_PKG_VERSION").to_owned(),
+        target_architecture: architecture,
+        created_at: Utc::now(),
+        source_revision: source_revision.to_owned(),
+        files: runtime_files,
+        generated_files: vec!["runtime-generation.v1.json".to_owned()],
+        set_sha256: runtime_set_sha256,
+        signing,
+    };
+    let mut runtime_release_bytes = serde_json::to_vec_pretty(&runtime_release)?;
+    runtime_release_bytes.push(b'\n');
+    let runtime_release_hash = Sha256Hash::digest(&runtime_release_bytes);
+    write_new_file(
+        &generation.join("runtime-release-manifest.json"),
+        &runtime_release_bytes,
+    )?;
+    let controller_sha256 =
+        Sha256Hash::digest_reader(fs::File::open(generation.join("star-controller.exe"))?)?;
+    let runtime_manifest = RuntimeGenerationManifest {
+        schema_id: RUNTIME_GENERATION_MANIFEST_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        generation: RuntimeGenerationRef {
+            generation_id,
+            runtime_root: ".".to_owned(),
+            release_manifest_sha256: runtime_release_hash,
+        },
+        product_version: env!("CARGO_PKG_VERSION").to_owned(),
+        target_architecture: architecture,
+        controller_path: "star-controller.exe".to_owned(),
+        controller_sha256,
+        cli_runtime_path: "star-cli-runtime.exe".to_owned(),
+        catalog_path: "catalog".to_owned(),
+        schemas_root: "schemas/v1".to_owned(),
+        bridge_contract_version: 2,
+    };
+    let mut runtime_manifest_bytes = serde_json::to_vec_pretty(&runtime_manifest)?;
+    runtime_manifest_bytes.push(b'\n');
+    write_new_file(
+        &generation.join("runtime-generation.v1.json"),
+        &runtime_manifest_bytes,
+    )?;
     Ok(())
 }
 
@@ -289,7 +384,91 @@ fn verify_stage(
         }
         verify_pe_architecture(&stage.join(name), expected_architecture)?;
     }
+    verify_runtime_generation(&stage, expected_architecture)?;
     Ok(manifest)
+}
+
+fn verify_runtime_generation(
+    stage: &Path,
+    expected_architecture: TargetArchitecture,
+) -> DynResult<()> {
+    let generations = stage.join("runtime").join("generations");
+    let directories = fs::read_dir(&generations)?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .collect::<Vec<_>>();
+    if directories.len() != 1 {
+        return Err("stage must contain exactly one Runtime Generation".into());
+    }
+    let root = directories[0].path();
+    let generation_bytes = fs::read(root.join("runtime-generation.v1.json"))?;
+    let generation: RuntimeGenerationManifest = serde_json::from_value(parse_no_duplicate_keys(
+        std::str::from_utf8(&generation_bytes)?,
+    )?)?;
+    if generation.schema_id != RUNTIME_GENERATION_MANIFEST_SCHEMA_ID
+        || generation.schema_version != 1
+        || generation.generation.generation_id != directories[0].file_name().to_string_lossy()
+        || generation.generation.runtime_root != "."
+        || generation.target_architecture != expected_architecture
+        || generation.bridge_contract_version != 2
+        || generation.controller_path != "star-controller.exe"
+        || generation.cli_runtime_path != "star-cli-runtime.exe"
+        || generation.catalog_path != "catalog"
+        || generation.schemas_root != "schemas/v1"
+    {
+        return Err("Runtime Generation manifest contract mismatch".into());
+    }
+    let runtime_release_path = root.join("runtime-release-manifest.json");
+    let runtime_release_bytes = fs::read(&runtime_release_path)?;
+    if Sha256Hash::digest(&runtime_release_bytes) != generation.generation.release_manifest_sha256 {
+        return Err("Runtime Generation release manifest hash mismatch".into());
+    }
+    let runtime_release: ReleaseFileManifest = serde_json::from_value(parse_no_duplicate_keys(
+        std::str::from_utf8(&runtime_release_bytes)?,
+    )?)?;
+    if runtime_release.schema_id != RELEASE_FILE_MANIFEST_SCHEMA_ID
+        || runtime_release.schema_version != INSTALLATION_SCHEMA_VERSION
+        || runtime_release.product_version != env!("CARGO_PKG_VERSION")
+        || runtime_release.target_architecture != expected_architecture
+        || runtime_release.generated_files != ["runtime-generation.v1.json"]
+    {
+        return Err("Runtime Generation release contract mismatch".into());
+    }
+    let expected = runtime_release
+        .files
+        .iter()
+        .map(|entry| entry.path.clone())
+        .collect::<BTreeSet<_>>();
+    let actual = collect_relative_files(&root)?
+        .into_iter()
+        .filter(|path| {
+            path != "runtime-release-manifest.json" && path != "runtime-generation.v1.json"
+        })
+        .collect::<BTreeSet<_>>();
+    if actual != expected {
+        return Err("Runtime Generation contains missing or unmanifested files".into());
+    }
+    for entry in &runtime_release.files {
+        let path = root.join(entry.path.replace('/', "\\"));
+        if !valid_relative_path(&entry.path)
+            || Sha256Hash::digest_reader(fs::File::open(&path)?)? != entry.sha256
+        {
+            return Err(format!("Runtime Generation file hash mismatch: {}", entry.path).into());
+        }
+    }
+    let set_sha256 = canonical_sha256(&serde_json::to_value(&runtime_release.files)?)?;
+    if set_sha256 != runtime_release.set_sha256 {
+        return Err("Runtime Generation file set digest mismatch".into());
+    }
+    if Sha256Hash::digest_reader(fs::File::open(root.join("star-controller.exe"))?)?
+        != generation.controller_sha256
+    {
+        return Err("Runtime Generation Controller hash mismatch".into());
+    }
+    verify_pe_architecture(&root.join("star-controller.exe"), expected_architecture)?;
+    verify_pe_architecture(&root.join("star-cli-runtime.exe"), expected_architecture)?;
+    Ok(())
 }
 
 fn collect_release_entries(root: &Path) -> DynResult<Vec<ReleaseFileEntry>> {

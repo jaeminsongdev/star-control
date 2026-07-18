@@ -8,7 +8,12 @@ use std::{
 };
 
 use star_contracts::{
-    Sha256Hash, installation::ControllerInstallManifest, parse_no_duplicate_keys,
+    Sha256Hash,
+    installation::{
+        ControllerInstallManifest, RUNTIME_ACTIVATION_RECORD_SCHEMA_ID,
+        RUNTIME_GENERATION_MANIFEST_SCHEMA_ID, RuntimeActivationRecord, RuntimeGenerationManifest,
+    },
+    parse_no_duplicate_keys,
 };
 use thiserror::Error;
 use windows::{
@@ -42,6 +47,8 @@ pub enum ControllerStartError {
     Lease(#[from] io::Error),
     #[error("installed Controller manifest is missing or invalid")]
     InstallManifest,
+    #[error("active Runtime Generation record is missing, incompatible, or invalid")]
+    RuntimeActivation,
     #[error("outer Job does not allow a durable Controller breakaway")]
     OuterJobDenied,
     #[error("Controller process could not start")]
@@ -57,6 +64,7 @@ pub enum OuterJobPolicy {
 
 pub struct VerifiedControllerImage {
     path: PathBuf,
+    bootstrap_install_directory: PathBuf,
     lease: File,
     hash: Sha256Hash,
 }
@@ -90,6 +98,20 @@ impl VerifiedControllerImage {
         install_directory: &Path,
         manifest: ControllerInstallManifest,
     ) -> Result<Self, ControllerStartError> {
+        match (
+            manifest.runtime_activation_record_path.as_deref(),
+            manifest.bridge_contract_version,
+        ) {
+            (Some(record_path), Some(bridge_contract_version)) => {
+                return Self::from_runtime_activation(
+                    install_directory,
+                    Path::new(record_path),
+                    bridge_contract_version,
+                );
+            }
+            (None, None) => {}
+            _ => return Err(ControllerStartError::InstallManifest),
+        }
         let controller = PathBuf::from(&manifest.controller_path);
         if !controller.is_absolute()
             || controller
@@ -103,11 +125,77 @@ impl VerifiedControllerImage {
         if controller.parent() != Some(install_directory) {
             return Err(ControllerStartError::InstallManifest);
         }
-        Self::open(&controller, &manifest.controller_sha256)
+        Self::open_with_bootstrap(&controller, &manifest.controller_sha256, install_directory)
+    }
+
+    fn from_runtime_activation(
+        install_directory: &Path,
+        activation_record_path: &Path,
+        bridge_contract_version: u32,
+    ) -> Result<Self, ControllerStartError> {
+        let activation = load_runtime_activation(activation_record_path)?;
+        if activation.bridge_contract_version != bridge_contract_version {
+            return Err(ControllerStartError::RuntimeActivation);
+        }
+        let runtime_root = canonical_runtime_directory(Path::new(&activation.active.runtime_root))?;
+        let generations_root = install_directory.join("runtime").join("generations");
+        let generations_root = canonical_runtime_directory(&generations_root)?;
+        if !path_is_within(&runtime_root, &generations_root) {
+            return Err(ControllerStartError::RuntimeActivation);
+        }
+        let runtime_manifest = load_runtime_generation_manifest(&runtime_root)?;
+        if runtime_manifest.schema_id != RUNTIME_GENERATION_MANIFEST_SCHEMA_ID
+            || runtime_manifest.schema_version != 1
+            || runtime_manifest.generation.generation_id != activation.active.generation_id
+            || runtime_manifest.generation.release_manifest_sha256
+                != activation.active.release_manifest_sha256
+            || runtime_manifest.bridge_contract_version != bridge_contract_version
+        {
+            return Err(ControllerStartError::RuntimeActivation);
+        }
+        let supplied_controller = PathBuf::from(&runtime_manifest.controller_path);
+        if supplied_controller
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_none_or(|name| !name.eq_ignore_ascii_case("star-controller.exe"))
+        {
+            return Err(ControllerStartError::RuntimeActivation);
+        }
+        let controller = if supplied_controller.is_absolute() {
+            supplied_controller
+        } else if supplied_controller
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
+        {
+            runtime_root.join(supplied_controller)
+        } else {
+            return Err(ControllerStartError::RuntimeActivation);
+        };
+        let controller = controller
+            .canonicalize()
+            .map_err(|_| ControllerStartError::RuntimeActivation)?;
+        if !path_is_within(&controller, &runtime_root) {
+            return Err(ControllerStartError::RuntimeActivation);
+        }
+        Self::open_with_bootstrap(
+            &controller,
+            &runtime_manifest.controller_sha256,
+            install_directory,
+        )
     }
 
     pub fn open(path: &Path, expected_hash: &Sha256Hash) -> Result<Self, ControllerStartError> {
+        let bootstrap = path.parent().ok_or(ControllerStartError::InstallManifest)?;
+        Self::open_with_bootstrap(path, expected_hash, bootstrap)
+    }
+
+    fn open_with_bootstrap(
+        path: &Path,
+        expected_hash: &Sha256Hash,
+        bootstrap_install_directory: &Path,
+    ) -> Result<Self, ControllerStartError> {
         let path = path.canonicalize()?;
+        let bootstrap_install_directory = bootstrap_install_directory.canonicalize()?;
         let lease = open_regular_local_file(&path)?;
         let actual = Sha256Hash::digest_reader(lease.try_clone()?)?;
         if &actual != expected_hash {
@@ -115,6 +203,7 @@ impl VerifiedControllerImage {
         }
         Ok(Self {
             path,
+            bootstrap_install_directory,
             lease,
             hash: actual,
         })
@@ -133,8 +222,11 @@ impl VerifiedControllerImage {
         let flags = launch_flags(policy)? | CREATE_SUSPENDED.0;
         let application = wide_nul(&self.path.as_os_str().to_string_lossy())?;
         let mut command_line = wide_nul(&format!(
-            "\"{}\" --background",
-            self.path.as_os_str().to_string_lossy()
+            "\"{}\" --background --bootstrap-install-root \"{}\"",
+            self.path.as_os_str().to_string_lossy(),
+            self.bootstrap_install_directory
+                .as_os_str()
+                .to_string_lossy(),
         ))?;
         let startup = STARTUPINFOW {
             cb: std::mem::size_of::<STARTUPINFOW>() as u32,
@@ -193,24 +285,8 @@ fn load_install_manifest(
     install_directory: &Path,
 ) -> Result<ControllerInstallManifest, ControllerStartError> {
     let manifest_path = install_directory.join("star-control-install.v1.json");
-    let file = open_regular_local_file(&manifest_path)
-        .map_err(|_| ControllerStartError::InstallManifest)?;
-    let length = file
-        .metadata()
-        .map_err(|_| ControllerStartError::InstallManifest)?
-        .len();
-    if length == 0 || length > 64 * 1024 {
-        return Err(ControllerStartError::InstallManifest);
-    }
-    let mut bytes = Vec::with_capacity(length as usize);
-    file.take(64 * 1024 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| ControllerStartError::InstallManifest)?;
-    if bytes.len() as u64 != length {
-        return Err(ControllerStartError::InstallManifest);
-    }
-    let text = std::str::from_utf8(&bytes).map_err(|_| ControllerStartError::InstallManifest)?;
-    let value = parse_no_duplicate_keys(text).map_err(|_| ControllerStartError::InstallManifest)?;
+    let value =
+        load_strict_json(&manifest_path).map_err(|_| ControllerStartError::InstallManifest)?;
     let manifest: ControllerInstallManifest =
         serde_json::from_value(value).map_err(|_| ControllerStartError::InstallManifest)?;
     if manifest.schema_id != "star.controller-install-manifest"
@@ -221,6 +297,64 @@ fn load_install_manifest(
         return Err(ControllerStartError::InstallManifest);
     }
     Ok(manifest)
+}
+
+fn load_runtime_activation(path: &Path) -> Result<RuntimeActivationRecord, ControllerStartError> {
+    let value = load_strict_json(path).map_err(|_| ControllerStartError::RuntimeActivation)?;
+    let record: RuntimeActivationRecord =
+        serde_json::from_value(value).map_err(|_| ControllerStartError::RuntimeActivation)?;
+    if record.schema_id != RUNTIME_ACTIVATION_RECORD_SCHEMA_ID || record.schema_version != 1 {
+        return Err(ControllerStartError::RuntimeActivation);
+    }
+    Ok(record)
+}
+
+fn load_runtime_generation_manifest(
+    runtime_root: &Path,
+) -> Result<RuntimeGenerationManifest, ControllerStartError> {
+    let value = load_strict_json(&runtime_root.join("runtime-generation.v1.json"))
+        .map_err(|_| ControllerStartError::RuntimeActivation)?;
+    serde_json::from_value(value).map_err(|_| ControllerStartError::RuntimeActivation)
+}
+
+fn load_strict_json(path: &Path) -> Result<serde_json::Value, ControllerStartError> {
+    let file =
+        open_regular_local_file(path).map_err(|_| ControllerStartError::RuntimeActivation)?;
+    let length = file
+        .metadata()
+        .map_err(|_| ControllerStartError::RuntimeActivation)?
+        .len();
+    if length == 0 || length > 64 * 1024 {
+        return Err(ControllerStartError::RuntimeActivation);
+    }
+    let mut bytes = Vec::with_capacity(length as usize);
+    file.take(64 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| ControllerStartError::RuntimeActivation)?;
+    if bytes.len() as u64 != length {
+        return Err(ControllerStartError::RuntimeActivation);
+    }
+    let text = std::str::from_utf8(&bytes).map_err(|_| ControllerStartError::RuntimeActivation)?;
+    parse_no_duplicate_keys(text).map_err(|_| ControllerStartError::RuntimeActivation)
+}
+
+fn canonical_runtime_directory(path: &Path) -> Result<PathBuf, ControllerStartError> {
+    if !path.is_absolute()
+        || !path.is_dir()
+        || !is_fixed_drive_path(path)
+        || std::fs::symlink_metadata(path).ok().is_none_or(|metadata| {
+            !metadata.is_dir() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+        })
+    {
+        return Err(ControllerStartError::RuntimeActivation);
+    }
+    path.canonicalize()
+        .map_err(|_| ControllerStartError::RuntimeActivation)
+}
+
+fn path_is_within(path: &Path, root: &Path) -> bool {
+    path.ancestors()
+        .any(|ancestor| ancestor.as_os_str().eq_ignore_ascii_case(root.as_os_str()))
 }
 
 fn open_regular_local_file(path: &Path) -> Result<File, io::Error> {
@@ -437,5 +571,81 @@ mod tests {
         std::fs::write(&path, manifest_json(env!("CARGO_PKG_VERSION"), "")).unwrap();
         assert!(load_install_manifest(&directory).is_ok());
         assert!(open_regular_local_file(Path::new(r"\\server\share\controller.exe")).is_err());
+    }
+
+    #[test]
+    fn runtime_activation_selects_only_a_generation_under_the_install_root() {
+        use star_contracts::installation::{RuntimeGenerationRef, TargetArchitecture};
+
+        let install_root = manifest_directory();
+        let runtime_root = install_root
+            .join("runtime")
+            .join("generations")
+            .join("rt_active");
+        std::fs::create_dir_all(&runtime_root).unwrap();
+        let controller = runtime_root.join("star-controller.exe");
+        std::fs::copy(std::env::current_exe().unwrap(), &controller).unwrap();
+        let controller_sha256 =
+            Sha256Hash::digest_reader(File::open(&controller).unwrap()).unwrap();
+        let release_manifest_sha256 = Sha256Hash::digest(b"release-manifest");
+        let generation = RuntimeGenerationRef {
+            generation_id: "rt_active".to_owned(),
+            runtime_root: runtime_root.canonicalize().unwrap().display().to_string(),
+            release_manifest_sha256,
+        };
+        let generation_manifest = RuntimeGenerationManifest {
+            schema_id: RUNTIME_GENERATION_MANIFEST_SCHEMA_ID.to_owned(),
+            schema_version: 1,
+            generation: generation.clone(),
+            product_version: env!("CARGO_PKG_VERSION").to_owned(),
+            target_architecture: TargetArchitecture::X64,
+            controller_path: controller.canonicalize().unwrap().display().to_string(),
+            controller_sha256,
+            cli_runtime_path: runtime_root
+                .join("star-cli-runtime.exe")
+                .display()
+                .to_string(),
+            catalog_path: runtime_root.join("catalog").display().to_string(),
+            schemas_root: runtime_root.join("schemas").display().to_string(),
+            bridge_contract_version: 2,
+        };
+        std::fs::write(
+            runtime_root.join("runtime-generation.v1.json"),
+            serde_json::to_vec(&generation_manifest).unwrap(),
+        )
+        .unwrap();
+        let activation: RuntimeActivationRecord = serde_json::from_value(serde_json::json!({
+            "schema_id":RUNTIME_ACTIVATION_RECORD_SCHEMA_ID,
+            "schema_version":1,
+            "activation_revision":1,
+            "active":generation,
+            "previous":null,
+            "state_generation_id":"state_1",
+            "bridge_contract_version":2,
+            "activated_at":"2026-07-18T00:00:00Z"
+        }))
+        .unwrap();
+        let activation_path = install_root.join("active-runtime.v1.json");
+        std::fs::write(&activation_path, serde_json::to_vec(&activation).unwrap()).unwrap();
+
+        let image = VerifiedControllerImage::from_runtime_activation(
+            &install_root.canonicalize().unwrap(),
+            &activation_path,
+            2,
+        )
+        .unwrap();
+        assert_eq!(image.path(), controller.canonicalize().unwrap());
+
+        let mut outside = activation;
+        outside.active.runtime_root = install_root.display().to_string();
+        std::fs::write(&activation_path, serde_json::to_vec(&outside).unwrap()).unwrap();
+        assert!(matches!(
+            VerifiedControllerImage::from_runtime_activation(
+                &install_root.canonicalize().unwrap(),
+                &activation_path,
+                2,
+            ),
+            Err(ControllerStartError::RuntimeActivation)
+        ));
     }
 }

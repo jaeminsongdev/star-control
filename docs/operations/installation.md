@@ -96,8 +96,10 @@ clean-room readiness도 환경을 만들지 않는다. exact source와 lockfile,
 - installer가 만드는 Codex MCP 설정은 [MCP 구현 동결 계약](../contracts/mcp-implementation-contract.md#codex-mcp-설정-정본)의 fixed server·approval 설정과 비교한다.
 - Plugin Hook 내용이 바뀌면 사용자가 다시 검토해야 할 수 있음을 안내한다.
 - activation 전 이전 executable set·store pointer·startup entry와 rollback validation plan을 고정한다.
+- Bootstrap Bridge v1→v2 최초 설치는 offline installer만 수행한다. installer는 `installation finalize` 다음에 `installation bridge initialize --state-generation bootstrap_v2`를 실행하며, Codex·MCP가 실행 중이면 파일 변경 전 중단한다. 이 1회 migration 뒤의 Runtime Generation update는 Codex/MCP 재시작 없이 stable `star update` supervisor가 수행한다.
 - update 뒤 binary·Plugin·MCP·Controller identity, `safe_default` smoke와 state integrity를 검사한다.
 - 실패한 업데이트에서 검증된 이전 artifact digest와 compatible state generation으로 돌아갈 수 있어야 한다.
+- Bootstrap Bridge와 Runtime Generation의 구분, activation record 원자 교체, candidate review·approval scope와 `tool_hot_reload|runtime_generation|bridge_update|plugin_update` 분류는 [Runtime update와 activation 계약](../contracts/runtime-update-and-activation.md)이 소유한다. Runtime-only update는 Codex Plugin cache와 MCP 설정을 바꾸지 않는다.
 
 ## Rollback
 

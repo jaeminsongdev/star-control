@@ -37,6 +37,18 @@
       "hash": "sha256:d231722d1154060d907a49113cb74445ae350ca732f53aa65bd8e78afbf564fd"
     },
     {
+      "file": "runtime-generation-manifest.schema.json",
+      "hash": "sha256:1954dc069696b7a7a9a4e95c418bb6c749199bf84956d2d7492422b7ff9bbcf5"
+    },
+    {
+      "file": "runtime-activation-record.schema.json",
+      "hash": "sha256:3ccd769c1d657a3e66c1d41b0937604000f00e4eae5b5a1c8744e7741f025bf8"
+    },
+    {
+      "file": "runtime-candidate-review.schema.json",
+      "hash": "sha256:547c210d5bdcf2dabcbe7b6ae15986e63d13d9476752e768ba3129b93f54bd99"
+    },
+    {
       "file": "project.schema.json",
       "hash": "sha256:9fe08282fbfbeaedf1bf4645380dfadccfcbfb29ff6a502ed7f6f927d93b12bd"
     },

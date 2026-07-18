@@ -89,7 +89,7 @@ pub fn verify_pipe_server_image(
 pub fn verify_pipe_client_image(
     pipe: &tokio::net::windows::named_pipe::NamedPipeServer,
     declared_pid: u32,
-    install_directory: &Path,
+    allowed_install_directories: &[&Path],
 ) -> windows::core::Result<PathBuf> {
     let actual_pid = pipe_client_pid(pipe)?;
     if actual_pid != declared_pid {
@@ -99,16 +99,25 @@ pub fn verify_pipe_client_image(
     let image = image
         .canonicalize()
         .map_err(|_| windows::core::Error::from_thread())?;
-    let install_directory = install_directory
-        .canonicalize()
-        .map_err(|_| windows::core::Error::from_thread())?;
+    let allowed_install_directories = allowed_install_directories
+        .iter()
+        .map(|directory| {
+            directory
+                .canonicalize()
+                .map_err(|_| windows::core::Error::from_thread())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let allowed_name = image
         .file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| {
             name.eq_ignore_ascii_case("star-mcp.exe") || name.eq_ignore_ascii_case("star.exe")
         });
-    if !allowed_name || image.parent() != Some(install_directory.as_path()) {
+    if !allowed_name
+        || !allowed_install_directories
+            .iter()
+            .any(|directory| image.parent() == Some(directory.as_path()))
+    {
         return Err(windows::core::Error::from_thread());
     }
     Ok(image)

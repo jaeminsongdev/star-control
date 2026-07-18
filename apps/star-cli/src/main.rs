@@ -43,10 +43,16 @@ star management retention apply --approve <sha256> [--json]\n\
 star management rebuild plan [--json]\n\
 star management rebuild apply --approve <sha256> [--json]\n\
 star installation finalize --architecture x64|arm64 [--replace-existing] [--json]\n\
+star installation bridge initialize --state-generation <id> [--json]\n\
 star installation status [--json]\n\
 star integration install|repair [--codex <exe>] [--skip-register] [--json]\n\
 star integration status [--json]\n\
 star integration uninstall [--codex <exe>] [--json]\n\
+star update status [--json]\n\
+star update verify [--json]\n\
+star update stage <runtime-generation-dir> [--json]\n\
+star update inspect <generation-id> [--json]\n\
+star update apply <generation-id> --state-generation <id> --approve <sha256> [--json]\n\
 star hook session-start\n\
 star controller start [--background]\n\
 star controller autostart enable|disable|status";
@@ -750,7 +756,7 @@ async fn main() {
         println!("{HELP}");
         return;
     }
-    if let Some(exit) = local_commands::dispatch(&raw) {
+    if let Some(exit) = local_commands::dispatch(&raw).await {
         std::process::exit(exit);
     }
     let parsed = match parse(&raw) {

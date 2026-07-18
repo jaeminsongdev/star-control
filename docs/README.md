@@ -59,6 +59,8 @@
 53. [Build Once 승격과 Release·평가 Gate 결정](decisions/ADR-0010-Build-Once-승격과-Release-평가-Gate-경계.md) — artifact byte·ready/approved/published·평가 보호 metric 경계
 54. [Stable rustfmt·Allowlisted Clippy·Personal Auto 경계 결정](decisions/ADR-0011-Stable-rustfmt-Allowlisted-Clippy-Personal-Auto-경계.md) — M11 toolchain·coverage·exact PatchSet 승인 경계
 55. [선택형 Windows 설치와 Codex Plugin 연동 결정](decisions/ADR-0012-선택형-Windows-설치와-Codex-Plugin-연동.md) — Inno Setup·실제 경로 렌더링·소유권·보존 경계
+56. [고정 Bootstrap Bridge와 Runtime Generation 결정](decisions/ADR-0013-고정-Bootstrap-Bridge와-Runtime-Generation.md) — 무재시작 Runtime update·candidate review·rollback 경계
+57. [Runtime update와 activation 계약](contracts/runtime-update-and-activation.md) — generation selector·durable operation·same-task E2E 완료 조건
 
 ## 문서 상태 표현
 
