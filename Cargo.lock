@@ -1290,6 +1290,7 @@ dependencies = [
  "star-adapter-windows",
  "star-contracts",
  "star-ipc",
+ "star-updater-core",
  "tokio",
 ]
 
@@ -1331,6 +1332,7 @@ dependencies = [
  "star-ipc",
  "star-project",
  "star-state",
+ "star-updater-core",
  "thiserror",
  "tokio",
  "toml",
@@ -1414,6 +1416,7 @@ dependencies = [
  "serde_json",
  "star-contracts",
  "star-ipc",
+ "star-updater-core",
  "thiserror",
  "tokio",
 ]
@@ -1476,6 +1479,32 @@ dependencies = [
  "star-domain",
  "star-ports",
  "thiserror",
+ "windows",
+]
+
+[[package]]
+name = "star-updater"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "star-contracts",
+ "star-updater-core",
+ "tokio",
+]
+
+[[package]]
+name = "star-updater-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "star-adapter-codex",
+ "star-adapter-windows",
+ "star-contracts",
+ "star-ipc",
+ "thiserror",
+ "tokio",
  "windows",
 ]
 

@@ -41,7 +41,7 @@
 35. [설치와 공개 배포](operations/installation.md)
 36. [Windows 설치와 Codex 연동 계약](contracts/windows-installation-and-codex-integration.md) — 선택형 경로·manifest·Plugin 렌더링·설치 수명주기 정본
 37. [최종 구현 로드맵](roadmap/final-implementation.md)
-38. [MCP 구현 검증 행렬](testing/mcp-verification-matrix.md) — 실제 Codex same-session 완료 gate와 [현재 완료 감사](testing/mcp-completion-audit.md), [Windows 설치·Codex Plugin 로컬 실증](testing/windows-installation-evidence-2026-07-14.md)
+38. [MCP 구현 검증 행렬](testing/mcp-verification-matrix.md) — 실제 Codex same-session 완료 gate와 [현재 완료 감사](testing/mcp-completion-audit.md), [Windows 설치·Codex Plugin 로컬 실증](testing/windows-installation-evidence-2026-07-14.md), [Star Updater restart E2E](testing/star-updater-restart-e2e-2026-07-18.md)
 39. [용어](product/glossary.md)
 40. [구현 대상 기능](features/README.md) — 23개 구현 기능과 최종 16개 작업 Profile
 41. [최종 Repository·Package·문서 구조](architecture/repository-layout.md) — 물리 위치, Package 의존 방향, 확장 절차
@@ -61,6 +61,8 @@
 55. [선택형 Windows 설치와 Codex Plugin 연동 결정](decisions/ADR-0012-선택형-Windows-설치와-Codex-Plugin-연동.md) — Inno Setup·실제 경로 렌더링·소유권·보존 경계
 56. [고정 Bootstrap Bridge와 Runtime Generation 결정](decisions/ADR-0013-고정-Bootstrap-Bridge와-Runtime-Generation.md) — 무재시작 Runtime update·candidate review·rollback 경계
 57. [Runtime update와 activation 계약](contracts/runtime-update-and-activation.md) — generation selector·durable operation·same-task E2E 완료 조건
+58. [전용 Star Updater와 Codex 전체 생명주기 결정](decisions/ADR-0014-전용-Star-Updater와-Codex-생명주기.md) — 4 EXE Runtime·30초 Controller lease·10초 restart integration update
+59. [Codex 생명주기와 Star Updater 계약](contracts/codex-lifecycle-and-updater.md) — all-task census·MCP ownership·apply/rollback/relaunch 상태기계
 
 ## 문서 상태 표현
 

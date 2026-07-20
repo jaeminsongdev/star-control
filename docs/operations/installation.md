@@ -23,7 +23,7 @@ release source revision·Task ID·config·Catalog·Tool·Profile과 final artifa
 
 ### Windows Runtime
 
-- `star.exe`, `star-controller.exe`, `star-mcp.exe` 실행 파일
+- `star.exe`, `star-controller.exe`, `star-mcp.exe`, `star-updater.exe` 실행 파일
 - required `star-control-core.toml`, ToolPackageManifest Schema와 fake example
 - Windows installer와 uninstall 정보
 - 상태·설정 migration
@@ -47,7 +47,7 @@ Installer는 runtime과 Plugin의 호환 version과 final artifact digest를 확
 
 주 배포 방식은 **installer-first**다. P-0026에서 architecture별 current-user Inno Setup 6 `.exe` 설치 파일을 선택하고 구현했다. 설치 마법사의 기본값은 `%LOCALAPPDATA%\Programs\Star-Control`이며 사용자가 바꿀 수 있고, update·repair는 같은 AppId의 이전 선택 경로를 재사용한다. portable archive는 개발·복구용 선택 산출물일 뿐 installer와 같은 수명주기 지원을 뜻하지 않는다.
 
-P-0026은 설치 transport, 세 binary, release-file manifest, installation record, 로컬 Codex Marketplace 렌더링과 자동 시작 경계를 구현한다. M10 `ReleaseManifest` 상태기계, CI·공개 승격, 서명·SBOM·provenance와 clean native ARM64 수명주기 Gate까지 완료됐다는 뜻은 아니다. 로컬 빌드는 항상 `unsigned_local`로 기록하며 실제 서명 검증이 없는 입력으로 `signed`를 선택할 수 없다.
+P-0026/P-0039는 설치 transport, 네 Runtime binary, release-file manifest, installation record, 로컬 Codex Marketplace 렌더링과 updater one-shot 경계를 구현한다. M10 `ReleaseManifest` 상태기계, CI·공개 승격, 서명·SBOM·provenance와 clean native ARM64 수명주기 Gate까지 완료됐다는 뜻은 아니다. 로컬 빌드는 항상 `unsigned_local`로 기록하며 실제 서명 검증이 없는 입력으로 `signed`를 선택할 수 없다.
 
 Installer는 current-user Controller startup entry를 눈에 띄게 설명하고 기본 활성화한다. 설치 화면에서 해제할 수 있어야 하며 설치 후 `star controller autostart enable|disable|status`와 제거 방법을 제공한다. entry는 `star-controller.exe --background`만 시작하며 Goal이나 개발 작업을 예약·실행하지 않는다.
 
@@ -96,10 +96,10 @@ clean-room readiness도 환경을 만들지 않는다. exact source와 lockfile,
 - installer가 만드는 Codex MCP 설정은 [MCP 구현 동결 계약](../contracts/mcp-implementation-contract.md#codex-mcp-설정-정본)의 fixed server·approval 설정과 비교한다.
 - Plugin Hook 내용이 바뀌면 사용자가 다시 검토해야 할 수 있음을 안내한다.
 - activation 전 이전 executable set·store pointer·startup entry와 rollback validation plan을 고정한다.
-- Bootstrap Bridge v1→v2 최초 설치는 offline installer만 수행한다. installer는 `installation finalize` 다음에 `installation bridge initialize --state-generation bootstrap_v2`를 실행하며, Codex·MCP가 실행 중이면 파일 변경 전 중단한다. 이 1회 migration 뒤의 Runtime Generation update는 Codex/MCP 재시작 없이 stable `star update` supervisor가 수행한다.
+- Bootstrap Bridge v1→v2 최초 설치는 offline installer만 수행한다. installer는 `installation finalize` 다음에 `installation bridge initialize --state-generation bootstrap_v2`를 실행하며, Codex·MCP가 실행 중이면 파일 변경 전 중단한다. 이 1회 migration 뒤의 Runtime Generation update는 Codex/MCP 재시작 없이 `star-updater.exe`가 수행한다.
 - update 뒤 binary·Plugin·MCP·Controller identity, `safe_default` smoke와 state integrity를 검사한다.
 - 실패한 업데이트에서 검증된 이전 artifact digest와 compatible state generation으로 돌아갈 수 있어야 한다.
-- Bootstrap Bridge와 Runtime Generation의 구분, activation record 원자 교체, candidate review·approval scope와 `tool_hot_reload|runtime_generation|bridge_update|plugin_update` 분류는 [Runtime update와 activation 계약](../contracts/runtime-update-and-activation.md)이 소유한다. Runtime-only update는 Codex Plugin cache와 MCP 설정을 바꾸지 않는다.
+- Bootstrap Bridge와 Runtime Generation의 구분, activation record 원자 교체, candidate review·approval scope와 `tool_hot_reload|runtime_update|codex_integration_update` 분류는 [Runtime update와 activation 계약](../contracts/runtime-update-and-activation.md) 및 [Codex 생명주기와 Updater 계약](../contracts/codex-lifecycle-and-updater.md)이 소유한다. Runtime-only update는 Codex Plugin cache와 MCP 설정을 바꾸지 않는다.
 
 ## Rollback
 

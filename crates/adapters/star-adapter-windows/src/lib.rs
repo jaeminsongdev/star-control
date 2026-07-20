@@ -15,16 +15,17 @@ use std::{
 };
 
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use star_contracts::{
     InstallationId, Sha256Hash, canonical_sha256,
     installation::{
         CODEX_INTEGRATION_RECORD_SCHEMA_ID, CodexIntegrationRecord, CodexIntegrationSummary,
         ControllerInstallManifest, INSTALLATION_RECORD_SCHEMA_ID, INSTALLATION_SCHEMA_VERSION,
-        InstallationRecord, RELEASE_FILE_MANIFEST_SCHEMA_ID, RUNTIME_ACTIVATION_RECORD_SCHEMA_ID,
-        RUNTIME_GENERATION_MANIFEST_SCHEMA_ID, ReleaseFileEntry, ReleaseFileManifest,
-        RuntimeActivationRecord, RuntimeCandidateReview, RuntimeGenerationManifest,
-        RuntimeGenerationRef, RuntimeUpdateClass, TargetArchitecture,
+        INTEGRATION_CANDIDATE_REVIEW_SCHEMA_ID, InstallationRecord, IntegrationCandidateClass,
+        IntegrationCandidateReview, RELEASE_FILE_MANIFEST_SCHEMA_ID,
+        RUNTIME_ACTIVATION_RECORD_SCHEMA_ID, RUNTIME_GENERATION_MANIFEST_SCHEMA_ID,
+        ReleaseFileEntry, ReleaseFileManifest, RuntimeActivationRecord, RuntimeCandidateReview,
+        RuntimeGenerationManifest, RuntimeGenerationRef, RuntimeUpdateClass, TargetArchitecture,
     },
     manifest::{ManifestSource, risk_lane},
     parse_manifest_v1, parse_no_duplicate_keys,
@@ -39,6 +40,10 @@ use windows::{
 };
 
 const RELEASE_MANIFEST_MAX_BYTES: u64 = 4 * 1024 * 1024;
+// Release payloads are verified by the manifest and can be much larger than
+// the JSON manifest itself. Keep a bounded ceiling for rollback reads rather
+// than using the manifest-size limit for executable files.
+const RELEASE_PAYLOAD_MAX_BYTES: u64 = 512 * 1024 * 1024;
 const LOCAL_RECORD_MAX_BYTES: u64 = 64 * 1024;
 pub const RELEASE_MANIFEST_FILE: &str = "release-manifest.json";
 pub const INSTALLATION_RECORD_FILE: &str = "installation-record.v1.json";
@@ -69,6 +74,10 @@ pub enum WindowsAdapterError {
     InvalidRuntimeGeneration,
     #[error("runtime generation is already staged and cannot be overwritten")]
     RuntimeGenerationExists,
+    #[error("integration candidate is not an approved Codex-integration-only release")]
+    IntegrationCandidateRejected,
+    #[error("integration candidate backup is malformed or does not belong to this installation")]
+    InvalidIntegrationBackup,
     #[error("required current-user environment variable is unavailable")]
     Environment,
     #[error("Windows installation I/O failed: {0}")]
@@ -86,6 +95,30 @@ pub struct InstallationStatus {
     pub product_version: String,
     pub target_architecture: TargetArchitecture,
     pub codex_integration: Option<CodexIntegrationSummary>,
+}
+
+/// Durable file-set backup used only while the one-shot updater applies a
+/// restart-required Codex integration candidate.  The updater may use this
+/// handle to restore the previous verified release if offline repair fails.
+#[derive(Clone, Debug)]
+pub struct IntegrationCandidateBackup {
+    pub backup_root: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct IntegrationBackupManifest {
+    schema_id: String,
+    schema_version: u32,
+    install_root: String,
+    target_architecture: TargetArchitecture,
+    state: String,
+    files: Vec<IntegrationBackupFile>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct IntegrationBackupFile {
+    path: String,
+    existed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -376,6 +409,352 @@ impl InstallationManager {
         })
     }
 
+    /// Inspects a complete, separately staged release without copying it into
+    /// the installation. The resulting class tells the caller whether a
+    /// restart transaction may handle the candidate or whether the offline
+    /// installer must replace the updater itself.
+    pub fn inspect_integration_candidate(
+        &self,
+        install_root: &Path,
+        candidate_root: &Path,
+    ) -> Result<IntegrationCandidateReview, WindowsAdapterError> {
+        let installed = self.status(install_root)?;
+        let install_root = canonical_fixed_directory(install_root)?;
+        let candidate_root = canonical_fixed_directory(candidate_root)?;
+        if paths_equal_case_insensitive(&install_root, &candidate_root) {
+            return Err(WindowsAdapterError::UnsafePath);
+        }
+        let current_bytes = read_regular_bounded(
+            &install_root.join(RELEASE_MANIFEST_FILE),
+            RELEASE_MANIFEST_MAX_BYTES,
+        )?;
+        let current = parse_release_manifest(&current_bytes)?;
+        let candidate_bytes = read_regular_bounded(
+            &candidate_root.join(RELEASE_MANIFEST_FILE),
+            RELEASE_MANIFEST_MAX_BYTES,
+        )?;
+        let candidate = parse_release_manifest(&candidate_bytes)?;
+        validate_release_manifest(&candidate, installed.target_architecture)?;
+        verify_release_files(&candidate_root, &candidate)?;
+
+        let current_files = current
+            .files
+            .iter()
+            .map(|entry| (entry.path.as_str(), entry))
+            .collect::<BTreeMap<_, _>>();
+        let candidate_files = candidate
+            .files
+            .iter()
+            .map(|entry| (entry.path.as_str(), entry))
+            .collect::<BTreeMap<_, _>>();
+        let paths = current_files
+            .keys()
+            .chain(candidate_files.keys())
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let changed_files = paths
+            .into_iter()
+            .filter(|path| current_files.get(path) != candidate_files.get(path))
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let candidate_class = classify_integration_candidate(&changed_files);
+        let candidate_release_manifest_sha256 = Sha256Hash::digest(&candidate_bytes);
+        let approval_scope_sha256 = canonical_sha256(&serde_json::json!({
+            "candidate_release_manifest_sha256":candidate_release_manifest_sha256,
+            "target_architecture":candidate.target_architecture,
+            "candidate_class":candidate_class,
+            "changed_files":changed_files,
+        }))
+        .map_err(|_| WindowsAdapterError::InvalidReleaseManifest)?;
+        Ok(IntegrationCandidateReview {
+            schema_id: INTEGRATION_CANDIDATE_REVIEW_SCHEMA_ID.to_owned(),
+            schema_version: 1,
+            candidate_release_manifest_sha256,
+            target_architecture: candidate.target_architecture,
+            candidate_class,
+            changed_files,
+            rollback_available: true,
+            requires_codex_restart: matches!(
+                candidate_class,
+                IntegrationCandidateClass::CodexIntegrationUpdate
+                    | IntegrationCandidateClass::MixedUpdate
+            ),
+            approval_scope_sha256,
+        })
+    }
+
+    /// Replaces only the Bridge/MCP/template file set of a previously reviewed
+    /// candidate.  This is deliberately unavailable for runtime, mixed, and
+    /// updater candidates: those routes have different activation or offline
+    /// installer ownership.  A durable backup is written before the first
+    /// installation-root mutation and is returned for an explicit rollback.
+    pub fn apply_codex_integration_candidate(
+        &self,
+        install_root: &Path,
+        candidate_root: &Path,
+        approval_scope_sha256: &Sha256Hash,
+        operation_id: &str,
+    ) -> Result<IntegrationCandidateBackup, WindowsAdapterError> {
+        if !safe_update_operation_id(operation_id) {
+            return Err(WindowsAdapterError::IntegrationCandidateRejected);
+        }
+        let installed = self.status(install_root)?;
+        let review = self.inspect_integration_candidate(install_root, candidate_root)?;
+        if review.candidate_class != IntegrationCandidateClass::CodexIntegrationUpdate
+            || review.approval_scope_sha256 != *approval_scope_sha256
+            || !review.rollback_available
+        {
+            return Err(WindowsAdapterError::IntegrationCandidateRejected);
+        }
+        let install_root = canonical_fixed_directory(install_root)?;
+        let candidate_root = canonical_fixed_directory(candidate_root)?;
+        let backup_parent = ensure_fixed_directory(
+            &self
+                .local_data_root
+                .join("updates")
+                .join("integration-backups"),
+        )?;
+        let backup_root = backup_parent.join(operation_id);
+        if backup_root.exists() {
+            return Err(WindowsAdapterError::IntegrationCandidateRejected);
+        }
+        std::fs::create_dir(&backup_root)?;
+        let backup_root = canonical_fixed_directory(&backup_root)?;
+
+        let mut paths = review.changed_files.clone();
+        paths.push(RELEASE_MANIFEST_FILE.to_owned());
+        paths.sort();
+        paths.dedup();
+        if paths
+            .iter()
+            .any(|path| path != RELEASE_MANIFEST_FILE && !is_codex_integration_path(path))
+        {
+            return Err(WindowsAdapterError::IntegrationCandidateRejected);
+        }
+        let mut backup_files = Vec::with_capacity(paths.len());
+        for relative in &paths {
+            let source = install_root.join(relative.replace('/', "\\"));
+            let existed = source.exists();
+            if existed {
+                copy_regular_file_new(
+                    &source,
+                    &backup_root.join("files").join(relative.replace('/', "\\")),
+                )?;
+            }
+            backup_files.push(IntegrationBackupFile {
+                path: relative.clone(),
+                existed,
+            });
+        }
+        atomic_write_json(
+            &backup_root.join("backup.v1.json"),
+            &IntegrationBackupManifest {
+                schema_id: "star.integration-candidate-backup".to_owned(),
+                schema_version: 1,
+                install_root: normal_windows_path(&install_root)
+                    .to_string_lossy()
+                    .into_owned(),
+                target_architecture: installed.target_architecture,
+                state: "prepared".to_owned(),
+                files: backup_files,
+            },
+        )?;
+        let backup = IntegrationCandidateBackup { backup_root };
+        if let Err(error) = self.apply_candidate_files(
+            &install_root,
+            &candidate_root,
+            &review.changed_files,
+            installed.target_architecture,
+        ) {
+            let _ = self.rollback_codex_integration_candidate(&install_root, &backup);
+            return Err(error);
+        }
+        self.set_integration_backup_state(&backup, "applied")?;
+        Ok(backup)
+    }
+
+    /// Restores a backup created by `apply_codex_integration_candidate` and
+    /// re-generates the derived installation/controller records from the old
+    /// release manifest.  Only a backup tied to this exact fixed installation
+    /// root is accepted.
+    pub fn rollback_codex_integration_candidate(
+        &self,
+        install_root: &Path,
+        backup: &IntegrationCandidateBackup,
+    ) -> Result<(), WindowsAdapterError> {
+        let install_root = canonical_fixed_directory(install_root)?;
+        let backup_root = canonical_fixed_directory(&backup.backup_root)?;
+        let manifest = load_integration_backup_manifest(&backup_root)?;
+        if manifest.schema_id != "star.integration-candidate-backup"
+            || manifest.schema_version != 1
+            || !matches!(
+                manifest.state.as_str(),
+                "prepared" | "applied" | "committed" | "rolled_back"
+            )
+            || !paths_equal_case_insensitive(Path::new(&manifest.install_root), &install_root)
+            || manifest.files.is_empty()
+            || manifest.files.iter().any(|file| {
+                (file.path != RELEASE_MANIFEST_FILE && !is_codex_integration_path(&file.path))
+                    || !valid_manifest_relative_path(&file.path)
+            })
+        {
+            return Err(WindowsAdapterError::InvalidIntegrationBackup);
+        }
+        let active = self
+            .runtime_activation_record_path()
+            .exists()
+            .then(|| self.load_runtime_activation_record(&install_root))
+            .transpose()?;
+        let mut files = manifest.files;
+        files.sort_by_key(|file| file.path == RELEASE_MANIFEST_FILE);
+        for file in files {
+            let destination = install_root.join(file.path.replace('/', "\\"));
+            if file.existed {
+                let bytes = read_regular_bounded(
+                    &backup_root.join("files").join(file.path.replace('/', "\\")),
+                    RELEASE_PAYLOAD_MAX_BYTES,
+                )?;
+                atomic_write(&destination, &bytes)?;
+            } else if destination.exists() {
+                if !destination.is_file() || has_reparse_ancestor(&destination) {
+                    return Err(WindowsAdapterError::UnsafePath);
+                }
+                std::fs::remove_file(destination)?;
+            }
+        }
+        self.finalize(&install_root, manifest.target_architecture, true)?;
+        if let Some(active) = active {
+            self.activate_runtime_bridge(&install_root, &active, active.bridge_contract_version)?;
+        }
+        self.status(&install_root)?;
+        self.set_integration_backup_state(
+            &IntegrationCandidateBackup { backup_root },
+            "rolled_back",
+        )?;
+        Ok(())
+    }
+
+    /// Marks the file-set backup committed only after Codex Plugin repair has
+    /// succeeded.  A process interruption before this point is recovered by
+    /// the next updater invocation instead of being mistaken for success.
+    pub fn commit_codex_integration_candidate(
+        &self,
+        backup: &IntegrationCandidateBackup,
+    ) -> Result<(), WindowsAdapterError> {
+        self.set_integration_backup_state(backup, "committed")
+    }
+
+    /// Restores an interrupted integration candidate before another updater
+    /// transaction starts. Committed/rolled-back audit backups remain intact;
+    /// only `prepared` or `applied` records are actionable.
+    pub fn recover_interrupted_codex_integration_candidates(
+        &self,
+        install_root: &Path,
+    ) -> Result<u32, WindowsAdapterError> {
+        let install_root = canonical_fixed_directory(install_root)?;
+        let parent = self
+            .local_data_root
+            .join("updates")
+            .join("integration-backups");
+        if !parent.exists() {
+            return Ok(0);
+        }
+        let parent = canonical_fixed_directory(&parent)?;
+        let mut recovered = 0_u32;
+        for entry in std::fs::read_dir(parent)? {
+            let entry = entry?;
+            let root = entry.path();
+            if !root.is_dir() {
+                return Err(WindowsAdapterError::InvalidIntegrationBackup);
+            }
+            let backup_root = canonical_fixed_directory(&root)?;
+            let manifest = load_integration_backup_manifest(&backup_root)?;
+            if !paths_equal_case_insensitive(Path::new(&manifest.install_root), &install_root) {
+                continue;
+            }
+            if matches!(manifest.state.as_str(), "prepared" | "applied") {
+                self.rollback_codex_integration_candidate(
+                    &install_root,
+                    &IntegrationCandidateBackup { backup_root },
+                )?;
+                recovered = recovered.saturating_add(1);
+            } else if !matches!(manifest.state.as_str(), "committed" | "rolled_back") {
+                return Err(WindowsAdapterError::InvalidIntegrationBackup);
+            }
+        }
+        Ok(recovered)
+    }
+
+    fn set_integration_backup_state(
+        &self,
+        backup: &IntegrationCandidateBackup,
+        state: &str,
+    ) -> Result<(), WindowsAdapterError> {
+        if !matches!(state, "prepared" | "applied" | "committed" | "rolled_back") {
+            return Err(WindowsAdapterError::InvalidIntegrationBackup);
+        }
+        let backup_root = canonical_fixed_directory(&backup.backup_root)?;
+        let mut manifest = load_integration_backup_manifest(&backup_root)?;
+        manifest.state = state.to_owned();
+        atomic_write_json(&backup_root.join("backup.v1.json"), &manifest)
+    }
+
+    fn apply_candidate_files(
+        &self,
+        install_root: &Path,
+        candidate_root: &Path,
+        changed_files: &[String],
+        target_architecture: TargetArchitecture,
+    ) -> Result<(), WindowsAdapterError> {
+        let candidate_bytes = read_regular_bounded(
+            &candidate_root.join(RELEASE_MANIFEST_FILE),
+            RELEASE_MANIFEST_MAX_BYTES,
+        )?;
+        let candidate = parse_release_manifest(&candidate_bytes)?;
+        validate_release_manifest(&candidate, target_architecture)?;
+        verify_release_files(candidate_root, &candidate)?;
+        let candidate_files = candidate
+            .files
+            .iter()
+            .map(|entry| (entry.path.as_str(), entry))
+            .collect::<BTreeMap<_, _>>();
+        let active = self
+            .runtime_activation_record_path()
+            .exists()
+            .then(|| self.load_runtime_activation_record(install_root))
+            .transpose()?;
+        for relative in changed_files {
+            if !is_codex_integration_path(relative) {
+                return Err(WindowsAdapterError::IntegrationCandidateRejected);
+            }
+            let destination = install_root.join(relative.replace('/', "\\"));
+            if let Some(entry) = candidate_files.get(relative.as_str()) {
+                let bytes = read_regular_bounded(
+                    &candidate_root.join(entry.path.replace('/', "\\")),
+                    entry.size,
+                )?;
+                if Sha256Hash::digest(&bytes) != entry.sha256 {
+                    return Err(WindowsAdapterError::FileIdentityMismatch);
+                }
+                atomic_write(&destination, &bytes)?;
+            } else if destination.exists() {
+                if !destination.is_file() || has_reparse_ancestor(&destination) {
+                    return Err(WindowsAdapterError::UnsafePath);
+                }
+                std::fs::remove_file(destination)?;
+            }
+        }
+        // The manifest is the commit marker: it changes only after every
+        // candidate payload file has been durably replaced.
+        atomic_write(&install_root.join(RELEASE_MANIFEST_FILE), &candidate_bytes)?;
+        self.finalize(install_root, target_architecture, true)?;
+        if let Some(active) = active {
+            self.activate_runtime_bridge(install_root, &active, active.bridge_contract_version)?;
+        }
+        self.status(install_root)?;
+        Ok(())
+    }
+
     /// Enables Bootstrap Bridge v2 only after a validated active Runtime
     /// Generation exists. The activation record is written first; if the
     /// Bridge manifest write fails, the existing v1 bridge remains active.
@@ -496,6 +875,51 @@ impl InstallationManager {
                 .join(INSTALLATION_RECORD_FILE),
         )
     }
+}
+
+fn classify_integration_candidate(changed_files: &[String]) -> IntegrationCandidateClass {
+    if changed_files.is_empty() {
+        return IntegrationCandidateClass::NoChange;
+    }
+    let updater_changed = changed_files.iter().any(|path| path == "star-updater.exe");
+    let integration_changed = changed_files.iter().any(|path| {
+        matches!(path.as_str(), "star.exe" | "star-mcp.exe")
+            || path.starts_with("integrations/codex-plugin-template/")
+    });
+    let runtime_changed = changed_files.iter().any(|path| {
+        !matches!(
+            path.as_str(),
+            "star-updater.exe" | "star.exe" | "star-mcp.exe"
+        ) && !path.starts_with("integrations/codex-plugin-template/")
+    });
+    match (updater_changed, integration_changed, runtime_changed) {
+        (true, false, false) => IntegrationCandidateClass::UpdaterUpdate,
+        (false, true, false) => IntegrationCandidateClass::CodexIntegrationUpdate,
+        (false, false, true) => IntegrationCandidateClass::RuntimeUpdate,
+        _ => IntegrationCandidateClass::MixedUpdate,
+    }
+}
+
+fn is_codex_integration_path(path: &str) -> bool {
+    matches!(path, "star.exe" | "star-mcp.exe")
+        || path.starts_with("integrations/codex-plugin-template/")
+}
+
+fn load_integration_backup_manifest(
+    backup_root: &Path,
+) -> Result<IntegrationBackupManifest, WindowsAdapterError> {
+    let bytes = read_regular_bounded(&backup_root.join("backup.v1.json"), LOCAL_RECORD_MAX_BYTES)
+        .map_err(|_| WindowsAdapterError::InvalidIntegrationBackup)?;
+    let value = strict_value(&bytes).map_err(|_| WindowsAdapterError::InvalidIntegrationBackup)?;
+    serde_json::from_value(value).map_err(|_| WindowsAdapterError::InvalidIntegrationBackup)
+}
+
+fn safe_update_operation_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
 pub fn compiled_architecture() -> Result<TargetArchitecture, WindowsAdapterError> {
@@ -998,7 +1422,12 @@ fn validate_release_manifest(
         }
         previous = Some(&entry.path);
     }
-    for required in ["star.exe", "star-controller.exe", "star-mcp.exe"] {
+    for required in [
+        "star.exe",
+        "star-controller.exe",
+        "star-mcp.exe",
+        "star-updater.exe",
+    ] {
         if !manifest.files.iter().any(|entry| entry.path == required) {
             return Err(WindowsAdapterError::InvalidReleaseManifest);
         }
@@ -1228,7 +1657,12 @@ mod tests {
 
     fn write_release_fixture(root: &Path) -> ReleaseFileManifest {
         let binary = std::env::current_exe().unwrap();
-        for name in ["star.exe", "star-controller.exe", "star-mcp.exe"] {
+        for name in [
+            "star.exe",
+            "star-controller.exe",
+            "star-mcp.exe",
+            "star-updater.exe",
+        ] {
             std::fs::copy(&binary, root.join(name)).unwrap();
         }
         std::fs::create_dir_all(root.join("integrations/codex-plugin-template")).unwrap();
@@ -1242,6 +1676,7 @@ mod tests {
             "integrations/codex-plugin-template/readme.txt",
             "star-controller.exe",
             "star-mcp.exe",
+            "star-updater.exe",
             "star.exe",
         ] {
             let path = root.join(relative.replace('/', "\\"));
@@ -1267,6 +1702,17 @@ mod tests {
         };
         atomic_write_json(&root.join(RELEASE_MANIFEST_FILE), &manifest).unwrap();
         manifest
+    }
+
+    fn refresh_release_fixture(root: &Path, mut manifest: ReleaseFileManifest) {
+        for entry in &mut manifest.files {
+            let bytes = std::fs::read(root.join(entry.path.replace('/', "\\"))).unwrap();
+            entry.size = bytes.len() as u64;
+            entry.sha256 = Sha256Hash::digest(&bytes);
+        }
+        manifest.set_sha256 =
+            canonical_sha256(&serde_json::to_value(&manifest.files).unwrap()).unwrap();
+        atomic_write_json(&root.join(RELEASE_MANIFEST_FILE), &manifest).unwrap();
     }
 
     fn write_runtime_generation_fixture(root: &Path, generation_id: &str) -> PathBuf {
@@ -1407,6 +1853,116 @@ mod tests {
         manager
             .finalize(&second, compiled_architecture().unwrap(), true)
             .unwrap();
+    }
+
+    #[test]
+    fn integration_candidate_classifies_full_stage_changes_without_mutating_installation() {
+        let installed = fixture_root("integration-inspect-installed");
+        let candidate = fixture_root("integration-inspect-candidate");
+        write_release_fixture(&installed);
+        let candidate_manifest = write_release_fixture(&candidate);
+        let manager = InstallationManager::new(fixture_root("integration-inspect-data"));
+        manager
+            .finalize(&installed, compiled_architecture().unwrap(), false)
+            .unwrap();
+
+        std::fs::write(candidate.join("star-mcp.exe"), b"candidate-mcp").unwrap();
+        refresh_release_fixture(&candidate, candidate_manifest);
+        let review = manager
+            .inspect_integration_candidate(&installed, &candidate)
+            .unwrap();
+        assert_eq!(
+            review.candidate_class,
+            IntegrationCandidateClass::CodexIntegrationUpdate
+        );
+        assert_eq!(review.changed_files, vec!["star-mcp.exe"]);
+        assert!(review.requires_codex_restart);
+        assert!(review.rollback_available);
+        assert!(manager.status(&installed).unwrap().verified);
+    }
+
+    #[test]
+    fn integration_candidate_apply_is_manifest_committed_and_rolls_back() {
+        let installed = fixture_root("integration-apply-installed");
+        let candidate = fixture_root("integration-apply-candidate");
+        let data = fixture_root("integration-apply-data");
+        write_release_fixture(&installed);
+        let candidate_manifest = write_release_fixture(&candidate);
+        let manager = InstallationManager::new(data);
+        manager
+            .finalize(&installed, compiled_architecture().unwrap(), false)
+            .unwrap();
+        std::fs::write(candidate.join("star-mcp.exe"), b"candidate-mcp").unwrap();
+        refresh_release_fixture(&candidate, candidate_manifest);
+        let review = manager
+            .inspect_integration_candidate(&installed, &candidate)
+            .unwrap();
+        let backup = manager
+            .apply_codex_integration_candidate(
+                &installed,
+                &candidate,
+                &review.approval_scope_sha256,
+                "upd_test_apply",
+            )
+            .unwrap();
+        assert!(manager.status(&installed).unwrap().verified);
+        assert_eq!(
+            manager
+                .inspect_integration_candidate(&installed, &candidate)
+                .unwrap()
+                .candidate_class,
+            IntegrationCandidateClass::NoChange
+        );
+        manager
+            .rollback_codex_integration_candidate(&installed, &backup)
+            .unwrap();
+        assert!(manager.status(&installed).unwrap().verified);
+        assert_eq!(
+            manager
+                .inspect_integration_candidate(&installed, &candidate)
+                .unwrap()
+                .candidate_class,
+            IntegrationCandidateClass::CodexIntegrationUpdate
+        );
+    }
+
+    #[test]
+    fn interrupted_integration_candidate_is_recovered_before_next_transaction() {
+        let installed = fixture_root("integration-recover-installed");
+        let candidate = fixture_root("integration-recover-candidate");
+        let data = fixture_root("integration-recover-data");
+        write_release_fixture(&installed);
+        let candidate_manifest = write_release_fixture(&candidate);
+        let manager = InstallationManager::new(data);
+        manager
+            .finalize(&installed, compiled_architecture().unwrap(), false)
+            .unwrap();
+        std::fs::write(candidate.join("star-mcp.exe"), b"candidate-mcp").unwrap();
+        refresh_release_fixture(&candidate, candidate_manifest);
+        let review = manager
+            .inspect_integration_candidate(&installed, &candidate)
+            .unwrap();
+        manager
+            .apply_codex_integration_candidate(
+                &installed,
+                &candidate,
+                &review.approval_scope_sha256,
+                "upd_test_recover",
+            )
+            .unwrap();
+        assert_eq!(
+            manager
+                .recover_interrupted_codex_integration_candidates(&installed)
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            manager
+                .inspect_integration_candidate(&installed, &candidate)
+                .unwrap()
+                .candidate_class,
+            IntegrationCandidateClass::CodexIntegrationUpdate
+        );
     }
 
     #[test]

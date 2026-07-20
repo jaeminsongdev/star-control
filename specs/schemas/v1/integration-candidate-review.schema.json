@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "IntegrationCandidateClass": {
+      "description": "Full release-stage classification for a Codex restart transaction. This is\nintentionally separate from RuntimeGeneration review: a stable Bridge and\nPlugin update changes files outside a generation selector.",
+      "enum": [
+        "codex_integration_update",
+        "updater_update",
+        "runtime_update",
+        "mixed_update",
+        "no_change"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "type": "string"
+    },
+    "TargetArchitecture": {
+      "enum": [
+        "x64",
+        "arm64"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.integration-candidate-review:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "approval_scope_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "candidate_class": {
+      "$ref": "#/$defs/IntegrationCandidateClass"
+    },
+    "candidate_release_manifest_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "changed_files": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "requires_codex_restart": {
+      "type": "boolean"
+    },
+    "rollback_available": {
+      "type": "boolean"
+    },
+    "schema_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "target_architecture": {
+      "$ref": "#/$defs/TargetArchitecture"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "candidate_release_manifest_sha256",
+    "target_architecture",
+    "candidate_class",
+    "changed_files",
+    "rollback_available",
+    "requires_codex_restart",
+    "approval_scope_sha256"
+  ],
+  "title": "IntegrationCandidateReview",
+  "type": "object"
+}

@@ -69,6 +69,7 @@ use star_controller::policy_profile::{
 };
 use star_controller::trust_store::TrustStore;
 use star_controller::{
+    lifecycle::{CodexLifecycle, ControllerLifecycleDecision},
     process_runtime::{
         DirectExeSpec, ExecutableLease, JsonStdioExecutionOptions, OutputEncoding,
         ProcessEndEvidence, ProcessEndObserver, ProcessStartEvidence, ProcessStartObserver,
@@ -3125,11 +3126,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut last_effective_snapshot_hash =
         effective_snapshot_hash(&registry, &trust, initial_policy_profile);
     let concurrency_gate = ConcurrencyGate::default();
+    let mut lifecycle = CodexLifecycle::default();
     let mut accept_pool = PipeAcceptPool::start(pipe.clone())?;
     let mut shutdown = Box::pin(tokio::signal::ctrl_c());
+    let mut lifecycle_tick = tokio::time::interval(std::time::Duration::from_secs(1));
+    lifecycle_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         let mut server = tokio::select! {
             accepted = accept_pool.accept() => accepted?,
+            _ = lifecycle_tick.tick(), if lifecycle.has_observations() => {
+                // A Hook `Stop` is not guaranteed when the Desktop itself
+                // disappears. Reconcile only PIDs that an installed Hook or
+                // MCP process previously attributed to an instance.
+                if let Ok(processes) = star_updater_core::process_census::snapshot() {
+                    let live_pids = processes.into_iter()
+                        .map(|process| process.pid)
+                        .collect::<BTreeSet<_>>();
+                    lifecycle.reconcile_owner_processes(&live_pids, Utc::now());
+                }
+                if matches!(lifecycle.decision(Utc::now()), ControllerLifecycleDecision::ShutdownNow) {
+                    graceful_controller_shutdown(
+                        &operations,
+                        &cancellation_tokens,
+                        std::time::Duration::from_secs(10),
+                        std::time::Duration::from_secs(2),
+                    ).await;
+                    break;
+                }
+                continue;
+            }
             signal = &mut shutdown => {
                 let _ = signal;
                 graceful_controller_shutdown(
@@ -3217,6 +3242,72 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
             continue;
+        }
+        if request.command == "lifecycle.observe" {
+            let event = request
+                .payload
+                .get("event")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let allowed = match hello.client_kind {
+                IpcClientKind::Cli => !matches!(event, "mcp_initialized" | "mcp_eof"),
+                IpcClientKind::Mcp => matches!(event, "mcp_initialized" | "mcp_eof"),
+                IpcClientKind::Hook | IpcClientKind::InternalTest => false,
+            };
+            if !allowed {
+                let response = invalid_request_response(
+                    request,
+                    "LIFECYCLE_OBSERVATION_FORBIDDEN",
+                    "The authenticated client is not allowed to submit this lifecycle event.",
+                    registry.revision,
+                );
+                let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                continue;
+            }
+            let response =
+                lifecycle_observation_response(&mut lifecycle, request, registry.revision);
+            let shutdown_now = response.status == IpcStatus::Ok
+                && matches!(
+                    lifecycle.decision(Utc::now()),
+                    ControllerLifecycleDecision::ShutdownNow
+                );
+            let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+            if shutdown_now {
+                graceful_controller_shutdown(
+                    &operations,
+                    &cancellation_tokens,
+                    std::time::Duration::from_secs(10),
+                    std::time::Duration::from_secs(2),
+                )
+                .await;
+                break;
+            }
+            continue;
+        }
+        if !update_restart_pending_command_allowed(&request.command) {
+            match star_updater_core::update_lease_active() {
+                Ok(true) => {
+                    let response = invalid_request_response(
+                        request,
+                        "UPDATE_RESTART_PENDING",
+                        "A verified updater transaction is counting down, draining, or applying; new mutation admission is closed.",
+                        registry.revision,
+                    );
+                    let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                    continue;
+                }
+                Err(_) => {
+                    let response = invalid_request_response(
+                        request,
+                        "UPDATE_LEASE_UNAVAILABLE",
+                        "The Controller could not prove that update mutation admission is open.",
+                        registry.revision,
+                    );
+                    let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                    continue;
+                }
+                Ok(false) => {}
+            }
         }
         let project_directory = match request_project_directory(&request) {
             Ok(project_directory) => project_directory,
@@ -7446,6 +7537,186 @@ fn completed_operation_response(
     }
 }
 
+fn lifecycle_observation_response(
+    lifecycle: &mut CodexLifecycle,
+    request: IpcRequest,
+    registry_revision: u64,
+) -> IpcResponse {
+    if !payload_has_only_keys(
+        &request.payload,
+        &[
+            "event",
+            "instance_id",
+            "task_id",
+            "connection_id",
+            "owner_pid",
+        ],
+    ) {
+        return invalid_request_response(
+            request,
+            "LIFECYCLE_OBSERVATION_INVALID",
+            "Lifecycle observations allow only event, instance_id, task_id, connection_id, and owner_pid.",
+            registry_revision,
+        );
+    }
+    let Some(event) = request
+        .payload
+        .get("event")
+        .and_then(serde_json::Value::as_str)
+    else {
+        return invalid_request_response(
+            request,
+            "LIFECYCLE_OBSERVATION_INVALID",
+            "Lifecycle event must be a string.",
+            registry_revision,
+        );
+    };
+    let Some(instance_id) = request
+        .payload
+        .get("instance_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| lifecycle_identifier_valid(value))
+    else {
+        return invalid_request_response(
+            request,
+            "LIFECYCLE_OBSERVATION_INVALID",
+            "Lifecycle instance_id must be a bounded non-empty identifier.",
+            registry_revision,
+        );
+    };
+    let Some(task_id) = request
+        .payload
+        .get("task_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| lifecycle_identifier_valid(value))
+    else {
+        return invalid_request_response(
+            request,
+            "LIFECYCLE_OBSERVATION_INVALID",
+            "Lifecycle task_id must be a bounded non-empty identifier.",
+            registry_revision,
+        );
+    };
+    let owner_pid = request
+        .payload
+        .get("owner_pid")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|pid| u32::try_from(pid).ok())
+        .filter(|pid| *pid != 0);
+
+    let observed_at = Utc::now();
+    let accepted = match event {
+        "session_start" => {
+            lifecycle.session_started_with_owner(instance_id, task_id, owner_pid, observed_at);
+            true
+        }
+        "user_prompt_submit" => {
+            lifecycle.user_prompt_submitted_with_owner(
+                instance_id,
+                task_id,
+                owner_pid,
+                observed_at,
+            );
+            true
+        }
+        "root_stop" => {
+            lifecycle.session_started_with_owner(instance_id, task_id, owner_pid, observed_at);
+            lifecycle.root_stop(task_id, observed_at)
+        }
+        "tool_started" => {
+            lifecycle.session_started_with_owner(instance_id, task_id, owner_pid, observed_at);
+            lifecycle.tool_started(task_id, observed_at)
+        }
+        "tool_finished" => {
+            lifecycle.session_started_with_owner(instance_id, task_id, owner_pid, observed_at);
+            lifecycle.tool_finished(task_id, observed_at)
+        }
+        "subagent_started" => {
+            lifecycle.session_started_with_owner(instance_id, task_id, owner_pid, observed_at);
+            lifecycle.subagent_started(task_id, observed_at)
+        }
+        "subagent_finished" => {
+            lifecycle.session_started_with_owner(instance_id, task_id, owner_pid, observed_at);
+            lifecycle.subagent_finished(task_id, observed_at)
+        }
+        "mcp_initialized" => request
+            .payload
+            .get("connection_id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| lifecycle_identifier_valid(value))
+            .map(|connection_id| {
+                lifecycle.mcp_initialized(
+                    connection_id,
+                    instance_id,
+                    Some(task_id),
+                    owner_pid,
+                    observed_at,
+                );
+            })
+            .is_some(),
+        "mcp_eof" => request
+            .payload
+            .get("connection_id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| lifecycle_identifier_valid(value))
+            .is_some_and(|connection_id| lifecycle.mcp_eof(connection_id, observed_at)),
+        _ => false,
+    };
+    if !accepted {
+        return invalid_request_response(
+            request,
+            "LIFECYCLE_OBSERVATION_INVALID",
+            "Lifecycle event is not supported by this authenticated client.",
+            registry_revision,
+        );
+    }
+    let state = match lifecycle.decision(observed_at) {
+        ControllerLifecycleDecision::KeepAlive => "active",
+        ControllerLifecycleDecision::IdleUntil(_) => "idle_lease",
+        ControllerLifecycleDecision::ShutdownNow => "shutdown_now",
+        ControllerLifecycleDecision::BlockedByUnknownInstance => "unknown_instance",
+    };
+    IpcResponse {
+        schema_id: "star.ipc.response".to_owned(),
+        schema_version: 1,
+        request_id: request.request_id,
+        status: IpcStatus::Ok,
+        data: Some(serde_json::json!({"accepted":true,"state":state})),
+        operation_id: None,
+        diagnostics: vec![],
+        error: None,
+        registry_revision: Some(registry_revision),
+        correlation_id: request.client_request_id,
+    }
+}
+
+fn lifecycle_identifier_valid(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 256 && !value.contains('\0')
+}
+
+fn update_restart_pending_command_allowed(command: &str) -> bool {
+    matches!(
+        command,
+        "controller.start"
+            | "controller.shutdown"
+            | "doctor.run"
+            | "evidence.get"
+            | "operation.get"
+            | "project.list"
+            | "project.status"
+            | "tool.describe"
+            | "tool.registry.status"
+            | "tool.search"
+            | "validation.plan"
+    )
+}
+
+fn payload_has_only_keys(payload: &serde_json::Value, allowed: &[&str]) -> bool {
+    payload
+        .as_object()
+        .is_some_and(|object| object.keys().all(|key| allowed.contains(&key.as_str())))
+}
+
 fn invalid_request_response(
     request: IpcRequest,
     code: &str,
@@ -9652,5 +9923,39 @@ mod tests {
             running.events.last().unwrap().detail,
             "controller_shutdown_forced_after_drain"
         );
+    }
+
+    #[test]
+    fn update_restart_admission_allows_only_read_and_supervision_commands() {
+        for command in [
+            "controller.start",
+            "controller.shutdown",
+            "doctor.run",
+            "evidence.get",
+            "operation.get",
+            "project.list",
+            "project.status",
+            "tool.describe",
+            "tool.registry.status",
+            "tool.search",
+            "validation.plan",
+        ] {
+            assert!(update_restart_pending_command_allowed(command), "{command}");
+        }
+        for command in [
+            "approval.resolve",
+            "operation.cancel",
+            "project.register",
+            "tool.invoke",
+            "tool.revoke",
+            "tool.scaffold",
+            "tool.trust",
+            "validation.run",
+        ] {
+            assert!(
+                !update_restart_pending_command_allowed(command),
+                "{command}"
+            );
+        }
     }
 }

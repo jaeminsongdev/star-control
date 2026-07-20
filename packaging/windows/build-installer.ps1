@@ -117,6 +117,8 @@ try {
     if ($result.ExitCode -ne 0) { throw 'star-controller.exe build failed' }
     $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-mcp', '--bin', 'star-mcp') -WorkingDirectory $repoRoot -EchoOutput
     if ($result.ExitCode -ne 0) { throw 'star-mcp.exe build failed' }
+    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-updater', '--bin', 'star-updater') -WorkingDirectory $repoRoot -EchoOutput
+    if ($result.ExitCode -ne 0) { throw 'star-updater.exe build failed' }
 
     $stageArgs = @(
         'run', '--locked', '-p', 'star-package-release', '--', 'stage',
@@ -127,6 +129,24 @@ try {
     )
     $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments $stageArgs -WorkingDirectory $repoRoot -EchoOutput
     if ($result.ExitCode -ne 0) { throw 'release stage generation failed' }
+
+    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+    if ($PortableZip) {
+        $zip = Join-Path $outputDir "star-control-windows-$Architecture-$version-portable.zip"
+        if (Test-Path -LiteralPath $zip) {
+            throw "기존 portable ZIP을 덮어쓰지 않습니다: $zip"
+        }
+        Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $zip -CompressionLevel Optimal
+        $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+        [pscustomobject]@{
+            portable_zip = $zip
+            sha256 = "sha256:$hash"
+            architecture = $Architecture
+            version = $version
+            signing_state = 'unsigned_local'
+        } | ConvertTo-Json
+        return
+    }
 
     if ([string]::IsNullOrWhiteSpace($IsccPath)) {
         $candidates = @(
@@ -140,7 +160,6 @@ try {
         throw 'ISCC.exe를 찾지 못했습니다. Inno Setup 6 설치 후 -IsccPath를 지정하세요.'
     }
 
-    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
     $iss = Join-Path $PSScriptRoot 'star-control.iss'
     $isccArgs = @(
         "/DAppVersion=$version",
@@ -164,14 +183,6 @@ try {
         version = $version
         signing_state = 'unsigned_local'
     } | ConvertTo-Json
-
-    if ($PortableZip) {
-        $zip = Join-Path $outputDir "star-control-windows-$Architecture-$version-portable.zip"
-        if (Test-Path -LiteralPath $zip) {
-            throw "기존 portable ZIP을 덮어쓰지 않습니다: $zip"
-        }
-        Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $zip -CompressionLevel Optimal
-    }
 }
 finally {
     Pop-Location

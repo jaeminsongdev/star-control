@@ -1,21 +1,16 @@
 [package]
-name = "star-cli"
+name = "star-updater"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [[bin]]
-name = "star"
+name = "star-updater"
 path = "src/main.rs"
 
 [dependencies]
-chrono.workspace = true
-serde.workspace = true
 serde_json.workspace = true
-star-adapter-codex = { path = "../../crates/adapters/star-adapter-codex" }
-star-adapter-windows = { path = "../../crates/adapters/star-adapter-windows" }
 star-contracts = { path = "../../crates/foundation/star-contracts" }
-star-ipc = { path = "../../crates/adapters/star-ipc" }
 star-updater-core = { path = "../../crates/control/star-updater-core" }
 tokio.workspace = true

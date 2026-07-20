@@ -18,6 +18,9 @@ use star_ipc::{
     client::{ControllerClient, ControllerClientError, cli_client_config},
     controller_start::VerifiedControllerImage,
 };
+use star_updater_core::{
+    integration_restart::latest_integration_restart_receipt, spawn_background_updater,
+};
 
 const HOOK_INPUT_MAX_BYTES: u64 = 1024 * 1024;
 const SESSION_START_SKILL_NAME: &str = "star-control-operations";
@@ -41,6 +44,9 @@ enum LocalCommand {
     IntegrationUninstall {
         codex: Option<PathBuf>,
     },
+    IntegrationRepairRestart {
+        codex_desktop: PathBuf,
+    },
     UpdateStatus,
     UpdateVerify,
     UpdateStage {
@@ -54,10 +60,59 @@ enum LocalCommand {
         state_generation_id: String,
         approval_scope_sha256: Sha256Hash,
     },
+    UpdateIntegrationApply {
+        candidate_root: PathBuf,
+        codex_desktop: PathBuf,
+        approval_scope_sha256: Sha256Hash,
+    },
+    UpdateOfflineInstallerRestart {
+        target_install_root: PathBuf,
+        installer: PathBuf,
+        codex_desktop: PathBuf,
+    },
     ControllerAutostart {
         action: String,
     },
-    HookSessionStart,
+    Hook {
+        event: HookEvent,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HookEvent {
+    SessionStart,
+    UserPromptSubmit,
+    Stop,
+    PreToolUse,
+    PostToolUse,
+    SubagentStart,
+    SubagentStop,
+}
+
+impl HookEvent {
+    fn hook_event_name(self) -> &'static str {
+        match self {
+            Self::SessionStart => "SessionStart",
+            Self::UserPromptSubmit => "UserPromptSubmit",
+            Self::Stop => "Stop",
+            Self::PreToolUse => "PreToolUse",
+            Self::PostToolUse => "PostToolUse",
+            Self::SubagentStart => "SubagentStart",
+            Self::SubagentStop => "SubagentStop",
+        }
+    }
+
+    fn lifecycle_event(self) -> &'static str {
+        match self {
+            Self::SessionStart => "session_start",
+            Self::UserPromptSubmit => "user_prompt_submit",
+            Self::Stop => "root_stop",
+            Self::PreToolUse => "tool_started",
+            Self::PostToolUse => "tool_finished",
+            Self::SubagentStart => "subagent_started",
+            Self::SubagentStop => "subagent_finished",
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -70,6 +125,8 @@ struct ParsedLocal {
 struct RuntimeUpdateStatus {
     activation_record_path: String,
     active_runtime_generation: Option<RuntimeActivationRecord>,
+    latest_integration_restart:
+        Option<star_updater_core::integration_restart::IntegrationRestartReceipt>,
 }
 
 pub async fn dispatch(args: &[String]) -> Option<i32> {
@@ -148,6 +205,25 @@ fn parse(args: &[String]) -> Result<Option<ParsedLocal>, String> {
                 state_generation_id: parse_bootstrap_state_generation(tail)?,
             }
         }
+        [first, second, third, tail @ ..]
+            if first == "integration" && second == "repair" && third == "restart" =>
+        {
+            let desktop = match tail {
+                [flag, path] if flag == "--codex-desktop" => PathBuf::from(path),
+                _ => {
+                    return Err(
+                        "integration repair restart requires --codex-desktop <absolute-path>"
+                            .to_owned(),
+                    );
+                }
+            };
+            if !desktop.is_absolute() {
+                return Err("--codex-desktop must be an absolute path".to_owned());
+            }
+            LocalCommand::IntegrationRepairRestart {
+                codex_desktop: desktop,
+            }
+        }
         [first, second, tail @ ..]
             if first == "integration" && matches!(second.as_str(), "install" | "repair") =>
         {
@@ -174,11 +250,34 @@ fn parse(args: &[String]) -> Result<Option<ParsedLocal>, String> {
             }
         }
         [first, second, generation_id, tail @ ..] if first == "update" && second == "apply" => {
-            let (state_generation_id, approval_scope_sha256) = parse_update_apply_options(tail)?;
-            LocalCommand::UpdateApply {
-                generation_id: generation_id.clone(),
-                state_generation_id,
-                approval_scope_sha256,
+            let candidate_root = PathBuf::from(generation_id);
+            if candidate_root.is_absolute() {
+                let (codex_desktop, approval_scope_sha256) =
+                    parse_integration_update_apply_options(tail)?;
+                LocalCommand::UpdateIntegrationApply {
+                    candidate_root,
+                    codex_desktop,
+                    approval_scope_sha256,
+                }
+            } else {
+                let (state_generation_id, approval_scope_sha256) =
+                    parse_update_apply_options(tail)?;
+                LocalCommand::UpdateApply {
+                    generation_id: generation_id.clone(),
+                    state_generation_id,
+                    approval_scope_sha256,
+                }
+            }
+        }
+        [first, second, tail @ ..]
+            if first == "update" && second == "offline-installer-restart" =>
+        {
+            let (target_install_root, installer, codex_desktop) =
+                parse_offline_installer_restart_options(tail)?;
+            LocalCommand::UpdateOfflineInstallerRestart {
+                target_install_root,
+                installer,
+                codex_desktop,
             }
         }
         [first, second, tail @ ..] if first == "integration" && second == "uninstall" => {
@@ -197,11 +296,21 @@ fn parse(args: &[String]) -> Result<Option<ParsedLocal>, String> {
                 action: action.clone(),
             }
         }
-        [first, second] if first == "hook" && second == "session-start" && !json => {
-            LocalCommand::HookSessionStart
+        [first, second] if first == "hook" && !json => {
+            let event = match second.as_str() {
+                "session-start" => HookEvent::SessionStart,
+                "user-prompt-submit" => HookEvent::UserPromptSubmit,
+                "stop" => HookEvent::Stop,
+                "pre-tool-use" => HookEvent::PreToolUse,
+                "post-tool-use" => HookEvent::PostToolUse,
+                "subagent-start" => HookEvent::SubagentStart,
+                "subagent-stop" => HookEvent::SubagentStop,
+                _ => return Err(format!("unsupported hook event: {second}")),
+            };
+            LocalCommand::Hook { event }
         }
-        [first, second] if first == "hook" && second == "session-start" => {
-            return Err("hook session-start does not accept --json".to_owned());
+        [first, _] if first == "hook" => {
+            return Err("hook commands do not accept --json".to_owned());
         }
         _ => {
             return Err(
@@ -246,6 +355,92 @@ fn parse_update_apply_options(tail: &[String]) -> Result<(String, Sha256Hash), S
     ))
 }
 
+fn parse_integration_update_apply_options(
+    tail: &[String],
+) -> Result<(PathBuf, Sha256Hash), String> {
+    let mut codex_desktop = None;
+    let mut approval_scope_sha256 = None;
+    let mut index = 0;
+    while index < tail.len() {
+        if index + 1 >= tail.len() {
+            return Err(format!("{} requires one value", tail[index]));
+        }
+        match tail[index].as_str() {
+            "--codex-desktop" if codex_desktop.is_none() => {
+                let path = PathBuf::from(&tail[index + 1]);
+                if !path.is_absolute() {
+                    return Err("--codex-desktop must be an absolute path".to_owned());
+                }
+                codex_desktop = Some(path);
+            }
+            "--approve" if approval_scope_sha256.is_none() => {
+                approval_scope_sha256 = Some(
+                    Sha256Hash::from_str(&tail[index + 1])
+                        .map_err(|_| "--approve must be a sha256 digest".to_owned())?,
+                );
+            }
+            value => return Err(format!("unknown or duplicate option: {value}")),
+        }
+        index += 2;
+    }
+    Ok((
+        codex_desktop.ok_or(
+            "integration update apply requires --codex-desktop <absolute-path>".to_owned(),
+        )?,
+        approval_scope_sha256
+            .ok_or("integration update apply requires --approve <sha256>".to_owned())?,
+    ))
+}
+
+fn parse_offline_installer_restart_options(
+    tail: &[String],
+) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+    let mut target_install_root = None;
+    let mut installer = None;
+    let mut codex_desktop = None;
+    let mut index = 0;
+    while index < tail.len() {
+        if index + 1 >= tail.len() {
+            return Err(format!("{} requires one value", tail[index]));
+        }
+        match tail[index].as_str() {
+            "--install-root" if target_install_root.is_none() => {
+                let path = PathBuf::from(&tail[index + 1]);
+                if !path.is_absolute() {
+                    return Err("--install-root must be an absolute path".to_owned());
+                }
+                target_install_root = Some(path);
+            }
+            "--installer" if installer.is_none() => {
+                let path = PathBuf::from(&tail[index + 1]);
+                if !path.is_absolute() {
+                    return Err("--installer must be an absolute path".to_owned());
+                }
+                installer = Some(path);
+            }
+            "--codex-desktop" if codex_desktop.is_none() => {
+                let path = PathBuf::from(&tail[index + 1]);
+                if !path.is_absolute() {
+                    return Err("--codex-desktop must be an absolute path".to_owned());
+                }
+                codex_desktop = Some(path);
+            }
+            value => return Err(format!("unknown or duplicate option: {value}")),
+        }
+        index += 2;
+    }
+    Ok((
+        target_install_root.ok_or(
+            "offline installer restart requires --install-root <absolute-path>".to_owned(),
+        )?,
+        installer
+            .ok_or("offline installer restart requires --installer <absolute-path>".to_owned())?,
+        codex_desktop.ok_or(
+            "offline installer restart requires --codex-desktop <absolute-path>".to_owned(),
+        )?,
+    ))
+}
+
 fn parse_bootstrap_state_generation(tail: &[String]) -> Result<String, String> {
     match tail {
         [flag, value] if flag == "--state-generation" => {
@@ -287,8 +482,8 @@ fn parse_integration_options(
 }
 
 async fn run(parsed: ParsedLocal) -> i32 {
-    if matches!(parsed.command, LocalCommand::HookSessionStart) {
-        return run_session_start_hook();
+    if let LocalCommand::Hook { event } = &parsed.command {
+        return run_hook(*event).await;
     }
     let install_root = match current_install_root() {
         Ok(path) => path,
@@ -381,6 +576,33 @@ async fn run(parsed: ParsedLocal) -> i32 {
                 Err(error) => print_codex_error(error),
             }
         }
+        LocalCommand::IntegrationRepairRestart { codex_desktop } => {
+            let updater = install_root.join("star-updater.exe");
+            let manager = match InstallationManager::for_current_user() {
+                Ok(manager) => manager,
+                Err(error) => return print_windows_error(error),
+            };
+            if let Err(error) = manager.status(&install_root) {
+                return print_windows_error(error);
+            }
+            let arguments = vec![
+                "integration-repair-restart".to_owned(),
+                "--install-root".to_owned(),
+                install_root.display().to_string(),
+                "--codex-desktop".to_owned(),
+                codex_desktop.display().to_string(),
+            ];
+            match spawn_background_updater(&updater, &arguments) {
+                Ok(pid) => print_value(
+                    &serde_json::json!({"state":"restart_armed","delay_seconds":10,"updater_pid":pid}),
+                    parsed.json,
+                ),
+                Err(error) => {
+                    eprintln!("updater background breakaway failed: {error}");
+                    4
+                }
+            }
+        }
         LocalCommand::UpdateStatus => {
             let manager = match InstallationManager::for_current_user() {
                 Ok(manager) => manager,
@@ -395,10 +617,18 @@ async fn run(parsed: ParsedLocal) -> i32 {
             } else {
                 None
             };
+            let latest_integration_restart = match latest_integration_restart_receipt() {
+                Ok(receipt) => receipt,
+                Err(error) => {
+                    eprintln!("restart receipt status is unavailable: {error}");
+                    return 4;
+                }
+            };
             print_value(
                 &RuntimeUpdateStatus {
                     activation_record_path: path.display().to_string(),
                     active_runtime_generation,
+                    latest_integration_restart,
                 },
                 parsed.json,
             )
@@ -430,7 +660,21 @@ async fn run(parsed: ParsedLocal) -> i32 {
                 Ok(manager) => manager,
                 Err(error) => return print_windows_error(error),
             };
-            match manager.inspect_runtime_candidate(&install_root, &generation_id) {
+            let stage = PathBuf::from(&generation_id);
+            let inspected = if stage.is_absolute() {
+                manager
+                    .inspect_integration_candidate(&install_root, &stage)
+                    .and_then(|review| {
+                        serde_json::to_value(review).map_err(WindowsAdapterError::from)
+                    })
+            } else {
+                manager
+                    .inspect_runtime_candidate(&install_root, &generation_id)
+                    .and_then(|review| {
+                        serde_json::to_value(review).map_err(WindowsAdapterError::from)
+                    })
+            };
+            match inspected {
                 Ok(review) => print_value(&review, parsed.json),
                 Err(error) => print_windows_error(error),
             }
@@ -448,6 +692,99 @@ async fn run(parsed: ParsedLocal) -> i32 {
                 parsed.json,
             )
             .await
+        }
+        LocalCommand::UpdateIntegrationApply {
+            candidate_root,
+            codex_desktop,
+            approval_scope_sha256,
+        } => {
+            let updater = install_root.join("star-updater.exe");
+            let manager = match InstallationManager::for_current_user() {
+                Ok(manager) => manager,
+                Err(error) => return print_windows_error(error),
+            };
+            let review = match manager.inspect_integration_candidate(&install_root, &candidate_root)
+            {
+                Ok(review) => review,
+                Err(error) => return print_windows_error(error),
+            };
+            if review.candidate_class
+                != star_contracts::installation::IntegrationCandidateClass::CodexIntegrationUpdate
+                || review.approval_scope_sha256 != approval_scope_sha256
+                || !review.requires_codex_restart
+            {
+                eprintln!(
+                    "candidate is not the approved restart-required Codex integration update"
+                );
+                return 4;
+            }
+            if !updater.is_file() {
+                eprintln!("installed star-updater.exe is unavailable");
+                return 4;
+            }
+            let arguments = vec![
+                "integration-apply-restart".to_owned(),
+                candidate_root.display().to_string(),
+                "--install-root".to_owned(),
+                install_root.display().to_string(),
+                "--codex-desktop".to_owned(),
+                codex_desktop.display().to_string(),
+                "--approve".to_owned(),
+                approval_scope_sha256.to_string(),
+            ];
+            match spawn_background_updater(&updater, &arguments) {
+                Ok(pid) => print_value(
+                    &serde_json::json!({
+                        "state":"restart_armed",
+                        "delay_seconds":10,
+                        "updater_pid":pid,
+                        "candidate_release_manifest_sha256":review.candidate_release_manifest_sha256,
+                    }),
+                    parsed.json,
+                ),
+                Err(error) => {
+                    eprintln!("updater background breakaway failed: {error}");
+                    4
+                }
+            }
+        }
+        LocalCommand::UpdateOfflineInstallerRestart {
+            target_install_root,
+            installer,
+            codex_desktop,
+        } => {
+            let updater = install_root.join("star-updater.exe");
+            let manager = match InstallationManager::for_current_user() {
+                Ok(manager) => manager,
+                Err(error) => return print_windows_error(error),
+            };
+            if let Err(error) = manager.status(&install_root) {
+                return print_windows_error(error);
+            }
+            let arguments = vec![
+                "offline-installer-restart".to_owned(),
+                "--installer".to_owned(),
+                installer.display().to_string(),
+                "--install-root".to_owned(),
+                target_install_root.display().to_string(),
+                "--codex-desktop".to_owned(),
+                codex_desktop.display().to_string(),
+            ];
+            match spawn_background_updater(&updater, &arguments) {
+                Ok(pid) => print_value(
+                    &serde_json::json!({
+                        "state":"restart_armed",
+                        "delay_seconds":10,
+                        "updater_pid":pid,
+                        "mode":"offline_installer",
+                    }),
+                    parsed.json,
+                ),
+                Err(error) => {
+                    eprintln!("updater background breakaway failed: {error}");
+                    4
+                }
+            }
         }
         LocalCommand::ControllerAutostart { action } => {
             let expected =
@@ -470,11 +807,70 @@ async fn run(parsed: ParsedLocal) -> i32 {
                 Err(error) => print_autostart_error(error),
             }
         }
-        LocalCommand::HookSessionStart => unreachable!(),
+        LocalCommand::Hook { .. } => unreachable!(),
     }
 }
 
 async fn apply_runtime_generation(
+    install_root: &std::path::Path,
+    generation_id: String,
+    state_generation_id: String,
+    approval_scope_sha256: Sha256Hash,
+    json: bool,
+) -> i32 {
+    // P-0039 packages the dedicated updater beside the stable CLI.  Keep the
+    // in-process P-0038 path only for an already-installed pre-updater release
+    // so repair/rollback of that release remains possible.
+    let updater = install_root.join("star-updater.exe");
+    if updater.is_file() {
+        let manager = match InstallationManager::for_current_user() {
+            Ok(manager) => manager,
+            Err(error) => return print_windows_error(error),
+        };
+        // Do not execute a same-directory binary merely because its filename
+        // matches.  A P-0039 package must pass the release-manifest file-set
+        // verification before the stable CLI delegates any mutation to it.
+        if let Err(error) = manager.status(install_root) {
+            return print_windows_error(error);
+        }
+        let output = match tokio::process::Command::new(&updater)
+            .arg("runtime-apply")
+            .arg(&generation_id)
+            .arg("--install-root")
+            .arg(install_root)
+            .arg("--state-generation")
+            .arg(&state_generation_id)
+            .arg("--approve")
+            .arg(approval_scope_sha256.to_string())
+            .arg("--json")
+            .output()
+            .await
+        {
+            Ok(output) => output,
+            Err(error) => {
+                eprintln!("star-updater could not start: {error}");
+                return 4;
+            }
+        };
+        if !output.stdout.is_empty() {
+            print!("{}", String::from_utf8_lossy(&output.stdout));
+        }
+        if !output.stderr.is_empty() {
+            eprint!("{}", String::from_utf8_lossy(&output.stderr));
+        }
+        return output.status.code().unwrap_or(4);
+    }
+    apply_runtime_generation_legacy(
+        install_root,
+        generation_id,
+        state_generation_id,
+        approval_scope_sha256,
+        json,
+    )
+    .await
+}
+
+async fn apply_runtime_generation_legacy(
     install_root: &std::path::Path,
     generation_id: String,
     state_generation_id: String,
@@ -720,7 +1116,7 @@ fn session_start_hook_output() -> serde_json::Value {
     })
 }
 
-fn run_session_start_hook() -> i32 {
+async fn run_hook(event: HookEvent) -> i32 {
     let mut input = Vec::new();
     if std::io::stdin()
         .take(HOOK_INPUT_MAX_BYTES + 1)
@@ -729,31 +1125,92 @@ fn run_session_start_hook() -> i32 {
         || input.is_empty()
         || input.len() as u64 > HOOK_INPUT_MAX_BYTES
     {
-        eprintln!("invalid SessionStart hook input");
+        eprintln!("invalid {} hook input", event.hook_event_name());
         return 2;
     }
     let Ok(text) = std::str::from_utf8(&input) else {
-        eprintln!("invalid SessionStart hook input");
+        eprintln!("invalid {} hook input", event.hook_event_name());
         return 2;
     };
     let Ok(value) = parse_no_duplicate_keys(text) else {
-        eprintln!("invalid SessionStart hook input");
+        eprintln!("invalid {} hook input", event.hook_event_name());
         return 2;
     };
     if value
         .get("hook_event_name")
         .and_then(|value| value.as_str())
-        != Some("SessionStart")
+        != Some(event.hook_event_name())
     {
-        eprintln!("hook_event_name must be SessionStart");
+        eprintln!("hook_event_name must be {}", event.hook_event_name());
         return 2;
     }
-    let output = session_start_hook_output();
-    println!(
-        "{}",
-        serde_json::to_string(&output).expect("hook output serializes")
-    );
+    let Some(session_id) = value.get("session_id").and_then(serde_json::Value::as_str) else {
+        eprintln!("{} hook input has no session_id", event.hook_event_name());
+        return 2;
+    };
+    if !lifecycle_identifier_valid(session_id) {
+        eprintln!(
+            "{} hook input has an invalid session_id",
+            event.hook_event_name()
+        );
+        return 2;
+    }
+    if let Err(error) = report_hook_lifecycle(event, session_id).await {
+        // A Hook must not turn a healthy Codex task into a failure merely
+        // because the optional Controller is currently unavailable.  The
+        // updater treats missing census evidence as a block, never as proof
+        // that a task is absent.
+        eprintln!("Star-Control lifecycle observation was not recorded: {error}");
+    }
+    if event == HookEvent::SessionStart {
+        let output = session_start_hook_output();
+        println!(
+            "{}",
+            serde_json::to_string(&output).expect("hook output serializes")
+        );
+    }
     0
+}
+
+fn lifecycle_identifier_valid(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 256 && !value.contains('\0')
+}
+
+async fn report_hook_lifecycle(event: HookEvent, session_id: &str) -> Result<(), String> {
+    let install_root = current_install_root()?;
+    let controller = VerifiedControllerImage::from_install_directory(&install_root)
+        .map_err(|_| "installed Controller identity could not be verified".to_owned())?;
+    let client = ControllerClient::new(
+        cli_client_config(controller.path().to_path_buf())
+            .map_err(|_| "Controller IPC configuration is unavailable".to_owned())?,
+    );
+    // Hook input intentionally exposes a stable session ID but not a desktop
+    // PID.  Attribute a parent only when the local process snapshot proves a
+    // `ChatGPT.exe` ancestor; update shutdown continues to require the
+    // updater's stricter exact-image census.
+    let owner_pid = star_updater_core::process_census::current_codex_desktop_owner_pid();
+    let instance_id = owner_pid.map_or_else(
+        || format!("codex-session:{session_id}"),
+        |pid| format!("codex-desktop:{pid}"),
+    );
+    let response = client
+        .call_with_verified_start(
+            &controller,
+            "lifecycle.observe",
+            serde_json::json!({
+                "event": event.lifecycle_event(),
+                "instance_id": instance_id,
+                "task_id": session_id,
+                "owner_pid": owner_pid,
+            }),
+            RequestId::new(),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    if response.status != star_contracts::ipc::IpcStatus::Ok {
+        return Err("Controller rejected lifecycle observation".to_owned());
+    }
+    Ok(())
 }
 
 fn print_value(value: &impl serde::Serialize, json: bool) -> i32 {
@@ -879,7 +1336,22 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .command,
-            LocalCommand::HookSessionStart
+            LocalCommand::Hook {
+                event: HookEvent::SessionStart
+            }
+        ));
+        assert!(matches!(
+            parse(&args(&[
+                "integration",
+                "repair",
+                "restart",
+                "--codex-desktop",
+                r"C:\\Codex\\ChatGPT.exe",
+            ]))
+            .unwrap()
+            .unwrap()
+            .command,
+            LocalCommand::IntegrationRepairRestart { .. }
         ));
         assert!(matches!(
             parse(&args(&["controller", "autostart", "enable"]))
@@ -925,6 +1397,17 @@ mod tests {
         assert!(matches!(
             parse(&args(&[
                 "update",
+                "inspect",
+                r"D:\\stage\\star-control-x64",
+            ]))
+            .unwrap()
+            .unwrap()
+            .command,
+            LocalCommand::UpdateInspect { .. }
+        ));
+        assert!(matches!(
+            parse(&args(&[
+                "update",
                 "apply",
                 "rt_candidate",
                 "--state-generation",
@@ -936,6 +1419,37 @@ mod tests {
             .unwrap()
             .command,
             LocalCommand::UpdateApply { .. }
+        ));
+        assert!(matches!(
+            parse(&args(&[
+                "update",
+                "apply",
+                r"D:\\stage\\star-control-x64",
+                "--codex-desktop",
+                r"C:\\Codex\\ChatGPT.exe",
+                "--approve",
+                "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            ]))
+            .unwrap()
+            .unwrap()
+            .command,
+            LocalCommand::UpdateIntegrationApply { .. }
+        ));
+        assert!(matches!(
+            parse(&args(&[
+                "update",
+                "offline-installer-restart",
+                "--install-root",
+                r"D:\\Star-Control",
+                "--installer",
+                r"D:\\dist\\setup.exe",
+                "--codex-desktop",
+                r"C:\\Codex\\ChatGPT.exe",
+            ]))
+            .unwrap()
+            .unwrap()
+            .command,
+            LocalCommand::UpdateOfflineInstallerRestart { .. }
         ));
     }
 

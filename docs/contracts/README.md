@@ -38,6 +38,10 @@ EventEnvelope와 진단처럼 append-only인 자료는 `revision` 대신 `sequen
 
 사람이 직접 편집하는 StarConfig와 Catalog descriptor는 예외다. 파일 역할에서 `schema_id`가 정해지고 `schema_version` 또는 `format_version`을 명시하며, Controller가 읽을 때 origin·hash가 있는 versioned snapshot으로 변환한다. 사람이 timestamp와 revision을 손으로 관리하게 하지 않는다.
 
+## Codex Runtime과 업데이트
+
+P-0038의 Runtime Generation selector, candidate review와 activation record는 [Runtime update와 activation 계약](runtime-update-and-activation.md)이 소유한다. P-0039의 `star-updater.exe`, CodexInstance·CodexTask·WorkSession·McpConnection projection, Controller 30초 idle lease, restart-required integration update와 durable receipt는 [Codex 생명주기와 Star Updater 계약](codex-lifecycle-and-updater.md)이 소유한다. 이 계약은 구현 진행 중이며 현재 설치본이 이미 4 EXE 또는 자동 restart를 제공한다는 뜻이 아니다.
+
 ## 공통 형식
 
 ### 식별자

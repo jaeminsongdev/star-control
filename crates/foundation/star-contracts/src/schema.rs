@@ -10,7 +10,8 @@ use crate::{
     fixed_mcp::{CallInput, McpToolResult, fixed_input_schema, fixed_result_schema},
     installation::{
         CODEX_INTEGRATION_RECORD_SCHEMA_ID, CodexIntegrationRecord, INSTALLATION_RECORD_SCHEMA_ID,
-        InstallationRecord, RELEASE_FILE_MANIFEST_SCHEMA_ID, RUNTIME_ACTIVATION_RECORD_SCHEMA_ID,
+        INTEGRATION_CANDIDATE_REVIEW_SCHEMA_ID, InstallationRecord, IntegrationCandidateReview,
+        RELEASE_FILE_MANIFEST_SCHEMA_ID, RUNTIME_ACTIVATION_RECORD_SCHEMA_ID,
         RUNTIME_CANDIDATE_REVIEW_SCHEMA_ID, RUNTIME_GENERATION_MANIFEST_SCHEMA_ID,
         ReleaseFileManifest, RuntimeActivationRecord, RuntimeCandidateReview,
         RuntimeGenerationManifest,
@@ -236,6 +237,10 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "runtime-candidate-review.schema.json",
             schema_document::<RuntimeCandidateReview>(RUNTIME_CANDIDATE_REVIEW_SCHEMA_ID),
+        ),
+        (
+            "integration-candidate-review.schema.json",
+            schema_document::<IntegrationCandidateReview>(INTEGRATION_CANDIDATE_REVIEW_SCHEMA_ID),
         ),
         (
             "project.schema.json",

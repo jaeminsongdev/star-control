@@ -7,6 +7,7 @@ members = [
     "crates/control/star-validation",
     "crates/control/star-execution",
     "crates/control/star-application",
+    "crates/control/star-updater-core",
     "crates/infrastructure/star-state",
     "crates/infrastructure/star-evidence",
     "crates/adapters/star-ipc",
@@ -15,6 +16,7 @@ members = [
     "apps/star-mcp",
     "apps/star-cli",
     "apps/star-controller",
+    "apps/star-updater",
     "tools/matrix-check",
     "tools/schema-gen",
     "tools/package-release",
@@ -49,4 +51,4 @@ tokio = { version = "1.47.1", features = ["io-std", "io-util", "macros", "net", 
 toml = "0.9.7"
 ulid = { version = "1.2.1", features = ["serde"] }
 zeroize = { version = "1.8.1", features = ["derive"] }
-windows = { version = "0.62.2", features = ["Wdk_System_SystemServices", "Win32_Foundation", "Win32_Globalization", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authentication_Identity", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_Isolation", "Win32_Security_WinTrust", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming"] }
+windows = { version = "0.62.2", features = ["Wdk_System_SystemServices", "Win32_Foundation", "Win32_Globalization", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authentication_Identity", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_Isolation", "Win32_Security_WinTrust", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Diagnostics_ToolHelp", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_WindowsAndMessaging"] }

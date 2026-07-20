@@ -56,6 +56,15 @@ const PLUGIN_SHORT_DESCRIPTION: &str = "Use ready Star-Control operations with n
 const PLUGIN_LONG_DESCRIPTION: &str = "Connects Codex to the installed Star-Control MCP gateway, invokes only ready actions, and keeps normal development work available through native project tools when Star-Control cannot act.";
 const PLUGIN_DEFAULT_PROMPT: &str = "Use ready Star-Control operations for this task; otherwise continue with native project tools.";
 const HOOK_STATUS_MESSAGE: &str = "Loading Star-Control operations";
+const LIFECYCLE_HOOK_EVENTS: &[&str] = &[
+    "SessionStart",
+    "UserPromptSubmit",
+    "Stop",
+    "PreToolUse",
+    "PostToolUse",
+    "SubagentStart",
+    "SubagentStop",
+];
 const SOURCE_FILE_MAX_BYTES: u64 = 512 * 1024;
 const CODEX_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -477,23 +486,8 @@ fn render_files(
     rendered.insert(MCP_RELATIVE.to_owned(), pretty_json_object(mcp)?);
 
     let mut hooks = strict_object(source, HOOKS_RELATIVE)?;
-    let hook = hooks
-        .get_mut("hooks")
-        .and_then(serde_json::Value::as_object_mut)
-        .and_then(|events| events.get_mut("SessionStart"))
-        .and_then(serde_json::Value::as_array_mut)
-        .and_then(|groups| groups.first_mut())
-        .and_then(serde_json::Value::as_object_mut)
-        .and_then(|group| group.get_mut("hooks"))
-        .and_then(serde_json::Value::as_array_mut)
-        .and_then(|handlers| handlers.first_mut())
-        .and_then(serde_json::Value::as_object_mut)
-        .ok_or(CodexAdapterError::InvalidTemplate)?;
     let executable = install_root.join("star.exe").to_string_lossy().into_owned();
-    hook.insert(
-        "commandWindows".to_owned(),
-        format!("\"{executable}\" hook session-start").into(),
-    );
+    render_hook_commands(&mut hooks, &executable)?;
     rendered.insert(HOOKS_RELATIVE.to_owned(), pretty_json_object(hooks)?);
     Ok(rendered)
 }
@@ -556,25 +550,7 @@ fn validate_rendered(
         return Err(CodexAdapterError::InvalidRenderedPlugin);
     }
     let hooks = strict_object(rendered, HOOKS_RELATIVE)?;
-    let expected_hook = format!(
-        "\"{}\" hook session-start",
-        install_root.join("star.exe").to_string_lossy()
-    );
-    let hook = hooks
-        .get("hooks")
-        .and_then(|value| value.get("SessionStart"))
-        .and_then(|value| value.as_array())
-        .and_then(|groups| groups.first())
-        .and_then(|group| group.get("hooks"))
-        .and_then(|value| value.as_array())
-        .and_then(|handlers| handlers.first())
-        .and_then(|handler| handler.as_object())
-        .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
-    if hook.get("commandWindows").and_then(|value| value.as_str()) != Some(expected_hook.as_str())
-        || hook.get("statusMessage").and_then(|value| value.as_str()) != Some(HOOK_STATUS_MESSAGE)
-    {
-        return Err(CodexAdapterError::InvalidRenderedPlugin);
-    }
+    validate_rendered_hook_commands(&hooks, install_root)?;
     let skill = rendered
         .get(SKILL_RELATIVE)
         .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
@@ -582,6 +558,101 @@ fn validate_rendered(
         return Err(CodexAdapterError::InvalidRenderedPlugin);
     }
     Ok(())
+}
+
+fn render_hook_commands(
+    hooks: &mut serde_json::Map<String, serde_json::Value>,
+    executable: &str,
+) -> Result<(), CodexAdapterError> {
+    let events = hooks
+        .get_mut("hooks")
+        .and_then(serde_json::Value::as_object_mut)
+        .ok_or(CodexAdapterError::InvalidTemplate)?;
+    for event_name in LIFECYCLE_HOOK_EVENTS {
+        let handler = lifecycle_hook_handler_mut(events, event_name)
+            .ok_or(CodexAdapterError::InvalidTemplate)?;
+        let command = handler
+            .get("command")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|value| value.strip_prefix("star "))
+            .filter(|value| !value.is_empty() && !value.contains('"'))
+            .ok_or(CodexAdapterError::InvalidTemplate)?;
+        handler.insert(
+            "commandWindows".to_owned(),
+            format!("\"{executable}\" {command}").into(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_rendered_hook_commands(
+    hooks: &serde_json::Map<String, serde_json::Value>,
+    install_root: &Path,
+) -> Result<(), CodexAdapterError> {
+    let events = hooks
+        .get("hooks")
+        .and_then(serde_json::Value::as_object)
+        .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+    for event_name in LIFECYCLE_HOOK_EVENTS {
+        let handler = lifecycle_hook_handler(events, event_name)
+            .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+        let command = handler
+            .get("command")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|value| value.strip_prefix("star "))
+            .filter(|value| !value.is_empty() && !value.contains('"'))
+            .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+        let expected = format!(
+            "\"{}\" {command}",
+            install_root.join("star.exe").to_string_lossy()
+        );
+        if handler
+            .get("commandWindows")
+            .and_then(serde_json::Value::as_str)
+            != Some(expected.as_str())
+        {
+            return Err(CodexAdapterError::InvalidRenderedPlugin);
+        }
+        if *event_name == "SessionStart"
+            && handler
+                .get("statusMessage")
+                .and_then(serde_json::Value::as_str)
+                != Some(HOOK_STATUS_MESSAGE)
+        {
+            return Err(CodexAdapterError::InvalidRenderedPlugin);
+        }
+    }
+    Ok(())
+}
+
+fn lifecycle_hook_handler_mut<'a>(
+    events: &'a mut serde_json::Map<String, serde_json::Value>,
+    event_name: &str,
+) -> Option<&'a mut serde_json::Map<String, serde_json::Value>> {
+    events
+        .get_mut(event_name)
+        .and_then(serde_json::Value::as_array_mut)
+        .and_then(|groups| groups.first_mut())
+        .and_then(serde_json::Value::as_object_mut)
+        .and_then(|group| group.get_mut("hooks"))
+        .and_then(serde_json::Value::as_array_mut)
+        .and_then(|handlers| handlers.first_mut())
+        .and_then(serde_json::Value::as_object_mut)
+}
+
+fn lifecycle_hook_handler<'a>(
+    events: &'a serde_json::Map<String, serde_json::Value>,
+    event_name: &str,
+) -> Option<&'a serde_json::Map<String, serde_json::Value>> {
+    events
+        .get(event_name)
+        .and_then(serde_json::Value::as_array)
+        .and_then(|groups| groups.first())
+        .and_then(serde_json::Value::as_object)
+        .and_then(|group| group.get("hooks"))
+        .and_then(serde_json::Value::as_array)
+        .and_then(|handlers| handlers.first())
+        .and_then(serde_json::Value::as_object)
 }
 
 fn write_rendered_files(

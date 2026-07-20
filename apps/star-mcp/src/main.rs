@@ -11,6 +11,8 @@ use star_mcp::{ControllerGateway, ControllerProgress, Gateway, GatewayError};
 
 struct IpcControllerGateway {
     gateway_path: std::path::PathBuf,
+    connection_id: String,
+    desktop_owner: Option<star_updater_core::process_census::ProcessIdentity>,
 }
 
 impl IpcControllerGateway {
@@ -19,6 +21,46 @@ impl IpcControllerGateway {
     ) -> Result<ControllerClient, GatewayError> {
         let config = mcp_client_config(bootstrap.path().to_path_buf()).map_err(map_client_error)?;
         Ok(ControllerClient::new(config))
+    }
+
+    async fn observe_connection(&self, event: &str, start_if_unavailable: bool) {
+        let Ok(bootstrap) = VerifiedControllerImage::from_install_manifest(&self.gateway_path)
+        else {
+            return;
+        };
+        let Ok(client) = Self::client_for_bootstrap(&bootstrap) else {
+            return;
+        };
+        let process_id = std::process::id();
+        let owner_pid = self.desktop_owner.as_ref().map(|owner| owner.pid);
+        let instance_id = owner_pid.map_or_else(
+            || format!("mcp-process:{process_id}"),
+            |pid| format!("codex-desktop:{pid}"),
+        );
+        let payload = serde_json::json!({
+            "event": event,
+            "connection_id": self.connection_id,
+            "instance_id": instance_id,
+            "task_id": format!("mcp-connection:{}", self.connection_id),
+            "owner_pid": owner_pid,
+        });
+        if start_if_unavailable {
+            let _ = client
+                .call_with_verified_start(
+                    &bootstrap,
+                    "lifecycle.observe",
+                    payload,
+                    RequestId::new(),
+                )
+                .await;
+        } else {
+            // EOF is terminal cleanup. It may update a live Controller, but it
+            // must never resurrect an already-idle Controller merely to report
+            // that this connection is gone.
+            let _ = client
+                .call("lifecycle.observe", payload, RequestId::new())
+                .await;
+        }
     }
 }
 impl ControllerGateway for IpcControllerGateway {
@@ -535,11 +577,45 @@ async fn main() {
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let binary = std::env::current_exe()?;
-    let server = Gateway::new(Arc::new(IpcControllerGateway {
+    let controller = Arc::new(IpcControllerGateway {
         gateway_path: binary,
-    }));
-    star_mcp::serve_supervised_stdio(server).await?;
-    Ok(())
+        connection_id: format!("mcp_{}", star_ipc::nonce()),
+        desktop_owner: star_updater_core::process_census::current_codex_desktop_owner(),
+    });
+    controller.observe_connection("mcp_initialized", true).await;
+    let result = if let Some(owner) = controller.desktop_owner.clone() {
+        tokio::select! {
+            result = star_mcp::serve_supervised_stdio(Gateway::new(controller.clone())) => result,
+            () = wait_for_desktop_owner_exit(owner) => Ok(()),
+        }
+    } else {
+        star_mcp::serve_supervised_stdio(Gateway::new(controller.clone())).await
+    };
+    controller.observe_connection("mcp_eof", false).await;
+    result
+}
+
+/// EOF remains the normal fast path.  This separate guard closes a gateway
+/// whose stdio was inherited or leaked after its verified Codex Desktop owner
+/// died.  Snapshot failure is fail-closed: lack of evidence never kills an
+/// otherwise live gateway.
+async fn wait_for_desktop_owner_exit(owner: star_updater_core::process_census::ProcessIdentity) {
+    let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        interval.tick().await;
+        let exited = star_updater_core::process_census::snapshot()
+            .map(|processes| {
+                matches!(
+                    star_updater_core::process_census::process_identity_state(&processes, &owner),
+                    star_updater_core::process_census::ProcessIdentityState::Exited
+                )
+            })
+            .unwrap_or(false);
+        if exited {
+            return;
+        }
+    }
 }
 
 #[cfg(test)]

@@ -49,6 +49,10 @@
       "hash": "sha256:547c210d5bdcf2dabcbe7b6ae15986e63d13d9476752e768ba3129b93f54bd99"
     },
     {
+      "file": "integration-candidate-review.schema.json",
+      "hash": "sha256:2a48d3f7729516d3089c6ca9f9ba69001a1f33aa4d1a404b46699db6ce5b4cab"
+    },
+    {
       "file": "project.schema.json",
       "hash": "sha256:9fe08282fbfbeaedf1bf4645380dfadccfcbfb29ff6a502ed7f6f927d93b12bd"
     },

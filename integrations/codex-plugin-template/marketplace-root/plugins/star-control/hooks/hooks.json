@@ -13,6 +13,78 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "star hook user-prompt-submit",
+            "commandWindows": "star hook user-prompt-submit",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "star hook stop",
+            "commandWindows": "star hook stop",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "star hook pre-tool-use",
+            "commandWindows": "star hook pre-tool-use",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "star hook post-tool-use",
+            "commandWindows": "star hook post-tool-use",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "star hook subagent-start",
+            "commandWindows": "star hook subagent-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "star hook subagent-stop",
+            "commandWindows": "star hook subagent-stop",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

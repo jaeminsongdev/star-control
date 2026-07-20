@@ -19,6 +19,7 @@ use star_contracts::{
 type DynResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 const HELP: &str = "star-package-release stage --architecture x64|arm64 --binary-dir <dir> --output <dir> --source-revision <value>\n\
+star-package-release reseal --architecture x64|arm64 --stage <dist-stage-dir> --source-revision <value>\n\
 star-package-release verify --architecture x64|arm64 --stage <dir>";
 
 #[derive(Debug)]
@@ -27,6 +28,11 @@ enum Action {
         architecture: TargetArchitecture,
         binary_dir: PathBuf,
         output: PathBuf,
+        source_revision: String,
+    },
+    Reseal {
+        architecture: TargetArchitecture,
+        stage: PathBuf,
         source_revision: String,
     },
     Verify {
@@ -68,6 +74,24 @@ fn run() -> DynResult<()> {
                     "target_architecture": manifest.target_architecture,
                     "file_count": manifest.files.len(),
                     "set_sha256": manifest.set_sha256,
+                }))?
+            );
+        }
+        Action::Reseal {
+            architecture,
+            stage,
+            source_revision,
+        } => {
+            let manifest = reseal_release_stage(&stage, architecture, &source_revision)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "stage": stage,
+                    "product_version": manifest.product_version,
+                    "target_architecture": manifest.target_architecture,
+                    "file_count": manifest.files.len(),
+                    "set_sha256": manifest.set_sha256,
+                    "resealed": true,
                 }))?
             );
         }
@@ -138,6 +162,21 @@ fn parse(args: Vec<String>) -> DynResult<Action> {
                 source_revision,
             })
         }
+        "reseal" => {
+            reject_unknown(
+                &options,
+                &["--architecture", "--stage", "--source-revision"],
+            )?;
+            let source_revision = value("--source-revision")?;
+            if source_revision.trim().is_empty() || source_revision.len() > 256 {
+                return Err("--source-revision must be 1..256 characters".into());
+            }
+            Ok(Action::Reseal {
+                architecture,
+                stage: value("--stage")?.into(),
+                source_revision,
+            })
+        }
         "verify" => {
             reject_unknown(&options, &["--architecture", "--stage"])?;
             Ok(Action::Verify {
@@ -179,7 +218,12 @@ fn stage_release(
     require_new_or_empty_directory(output)?;
     fs::create_dir_all(output)?;
 
-    for name in ["star.exe", "star-controller.exe", "star-mcp.exe"] {
+    for name in [
+        "star.exe",
+        "star-controller.exe",
+        "star-mcp.exe",
+        "star-updater.exe",
+    ] {
         copy_file(&binary_dir.join(name), &output.join(name))?;
         verify_pe_architecture(&output.join(name), architecture)?;
     }
@@ -232,6 +276,58 @@ fn stage_release(
     bytes.push(b'\n');
     write_new_file(&output.join("release-manifest.json"), &bytes)?;
     Ok(())
+}
+
+/// Re-seals an already staged package after an allowed package-side
+/// transformation (for example signing), without granting mutation access to
+/// an installed product root.  The stage must be below this repository's
+/// `dist/stage` root and retain the current package identity.
+fn reseal_release_stage(
+    stage: &Path,
+    expected_architecture: TargetArchitecture,
+    source_revision: &str,
+) -> DynResult<ReleaseFileManifest> {
+    let stage = stage.canonicalize()?;
+    let allowed_root = workspace_root().join("dist").join("stage").canonicalize()?;
+    if !stage.starts_with(&allowed_root) || stage == allowed_root {
+        return Err(format!(
+            "reseal stage must be a descendant of the package dist/stage root: {}",
+            stage.display()
+        )
+        .into());
+    }
+    let manifest_path = stage.join("release-manifest.json");
+    let current_text = fs::read_to_string(&manifest_path)?;
+    let current: ReleaseFileManifest =
+        serde_json::from_value(parse_no_duplicate_keys(&current_text)?)?;
+    if current.schema_id != RELEASE_FILE_MANIFEST_SCHEMA_ID
+        || current.schema_version != INSTALLATION_SCHEMA_VERSION
+        || current.product_version != env!("CARGO_PKG_VERSION")
+        || current.target_architecture != expected_architecture
+        || current.generated_files != ["star-control-install.v1.json"]
+        || current.signing != PackageSigningState::UnsignedLocal
+    {
+        return Err("reseal stage has an incompatible release manifest".into());
+    }
+    let files = collect_release_entries(&stage)?;
+    let set_sha256 = canonical_sha256(&serde_json::to_value(&files)?)?;
+    let manifest = ReleaseFileManifest {
+        schema_id: RELEASE_FILE_MANIFEST_SCHEMA_ID.to_owned(),
+        schema_version: INSTALLATION_SCHEMA_VERSION,
+        product_version: env!("CARGO_PKG_VERSION").to_owned(),
+        target_architecture: expected_architecture,
+        created_at: Utc::now(),
+        source_revision: source_revision.to_owned(),
+        files,
+        generated_files: vec!["star-control-install.v1.json".to_owned()],
+        set_sha256,
+        signing: PackageSigningState::UnsignedLocal,
+    };
+    let mut bytes = serde_json::to_vec_pretty(&manifest)?;
+    bytes.push(b'\n');
+    fs::write(&manifest_path, bytes)?;
+    verify_stage(&stage, expected_architecture)?;
+    Ok(manifest)
 }
 
 fn stage_runtime_generation(
@@ -378,7 +474,12 @@ fn verify_stage(
     if set_sha256 != manifest.set_sha256 {
         return Err("release file set digest mismatch".into());
     }
-    for name in ["star.exe", "star-controller.exe", "star-mcp.exe"] {
+    for name in [
+        "star.exe",
+        "star-controller.exe",
+        "star-mcp.exe",
+        "star-updater.exe",
+    ] {
         if !expected_paths.contains(name) {
             return Err(format!("required runtime is missing: {name}").into());
         }

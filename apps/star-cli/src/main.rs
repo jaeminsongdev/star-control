@@ -46,12 +46,13 @@ star installation finalize --architecture x64|arm64 [--replace-existing] [--json
 star installation bridge initialize --state-generation <id> [--json]\n\
 star installation status [--json]\n\
 star integration install|repair [--codex <exe>] [--skip-register] [--json]\n\
+star integration repair restart --codex-desktop <absolute-exe> [--json]\n\
 star integration status [--json]\n\
 star integration uninstall [--codex <exe>] [--json]\n\
 star update status [--json]\n\
 star update verify [--json]\n\
 star update stage <runtime-generation-dir> [--json]\n\
-star update inspect <generation-id> [--json]\n\
+star update inspect <generation-id|absolute-release-stage> [--json]\n\
 star update apply <generation-id> --state-generation <id> --approve <sha256> [--json]\n\
 star hook session-start\n\
 star controller start [--background]\n\

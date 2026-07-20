@@ -11,7 +11,19 @@
 
 같은 version의 기존 `dist/stage/<version>/<architecture>`가 비어 있지 않으면 덮어쓰지 않는다. 검증된 stage를 의도적으로 다시 만들 때만 `-ReplaceStage`를 사용한다. 이 switch는 `dist/stage` 아래에서 확인된 정확한 architecture 폴더에만 적용된다.
 
-개발·복구용 ZIP이 별도로 필요할 때만 `-PortableZip`을 추가한다. 로컬 package는 항상 `unsigned_local`이며 실제 signer와 서명 검증이 구현되기 전에는 signed 상태를 선택할 수 없다.
+개발·복구용 ZIP이 별도로 필요할 때만 `-PortableZip`을 추가한다. 이 경로는 verified stage를 ZIP으로 봉인할 뿐이므로 Inno Setup 설치가 없어도 실행할 수 있으며 installer 생성·설치 E2E를 대체하지 않는다. 로컬 package는 항상 `unsigned_local`이며 실제 signer와 서명 검증이 구현되기 전에는 signed 상태를 선택할 수 없다.
+
+서명처럼 허용된 package-side 변환 뒤에는 설치 root가 아닌 `dist/stage` 하위의
+동일 release stage만 다시 봉인할 수 있다.
+
+```powershell
+cargo run --locked -p star-package-release -- reseal `
+  --architecture x64 --stage .\dist\stage\0.1.0\x64 `
+  --source-revision <source-revision>
+```
+
+`reseal`은 architecture, version, unsigned-local identity와 declared file set을
+다시 검증하며, 설치본·Codex cache·사용자 설정은 변경하지 않는다.
 
 ## 설치와 확인
 
@@ -24,7 +36,6 @@
 
 & 'D:\도구\Star-Control\star.exe' installation status
 & 'D:\도구\Star-Control\star.exe' integration status
-& 'D:\도구\Star-Control\star.exe' controller autostart status
 ```
 
 Codex CLI 등록이 실행 환경에서 허용되지 않으면 설치 자체는 유지하고 integration 상태를 `manual_action_required`로 기록한다. 결과의 `manual_commands`를 공식 CLI에서 실행하거나 Codex Plugin 화면에서 설치한 뒤 새 작업을 열고 Hook을 검토한다. Star-Control은 Codex `config.toml`, Plugin cache와 Hook trust 저장소를 직접 수정하지 않는다.
@@ -33,7 +44,8 @@ Codex CLI 등록이 실행 환경에서 허용되지 않으면 설치 자체는 
 
 - update·repair는 같은 installer를 다시 실행하고 이전 선택 경로를 재사용한다.
 - update·repair·제거 전에 Codex 앱을 완전히 종료하고, Codex 밖의 별도 PowerShell에서 installer를 실행한다. 실행 중인 Codex 작업 안에서 installer를 호출하지 않는다.
-- Installer는 실행 중인 Codex나 Star-Control process를 강제로 닫지 않는다. 설치 전 WMI preflight가 `ChatGPT.exe`, `star-controller.exe`, `star-mcp.exe`를 확인하며, 실행 중이거나 확인할 수 없으면 파일을 변경하기 전에 중단한다. integration install·repair·uninstall도 `ChatGPT.exe`가 실행 중이면 쓰기 전에 실패한다.
+- Installer는 실행 중인 Codex나 Star-Control process를 강제로 닫지 않는다. 설치 전 WMI preflight가 `ChatGPT.exe`, `Codex.exe`, `star-controller.exe`, `star-mcp.exe`, `star-updater.exe`를 확인하며, 실행 중이거나 확인할 수 없으면 파일을 변경하기 전에 중단한다. integration install·repair·uninstall도 Codex가 실행 중이면 쓰기 전에 실패한다.
+- Controller autostart는 설치본에서 항상 비활성화한다. Hook/MCP가 필요할 때 시작된 Controller는 모든 관측 작업세션 종료 뒤 30초 lease로 종료한다.
 - 기본 제거는 program payload, installation record와 exact-owned 자동 시작 entry를 제거한다. 사용자 설정·runtime state·Project 자료는 보존한다.
 - `/PURGEDATA` 제거는 `%APPDATA%\Star-Control`과 `%LOCALAPPDATA%\Star-Control`을 추가로 제거하는 명시적 파괴 동작이다. Project의 `.star-control`과 `.ai-runs`는 대상이 아니다.
 

@@ -2,7 +2,7 @@
 
 ## 상태
 
-채택, 구현 진행 중 (P-0038 이후).
+채택, P-0038 Runtime Generation 구현 완료. P-0039부터 update mutation owner와 restart-required integration lifecycle은 [ADR-0014](ADR-0014-전용-Star-Updater와-Codex-생명주기.md)가 supersede하며, Bootstrap/Generation 분리와 Runtime 무재시작 불변식은 유지한다.
 
 ## 결정
 

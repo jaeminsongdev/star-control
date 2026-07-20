@@ -12,6 +12,7 @@ pub const CODEX_INTEGRATION_RECORD_SCHEMA_ID: &str = "star.codex-integration-rec
 pub const RUNTIME_GENERATION_MANIFEST_SCHEMA_ID: &str = "star.runtime-generation-manifest";
 pub const RUNTIME_ACTIVATION_RECORD_SCHEMA_ID: &str = "star.runtime-activation-record";
 pub const RUNTIME_CANDIDATE_REVIEW_SCHEMA_ID: &str = "star.runtime-candidate-review";
+pub const INTEGRATION_CANDIDATE_REVIEW_SCHEMA_ID: &str = "star.integration-candidate-review";
 pub const INSTALLATION_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -143,6 +144,33 @@ pub enum RuntimeUpdateClass {
     RuntimeGeneration,
     BridgeUpdate,
     PluginUpdate,
+}
+
+/// Full release-stage classification for a Codex restart transaction. This is
+/// intentionally separate from RuntimeGeneration review: a stable Bridge and
+/// Plugin update changes files outside a generation selector.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IntegrationCandidateClass {
+    CodexIntegrationUpdate,
+    UpdaterUpdate,
+    RuntimeUpdate,
+    MixedUpdate,
+    NoChange,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct IntegrationCandidateReview {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub candidate_release_manifest_sha256: Sha256Hash,
+    pub target_architecture: TargetArchitecture,
+    pub candidate_class: IntegrationCandidateClass,
+    pub changed_files: Vec<String>,
+    pub rollback_available: bool,
+    pub requires_codex_restart: bool,
+    pub approval_scope_sha256: Sha256Hash,
 }
 
 /// Public candidate review used by both the stable CLI and Registry actions.

@@ -27,6 +27,7 @@ star-project = { path = "../../crates/control/star-project" }
 star-evidence = { path = "../../crates/infrastructure/star-evidence" }
 star-state = { path = "../../crates/infrastructure/star-state" }
 star-ipc = { path = "../../crates/adapters/star-ipc" }
+star-updater-core = { path = "../../crates/control/star-updater-core" }
 tokio.workspace = true
 thiserror.workspace = true
 toml.workspace = true

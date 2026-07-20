@@ -65,7 +65,7 @@ Star-Control/
 │  └─ managed-registry/             # M5 Git 정본 목표 위치; 이번 설계에서 실제 파일은 만들지 않음
 │     ├─ manifest.toml              # explicit fragment·namespace·compatibility root
 │     └─ declarations/<fragment>.toml # root가 explicit list로 가리키는 review 대상 fragment
-├─ apps/                            # 사용자가 실행하는 3개 얇은 binary
+├─ apps/                            # 사용자가 실행하는 4개 얇은 binary
 ├─ crates/                          # 제품 runtime Package
 │  ├─ foundation/                   # 계약·domain·port·설정
 │  ├─ control/                      # project·application·실행·검증 engine
@@ -102,11 +102,11 @@ Star-Control/
 
 `target/`, `dist/`, coverage 결과, `.ai-runs/`, 임시 worktree와 사용자 secret은 이 source 구조에 포함하지 않는다.
 
-최종 runtime code는 3개 실행 파일과 bounded 내부 Package 집합으로 구성한다. P0는 위 8개 책임 Package를 실제 workspace member로 사용하고 새 DB 전용 public Package를 만들지 않는다. `star-state`와 `star-evidence`는 `crates/infrastructure/`, project·validation·execution·application은 `crates/control/`, contract·domain·port는 `crates/foundation/`에 둔다. Package 수를 기능 수와 맞추지 않고, 9개 검증 기능은 `star-checks` module로, 최종 16개 작업 유형은 `catalog/profiles` data로 흡수한다.
+최종 runtime code는 4개 실행 파일과 bounded 내부 Package 집합으로 구성한다. P0는 위 8개 책임 Package를 실제 workspace member로 사용하고 새 DB 전용 public Package를 만들지 않는다. `star-state`와 `star-evidence`는 `crates/infrastructure/`, project·validation·execution·application은 `crates/control/`, contract·domain·port는 `crates/foundation/`에 둔다. Package 수를 기능 수와 맞추지 않고, 9개 검증 기능은 `star-checks` module로, 최종 16개 작업 유형은 `catalog/profiles` data로 흡수한다.
 
 ## 실행 파일 구조
 
-세 binary는 서로 다른 사용자·protocol 경계를 담당하지만 내부 판단을 중복 구현하지 않는다.
+네 binary는 서로 다른 사용자·protocol 경계를 담당하지만 내부 판단을 중복 구현하지 않는다.
 
 ```text
 apps/
@@ -138,6 +138,10 @@ apps/
       ├─ surface/                   # 고정 search·describe·operation·risk lane 목록
       ├─ instructions/              # 고정 generic 사용 순서
       └─ translate/                 # 고정 MCP call과 typed IPC 변환
+└─ star-updater/
+   ├─ Cargo.toml
+   └─ src/
+      └─ main.rs                    # one-shot stage·apply·rollback·restart entry
 ```
 
 ### 실행 파일별 금지 책임
@@ -147,6 +151,7 @@ apps/
 | `star.exe` | 사람이 쓰는 terminal 명령과 표시 | DB·artifact·상태 직접 접근, 계획·권한 판단, Git 직접 실행, Codex·App Server·AI·OpenAI API 호출 |
 | `star-controller.exe` | 상태·관리 DB의 단일 writer와 전체 use case 조립 | 사용자 UI, 자체 AI 호출, HTTP API server |
 | `star-mcp.exe` | 고정 MCP surface와 Controller IPC 변환 | TOML·Registry·tool별 handler·EXE path·parser, DB·artifact 직접 접근, 별도 상태·정책, Codex App Server 직접 제어 |
+| `star-updater.exe` | update lease, stage/apply/rollback, Codex restart와 receipt | 상주 scheduler, 일반 사용자 CLI, 직접 채팅 주입, updater self-replacement |
 
 CLI와 MCP는 모두 local IPC client다. Controller만 application use case를 실행하고 상태를 쓴다. 이 원칙으로 같은 명령이 진입점마다 다르게 동작하는 일을 막는다.
 

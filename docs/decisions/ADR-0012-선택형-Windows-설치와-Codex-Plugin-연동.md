@@ -2,7 +2,7 @@
 
 ## 상태
 
-승인됨 — P-0026 구현 기준
+부분 대체됨 — P-0026 구현 기준 중 설치 위치·소유권·cache/trust 비직접수정은 유지한다. Runtime EXE inventory, update owner, Codex 종료·재실행은 [ADR-0014](ADR-0014-전용-Star-Updater와-Codex-생명주기.md)가 supersede한다.
 
 ## 배경
 
@@ -15,7 +15,7 @@ Codex Plugin은 MCP 설정과 Hook을 함께 배포할 수 있지만, 설치된 
 1. Windows 설치본은 Inno Setup으로 만드는 architecture별 current-user `.exe` 설치 파일을 기본 배포 형식으로 사용한다.
 2. 공개 기본 설치 경로는 `{localappdata}\Programs\Star-Control`이다. 설치 마법사에서 사용자가 경로를 바꿀 수 있고, 같은 AppId의 update·repair는 이전 경로를 기억한다.
 3. x64와 ARM64 설치 파일을 따로 만든다. 한 설치 파일에 서로 다른 architecture binary를 섞지 않는다.
-4. 설치 root에는 사용자 실행 파일을 `star.exe`, `star-controller.exe`, `star-mcp.exe` 세 개만 둔다. installer helper와 updater를 별도 상주 EXE로 추가하지 않는다.
+4. 설치 root에는 `star.exe`, `star-controller.exe`, `star-mcp.exe`, `star-updater.exe` 네 개의 Runtime EXE를 둔다. `star-updater.exe`는 [ADR-0014](ADR-0014-전용-Star-Updater와-Codex-생명주기.md)의 update one-shot이며 별도 상주 service가 아니다.
 5. package의 `release-manifest.json`은 상대 경로와 SHA-256을 가진 immutable release-file manifest다. `%LOCALAPPDATA%\Star-Control\installation\installation-record.v1.json`은 실제 절대 설치 경로와 설치 instance를 가진 machine-local record다. 두 문서는 역할을 합치지 않는다.
 6. 기존 `star-control-install.v1.json`은 같은 폴더의 Controller와 gateway hash를 묶는 bootstrap 보안 manifest로 유지한다. release-file manifest나 machine-local record로 대체하지 않는다.
 7. Installer는 설치된 `star.exe integration install`을 호출한다. 이 command가 Plugin template을 실제 경로로 렌더링하고, `%LOCALAPPDATA%\Star-Control\integrations\codex\<version>\marketplace-root`에 Star-Control 소유 로컬 Marketplace를 만든다.

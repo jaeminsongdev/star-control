@@ -717,7 +717,7 @@ M1→M2→M3→M4 제품 Gate가 실제로 통과하기 전에는 M11 source mut
 
 M11 구현은 다음을 모두 증명할 때만 완료다.
 
-- `rust_style_auto_fix`가 C01의 16번째 Profile이고 core 기능 23개·runtime executable 3개가 유지된다.
+- `rust_style_auto_fix`가 C01의 16번째 Profile이고 core 기능 23개·runtime executable 4개가 유지된다.
 - `star.exe` CLI만으로 inspect/check/prepare/auto-apply와 기존 patch 조회·복구 흐름을 완료하며 AI/OpenAI/browser/scheduler 호출이 없다.
 - Git의 `.rs`/Cargo/rustfmt/Clippy/toolchain source와 versioned Catalog policy가 정본이고 DB는 삭제 후 재구축 가능한 derived projection이다.
 - stable project-pinned toolchain, exact executable/config/style edition/policy/coverage가 PatchSet·Gate·Evidence에 bind된다.

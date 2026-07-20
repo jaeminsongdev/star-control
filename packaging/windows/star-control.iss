@@ -63,7 +63,6 @@ korean.OfflineInstallRequired=Codex 앱과 모든 Star-Control 프로세스를 �
 
 [Tasks]
 Name: "codexintegration"; Description: "Codex Plugin, MCP, Hook 연동 구성"
-Name: "autostart"; Description: "현재 사용자 로그인 시 Star-Control Controller 자동 시작"
 
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -112,19 +111,49 @@ end;
 
 function OfflineProcessesAreRunning: Boolean;
 var
-  Locator, Services, Processes: Variant;
+  Locator, Services, Processes, Process: Variant;
+  Name, ExecutablePath, TargetRoot: String;
+  Index: Integer;
 begin
   Result := True;
   try
     Locator := CreateOleObject('WbemScripting.SWbemLocator');
     Services := Locator.ConnectServer('.', 'root\CIMV2');
     Processes := Services.ExecQuery(
-      'SELECT ProcessId FROM Win32_Process WHERE ' +
+      'SELECT Name, ExecutablePath FROM Win32_Process WHERE ' +
       'Name = ''ChatGPT.exe'' OR ' +
+      'Name = ''Codex.exe'' OR ' +
       'Name = ''star-controller.exe'' OR ' +
-      'Name = ''star-mcp.exe'''
+      'Name = ''star-mcp.exe'' OR ' +
+      'Name = ''star-updater.exe'''
     );
-    Result := Processes.Count > 0;
+    TargetRoot := Lowercase(AddBackslash(ExpandConstant('{app}')));
+    Result := False;
+    for Index := 0 to Processes.Count - 1 do
+    begin
+      Process := Processes.ItemIndex(Index);
+      Name := Lowercase(String(Process.Name));
+      { Any Codex application/CLI is a global integration lock.  Star images
+        are a lock only when they can touch the exact tree being replaced;
+        the detached staged updater is intentionally outside the app root. }
+      if (Name = 'chatgpt.exe') or (Name = 'codex.exe') then
+      begin
+        Result := True;
+        exit;
+      end;
+      if VarIsNull(Process.ExecutablePath) or VarIsEmpty(Process.ExecutablePath) then
+      begin
+        Log('Star-Control process path could not be verified; setup remains fail-closed.');
+        Result := True;
+        exit;
+      end;
+      ExecutablePath := Lowercase(String(Process.ExecutablePath));
+      if Pos(TargetRoot, ExecutablePath) = 1 then
+      begin
+        Result := True;
+        exit;
+      end;
+    end;
   except
     Log('Offline process preflight failed; setup remains fail-closed.');
   end;
@@ -201,18 +230,11 @@ begin
         'Star-Control Codex integration needs manual deregistration'
       );
     end;
-    if WizardIsTaskSelected('autostart') then
-      RunRequired(
-        ExpandConstant('{app}\star.exe'),
-        'controller autostart enable',
-        'Star-Control current-user autostart registration failed'
-      )
-    else
-      RunRequired(
-        ExpandConstant('{app}\star.exe'),
-        'controller autostart disable',
-        'Star-Control current-user autostart removal failed'
-      );
+    RunRequired(
+      ExpandConstant('{app}\star.exe'),
+      'controller autostart disable',
+      'Star-Control current-user autostart removal failed'
+    );
   end;
 end;
 

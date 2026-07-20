@@ -1,0 +1,18 @@
+[package]
+name = "star-updater-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+star-adapter-windows = { path = "../../adapters/star-adapter-windows" }
+star-adapter-codex = { path = "../../adapters/star-adapter-codex" }
+star-contracts = { path = "../../foundation/star-contracts" }
+star-ipc = { path = "../../adapters/star-ipc" }
+thiserror.workspace = true
+tokio.workspace = true
+windows.workspace = true
