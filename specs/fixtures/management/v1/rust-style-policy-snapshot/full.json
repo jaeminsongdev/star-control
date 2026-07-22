@@ -1,0 +1,69 @@
+{
+  "auto_policy": "safe_default",
+  "clippy_fix_allowlist": [
+    {
+      "allowed_scope": [
+        "fixture"
+      ],
+      "clippy_executable_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "clippy_release": "fixture",
+      "corpus_ref": "fixture",
+      "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "entry_version": "fixture",
+      "lifecycle": "active",
+      "lint_id": "fixture",
+      "public_api_policy": "fixture",
+      "required_applicability": "machine_applicable",
+      "required_check_families": [
+        "fixture"
+      ],
+      "source": "project_catalog",
+      "source_ref": "fixture"
+    }
+  ],
+  "clippy_parameter_sources": [
+    {
+      "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "source_ref": "fixture"
+    }
+  ],
+  "contract_version": 0,
+  "coverage_policy_ref": "fixture",
+  "fixed_adapter_definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "forbidden_operations": [
+    "fixture"
+  ],
+  "formatting_sources": [
+    {
+      "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "source_ref": "fixture"
+    }
+  ],
+  "limitations": [
+    "fixture"
+  ],
+  "lint_level_sources": [
+    {
+      "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "source_ref": "fixture"
+    }
+  ],
+  "max_changed_bytes": 0,
+  "max_files": 0,
+  "max_hunks": 0,
+  "pipeline_ref": "fixture",
+  "policy_completeness": "complete",
+  "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "profile_definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "profile_ref": "fixture",
+  "schema_id": "star.rust-style-policy-snapshot",
+  "schema_version": 1,
+  "scope_packages": [
+    "fixture"
+  ],
+  "scope_paths": [
+    "src/lib.rs"
+  ],
+  "scope_project_id": "fixture",
+  "standing_grant_ref": "fixture"
+}

@@ -1,0 +1,94 @@
+{
+  "binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "cargo": {
+    "component_state": "available",
+    "logical_id": "fixture",
+    "opaque_file_identity": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "fixture"
+  },
+  "channel": "fixture",
+  "clippy_driver": {
+    "component_state": "available",
+    "logical_id": "fixture",
+    "opaque_file_identity": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "fixture"
+  },
+  "completeness": "complete",
+  "component_states": [
+    {
+      "state": "available",
+      "target_triple": "fixture"
+    }
+  ],
+  "config_bindings": [
+    {
+      "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "source_ref": "fixture"
+    }
+  ],
+  "contract_version": 0,
+  "host_target": "fixture",
+  "host_triple": "fixture",
+  "limitations": [
+    "fixture"
+  ],
+  "manifest_refs": [
+    {
+      "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "source_ref": "fixture"
+    }
+  ],
+  "msrv_bindings": [
+    {
+      "edition": "fixture",
+      "provenance": "fixture",
+      "subject_ref": "fixture"
+    }
+  ],
+  "parsing_editions": [
+    {
+      "edition": "fixture",
+      "provenance": "fixture",
+      "subject_ref": "fixture"
+    }
+  ],
+  "release": "fixture",
+  "requested_target_triples": [
+    "fixture"
+  ],
+  "rustc": {
+    "component_state": "available",
+    "logical_id": "fixture",
+    "opaque_file_identity": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "fixture"
+  },
+  "rustfmt": {
+    "component_state": "available",
+    "logical_id": "fixture",
+    "opaque_file_identity": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "fixture"
+  },
+  "schema_id": "star.rust-toolchain-binding",
+  "schema_version": 1,
+  "style_editions": [
+    {
+      "edition": "fixture",
+      "provenance": "fixture",
+      "subject_ref": "fixture"
+    }
+  ],
+  "target_states": [
+    {
+      "state": "available",
+      "target_triple": "fixture"
+    }
+  ],
+  "toolchain_pin_state": "pinned_stable",
+  "toolchain_source": "rust_toolchain_toml",
+  "toolchain_source_ref": "fixture",
+  "workspace_root_ref": "fixture"
+}

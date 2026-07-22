@@ -1,0 +1,13 @@
+{
+  "cells": [],
+  "cfg_frontier": [],
+  "completeness": "complete",
+  "conflicts": [],
+  "contract_version": 0,
+  "coverage_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "limitations": [],
+  "policy_ref": "fixture",
+  "required_cell_ids": [],
+  "schema_id": "star.rust-style-coverage-matrix",
+  "schema_version": 2
+}

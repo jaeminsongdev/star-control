@@ -1,0 +1,27 @@
+{
+  "adapter_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "contract_version": 0,
+  "coverage_cell_refs": [
+    "fixture"
+  ],
+  "diagnostic_set_ref": "fixture",
+  "diff_artifact_ref": "art_00000000000000000000000000",
+  "execution_result_ref": "fixture",
+  "filesystem_manifest_ref": "fixture",
+  "finished_at": "2026-01-01T00:00:00Z",
+  "ordinal": 0,
+  "pipeline_ref": "fixture",
+  "result": "succeeded",
+  "schema_id": "star.rust-style-step-execution",
+  "schema_version": 1,
+  "side_effect_result": "pass",
+  "started_at": "2026-01-01T00:00:00Z",
+  "step_execution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "step_execution_id": "fixture",
+  "step_id": "fixture",
+  "subject_after": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_before": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "suggestion_manifest_ref": "fixture",
+  "task_invocation_ref": "fixture",
+  "tool_descriptor_ref": "fixture"
+}

@@ -1,0 +1,51 @@
+{
+  "binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "cargo": {
+    "component_state": "available",
+    "logical_id": "fixture",
+    "opaque_file_identity": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "fixture"
+  },
+  "channel": "fixture",
+  "clippy_driver": {
+    "component_state": "available",
+    "logical_id": "fixture",
+    "opaque_file_identity": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "fixture"
+  },
+  "completeness": "complete",
+  "component_states": [],
+  "config_bindings": [],
+  "contract_version": 0,
+  "host_target": "fixture",
+  "host_triple": "fixture",
+  "limitations": [],
+  "manifest_refs": [],
+  "msrv_bindings": [],
+  "parsing_editions": [],
+  "requested_target_triples": [],
+  "rustc": {
+    "component_state": "available",
+    "logical_id": "fixture",
+    "opaque_file_identity": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "fixture"
+  },
+  "rustfmt": {
+    "component_state": "available",
+    "logical_id": "fixture",
+    "opaque_file_identity": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "fixture"
+  },
+  "schema_id": "star.rust-toolchain-binding",
+  "schema_version": 1,
+  "style_editions": [],
+  "target_states": [],
+  "toolchain_pin_state": "pinned_stable",
+  "toolchain_source": "rust_toolchain_toml",
+  "toolchain_source_ref": "fixture",
+  "workspace_root_ref": "fixture"
+}

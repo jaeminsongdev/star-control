@@ -1,0 +1,44 @@
+{
+  "cells": [
+    {
+      "cell_id": "fixture",
+      "cfg_observation_ref": "fixture",
+      "default_features": false,
+      "execution": "executed",
+      "feature_set_id": "fixture",
+      "features": [
+        "fixture"
+      ],
+      "host_triple": "fixture",
+      "manifest_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "ownership": "handwritten",
+      "package_id": "fixture",
+      "phase": "diagnostic_check",
+      "reason": "fixture",
+      "required_features_satisfied": false,
+      "source_root": "fixture",
+      "target_kind": "lib",
+      "target_name": "fixture",
+      "target_triple": "fixture",
+      "workspace_ref": "fixture"
+    }
+  ],
+  "cfg_frontier": [
+    "fixture"
+  ],
+  "completeness": "complete",
+  "conflicts": [
+    "fixture"
+  ],
+  "contract_version": 0,
+  "coverage_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "limitations": [
+    "fixture"
+  ],
+  "policy_ref": "fixture",
+  "required_cell_ids": [
+    "fixture"
+  ],
+  "schema_id": "star.rust-style-coverage-matrix",
+  "schema_version": 1
+}
