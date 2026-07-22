@@ -1,0 +1,15 @@
+[package]
+name = "star-adapter-rust-index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+star-contracts = { path = "../../foundation/star-contracts" }
+star-project = { path = "../../control/star-project" }
+thiserror.workspace = true
+tree-sitter.workspace = true
+tree-sitter-rust.workspace = true
