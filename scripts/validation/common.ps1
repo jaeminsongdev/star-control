@@ -248,7 +248,14 @@ function Get-ValidationFailureSummary {
         [AllowEmptyString()][string]$Stderr,
         [Parameter(Mandatory)][string]$Fallback
     )
-    $text = if (-not [string]::IsNullOrWhiteSpace($Stderr)) { $Stderr } else { $Stdout }
+    $streams = @()
+    if (-not [string]::IsNullOrWhiteSpace($Stderr)) {
+        $streams += "[stderr]$([Environment]::NewLine)$Stderr"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Stdout)) {
+        $streams += "[stdout]$([Environment]::NewLine)$Stdout"
+    }
+    $text = $streams -join [Environment]::NewLine
     if ([string]::IsNullOrWhiteSpace($text)) {
         return $Fallback
     }

@@ -158,6 +158,7 @@ $commonSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot "common.ps1") 
 Assert-ValidationContract -Condition ($commonSource.Contains('$startInfo.CreateNoWindow = $true')) -Message "validator child processes must not allocate console windows"
 Assert-ValidationContract -Condition ($commonSource.Contains('$startInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden')) -Message "validator child windows must stay hidden"
 Assert-ValidationContract -Condition ($commonSource.Contains('$process.Dispose()')) -Message "validator process handles must be disposed"
+Assert-ValidationContract -Condition ($commonSource.Contains('$streams += "[stderr]') -and $commonSource.Contains('$streams += "[stdout]')) -Message "validation failure summary preserves both process streams"
 
 $projectSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "crates/control/star-project/src/lib.rs") -Raw -Encoding UTF8
 $projectCatalogSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "crates/control/star-project/src/catalog.rs") -Raw -Encoding UTF8
