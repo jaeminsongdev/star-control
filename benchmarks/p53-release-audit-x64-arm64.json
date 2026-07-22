@@ -1,13 +1,13 @@
 {
   "schema_id": "star.p53-release-audit",
   "schema_version": 1,
-  "recorded_at": "2026-07-21T06:14:00Z",
+  "recorded_at": "2026-07-22T16:32:19Z",
   "product_version": "0.1.0",
   "publication_channel": "github_releases",
   "source": {
-    "head": "4f01948b5b31198cd45f6f539ef5d1cb3a361e25",
-    "worktree_state": "dirty",
-    "candidate_ref": "dirty:4f01948b5b31198cd45f6f539ef5d1cb3a361e25:p0053-refresh-20260721T060528Z",
+    "head": "cc01b4dc65663bb3903233e8620107bb81ea60e6",
+    "worktree_state": "clean_at_build_and_validation",
+    "candidate_ref": "p0053-clean-20260722T161337Z",
     "public_candidate": false
   },
   "host": {
@@ -24,10 +24,10 @@
   "x64": {
     "support_tier": "stable",
     "runtime_verification": "native_isolated_unsigned",
-    "stage": "dist/stage/p0053-refresh-20260721T060528Z/x64-pristine",
+    "stage": "dist/stage/p0053-clean-20260722T161337Z/x64",
     "stage_file_count": 279,
-    "stage_set_sha256": "sha256:ee64250702fa053193cad7789b17da237bb8add9b0d04912cbb56ef23704b99c",
-    "stage_manifest_sha256": "sha256:c7817459dd94516b56308907daf631d38e8fcd825f699da3a3bca169fe464dbf",
+    "stage_set_sha256": "sha256:790a52b321f5fa04e461ee98a7b15f5dc1e87668b17c36cc106aa89f6d78f3b6",
+    "stage_manifest_sha256": "sha256:9418fa1bd5768a80b2566adb745cb54ca5315297e141405afcfe71da47d1ba4e",
     "stage_signing": "unsigned_local",
     "runtimes": [
       {
@@ -60,31 +60,31 @@
       }
     ],
     "installer_model": {
-      "path": "target/p0053-installer-model-20260721T060528Z/x64/star-control-windows-x64-0.1.0-setup.exe",
+      "path": "target/p0053-clean-installer-model-20260722T161337Z/x64/star-control-windows-x64-0.1.0-setup.exe",
       "compiler": "Inno Setup 6.7.3",
-      "size": 14698617,
-      "sha256": "sha256:88bc4a9a47694142b3346c386c85e23b71f7ba011cfb18adb4db55c7a7cdf9a0",
+      "size": 14700253,
+      "sha256": "sha256:1b53e0ee4b8ad8a8258ef67894308d259a581fbf658a026ba4b89654202b10e4",
       "signature": "not_signed",
       "public_candidate": false
     },
     "isolated_stage_lifecycle": {
-      "subject_stage_copy": "target/p0053-x64-lifecycle-copy-20260721T060528Z/stage",
-      "source_stage_manifest_sha256": "sha256:c7817459dd94516b56308907daf631d38e8fcd825f699da3a3bca169fe464dbf",
+      "subject_stage_copy": "target/p0053-clean-lifecycle-20260722T161337Z/program/x64",
+      "source_stage_manifest_sha256": "sha256:9418fa1bd5768a80b2566adb745cb54ca5315297e141405afcfe71da47d1ba4e",
       "installation_finalize": "pass",
       "bridge_initialize": "pass",
       "installation_status_verified": true,
-      "release_manifest_sha256": "sha256:c7817459dd94516b56308907daf631d38e8fcd825f699da3a3bca169fe464dbf",
-      "runtime_release_manifest_sha256": "sha256:9172673ed322edcefa9da9c90d227524a86d537ae14dc51e5641034b3ff5ecd4",
+      "release_manifest_sha256": "sha256:9418fa1bd5768a80b2566adb745cb54ca5315297e141405afcfe71da47d1ba4e",
+      "runtime_release_manifest_sha256": "sha256:326e9ba53b7f452ec095410ab226c934287459abe71f896252867bdaa7c4fa2e",
       "actual_signed_inno_lifecycle": "not_run"
     }
   },
   "arm64": {
     "support_tier": "preview",
     "runtime_verification": "native_unverified",
-    "stage": "dist/stage/p0053-refresh-20260721T060528Z/arm64",
+    "stage": "dist/stage/p0053-clean-20260722T161337Z/arm64",
     "stage_file_count": 279,
-    "stage_set_sha256": "sha256:bbb659c44090b06f9b1fc612b166083f04b8ba1f5941c99965d843b501a90c94",
-    "stage_manifest_sha256": "sha256:32d49c777c93b15b57c866e47ac44ba92c736383f3f2f38f1e3eac8e429cc8fc",
+    "stage_set_sha256": "sha256:480fadb101f04472a7eb843676578012abbebf70f8ff045c097828aca6bbb522",
+    "stage_manifest_sha256": "sha256:35442edf1309e7fa87d4a068df51ef542b2fd20d307c82a95c30d91a910bdc8d",
     "stage_signing": "unsigned_local",
     "runtimes": [
       {
@@ -97,7 +97,7 @@
       {
         "name": "star-controller.exe",
         "size": 21381632,
-        "sha256": "sha256:9eac3878a7232e4419515e5f5b3bd9cfc206eee23d60321a42bd406ec6b2a75a",
+        "sha256": "sha256:5a385780b328759a4c66a2fc47fecf80603a70a635fcea343a9ef78d42996e93",
         "pe_machine": "0xaa64",
         "signature": "not_signed"
       },
@@ -117,10 +117,10 @@
       }
     ],
     "installer_model": {
-      "path": "target/p0053-installer-model-20260721T060528Z/arm64/star-control-windows-arm64-0.1.0-setup.exe",
+      "path": "target/p0053-clean-installer-model-20260722T161337Z/arm64/star-control-windows-arm64-0.1.0-setup.exe",
       "compiler": "Inno Setup 6.7.3",
-      "size": 13788474,
-      "sha256": "sha256:e2bdf0d7a80f7b649cc02f98a293e591fb7f3bda00160510e1c6c684ebb1f8b6",
+      "size": 13786256,
+      "sha256": "sha256:2ea8f34c427361e38ba7837f533e0089af33db2ad694fed404705c68a67a9c65",
       "signature": "not_signed",
       "public_candidate": false
     },
@@ -134,9 +134,9 @@
     "arm64_exit_code": 2,
     "reason": "authenticode_verification_failed",
     "manifest_hashes_unchanged": true,
-    "source_identity": "d971198b7ee3f2c1afca8cb1db6b34271c188b584bf84473b0ef49eef2960af5",
-    "x64_subject": "dist/stage/p0053-refresh-20260721T060528Z/x64-signing-negative",
-    "arm64_subject": "dist/stage/p0053-refresh-20260721T060528Z/arm64-signing-negative"
+    "source_revision": "cc01b4dc65663bb3903233e8620107bb81ea60e6",
+    "x64_subject": "dist/stage/p0053-clean-20260722T161337Z/x64",
+    "arm64_subject": "dist/stage/p0053-clean-20260722T161337Z/arm64"
   },
   "current_installed_runtime": {
     "registry_revision": 4,
@@ -146,13 +146,32 @@
     "candidate_installed": false,
     "inspector_version": "0.22.0",
     "inspector_tools_list_count": 12,
-    "inspector_tools_list_sha256": "sha256:b193ad92f3c5a85854e51788e11bba7b244102e557121a43d15930f86dafe690"
+    "inspector_tools_list_sha256": "sha256:b193ad92f3c5a85854e51788e11bba7b244102e557121a43d15930f86dafe690",
+    "candidate_inspector_evidence": {
+      "path": "dist/release-evidence/p0053-clean-20260722T161337Z/mcp-inspector-core17.pre-sign.json",
+      "sha256": "sha256:90b26ef8454d292e8df8e177139b0566c89799998259344b42dd927792329fc4",
+      "fixed_tool_count": 12,
+      "required_core_ready_search_count": 17,
+      "required_core_describe_count": 17,
+      "candidate_installed_in_current_codex": false
+    }
+  },
+  "pre_sign_supply_chain": {
+    "state": "complete_for_unsigned_stage_only",
+    "must_regenerate_after_signing": true,
+    "x64_sbom_sha256": "sha256:a8c7ad5fd2a414ef6e8ad57c0abc7fac0d72d6212d5c55d9bb5a0198f00f6a38",
+    "arm64_sbom_sha256": "sha256:451adb3f67ddc008a1d99ff3218d9b91789d7247dcd732a996779d08a5b15874",
+    "provenance_sha256": "sha256:d358d51fb26bc16aee7341a47904303ed811c7836931cf8ba102e5a32b06501f",
+    "pe_signature_inventory_sha256": "sha256:4b4bc8a208ee2d34ee82060cc05b601e3716f3c3f968d006f9dfcd65522e6476",
+    "cargo_audit_sha256": "sha256:d87e52a17f4e431052bede2429f27dc229645b4f404de28e2729e6340d3d019f",
+    "cargo_audit_vulnerability_count": 0,
+    "cargo_audit_warning_count": 0
   },
   "validation": {
     "full": {
-      "operation_id": "opn_01KY1M9RNEM0052W730W3SN9TH",
-      "report": "target/validation/20260721T060240092Z-3220/report.json",
-      "sha256": "sha256:0606fd2f4adc684af04b2adf4d7a5d368a0f9d4f06525e1427ee13a8bd1c3d69",
+      "operation_id": null,
+      "report": "target/validation/20260722T160820458Z-11616/report.json",
+      "sha256": "sha256:be1089993e220e1807bd5f1f4e81513c11c2fb93f0e62ff677983327d4d46714",
       "checks_passed": 10,
       "checks_total": 10,
       "status": "pass",
@@ -160,15 +179,14 @@
       "stability": "stable"
     },
     "release": {
-      "operation_id": "opn_01KY1MVADFM1KX6XB5PASCCBCJ",
-      "report": "target/validation/20260721T061214465Z-31000/report.json",
-      "sha256": "sha256:0e53bc8c0ce48987c2ecdabe88f0d58d0a57fe8b07c40667694ed37ed330e13b",
-      "checks_passed": 13,
+      "operation_id": null,
+      "report": "target/validation/20260722T160955889Z-23200/report.json",
+      "sha256": "sha256:1f57a01bf9e56446a54778fd3e6f3d43f7e98ca036096c93566127f04978c2c5",
+      "checks_passed": 14,
       "checks_total": 15,
-      "status": "fail",
+      "status": "unverified",
       "completeness": "unverified",
       "blocking_checks": [
-        "release-clean-worktree",
         "release-external-signing-publication"
       ]
     }
@@ -189,15 +207,15 @@
   ],
   "release_decision": {
     "local_implementation": "complete",
-    "local_candidate": "blocked_unsealed_dirty_worktree",
+    "local_candidate": "clean_unsigned_simulation_complete",
+    "public_release": "blocked_external",
     "public_release_after_local_seal": "blocked_external",
     "blocking_gates": [
-      "p0040_p0053_local_commit_seal",
       "approved_authenticode_certificate_and_timestamp_provider",
       "signed_runtime_and_installer_new_candidate",
       "clean_signed_x64_installer_lifecycle",
-      "installed_candidate_core_17_of_17_codex_and_inspector_evidence",
-      "sbom_and_provenance",
+      "signed_candidate_core_17_of_17_current_codex_invoke_evidence",
+      "final_signed_artifact_sbom_and_provenance",
       "exact_github_action_approvals_and_remote_digest_reconciliation"
     ]
   }

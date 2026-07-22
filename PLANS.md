@@ -35,10 +35,10 @@
 | P-0046~P-0050 | DONE | M5~M9 registry/doctor/radar/migration/change-bundle/merge/handoff |
 | P-0051 | DONE | M10 build-once release/evaluation engine과 fake provider fault corpus |
 | P-0052 | DONE | M11 Rust fixed pipeline, persisted pre/post Gate, exact apply/recovery |
-| P-0053 local | DONE | source 17/17, x64 isolated lifecycle, ARM64 simulation, package/signing-negative audit |
-| P-0053 public | `blocked_external` | trusted signing, signed clean install, installed 17/17, provenance, remote reconcile 필요 |
+| P-0053 local | DONE | clean source seal, source 17/17, candidate Inspector 17/17, x64 isolated lifecycle, ARM64 simulation, pre-sign supply chain과 signing-negative audit |
+| P-0053 public | `blocked_external` | trusted signing, signed clean install, current Codex 17/17 invoke, final provenance와 remote reconcile 필요 |
 
-P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 branch `codex/p0041-p0053-completion`의 `b29c178..7c42f0b` commit chain으로 봉인했다. 큰 변경을 빌드 불가능한 P-ID snapshot으로 만들지 않도록 crate·Schema·fixture·문서 단위의 소규모 commit으로 나눴다.
+P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 branch `codex/p0041-p0053-completion`의 `b29c178..cc01b4d` commit chain으로 봉인했다. 큰 변경을 빌드 불가능한 P-ID snapshot으로 만들지 않도록 crate·Schema·fixture·문서 단위의 소규모 commit으로 나눴다.
 
 ## 구현 요약
 
@@ -52,31 +52,32 @@ P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 branch `codex/
 
 ## 검증과 로컬 출시 증거
 
-- current pre-seal FULL: `target/validation/20260722T155246300Z-31056/report.json`, 10/10 complete·stable PASS, report `sha256:e3e47869bbad6cc015645e4b400f3304453bb334556f8462979c9068f0504040`.
+- clean FULL: `target/validation/20260722T160820458Z-11616/report.json`, 10/10 complete PASS, report `sha256:be1089993e220e1807bd5f1f4e81513c11c2fb93f0e62ff677983327d4d46714`.
+- clean release: `target/validation/20260722T160955889Z-23200/report.json`, 14/15 PASS, failed 0. 유일한 non-pass는 external signing/publication `unverified/not_run`이다.
 - M1 x64 reference: `benchmarks/m1-code-index-x64-reference.json`, 10,000-file corpus와 cache profile 5회 반복.
-- P-0053 audit: `benchmarks/p53-release-audit-x64-arm64.json`, refresh `p0053-refresh-20260721T060528Z`.
+- P-0053 audit: `benchmarks/p53-release-audit-x64-arm64.json`, clean candidate `p0053-clean-20260722T161337Z`, source `cc01b4d`.
 - x64/ARM64 stage는 manifest 279파일, 네 EXE PE machine·digest와 Inno installer model을 검증했다.
 - ARM64 workspace·explicit-feature Rust corpus cross-check/Clippy는 PASS지만 native execution은 `native_unverified`다.
 - unsigned signing-negative stage는 `seal-signed` Authenticode Gate에서 manifest mutation 없이 거부됐다.
-- source candidate의 final clean `FULL`·`release` report가 commit 전 dirty report보다 우선한다.
+- official Inspector 0.22.0은 candidate stage의 fixed 12 tools, required core ready search 17/17과 describe 17/17을 통과했다.
+- x64·ARM64 SPDX SBOM, cargo-audit와 provenance는 pre-sign evidence로 생성했으며 signing 뒤 반드시 재생성한다.
 
 ## 열린 Gate
 
-1. clean HEAD에서 `FULL`과 `release` profile을 재실행한다.
-2. current-user/machine의 trusted Authenticode certificate, private key, timestamp provider와 `signtool.exe`를 확인한다.
-3. Runtime EXE 서명 → `seal-signed` → installer build·서명 → final digest/SBOM/provenance 순서로 새 candidate를 만든다.
-4. disposable clean x64 install·first run·update failure rollback·repair·uninstall/user-data 보존을 검증한다.
-5. source candidate 설치 후 current Codex와 Inspector에서 required core 17/17을 재감사한다.
-6. exact GitHub destination·manifest·digest가 일치할 때만 tag/draft/upload/publish하고 remote digest를 read-back한다.
+1. 승인된 Authenticode certificate·private key·timestamp provider를 공급한다. SDK `signtool.exe`는 확인됐지만 usable signing certificate는 CurrentUser·LocalMachine 모두 0개다.
+2. Runtime EXE 서명 → `seal-signed` → installer build·서명 → final digest/SBOM/provenance 순서로 새 candidate를 만든다.
+3. disposable clean x64 install·first run·update failure rollback·repair·uninstall/user-data 보존을 검증한다.
+4. signed candidate를 실제 Codex integration에 설치한 뒤 current Codex에서 required core 17/17 search·describe·invoke를 재감사한다.
+5. exact GitHub destination·manifest·digest가 일치할 때만 tag/draft/upload/publish하고 remote digest를 read-back한다.
 
 ## 현재 Context Pack
 
 - repo: `D:\개발\관제\Star-Control`
 - branch: `codex/p0041-p0053-completion`
-- base: P-0040 `416ed3e`; implementation/evidence chain `b29c178..7c42f0b`
+- base: P-0040 `416ed3e`; implementation/evidence chain `b29c178..cc01b4d`
 - 먼저 읽기: `README.md`, `docs/roadmap/final-implementation.md`, `docs/testing/p53-final-release-audit-2026-07-20.md`, `benchmarks/p53-release-audit-x64-arm64.json`
-- 다음 명령: `pwsh ./scripts/validate.ps1 -Profile full`, 이어서 `-Profile release`
-- public blocker: trusted Authenticode signing material과 signed clean-install/installed-17/17/provenance/remote evidence
+- 다음 명령: trusted signing material이 공급되면 `seal-signed` 순서로 새 candidate 생성
+- public blocker: trusted Authenticode signing material과 signed clean-install/current-Codex-17/17/final-provenance/remote evidence
 
 ## Archive References
 

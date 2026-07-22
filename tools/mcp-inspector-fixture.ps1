@@ -3,13 +3,22 @@ param(
     [string]$RunRoot,
 
     [Parameter(Mandatory = $true)]
-    [string]$InspectorCache
+    [string]$InspectorCache,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ReleaseBinaryRoot
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $run = [IO.Path]::GetFullPath($RunRoot)
 $cache = [IO.Path]::GetFullPath($InspectorCache)
+$releaseBinaries = if ([string]::IsNullOrWhiteSpace($ReleaseBinaryRoot)) {
+    [IO.Path]::GetFullPath((Join-Path $repo 'target\release'))
+} else {
+    [IO.Path]::GetFullPath($ReleaseBinaryRoot)
+}
+$fixtureBinaries = [IO.Path]::GetFullPath((Join-Path $repo 'target\release'))
 $install = Join-Path $run 'install'
 $rawRoot = Join-Path $run 'raw'
 $workspace = Join-Path $run 'workspace'
@@ -21,6 +30,9 @@ if (Test-Path -LiteralPath $run) {
 }
 if (-not (Test-Path -LiteralPath $cache -PathType Container)) {
     throw "Inspector cache does not exist: $cache"
+}
+if (-not (Test-Path -LiteralPath $releaseBinaries -PathType Container)) {
+    throw "Release binary root does not exist: $releaseBinaries"
 }
 
 function Get-Sha256([string]$Path) {
@@ -153,6 +165,25 @@ $fixedTools = @(
     [ordered]@{ name = 'star_tool_operation_cancel'; title = 'Cancel an Operation'; description = 'Request cancellation of a durable operation and return its current state.'; readOnly = $false; destructive = $true; idempotent = $true; openWorld = $true },
     [ordered]@{ name = 'star_approval_resolve'; title = 'Resolve an Approval'; description = "Record the user's approve or deny decision for the exact approval scope."; readOnly = $false; destructive = $true; idempotent = $true; openWorld = $true }
 )
+$requiredCoreToolIds = @(
+    'star.core.goal.start',
+    'star.core.goal.answer',
+    'star.core.plan.get',
+    'star.core.plan.update',
+    'star.core.run.continue',
+    'star.core.status.get',
+    'star.core.goal.pause',
+    'star.core.goal.resume',
+    'star.core.goal.cancel',
+    'star.core.evidence.get',
+    'star.core.merge.status',
+    'star.core.handoff.get',
+    'star.core.doctor',
+    'star.core.project.list',
+    'star.core.project.status',
+    'star.core.validation.plan',
+    'star.core.validation.run'
+)
 
 $existingControllers = @(Get-Process -Name 'star-controller' -ErrorAction SilentlyContinue)
 if ($existingControllers.Count -ne 0) {
@@ -165,13 +196,18 @@ if ($existingControllers.Count -ne 0) {
 }
 
 New-Item -ItemType Directory -Path $catalog, $rawRoot -Force | Out-Null
-foreach ($name in @('star.exe', 'star-mcp.exe', 'star-controller.exe', 'star-fake-exe.exe')) {
-    $source = Join-Path $repo "target\release\$name"
+foreach ($name in @('star.exe', 'star-mcp.exe', 'star-controller.exe')) {
+    $source = Join-Path $releaseBinaries $name
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-        throw "missing release binary: $source"
+        throw "missing candidate release binary: $source"
     }
     Copy-Item -LiteralPath $source -Destination (Join-Path $install $name)
 }
+$fakeSource = Join-Path $fixtureBinaries 'star-fake-exe.exe'
+if (-not (Test-Path -LiteralPath $fakeSource -PathType Leaf)) {
+    throw "missing test-only fixture binary: $fakeSource"
+}
+Copy-Item -LiteralPath $fakeSource -Destination (Join-Path $install 'star-fake-exe.exe')
 Copy-Item -LiteralPath (Join-Path $repo 'catalog\tool-packages\star-control-core.toml') `
     -Destination (Join-Path $catalog 'star-control-core.toml')
 Copy-Item -LiteralPath (Join-Path $repo 'catalog\tool-packages\schemas') `
@@ -218,6 +254,8 @@ $controllerPath = Join-Path $install 'star-controller.exe'
 $toolsList = $null
 $registryStatus = $null
 $search = $null
+$coreSearch = $null
+$coreDescriptions = @()
 $controllerAfterStatus = $null
 $controllerAfterSearch = $null
 try {
@@ -302,6 +340,65 @@ try {
         throw 'Controller PID changed between Inspector tool calls'
     }
 
+    $coreSearch = Invoke-Inspector 'core-search' @(
+        '--method', 'tools/call',
+        '--tool-name', 'star_tool_search',
+        '--tool-arg', 'query=star.core',
+        '--tool-arg', 'sources=["release"]',
+        '--tool-arg', 'readiness=["ready"]',
+        '--tool-arg', 'limit=50'
+    ) $nodePath $cliPath $cliWorkingDirectory $gatewayPath
+    $coreSearchContent = $coreSearch.Data.structuredContent
+    $coreSearchItems = @($coreSearchContent.data.items)
+    $coreSearchIds = @($coreSearchItems.tool_id | Sort-Object)
+    $expectedCoreIds = @($requiredCoreToolIds | Sort-Object)
+    if ($coreSearch.Data.isError -ne $false -or
+        $coreSearchContent.status -ne 'ok' -or
+        $coreSearchContent.schema_id -ne 'star.mcp.star_tool_search.result' -or
+        $coreSearchItems.Count -ne $requiredCoreToolIds.Count -or
+        @(Compare-Object $coreSearchIds $expectedCoreIds).Count -ne 0 -or
+        @($coreSearchItems | Where-Object { $_.source -ne 'release' -or $_.readiness -ne 'ready' }).Count -ne 0) {
+        throw 'Inspector core search did not return the exact 17 ready release actions'
+    }
+
+    foreach ($toolId in $requiredCoreToolIds) {
+        $role = 'describe-' + $toolId.Replace('.', '-')
+        $description = Invoke-Inspector $role @(
+            '--method', 'tools/call',
+            '--tool-name', 'star_tool_describe',
+            '--tool-arg', "tool_id=$toolId"
+        ) $nodePath $cliPath $cliWorkingDirectory $gatewayPath
+        $content = $description.Data.structuredContent
+        if ($description.Data.isError -ne $false -or
+            $content.status -ne 'ok' -or
+            $content.schema_id -ne 'star.mcp.star_tool_describe.result' -or
+            $content.data.tool_id -ne $toolId -or
+            $content.data.source -ne 'release' -or
+            $content.data.readiness -ne 'ready' -or
+            [string]::IsNullOrWhiteSpace([string]$content.data.descriptor_hash) -or
+            [string]::IsNullOrWhiteSpace([string]$content.data.required_call_tool) -or
+            $null -eq $content.data.input_schema -or
+            $null -eq $content.data.output_schema) {
+            throw "Inspector describe did not return a complete ready descriptor: $toolId"
+        }
+        $coreDescriptions += [pscustomobject]@{
+            ToolId = $toolId
+            DescriptorHash = [string]$content.data.descriptor_hash
+            RequiredCallTool = [string]$content.data.required_call_tool
+            RiskLane = [string]$content.data.risk_lane
+            Raw = [ordered]@{
+                role = $role
+                duration_ms = $description.DurationMs
+                stdout = $description.Stdout
+                stderr = $description.Stderr
+            }
+        }
+    }
+    $controllerAfterCoreAudit = Get-IsolatedController
+    if ($controllerAfterCoreAudit.Id -ne $controllerAfterStatus.Id) {
+        throw 'Controller PID changed during required core describe audit'
+    }
+
     $architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
     if ($architecture -eq 'x64') { $architecture = 'x86_64' }
     $evidence = [ordered]@{
@@ -332,6 +429,7 @@ try {
             cwd_workaround = 'inspector-0.22.0-relative-package-json-resolution'
         }
         binaries = [ordered]@{
+            release_binary_root = $releaseBinaries
             gateway_sha256 = Get-Sha256 $gatewayPath
             controller_sha256 = Get-Sha256 $controllerPath
         }
@@ -354,12 +452,29 @@ try {
             search_query = 'goal'
             search_result_count = $searchItems.Count
             search_contains_goal_start = $true
+            required_core_search = $true
+            required_core_count = $coreSearchItems.Count
+            required_core_tool_ids = @($requiredCoreToolIds)
+            required_core_describe_count = $coreDescriptions.Count
+            required_core_descriptors = @(
+                $coreDescriptions | ForEach-Object {
+                    [ordered]@{
+                        tool_id = $_.ToolId
+                        descriptor_hash = $_.DescriptorHash
+                        required_call_tool = $_.RequiredCallTool
+                        risk_lane = $_.RiskLane
+                    }
+                }
+            )
             controller_pid_unchanged_between_calls = $true
         }
         raw_evidence = @(
             [ordered]@{ role = 'tools_list'; duration_ms = $toolsList.DurationMs; stdout = $toolsList.Stdout; stderr = $toolsList.Stderr },
             [ordered]@{ role = 'registry_status'; duration_ms = $registryStatus.DurationMs; stdout = $registryStatus.Stdout; stderr = $registryStatus.Stderr },
-            [ordered]@{ role = 'search'; duration_ms = $search.DurationMs; stdout = $search.Stdout; stderr = $search.Stderr }
+            [ordered]@{ role = 'search'; duration_ms = $search.DurationMs; stdout = $search.Stdout; stderr = $search.Stderr },
+            [ordered]@{ role = 'core_search'; duration_ms = $coreSearch.DurationMs; stdout = $coreSearch.Stdout; stderr = $coreSearch.Stderr }
+        ) + @(
+            $coreDescriptions | ForEach-Object { $_.Raw }
         )
     }
     $evidence | ConvertTo-Json -Depth 20
