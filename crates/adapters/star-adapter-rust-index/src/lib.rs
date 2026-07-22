@@ -796,6 +796,7 @@ impl LspClient {
                 continue;
             }
             if message.get("error").is_some() {
+                report_lsp_parse_failure(method, &message);
                 return Err(AdapterFailure::ParseFailed);
             }
             return Ok(message
@@ -833,12 +834,16 @@ impl LspClient {
                 .pointer("/params/health")
                 .and_then(serde_json::Value::as_str);
             if health == Some("error") {
+                report_lsp_parse_failure("experimental/serverStatus health", &message);
                 return Err(AdapterFailure::ParseFailed);
             }
-            let quiescent = message
+            let Some(quiescent) = message
                 .pointer("/params/quiescent")
                 .and_then(serde_json::Value::as_bool)
-                .ok_or(AdapterFailure::ParseFailed)?;
+            else {
+                report_lsp_parse_failure("experimental/serverStatus quiescent", &message);
+                return Err(AdapterFailure::ParseFailed);
+            };
             if !quiescent {
                 saw_busy = true;
             } else if saw_busy {
@@ -904,6 +909,14 @@ impl LspClient {
         let _ = self.child.wait();
     }
 }
+
+#[cfg(test)]
+fn report_lsp_parse_failure(stage: &str, message: &serde_json::Value) {
+    eprintln!("rust-analyzer LSP ParseFailed at {stage}: {message}");
+}
+
+#[cfg(not(test))]
+fn report_lsp_parse_failure(_stage: &str, _message: &serde_json::Value) {}
 
 impl Drop for LspClient {
     fn drop(&mut self) {
