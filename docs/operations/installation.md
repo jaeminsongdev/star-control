@@ -4,7 +4,7 @@
 
 개인 사용자는 유료 동작 외에는 자동으로 진행할 수 있고, 공개 사용자는 안전한 기본값으로 시작할 수 있어야 한다. 설정 계층과 Catalog의 상세 계약은 [설정과 Catalog 계약](../contracts/config-and-catalog.md), 검사 계층·artifact 승격·release 상태와 평가는 [10단계 CI·Release·평가 정본](../contracts/ci-release-evaluation-and-product-completion.md), 실제 Windows 설치 transport는 [Windows 설치와 Codex 연동 계약](../contracts/windows-installation-and-codex-integration.md)에서 확인한다.
 
-MCP·외부 Tool Runtime의 지원 기준은 Windows 11 24H2 build 26100 이상, x64·ARM64다.
+MCP·외부 Tool Runtime의 OS baseline은 Windows 11 24H2 build 26100 이상이다. 공개 `v0.1.0`에서 x64는 signed Stable, ARM64는 cross-build·simulation 기반 `native_unverified` Preview이며 publication destination은 GitHub Releases다.
 
 ## 공개 배포 묶음
 
@@ -43,11 +43,11 @@ Installer는 runtime과 Plugin의 호환 version과 final artifact digest를 확
 6. `safe_default`로 network·remote write·paid action·source mutation이 없는 deterministic first-run smoke를 실행한다.
 7. 원하는 사용자는 personal_auto를 선택한다.
 
-설치 evidence는 disposable clean Windows x64·ARM64에서 각각 수집한다. ARM64 cross-build만으로 native process·IPC·Controller·CLI·MCP·install을 통과했다고 표시하지 않는다. required core command가 `unavailable`이면 first-run success나 release ready가 아니다.
+Stable 설치 evidence는 disposable clean Windows x64에서 수집한다. ARM64 Preview는 cross-build, PE architecture, file manifest, Authenticode signature, installer model과 fake lifecycle을 검증하며 native process·IPC·Controller·CLI·MCP·install을 통과했다고 표시하지 않는다. required core command가 `unavailable`이면 x64 first-run success나 release ready가 아니다.
 
 주 배포 방식은 **installer-first**다. P-0026에서 architecture별 current-user Inno Setup 6 `.exe` 설치 파일을 선택하고 구현했다. 설치 마법사의 기본값은 `%LOCALAPPDATA%\Programs\Star-Control`이며 사용자가 바꿀 수 있고, update·repair는 같은 AppId의 이전 선택 경로를 재사용한다. portable archive는 개발·복구용 선택 산출물일 뿐 installer와 같은 수명주기 지원을 뜻하지 않는다.
 
-P-0026/P-0039는 설치 transport, 네 Runtime binary, release-file manifest, installation record, 로컬 Codex Marketplace 렌더링과 updater one-shot 경계를 구현한다. M10 `ReleaseManifest` 상태기계, CI·공개 승격, 서명·SBOM·provenance와 clean native ARM64 수명주기 Gate까지 완료됐다는 뜻은 아니다. 로컬 빌드는 항상 `unsigned_local`로 기록하며 실제 서명 검증이 없는 입력으로 `signed`를 선택할 수 없다.
+P-0026/P-0039는 설치 transport, 네 Runtime binary, release-file manifest, installation record, 로컬 Codex Marketplace 렌더링과 updater one-shot 경계를 구현한다. M10 `ReleaseManifest` 상태기계, CI·공개 승격, 서명·SBOM·provenance까지 완료됐다는 뜻은 아니다. 로컬 빌드는 항상 `unsigned_local`로 기록하며 실제 서명 검증이 없는 입력으로 `signed`를 선택할 수 없다. Authenticode certificate나 timestamp provider가 없으면 unsigned Stable로 낮추지 않고 `blocked_external`을 유지한다.
 
 Installer는 current-user Controller startup entry를 눈에 띄게 설명하고 기본 활성화한다. 설치 화면에서 해제할 수 있어야 하며 설치 후 `star controller autostart enable|disable|status`와 제거 방법을 제공한다. entry는 `star-controller.exe --background`만 시작하며 Goal이나 개발 작업을 예약·실행하지 않는다.
 
@@ -55,7 +55,7 @@ Installer는 current-user Controller startup entry를 눈에 띄게 설명하고
 
 `star doctor`는 현재 문서에 정의된 **목표 command이며 아직 구현되지 않았다**. 설치 성공을 주장하는 근거로 예시 출력을 사용하지 않는다.
 
-2026-07-14 현재 PC에서 수행한 x64 실제 설치·Codex Plugin 설치와 x64·ARM64 패키지 검증 값은 [Windows 설치·Codex Plugin 로컬 실증](../testing/windows-installation-evidence-2026-07-14.md)에 분리해 기록한다. 이 근거는 native ARM64, 실제 제거, 서명·공개 배포 Gate를 대신하지 않는다.
+2026-07-14 현재 PC에서 수행한 x64 실제 설치·Codex Plugin 설치와 x64·ARM64 패키지 검증 값은 [Windows 설치·Codex Plugin 로컬 실증](../testing/windows-installation-evidence-2026-07-14.md)에 분리해 기록한다. 이 근거는 native ARM64, 현재 release candidate의 clean x64 제거, 서명·공개 배포 Gate를 대신하지 않는다.
 
 ## doctor와 clean-room 운영 경계
 
@@ -144,6 +144,6 @@ top-level `approved|published|publish_outcome_unknown`은 주 publication channe
 - 안전 기본값과 자동화 프로필의 차이를 설명한다.
 - Codex 기능 변화에 따른 호환 범위를 공개한다.
 - 새 프로젝트도 MIT License로 배포한다.
-- 최종 배포 전 clean Windows x64·native ARM64에서 설치, safe_default 첫 실행, 업데이트, rollback, 제거·user data 보존 흐름을 검증한다.
+- 최종 배포 전 clean Windows x64에서 설치, safe_default 첫 실행, 업데이트, failure rollback, repair, 제거·user data 보존 흐름을 검증하고 ARM64 Preview는 model-equivalent fake lifecycle을 별도로 검증한다.
 - source revision·artifact digest·version·changelog·license·conditional supply-chain 자료와 remaining risk를 ReleaseManifest에 공개한다.
-- 공개 채널의 현재 installer·code signing·SBOM·provenance 요구는 P9 구현 직전 공식 자료로 다시 확인한다.
+- GitHub Releases의 Runtime·installer Authenticode는 required다. SBOM·provenance의 current applicability와 signer·timestamp provider는 P9 실행 시점에 검증한다.

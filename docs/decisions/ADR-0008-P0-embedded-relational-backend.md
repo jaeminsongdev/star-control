@@ -2,7 +2,7 @@
 
 ## 상태
 
-채택 — 2026-07-12, Windows x64·ARM64 release cross-build 통과, native ARM64 실행은 P9 gate
+채택 — 2026-07-12, Windows x64·ARM64 release cross-build 통과. `v0.1.0`의 native ARM64 limitation과 Preview 정책은 ADR-0015가 소유
 
 ## 맥락
 

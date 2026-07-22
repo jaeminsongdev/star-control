@@ -985,19 +985,19 @@ ReleaseManifest는 Star-Control 자체 또는 대상 프로젝트 release 후보
 | `metadata_refs` | version source, changelog, package policy, license·third-party notice |
 | `supply_chain_applicability` | SBOM·provenance·signing별 required/not-required/unavailable/incomplete/complete와 policy ref |
 | `sbom_ref`, `provenance_ref`, `signature_refs` | applicable할 때 exact final artifact set에 대한 공급망 자료 |
-| `compatibility` | Windows baseline·architecture, Plugin/runtime, config·state·schema와 install·update 범위 |
-| `validation_refs` | clean build·test·package, native runtime, install·safe_default·update·rollback·uninstall 결과 |
+| `compatibility` | Windows baseline, architecture별 support tier·verification state, Plugin/runtime, config·state·schema와 install·update 범위 |
+| `validation_refs` | x64 Stable clean build·test·package·native runtime·install lifecycle과 ARM64 Preview cross-build·simulation 결과 |
 | `release_gate_refs` | release_preflight부터 release_ready까지 phase별 GateDecision |
 | `remote_actions` | publish·deploy·withdraw·rollback별 target, immutable subject와 `planned\|approved\|running\|verified\|outcome_unknown\|rollback_required\|rolled_back\|withdrawn` 상태 |
 | `approval_request_refs` | action ID별 exact manifest revision·digest·channel·provider·destination 승인 |
 | `remote_operation_refs`, `before_remote_snapshot_refs`, `after_remote_snapshot_refs` | action/target별 external effect와 실제 결과 확인; 한 target 결과로 다른 target을 채우지 않음 |
 | `rollback_plan_ref`, `rollback_artifact_ref`, `user_data_policy` | 실패 시 돌아갈 byte·state와 보존 정책 |
 | `remaining_risks`, `external_gates` | 미구현·환경·provider·승인 한계 |
-| `status` | `draft`, `candidate`, `blocked`, `ready`, `approved`, `publishing`, `publish_outcome_unknown`, `published`, `rollback_required`, `withdrawn` |
+| `status` | `draft`, `candidate`, `blocked`, `blocked_external`, `ready`, `approved`, `publishing`, `publish_outcome_unknown`, `published`, `rollback_required`, `withdrawn` |
 
 `candidate`가 되려면 final artifact set digest가 있어야 한다. artifact byte, source, version, config, Tool, Profile 또는 package file list가 바뀌면 같은 candidate를 수정하지 않고 새 revision을 만든다. verification과 promotion은 같은 byte를 사용하며 rebuild·재압축·signing으로 byte가 달라지면 새 candidate다.
 
-`ready`는 publish됐다는 뜻이 아니고, `approved`는 remote effect가 성공했다는 뜻이 아니다. top-level `published`는 주 publication action의 exact provider after snapshot이 version·source/tag·artifact digest·channel을 확인한 event가 있을 때만 기록한다. deploy는 role별 remote action `verified`와 `deployed_verified` projection을 사용하며 top-level status를 되감거나 가짜 published를 만들지 않는다. adapter success response, local tag, branch name과 이전 snapshot만으로 `published`를 만들지 않는다.
+`blocked_external`은 certificate·timestamp provider처럼 required 외부 prerequisite가 없어 local run만으로 해소할 수 없는 상태이며 pass가 아니다. `ready`는 publish됐다는 뜻이 아니고, `approved`는 remote effect가 성공했다는 뜻이 아니다. top-level `published`는 주 publication action의 exact provider after snapshot이 version·source/tag·artifact digest·channel을 확인한 event가 있을 때만 기록한다. deploy는 role별 remote action `verified`와 `deployed_verified` projection을 사용하며 top-level status를 되감거나 가짜 published를 만들지 않는다. adapter success response, local tag, branch name과 이전 snapshot만으로 `published`를 만들지 않는다.
 
 필요하지 않은 SBOM·provenance·signing은 field를 조용히 생략하지 않고 applicability=`not_required`, versioned policy·이유·decision ref를 둔다. required인데 unavailable/incomplete이면 release Gate는 block한다.
 

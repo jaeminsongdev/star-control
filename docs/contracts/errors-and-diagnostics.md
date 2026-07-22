@@ -334,7 +334,7 @@ backend 고유 오류 이름·SQL text·database filename과 raw path를 code나
 | `RELEASE_REBUILD_FORBIDDEN` | 승격·검증·publish 단계가 final artifact를 다시 build/package하려 함 | 실행 전 거부 |
 | `RELEASE_PACKAGE_CONTENT_INVALID` | dry-run/file list에 누락·unexpected·forbidden payload가 있음 | `block` |
 | `RELEASE_METADATA_INCOMPLETE` | version·changelog·metadata·license·applicability 근거 누락 | `block` |
-| `RELEASE_PLATFORM_EVIDENCE_MISSING` | required x64 또는 native ARM64 build/runtime/install evidence 누락 | `blocked_external` 또는 `block` |
+| `RELEASE_PLATFORM_EVIDENCE_MISSING` | required x64 Stable native evidence 또는 ARM64 Preview cross-build·simulation evidence 누락 | `blocked_external` 또는 `block` |
 | `RELEASE_INSTALL_LIFECYCLE_FAILED` | install·safe_default·update·rollback·uninstall의 required Check 실패 | `rollback_required` 또는 `block` |
 | `RELEASE_APPROVAL_REQUIRED` | publish·deploy·withdrawal·rollback exact action 승인 없음 | effect 없이 대기 |
 | `RELEASE_APPROVAL_STALE` | manifest/digest/destination/before snapshot/expiry가 승인과 다름 | 새 snapshot·승인 요구 |

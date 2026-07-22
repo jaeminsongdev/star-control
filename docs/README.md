@@ -63,6 +63,7 @@
 57. [Runtime update와 activation 계약](contracts/runtime-update-and-activation.md) — generation selector·durable operation·same-task E2E 완료 조건
 58. [전용 Star Updater와 Codex 전체 생명주기 결정](decisions/ADR-0014-전용-Star-Updater와-Codex-생명주기.md) — 4 EXE Runtime·30초 Controller lease·10초 restart integration update
 59. [Codex 생명주기와 Star Updater 계약](contracts/codex-lifecycle-and-updater.md) — all-task census·MCP ownership·apply/rollback/relaunch 상태기계
+60. [x64 Stable과 ARM64 Preview 출시 정책](decisions/ADR-0015-x64-Stable과-ARM64-Preview-출시-정책.md) — `v0.1.0` GitHub Releases·서명 필수·ARM64 `native_unverified` 경계
 
 ## 문서 상태 표현
 

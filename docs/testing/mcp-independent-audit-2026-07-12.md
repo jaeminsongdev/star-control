@@ -1,5 +1,8 @@
 # MCP 독립 감사 보고서 — 2026-07-12
 
+> [!IMPORTANT]
+> 이 문서는 2026-07-12 source와 required core 13개를 대상으로 한 역사적 감사 snapshot이다. current inventory는 17개이며 6개 action이 후속 Slice에서 owning handler·Schema를 얻었다. 아래 13개 수치와 당시 **BLOCK** 판정을 현재 상태로 다시 계산하지 않으며 current 상태는 [최종 구현 로드맵](../roadmap/final-implementation.md)과 root `PLANS.md`를 따른다.
+
 ## 판정 요약
 
 최종 판정은 **BLOCK**이다. 고정 MCP 12-tool과 required core 13개의 ID·command·lane 표면은 exact 일치하지만, core 13개에 필요한 소유 command handler와 generated input·output Schema가 없다. 이전 구현은 이 action들을 `ready`로 노출한 뒤 실제 호출에서 process backend만 지원한다며 실패했다. 이번 감사에서는 허위 ready·invoke를 fail-closed `unavailable`로 바꿨지만, 제외 범위인 Planner·Goal application command를 임의로 구현하지 않았으므로 정본의 release 완료 조건은 여전히 충족하지 못한다.

@@ -4,9 +4,9 @@
 
 이 문서는 Windows 설치 파일이 최종 binary를 배치하고, 실제 설치 경로를 Codex Plugin의 MCP·Hook 설정에 연결하고, update·repair·제거 때 소유 자료를 안전하게 처리하는 계약을 정의한다. P-0026은 이 설치 transport 수직 Slice를 구현한다. M10의 전체 `ReleaseManifest` lifecycle·CI·공개 배포 engine이 구현됐다는 뜻은 아니다.
 
-P-0039의 전용 updater와 lifecycle 관측은 구현 진행 중이다. 이 문서의 updater restart transaction은 installed-tree E2E가 끝나기 전에는 설계·수용 기준이며, 사용자 설치와 현재 Codex를 실제로 바꾸는 검증은 별도 승인을 받아야 한다.
+P-0039의 전용 updater와 lifecycle 관측 및 installed-tree restart E2E는 구현됐다. 이후 공개 candidate의 clean 설치·update·rollback·repair·uninstall 검증과 사용자 설치 상태 변경은 각각 해당 Slice와 승인 경계를 따른다.
 
-기준 결정은 [ADR-0012](../decisions/ADR-0012-선택형-Windows-설치와-Codex-Plugin-연동.md)와 P-0039의 [ADR-0014](../decisions/ADR-0014-전용-Star-Updater와-Codex-생명주기.md)다. ADR-0012의 offline installer 경계는 유지하되, 설치 후 통합 변경의 restart transaction은 전용 updater가 소유한다.
+기준 결정은 [ADR-0012](../decisions/ADR-0012-선택형-Windows-설치와-Codex-Plugin-연동.md), P-0039의 [ADR-0014](../decisions/ADR-0014-전용-Star-Updater와-Codex-생명주기.md)와 [ADR-0015](../decisions/ADR-0015-x64-Stable과-ARM64-Preview-출시-정책.md)다. ADR-0012의 offline installer 경계는 유지하되, 설치 후 통합 변경의 restart transaction은 전용 updater가 소유한다.
 
 ## 소유권 경계
 
@@ -29,10 +29,10 @@ Codex cache·`config.toml`·Hook trust file을 Star-Control이 직접 쓰는 것
 
 ### 배포 파일
 
-- `star-control-windows-x64-<version>-setup.exe`
-- `star-control-windows-arm64-<version>-setup.exe`
+- `star-control-windows-x64-<version>-setup.exe` — signed Stable
+- `star-control-windows-arm64-<version>-setup.exe` — signed `native_unverified` Preview
 
-두 파일은 같은 source revision과 제품 version을 사용하지만 architecture별 binary와 hash가 다르다. public release에서는 각각 code signing 검증을 통과해야 한다. P-0026 local build는 unsigned를 허용하되 `release-manifest.json`에 signed인 것처럼 기록하지 않는다.
+두 파일은 같은 source revision과 제품 version을 사용하지만 architecture별 binary와 hash가 다르다. public GitHub Release에서는 각각 Authenticode 검증을 통과해야 한다. P-0026 local build는 unsigned를 허용하되 `release-manifest.json`에 signed인 것처럼 기록하지 않으며 unsigned 결과를 Stable로 공개하지 않는다. certificate 또는 timestamp provider가 없으면 release는 `blocked_external`이다. ARM64 Preview는 cross-build·PE architecture·file manifest·signature·installer model·fake lifecycle evidence만 주장하고 native process·IPC·설치 성공으로 승격하지 않는다.
 
 ### 경로 규칙
 
@@ -71,7 +71,7 @@ install root는 local fixed volume의 absolute path여야 한다. UNC·device pa
 └─ provenance.json                   # policy가 요구하고 실제 생성됐을 때
 ```
 
-`sbom.spdx.json`, `provenance.json`과 third-party notice는 package policy가 요구하는 실제 자료만 넣는다. 빈 파일로 성공을 흉내 내지 않는다. 세 runtime EXE 외 build helper를 install root에 두지 않는다. Inno Setup이 소유하는 `unins*.exe`·`unins*.dat`는 제품 runtime EXE가 아니라 제거 metadata이므로 설치 뒤 추가될 수 있다.
+`sbom.spdx.json`, `provenance.json`과 third-party notice는 package policy가 요구하는 실제 자료만 넣는다. 빈 파일로 성공을 흉내 내지 않는다. 네 runtime EXE 외 build helper를 install root에 두지 않는다. Inno Setup이 소유하는 `unins*.exe`·`unins*.dat`는 제품 runtime EXE가 아니라 제거 metadata이므로 설치 뒤 추가될 수 있다.
 
 ## release-file manifest v1
 
@@ -91,7 +91,7 @@ install root는 local fixed volume의 absolute path여야 한다. UNC·device pa
 | `set_sha256` | SHA-256 | `files[]` canonical JSON의 hash |
 | `signing` | `unsigned_local\|signed` | 실제 상태만 기록 |
 
-manifest 자기 자신과 installation-bound generated file은 `files[]`에 넣지 않는다. `star installation finalize`는 모든 entry의 존재·regular file·size·hash, 예상 architecture, 세 runtime EXE의 포함과 `generated_files` allowlist를 검사한 뒤 bootstrap manifest를 만든다. 누락·추가 program file 정책은 package build 검증이 담당한다.
+manifest 자기 자신과 installation-bound generated file은 `files[]`에 넣지 않는다. `star installation finalize`는 모든 entry의 존재·regular file·size·hash, 예상 architecture, 네 runtime EXE의 포함과 `generated_files` allowlist를 검사한 뒤 bootstrap manifest를 만든다. 누락·추가 program file 정책은 package build 검증이 담당한다.
 
 이 문서는 M10의 승인·published state를 가진 `star.release-manifest` v2와 다른 technical package manifest다.
 

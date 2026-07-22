@@ -1,7 +1,7 @@
 # MCP 구현 완료 감사
 
 > [!WARNING]
-> 이 문서는 구현자의 완료 주장과 과거 evidence 색인이다. 2026-07-12 독립 감사에서 required core 13개 handler·owning Schema 부재와 stale/self-attested evidence가 확인되어 완료 결론은 폐기됐다. 현재 판정은 [MCP 독립 감사 보고서](mcp-independent-audit-2026-07-12.md)의 **BLOCK**을 따른다.
+> 이 문서는 구현자의 완료 주장과 2026-07-12 당시 required core 13개 evidence 색인이다. 독립 감사에서 handler·owning Schema 부재와 stale/self-attested evidence가 확인되어 당시 완료 결론은 폐기됐다. current inventory는 17개이며 6개 action이 후속 Slice에서 구현됐으므로 이 역사 문서의 수치와 판정을 현재 상태로 승격하지 않는다. current 상태는 [최종 구현 로드맵](../roadmap/final-implementation.md)과 root `PLANS.md`를 따른다.
 
 ## 상태와 판정 경계
 

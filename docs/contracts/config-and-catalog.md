@@ -342,7 +342,9 @@ workload가 warmup/measurement run 수를 명시하면 StarConfig default와 병
 |---|---|---|---|
 | `release.promotion_mode` | enum | `build_once` | immutable; 검증·승격·publish를 위한 rebuild 금지 |
 | `release.require_clean_windows` | boolean | `true` | immutable |
-| `release.require_native_arm64_runtime` | boolean | `true` | immutable; cross-build evidence로 대체 금지 |
+| `release.require_native_x64_runtime` | boolean | `true` | immutable; x64 Stable은 clean native runtime·install lifecycle 필수 |
+| `release.arm64_support_tier` | enum | `preview` | immutable for `v0.1.0`; Stable로 자동 승격 금지 |
+| `release.arm64_runtime_verification` | enum | `native_unverified` | immutable; cross-build·simulation을 native pass로 변환 금지 |
 | `release.require_explicit_remote_action_approval` | boolean | `true` | immutable; publish·deploy·withdraw·rollback 모두 적용 |
 | `release.publish_action` | action policy | `prompt` | `deny > prompt`; `auto` 금지 |
 | `release.deploy_action` | action policy | `prompt` | `deny > prompt`; target별 `auto` 금지 |
@@ -983,10 +985,10 @@ M10 `ci_release_deploy` ProfileDescriptor는 공통 metadata 외에 다음 typed
 |---|---|
 | `validation_layer_refs` | `local_quick\|target\|full\|release`의 GatePolicy·Check promotion chain |
 | `release_policy_ref` | versioned `packaging/release.toml`과 built-in minimum policy fingerprint |
-| `target_environment_refs` | clean Windows x64·native ARM64 build/runtime/install environment requirement |
+| `target_environment_refs` | clean Windows x64 Stable build/runtime/install과 ARM64 Preview cross-build·simulation environment requirement |
 | `package_lifecycle_refs` | package dry-run·file list, install·safe_default·update·rollback·uninstall Check |
 | `supply_chain_applicability_ref` | SBOM·provenance·signing의 required/not-required 근거와 evidence floor |
-| `approval_state_policy` | `draft\|candidate\|blocked\|ready\|approved\|publishing\|publish_outcome_unknown\|published\|rollback_required\|withdrawn` 전이, role별 remote action과 exact approval binding |
+| `approval_state_policy` | `draft\|candidate\|blocked\|blocked_external\|ready\|approved\|publishing\|publish_outcome_unknown\|published\|rollback_required\|withdrawn` 전이, role별 remote action과 exact approval binding |
 | `evaluation_policy_refs` | Rule·Check·Profile·Recipe evaluation, validator guard, Radar·lifecycle policy |
 | `evaluation_contexts` | `cli_only`와 `codex_integrated`를 합산하지 않는 cohort contract |
 

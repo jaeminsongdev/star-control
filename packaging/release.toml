@@ -3,6 +3,14 @@ version_source = "Cargo.toml:[workspace.package].version"
 primary_distribution = "inno_setup_current_user"
 portable_distribution = "development_and_recovery_only"
 
+[publication]
+provider = "github"
+surface = "releases"
+repository = "jaeminsongdev/star-control"
+tag_template = "v{version}"
+server_deploy = false
+requires_exact_action_approval = true
+
 [windows]
 default_install_directory = "%LOCALAPPDATA%\\Programs\\Star-Control"
 selectable_install_directory = true
@@ -13,13 +21,27 @@ architectures = ["x64", "arm64"]
 [windows.x64]
 rust_target = "x86_64-pc-windows-msvc"
 installer_name = "star-control-windows-x64-{version}-setup.exe"
+support_tier = "stable"
+runtime_verification = "native_required"
 
 [windows.arm64]
 rust_target = "aarch64-pc-windows-msvc"
 installer_name = "star-control-windows-arm64-{version}-setup.exe"
+support_tier = "preview"
+runtime_verification = "native_unverified"
+required_evidence = [
+    "cross_build",
+    "pe_architecture",
+    "file_manifest",
+    "authenticode_signature",
+    "installer_model",
+    "fake_lifecycle",
+]
 
 [supply_chain]
 local_signing = "unsigned_local"
 public_signing = "required_gate"
+missing_public_certificate = "blocked_external"
+unsigned_stable = "forbidden"
 sbom = "required_before_public_release"
 provenance = "required_before_public_release"

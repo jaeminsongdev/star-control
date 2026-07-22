@@ -22,7 +22,7 @@
 
 M11은 새 최상위 persisted document나 별도 mutable run record를 만들지 않는다. `RecipeExecution`, `PatchSet`, `PatchApplication`, `ValidationRun`, `GateDecision`, `EvidenceBundle`과 `ReviewPack`에 이 문서의 nested versioned type을 연결한다. DB는 derived projection이며 Git source·Cargo/rustfmt/Clippy config·versioned Catalog policy가 계속 정본이다.
 
-2026-07-14 현재 Star-Control 저장소 자체의 root `Cargo.toml`은 workspace, `edition = "2024"`, `rust-version = "1.85"`이지만 `rust-toolchain.toml`은 실제로 존재하지 않는다. 최종 구조 문서에 그 파일이 적혀 있다는 이유로 현재 구현 사실이나 pinned toolchain으로 간주하지 않으며, M11 문서 작업에서 해당 파일을 생성하지 않는다.
+2026-07-20 현재 Star-Control 저장소 자체의 root `Cargo.toml`은 workspace, `edition = "2024"`, `rust-version = "1.96"`이지만 `rust-toolchain.toml`은 실제로 존재하지 않는다. 최종 구조 문서에 그 파일이 적혀 있다는 이유로 현재 구현 사실이나 pinned toolchain으로 간주하지 않으며, M11 문서 작업에서 해당 파일을 생성하지 않는다.
 
 ## 2. 목표와 사용자 효용
 
@@ -59,7 +59,7 @@ M11 source mutation 구현은 다음 제품 Gate가 실제 code·Schema·fixture
 M11은 다음을 지원하지 않는다.
 
 - 별도 Rust formatter, parser, AST rewrite engine, LSP, compiler 또는 Clippy 재구현
-- `star-rust-style.exe` 같은 네 번째 runtime executable
+- `star-rust-style.exe` 같은 다섯 번째 runtime executable
 - local AI, 다른 AI provider, OpenAI API 직접 호출, embedding, browser UI와 자체 예약 실행·watcher
 - 사용자 정의 shell pipeline, command string, PowerShell·`cmd` script 또는 PATH 첫 executable 실행
 - nightly toolchain, unstable rustfmt option과 nightly-only style edition의 자동 적용

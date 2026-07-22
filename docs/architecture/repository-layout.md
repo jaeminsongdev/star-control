@@ -1728,7 +1728,8 @@ full
 
 release
   -> build/package once + immutable artifact set digest
-  -> clean Windows x64/ARM64 native E2E + install/safe_default/update/rollback/uninstall
+  -> clean Windows x64 Stable native E2E + ARM64 Preview cross-build/simulation
+  -> x64 install/safe_default/update/failure rollback/repair/uninstall + ARM64 fake lifecycle
   -> package file manifest + checksum + metadata/license
   -> applicable SBOM/provenance/signing
   -> ready; explicit approval 뒤 publish, after snapshot 뒤 published
@@ -1767,8 +1768,8 @@ release
 | P6 | `star-vcs` local baseline·overlap·WorktreeRecord·MergePlan v2·queue/conflict/result, Git fake/adapter와 CLI-only local integration tests |
 | P7 | MultiProjectGoal·CrossRepoChangeBundle·participant state/Gate/recovery, RemoteStateSnapshot v2·explicit-approval remote adapter, release handoff와 multi-project integration tests |
 | P8 | EvaluationRun v2, `star-evaluation` pure cohort·metric·comparison, `evals/` policy/candidate, shadow·trial, Radar·lifecycle migration와 CLI/Codex context 분리 |
-| M11 | read-only Cargo/toolchain/config discovery → Rust nested contract/coverage → rustfmt/Clippy check → isolated rustfmt PatchSet → exact allowlisted Clippy hunk → convergence/replay → candidate/post Gate → `personal_auto` exact approval → Windows x64·ARM64 CLI-only Corpus. M1→M2→M3→M4 제품 Gate 뒤 mutation을 시작하고 P9 전에 conformance를 완료 |
-| P9 | ReleaseManifest v2·evidence v6, final 16 Profile·M11 conformance, release tier/Gate, build-once artifact set, `packaging/windows`, clean x64·ARM64 install lifecycle, approval·publish after-state와 최종 운영 문서 |
+| M11 | read-only Cargo/toolchain/config discovery → Rust nested contract/coverage → rustfmt/Clippy check → isolated rustfmt PatchSet → exact allowlisted Clippy hunk → convergence/replay → candidate/post Gate → `personal_auto` exact approval → Windows x64 CLI-only·ARM64 target/cfg simulation Corpus. M1→M2→M3→M4 제품 Gate 뒤 mutation을 시작하고 P9 전에 conformance를 완료 |
+| P9 | ReleaseManifest v2·evidence v6, final 16 Profile·M11 conformance, release tier/Gate, build-once artifact set, `packaging/windows`, clean x64 Stable install lifecycle·ARM64 Preview simulation, approval·GitHub publish after-state와 최종 운영 문서 |
 
 M1·M2·M3·M4·M5·M6·M7·M8과 사용자 9·10·11단계는 이 문서에서 지정한 관리 확장을 뜻하며 기존 제품 로드맵의 P1·P2·P3·P7 번호와 다르다. M3 제품 구현은 로드맵 P5 첫 수직 Slice이고 M4는 그 Gate를 소비한 뒤 P6 병렬·merge보다 좁은 single-project worktree capability부터 사용한다. M5~M8은 새 기능별 Package 없이 read-only Index·planning·Patch·Gate·check·evidence 경계에 Registry, compatibility/environment, maintenance와 migration/performance/equivalence 계약을 조립한다. 9단계도 새 Package를 만들지 않고 P6 `star-vcs` local integration과 P7 `star-execution/star-application` coordination·remote adapter를 조립한다. 10단계는 P8 `star-evaluation`과 P9 release/packaging을 같은 Gate·evidence 위에 조립한다. M11은 기존 Project/Tool/Patch/Gate/Evidence module에 Rust bounded adapter를 조립하고 P9 공개 배포 conformance 앞에 둔다. 현재 M1~11단계의 관리·release/evaluation 기능은 구조·계약 문서만 확정했고 module·migration·validator·runner·rewrite·worktree·merge queue·ChangeBundle·remote operation·release/evaluation/Rust style engine·Registry/contract/maintenance/migration·codemod·doctor·clean-room runner·debugger·scanner·dependency updater·benchmark·profiler·compiler·CI/signer/deploy adapter·network client·Corpus를 구현하지 않았다. 예외로 P-0026은 M10 전체와 분리된 installation transport만 구현해 technical release-file manifest·installation record·Inno Setup installer·Codex Plugin 렌더링을 제공한다. P0의 backend·dependency는 별도 승인 뒤에만 추가한다. 이미 구현된 P1 MCP와 P-0026 수직 Slice는 그 역사와 검증 상태를 유지하지만 M1~11단계 관리 계약이나 M10 release `ready`가 구현됐다는 근거가 되지 않는다. 각 단계는 다음 단계가 실제로 필요로 하는 공개 계약까지만 먼저 만들고 미래 Package의 빈 폴더와 사용되지 않는 추상화를 만들지 않는다.
 

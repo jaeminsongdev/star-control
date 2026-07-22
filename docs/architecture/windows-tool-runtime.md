@@ -7,7 +7,7 @@
 지원 기준:
 
 - Windows 11 24H2, build 26100 이상
-- x86-64와 ARM64 native build
+- x86-64 native Stable build와 ARM64 cross-build Preview. native ARM64 runtime evidence가 생기기 전 support state는 `native_unverified`
 - local fixed volume
 - user-mode per-user Controller
 - 관리자 자동 elevation 없음

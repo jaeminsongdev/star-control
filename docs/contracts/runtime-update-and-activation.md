@@ -57,4 +57,4 @@ Controller가 종료된 뒤에도 단발 Updater가 activation과 새 Controller
 3. apply/rollback은 exact approval scope에 바인딩되며 `star-updater.exe`가 Controller shutdown, selector 교체, 새 Controller postcheck와 rollback을 소유한다. `star.exe`는 verified delegation만 한다.
 4. 같은 Codex 작업에서 ChatGPT PID와 MCP PID를 유지한 채 Controller PID와 generation만 교체하는 installed-tree 실기 증거는 별도 설치 상태 변경 승인 후 남긴다.
 5. update 전후 fixed MCP 12개와 Plugin/MCP 설정 hash가 불변인 실기 증거는 4와 함께 남긴다. Registry action은 fixed MCP 변경 없이 별도 package로 search·describe·call 검증한다.
-6. x64 및 native ARM64 lifecycle, crash-point rollback, current artifact digest evidence가 있다.
+6. x64 Stable의 native lifecycle·crash-point rollback·current artifact digest evidence가 있다. ARM64 Preview는 cross-build·architecture·manifest·signature·installer model·fake lifecycle evidence를 가지며 native 결과는 `native_unverified`로 남긴다.

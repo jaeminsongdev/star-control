@@ -33,7 +33,7 @@ Rule·Check·Profile·Recipe 개선도 통과율이나 실행 시간만 보면 v
 
 - 검증한 source와 publish한 artifact byte를 digest로 끝까지 추적할 수 있다.
 - release readiness와 외부 권한·실제 원격 결과가 섞이지 않는다.
-- clean Windows x64·ARM64, package·install lifecycle과 rollback 증거가 같은 release Gate에 연결된다.
+- architecture별 package·lifecycle·rollback 증거가 같은 release subject에 연결된다. `v0.1.0`의 x64 Stable·ARM64 `native_unverified` Preview evidence floor는 ADR-0015가 소유한다.
 - 규칙 개선이 validator 약화나 오탐 은폐가 아니라 실제 결함·재작업·시간 근거로 판단된다.
 - 제품 source·Catalog·policy는 review된 정본으로 남고 DB·EvaluationRun이 자동으로 역쓰기하지 않는다.
 - CLI-only 제품 효용과 Codex 연동의 추가 효용을 독립적으로 판단할 수 있다.
@@ -56,3 +56,4 @@ Rule·Check·Profile·Recipe 개선도 통과율이나 실행 시간만 보면 v
 - [승인·권한·안전](../architecture/security-and-permissions.md)
 - [상태 기록과 이어하기](../architecture/state-and-artifacts.md)
 - [설치와 공개 배포](../operations/installation.md)
+- [x64 Stable과 ARM64 Preview 출시 정책](ADR-0015-x64-Stable과-ARM64-Preview-출시-정책.md)

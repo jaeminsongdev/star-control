@@ -486,7 +486,7 @@ success라도 output Schema 실패, extra final frame, output limit, undeclared 
 
 ## 11단계 Rust style Tool 경계
 
-[Rust 코드 스타일 자동 교정](../features/rust-code-style-auto-fix.md)은 위 M4 external mutator 계약을 네 개의 fixed Tool role로 소비한다. 새 protocol, shell runner 또는 네 번째 runtime executable을 만들지 않는다.
+[Rust 코드 스타일 자동 교정](../features/rust-code-style-auto-fix.md)은 위 M4 external mutator 계약을 네 개의 fixed Tool role로 소비한다. 새 protocol, shell runner 또는 다섯 번째 runtime executable을 만들지 않는다.
 
 | stable Tool ID | process 역할 | source effect |
 |---|---|---|
