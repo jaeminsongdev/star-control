@@ -4,6 +4,8 @@ pub mod approval_store;
 pub mod authenticode;
 pub mod autostart;
 pub mod concurrency_gate;
+pub mod coordination_store;
+pub mod goal_store;
 pub mod lifecycle;
 pub mod manifest_resources;
 pub mod operation_store;

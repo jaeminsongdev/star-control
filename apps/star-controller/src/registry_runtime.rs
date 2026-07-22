@@ -20,6 +20,44 @@ const REQUIRED_RELEASE_MANIFEST: &str =
     include_str!("../../../catalog/tool-packages/star-control-core.toml");
 const REQUIRED_RELEASE_RESOURCES: &[(&str, &str)] = &[
     (
+        "schemas/goal-start-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/goal-start-input.schema.json"),
+    ),
+    (
+        "schemas/goal-answer-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/goal-answer-input.schema.json"),
+    ),
+    (
+        "schemas/goal-get-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/goal-get-input.schema.json"),
+    ),
+    (
+        "schemas/goal-mutation-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/goal-mutation-input.schema.json"),
+    ),
+    (
+        "schemas/plan-update-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/plan-update-input.schema.json"),
+    ),
+    (
+        "schemas/goal-record-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/goal-record-output.schema.json"),
+    ),
+    (
+        "schemas/plan-get-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/plan-get-output.schema.json"),
+    ),
+    (
+        "schemas/change-bundle-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/change-bundle-output.schema.json"),
+    ),
+    (
+        "schemas/change-bundle-handoff-output.schema.json",
+        include_str!(
+            "../../../catalog/tool-packages/schemas/change-bundle-handoff-output.schema.json"
+        ),
+    ),
+    (
         "schemas/doctor-input.schema.json",
         include_str!("../../../catalog/tool-packages/schemas/doctor-input.schema.json"),
     ),

@@ -7,23 +7,33 @@ mod validation_planning;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{SecondsFormat, Utc};
+use star_adapter_rust_index::{RustAnalyzerSemanticAdapter, RustSyntaxAdapter};
+use star_application::rust_style_runtime::RustStyleScope;
 use star_application::{ApplicationError, ManagementApplicationService};
-use star_contracts::evidence::ValidationProfile;
+use star_contracts::evidence::{ActorRef, ActorType, ValidationProfile};
 use star_contracts::{
     Sha256Hash,
     fixed_mcp::ApprovalDecision,
-    ids::{ApprovalId, DiagnosticId, FindingId, OperationId, PatchSetId, ProjectId, RequestId},
+    ids::{
+        ApprovalId, DiagnosticId, FindingId, GoalId, OperationId, PatchSetId, ProjectId, RequestId,
+        SymbolId, TaskSpecId,
+    },
+    index::{IndexTier, SourceClass},
     ipc::{
         ControllerReadiness, ErrorEnvelope, IpcClientKind, IpcHello, IpcRequest, IpcResponse,
         IpcStatus,
     },
+    management::{ProjectPathRef, ProjectV1ToV2MigrationPlan},
     manifest::{
         ActionDescriptor, BackendKind, ExecutableDescriptor, ExitCodes, IntegrityFile,
         ManifestProtocol, ManifestSource, UpdatePolicy, parameter_pattern_matches, risk_lane,
         version_requirement_matches,
     },
+    orchestration::{GoalPlanItem, GoalRecord},
     parse_no_duplicate_keys,
+    planning::ValidationScopeLevel,
     runtime::ExternalToolProgress,
+    rust_style::RustAutoPolicy,
 };
 use star_evidence::LocalArtifactStore;
 use star_ipc::{
@@ -33,16 +43,21 @@ use star_ipc::{
     process_identity::verify_pipe_client_image,
     windows_pipe::{PipeAcceptPool, read_json, write_json},
 };
+use star_planning::{TaskSpecDraft, descriptor};
 use star_project::catalog::{
-    ProjectCatalogManifest, ProjectCatalogView, inspect_project_catalog,
-    inspect_project_catalog_entry, parse_project_catalog, resolve_project_catalog_root,
+    CatalogAvailability, CatalogIdentityStatus, CatalogProjectRole, ProjectCatalogManifest,
+    ProjectCatalogView, inspect_project_catalog, inspect_project_catalog_entry,
+    parse_project_catalog, resolve_project_catalog_root,
 };
 use star_state::{
-    RecoveryInspection, SqliteManagementRepositorySet, WindowsProjectRootBindingStore,
-    inspect_management_root,
+    FileCodeIndexCache, RecoveryInspection, SqliteManagementRepositorySet,
+    WindowsProjectRootBindingStore, apply_project_v1_to_v2, inspect_management_root,
+    plan_project_v1_to_v2, rollback_project_v1_to_v2,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
+    io::Read,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Mutex},
 };
@@ -60,6 +75,10 @@ use star_controller::authenticode::{
 };
 use star_controller::autostart::{self, AutostartState};
 use star_controller::concurrency_gate::{ConcurrencyGate, GateRequest, OperationLockKey};
+use star_controller::coordination_store::{
+    CoordinationStoreError, with_default_coordination_store,
+};
+use star_controller::goal_store::{GoalStartRequest, GoalStoreError, with_default_goal_store};
 use star_controller::manifest_resources::{normalize_schema_arguments, validate_schema_instance};
 use star_controller::operation_store::{
     OperationCreate, OperationSnapshot, OperationStore, OperationStoreError,
@@ -574,11 +593,21 @@ struct ControllerCommandRegistration {
 
 // Readiness requires all three surfaces to agree: this list, the concrete
 // handler registry below, and both resolved action Schemas. Tests fail if any
-// surface drifts. Goal/plan/register actions deliberately remain unavailable.
-// `validation.run` is the bounded native-entrypoint precursor, not the full M3
-// persisted runner or GateDecision/EvidenceBundle writer.
+// surface drifts. Project registration is intentionally outside the required
+// release-core surface; the M9 merge/handoff readers are now active.
 const IMPLEMENTED_CONTROLLER_COMMANDS: &[&str] = &[
+    "goal.start",
+    "goal.answer",
+    "plan.get",
+    "plan.update",
+    "run.continue",
+    "goal.status",
+    "goal.pause",
+    "goal.resume",
+    "goal.cancel",
     "evidence.get",
+    "merge.status",
+    "handoff.get",
     "doctor.run",
     "project.list",
     "project.status",
@@ -586,6 +615,50 @@ const IMPLEMENTED_CONTROLLER_COMMANDS: &[&str] = &[
     "validation.run",
 ];
 const CONTROLLER_COMMAND_HANDLERS: &[ControllerCommandRegistration] = &[
+    ControllerCommandRegistration {
+        backend_ref: "goal.start",
+        handler: ControllerCommandHandler::Sync(run_goal_start_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "goal.answer",
+        handler: ControllerCommandHandler::Sync(run_goal_answer_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "plan.get",
+        handler: ControllerCommandHandler::Sync(run_plan_get_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "plan.update",
+        handler: ControllerCommandHandler::Sync(run_plan_update_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "run.continue",
+        handler: ControllerCommandHandler::Sync(run_continue_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "goal.status",
+        handler: ControllerCommandHandler::Sync(run_goal_status_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "goal.pause",
+        handler: ControllerCommandHandler::Sync(run_goal_pause_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "goal.resume",
+        handler: ControllerCommandHandler::Sync(run_goal_resume_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "goal.cancel",
+        handler: ControllerCommandHandler::Sync(run_goal_cancel_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "merge.status",
+        handler: ControllerCommandHandler::Sync(run_merge_status_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "handoff.get",
+        handler: ControllerCommandHandler::Sync(run_handoff_get_command),
+    },
     ControllerCommandRegistration {
         backend_ref: "evidence.get",
         handler: ControllerCommandHandler::Sync(run_evidence_get_command),
@@ -660,9 +733,71 @@ fn load_project_catalog_view() -> Result<ProjectCatalogView, RuntimeFailure> {
     ))
 }
 
-fn tracked_project_registration_enabled() -> bool {
-    parse_project_catalog(PROJECT_CATALOG_SOURCE)
-        .is_ok_and(|manifest| manifest.registration_enabled)
+fn validate_project_registration_allowlist(
+    arguments: &serde_json::Value,
+    request_root: &std::path::Path,
+) -> Result<(), RuntimeFailure> {
+    let project_key = arguments
+        .get("project_key")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty() && value.chars().count() <= 128)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "project_key must identify one tracked catalog entry.",
+        ))?;
+    let (manifest, catalog_root) = load_project_catalog_manifest_and_root()?;
+    if !manifest.registration_enabled {
+        return Err((
+            "PROJECT_REGISTRATION_DISABLED",
+            "Project registration is disabled by the tracked catalog policy.",
+        ));
+    }
+    let entry = manifest
+        .projects
+        .iter()
+        .find(|entry| entry.project_key == project_key)
+        .ok_or((
+            "PROJECT_NOT_ALLOWLISTED",
+            "The project key is not present in the tracked registration allowlist.",
+        ))?;
+    if entry.role != CatalogProjectRole::ActiveCanonical {
+        return Err((
+            "PROJECT_ROLE_NOT_REGISTERABLE",
+            "Only an active canonical catalog entry can be registered by this command.",
+        ));
+    }
+    let status = inspect_project_catalog_entry(&manifest, &catalog_root, project_key).ok_or((
+        "PROJECT_NOT_ALLOWLISTED",
+        "The project key is not present in the tracked registration allowlist.",
+    ))?;
+    if status.availability != CatalogAvailability::Available {
+        return Err((
+            "PROJECT_ALLOWLIST_ROOT_UNAVAILABLE",
+            "The allowlisted project root is unavailable or failed its repository probe.",
+        ));
+    }
+    if status.identity_status != CatalogIdentityStatus::Match {
+        return Err((
+            "PROJECT_IDENTITY_CONFLICT",
+            "The allowlisted project root does not match its declared repository identity.",
+        ));
+    }
+    let expected_root = catalog_root
+        .join(&entry.relative_path)
+        .canonicalize()
+        .map_err(|_| {
+            (
+                "PROJECT_ALLOWLIST_ROOT_UNAVAILABLE",
+                "The allowlisted project root cannot be resolved to a final path.",
+            )
+        })?;
+    if project_directory_hash(&expected_root) != project_directory_hash(request_root) {
+        return Err((
+            "PROJECT_ROOT_NOT_ALLOWLISTED",
+            "The authenticated client project root is not the exact root selected by project_key.",
+        ));
+    }
+    Ok(())
 }
 
 fn run_project_list_command(
@@ -672,6 +807,278 @@ fn run_project_list_command(
         (
             "PROJECT_CATALOG_SERIALIZATION_FAILED",
             "The project catalog view could not be serialized.",
+        )
+    })
+}
+
+fn map_goal_store_error(error: GoalStoreError) -> RuntimeFailure {
+    match error {
+        GoalStoreError::Invalid => (
+            "TOOL_ARGUMENT_INVALID",
+            "The Goal/Plan/Run request is invalid.",
+        ),
+        GoalStoreError::NotFound => ("GOAL_NOT_FOUND", "The durable goal was not found."),
+        GoalStoreError::RevisionConflict => (
+            "GOAL_REVISION_CONFLICT",
+            "The durable goal changed after the caller observed it.",
+        ),
+        GoalStoreError::Lifecycle => (
+            "GOAL_TRANSITION_INVALID",
+            "The requested Goal/Plan/Run lifecycle transition is invalid.",
+        ),
+        GoalStoreError::IdempotencyConflict => (
+            "IDEMPOTENCY_CONFLICT",
+            "The idempotency key is already bound to different goal input.",
+        ),
+        GoalStoreError::Corrupt => (
+            "GOAL_STORE_CORRUPT",
+            "The durable goal state is corrupt or has an unsupported version.",
+        ),
+        GoalStoreError::LocalAppDataUnavailable | GoalStoreError::Io(_) | GoalStoreError::Dacl => (
+            "GOAL_STORE_UNAVAILABLE",
+            "The Controller cannot access the protected durable goal state.",
+        ),
+    }
+}
+
+fn goal_argument<'a>(
+    arguments: &'a serde_json::Value,
+    name: &str,
+) -> Result<&'a str, RuntimeFailure> {
+    let value = arguments
+        .get(name)
+        .and_then(serde_json::Value::as_str)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "A required Goal/Plan/Run string argument is missing.",
+        ))?;
+    GoalId::parse(value).map_err(|_| {
+        (
+            "TOOL_ARGUMENT_INVALID",
+            "goal_id must be a valid durable GoalId.",
+        )
+    })?;
+    Ok(value)
+}
+
+fn expected_goal_revision(arguments: &serde_json::Value) -> Result<u64, RuntimeFailure> {
+    arguments
+        .get("expected_revision")
+        .and_then(serde_json::Value::as_u64)
+        .filter(|revision| *revision > 0)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "expected_revision must be a positive integer.",
+        ))
+}
+
+fn serialize_goal(goal: GoalRecord) -> Result<serde_json::Value, RuntimeFailure> {
+    serde_json::to_value(goal).map_err(|_| {
+        (
+            "GOAL_SERIALIZATION_FAILED",
+            "The durable goal could not be serialized.",
+        )
+    })
+}
+
+fn run_goal_start_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let objective = arguments
+        .get("objective")
+        .and_then(serde_json::Value::as_str)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "objective must be a non-empty string.",
+        ))?;
+    let idempotency_key = arguments
+        .get("idempotency_key")
+        .and_then(serde_json::Value::as_str)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "idempotency_key is required for durable goal creation.",
+        ))?;
+    let question = arguments
+        .get("question")
+        .map(|value| {
+            let question_id = value
+                .get("question_id")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(("TOOL_ARGUMENT_INVALID", "question.question_id is required."))?;
+            let prompt = value
+                .get("prompt")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(("TOOL_ARGUMENT_INVALID", "question.prompt is required."))?;
+            Ok::<_, RuntimeFailure>((question_id.to_owned(), prompt.to_owned()))
+        })
+        .transpose()?;
+    let goal = with_default_goal_store(|store| {
+        store.start(GoalStartRequest {
+            objective: objective.to_owned(),
+            project_key: arguments
+                .get("project_key")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
+            question,
+            idempotency_key: idempotency_key.to_owned(),
+        })
+    })
+    .map_err(map_goal_store_error)?;
+    serialize_goal(goal)
+}
+
+fn run_goal_status_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    serialize_goal(
+        with_default_goal_store(|store| store.get(goal_id)).map_err(map_goal_store_error)?,
+    )
+}
+
+fn run_goal_answer_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    let revision = expected_goal_revision(arguments)?;
+    let question_id = arguments
+        .get("question_id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(("TOOL_ARGUMENT_INVALID", "question_id is required."))?;
+    let answer = arguments
+        .get("answer")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(("TOOL_ARGUMENT_INVALID", "answer is required."))?;
+    serialize_goal(
+        with_default_goal_store(|store| store.answer(goal_id, revision, question_id, answer))
+            .map_err(map_goal_store_error)?,
+    )
+}
+
+fn run_plan_get_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    let goal = with_default_goal_store(|store| store.get(goal_id)).map_err(map_goal_store_error)?;
+    Ok(serde_json::json!({
+        "goal_id": goal.goal_id,
+        "goal_revision": goal.revision,
+        "plan_revision": goal.plan_revision,
+        "status": goal.status,
+        "items": goal.plan_items,
+        "goal_fingerprint": goal.content_fingerprint,
+    }))
+}
+
+fn run_plan_update_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    let revision = expected_goal_revision(arguments)?;
+    let items: Vec<GoalPlanItem> = serde_json::from_value(
+        arguments
+            .get("items")
+            .cloned()
+            .ok_or(("TOOL_ARGUMENT_INVALID", "items are required."))?,
+    )
+    .map_err(|_| ("TOOL_ARGUMENT_INVALID", "items are invalid."))?;
+    serialize_goal(
+        with_default_goal_store(|store| store.update_plan(goal_id, revision, items))
+            .map_err(map_goal_store_error)?,
+    )
+}
+
+fn run_continue_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    let revision = expected_goal_revision(arguments)?;
+    serialize_goal(
+        with_default_goal_store(|store| store.continue_run(goal_id, revision))
+            .map_err(map_goal_store_error)?,
+    )
+}
+
+fn run_goal_pause_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    let revision = expected_goal_revision(arguments)?;
+    serialize_goal(
+        with_default_goal_store(|store| store.pause(goal_id, revision))
+            .map_err(map_goal_store_error)?,
+    )
+}
+
+fn run_goal_resume_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    let revision = expected_goal_revision(arguments)?;
+    serialize_goal(
+        with_default_goal_store(|store| store.resume(goal_id, revision))
+            .map_err(map_goal_store_error)?,
+    )
+}
+
+fn run_goal_cancel_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    let revision = expected_goal_revision(arguments)?;
+    serialize_goal(
+        with_default_goal_store(|store| store.cancel(goal_id, revision))
+            .map_err(map_goal_store_error)?,
+    )
+}
+
+fn map_coordination_store_error(error: CoordinationStoreError) -> RuntimeFailure {
+    match error {
+        CoordinationStoreError::NotFound => (
+            "COORDINATION_NOT_FOUND",
+            "No durable ChangeBundle is recorded for the requested goal.",
+        ),
+        CoordinationStoreError::Conflict => (
+            "COORDINATION_IDENTITY_CONFLICT",
+            "The durable ChangeBundle identity conflicts with existing state.",
+        ),
+        CoordinationStoreError::Corrupt => (
+            "COORDINATION_STORE_CORRUPT",
+            "The durable coordination state is corrupt or unsupported.",
+        ),
+        CoordinationStoreError::LocalAppDataUnavailable
+        | CoordinationStoreError::Io(_)
+        | CoordinationStoreError::Dacl => (
+            "COORDINATION_STORE_UNAVAILABLE",
+            "The Controller cannot access the protected coordination state.",
+        ),
+    }
+}
+
+fn run_merge_status_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    let bundle = with_default_coordination_store(|store| store.merge_status(goal_id))
+        .map_err(map_coordination_store_error)?;
+    serde_json::to_value(bundle).map_err(|_| {
+        (
+            "COORDINATION_SERIALIZATION_FAILED",
+            "The ChangeBundle status could not be serialized.",
+        )
+    })
+}
+
+fn run_handoff_get_command(
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let goal_id = goal_argument(arguments, "goal_id")?;
+    let handoff = with_default_coordination_store(|store| store.handoff(goal_id))
+        .map_err(map_coordination_store_error)?;
+    serde_json::to_value(handoff).map_err(|_| {
+        (
+            "COORDINATION_SERIALIZATION_FAILED",
+            "The ChangeBundle handoff could not be serialized.",
         )
     })
 }
@@ -889,7 +1296,7 @@ fn run_doctor_command(_arguments: &serde_json::Value) -> Result<serde_json::Valu
     let catalog_clean = catalog.summary.unavailable_projects == 0
         && catalog.summary.identity_mismatches == 0
         && catalog.summary.identity_unverified == 0;
-    let registration_disabled = !catalog.registration_enabled;
+    let registration_enabled = catalog.registration_enabled;
     let checks = vec![
         serde_json::json!({
             "check_id":"controller_command_contracts",
@@ -920,15 +1327,15 @@ fn run_doctor_command(_arguments: &serde_json::Value) -> Result<serde_json::Valu
         }),
         serde_json::json!({
             "check_id":"project_registration_gate",
-            "status":if registration_disabled { "pass" } else { "fail" },
-            "summary":if registration_disabled {
-                "Project registration remains disabled for the read-only catalog slice."
+            "status":if registration_enabled { "pass" } else { "fail" },
+            "summary":if registration_enabled {
+                "Project registration is enabled behind exact allowlist root and identity checks."
             } else {
-                "Project registration was enabled before the registration slice was implemented."
+                "Project registration is disabled by the tracked catalog policy."
             }
         }),
     ];
-    let status = if !handlers_consistent || !active_count_valid || !registration_disabled {
+    let status = if !handlers_consistent || !active_count_valid || !registration_enabled {
         "fail"
     } else if !catalog_clean {
         "warning"
@@ -3033,6 +3440,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA is unavailable")?,
     );
     let management_root = local_appdata.join("Star-Control/management");
+    let root_binding_root = local_appdata.join("Star-Control/root-bindings");
+    let rust_style_runtime_root = local_appdata.join("Star-Control/rust-style-runtime");
+    let installed_rust_style_policy =
+        bootstrap_install_directory.join("catalog/policies/rust-style.toml");
+    let development_rust_style_policy = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .map(|root| root.join("catalog/policies/rust-style.toml"));
+    let rust_style_policy_path = if installed_rust_style_policy.is_file() {
+        installed_rust_style_policy
+    } else {
+        development_rust_style_policy
+            .filter(|path| path.is_file())
+            .ok_or("Rust style release policy is unavailable")?
+    };
     let management_inspection = inspect_management_root(&management_root);
     let management_service = if management_inspection
         .is_some_and(|inspection| inspection != RecoveryInspection::Healthy)
@@ -3044,11 +3466,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &management_root,
                 env!("CARGO_PKG_VERSION"),
             )?),
-            Arc::new(WindowsProjectRootBindingStore::open(
-                local_appdata.join("Star-Control/root-bindings"),
-            )?),
+            Arc::new(WindowsProjectRootBindingStore::open(&root_binding_root)?),
             Arc::new(LocalArtifactStore::default()),
-        );
+        )
+        .with_syntax_adapter(Arc::new(RustSyntaxAdapter))
+        .with_rust_style_runtime(rust_style_runtime_root, rust_style_policy_path)
+        .with_index_cache(Arc::new(FileCodeIndexCache::open(
+            local_appdata.join("Star-Control/cache/project-index"),
+        )?));
+        let service = match RustAnalyzerSemanticAdapter::discover_pinned() {
+            Ok(adapter) => service.with_semantic_adapter(Arc::new(adapter)),
+            Err(_) => service,
+        };
         let _ = service.recover_incomplete_registrations()?;
         let startup_retention = service.plan_retention()?;
         let _ = service.apply_retention(
@@ -3317,23 +3746,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
-        if request.command == "project.register" && !tracked_project_registration_enabled() {
-            let response = invalid_request_response(
-                request,
-                "PROJECT_REGISTRATION_DISABLED",
-                "Project registration remains disabled until the tracked allowlist registration slice is implemented and approved.",
-                registry.revision,
-            );
+        if request.command == "project.register"
+            && let Err((code, message)) =
+                validate_project_registration_allowlist(&request.payload, &project_directory)
+        {
+            let response = invalid_request_response(request, code, message, registry.revision);
             let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
             continue;
         }
         if is_management_command(&request.command) {
+            let management_policy_profile =
+                UserPolicyProfile::load(&appdata).unwrap_or(UserPolicyProfile::SafeDefault);
             let response = handle_management_command(
-                management_service.as_ref(),
-                management_inspection,
+                ManagementCommandContext {
+                    service: management_service.as_ref(),
+                    recovery_inspection: management_inspection,
+                    management_root: &management_root,
+                    binding_root: &root_binding_root,
+                    project_directory: &project_directory,
+                    policy_profile: management_policy_profile,
+                    registry_revision: registry.revision,
+                },
                 request,
-                &project_directory,
-                registry.revision,
             );
             let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
             continue;
@@ -7701,7 +8135,13 @@ fn update_restart_pending_command_allowed(command: &str) -> bool {
             | "controller.shutdown"
             | "doctor.run"
             | "evidence.get"
+            | "graph.neighbors"
+            | "index.definitions"
+            | "index.references"
+            | "index.search"
+            | "index.status"
             | "operation.get"
+            | "planning.get"
             | "project.list"
             | "project.status"
             | "tool.describe"
@@ -7746,7 +8186,18 @@ fn invalid_request_response(
 fn is_direct_core_command(command: &str) -> bool {
     matches!(
         command,
-        "doctor.run"
+        "goal.start"
+            | "goal.answer"
+            | "plan.get"
+            | "plan.update"
+            | "run.continue"
+            | "goal.status"
+            | "goal.pause"
+            | "goal.resume"
+            | "goal.cancel"
+            | "merge.status"
+            | "handoff.get"
+            | "doctor.run"
             | "project.list"
             | "project.status"
             | "validation.plan"
@@ -7836,7 +8287,19 @@ fn is_management_command(command: &str) -> bool {
     matches!(
         command,
         "project.register"
+            | "project.discover"
+            | "planning.create"
+            | "planning.get"
             | "scan.run"
+            | "index.status"
+            | "index.search"
+            | "index.definitions"
+            | "index.references"
+            | "graph.neighbors"
+            | "style.rust.inspect"
+            | "style.rust.check"
+            | "style.rust.prepare"
+            | "style.rust.auto-apply"
             | "finding.list"
             | "patch.prepare"
             | "patch.apply"
@@ -7845,16 +8308,124 @@ fn is_management_command(command: &str) -> bool {
             | "management.retention.apply"
             | "management.rebuild.plan"
             | "management.rebuild.apply"
+            | "management.migrate.project-v1-v2.plan"
+            | "management.migrate.project-v1-v2.apply"
+            | "management.migrate.project-v1-v2.rollback"
     )
 }
 
-fn handle_management_command(
-    service: Option<&ManagementApplicationService>,
+struct ManagementCommandContext<'a> {
+    service: Option<&'a ManagementApplicationService>,
     recovery_inspection: Option<RecoveryInspection>,
-    request: IpcRequest,
-    project_directory: &std::path::Path,
+    management_root: &'a std::path::Path,
+    binding_root: &'a std::path::Path,
+    project_directory: &'a std::path::Path,
+    policy_profile: UserPolicyProfile,
     registry_revision: u64,
+}
+
+fn handle_management_command(
+    context: ManagementCommandContext<'_>,
+    request: IpcRequest,
 ) -> IpcResponse {
+    let ManagementCommandContext {
+        service,
+        recovery_inspection,
+        management_root,
+        binding_root,
+        project_directory,
+        policy_profile,
+        registry_revision,
+    } = context;
+    if request
+        .command
+        .starts_with("management.migrate.project-v1-v2.")
+    {
+        if recovery_inspection != Some(RecoveryInspection::MigrationRequired) {
+            return invalid_request_response(
+                request,
+                "MANAGEMENT_MIGRATION_NOT_REQUIRED",
+                "Project v1 to v2 migration is available only for an inspected version 1 store.",
+                registry_revision,
+            );
+        }
+        let result = match request.command.as_str() {
+            "management.migrate.project-v1-v2.plan"
+                if payload_has_exact_keys(&request.payload, &[]) =>
+            {
+                plan_project_v1_to_v2(management_root, binding_root)
+                    .map_err(ApplicationError::Repository)
+                    .and_then(serialize_management_result)
+            }
+            "management.migrate.project-v1-v2.apply"
+                if payload_has_exact_keys(
+                    &request.payload,
+                    &["plan", "approved_plan_fingerprint"],
+                ) =>
+            {
+                management_migration_plan(&request.payload).and_then(|plan| {
+                    let approval = request
+                        .payload
+                        .get("approved_plan_fingerprint")
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(|value| Sha256Hash::from_str(value).ok())
+                        .ok_or(ApplicationError::Invalid)?;
+                    let backup_root = management_migration_backup_root(management_root, &plan)?;
+                    apply_project_v1_to_v2(
+                        management_root,
+                        binding_root,
+                        &backup_root,
+                        &plan,
+                        approval.as_str(),
+                    )
+                    .map_err(ApplicationError::Repository)
+                    .and_then(|result| {
+                        serialize_management_result(serde_json::json!({
+                            "migration":result,
+                            "backup_locator":format!(
+                                "migration-backups/project-v1-to-v2-{}",
+                                plan.plan_fingerprint.as_str().trim_start_matches("sha256:")
+                            ),
+                            "controller_restart_required":true,
+                        }))
+                    })
+                })
+            }
+            "management.migrate.project-v1-v2.rollback"
+                if payload_has_exact_keys(
+                    &request.payload,
+                    &["plan", "approved_backup_fingerprint"],
+                ) =>
+            {
+                management_migration_plan(&request.payload).and_then(|plan| {
+                    let approval = request
+                        .payload
+                        .get("approved_backup_fingerprint")
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(|value| Sha256Hash::from_str(value).ok())
+                        .ok_or(ApplicationError::Invalid)?;
+                    let backup_root = management_migration_backup_root(management_root, &plan)?;
+                    rollback_project_v1_to_v2(
+                        management_root,
+                        binding_root,
+                        &backup_root,
+                        &plan,
+                        approval.as_str(),
+                    )
+                    .map_err(ApplicationError::Repository)
+                    .and_then(|backup_fingerprint| {
+                        serialize_management_result(serde_json::json!({
+                            "state":"rolled_back",
+                            "backup_fingerprint":backup_fingerprint,
+                            "controller_restart_required":true,
+                        }))
+                    })
+                })
+            }
+            _ => Err(ApplicationError::Invalid),
+        };
+        return management_command_response(request, result, registry_revision);
+    }
     let Some(service) = service else {
         if request.command == "management.status" && payload_has_exact_keys(&request.payload, &[]) {
             return IpcResponse {
@@ -7867,8 +8438,13 @@ fn handle_management_command(
                     "recovery_required":true,
                     "inspection":recovery_inspection.unwrap_or(RecoveryInspection::Corrupt),
                     "open_mode":"read_only_recovery",
-                    "available_commands":["management.status"],
-                    "required_user_choice":["verified_restore","source_rebuild"],
+                    "available_commands":[
+                        "management.status",
+                        "management.migrate.project-v1-v2.plan",
+                        "management.migrate.project-v1-v2.apply",
+                        "management.migrate.project-v1-v2.rollback"
+                    ],
+                    "required_user_choice":["approved_project_v1_to_v2_migration","verified_restore","source_rebuild"],
                     "mutation_state":"blocked_until_recovery_candidate_activation",
                 })),
                 operation_id: None,
@@ -7886,7 +8462,9 @@ fn handle_management_command(
         );
     };
     let result = match request.command.as_str() {
-        "project.register" if payload_has_exact_keys(&request.payload, &["idempotency_key"]) => {
+        "project.register"
+            if payload_has_exact_keys(&request.payload, &["project_key", "idempotency_key"]) =>
+        {
             let idempotency_key = request
                 .idempotency_key
                 .as_deref()
@@ -7909,6 +8487,45 @@ fn handle_management_command(
         "project.list" if payload_has_exact_keys(&request.payload, &[]) => service
             .list_projects()
             .and_then(|items| serialize_management_result(serde_json::json!({"items":items}))),
+        "project.discover" if payload_has_exact_keys(&request.payload, &[]) => service
+            .discover_projects()
+            .and_then(serialize_management_result),
+        "planning.create"
+            if payload_has_exact_keys(&request.payload, &["task_file", "idempotency_key"]) =>
+        {
+            let idempotency_key = request
+                .payload
+                .get("idempotency_key")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| {
+                    !value.trim().is_empty()
+                        && value.chars().count() <= 128
+                        && !value.contains('\0')
+                })
+                .ok_or(ApplicationError::Invalid);
+            idempotency_key.and_then(|key| {
+                read_planning_task(&request.payload, project_directory).and_then(|task| {
+                    planning_check_descriptors(project_directory).and_then(|descriptors| {
+                        service
+                            .create_planning_bundle(
+                                task,
+                                planning_actor(&request.actor),
+                                descriptors,
+                                key,
+                            )
+                            .and_then(serialize_management_result)
+                    })
+                })
+            })
+        }
+        "planning.get" if payload_has_exact_keys(&request.payload, &["task_spec_id"]) => request
+            .payload
+            .get("task_spec_id")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|value| TaskSpecId::parse(value.to_owned()).ok())
+            .ok_or(ApplicationError::Invalid)
+            .and_then(|task_spec_id| service.get_planning_bundle(&task_spec_id))
+            .and_then(serialize_management_result),
         "scan.run"
             if payload_has_exact_keys(&request.payload, &["project_id", "idempotency_key"]) =>
         {
@@ -7926,6 +8543,168 @@ fn handle_management_command(
                     .and_then(|key| service.scan_project(&project_id, key))
                     .and_then(serialize_management_result)
             })
+        }
+        "index.status" if payload_has_exact_keys(&request.payload, &["project_id"]) => {
+            management_project_id(&request.payload).and_then(|project_id| {
+                service
+                    .index_status(&project_id)
+                    .and_then(serialize_management_result)
+            })
+        }
+        "index.search"
+            if payload_has_exact_keys(
+                &request.payload,
+                &["project_id", "query", "tier", "require_current"],
+            ) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                let query = request
+                    .payload
+                    .get("query")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or(ApplicationError::Invalid)?;
+                let tier = match request
+                    .payload
+                    .get("tier")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    Some("text") => IndexTier::Text,
+                    Some("syntax") => IndexTier::Syntax,
+                    Some("semantic") => IndexTier::Semantic,
+                    _ => return Err(ApplicationError::Invalid),
+                };
+                let require_current = request
+                    .payload
+                    .get("require_current")
+                    .and_then(serde_json::Value::as_bool)
+                    .ok_or(ApplicationError::Invalid)?;
+                service
+                    .index_search(&project_id, query, tier, require_current)
+                    .and_then(serialize_management_result)
+            })
+        }
+        "index.definitions"
+            if payload_has_exact_keys(
+                &request.payload,
+                &["project_id", "query", "require_current"],
+            ) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                let query = request
+                    .payload
+                    .get("query")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or(ApplicationError::Invalid)?;
+                let require_current = request
+                    .payload
+                    .get("require_current")
+                    .and_then(serde_json::Value::as_bool)
+                    .ok_or(ApplicationError::Invalid)?;
+                service
+                    .index_definitions(&project_id, query, require_current)
+                    .and_then(serialize_management_result)
+            })
+        }
+        "index.references"
+            if payload_has_exact_keys(
+                &request.payload,
+                &["project_id", "symbol_id", "require_current"],
+            ) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                let symbol_id = request
+                    .payload
+                    .get("symbol_id")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(|value| SymbolId::parse(value.to_owned()).ok())
+                    .ok_or(ApplicationError::Invalid)?;
+                let require_current = request
+                    .payload
+                    .get("require_current")
+                    .and_then(serde_json::Value::as_bool)
+                    .ok_or(ApplicationError::Invalid)?;
+                service
+                    .index_references(&project_id, &symbol_id, require_current)
+                    .and_then(serialize_management_result)
+            })
+        }
+        "graph.neighbors"
+            if payload_has_exact_keys(
+                &request.payload,
+                &["project_id", "entity_key", "require_current"],
+            ) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                let entity_key = request
+                    .payload
+                    .get("entity_key")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or(ApplicationError::Invalid)?;
+                let require_current = request
+                    .payload
+                    .get("require_current")
+                    .and_then(serde_json::Value::as_bool)
+                    .ok_or(ApplicationError::Invalid)?;
+                service
+                    .graph_neighbors(&project_id, entity_key, require_current)
+                    .and_then(serialize_management_result)
+            })
+        }
+        "style.rust.inspect" if payload_has_exact_keys(&request.payload, &["project_id"]) => {
+            management_project_id(&request.payload).and_then(|project_id| {
+                service
+                    .inspect_rust_style(
+                        &project_id,
+                        RustStyleScope::workspace(),
+                        rust_style_auto_policy(policy_profile),
+                    )
+                    .and_then(serialize_management_result)
+            })
+        }
+        "style.rust.check"
+            if payload_has_exact_keys(&request.payload, &["project_id", "scope", "package"]) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                management_rust_style_scope(&request.payload).and_then(|scope| {
+                    service
+                        .check_rust_style(
+                            &project_id,
+                            scope,
+                            rust_style_auto_policy(policy_profile),
+                        )
+                        .and_then(serialize_management_result)
+                })
+            })
+        }
+        "style.rust.prepare"
+            if payload_has_exact_keys(&request.payload, &["project_id", "scope", "package"]) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                management_rust_style_scope(&request.payload).and_then(|scope| {
+                    service
+                        .prepare_rust_style(
+                            &project_id,
+                            scope,
+                            rust_style_auto_policy(policy_profile),
+                        )
+                        .and_then(serialize_management_result)
+                })
+            })
+        }
+        "style.rust.auto-apply"
+            if payload_has_exact_keys(&request.payload, &["project_id", "scope", "package"]) =>
+        {
+            if policy_profile != UserPolicyProfile::PersonalAuto {
+                Err(ApplicationError::Invalid)
+            } else {
+                management_project_id(&request.payload).and_then(|project_id| {
+                    management_rust_style_scope(&request.payload).and_then(|scope| {
+                        service
+                            .auto_apply_rust_style(&project_id, scope)
+                            .and_then(serialize_management_result)
+                    })
+                })
+            }
         }
         "finding.list" if payload_has_exact_keys(&request.payload, &["project_id"]) => {
             management_project_id(&request.payload).and_then(|project_id| {
@@ -8007,6 +8786,14 @@ fn handle_management_command(
         }
         _ => Err(ApplicationError::Invalid),
     };
+    management_command_response(request, result, registry_revision)
+}
+
+fn management_command_response(
+    request: IpcRequest,
+    result: Result<serde_json::Value, ApplicationError>,
+    registry_revision: u64,
+) -> IpcResponse {
     match result {
         Ok(data) => IpcResponse {
             schema_id: "star.ipc.response".to_owned(),
@@ -8030,6 +8817,22 @@ fn handle_management_command(
                     "MANAGEMENT_NOT_FOUND",
                     "The requested management object does not exist.",
                 ),
+                ApplicationError::IndexNotCurrent => (
+                    "INDEX_NOT_CURRENT",
+                    "The requested code index is stale or unverified.",
+                ),
+                ApplicationError::IndexIdentityConflict => (
+                    "INDEX_IDENTITY_CONFLICT",
+                    "The same code index analysis input produced conflicting content.",
+                ),
+                ApplicationError::Planning(_) => (
+                    "MANAGEMENT_PLANNING_BLOCKED",
+                    "The task could not be converted into a sealed impact and validation plan.",
+                ),
+                ApplicationError::CheckGraph(_) => (
+                    "MANAGEMENT_CHECK_GRAPH_BLOCKED",
+                    "The validation CheckGraph could not produce sealed complete evidence.",
+                ),
                 ApplicationError::Apply(_) => (
                     "MANAGEMENT_PATCH_BLOCKED",
                     "The PatchSet could not be applied under its exact preconditions.",
@@ -8050,10 +8853,37 @@ fn handle_management_command(
                     "MANAGEMENT_PATCH_PREPARE_FAILED",
                     "The Controller could not prepare an immutable PatchSet.",
                 ),
+                ApplicationError::RustStyle(_) => (
+                    "RUST_STYLE_WORKFLOW_BLOCKED",
+                    "The pinned Rust style workflow could not produce complete verified evidence.",
+                ),
             };
             invalid_request_response(request, code, message, registry_revision)
         }
     }
+}
+
+fn management_migration_plan(
+    payload: &serde_json::Value,
+) -> Result<ProjectV1ToV2MigrationPlan, ApplicationError> {
+    serde_json::from_value(
+        payload
+            .get("plan")
+            .cloned()
+            .ok_or(ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)
+}
+
+fn management_migration_backup_root(
+    management_root: &std::path::Path,
+    plan: &ProjectV1ToV2MigrationPlan,
+) -> Result<std::path::PathBuf, ApplicationError> {
+    let state_root = management_root.parent().ok_or(ApplicationError::Invalid)?;
+    Ok(state_root.join("migration-backups").join(format!(
+        "project-v1-to-v2-{}",
+        plan.plan_fingerprint.as_str().trim_start_matches("sha256:")
+    )))
 }
 
 fn payload_has_exact_keys(payload: &serde_json::Value, allowed: &[&str]) -> bool {
@@ -8071,6 +8901,139 @@ fn management_project_id(payload: &serde_json::Value) -> Result<ProjectId, Appli
         .ok_or(ApplicationError::Invalid)
 }
 
+fn management_rust_style_scope(
+    payload: &serde_json::Value,
+) -> Result<RustStyleScope, ApplicationError> {
+    match (
+        payload.get("scope").and_then(serde_json::Value::as_str),
+        payload.get("package"),
+    ) {
+        (Some("workspace"), Some(value)) if value.is_null() => Ok(RustStyleScope::workspace()),
+        (Some("package"), Some(value)) => {
+            value
+                .as_str()
+                .ok_or(ApplicationError::Invalid)
+                .and_then(|package| {
+                    RustStyleScope::package(package.to_owned()).map_err(ApplicationError::from)
+                })
+        }
+        _ => Err(ApplicationError::Invalid),
+    }
+}
+
+fn rust_style_auto_policy(profile: UserPolicyProfile) -> RustAutoPolicy {
+    match profile {
+        UserPolicyProfile::SafeDefault => RustAutoPolicy::SafeDefault,
+        UserPolicyProfile::PersonalAuto => RustAutoPolicy::PersonalAuto,
+    }
+}
+
+fn read_planning_task(
+    payload: &serde_json::Value,
+    project_directory: &std::path::Path,
+) -> Result<TaskSpecDraft, ApplicationError> {
+    const MAX_TASK_BYTES: u64 = 1024 * 1024;
+    let relative = payload
+        .get("task_file")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| ProjectPathRef::parse(value.to_owned()).ok())
+        .ok_or(ApplicationError::Invalid)?;
+    let root = std::fs::canonicalize(project_directory).map_err(|_| ApplicationError::Invalid)?;
+    let path = std::fs::canonicalize(root.join(relative.as_str()))
+        .map_err(|_| ApplicationError::Invalid)?;
+    if !path.starts_with(&root) || !path.is_file() || !safe_user_config_path(&path) {
+        return Err(ApplicationError::Invalid);
+    }
+    let mut file = std::fs::File::open(path).map_err(|_| ApplicationError::Invalid)?;
+    if file
+        .metadata()
+        .map_err(|_| ApplicationError::Invalid)?
+        .len()
+        > MAX_TASK_BYTES
+    {
+        return Err(ApplicationError::Invalid);
+    }
+    let mut bytes = Vec::new();
+    file.by_ref()
+        .take(MAX_TASK_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| ApplicationError::Invalid)?;
+    if bytes.len() as u64 > MAX_TASK_BYTES {
+        return Err(ApplicationError::Invalid);
+    }
+    let text = String::from_utf8(bytes).map_err(|_| ApplicationError::Invalid)?;
+    let value = parse_no_duplicate_keys(&text).map_err(|_| ApplicationError::Invalid)?;
+    serde_json::from_value(value).map_err(|_| ApplicationError::Invalid)
+}
+
+fn planning_actor(actor: &serde_json::Value) -> ActorRef {
+    let kind = actor
+        .get("kind")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("unknown");
+    let actor_type = match kind {
+        "mcp" => ActorType::Mcp,
+        "cli" => ActorType::User,
+        _ => ActorType::Controller,
+    };
+    ActorRef {
+        actor_type,
+        actor_id: format!("authenticated-{kind}"),
+        display_name: format!("Authenticated {kind}"),
+        auth_source: "windows_authenticated_pipe".to_owned(),
+    }
+}
+
+fn planning_check_descriptors(
+    project_directory: &std::path::Path,
+) -> Result<Vec<star_contracts::planning::CheckDescriptor>, ApplicationError> {
+    if !project_directory
+        .join(".star-control/project.toml")
+        .is_file()
+        || !project_directory.join("scripts/validate.ps1").is_file()
+    {
+        return Ok(Vec::new());
+    }
+    let classes = vec![
+        SourceClass::Source,
+        SourceClass::Test,
+        SourceClass::Docs,
+        SourceClass::Config,
+        SourceClass::Schema,
+        SourceClass::Migration,
+        SourceClass::Generated,
+        SourceClass::Unknown,
+    ];
+    [
+        "format",
+        "lint",
+        "build",
+        "test",
+        "docs",
+        "config",
+        "contract",
+        "migration",
+        "generation",
+        "project_full",
+    ]
+    .into_iter()
+    .map(|family| {
+        descriptor(
+            &format!("star.project.{family}"),
+            family,
+            vec![
+                ValidationScopeLevel::Package,
+                ValidationScopeLevel::Workspace,
+                ValidationScopeLevel::ProjectFull,
+            ],
+            classes.clone(),
+            vec!["-Profile".to_owned(), "target".to_owned()],
+        )
+        .map_err(ApplicationError::from)
+    })
+    .collect()
+}
+
 fn serialize_management_result(
     result: impl serde::Serialize,
 ) -> Result<serde_json::Value, ApplicationError> {
@@ -8086,6 +9049,54 @@ mod tests {
         let manifest = include_str!("../../../catalog/tool-packages/star-control-core.toml");
         std::fs::write(directory.join("star-control-core.toml"), manifest).unwrap();
         for (relative, source) in [
+            (
+                "schemas/goal-start-input.schema.json",
+                include_str!("../../../catalog/tool-packages/schemas/goal-start-input.schema.json"),
+            ),
+            (
+                "schemas/goal-answer-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/goal-answer-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/goal-get-input.schema.json",
+                include_str!("../../../catalog/tool-packages/schemas/goal-get-input.schema.json"),
+            ),
+            (
+                "schemas/goal-mutation-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/goal-mutation-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/plan-update-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/plan-update-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/goal-record-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/goal-record-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/plan-get-output.schema.json",
+                include_str!("../../../catalog/tool-packages/schemas/plan-get-output.schema.json"),
+            ),
+            (
+                "schemas/change-bundle-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/change-bundle-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/change-bundle-handoff-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/change-bundle-handoff-output.schema.json"
+                ),
+            ),
             (
                 "schemas/doctor-input.schema.json",
                 include_str!("../../../catalog/tool-packages/schemas/doctor-input.schema.json"),
@@ -8207,9 +9218,9 @@ mod tests {
         assert_eq!(ready, IMPLEMENTED_CONTROLLER_COMMANDS);
         assert!(matches!(
             effective_controller_readiness(&registry, &trust, UserPolicyProfile::SafeDefault),
-            ControllerReadiness::Degraded
+            ControllerReadiness::Ready
         ));
-        assert!(!effective_core_ready(
+        assert!(effective_core_ready(
             &registry,
             &trust,
             UserPolicyProfile::SafeDefault
@@ -8276,14 +9287,38 @@ mod tests {
                 .count(),
             13
         );
-        assert!(!manifest.registration_enabled);
-        assert!(!tracked_project_registration_enabled());
+        assert!(manifest.registration_enabled);
         let manifest_directory = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let repository = manifest_directory
             .parent()
             .and_then(std::path::Path::parent)
             .unwrap()
             .to_path_buf();
+        assert_eq!(
+            validate_project_registration_allowlist(
+                &serde_json::json!({"project_key":"star-control"}),
+                &repository.canonicalize().unwrap(),
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            validate_project_registration_allowlist(
+                &serde_json::json!({"project_key":"star-control"}),
+                &repository.join("apps").canonicalize().unwrap(),
+            )
+            .unwrap_err()
+            .0,
+            "PROJECT_ROOT_NOT_ALLOWLISTED"
+        );
+        assert_eq!(
+            validate_project_registration_allowlist(
+                &serde_json::json!({"project_key":"missing"}),
+                &repository.canonicalize().unwrap(),
+            )
+            .unwrap_err()
+            .0,
+            "PROJECT_NOT_ALLOWLISTED"
+        );
         let catalog_root = repository.parent().unwrap().to_path_buf();
         let relative_path = repository
             .file_name()
@@ -8477,7 +9512,7 @@ mod tests {
             directory: root.clone(),
         }]);
         let mut trust = TrustStore::load(root.join("trust.json")).unwrap();
-        assert!(!effective_core_ready(
+        assert!(effective_core_ready(
             &registry,
             &trust,
             UserPolicyProfile::SafeDefault
@@ -8611,7 +9646,7 @@ mod tests {
                 &trust,
                 UserPolicyProfile::SafeDefault,
             ),
-            "unavailable"
+            "degraded"
         );
     }
 

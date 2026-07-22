@@ -27,13 +27,25 @@ star tools trust <package-id> --manifest-hash <sha256> [--expires <rfc3339>] [--
 star tools revoke <package-id> [--cancel-running] --reason <text> [--json]\n\
 star tools scaffold <exe-path> --output <toml-path>\n\
 star doctor [--json]\n\
-star project register [--json]\n\
+star project register <project-key> [--idempotency <key>] [--json]\n\
+star project discover [--json]\n\
 star project list [--json]\n\
 star project status <project-key> [--json]\n\
+star planning create <task-json> [--idempotency <key>] [--json]\n\
+star planning get <task-spec-id> [--json]\n\
 star validation plan <project-key> [--profile quick|target|full|release] [--unit <unit>] [--json]\n\
 star validation run <project-key> [--profile quick|target|full|release] [--unit <unit>] [--timeout-ms <milliseconds>] [--json]\n\
 star evidence get <project-key> <evidence-ref> [--json]\n\
 star scan run <project-id> [--idempotency <key>] [--json]\n\
+star index status <project-id> [--json]\n\
+star index search <project-id> <query> [--tier text|syntax|semantic] [--allow-stale] [--json]\n\
+star index definitions <project-id> <query> [--allow-stale] [--json]\n\
+star index references <project-id> <symbol-id> [--allow-stale] [--json]\n\
+star graph neighbors <project-id> <entity-key> [--allow-stale] [--json]\n\
+star style rust inspect <project-id> [--json]\n\
+star style rust check <project-id> [--scope workspace|package] [--package <package>] [--json]\n\
+star style rust prepare <project-id> --scope workspace|package [--package <package>] [--json]\n\
+star style rust auto-apply <project-id> --scope workspace|package [--package <package>] [--json]\n\
 star finding list <project-id> [--json]\n\
 star patch prepare <project-id> <finding-id> [--json]\n\
 star patch apply <project-id> <patch-set-id> --approve <sha256> [--json]\n\
@@ -42,6 +54,9 @@ star management retention plan [--json]\n\
 star management retention apply --approve <sha256> [--json]\n\
 star management rebuild plan [--json]\n\
 star management rebuild apply --approve <sha256> [--json]\n\
+star management migrate project-v1-v2 plan [--json]\n\
+star management migrate project-v1-v2 apply <plan-json> --approve <sha256> [--json]\n\
+star management migrate project-v1-v2 rollback <plan-json> --approve <sha256> [--json]\n\
 star installation finalize --architecture x64|arm64 [--replace-existing] [--json]\n\
 star installation bridge initialize --state-generation <id> [--json]\n\
 star installation status [--json]\n\
@@ -209,12 +224,25 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             })
         }
         [first, second, tail @ ..] if first == "project" && second == "register" => {
-            let (positionals, _) = parse_tail(tail, &[], &[])?;
-            require_positionals(&positionals, 0, "project register")?;
+            let (positionals, options) = parse_tail(tail, &["--idempotency"], &[])?;
+            require_positionals(&positionals, 1, "project register")?;
+            let idempotency_key = options
+                .get("--idempotency")
+                .and_then(Clone::clone)
+                .unwrap_or_else(|| RequestId::new().as_str().to_owned());
+            if idempotency_key.trim().is_empty()
+                || idempotency_key.chars().count() > 128
+                || idempotency_key.contains('\0')
+            {
+                return Err(
+                    "--idempotency must contain 1 through 128 non-NUL characters".to_owned(),
+                );
+            }
             Ok(Parsed {
                 command: "project.register".to_owned(),
                 payload: serde_json::json!({
-                    "idempotency_key":RequestId::new().as_str(),
+                    "project_key":positionals[0],
+                    "idempotency_key":idempotency_key,
                 }),
                 json,
             })
@@ -228,12 +256,54 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                 json,
             })
         }
+        [first, second, tail @ ..] if first == "project" && second == "discover" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 0, "project discover")?;
+            Ok(Parsed {
+                command: "project.discover".to_owned(),
+                payload: serde_json::json!({}),
+                json,
+            })
+        }
         [first, second, tail @ ..] if first == "project" && second == "status" => {
             let (positionals, _) = parse_tail(tail, &[], &[])?;
             require_positionals(&positionals, 1, "project status")?;
             Ok(Parsed {
                 command: "project.status".to_owned(),
                 payload: serde_json::json!({"project_key":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "planning" && second == "create" => {
+            let (positionals, options) = parse_tail(tail, &["--idempotency"], &[])?;
+            require_positionals(&positionals, 1, "planning create")?;
+            let idempotency_key = options
+                .get("--idempotency")
+                .and_then(Clone::clone)
+                .unwrap_or_else(|| RequestId::new().as_str().to_owned());
+            if idempotency_key.trim().is_empty()
+                || idempotency_key.chars().count() > 128
+                || idempotency_key.contains('\0')
+            {
+                return Err(
+                    "--idempotency must contain 1 through 128 non-NUL characters".to_owned(),
+                );
+            }
+            Ok(Parsed {
+                command: "planning.create".to_owned(),
+                payload: serde_json::json!({
+                    "task_file":positionals[0],
+                    "idempotency_key":idempotency_key,
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "planning" && second == "get" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "planning get")?;
+            Ok(Parsed {
+                command: "planning.get".to_owned(),
+                payload: serde_json::json!({"task_spec_id":positionals[0]}),
                 json,
             })
         }
@@ -364,6 +434,96 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                 json,
             })
         }
+        [first, second, tail @ ..] if first == "index" && second == "status" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "index status")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "index status requires a valid ProjectId".to_owned())?;
+            Ok(Parsed {
+                command: "index.status".to_owned(),
+                payload: serde_json::json!({"project_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "index" && second == "search" => {
+            let (positionals, options) = parse_tail(tail, &["--tier"], &["--allow-stale"])?;
+            require_positionals(&positionals, 2, "index search")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "index search requires a valid ProjectId".to_owned())?;
+            let tier = options
+                .get("--tier")
+                .and_then(Clone::clone)
+                .unwrap_or_else(|| "text".to_owned());
+            if !matches!(tier.as_str(), "text" | "syntax" | "semantic") {
+                return Err("--tier must be text, syntax, or semantic".to_owned());
+            }
+            if positionals[1].trim().is_empty() || positionals[1].chars().count() > 256 {
+                return Err("index query must contain 1 through 256 characters".to_owned());
+            }
+            Ok(Parsed {
+                command: "index.search".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "query":positionals[1],
+                    "tier":tier,
+                    "require_current":!options.contains_key("--allow-stale"),
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "index" && second == "definitions" => {
+            let (positionals, options) = parse_tail(tail, &[], &["--allow-stale"])?;
+            require_positionals(&positionals, 2, "index definitions")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "index definitions requires a valid ProjectId".to_owned())?;
+            if positionals[1].trim().is_empty() || positionals[1].chars().count() > 256 {
+                return Err("definition query must contain 1 through 256 characters".to_owned());
+            }
+            Ok(Parsed {
+                command: "index.definitions".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "query":positionals[1],
+                    "require_current":!options.contains_key("--allow-stale"),
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "index" && second == "references" => {
+            let (positionals, options) = parse_tail(tail, &[], &["--allow-stale"])?;
+            require_positionals(&positionals, 2, "index references")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "index references requires a valid ProjectId".to_owned())?;
+            star_contracts::ids::SymbolId::parse(positionals[1].clone())
+                .map_err(|_| "index references requires a valid SymbolId".to_owned())?;
+            Ok(Parsed {
+                command: "index.references".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "symbol_id":positionals[1],
+                    "require_current":!options.contains_key("--allow-stale"),
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "graph" && second == "neighbors" => {
+            let (positionals, options) = parse_tail(tail, &[], &["--allow-stale"])?;
+            require_positionals(&positionals, 2, "graph neighbors")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "graph neighbors requires a valid ProjectId".to_owned())?;
+            if positionals[1].trim().is_empty() || positionals[1].chars().count() > 512 {
+                return Err("entity key must contain 1 through 512 characters".to_owned());
+            }
+            Ok(Parsed {
+                command: "graph.neighbors".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "entity_key":positionals[1],
+                    "require_current":!options.contains_key("--allow-stale"),
+                }),
+                json,
+            })
+        }
         [first, second, tail @ ..] if first == "finding" && second == "list" => {
             let (positionals, _) = parse_tail(tail, &[], &[])?;
             require_positionals(&positionals, 1, "finding list")?;
@@ -372,6 +532,69 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             Ok(Parsed {
                 command: "finding.list".to_owned(),
                 payload: serde_json::json!({"project_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "style" && second == "rust" && third == "inspect" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "style rust inspect")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone())
+                .map_err(|_| "style rust inspect requires a valid ProjectId".to_owned())?;
+            Ok(Parsed {
+                command: "style.rust.inspect".to_owned(),
+                payload: serde_json::json!({"project_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "style"
+                && second == "rust"
+                && matches!(third.as_str(), "check" | "prepare" | "auto-apply") =>
+        {
+            let (positionals, options) = parse_tail(tail, &["--scope", "--package"], &[])?;
+            require_positionals(&positionals, 1, "style rust check|prepare|auto-apply")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone()).map_err(|_| {
+                "style rust check|prepare|auto-apply requires a valid ProjectId".to_owned()
+            })?;
+            let scope = options
+                .get("--scope")
+                .and_then(Clone::clone)
+                .unwrap_or_else(|| "workspace".to_owned());
+            if third != "check" && !options.contains_key("--scope") {
+                return Err("--scope is required for prepare and auto-apply".to_owned());
+            }
+            let package = options.get("--package").and_then(Clone::clone);
+            match (scope.as_str(), package.as_deref()) {
+                ("workspace", None) => {}
+                ("package", Some(value))
+                    if !value.is_empty()
+                        && value.len() <= 512
+                        && !value.starts_with('-')
+                        && !value.contains('\0')
+                        && !value.chars().any(char::is_whitespace) => {}
+                ("package", None) => {
+                    return Err("--package is required when --scope package is used".to_owned());
+                }
+                ("workspace", Some(_)) => {
+                    return Err("--package is valid only with --scope package".to_owned());
+                }
+                _ => return Err("--scope must be workspace or package".to_owned()),
+            }
+            let command = match third.as_str() {
+                "check" => "style.rust.check",
+                "prepare" => "style.rust.prepare",
+                "auto-apply" => "style.rust.auto-apply",
+                _ => unreachable!(),
+            };
+            Ok(Parsed {
+                command: command.to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "scope":scope,
+                    "package":package,
+                }),
                 json,
             })
         }
@@ -418,6 +641,57 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             Ok(Parsed {
                 command: "management.status".to_owned(),
                 payload: serde_json::json!({}),
+                json,
+            })
+        }
+        [first, second, third, fourth, tail @ ..]
+            if first == "management"
+                && second == "migrate"
+                && third == "project-v1-v2"
+                && fourth == "plan" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 0, "management migrate project-v1-v2 plan")?;
+            Ok(Parsed {
+                command: "management.migrate.project-v1-v2.plan".to_owned(),
+                payload: serde_json::json!({}),
+                json,
+            })
+        }
+        [first, second, third, fourth, tail @ ..]
+            if first == "management"
+                && second == "migrate"
+                && third == "project-v1-v2"
+                && matches!(fourth.as_str(), "apply" | "rollback") =>
+        {
+            let (positionals, options) = parse_tail(tail, &["--approve"], &[])?;
+            require_positionals(
+                &positionals,
+                1,
+                "management migrate project-v1-v2 apply|rollback",
+            )?;
+            let approval = required_option(&options, "--approve")?;
+            approval
+                .parse::<star_contracts::Sha256Hash>()
+                .map_err(|_| "--approve must be the exact migration or backup sha256".to_owned())?;
+            let plan = read_bounded_json_file(&positionals[0])?;
+            let (command, approval_key) = if fourth == "apply" {
+                (
+                    "management.migrate.project-v1-v2.apply",
+                    "approved_plan_fingerprint",
+                )
+            } else {
+                (
+                    "management.migrate.project-v1-v2.rollback",
+                    "approved_backup_fingerprint",
+                )
+            };
+            Ok(Parsed {
+                command: command.to_owned(),
+                payload: serde_json::json!({
+                    "plan":plan,
+                    (approval_key):approval,
+                }),
                 json,
             })
         }
@@ -569,6 +843,19 @@ fn absolute_path(value: &str) -> Result<String, String> {
             .join(path)
     };
     Ok(path.to_string_lossy().into_owned())
+}
+
+fn read_bounded_json_file(value: &str) -> Result<serde_json::Value, String> {
+    let path = PathBuf::from(absolute_path(value)?);
+    let metadata =
+        std::fs::metadata(&path).map_err(|_| "migration plan JSON is unavailable".to_owned())?;
+    if !metadata.is_file() || metadata.len() > 4 * 1024 * 1024 {
+        return Err("migration plan JSON must be a file no larger than 4 MiB".to_owned());
+    }
+    let source = std::fs::read_to_string(path)
+        .map_err(|_| "migration plan JSON is not valid UTF-8".to_owned())?;
+    star_contracts::parse_no_duplicate_keys(&source)
+        .map_err(|_| "migration plan JSON is invalid or has duplicate keys".to_owned())
 }
 
 fn install_directory() -> Result<PathBuf, String> {
@@ -1001,14 +1288,31 @@ mod tests {
         let project = star_contracts::ids::ProjectId::new();
         let finding = star_contracts::ids::FindingId::new();
         let patch = star_contracts::ids::PatchSetId::new();
+        let symbol = star_contracts::ids::SymbolId::new();
         let fingerprint = star_contracts::Sha256Hash::digest(b"patch").to_string();
         let cases = [
             (args(&["doctor"]), "doctor.run"),
-            (args(&["project", "register"]), "project.register"),
+            (
+                args(&["project", "register", "star-control"]),
+                "project.register",
+            ),
+            (args(&["project", "discover"]), "project.discover"),
             (args(&["project", "list"]), "project.list"),
             (
                 args(&["project", "status", "star-control"]),
                 "project.status",
+            ),
+            (
+                args(&["planning", "create", ".star-control/task.json"]),
+                "planning.create",
+            ),
+            (
+                vec![
+                    "planning".into(),
+                    "get".into(),
+                    star_contracts::ids::TaskSpecId::new().to_string(),
+                ],
+                "planning.get",
             ),
             (
                 args(&[
@@ -1048,6 +1352,90 @@ mod tests {
                 "scan.run",
             ),
             (
+                vec!["index".into(), "status".into(), project.to_string()],
+                "index.status",
+            ),
+            (
+                vec![
+                    "index".into(),
+                    "search".into(),
+                    project.to_string(),
+                    "main".into(),
+                    "--tier".into(),
+                    "text".into(),
+                ],
+                "index.search",
+            ),
+            (
+                vec![
+                    "index".into(),
+                    "definitions".into(),
+                    project.to_string(),
+                    "main".into(),
+                ],
+                "index.definitions",
+            ),
+            (
+                vec![
+                    "index".into(),
+                    "references".into(),
+                    project.to_string(),
+                    symbol.to_string(),
+                ],
+                "index.references",
+            ),
+            (
+                vec![
+                    "graph".into(),
+                    "neighbors".into(),
+                    project.to_string(),
+                    "source:fixture".into(),
+                ],
+                "graph.neighbors",
+            ),
+            (
+                vec![
+                    "style".into(),
+                    "rust".into(),
+                    "inspect".into(),
+                    project.to_string(),
+                ],
+                "style.rust.inspect",
+            ),
+            (
+                vec![
+                    "style".into(),
+                    "rust".into(),
+                    "check".into(),
+                    project.to_string(),
+                ],
+                "style.rust.check",
+            ),
+            (
+                vec![
+                    "style".into(),
+                    "rust".into(),
+                    "prepare".into(),
+                    project.to_string(),
+                    "--scope".into(),
+                    "workspace".into(),
+                ],
+                "style.rust.prepare",
+            ),
+            (
+                vec![
+                    "style".into(),
+                    "rust".into(),
+                    "auto-apply".into(),
+                    project.to_string(),
+                    "--scope".into(),
+                    "package".into(),
+                    "--package".into(),
+                    "star-application".into(),
+                ],
+                "style.rust.auto-apply",
+            ),
+            (
                 vec!["finding".into(), "list".into(), project.to_string()],
                 "finding.list",
             ),
@@ -1072,6 +1460,10 @@ mod tests {
                 "patch.apply",
             ),
             (args(&["management", "status"]), "management.status"),
+            (
+                args(&["management", "migrate", "project-v1-v2", "plan"]),
+                "management.migrate.project-v1-v2.plan",
+            ),
             (
                 args(&["management", "retention", "plan"]),
                 "management.retention.plan",
@@ -1117,6 +1509,28 @@ mod tests {
             ])
             .unwrap_err()
             .contains("1 through 128")
+        );
+        assert!(
+            parse(&[
+                "style".into(),
+                "rust".into(),
+                "prepare".into(),
+                project.to_string(),
+            ])
+            .unwrap_err()
+            .contains("--scope is required")
+        );
+        assert!(
+            parse(&[
+                "style".into(),
+                "rust".into(),
+                "prepare".into(),
+                project.to_string(),
+                "--scope".into(),
+                "package".into(),
+            ])
+            .unwrap_err()
+            .contains("--package is required")
         );
     }
 

@@ -22,7 +22,10 @@ serde.workspace = true
 serde_json.workspace = true
 star-contracts = { path = "../../crates/foundation/star-contracts" }
 star-adapter-windows = { path = "../../crates/adapters/star-adapter-windows" }
+star-adapter-rust-index = { path = "../../crates/adapters/star-adapter-rust-index" }
 star-application = { path = "../../crates/control/star-application" }
+star-development = { path = "../../crates/control/star-development" }
+star-planning = { path = "../../crates/control/star-planning" }
 star-project = { path = "../../crates/control/star-project" }
 star-evidence = { path = "../../crates/infrastructure/star-evidence" }
 star-state = { path = "../../crates/infrastructure/star-state" }
