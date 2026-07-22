@@ -142,7 +142,9 @@ function Get-StarValidationChecks {
     }
     if ($Context.Profile -eq "release") {
         [void]$checks.Add((New-ValidationCheckSpec -Id "cargo-release-build" -Unit "workspace" -Executable "cargo" -Arguments @("build", "--workspace", "--release", "--locked") -WorkingDirectory $Context.Root))
-        [void]$checks.Add((New-UnverifiedValidationCheckSpec -Id "release-platform-security-recovery" -Unit "release" -Reason "cross-platform installer, security, recovery, and signed artifact gates are not implemented in this project runner" -WorkingDirectory $Context.Root))
+        [void]$checks.Add((New-ValidationCheckSpec -Id "release-arm64-cross-build" -Unit "release" -Executable "pwsh" -Arguments @("-NoProfile", "-File", (Join-Path $Context.Root "scripts/release/cross-build-arm64.ps1")) -WorkingDirectory $Context.Root -UnverifiedExitCodes @(3)))
+        [void]$checks.Add((New-ValidationCheckSpec -Id "release-lifecycle-simulation" -Unit "release" -Executable "cargo" -Arguments @("test", "--locked", "-p", "star-release", "lifecycle::tests::") -WorkingDirectory $Context.Root))
+        [void]$checks.Add((New-UnverifiedValidationCheckSpec -Id "release-external-signing-publication" -Unit "release" -Reason "approved Authenticode certificate/timestamp evidence, signed Runtime EXEs, signed installer, clean x64 installer lifecycle, SBOM/provenance, exact GitHub approval, remote publish and digest reconcile require an externally supplied final candidate and are never performed by the source validation runner" -WorkingDirectory $Context.Root))
     }
     return @($checks)
 }

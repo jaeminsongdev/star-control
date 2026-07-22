@@ -1,6 +1,6 @@
 # Windows 설치 패키지
 
-이 폴더는 [Windows 설치와 Codex 연동 계약](../../docs/contracts/windows-installation-and-codex-integration.md)에 따른 current-user Inno Setup 6 설치 파일을 만든다. 공개 배포 상태기계와 서명은 이 폴더의 책임이 아니다.
+이 폴더는 [Windows 설치와 Codex 연동 계약](../../docs/contracts/windows-installation-and-codex-integration.md)에 따른 current-user Inno Setup 6 설치 파일을 만든다. 공개 배포 상태기계와 signer 자체는 이 폴더의 책임이 아니지만, stage의 file set·PE architecture와 실제 Authenticode 결과를 검증해 `unsigned_local|signed`를 거짓 없이 봉인하는 경계는 `star-package-release`가 소유한다.
 
 ## 산출물 만들기
 
@@ -11,10 +11,9 @@
 
 같은 version의 기존 `dist/stage/<version>/<architecture>`가 비어 있지 않으면 덮어쓰지 않는다. 검증된 stage를 의도적으로 다시 만들 때만 `-ReplaceStage`를 사용한다. 이 switch는 `dist/stage` 아래에서 확인된 정확한 architecture 폴더에만 적용된다.
 
-개발·복구용 ZIP이 별도로 필요할 때만 `-PortableZip`을 추가한다. 이 경로는 verified stage를 ZIP으로 봉인할 뿐이므로 Inno Setup 설치가 없어도 실행할 수 있으며 installer 생성·설치 E2E를 대체하지 않는다. 로컬 package는 항상 `unsigned_local`이며 실제 signer와 서명 검증이 구현되기 전에는 signed 상태를 선택할 수 없다.
+개발·복구용 ZIP이 별도로 필요할 때만 `-PortableZip`을 추가한다. 이 경로는 verified stage를 ZIP으로 봉인할 뿐이므로 Inno Setup 설치가 없어도 실행할 수 있으며 installer 생성·설치 E2E를 대체하지 않는다. 최초 local stage는 항상 `unsigned_local`이다.
 
-서명처럼 허용된 package-side 변환 뒤에는 설치 root가 아닌 `dist/stage` 하위의
-동일 release stage만 다시 봉인할 수 있다.
+허용된 비서명 package-side 변환 뒤에는 설치 root가 아닌 `dist/stage` 하위의 동일 release stage만 `reseal`로 다시 봉인할 수 있다. 이 명령은 상태를 `unsigned_local`로 유지한다.
 
 ```powershell
 cargo run --locked -p star-package-release -- reseal `
@@ -22,8 +21,24 @@ cargo run --locked -p star-package-release -- reseal `
   --source-revision <source-revision>
 ```
 
-`reseal`은 architecture, version, unsigned-local identity와 declared file set을
-다시 검증하며, 설치본·Codex cache·사용자 설정은 변경하지 않는다.
+`reseal`은 architecture, version, unsigned-local identity와 declared file set을 다시 검증하며, 설치본·Codex cache·사용자 설정은 변경하지 않는다.
+
+공개 후보는 먼저 stage 안의 root·Runtime Generation `.exe`를 모두 외부 signer로 서명한 뒤 `seal-signed`를 실행한다. 하나라도 offline Authenticode `Valid`가 아니거나 pre-sign manifest의 file path inventory가 달라졌으면 manifest를 쓰기 전에 실패한다. 이 명령은 nested Runtime Generation manifest와 top-level file manifest의 source revision·digest를 함께 다시 계산하므로 서명 전 검증 결과를 상속하지 않는다.
+
+```powershell
+cargo run --locked -p star-package-release -- seal-signed `
+  --architecture x64 --stage .\dist\stage\0.1.0\x64 `
+  --source-revision <40-or-64-hex-source-revision>
+```
+
+그 다음 installer를 만들고 installer 자체를 서명한 뒤 최종 installer digest와 release Gate를 새로 계산한다. `seal-signed`는 signer나 timestamp provider를 호출하지 않고 이미 서명된 byte의 Windows trust만 검증한다. approved certificate identity·timestamp receipt와 final installer signature는 별도 `ReleaseManifest` signature evidence에 결합해야 한다.
+
+표준 `dist/stage/<version>/<architecture>`가 `signed`로 봉인되면 다음 명령은 Runtime을 다시 빌드하지 않고 그 exact stage만 검증해 installer를 만든다. 생성 직후 installer 상태는 아직 `unsigned_local`이며 외부 signer로 installer를 서명한 다음 최종 digest를 다시 계산해야 한다.
+
+```powershell
+.\packaging\windows\build-installer.ps1 -Architecture x64 `
+  -SourceRevision <40-or-64-hex-source-revision> -UseExistingSignedStage
+```
 
 ## 설치와 확인
 

@@ -7,7 +7,8 @@ param(
     [string]$SourceRevision,
     [string]$IsccPath,
     [switch]$PortableZip,
-    [switch]$ReplaceStage
+    [switch]$ReplaceStage,
+    [switch]$UseExistingSignedStage
 )
 
 $ErrorActionPreference = 'Stop'
@@ -94,41 +95,67 @@ $binaryDir = Join-Path $repoRoot "target\$target\release"
 $stageDir = Join-Path $repoRoot "dist\stage\$version\$Architecture"
 $outputDir = Join-Path $repoRoot 'dist'
 
+if ($UseExistingSignedStage -and ($ReplaceStage -or $PortableZip)) {
+    throw '-UseExistingSignedStage cannot be combined with -ReplaceStage or -PortableZip.'
+}
+
 if (Test-Path -LiteralPath $stageDir) {
     $existing = Get-ChildItem -LiteralPath $stageDir -Force -ErrorAction Stop | Select-Object -First 1
     if ($existing) {
-        if (-not $ReplaceStage) {
+        if ($UseExistingSignedStage) {
+            # Public flow consumes this exact signed stage without rebuilding it.
+        } elseif (-not $ReplaceStage) {
             throw "기존 stage를 덮어쓰지 않습니다. 다시 만들려면 -ReplaceStage를 명시하세요: $stageDir"
         }
-        $resolvedStage = [System.IO.Path]::GetFullPath($stageDir)
-        $allowedRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'dist\stage')) + [System.IO.Path]::DirectorySeparatorChar
-        if (-not $resolvedStage.StartsWith($allowedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "stage 삭제 경계 밖입니다: $resolvedStage"
+        if (-not $UseExistingSignedStage) {
+            $resolvedStage = [System.IO.Path]::GetFullPath($stageDir)
+            $allowedRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'dist\stage')) + [System.IO.Path]::DirectorySeparatorChar
+            if (-not $resolvedStage.StartsWith($allowedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "stage 삭제 경계 밖입니다: $resolvedStage"
+            }
+            Remove-Item -LiteralPath $resolvedStage -Recurse -Force
         }
-        Remove-Item -LiteralPath $resolvedStage -Recurse -Force
     }
+} elseif ($UseExistingSignedStage) {
+    throw "signed stage가 없습니다: $stageDir"
 }
 
 Push-Location $repoRoot
 try {
-    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-cli', '--bin', 'star') -WorkingDirectory $repoRoot -EchoOutput
-    if ($result.ExitCode -ne 0) { throw 'star.exe build failed' }
-    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-controller', '--bin', 'star-controller') -WorkingDirectory $repoRoot -EchoOutput
-    if ($result.ExitCode -ne 0) { throw 'star-controller.exe build failed' }
-    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-mcp', '--bin', 'star-mcp') -WorkingDirectory $repoRoot -EchoOutput
-    if ($result.ExitCode -ne 0) { throw 'star-mcp.exe build failed' }
-    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-updater', '--bin', 'star-updater') -WorkingDirectory $repoRoot -EchoOutput
-    if ($result.ExitCode -ne 0) { throw 'star-updater.exe build failed' }
+    $stageSigning = 'unsigned_local'
+    if ($UseExistingSignedStage) {
+        $verifyArgs = @(
+            'run', '--locked', '-p', 'star-package-release', '--', 'verify',
+            '--architecture', $Architecture,
+            '--stage', $stageDir
+        )
+        $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments $verifyArgs -WorkingDirectory $repoRoot -EchoOutput
+        if ($result.ExitCode -ne 0) { throw 'signed release stage verification failed' }
+        $stageManifest = Get-Content -Raw -LiteralPath (Join-Path $stageDir 'release-manifest.json') | ConvertFrom-Json
+        if ($stageManifest.signing -ne 'signed' -or $stageManifest.source_revision -ne $SourceRevision) {
+            throw 'signed stage signing state or source revision does not match the exact build request'
+        }
+        $stageSigning = 'signed'
+    } else {
+        $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-cli', '--bin', 'star') -WorkingDirectory $repoRoot -EchoOutput
+        if ($result.ExitCode -ne 0) { throw 'star.exe build failed' }
+        $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-controller', '--bin', 'star-controller') -WorkingDirectory $repoRoot -EchoOutput
+        if ($result.ExitCode -ne 0) { throw 'star-controller.exe build failed' }
+        $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-mcp', '--bin', 'star-mcp') -WorkingDirectory $repoRoot -EchoOutput
+        if ($result.ExitCode -ne 0) { throw 'star-mcp.exe build failed' }
+        $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments @('build', '--locked', '--release', '--target', $target, '-p', 'star-updater', '--bin', 'star-updater') -WorkingDirectory $repoRoot -EchoOutput
+        if ($result.ExitCode -ne 0) { throw 'star-updater.exe build failed' }
 
-    $stageArgs = @(
-        'run', '--locked', '-p', 'star-package-release', '--', 'stage',
-        '--architecture', $Architecture,
-        '--binary-dir', $binaryDir,
-        '--output', $stageDir,
-        '--source-revision', $SourceRevision
-    )
-    $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments $stageArgs -WorkingDirectory $repoRoot -EchoOutput
-    if ($result.ExitCode -ne 0) { throw 'release stage generation failed' }
+        $stageArgs = @(
+            'run', '--locked', '-p', 'star-package-release', '--', 'stage',
+            '--architecture', $Architecture,
+            '--binary-dir', $binaryDir,
+            '--output', $stageDir,
+            '--source-revision', $SourceRevision
+        )
+        $result = Invoke-PackagingProcessCapture -Executable 'cargo' -Arguments $stageArgs -WorkingDirectory $repoRoot -EchoOutput
+        if ($result.ExitCode -ne 0) { throw 'release stage generation failed' }
+    }
 
     New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
     if ($PortableZip) {
@@ -143,7 +170,7 @@ try {
             sha256 = "sha256:$hash"
             architecture = $Architecture
             version = $version
-            signing_state = 'unsigned_local'
+            signing_state = $stageSigning
         } | ConvertTo-Json
         return
     }
@@ -160,6 +187,10 @@ try {
         throw 'ISCC.exe를 찾지 못했습니다. Inno Setup 6 설치 후 -IsccPath를 지정하세요.'
     }
 
+    $installer = Join-Path $outputDir "star-control-windows-$Architecture-$version-setup.exe"
+    if (Test-Path -LiteralPath $installer) {
+        throw "기존 installer를 덮어쓰지 않습니다: $installer"
+    }
     $iss = Join-Path $PSScriptRoot 'star-control.iss'
     $isccArgs = @(
         "/DAppVersion=$version",
@@ -171,7 +202,6 @@ try {
     $result = Invoke-PackagingProcessCapture -Executable $IsccPath -Arguments $isccArgs -WorkingDirectory $repoRoot -EchoOutput
     if ($result.ExitCode -ne 0) { throw 'Inno Setup compilation failed' }
 
-    $installer = Join-Path $outputDir "star-control-windows-$Architecture-$version-setup.exe"
     if (-not (Test-Path -LiteralPath $installer)) {
         throw "예상 installer가 없습니다: $installer"
     }
@@ -181,7 +211,8 @@ try {
         sha256 = "sha256:$hash"
         architecture = $Architecture
         version = $version
-        signing_state = 'unsigned_local'
+        runtime_stage_signing = $stageSigning
+        installer_signing = 'unsigned_local'
     } | ConvertTo-Json
 }
 finally {

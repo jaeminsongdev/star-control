@@ -11,7 +11,7 @@
 - quick: 일반 문서·주석·설정의 UTF-8, 링크, fence, JSON, TOML, YAML, diff 검사를 수행한다.
 - target: 기본 요청이다. 실제 변경이 일반 문서뿐이면 quick으로 낮아지고, 일반 코드면 영향 unit의 target 검사를 수행하며, 공개 계약·Schema·lockfile·toolchain·검증 계약이면 full로 올라간다.
 - full: 요청하면 낮추지 않는다. 전체 프로젝트와 생성 계약·conformance를 검사한다.
-- release: clean worktree와 full gate를 포함한다. 서명·publish·deploy 같은 외부 효과는 수행하지 않으며 준비되지 않은 release 항목은 unverified로 보고한다.
+- release: clean worktree와 full gate, x64 workspace release build, exact Rust toolchain의 ARM64 workspace cross-build, nested Rust style corpus ARM64 check·Clippy와 x64/ARM64 fake lifecycle 상태기계를 포함한다. 서명·publish·deploy 같은 외부 효과는 수행하지 않으며 signed final candidate·clean x64 installer lifecycle·SBOM/provenance·exact GitHub approval·remote digest reconcile이 공급되지 않으면 해당 check를 `unverified`로 보고한다.
 
 확장자 하나만으로 영향도를 낮추지 않는다. Markdown이라도 공개 계약 또는 생성 입력이면 full 대상이다. release는 자동 선택하지 않는다.
 
