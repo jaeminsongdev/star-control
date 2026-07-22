@@ -1,0 +1,37 @@
+{
+  "completeness": "complete",
+  "consumers": [
+    {
+      "declaration_id": "fixture",
+      "observed_value": "fixture",
+      "path": "src/lib.rs",
+      "project_id": "prj_00000000000000000000000000",
+      "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "state": "bound"
+    }
+  ],
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "declarations": [
+    {
+      "aliases": [
+        "fixture"
+      ],
+      "declaration_id": "fixture",
+      "kind": "error_code",
+      "lifecycle": "active",
+      "namespace": "fixture",
+      "owner_project_id": "fixture",
+      "source_path": "src/lib.rs",
+      "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "value": "fixture"
+    }
+  ],
+  "git_revision": "fixture",
+  "limitations": [
+    "fixture"
+  ],
+  "manifest_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "registry_id": "fixture",
+  "schema_id": "star.managed-registry-snapshot",
+  "schema_version": 1
+}

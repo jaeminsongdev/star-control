@@ -1,0 +1,11 @@
+{
+  "checks": [],
+  "dependency_download": "fixture",
+  "package_install": "fixture",
+  "report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.clean-room-doctor-report",
+  "schema_version": 1,
+  "state": "pass",
+  "system_mutation": "fixture",
+  "unexpected": true
+}

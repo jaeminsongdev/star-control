@@ -1,0 +1,21 @@
+{
+  "completeness": "complete",
+  "items": [
+    {
+      "blocking": false,
+      "fresh": false,
+      "item_id": "fixture",
+      "kind": "failure",
+      "priority": 0,
+      "source": "fixture",
+      "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "subject": "fixture"
+    }
+  ],
+  "limitations": [
+    "fixture"
+  ],
+  "radar_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.maintenance-radar",
+  "schema_version": 1
+}

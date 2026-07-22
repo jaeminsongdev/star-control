@@ -1,0 +1,12 @@
+{
+  "completeness": "complete",
+  "consumers": [],
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "declarations": [],
+  "git_revision": "fixture",
+  "manifest_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "registry_id": "fixture",
+  "schema_id": "star.managed-registry-snapshot",
+  "schema_version": 1,
+  "unexpected": true
+}

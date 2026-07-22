@@ -1,0 +1,12 @@
+{
+  "after_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "before_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "completeness": "complete",
+  "findings": [],
+  "kind": "api",
+  "outcome": "compatible",
+  "report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.compatibility-report",
+  "schema_version": 1,
+  "unexpected": true
+}
