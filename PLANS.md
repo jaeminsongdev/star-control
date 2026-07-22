@@ -38,7 +38,7 @@
 | P-0053 local | DONE | clean source seal, source 17/17, candidate Inspector 17/17, x64 isolated lifecycle, ARM64 simulation, pre-sign supply chain과 signing-negative audit |
 | P-0053 public | `blocked_external` | trusted signing, signed clean install, current Codex 17/17 invoke, final provenance와 remote reconcile 필요 |
 
-P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 branch `codex/p0041-p0053-completion`의 `b29c178..cc01b4d` commit chain으로 봉인했다. 큰 변경을 빌드 불가능한 P-ID snapshot으로 만들지 않도록 crate·Schema·fixture·문서 단위의 소규모 commit으로 나눴다.
+P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 branch `codex/p0041-p0053-completion`의 `b29c178..ac3ca70` commit chain으로 봉인했다. `ac3ca70`은 Windows CI에서 드러난 Rust semantic URI, project allowlist fixture와 long-poll scheduler 경계를 포함한 최종 candidate source revision이다. 큰 변경을 빌드 불가능한 P-ID snapshot으로 만들지 않도록 crate·Schema·fixture·문서 단위의 소규모 commit으로 나눴다.
 
 ## 구현 요약
 
@@ -52,10 +52,11 @@ P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 branch `codex/
 
 ## 검증과 로컬 출시 증거
 
-- clean FULL: `target/validation/20260722T160820458Z-11616/report.json`, 10/10 complete PASS, report `sha256:be1089993e220e1807bd5f1f4e81513c11c2fb93f0e62ff677983327d4d46714`.
-- clean release: `target/validation/20260722T160955889Z-23200/report.json`, 14/15 PASS, failed 0. 유일한 non-pass는 external signing/publication `unverified/not_run`이다.
+- clean FULL: `target/validation/20260722T183736373Z-23820/report.json`, source `ac3ca70`, 10/10 complete PASS, report `sha256:059466b8c24911c70640192af8aed995933e0cde62840fc7e096fdc2050a4df4`.
+- clean release: `target/validation/20260722T183855005Z-11592/report.json`, source `ac3ca70`, 14/15 PASS, failed 0. 유일한 non-pass는 external signing/publication `unverified/not_run`이다.
+- PR 전체 변경 Gate: `target/validation/20260722T184037675Z-24808/report.json`, 11/11 PASS. GitHub Actions run `29947378549`, job `89016087886`도 최종 candidate source에서 PASS했다.
 - M1 x64 reference: `benchmarks/m1-code-index-x64-reference.json`, 10,000-file corpus와 cache profile 5회 반복.
-- P-0053 audit: `benchmarks/p53-release-audit-x64-arm64.json`, clean candidate `p0053-clean-20260722T161337Z`, source `cc01b4d`.
+- P-0053 audit: `benchmarks/p53-release-audit-x64-arm64.json`, clean candidate `p0053-final-ac3ca70`, source `ac3ca70`.
 - x64/ARM64 stage는 manifest 279파일, 네 EXE PE machine·digest와 Inno installer model을 검증했다.
 - ARM64 workspace·explicit-feature Rust corpus cross-check/Clippy는 PASS지만 native execution은 `native_unverified`다.
 - unsigned signing-negative stage는 `seal-signed` Authenticode Gate에서 manifest mutation 없이 거부됐다.
@@ -74,7 +75,7 @@ P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 branch `codex/
 
 - repo: `D:\개발\관제\Star-Control`
 - branch: `codex/p0041-p0053-completion`
-- base: P-0040 `416ed3e`; implementation/evidence chain `b29c178..cc01b4d`
+- base: P-0040 `416ed3e`; implementation/candidate source chain `b29c178..ac3ca70`
 - 먼저 읽기: `README.md`, `docs/roadmap/final-implementation.md`, `docs/testing/p53-final-release-audit-2026-07-20.md`, `benchmarks/p53-release-audit-x64-arm64.json`
 - 다음 명령: trusted signing material이 공급되면 `seal-signed` 순서로 새 candidate 생성
 - public blocker: trusted Authenticode signing material과 signed clean-install/current-Codex-17/17/final-provenance/remote evidence

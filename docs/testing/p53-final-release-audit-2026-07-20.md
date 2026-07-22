@@ -9,13 +9,13 @@
 ## 감사 subject
 
 - branch: `codex/p0041-p0053-completion`
-- source revision: `cc01b4dc65663bb3903233e8620107bb81ea60e6`
-- candidate: `p0053-clean-20260722T161337Z`
+- source revision: `ac3ca70ff4c7c8827a892fad1b55ba22cb72bfac`
+- candidate: `p0053-final-ac3ca70`
 - source state at build and validation: clean
 - host: Microsoft Windows 11 Pro `10.0.26200`, x64
 - toolchain: Rust `1.96.0`, `rustfmt`·Clippy·`rust-analyzer`·`rust-src` pinned component
 
-이 후보는 P-0040 정책 commit `416ed3e`, P-0041~P-0053 구현·Schema·fixture·문서 commit chain과 clean-profile binding 수정 `cc01b4d`를 포함한다. 다른 `D:\개발` 저장소, Codex runtime DB·plugin cache와 실제 설치 파일은 수정하지 않았다.
+이 후보는 P-0040 정책 commit `416ed3e`, P-0041~P-0053 구현·Schema·fixture·문서 chain, clean-profile binding과 Windows CI에서 드러난 Rust semantic URI·project allowlist fixture·long-poll scheduler 경계 수정까지 포함한다. 다른 `D:\개발` 저장소, Codex runtime DB·plugin cache와 실제 설치 파일은 수정하지 않았다.
 
 ## required core와 MCP
 
@@ -23,43 +23,43 @@ source test는 required core 17개 각각에 대해 manifest action, concrete Co
 
 `goal.start`, `goal.answer`, `plan.get`, `plan.update`, `run.continue`, `status.get`, `goal.pause`, `goal.resume`, `goal.cancel`, `evidence.get`, `merge.status`, `handoff.get`, `doctor`, `project.list`, `project.status`, `validation.plan`, `validation.run`.
 
-공식 MCP Inspector `0.22.0` cached exact package를 candidate stage의 `star-mcp.exe`와 `star-controller.exe`에 직접 연결했다. fixed Gateway tool 12개와 fully resolved Schema가 통과했고, release source·`ready` filter 검색은 위 17개를 정확히 반환했다. 이어 17개를 각각 describe해 `descriptor_hash`, `required_call_tool`, risk lane과 input/output Schema를 확인했다. 증거는 `dist/release-evidence/p0053-clean-20260722T161337Z/mcp-inspector-core17.pre-sign.json`, SHA-256 `90b26ef8454d292e8df8e177139b0566c89799998259344b42dd927792329fc4`다.
+공식 MCP Inspector `0.22.0` cached exact package를 candidate stage의 `star-mcp.exe`와 `star-controller.exe`에 직접 연결했다. fixed Gateway tool 12개와 fully resolved Schema가 통과했고, release source·`ready` filter 검색은 위 17개를 정확히 반환했다. 이어 17개를 각각 describe해 `descriptor_hash`, `required_call_tool`, risk lane과 input/output Schema를 확인했다. 증거는 `dist/release-evidence/p0053-final-ac3ca70/mcp-inspector-core17.pre-sign.json`, SHA-256 `2bc1fe4f2dc3f6a27274a1e146c762289827edfd8a76d837a2a338032568413f`다.
 
 이 Inspector run은 exact candidate binary와 release Catalog의 실행 증거지만 signed installer나 current Codex host 설치 증거는 아니다. 현재 Codex가 사용하는 기존 설치본은 registry revision 4와 ready action 6개를 유지한다. candidate 검사 동안 같은 SID의 Controller를 bounded하게 교체했고, 종료 후 설치된 `D:\도구\Star-Control` Controller를 verified start 경로로 복구해 `installation status verified=true`를 재확인했다.
 
 ## x64 Stable local evidence
 
-`dist/stage/p0053-clean-20260722T161337Z/x64`는 manifest 279파일, set digest `sha256:790a52b321f5fa04e461ee98a7b15f5dc1e87668b17c36cc106aa89f6d78f3b6`, manifest digest `sha256:9418fa1bd5768a80b2566adb745cb54ca5315297e141405afcfe71da47d1ba4e`다. 네 root Runtime EXE의 PE machine은 모두 `0x8664`이고 package verifier가 source revision `cc01b4d...`와 file set을 재검증했다.
+`dist/stage/p0053-final-ac3ca70/x64`는 manifest 279파일, set digest `sha256:eec02f5539b79e320ed22b1f606bb881f46ba488491bc8b52a6135174fcdea70`, manifest digest `sha256:c16b93df40f58795b56f95c95aa6a6cc4cc726e4c6da856f670947e4969f2f5e`다. 네 root Runtime EXE의 PE machine은 모두 `0x8664`이고 package verifier가 source revision `ac3ca70...`와 file set을 재검증했다.
 
-candidate를 `target/p0053-clean-lifecycle-20260722T161337Z/program/x64`에 복제하고 격리된 `APPDATA`, `LOCALAPPDATA`, `USERPROFILE`에서 다음을 확인했다.
+candidate를 `target/p0053-final-ac3ca70-lifecycle/program/x64`에 복제하고 격리된 `APPDATA`, `LOCALAPPDATA`, `USERPROFILE`에서 다음을 확인했다.
 
 1. `installation finalize --architecture x64 --replace-existing --json` PASS
-2. `installation bridge initialize --state-generation p0053_clean_bootstrap --json` PASS
+2. `installation bridge initialize --state-generation p0053_final_ac3ca70_bootstrap --json` PASS
 3. `installation status --json`의 `verified=true`
-4. active generation `rt_f9fdfde4297dac05`, Bridge contract v2
-5. Runtime release manifest `sha256:326e9ba53b7f452ec095410ab226c934287459abe71f896252867bdaa7c4fa2e`
+4. active generation `rt_3fad4b7d6b66e83d`, Bridge contract v2
+5. Runtime release manifest `sha256:8bd05f1c4ebd1d244184a4fda9a2bd8fba93f1bd7e40aa11d431f459594037e0`
 
-Inno Setup model installer는 `target/p0053-clean-installer-model-20260722T161337Z/x64/star-control-windows-x64-0.1.0-setup.exe`, 14,700,253 bytes, SHA-256 `1b53e0ee4b8ad8a8258ef67894308d259a581fbf658a026ba4b89654202b10e4`다. model과 Runtime은 모두 `NotSigned`이므로 public candidate가 아니다.
+Inno Setup model installer는 `target/p0053-final-ac3ca70-installer-model/star-control-windows-x64-0.1.0-setup.exe`, 14,704,281 bytes, SHA-256 `60c80abdee20f6146dbfd0045631e708bf74faba670bd208fe0f0cc56be67fe2`다. model과 Runtime은 모두 `NotSigned`이므로 public candidate가 아니다.
 
 ## ARM64 Preview simulation
 
 exact Rust 1.96의 `aarch64-pc-windows-msvc` target으로 workspace cross-build, nested multi-crate Rust corpus check·Clippy, package verify, file manifest, installer model과 fake lifecycle을 실행했다.
 
-- stage: `dist/stage/p0053-clean-20260722T161337Z/arm64`
+- stage: `dist/stage/p0053-final-ac3ca70/arm64`
 - manifest file count: 279
-- set digest: `sha256:480fadb101f04472a7eb843676578012abbebf70f8ff045c097828aca6bbb522`
-- manifest digest: `sha256:35442edf1309e7fa87d4a068df51ef542b2fd20d307c82a95c30d91a910bdc8d`
+- set digest: `sha256:48080668afff473a30ee0f2090654c2b5265691331db5430b1b5e5ff52861560`
+- manifest digest: `sha256:5d36281d0d7c1facd942e1b4106143c38fb14175e66a70185ae801160a7280f8`
 - 네 root Runtime EXE PE machine: 모두 `0xaa64`
-- installer model: 13,786,256 bytes, `sha256:2ea8f34c427361e38ba7837f533e0089af33db2ad694fed404705c68a67a9c65`
+- installer model: 13,791,989 bytes, `sha256:067acf12f4cf9a31c48c1ee555b306fae64fc00edd8a818a7a6a38fcf79fdf21`
 - runtime verification: `native_unverified`
 
 Inno bootstrap 자체의 host PE machine은 payload target 판정이 아니다. ARM64 process·IPC·Controller·CLI·MCP·native install 성공은 실행하거나 주장하지 않았다.
 
 ## 공급망·보안 evidence
 
-`syft 1.45.0`으로 x64·ARM64 candidate stage의 named SPDX JSON을 만들었다. 각각 7 packages를 식별했고 SHA-256은 `a8c7ad5fd2a414ef6e8ad57c0abc7fac0d72d6212d5c55d9bb5a0198f00f6a38`, `451adb3f67ddc008a1d99ff3218d9b91789d7247dcd732a996779d08a5b15874`다. `cargo audit --deny warnings --json`은 current RustSec DB로 222 dependencies를 검사해 vulnerability 0, warning 0으로 끝났다.
+`syft 1.45.0`으로 x64·ARM64 candidate stage의 named SPDX JSON을 만들었다. 각각 7 packages를 식별했고 SHA-256은 `bfcc718de1771c9ad494d8cc3bf807db533300179e873b008f4d7a94aa6f4c8a`, `4112544d3d5fff27ff6cb44ca22f6ceb7b321ceb0c88ed85397d84cfba6b62f9`다. `cargo audit --deny warnings --json`은 current RustSec DB로 222 dependencies를 검사해 vulnerability 0, warning 0으로 끝났고 evidence SHA-256은 `828df9bf88877683e849f76f2b7145be94327b140f55adcfe24d87bf9fd91e60`이다.
 
-`provenance.pre-sign.json`은 source revision, Cargo/toolchain/release-policy material, 두 stage set·manifest·installer model·SBOM digest와 clean FULL/release report를 연결한다. SHA-256은 `d358d51fb26bc16aee7341a47904303ed811c7836931cf8ba102e5a32b06501f`다. 이 자료는 명시적으로 `public_release_eligible=false`, `must_regenerate_after_signing=true`이며 signed final artifact provenance로 재사용하지 않는다.
+`provenance.pre-sign.json`은 source revision, Cargo/toolchain/release-policy material, 두 stage set·manifest·installer model·SBOM digest와 clean FULL/release/PR Gate, GitHub Actions success를 연결한다. SHA-256은 `bc1209edab4eb0cedcd9b0f801148142b59330d11624451904acf57ab8cf5cb9`이며 PE/signature inventory SHA-256은 `55fd7ef8c78919ffb55d622ca30c77ffa76f2862500982a5eb27507f7c996dac`다. 이 자료는 명시적으로 `public_release_eligible=false`, `must_regenerate_after_signing=true`이며 signed final artifact provenance로 재사용하지 않는다.
 
 ## signing과 publication Gate
 
@@ -71,8 +71,10 @@ Git tag, GitHub draft, asset upload와 publish는 실행하지 않았다. unsign
 
 ## clean 검증
 
-- FULL: `target/validation/20260722T160820458Z-11616/report.json`, 10/10 complete PASS, 84.0초, `sha256:be1089993e220e1807bd5f1f4e81513c11c2fb93f0e62ff677983327d4d46714`
-- release: `target/validation/20260722T160955889Z-23200/report.json`, 15개 중 14개 PASS, failed 0, 142.4초, `sha256:1f57a01bf9e56446a54778fd3e6f3d43f7e98ca036096c93566127f04978c2c5`
+- FULL: `target/validation/20260722T183736373Z-23820/report.json`, 10/10 complete PASS, 74.2초, `sha256:059466b8c24911c70640192af8aed995933e0cde62840fc7e096fdc2050a4df4`
+- release: `target/validation/20260722T183855005Z-11592/report.json`, 15개 중 14개 PASS, failed 0, 91.4초, `sha256:1ce7c517f815ddf60461f15eca3802b6f355de3ff0ce6efef6557ea4d44bab0d`
+- PR 전체 변경 Gate: `target/validation/20260722T184037675Z-24808/report.json`, 11/11 PASS, `sha256:0f374a379e20d29f9bfcdc911a80077fa256a66a5d62cc1d51146ee5bc812a99`
+- GitHub Actions: workflow run `29947378549`, job `89016087886`, run #24 `Native validation` PASS
 - release의 유일한 non-pass는 `release-external-signing-publication`: `unverified/not_run`
 - `release-clean-worktree`: PASS
 
