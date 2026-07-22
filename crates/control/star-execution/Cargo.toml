@@ -12,5 +12,6 @@ serde_json.workspace = true
 star-contracts = { path = "../../foundation/star-contracts" }
 star-domain = { path = "../../foundation/star-domain" }
 star-ports = { path = "../../foundation/star-ports" }
+star-validation = { path = "../star-validation" }
 thiserror.workspace = true
 windows.workspace = true

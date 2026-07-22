@@ -13,11 +13,12 @@ star-contracts = { path = "../../foundation/star-contracts" }
 star-domain = { path = "../../foundation/star-domain" }
 star-execution = { path = "../star-execution" }
 star-ports = { path = "../../foundation/star-ports" }
+star-planning = { path = "../star-planning" }
 star-project = { path = "../star-project" }
 star-validation = { path = "../star-validation" }
 thiserror.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 star-evidence = { path = "../../infrastructure/star-evidence" }
 star-state = { path = "../../infrastructure/star-state" }
-toml.workspace = true

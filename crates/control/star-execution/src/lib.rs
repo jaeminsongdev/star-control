@@ -25,6 +25,8 @@ use windows::{
     core::{HSTRING, PCWSTR},
 };
 
+pub mod rust_style;
+
 pub const RECIPE_ID: &str = "star.recipe.remove-trailing-whitespace";
 pub const RECIPE_VERSION: &str = "1.0.0";
 
@@ -124,6 +126,11 @@ pub struct PreparedPatch {
 
 impl PreparedPatch {
     pub fn attach_artifact(mut self, artifact: ArtifactRef) -> Result<Self, ExecutionError> {
+        let artifact_bytes = serde_json::to_vec_pretty(&self.recipe_artifact)
+            .map_err(|_| ExecutionError::InvalidArtifact)?;
+        if artifact.sha256 != Sha256Hash::digest(&artifact_bytes) {
+            return Err(ExecutionError::InvalidArtifact);
+        }
         let patch_fingerprint = versioned_fingerprint(
             "star.patch-set",
             1,
@@ -281,6 +288,7 @@ pub fn prepare_trailing_whitespace_patch(
     })
 }
 
+#[derive(Debug)]
 pub struct AppliedPatch {
     pub patch_set: PatchSet,
     originals: Vec<(PathBuf, Vec<u8>, Sha256Hash)>,
@@ -333,6 +341,33 @@ pub fn apply_patch(
             }
             _ => return Err(failure(patch_set, false, "PATCH_ARTIFACT_INVALID")),
         };
+    let recipe_bytes = match serde_json::to_vec_pretty(recipe_artifact) {
+        Ok(bytes) => bytes,
+        Err(_) => return Err(failure(patch_set, false, "PATCH_ARTIFACT_INVALID")),
+    };
+    if patch_set.patch_artifact_refs.len() != 1
+        || patch_set.patch_artifact_refs[0].sha256 != Sha256Hash::digest(&recipe_bytes)
+    {
+        return Err(failure(patch_set, false, "PATCH_ARTIFACT_INVALID"));
+    }
+    let expected_patch_fingerprint = match versioned_fingerprint(
+        "star.patch-set",
+        1,
+        &serde_json::json!({
+            "project_id":patch_set.project_id,
+            "base_workspace_snapshot_id":patch_set.base_workspace_snapshot_id,
+            "change_plan_id":patch_set.change_plan_id,
+            "change_plan_revision":patch_set.change_plan_revision,
+            "operations":patch_set.operations,
+            "artifact_sha256":patch_set.patch_artifact_refs[0].sha256,
+        }),
+    ) {
+        Ok(fingerprint) => fingerprint,
+        Err(_) => return Err(failure(patch_set, false, "PATCH_ARTIFACT_INVALID")),
+    };
+    if expected_patch_fingerprint != patch_set.patch_fingerprint {
+        return Err(failure(patch_set, false, "PATCH_ARTIFACT_MISMATCH"));
+    }
     if recipe.files.len() != patch_set.operations.len() {
         return Err(failure(patch_set, false, "PATCH_ARTIFACT_MISMATCH"));
     }
@@ -372,16 +407,20 @@ pub fn apply_patch(
     }
     let mut originals: Vec<(PathBuf, Vec<u8>, Sha256Hash)> = Vec::new();
     for (path, before, after, after_hash) in prepared {
+        let still_current = fs::read(&path)
+            .ok()
+            .is_some_and(|bytes| Sha256Hash::digest(&bytes) == Sha256Hash::digest(&before));
+        if !still_current {
+            let partial = !rollback_originals(&originals);
+            patch_set.status = if partial {
+                PatchSetStatus::PartiallyApplied
+            } else {
+                PatchSetStatus::Failed
+            };
+            return Err(failure(patch_set, partial, "PATCH_TARGET_DIRTY_OR_STALE"));
+        }
         if replace_file_atomic(&path, &after).is_err() {
-            let mut partial = false;
-            for (applied_path, original, expected_after) in originals.iter().rev() {
-                let safe = fs::read(applied_path)
-                    .ok()
-                    .is_some_and(|bytes| Sha256Hash::digest(&bytes) == *expected_after);
-                if !safe || replace_file_atomic(applied_path, original).is_err() {
-                    partial = true;
-                }
-            }
+            let partial = !rollback_originals(&originals);
             patch_set.status = if partial {
                 PatchSetStatus::PartiallyApplied
             } else {
@@ -396,6 +435,19 @@ pub fn apply_patch(
         patch_set,
         originals,
     })
+}
+
+fn rollback_originals(originals: &[(PathBuf, Vec<u8>, Sha256Hash)]) -> bool {
+    let mut complete = true;
+    for (applied_path, original, expected_after) in originals.iter().rev() {
+        let safe = fs::read(applied_path)
+            .ok()
+            .is_some_and(|bytes| Sha256Hash::digest(&bytes) == *expected_after);
+        if !safe || replace_file_atomic(applied_path, original).is_err() {
+            complete = false;
+        }
+    }
+    complete
 }
 
 pub fn rollback_applied(mut applied: AppliedPatch) -> Result<PatchSet, Box<ApplyFailure>> {
@@ -654,8 +706,13 @@ mod tests {
             observed_at: Utc::now(),
             redaction_state: RedactionState::NotNeeded,
         };
-        let prepared =
-            prepare_trailing_whitespace_patch(&root, &finding, &[occurrence], &snapshot).unwrap();
+        let prepared = prepare_trailing_whitespace_patch(
+            &root,
+            &finding,
+            std::slice::from_ref(&occurrence),
+            &snapshot,
+        )
+        .unwrap();
         let artifact_ref = ArtifactRef {
             artifact_id: ArtifactId::new(),
             kind: ArtifactKind::ChangeSet,
@@ -694,6 +751,58 @@ mod tests {
         assert_eq!(
             fs::read(root.join("src/lib.rs")).unwrap(),
             b"fn main() {}  \n"
+        );
+
+        let unsealed = prepare_trailing_whitespace_patch(
+            &root,
+            &finding,
+            std::slice::from_ref(&occurrence),
+            &snapshot,
+        )
+        .unwrap();
+        let unsealed_approval = unsealed.patch_set.patch_fingerprint.to_string();
+        let error = apply_patch(
+            unsealed.patch_set,
+            &root,
+            &unsealed.recipe_artifact,
+            &unsealed_approval,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "PATCH_ARTIFACT_INVALID");
+
+        let prepared =
+            prepare_trailing_whitespace_patch(&root, &finding, &[occurrence], &snapshot).unwrap();
+        let artifact_ref = ArtifactRef {
+            artifact_id: ArtifactId::new(),
+            kind: ArtifactKind::ChangeSet,
+            project_id: Some(finding.project_id.clone()),
+            relative_path: ".ai-runs/stale-patch.json".to_owned(),
+            media_type: "application/json".to_owned(),
+            size_bytes: 1,
+            sha256: Sha256Hash::digest(
+                &serde_json::to_vec_pretty(&prepared.recipe_artifact).unwrap(),
+            ),
+            created_at: Utc::now(),
+            producer: test_producer(),
+            redaction_status: RedactionStatus::NotNeeded,
+            retention_class: RetentionClass::Evidence,
+            source_artifact_ref: None,
+        };
+        let prepared = prepared.attach_artifact(artifact_ref).unwrap();
+        let approval = prepared.patch_set.patch_fingerprint.to_string();
+        fs::write(root.join("src/lib.rs"), b"fn main() { changed(); }  \n").unwrap();
+        let error = apply_patch(
+            prepared.patch_set,
+            &root,
+            &prepared.recipe_artifact,
+            &approval,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "PATCH_TARGET_DIRTY_OR_STALE");
+        assert!(!error.partial);
+        assert_eq!(
+            fs::read(root.join("src/lib.rs")).unwrap(),
+            b"fn main() { changed(); }  \n"
         );
     }
 }
