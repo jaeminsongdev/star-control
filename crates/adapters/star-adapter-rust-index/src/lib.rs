@@ -35,6 +35,7 @@ const PINNED_RUST_ANALYZER_VERSION: &str = "rust-analyzer 1.96.0 (ac68faa2 2026-
 const PINNED_RUST_ANALYZER_X64_SHA256: &str =
     "sha256:9564c8fe6f9d0c71233a211780c87ebba728f1d8e157c3a67748e4ff5d6840ff";
 const RUST_ANALYZER_TOOLCHAIN: &str = "1.96.0";
+const RUST_SRC_RELATIVE_PATH: &str = "lib/rustlib/src/rust/library";
 const LSP_MESSAGE_LIMIT: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Debug, Default)]
@@ -142,6 +143,7 @@ impl RustAnalyzerSemanticAdapter {
         if !executable.is_absolute() || !executable.is_file() {
             return Err(RustAnalyzerDiscoveryError::Unavailable);
         }
+        require_pinned_rust_src(&executable)?;
         let version = run_bounded_command(&executable, &["--version"], Duration::from_secs(5))?;
         if !version.success
             || String::from_utf8_lossy(&version.stdout).trim() != PINNED_RUST_ANALYZER_VERSION
@@ -171,6 +173,23 @@ impl RustAnalyzerSemanticAdapter {
         self.max_reference_queries = max_reference_queries;
         self
     }
+}
+
+fn require_pinned_rust_src(
+    rust_analyzer_executable: &Path,
+) -> Result<(), RustAnalyzerDiscoveryError> {
+    let toolchain_root = rust_analyzer_executable
+        .parent()
+        .and_then(Path::parent)
+        .ok_or(RustAnalyzerDiscoveryError::Unavailable)?;
+    let library = toolchain_root.join(RUST_SRC_RELATIVE_PATH);
+    if !library.is_dir()
+        || !library.join("core/src/lib.rs").is_file()
+        || !library.join("std/src/lib.rs").is_file()
+    {
+        return Err(RustAnalyzerDiscoveryError::Unavailable);
+    }
+    Ok(())
 }
 
 struct BoundedCommandOutput {
@@ -241,7 +260,7 @@ impl SemanticAdapter for RustAnalyzerSemanticAdapter {
     fn fingerprint(&self) -> Sha256Hash {
         Sha256Hash::digest(
             format!(
-                "star.rust-analyzer-semantic-adapter.v1;toolchain={RUST_ANALYZER_TOOLCHAIN};version={PINNED_RUST_ANALYZER_VERSION};binary={};workspace_files={};workspace_bytes={};reference_queries={};request_timeout_seconds=45",
+                "star.rust-analyzer-semantic-adapter.v2;toolchain={RUST_ANALYZER_TOOLCHAIN};rust-src=required;version={PINNED_RUST_ANALYZER_VERSION};binary={};workspace_files={};workspace_bytes={};reference_queries={};request_timeout_seconds=45",
                 self.binary_sha256
                 ,self.max_workspace_files
                 ,self.max_workspace_bytes
@@ -1121,7 +1140,11 @@ fn scalar_column(source: &[u8], line_start: usize, offset: usize) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path, time::Duration};
+    use std::{
+        fs,
+        path::Path,
+        time::{Duration, SystemTime, UNIX_EPOCH},
+    };
 
     use star_contracts::{Sha256Hash, management::ProjectPathRef};
     use star_project::{
@@ -1131,7 +1154,7 @@ mod tests {
 
     use super::{
         AdapterFailure, LspClient, RustAnalyzerSemanticAdapter, RustSyntaxAdapter,
-        run_rust_analyzer, scalar_column_from_utf16,
+        require_pinned_rust_src, run_rust_analyzer, scalar_column_from_utf16,
     };
 
     fn source_at(path: &str, text: &str) -> FileObservation {
@@ -1219,6 +1242,31 @@ mod tests {
             RustSyntaxAdapter.analyze(&source(&text)),
             Err(AdapterFailure::ResourceLimit)
         ));
+    }
+
+    #[test]
+    fn pinned_rust_src_is_required_at_the_toolchain_boundary() {
+        let root = std::env::temp_dir().join(format!(
+            "star-rust-src-boundary-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let executable = root.join("bin/rust-analyzer.exe");
+        fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        fs::write(&executable, b"fixture").unwrap();
+        assert!(matches!(
+            require_pinned_rust_src(&executable),
+            Err(super::RustAnalyzerDiscoveryError::Unavailable)
+        ));
+        for path in ["core/src/lib.rs", "std/src/lib.rs"] {
+            let path = root.join(super::RUST_SRC_RELATIVE_PATH).join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"// fixture").unwrap();
+        }
+        require_pinned_rust_src(&executable).unwrap();
     }
 
     #[test]

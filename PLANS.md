@@ -10,7 +10,7 @@
 - 공개 채널은 GitHub Releases `v0.1.0`이며 별도 서버 deploy는 없다.
 - x64는 signed Stable, ARM64는 cross-build·simulation 기반 signed Preview와 `native_unverified`다.
 - Authenticode 인증서가 없으면 unsigned Stable로 낮추지 않고 `blocked_external`을 유지한다.
-- Rust 1.96, Runtime EXE 4개, required core action 17개가 current inventory다.
+- Rust 1.96과 `rustfmt`·Clippy·`rust-analyzer`·`rust-src`, Runtime EXE 4개, required core action 17개가 current inventory다.
 - 과거 13-action·현재 설치본 6-action 감사는 해당 snapshot만 설명하며 source 17/17과 섞지 않는다.
 
 ## 핵심 불변식

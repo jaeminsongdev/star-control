@@ -93,7 +93,7 @@ Star-Control/
 ├─ LICENSE
 ├─ Cargo.toml                       # workspace와 공통 dependency 정책
 ├─ Cargo.lock
-├─ rust-toolchain.toml              # exact Rust 1.96과 rustfmt·Clippy·rust-analyzer component pin
+├─ rust-toolchain.toml              # exact Rust 1.96과 rustfmt·Clippy·rust-analyzer·rust-src component pin
 ├─ deny.toml                        # dependency·license 정책
 ├─ .editorconfig
 ├─ .gitattributes

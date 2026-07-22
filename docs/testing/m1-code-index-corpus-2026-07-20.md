@@ -32,7 +32,7 @@ Rust syntax corpus는 definition 50,000건과 unresolved reference 80,000건을 
 
 non-Git와 Git dirty cohort 모두 단일 파일 변경이 4개 partition만 무효화해 full 승격이 발생하지 않았다. 10,000-file p95가 동결 budget 안이고 watcher event는 hash 검증을 대체할 수 없으므로 v0.1에는 watcher를 추가하지 않는다. file count·single file·total bytes·parallel limit과 source double-read를 유지하며, 이후 더 큰 byte-volume cohort가 budget을 넘을 때만 watcher를 별도 Slice로 재평가한다.
 
-두 dependency는 MIT이고 lockfile checksum으로 고정된다. `cargo metadata --locked --offline`가 통과하므로 syntax adapter는 build 후 offline 실행한다. semantic adapter는 root path를 저장하지 않고 `rustup which --toolchain 1.96.0 rust-analyzer`가 exact version·observed binary fingerprint를 제공할 때만 활성화되며, 없거나 pin이 다르면 정확히 unavailable fallback을 사용한다.
+두 dependency는 MIT이고 lockfile checksum으로 고정된다. `cargo metadata --locked --offline`가 통과하므로 syntax adapter는 build 후 offline 실행한다. semantic adapter는 root path를 저장하지 않고 `rustup which --toolchain 1.96.0 rust-analyzer`가 exact version·observed binary fingerprint를 제공하며 같은 toolchain의 pinned `rust-src`가 확인될 때만 활성화된다. binary·`rust-src`가 없거나 pin이 다르면 정확히 unavailable fallback을 사용한다.
 
 ## 첨부 미해결 17개 종료표
 

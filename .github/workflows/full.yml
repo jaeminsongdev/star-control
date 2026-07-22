@@ -51,7 +51,7 @@ jobs:
       - name: Install pinned Rust toolchain
         uses: dtolnay/rust-toolchain@1.96.0
         with:
-          components: rustfmt, clippy, rust-analyzer
+          components: rustfmt, clippy, rust-analyzer, rust-src
 
       - name: Run native validation
         shell: pwsh

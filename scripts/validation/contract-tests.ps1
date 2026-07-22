@@ -137,9 +137,9 @@ Assert-ValidationContract -Condition ($workflow.Contains("./scripts/validate.ps1
 Assert-ValidationContract -Condition (([regex]::Matches($workflow, "\./scripts/validate\.ps1")).Count -eq 1) -Message "native validator runs once"
 Assert-ValidationContract -Condition (-not $workflow.Contains("continue-on-error: true")) -Message "validation gate must be authoritative"
 Assert-ValidationContract -Condition ($workflow.Contains("uses: dtolnay/rust-toolchain@1.96.0")) -Message "CI uses the exact Rust toolchain pin"
-Assert-ValidationContract -Condition ($workflow.Contains("components: rustfmt, clippy, rust-analyzer")) -Message "CI installs every required Rust component"
+Assert-ValidationContract -Condition ($workflow.Contains("components: rustfmt, clippy, rust-analyzer, rust-src")) -Message "CI installs every required Rust component"
 Assert-ValidationContract -Condition ($rustToolchain.Contains('channel = "1.96.0"')) -Message "repository Rust toolchain pin"
-foreach ($component in @("rustfmt", "clippy", "rust-analyzer")) {
+foreach ($component in @("rustfmt", "clippy", "rust-analyzer", "rust-src")) {
     Assert-ValidationContract -Condition ($rustToolchain.Contains("`"$component`"")) -Message "repository Rust component $component"
 }
 foreach ($removedDuplicate in @(

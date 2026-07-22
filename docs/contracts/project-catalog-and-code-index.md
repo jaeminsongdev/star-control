@@ -422,7 +422,7 @@ M1 `SourceRange`의 line·column은 1-based Unicode scalar index다. tree-sitter
 
 | 범위 | current 동작 | 승격하지 않는 것 |
 |---|---|---|
-| toolchain | `rust-toolchain.toml`의 Rust·rust-analyzer 1.96.0, observed binary hash를 adapter fingerprint에 포함 | 다른 toolchain·version·binary를 호환된 것으로 간주하지 않음 |
+| toolchain | `rust-toolchain.toml`의 Rust·rust-analyzer 1.96.0과 `rust-src`, observed binary hash를 adapter fingerprint에 포함 | 다른 toolchain·version·binary 또는 `rust-src` 누락을 호환된 것으로 간주하지 않음 |
 | syntax | `tree-sitter` 0.26.11 + `tree-sitter-rust` 0.24.2, 16 MiB/file·node/depth 상한, declaration만 `confirmed_definition` | syntax identifier를 resolved reference로 승격하지 않음 |
 | macro·cfg | macro declaration과 parse 가능한 cfg source declaration을 색인 | macro expansion, active feature/target/cfg, generated target 관계를 syntax 사실로 확정하지 않음 |
 | semantic | pinned rust-analyzer LSP `documentSymbol`·`references`, same-file exact target만 resolved | cross-file target은 `INDEX_RUST_ANALYZER_CROSS_FILE_TARGET_DEFERRED`, dynamic dispatch·reflection은 미확정 |

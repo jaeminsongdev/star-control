@@ -13,7 +13,7 @@
 - candidate: `p0053-clean-20260722T161337Z`
 - source state at build and validation: clean
 - host: Microsoft Windows 11 Pro `10.0.26200`, x64
-- toolchain: Rust `1.96.0`, `rustfmt`·Clippy·`rust-analyzer` pinned component
+- toolchain: Rust `1.96.0`, `rustfmt`·Clippy·`rust-analyzer`·`rust-src` pinned component
 
 이 후보는 P-0040 정책 commit `416ed3e`, P-0041~P-0053 구현·Schema·fixture·문서 commit chain과 clean-profile binding 수정 `cc01b4d`를 포함한다. 다른 `D:\개발` 저장소, Codex runtime DB·plugin cache와 실제 설치 파일은 수정하지 않았다.
 

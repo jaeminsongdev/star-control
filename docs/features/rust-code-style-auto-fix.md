@@ -22,7 +22,7 @@
 
 M11은 새 최상위 persisted document나 별도 mutable run record를 만들지 않는다. `RecipeExecution`, `PatchSet`, `PatchApplication`, `ValidationRun`, `GateDecision`, `EvidenceBundle`과 `ReviewPack`에 이 문서의 nested versioned type을 연결한다. DB는 derived projection이며 Git source·Cargo/rustfmt/Clippy config·versioned Catalog policy가 계속 정본이다.
 
-현재 Star-Control root `Cargo.toml`은 workspace, `edition = "2024"`, `rust-version = "1.96"`을 선언하고 `rust-toolchain.toml`은 exact `1.96.0`과 `rustfmt`, `clippy`, `rust-analyzer` component를 고정한다. ARM64 target은 manifest가 자동 설치하지 않으며 release simulation은 이미 설치된 exact-version toolchain과 `aarch64-pc-windows-msvc` standard library를 read-only로 발견할 때만 실행한다. component·target이 없거나 identity가 다르면 설치·업데이트하지 않고 unavailable/unverified로 중단한다.
+현재 Star-Control root `Cargo.toml`은 workspace, `edition = "2024"`, `rust-version = "1.96"`을 선언하고 `rust-toolchain.toml`은 exact `1.96.0`과 `rustfmt`, `clippy`, `rust-analyzer`, `rust-src` component를 고정한다. ARM64 target은 manifest가 자동 설치하지 않으며 release simulation은 이미 설치된 exact-version toolchain과 `aarch64-pc-windows-msvc` standard library를 read-only로 발견할 때만 실행한다. component·target이 없거나 identity가 다르면 설치·업데이트하지 않고 unavailable/unverified로 중단한다.
 
 ## 2. 목표와 사용자 효용
 
