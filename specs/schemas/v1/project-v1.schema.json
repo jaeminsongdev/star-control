@@ -28,17 +28,10 @@
       "type": "string"
     }
   },
-  "$id": "urn:star-control:schema:star.project:v2",
+  "$id": "urn:star-control:schema:star.project:v1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "attached_checkout_ids": {
-      "items": {
-        "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
-        "type": "string"
-      },
-      "type": "array"
-    },
     "declaration_fingerprint": {
       "$ref": "#/$defs/Sha256Hash"
     },
@@ -72,12 +65,19 @@
     "repository_kind": {
       "$ref": "#/$defs/RepositoryKind"
     },
+    "root_binding_id": {
+      "pattern": "^rtb_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "schema_id": {
       "const": "star.project",
       "type": "string"
     },
     "schema_version": {
-      "const": 2,
+      "const": 1,
       "type": "integer"
     },
     "source_of_truth": {
@@ -96,9 +96,8 @@
     "repository_kind",
     "source_of_truth",
     "declaration_fingerprint",
-    "registration_state",
-    "attached_checkout_ids"
+    "registration_state"
   ],
-  "title": "Project",
+  "title": "ProjectV1",
   "type": "object"
 }

@@ -1,0 +1,190 @@
+{
+  "$defs": {
+    "CheckoutAttachmentState": {
+      "enum": [
+        "attached",
+        "detached",
+        "missing",
+        "identity_conflict",
+        "unsupported"
+      ],
+      "type": "string"
+    },
+    "CheckoutHeadState": {
+      "enum": [
+        "branch",
+        "detached",
+        "unborn",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "CheckoutKind": {
+      "enum": [
+        "main_worktree",
+        "linked_worktree",
+        "clone",
+        "filesystem_root"
+      ],
+      "type": "string"
+    },
+    "RemoteIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "host",
+        "owner",
+        "repository"
+      ],
+      "type": "object"
+    },
+    "RepositoryKind": {
+      "enum": [
+        "git",
+        "none"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.project-checkout:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attachment_state": {
+      "$ref": "#/$defs/CheckoutAttachmentState"
+    },
+    "checkout_id": {
+      "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "checkout_kind": {
+      "$ref": "#/$defs/CheckoutKind"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "default_branch_hint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "head_commit_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "head_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "head_state": {
+      "$ref": "#/$defs/CheckoutHeadState"
+    },
+    "head_tree_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_observed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "object_format": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "remote_identity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RemoteIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "repository_binding_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "repository_kind": {
+      "$ref": "#/$defs/RepositoryKind"
+    },
+    "root_binding_id": {
+      "pattern": "^rtb_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_id": {
+      "const": "star.project-checkout",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "upstream_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "worktree_binding_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "checkout_id",
+    "project_id",
+    "repository_kind",
+    "checkout_kind",
+    "head_state",
+    "attachment_state",
+    "last_observed_at",
+    "limitations",
+    "content_fingerprint"
+  ],
+  "title": "ProjectCheckout",
+  "type": "object"
+}

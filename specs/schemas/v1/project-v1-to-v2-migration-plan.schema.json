@@ -1,0 +1,442 @@
+{
+  "$defs": {
+    "CheckoutAttachmentState": {
+      "enum": [
+        "attached",
+        "detached",
+        "missing",
+        "identity_conflict",
+        "unsupported"
+      ],
+      "type": "string"
+    },
+    "CheckoutHeadState": {
+      "enum": [
+        "branch",
+        "detached",
+        "unborn",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "CheckoutKind": {
+      "enum": [
+        "main_worktree",
+        "linked_worktree",
+        "clone",
+        "filesystem_root"
+      ],
+      "type": "string"
+    },
+    "IdentityScope": {
+      "enum": [
+        "shared",
+        "local"
+      ],
+      "type": "string"
+    },
+    "Project": {
+      "additionalProperties": false,
+      "properties": {
+        "attached_checkout_ids": {
+          "items": {
+            "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "declaration_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "identity_scope": {
+          "$ref": "#/$defs/IdentityScope"
+        },
+        "latest_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latest_workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "registration_state": {
+          "$ref": "#/$defs/RegistrationState"
+        },
+        "repository_kind": {
+          "$ref": "#/$defs/RepositoryKind"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_of_truth": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "project_id",
+        "identity_scope",
+        "display_name",
+        "repository_kind",
+        "source_of_truth",
+        "declaration_fingerprint",
+        "registration_state",
+        "attached_checkout_ids"
+      ],
+      "type": "object"
+    },
+    "ProjectCheckout": {
+      "additionalProperties": false,
+      "properties": {
+        "attachment_state": {
+          "$ref": "#/$defs/CheckoutAttachmentState"
+        },
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "checkout_kind": {
+          "$ref": "#/$defs/CheckoutKind"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "default_branch_hint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_commit_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_state": {
+          "$ref": "#/$defs/CheckoutHeadState"
+        },
+        "head_tree_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_observed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "object_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "remote_identity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemoteIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "repository_binding_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repository_kind": {
+          "$ref": "#/$defs/RepositoryKind"
+        },
+        "root_binding_id": {
+          "pattern": "^rtb_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "upstream_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "worktree_binding_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "checkout_id",
+        "project_id",
+        "repository_kind",
+        "checkout_kind",
+        "head_state",
+        "attachment_state",
+        "last_observed_at",
+        "limitations",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ProjectV1": {
+      "additionalProperties": false,
+      "properties": {
+        "declaration_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "identity_scope": {
+          "$ref": "#/$defs/IdentityScope"
+        },
+        "latest_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latest_workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "registration_state": {
+          "$ref": "#/$defs/RegistrationState"
+        },
+        "repository_kind": {
+          "$ref": "#/$defs/RepositoryKind"
+        },
+        "root_binding_id": {
+          "pattern": "^rtb_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_of_truth": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "project_id",
+        "identity_scope",
+        "display_name",
+        "repository_kind",
+        "source_of_truth",
+        "declaration_fingerprint",
+        "registration_state"
+      ],
+      "type": "object"
+    },
+    "ProjectV1ToV2MigrationEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProjectCheckout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "project": {
+          "$ref": "#/$defs/Project"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "source_project": {
+          "$ref": "#/$defs/ProjectV1"
+        },
+        "source_project_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_root_binding_id": {
+          "pattern": "^rtb_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "source_project",
+        "source_project_fingerprint",
+        "source_updated_at",
+        "project"
+      ],
+      "type": "object"
+    },
+    "RegistrationState": {
+      "enum": [
+        "attached",
+        "detached",
+        "invalid"
+      ],
+      "type": "string"
+    },
+    "RemoteIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "host",
+        "owner",
+        "repository"
+      ],
+      "type": "object"
+    },
+    "RepositoryKind": {
+      "enum": [
+        "git",
+        "none"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.management.project-v1-to-v2-migration-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/ProjectV1ToV2MigrationEntry"
+      },
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.management.project-v1-to-v2-migration-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_store_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "target_store_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "source_store_version",
+    "target_store_version",
+    "entries",
+    "limitations",
+    "plan_fingerprint"
+  ],
+  "title": "ProjectV1ToV2MigrationPlan",
+  "type": "object"
+}

@@ -1,0 +1,280 @@
+{
+  "$defs": {
+    "ClippyAllowlistSource": {
+      "enum": [
+        "project_catalog",
+        "user_catalog",
+        "builtin_verified"
+      ],
+      "type": "string"
+    },
+    "ClippyFixAllowlistEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_scope": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "clippy_executable_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "clippy_release": {
+          "type": "string"
+        },
+        "corpus_ref": {
+          "type": "string"
+        },
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "entry_version": {
+          "type": "string"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/RustCatalogLifecycle"
+        },
+        "lint_id": {
+          "type": "string"
+        },
+        "public_api_policy": {
+          "type": "string"
+        },
+        "required_applicability": {
+          "$ref": "#/$defs/SuggestionApplicability"
+        },
+        "required_check_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/ClippyAllowlistSource"
+        },
+        "source_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "lint_id",
+        "entry_version",
+        "source",
+        "source_ref",
+        "clippy_release",
+        "clippy_executable_sha256",
+        "required_applicability",
+        "allowed_scope",
+        "public_api_policy",
+        "required_check_families",
+        "corpus_ref",
+        "lifecycle",
+        "definition_fingerprint"
+      ],
+      "type": "object"
+    },
+    "RustAutoPolicy": {
+      "enum": [
+        "safe_default",
+        "personal_auto"
+      ],
+      "type": "string"
+    },
+    "RustCatalogLifecycle": {
+      "enum": [
+        "active",
+        "deprecated",
+        "retired",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "RustCompleteness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified",
+        "ambiguous",
+        "unsupported"
+      ],
+      "type": "string"
+    },
+    "RustSourceBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "content_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_ref",
+        "content_sha256"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SuggestionApplicability": {
+      "enum": [
+        "machine_applicable",
+        "maybe_incorrect",
+        "has_placeholders",
+        "unspecified",
+        "unknown"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.rust-style-policy-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "auto_policy": {
+      "$ref": "#/$defs/RustAutoPolicy"
+    },
+    "clippy_fix_allowlist": {
+      "items": {
+        "$ref": "#/$defs/ClippyFixAllowlistEntry"
+      },
+      "type": "array"
+    },
+    "clippy_parameter_sources": {
+      "items": {
+        "$ref": "#/$defs/RustSourceBinding"
+      },
+      "type": "array"
+    },
+    "contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "coverage_policy_ref": {
+      "type": "string"
+    },
+    "fixed_adapter_definition_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "forbidden_operations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "formatting_sources": {
+      "items": {
+        "$ref": "#/$defs/RustSourceBinding"
+      },
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "lint_level_sources": {
+      "items": {
+        "$ref": "#/$defs/RustSourceBinding"
+      },
+      "type": "array"
+    },
+    "max_changed_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "max_files": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "max_hunks": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "pipeline_ref": {
+      "type": "string"
+    },
+    "policy_completeness": {
+      "$ref": "#/$defs/RustCompleteness"
+    },
+    "policy_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "profile_definition_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "profile_ref": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.rust-style-policy-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_packages": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "scope_paths": {
+      "items": {
+        "minLength": 1,
+        "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "scope_project_id": {
+      "type": "string"
+    },
+    "standing_grant_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "contract_version",
+    "profile_ref",
+    "profile_definition_hash",
+    "pipeline_ref",
+    "fixed_adapter_definition_fingerprint",
+    "formatting_sources",
+    "lint_level_sources",
+    "clippy_parameter_sources",
+    "clippy_fix_allowlist",
+    "coverage_policy_ref",
+    "scope_project_id",
+    "scope_packages",
+    "scope_paths",
+    "auto_policy",
+    "max_files",
+    "max_hunks",
+    "max_changed_bytes",
+    "forbidden_operations",
+    "policy_completeness",
+    "limitations",
+    "policy_fingerprint"
+  ],
+  "title": "RustStylePolicySnapshot",
+  "type": "object"
+}

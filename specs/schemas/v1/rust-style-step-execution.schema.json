@@ -1,0 +1,150 @@
+{
+  "$defs": {
+    "RustSideEffectResult": {
+      "enum": [
+        "pass",
+        "violation",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "RustStepResult": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "blocked",
+        "stale",
+        "cancelled",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.rust-style-step-execution:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "coverage_cell_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "diagnostic_set_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "diff_artifact_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "execution_result_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "filesystem_manifest_ref": {
+      "type": "string"
+    },
+    "finished_at": {
+      "type": "string"
+    },
+    "ordinal": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "pipeline_ref": {
+      "type": "string"
+    },
+    "result": {
+      "$ref": "#/$defs/RustStepResult"
+    },
+    "schema_id": {
+      "const": "star.rust-style-step-execution",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "side_effect_result": {
+      "$ref": "#/$defs/RustSideEffectResult"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "step_execution_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "step_execution_id": {
+      "type": "string"
+    },
+    "step_id": {
+      "type": "string"
+    },
+    "subject_after": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "subject_before": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "suggestion_manifest_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "task_invocation_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tool_descriptor_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "contract_version",
+    "step_execution_id",
+    "ordinal",
+    "step_id",
+    "pipeline_ref",
+    "adapter_fingerprint",
+    "subject_before",
+    "subject_after",
+    "coverage_cell_refs",
+    "filesystem_manifest_ref",
+    "side_effect_result",
+    "result",
+    "started_at",
+    "finished_at",
+    "step_execution_fingerprint"
+  ],
+  "title": "RustStyleStepExecution",
+  "type": "object"
+}

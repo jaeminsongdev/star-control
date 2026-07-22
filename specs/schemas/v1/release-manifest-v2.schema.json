@@ -1,0 +1,596 @@
+{
+  "$defs": {
+    "EvidenceCompleteness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified",
+        "not_run",
+        "flaky"
+      ],
+      "type": "string"
+    },
+    "ReleaseArchitecture": {
+      "enum": [
+        "x64",
+        "arm64"
+      ],
+      "type": "string"
+    },
+    "ReleaseArtifactV2": {
+      "additionalProperties": false,
+      "properties": {
+        "architecture": {
+          "$ref": "#/$defs/ReleaseArchitecture"
+        },
+        "logical_name": {
+          "type": "string"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "logical_name",
+        "role",
+        "architecture",
+        "size",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ReleaseCompatibilityTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "architecture": {
+          "$ref": "#/$defs/ReleaseArchitecture"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "minimum_windows_build": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runtime_verification": {
+          "$ref": "#/$defs/RuntimeVerificationState"
+        },
+        "support_tier": {
+          "$ref": "#/$defs/ReleaseSupportTier"
+        }
+      },
+      "required": [
+        "architecture",
+        "support_tier",
+        "runtime_verification",
+        "minimum_windows_build",
+        "evidence_refs",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "ReleaseIdentityBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "environment_fingerprints": {
+          "items": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "type": "array"
+        },
+        "profile_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "tool_descriptor_fingerprints": {
+          "items": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "config_fingerprint",
+        "catalog_fingerprint",
+        "tool_descriptor_fingerprints",
+        "profile_fingerprint",
+        "environment_fingerprints"
+      ],
+      "type": "object"
+    },
+    "ReleaseRemoteAction": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "type": "string"
+        },
+        "after_snapshot_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "approval_request_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "before_snapshot_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "destination": {
+          "type": "string"
+        },
+        "immutable_subject_digest": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "kind": {
+          "$ref": "#/$defs/RemoteActionKind"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "receipt_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/RemoteActionState"
+        }
+      },
+      "required": [
+        "action_id",
+        "kind",
+        "provider",
+        "destination",
+        "immutable_subject_digest",
+        "state"
+      ],
+      "type": "object"
+    },
+    "ReleaseSourceRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "ReleaseStatus": {
+      "enum": [
+        "draft",
+        "candidate",
+        "blocked",
+        "blocked_external",
+        "ready",
+        "approved",
+        "publishing",
+        "publish_outcome_unknown",
+        "published",
+        "rollback_required",
+        "withdrawn"
+      ],
+      "type": "string"
+    },
+    "ReleaseSupportTier": {
+      "enum": [
+        "stable",
+        "preview"
+      ],
+      "type": "string"
+    },
+    "ReleaseVerificationLayer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_set_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completeness": {
+          "$ref": "#/$defs/EvidenceCompleteness"
+        },
+        "gate_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "layer": {
+          "$ref": "#/$defs/VerificationLayerKind"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "validation_plan_ref": {
+          "type": "string"
+        },
+        "validation_run_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "layer",
+        "validation_plan_ref",
+        "completeness",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "RemoteActionKind": {
+      "enum": [
+        "publish",
+        "deploy",
+        "withdraw",
+        "rollback"
+      ],
+      "type": "string"
+    },
+    "RemoteActionState": {
+      "enum": [
+        "planned",
+        "approved",
+        "running",
+        "verified",
+        "outcome_unknown",
+        "rollback_required",
+        "rolled_back",
+        "withdrawn",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "RuntimeVerificationState": {
+      "enum": [
+        "native_verified",
+        "native_unverified",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SupplyChainDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/SupplyChainKind"
+        },
+        "policy_ref": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/SupplyChainState"
+        }
+      },
+      "required": [
+        "kind",
+        "state",
+        "policy_ref",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "SupplyChainKind": {
+      "enum": [
+        "sbom",
+        "provenance",
+        "signing"
+      ],
+      "type": "string"
+    },
+    "SupplyChainState": {
+      "enum": [
+        "not_required",
+        "required_unavailable",
+        "required_incomplete",
+        "complete"
+      ],
+      "type": "string"
+    },
+    "VerificationLayerKind": {
+      "enum": [
+        "local_quick",
+        "target",
+        "full",
+        "release"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.release-manifest:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "after_remote_snapshot_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "approval_request_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "artifact_set_digest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ReleaseArtifactV2"
+      },
+      "type": "array"
+    },
+    "before_remote_snapshot_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "build_invocation_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "channel": {
+      "type": "string"
+    },
+    "compatibility": {
+      "items": {
+        "$ref": "#/$defs/ReleaseCompatibilityTarget"
+      },
+      "type": "array"
+    },
+    "external_gates": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "identity_binding": {
+      "$ref": "#/$defs/ReleaseIdentityBinding"
+    },
+    "included_files_manifest_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "manifest_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "metadata_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "product_id": {
+      "type": "string"
+    },
+    "provenance_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "release_gate_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "release_manifest_id": {
+      "pattern": "^rel_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "remaining_risks": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "remote_actions": {
+      "items": {
+        "$ref": "#/$defs/ReleaseRemoteAction"
+      },
+      "type": "array"
+    },
+    "remote_operation_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rollback_artifact_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rollback_plan_ref": {
+      "type": "string"
+    },
+    "sbom_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_id": {
+      "const": "star.release-manifest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "scope_revision_ref": {
+      "type": "string"
+    },
+    "signature_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "source_revisions": {
+      "items": {
+        "$ref": "#/$defs/ReleaseSourceRevision",
+        "pattern": "^prv_[a-z2-7]{52}$"
+      },
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/ReleaseStatus"
+    },
+    "supersedes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "supply_chain_applicability": {
+      "items": {
+        "$ref": "#/$defs/SupplyChainDecision"
+      },
+      "type": "array"
+    },
+    "task_spec_ref": {
+      "type": "string"
+    },
+    "user_data_policy": {
+      "type": "string"
+    },
+    "validation_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "verification_layers": {
+      "items": {
+        "$ref": "#/$defs/ReleaseVerificationLayer"
+      },
+      "type": "array"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "release_manifest_id",
+    "revision",
+    "product_id",
+    "version",
+    "channel",
+    "task_spec_ref",
+    "scope_revision_ref",
+    "source_revisions",
+    "identity_binding",
+    "verification_layers",
+    "build_invocation_refs",
+    "artifacts",
+    "metadata_refs",
+    "supply_chain_applicability",
+    "signature_refs",
+    "compatibility",
+    "validation_refs",
+    "release_gate_refs",
+    "remote_actions",
+    "approval_request_refs",
+    "remote_operation_refs",
+    "before_remote_snapshot_refs",
+    "after_remote_snapshot_refs",
+    "rollback_plan_ref",
+    "user_data_policy",
+    "remaining_risks",
+    "external_gates",
+    "status",
+    "manifest_fingerprint"
+  ],
+  "title": "ReleaseManifestV2",
+  "type": "object"
+}

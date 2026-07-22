@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "RiskSeverityFloor": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "SelectorKind": {
+      "enum": [
+        "path",
+        "package",
+        "workspace",
+        "symbol",
+        "contract",
+        "config_key",
+        "schema",
+        "source_class"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SourceClass": {
+      "enum": [
+        "source",
+        "test",
+        "docs",
+        "config",
+        "schema",
+        "migration",
+        "vendor",
+        "generated",
+        "cache",
+        "output",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "ValidationScopeLevel": {
+      "enum": [
+        "package",
+        "workspace",
+        "project_full"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.risk-path-descriptor:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "entity_kinds": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "fallback_floor": {
+      "$ref": "#/$defs/ValidationScopeLevel"
+    },
+    "required_check_families": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "risk_id": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.risk-path-descriptor",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "selector_kinds": {
+      "items": {
+        "$ref": "#/$defs/SelectorKind"
+      },
+      "type": "array"
+    },
+    "severity_floor": {
+      "$ref": "#/$defs/RiskSeverityFloor"
+    },
+    "source_classes": {
+      "items": {
+        "$ref": "#/$defs/SourceClass"
+      },
+      "type": "array"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "risk_id",
+    "version",
+    "selector_kinds",
+    "source_classes",
+    "entity_kinds",
+    "required_check_families",
+    "severity_floor",
+    "fallback_floor",
+    "content_fingerprint"
+  ],
+  "title": "RiskPathDescriptor",
+  "type": "object"
+}

@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "MigrationApplyState": {
+      "enum": [
+        "completed",
+        "interrupted"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.management.project-v1-to-v2-migration-result:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "backup_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "completed_steps": {
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.management.project-v1-to-v2-migration-result",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/MigrationApplyState"
+    },
+    "total_steps": {
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "state",
+    "completed_steps",
+    "total_steps",
+    "plan_fingerprint",
+    "backup_fingerprint"
+  ],
+  "title": "ProjectV1ToV2MigrationResult",
+  "type": "object"
+}

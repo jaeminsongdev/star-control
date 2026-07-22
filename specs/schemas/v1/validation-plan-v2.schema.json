@@ -1,0 +1,621 @@
+{
+  "$defs": {
+    "AffectedScope": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "requested_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "selected_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "selectors": {
+          "items": {
+            "$ref": "#/$defs/PlanningSelector"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "requested_level",
+        "selected_level",
+        "selectors",
+        "reason_codes",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "CheckApplicability": {
+      "enum": [
+        "applicable",
+        "not_applicable",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "CheckCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "applicability": {
+          "$ref": "#/$defs/CheckApplicability"
+        },
+        "check_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "family": {
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CheckResolutionOutcome"
+        },
+        "reason_code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "applicability",
+        "outcome",
+        "evidence_refs",
+        "reason_code"
+      ],
+      "type": "object"
+    },
+    "CheckGraphEdgeV2": {
+      "additionalProperties": false,
+      "properties": {
+        "from_plan_item_id": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string"
+        },
+        "to_plan_item_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_plan_item_id",
+        "to_plan_item_id",
+        "relation"
+      ],
+      "type": "object"
+    },
+    "CheckGraphV2": {
+      "additionalProperties": false,
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/CheckGraphEdgeV2"
+          },
+          "type": "array"
+        },
+        "failure_policy": {
+          "type": "string"
+        },
+        "max_parallel": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "nodes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "nodes",
+        "edges",
+        "max_parallel",
+        "failure_policy"
+      ],
+      "type": "object"
+    },
+    "CheckInvocationTemplate": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expected_exit_codes": {
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "logical_executable": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "logical_executable",
+        "args",
+        "timeout_ms",
+        "expected_exit_codes"
+      ],
+      "type": "object"
+    },
+    "CheckPlanV2": {
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "evidence_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "fallback_floor": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "family": {
+          "type": "string"
+        },
+        "impact_edge_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "invocation": {
+          "$ref": "#/$defs/CheckInvocationTemplate"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CheckResolutionOutcome"
+        },
+        "plan_item_id": {
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "risk_path_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "scope_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "tool_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_item_id",
+        "check_id",
+        "tool_id",
+        "family",
+        "project_id",
+        "scope_level",
+        "outcome",
+        "reason_codes",
+        "impact_edge_ids",
+        "risk_path_ids",
+        "invocation",
+        "fallback_floor",
+        "evidence_kinds"
+      ],
+      "type": "object"
+    },
+    "CheckResolutionOutcome": {
+      "enum": [
+        "selected_required",
+        "selected_optional",
+        "omitted_not_applicable",
+        "unresolved_not_found",
+        "blocked_unavailable",
+        "user_waived"
+      ],
+      "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "FallbackDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "to_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "trigger": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "from_level",
+        "to_level",
+        "trigger",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "GatePolicyV2": {
+      "additionalProperties": false,
+      "properties": {
+        "fail_on_flaky": {
+          "type": "boolean"
+        },
+        "fail_on_partial": {
+          "type": "boolean"
+        },
+        "fail_on_required_failure": {
+          "type": "boolean"
+        },
+        "fail_on_unverified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "fail_on_required_failure",
+        "fail_on_partial",
+        "fail_on_unverified",
+        "fail_on_flaky"
+      ],
+      "type": "object"
+    },
+    "PlanningSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SelectorKind"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ReviewKind": {
+      "enum": [
+        "none",
+        "human_semantic",
+        "codex_independent"
+      ],
+      "type": "string"
+    },
+    "ReviewRequirementV2": {
+      "additionalProperties": false,
+      "properties": {
+        "absence_behavior": {
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "review_kind": {
+          "$ref": "#/$defs/ReviewKind"
+        }
+      },
+      "required": [
+        "required",
+        "review_kind",
+        "reason_codes",
+        "absence_behavior"
+      ],
+      "type": "object"
+    },
+    "SelectorKind": {
+      "enum": [
+        "path",
+        "package",
+        "workspace",
+        "symbol",
+        "contract",
+        "config_key",
+        "schema",
+        "source_class"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "UnresolvedCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "readiness_impact": {
+          "$ref": "#/$defs/ValidationPlanV2Readiness"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "required_coverage": {
+          "type": "string"
+        },
+        "searched_catalog_scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "reason",
+        "searched_catalog_scope",
+        "required_coverage",
+        "readiness_impact"
+      ],
+      "type": "object"
+    },
+    "ValidationPlanV2Readiness": {
+      "enum": [
+        "draft",
+        "ready",
+        "blocked",
+        "invalidated"
+      ],
+      "type": "string"
+    },
+    "ValidationRiskLevel": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "ValidationScopeLevel": {
+      "enum": [
+        "package",
+        "workspace",
+        "project_full"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.validation-plan:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "affected_scope": {
+      "items": {
+        "$ref": "#/$defs/AffectedScope"
+      },
+      "type": "array"
+    },
+    "candidate_checks": {
+      "items": {
+        "$ref": "#/$defs/CheckCandidate"
+      },
+      "type": "array"
+    },
+    "catalog_snapshot_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "change_set_refs": {
+      "items": {
+        "$ref": "#/$defs/DocumentRef"
+      },
+      "type": "array"
+    },
+    "check_graph": {
+      "$ref": "#/$defs/CheckGraphV2"
+    },
+    "config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "fallback_decisions": {
+      "items": {
+        "$ref": "#/$defs/FallbackDecision"
+      },
+      "type": "array"
+    },
+    "gate_policy": {
+      "$ref": "#/$defs/GatePolicyV2"
+    },
+    "impact_analysis_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "independent_review": {
+      "$ref": "#/$defs/ReviewRequirementV2"
+    },
+    "manual_observations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "omitted_checks": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "optional_checks": {
+      "items": {
+        "$ref": "#/$defs/CheckPlanV2"
+      },
+      "type": "array"
+    },
+    "phase": {
+      "type": "string"
+    },
+    "previous_success_comparisons": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "readiness": {
+      "$ref": "#/$defs/ValidationPlanV2Readiness"
+    },
+    "required_checks": {
+      "items": {
+        "$ref": "#/$defs/CheckPlanV2"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "risk_level": {
+      "$ref": "#/$defs/ValidationRiskLevel"
+    },
+    "schema_id": {
+      "const": "star.validation-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "scope_revision": {
+      "format": "uint64",
+      "minimum": 1,
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "integer"
+    },
+    "scope_revision_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "selection_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "task_spec_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "unresolved_checks": {
+      "items": {
+        "$ref": "#/$defs/UnresolvedCheck"
+      },
+      "type": "array"
+    },
+    "validation_plan_id": {
+      "pattern": "^vpl_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "validation_plan_id",
+    "revision",
+    "task_spec_ref",
+    "scope_revision",
+    "scope_revision_ref",
+    "phase",
+    "change_set_refs",
+    "impact_analysis_ref",
+    "risk_level",
+    "affected_scope",
+    "candidate_checks",
+    "required_checks",
+    "optional_checks",
+    "check_graph",
+    "omitted_checks",
+    "unresolved_checks",
+    "previous_success_comparisons",
+    "fallback_decisions",
+    "manual_observations",
+    "independent_review",
+    "gate_policy",
+    "config_fingerprint",
+    "catalog_snapshot_ref",
+    "selection_fingerprint",
+    "readiness"
+  ],
+  "title": "FullValidationPlan",
+  "type": "object"
+}

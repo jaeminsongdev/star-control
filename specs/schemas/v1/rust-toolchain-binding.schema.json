@@ -1,0 +1,276 @@
+{
+  "$defs": {
+    "RustAvailabilityState": {
+      "enum": [
+        "available",
+        "missing",
+        "unsupported",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "RustCompleteness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified",
+        "ambiguous",
+        "unsupported"
+      ],
+      "type": "string"
+    },
+    "RustEditionBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "edition": {
+          "type": "string"
+        },
+        "provenance": {
+          "type": "string"
+        },
+        "subject_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_ref",
+        "edition",
+        "provenance"
+      ],
+      "type": "object"
+    },
+    "RustExecutableBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "component_state": {
+          "$ref": "#/$defs/RustAvailabilityState"
+        },
+        "logical_id": {
+          "type": "string"
+        },
+        "opaque_file_identity": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_id",
+        "opaque_file_identity",
+        "version",
+        "sha256",
+        "component_state"
+      ],
+      "type": "object"
+    },
+    "RustSourceBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "content_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_ref",
+        "content_sha256"
+      ],
+      "type": "object"
+    },
+    "RustTargetState": {
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/RustAvailabilityState"
+        },
+        "target_triple": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_triple",
+        "state"
+      ],
+      "type": "object"
+    },
+    "RustToolchainPinState": {
+      "enum": [
+        "pinned_stable",
+        "moving_stable",
+        "beta",
+        "nightly",
+        "custom",
+        "unresolved"
+      ],
+      "type": "string"
+    },
+    "RustToolchainSource": {
+      "enum": [
+        "rust_toolchain_toml",
+        "legacy_rust_toolchain",
+        "project_catalog",
+        "rustup_directory_override",
+        "environment_override",
+        "default"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.rust-toolchain-binding:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "binding_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "cargo": {
+      "$ref": "#/$defs/RustExecutableBinding"
+    },
+    "channel": {
+      "type": "string"
+    },
+    "clippy_driver": {
+      "$ref": "#/$defs/RustExecutableBinding"
+    },
+    "completeness": {
+      "$ref": "#/$defs/RustCompleteness"
+    },
+    "component_states": {
+      "items": {
+        "$ref": "#/$defs/RustTargetState"
+      },
+      "type": "array"
+    },
+    "config_bindings": {
+      "items": {
+        "$ref": "#/$defs/RustSourceBinding"
+      },
+      "type": "array"
+    },
+    "contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "host_target": {
+      "type": "string"
+    },
+    "host_triple": {
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_refs": {
+      "items": {
+        "$ref": "#/$defs/RustSourceBinding"
+      },
+      "type": "array"
+    },
+    "msrv_bindings": {
+      "items": {
+        "$ref": "#/$defs/RustEditionBinding"
+      },
+      "type": "array"
+    },
+    "parsing_editions": {
+      "items": {
+        "$ref": "#/$defs/RustEditionBinding"
+      },
+      "type": "array"
+    },
+    "release": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "requested_target_triples": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "rustc": {
+      "$ref": "#/$defs/RustExecutableBinding"
+    },
+    "rustfmt": {
+      "$ref": "#/$defs/RustExecutableBinding"
+    },
+    "schema_id": {
+      "const": "star.rust-toolchain-binding",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "style_editions": {
+      "items": {
+        "$ref": "#/$defs/RustEditionBinding"
+      },
+      "type": "array"
+    },
+    "target_states": {
+      "items": {
+        "$ref": "#/$defs/RustTargetState"
+      },
+      "type": "array"
+    },
+    "toolchain_pin_state": {
+      "$ref": "#/$defs/RustToolchainPinState"
+    },
+    "toolchain_source": {
+      "$ref": "#/$defs/RustToolchainSource"
+    },
+    "toolchain_source_ref": {
+      "type": "string"
+    },
+    "workspace_root_ref": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "contract_version",
+    "workspace_root_ref",
+    "manifest_refs",
+    "toolchain_source",
+    "toolchain_source_ref",
+    "toolchain_pin_state",
+    "channel",
+    "host_triple",
+    "cargo",
+    "rustc",
+    "rustfmt",
+    "clippy_driver",
+    "parsing_editions",
+    "style_editions",
+    "msrv_bindings",
+    "host_target",
+    "requested_target_triples",
+    "config_bindings",
+    "component_states",
+    "target_states",
+    "completeness",
+    "limitations",
+    "binding_fingerprint"
+  ],
+  "title": "RustToolchainBinding",
+  "type": "object"
+}

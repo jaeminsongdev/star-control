@@ -1,0 +1,348 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "EnvironmentValueRef": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "const": "literal",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "secret_ref": {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            "source": {
+              "const": "secret",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "secret_ref"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "OutputLimits": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_bytes": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "stderr_bytes": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "stdout_bytes": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stdout_bytes",
+        "stderr_bytes",
+        "artifact_bytes"
+      ],
+      "type": "object"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.task-invocation:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "args": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "cwd": {
+      "minLength": 1,
+      "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+      "type": "string"
+    },
+    "env_refs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/EnvironmentValueRef"
+      },
+      "type": "object"
+    },
+    "executable": {
+      "type": "string"
+    },
+    "executable_binding_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "expected_exit_codes": {
+      "items": {
+        "format": "int32",
+        "type": "integer"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "input_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "invocation_id": {
+      "type": "string"
+    },
+    "output_limits": {
+      "$ref": "#/$defs/OutputLimits"
+    },
+    "permission_action": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.task-invocation",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "stdin_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "timeout_ms": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "tool_ref": {
+      "$ref": "#/$defs/CatalogRef"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "invocation_id",
+    "tool_ref",
+    "executable",
+    "executable_binding_fingerprint",
+    "args",
+    "cwd",
+    "env_refs",
+    "timeout_ms",
+    "permission_action",
+    "idempotency_key",
+    "expected_exit_codes",
+    "output_limits",
+    "input_fingerprint"
+  ],
+  "title": "TaskInvocationV2",
+  "type": "object"
+}

@@ -1,0 +1,108 @@
+{
+  "$defs": {
+    "ReproductionAttempt": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "duration_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "environment_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "family_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "input_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "observed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "attempt",
+        "family_fingerprint",
+        "environment_fingerprint",
+        "input_fingerprint",
+        "complete",
+        "observed",
+        "duration_ms"
+      ],
+      "type": "object"
+    },
+    "ReproductionState": {
+      "enum": [
+        "reproduced",
+        "partially_reproduced",
+        "not_reproduced",
+        "blocked_external",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.reproduction-pack:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempts": {
+      "items": {
+        "$ref": "#/$defs/ReproductionAttempt"
+      },
+      "type": "array"
+    },
+    "family_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "pack_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.reproduction-pack",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/ReproductionState"
+    },
+    "subject_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "family_fingerprint",
+    "subject_fingerprint",
+    "attempts",
+    "state",
+    "limitations",
+    "pack_fingerprint"
+  ],
+  "title": "ReproductionPack",
+  "type": "object"
+}

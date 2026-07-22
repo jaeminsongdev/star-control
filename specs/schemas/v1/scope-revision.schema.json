@@ -1,0 +1,443 @@
+{
+  "$defs": {
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string"
+        },
+        "actor_type": {
+          "$ref": "#/$defs/ActorType"
+        },
+        "auth_source": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_type",
+        "actor_id",
+        "display_name",
+        "auth_source"
+      ],
+      "type": "object"
+    },
+    "ActorType": {
+      "enum": [
+        "user",
+        "codex",
+        "system",
+        "controller",
+        "mcp",
+        "tool"
+      ],
+      "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ExcludedScope": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_to": {
+          "$ref": "#/$defs/ScopeAxis"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        }
+      },
+      "required": [
+        "selector",
+        "applies_to",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "IndexFreshnessState": {
+      "enum": [
+        "current",
+        "stale_catalog",
+        "stale_source",
+        "stale_config",
+        "stale_adapter",
+        "partial",
+        "unverified",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "PlanningSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SelectorKind"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ScopeApprovalState": {
+      "enum": [
+        "accepted",
+        "proposed",
+        "rejected",
+        "superseded"
+      ],
+      "type": "string"
+    },
+    "ScopeAxis": {
+      "enum": [
+        "analysis",
+        "planned_change",
+        "validation",
+        "all"
+      ],
+      "type": "string"
+    },
+    "ScopeDerivedAddition": {
+      "additionalProperties": false,
+      "properties": {
+        "axis": {
+          "$ref": "#/$defs/ScopeAxis"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        },
+        "source": {
+          "$ref": "#/$defs/ScopeItemSource"
+        }
+      },
+      "required": [
+        "axis",
+        "selector",
+        "source",
+        "reason_code",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "ScopeItemSource": {
+      "enum": [
+        "user",
+        "task_descriptor",
+        "impact",
+        "risk_path",
+        "fallback",
+        "user_override"
+      ],
+      "type": "string"
+    },
+    "ScopeReasonCode": {
+      "enum": [
+        "initial",
+        "user_edit",
+        "unexpected_impact",
+        "new_risk",
+        "source_changed",
+        "check_fallback"
+      ],
+      "type": "string"
+    },
+    "ScopeSet": {
+      "additionalProperties": false,
+      "properties": {
+        "exclusions": {
+          "items": {
+            "$ref": "#/$defs/ExcludedScope"
+          },
+          "type": "array"
+        },
+        "project_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "selectors": {
+          "items": {
+            "$ref": "#/$defs/ScopedSelector"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_ids",
+        "selectors",
+        "exclusions"
+      ],
+      "type": "object"
+    },
+    "ScopeSourceSnapshotRef": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "code_index_snapshot_id": {
+          "pattern": "^cix_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "freshness": {
+          "$ref": "#/$defs/IndexFreshnessState"
+        },
+        "project_catalog_snapshot_id": {
+          "pattern": "^pcs_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "project_catalog_snapshot_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "code_index_snapshot_id",
+        "freshness"
+      ],
+      "type": "object"
+    },
+    "ScopeUserDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/ActorRef"
+        },
+        "decision_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        },
+        "state": {
+          "$ref": "#/$defs/ScopeApprovalState"
+        }
+      },
+      "required": [
+        "decision_id",
+        "state",
+        "selector",
+        "reason",
+        "actor"
+      ],
+      "type": "object"
+    },
+    "ScopedSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        },
+        "source": {
+          "$ref": "#/$defs/ScopeItemSource"
+        }
+      },
+      "required": [
+        "selector",
+        "source",
+        "reason_code",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "SelectorKind": {
+      "enum": [
+        "path",
+        "package",
+        "workspace",
+        "symbol",
+        "contract",
+        "config_key",
+        "schema",
+        "source_class"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.scope-revision:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analysis_scope": {
+      "$ref": "#/$defs/ScopeSet"
+    },
+    "approval_state": {
+      "$ref": "#/$defs/ScopeApprovalState"
+    },
+    "changed_fields": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "created_by": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "derived_additions": {
+      "items": {
+        "$ref": "#/$defs/ScopeDerivedAddition"
+      },
+      "type": "array"
+    },
+    "planned_change_scope": {
+      "$ref": "#/$defs/ScopeSet"
+    },
+    "previous_scope_revision_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reason_code": {
+      "$ref": "#/$defs/ScopeReasonCode"
+    },
+    "requested_scope": {
+      "$ref": "#/$defs/ScopeSet"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.scope-revision",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "scope_revision_id": {
+      "pattern": "^scp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "source_snapshot_refs": {
+      "items": {
+        "$ref": "#/$defs/ScopeSourceSnapshotRef"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "task_spec_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "user_decisions": {
+      "items": {
+        "$ref": "#/$defs/ScopeUserDecision"
+      },
+      "type": "array"
+    },
+    "validation_scope": {
+      "$ref": "#/$defs/ScopeSet"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "scope_revision_id",
+    "revision",
+    "task_spec_ref",
+    "reason_code",
+    "reason",
+    "requested_scope",
+    "analysis_scope",
+    "planned_change_scope",
+    "validation_scope",
+    "source_snapshot_refs",
+    "derived_additions",
+    "user_decisions",
+    "changed_fields",
+    "approval_state",
+    "scope_hash",
+    "created_by",
+    "created_at"
+  ],
+  "title": "ScopeRevision",
+  "type": "object"
+}

@@ -1,0 +1,379 @@
+{
+  "$defs": {
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string"
+        },
+        "actor_type": {
+          "$ref": "#/$defs/ActorType"
+        },
+        "auth_source": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_type",
+        "actor_id",
+        "display_name",
+        "auth_source"
+      ],
+      "type": "object"
+    },
+    "ActorType": {
+      "enum": [
+        "user",
+        "codex",
+        "system",
+        "controller",
+        "mcp",
+        "tool"
+      ],
+      "type": "string"
+    },
+    "BaselinePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/BaselinePolicyKind"
+        },
+        "reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "BaselinePolicyKind": {
+      "enum": [
+        "current_workspace",
+        "explicit_revision",
+        "previous_success"
+      ],
+      "type": "string"
+    },
+    "CheckOverride": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CheckOverrideKind"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "kind",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "CheckOverrideKind": {
+      "enum": [
+        "add",
+        "promote",
+        "omit"
+      ],
+      "type": "string"
+    },
+    "ExcludedScope": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_to": {
+          "$ref": "#/$defs/ScopeAxis"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        }
+      },
+      "required": [
+        "selector",
+        "applies_to",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "IntendedChange": {
+      "additionalProperties": false,
+      "properties": {
+        "change_id": {
+          "type": "string"
+        },
+        "change_kind": {
+          "$ref": "#/$defs/IntendedChangeKind"
+        },
+        "intended_postcondition": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        }
+      },
+      "required": [
+        "change_id",
+        "selector",
+        "change_kind",
+        "intended_postcondition"
+      ],
+      "type": "object"
+    },
+    "IntendedChangeKind": {
+      "enum": [
+        "add",
+        "modify",
+        "delete",
+        "rename",
+        "contract_change"
+      ],
+      "type": "string"
+    },
+    "PlanningSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SelectorKind"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ProjectTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/ProjectTargetRole"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "role",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "ProjectTargetRole": {
+      "enum": [
+        "planned_change",
+        "read_only_impact",
+        "validation_only"
+      ],
+      "type": "string"
+    },
+    "ScopeAxis": {
+      "enum": [
+        "analysis",
+        "planned_change",
+        "validation",
+        "all"
+      ],
+      "type": "string"
+    },
+    "SelectorKind": {
+      "enum": [
+        "path",
+        "package",
+        "workspace",
+        "symbol",
+        "contract",
+        "config_key",
+        "schema",
+        "source_class"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SuccessCriterion": {
+      "additionalProperties": false,
+      "properties": {
+        "criterion_id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "verification": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "criterion_id",
+        "description",
+        "verification",
+        "required"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.task-spec:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "baseline_policy": {
+      "$ref": "#/$defs/BaselinePolicy"
+    },
+    "check_overrides": {
+      "items": {
+        "$ref": "#/$defs/CheckOverride"
+      },
+      "type": "array"
+    },
+    "constraints": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "created_by": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "excluded_scope": {
+      "items": {
+        "$ref": "#/$defs/ExcludedScope"
+      },
+      "type": "array"
+    },
+    "forbidden_actions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "included_scope": {
+      "items": {
+        "$ref": "#/$defs/PlanningSelector"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "intended_changes": {
+      "items": {
+        "$ref": "#/$defs/IntendedChange"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "objective": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "project_targets": {
+      "items": {
+        "$ref": "#/$defs/ProjectTarget"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "requested_checks": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.task-spec",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "success_criteria": {
+      "items": {
+        "$ref": "#/$defs/SuccessCriterion"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "task_spec_id": {
+      "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "task_spec_id",
+    "revision",
+    "title",
+    "objective",
+    "project_targets",
+    "included_scope",
+    "excluded_scope",
+    "intended_changes",
+    "success_criteria",
+    "constraints",
+    "forbidden_actions",
+    "baseline_policy",
+    "requested_checks",
+    "check_overrides",
+    "assumptions",
+    "created_by",
+    "created_at",
+    "content_fingerprint"
+  ],
+  "title": "TaskSpec",
+  "type": "object"
+}

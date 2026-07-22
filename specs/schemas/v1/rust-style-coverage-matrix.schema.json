@@ -1,0 +1,218 @@
+{
+  "$defs": {
+    "RustCompleteness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified",
+        "ambiguous",
+        "unsupported"
+      ],
+      "type": "string"
+    },
+    "RustCoverageExecution": {
+      "enum": [
+        "executed",
+        "skipped",
+        "unavailable",
+        "conflicted",
+        "invalidated"
+      ],
+      "type": "string"
+    },
+    "RustCoveragePhase": {
+      "enum": [
+        "diagnostic_check",
+        "isolated_fix",
+        "candidate_final_check",
+        "actual_after_post_check"
+      ],
+      "type": "string"
+    },
+    "RustSourceOwnership": {
+      "enum": [
+        "handwritten",
+        "generated",
+        "vendor",
+        "out_of_scope"
+      ],
+      "type": "string"
+    },
+    "RustStyleCoverageCell": {
+      "additionalProperties": false,
+      "properties": {
+        "cell_id": {
+          "type": "string"
+        },
+        "cfg_observation_ref": {
+          "type": "string"
+        },
+        "default_features": {
+          "type": "boolean"
+        },
+        "execution": {
+          "$ref": "#/$defs/RustCoverageExecution"
+        },
+        "feature_set_id": {
+          "type": "string"
+        },
+        "features": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "host_triple": {
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "ownership": {
+          "$ref": "#/$defs/RustSourceOwnership"
+        },
+        "package_id": {
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/RustCoveragePhase"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required_features_satisfied": {
+          "type": "boolean"
+        },
+        "source_root": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "target_kind": {
+          "$ref": "#/$defs/RustTargetKind"
+        },
+        "target_name": {
+          "type": "string"
+        },
+        "target_triple": {
+          "type": "string"
+        },
+        "workspace_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cell_id",
+        "workspace_ref",
+        "package_id",
+        "manifest_sha256",
+        "target_kind",
+        "target_name",
+        "source_root",
+        "feature_set_id",
+        "default_features",
+        "features",
+        "required_features_satisfied",
+        "host_triple",
+        "target_triple",
+        "cfg_observation_ref",
+        "ownership",
+        "phase",
+        "execution"
+      ],
+      "type": "object"
+    },
+    "RustTargetKind": {
+      "enum": [
+        "lib",
+        "bin",
+        "test",
+        "example",
+        "bench",
+        "custom_build",
+        "proc_macro"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.rust-style-coverage-matrix:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cells": {
+      "items": {
+        "$ref": "#/$defs/RustStyleCoverageCell"
+      },
+      "type": "array"
+    },
+    "cfg_frontier": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "completeness": {
+      "$ref": "#/$defs/RustCompleteness"
+    },
+    "conflicts": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "coverage_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "policy_ref": {
+      "type": "string"
+    },
+    "required_cell_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.rust-style-coverage-matrix",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "contract_version",
+    "policy_ref",
+    "cells",
+    "required_cell_ids",
+    "cfg_frontier",
+    "conflicts",
+    "completeness",
+    "limitations",
+    "coverage_fingerprint"
+  ],
+  "title": "RustStyleCoverageMatrix",
+  "type": "object"
+}
