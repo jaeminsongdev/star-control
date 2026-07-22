@@ -1,0 +1,115 @@
+{
+  "adapter_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "analysis_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "artifact_refs": [
+    {
+      "artifact_id": "art_00000000000000000000000000",
+      "created_at": "2026-01-01T00:00:00Z",
+      "kind": "log",
+      "media_type": "fixture",
+      "producer": {
+        "build_id": "fixture",
+        "component": "fixture",
+        "platform": "fixture",
+        "product_version": "fixture"
+      },
+      "project_id": "prj_00000000000000000000000000",
+      "redaction_status": "not_needed",
+      "relative_path": "src/lib.rs",
+      "retention_class": "temporary",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 0,
+      "source_artifact_ref": null
+    }
+  ],
+  "checkout_id": "cko_00000000000000000000000000",
+  "checkout_observation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "classification_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "code_index_snapshot_id": "cix_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "counts": {
+    "definitions": 0,
+    "findings": 0,
+    "graph_edges": 0,
+    "modules": 0,
+    "packages": 0,
+    "references": 0,
+    "sources": 0,
+    "symbols": 0
+  },
+  "coverage": [
+    {
+      "excluded_count": 0,
+      "failed_count": 0,
+      "language_id": "fixture",
+      "source_class": "source",
+      "succeeded_count": 0,
+      "target_count": 0,
+      "tier": "text"
+    }
+  ],
+  "freshness": [
+    {
+      "indexed_adapter_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "indexed_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "indexed_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "indexed_source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "observed_source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "partition_key": "fixture",
+      "probe_method": "fixture",
+      "probed_at": "2026-01-01T00:00:00Z",
+      "stale_reason_codes": [
+        "fixture"
+      ],
+      "state": "current",
+      "unverified_scope_count": 0
+    }
+  ],
+  "generation_id": "gen_00000000000000000000000000",
+  "index_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "limitations": [
+    {
+      "code": "fixture",
+      "parameters": {
+        "fixture": "fixture"
+      },
+      "scope": "fixture"
+    }
+  ],
+  "max_tier": "text",
+  "partitions": [
+    {
+      "cache_hit": false,
+      "excluded_count": 0,
+      "failed_count": 0,
+      "indexed_count": 0,
+      "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "inventory",
+      "limitations": [
+        {
+          "code": "fixture",
+          "parameters": {
+            "fixture": "fixture"
+          },
+          "scope": "fixture"
+        }
+      ],
+      "output_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "partition_key": "fixture",
+      "requested_tier": "text",
+      "required": false,
+      "state": "not_planned",
+      "target_count": 0,
+      "used_tier": "text"
+    }
+  ],
+  "project_catalog_snapshot_id": "pcs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "project_id": "prj_00000000000000000000000000",
+  "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "required_tier": "text",
+  "scan_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "scan_run_id": "scn_00000000000000000000000000",
+  "schema_id": "star.code-index-snapshot",
+  "schema_version": 1,
+  "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

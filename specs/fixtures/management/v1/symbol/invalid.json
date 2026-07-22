@@ -14,7 +14,7 @@
   "schema_id": "star.symbol",
   "schema_version": 1,
   "symbol_id": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "symbol_kind": "sym_00000000000000000000000000",
+  "symbol_kind": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "unexpected": true,
   "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }

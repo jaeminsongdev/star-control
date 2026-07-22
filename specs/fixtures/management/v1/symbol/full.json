@@ -15,7 +15,7 @@
   "schema_version": 1,
   "signature_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "symbol_id": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "symbol_kind": "sym_00000000000000000000000000",
+  "symbol_kind": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "visibility": "fixture",
   "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }

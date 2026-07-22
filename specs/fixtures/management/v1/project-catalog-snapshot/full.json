@@ -1,0 +1,63 @@
+{
+  "captured_at": "2026-01-01T00:00:00Z",
+  "checkout_refs": [
+    {
+      "checkout_id": "cko_00000000000000000000000000",
+      "observation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "project_id": "prj_00000000000000000000000000"
+    }
+  ],
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "counts": {
+    "checkouts": 0,
+    "errors": 0,
+    "excluded": 0,
+    "projects": 0,
+    "roots": 0,
+    "workspaces": 0
+  },
+  "discovery_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "discovery_scope_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "limitations": [
+    {
+      "code": "fixture",
+      "parameters": {
+        "fixture": "fixture"
+      },
+      "scope": "fixture"
+    }
+  ],
+  "project_catalog_snapshot_id": "pcs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "project_edges": [
+    {
+      "evidence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "from_checkout_id": "cko_00000000000000000000000000",
+      "from_project_id": "fixture",
+      "relation": "nested",
+      "to_checkout_id": "cko_00000000000000000000000000",
+      "to_project_id": "fixture"
+    }
+  ],
+  "project_refs": [
+    {
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "project_id": "prj_00000000000000000000000000"
+    }
+  ],
+  "schema_id": "star.project-catalog-snapshot",
+  "schema_version": 1,
+  "workspace_nodes": [
+    {
+      "checkout_id": "cko_00000000000000000000000000",
+      "evidence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "cargo",
+      "marker_source": "fixture",
+      "member_refs": [
+        "fixture"
+      ],
+      "project_id": "prj_00000000000000000000000000",
+      "workspace_key": "fixture"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "captured_at": "2026-01-01T00:00:00Z",
+  "checkout_refs": [],
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "counts": {
+    "checkouts": 0,
+    "errors": 0,
+    "excluded": 0,
+    "projects": 0,
+    "roots": 0,
+    "workspaces": 0
+  },
+  "discovery_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "discovery_scope_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "limitations": [],
+  "project_catalog_snapshot_id": "pcs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "project_edges": [],
+  "project_refs": [],
+  "schema_id": "star.project-catalog-snapshot",
+  "schema_version": 1,
+  "unexpected": true,
+  "workspace_nodes": []
+}
