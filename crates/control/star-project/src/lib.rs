@@ -1,6 +1,8 @@
 //! Project discovery and deterministic scan input construction.
 
 pub mod catalog;
+pub mod catalog_snapshot;
+pub mod index;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -17,14 +19,16 @@ use star_contracts::{
     Sha256Hash,
     evidence::ArtifactRef,
     ids::{
-        CanonicalSourceId, ProjectId, ProjectRevisionId, RootBindingId, ScanRunId, SymbolId,
-        WorkspaceSnapshotId,
+        CanonicalSourceId, CheckoutId, ProjectId, ProjectRevisionId, RootBindingId, ScanRunId,
+        SymbolId, WorkspaceSnapshotId,
     },
     management::{
-        Baseline, BaselineScope, CanonicalSource, Completeness, IdentityScope, Project,
-        ProjectPathRef, ProjectRevision, RegistrationState, RepositoryKind, Sensitivity,
-        SourceKind, SourceRange, Suppression, SuppressionScope, Symbol, WorkspaceSnapshot,
+        Baseline, BaselineScope, CanonicalSource, CheckoutAttachmentState, CheckoutHeadState,
+        CheckoutKind, Completeness, IdentityScope, Project, ProjectCheckout, ProjectPathRef,
+        ProjectRevision, RegistrationState, RepositoryKind, Sensitivity, SourceKind, SourceRange,
+        Suppression, SuppressionScope, Symbol, WorkspaceSnapshot,
     },
+    planning::ObservedChangeKind,
 };
 use star_domain::{
     PersistenceRedactor, validate_baseline, validate_suppression, versioned_fingerprint,
@@ -69,6 +73,12 @@ pub struct SharedDecisionDeclarations {
     pub baselines: Vec<Baseline>,
     pub suppressions: Vec<Suppression>,
     pub source_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug)]
+pub struct AttachedProjectSeed {
+    pub project: Project,
+    pub checkout: ProjectCheckout,
 }
 
 pub fn load_shared_decisions(
@@ -307,21 +317,112 @@ impl ProjectSeed {
         })
     }
 
-    pub fn attach(self, root_binding_id: RootBindingId) -> Project {
-        Project {
+    pub fn attach(
+        self,
+        checkout_id: CheckoutId,
+        root_binding_id: RootBindingId,
+        root: &Path,
+    ) -> Result<AttachedProjectSeed, ProjectError> {
+        let checkout_kind = match self.repository_kind {
+            RepositoryKind::Git if root.join(".git").is_file() => CheckoutKind::LinkedWorktree,
+            RepositoryKind::Git => CheckoutKind::MainWorktree,
+            RepositoryKind::None => CheckoutKind::FilesystemRoot,
+        };
+        let (head_state, head_ref, head_commit_id, head_tree_id, object_format, mut limitations) =
+            if self.repository_kind == RepositoryKind::Git {
+                let head_ref = git_text(root, &["symbolic-ref", "--quiet", "--short", "HEAD"]);
+                let head_commit = git_text(root, &["rev-parse", "--verify", "HEAD"]);
+                let head_tree = git_text(root, &["rev-parse", "--verify", "HEAD^{tree}"]);
+                let object_format = git_text(root, &["rev-parse", "--show-object-format"]);
+                let state = if head_ref.is_ok() {
+                    CheckoutHeadState::Branch
+                } else if head_commit.is_ok() {
+                    CheckoutHeadState::Detached
+                } else {
+                    CheckoutHeadState::Unborn
+                };
+                (
+                    state,
+                    head_ref.ok(),
+                    head_commit.ok(),
+                    head_tree.ok(),
+                    object_format.ok(),
+                    vec!["repository_binding_deferred_to_m1_probe".to_owned()],
+                )
+            } else {
+                (
+                    CheckoutHeadState::Unavailable,
+                    None,
+                    None,
+                    None,
+                    None,
+                    Vec::new(),
+                )
+            };
+        limitations.sort();
+        let fingerprint_payload = serde_json::json!({
+            "identity_contract_version":1,
+            "checkout_id":checkout_id,
+            "project_id":self.project_id,
+            "root_binding_id":root_binding_id,
+            "repository_kind":self.repository_kind,
+            "checkout_kind":checkout_kind,
+            "repository_binding_id":null,
+            "worktree_binding_id":null,
+            "object_format":object_format,
+            "head_state":head_state,
+            "head_ref":head_ref,
+            "head_commit_id":head_commit_id,
+            "head_tree_id":head_tree_id,
+            "upstream_ref":null,
+            "default_branch_hint":null,
+            "remote_identity":null,
+            "attachment_state":"attached",
+            "limitations":limitations,
+        });
+        let content_fingerprint =
+            versioned_fingerprint("star.identity.project-checkout", 1, &fingerprint_payload)
+                .map_err(|_| ProjectError::Fingerprint)?;
+        let project = Project {
             schema_id: "star.project".to_owned(),
-            schema_version: 1,
-            project_id: self.project_id,
+            schema_version: 2,
+            project_id: self.project_id.clone(),
             identity_scope: self.identity_scope,
             display_name: self.display_name,
             repository_kind: self.repository_kind,
             source_of_truth: self.source_of_truth,
             declaration_fingerprint: self.declaration_fingerprint,
             registration_state: RegistrationState::Attached,
-            root_binding_id: Some(root_binding_id),
+            attached_checkout_ids: vec![checkout_id.clone()],
             latest_revision_id: None,
             latest_workspace_snapshot_id: None,
-        }
+        };
+        Ok(AttachedProjectSeed {
+            project,
+            checkout: ProjectCheckout {
+                schema_id: "star.project-checkout".to_owned(),
+                schema_version: 1,
+                checkout_id,
+                project_id: self.project_id,
+                root_binding_id: Some(root_binding_id),
+                repository_kind: self.repository_kind,
+                checkout_kind,
+                repository_binding_id: None,
+                worktree_binding_id: None,
+                object_format,
+                head_state,
+                head_ref,
+                head_commit_id,
+                head_tree_id,
+                upstream_ref: None,
+                default_branch_hint: None,
+                remote_identity: None,
+                attachment_state: CheckoutAttachmentState::Attached,
+                last_observed_at: Utc::now(),
+                limitations,
+                content_fingerprint,
+            },
+        })
     }
 }
 
@@ -335,6 +436,9 @@ pub struct ScanPolicy {
     pub max_files: usize,
     pub max_total_bytes: u64,
     pub max_parallel_files: usize,
+    /// Registered nested checkout roots, relative to this checkout, whose bytes
+    /// belong to another Project/Checkout partition.
+    pub excluded_relative_roots: Vec<ProjectPathRef>,
 }
 
 impl Default for ScanPolicy {
@@ -348,6 +452,7 @@ impl Default for ScanPolicy {
             max_files: 200_000,
             max_total_bytes: 8 * 1024 * 1024 * 1024,
             max_parallel_files: 4,
+            excluded_relative_roots: Vec::new(),
         }
     }
 }
@@ -372,6 +477,173 @@ pub struct ProjectObservation {
     pub limitations: Vec<String>,
     pub files: Vec<FileObservation>,
     pub scan_config_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug)]
+pub struct WorkspaceChangeObservation {
+    pub path: ProjectPathRef,
+    pub rename_from: Option<ProjectPathRef>,
+    pub change_kind: ObservedChangeKind,
+    pub before_sha256: Option<Sha256Hash>,
+    pub after_sha256: Option<Sha256Hash>,
+    pub staged: bool,
+    pub unstaged: bool,
+    pub untracked: bool,
+    pub binary: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct WorkspaceChangeObservationSet {
+    pub entries: Vec<WorkspaceChangeObservation>,
+    pub completeness: Completeness,
+    pub limitations: Vec<String>,
+}
+
+pub fn observe_workspace_changes(
+    project: &Project,
+    root: &Path,
+    current_sources: &[star_contracts::index::SourceEntry],
+) -> Result<WorkspaceChangeObservationSet, ProjectError> {
+    if !root.is_absolute() || !root.is_dir() {
+        return Err(ProjectError::InvalidRoot);
+    }
+    if project.repository_kind != RepositoryKind::Git {
+        return Ok(WorkspaceChangeObservationSet {
+            entries: vec![],
+            completeness: Completeness::Complete,
+            limitations: vec![],
+        });
+    }
+    let output = hidden_command("git")
+        .arg("-C")
+        .arg(root)
+        .args([
+            "-c",
+            "core.quotepath=false",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+        ])
+        .output()
+        .map_err(|_| ProjectError::Io)?;
+    if !output.status.success() || output.stdout.len() > 8 * 1024 * 1024 {
+        return Err(ProjectError::ResourceLimit);
+    }
+    let after_hashes = current_sources
+        .iter()
+        .map(|source| (source.path.as_str(), source.content_sha256.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let records = output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+        .collect::<Vec<_>>();
+    let mut cursor = 0_usize;
+    let mut entries = Vec::new();
+    let mut limitations = Vec::new();
+    while cursor < records.len() {
+        let record = records[cursor];
+        cursor += 1;
+        if record.len() < 4 || record[2] != b' ' {
+            return Err(ProjectError::Io);
+        }
+        let x = record[0];
+        let y = record[1];
+        let path_text = String::from_utf8(record[3..].to_vec()).map_err(|_| ProjectError::Io)?;
+        let path = ProjectPathRef::parse(path_text).map_err(|_| ProjectError::InvalidRoot)?;
+        let renamed = matches!(x, b'R' | b'C') || matches!(y, b'R' | b'C');
+        let rename_from = if renamed {
+            let original = records.get(cursor).ok_or(ProjectError::Io)?;
+            cursor += 1;
+            Some(
+                ProjectPathRef::parse(
+                    String::from_utf8((*original).to_vec()).map_err(|_| ProjectError::Io)?,
+                )
+                .map_err(|_| ProjectError::InvalidRoot)?,
+            )
+        } else {
+            None
+        };
+        let untracked = x == b'?' && y == b'?';
+        let staged = !untracked && x != b' ';
+        let unstaged = !untracked && y != b' ';
+        let change_kind = if renamed {
+            ObservedChangeKind::Rename
+        } else if x == b'D' || y == b'D' {
+            ObservedChangeKind::Delete
+        } else if untracked || x == b'A' || y == b'A' {
+            ObservedChangeKind::Add
+        } else {
+            ObservedChangeKind::Modify
+        };
+        let before_path = rename_from.as_ref().unwrap_or(&path);
+        let before_sha256 = if untracked || change_kind == ObservedChangeKind::Add {
+            None
+        } else {
+            match git_head_content_sha256(root, before_path) {
+                Ok(value) => value,
+                Err(_) => {
+                    limitations.push("git_head_content_unavailable".to_owned());
+                    None
+                }
+            }
+        };
+        let after_sha256 = if change_kind == ObservedChangeKind::Delete {
+            None
+        } else {
+            after_hashes.get(path.as_str()).cloned()
+        };
+        if change_kind != ObservedChangeKind::Delete && after_sha256.is_none() {
+            limitations.push("current_index_entry_unavailable".to_owned());
+        }
+        entries.push(WorkspaceChangeObservation {
+            path,
+            rename_from,
+            change_kind,
+            before_sha256,
+            after_sha256,
+            staged,
+            unstaged,
+            untracked,
+            binary: false,
+        });
+    }
+    entries.sort_by(|left, right| left.path.cmp(&right.path));
+    limitations.sort();
+    limitations.dedup();
+    Ok(WorkspaceChangeObservationSet {
+        entries,
+        completeness: if limitations.is_empty() {
+            Completeness::Complete
+        } else {
+            Completeness::Partial
+        },
+        limitations,
+    })
+}
+
+fn git_head_content_sha256(
+    root: &Path,
+    path: &ProjectPathRef,
+) -> Result<Option<Sha256Hash>, ProjectError> {
+    let object = format!("HEAD:{}", path.as_str());
+    let size = git_text(root, &["cat-file", "-s", &object])?
+        .parse::<u64>()
+        .map_err(|_| ProjectError::Io)?;
+    if size > 16 * 1024 * 1024 {
+        return Err(ProjectError::ResourceLimit);
+    }
+    let output = hidden_command("git")
+        .arg("-C")
+        .arg(root)
+        .args(["show", &object])
+        .output()
+        .map_err(|_| ProjectError::Io)?;
+    if !output.status.success() || output.stdout.len() as u64 != size {
+        return Ok(None);
+    }
+    Ok(Some(Sha256Hash::digest(&output.stdout)))
 }
 
 impl ProjectObservation {
@@ -517,6 +789,14 @@ pub fn observe_project(
     } else {
         filesystem_paths(root, policy)?
     };
+    let paths: Vec<_> = paths
+        .into_iter()
+        .filter(|path| {
+            path.strip_prefix(root)
+                .ok()
+                .is_none_or(|relative| !is_excluded_relative_path(relative, policy))
+        })
+        .collect();
     if paths.len() > policy.max_files {
         return Err(ProjectError::ResourceLimit);
     }
@@ -574,6 +854,11 @@ pub fn observe_project(
         });
     }
     files.sort_by(|left, right| left.path.cmp(&right.path));
+    let verification_limitations = verify_observed_files(root, &files);
+    if !verification_limitations.is_empty() {
+        completeness = Completeness::Partial;
+        limitations.extend(verification_limitations);
+    }
     limitations.sort();
     limitations.dedup();
     let entries: Vec<_> = files
@@ -615,6 +900,21 @@ pub fn observe_project(
         files,
         scan_config_fingerprint,
     })
+}
+
+fn verify_observed_files(root: &Path, files: &[FileObservation]) -> Vec<String> {
+    let mut limitations = Vec::new();
+    for file in files {
+        let verification_path = root.join(file.path.as_str());
+        match fs::read(verification_path) {
+            Ok(bytes) if Sha256Hash::digest(&bytes) == file.content_sha256 => {}
+            Ok(_) => limitations.push("SCAN_SOURCE_CHANGED_DURING_RUN".to_owned()),
+            Err(_) => limitations.push("SCAN_SOURCE_UNREADABLE".to_owned()),
+        }
+    }
+    limitations.sort();
+    limitations.dedup();
+    limitations
 }
 
 fn project_revision(
@@ -755,6 +1055,9 @@ fn filesystem_paths(root: &Path, policy: &ScanPolicy) -> Result<Vec<PathBuf>, Pr
             let relative = path
                 .strip_prefix(root)
                 .map_err(|_| ProjectError::InvalidRoot)?;
+            if is_excluded_relative_path(relative, policy) {
+                continue;
+            }
             if relative.components().next().is_some_and(|component| {
                 matches!(component.as_os_str().to_str(), Some(".git" | ".ai-runs"))
             }) {
@@ -775,6 +1078,18 @@ fn filesystem_paths(root: &Path, policy: &ScanPolicy) -> Result<Vec<PathBuf>, Pr
         }
     }
     Ok(files)
+}
+
+fn is_excluded_relative_path(relative: &Path, policy: &ScanPolicy) -> bool {
+    let relative_text = relative
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect::<Vec<_>>()
+        .join("/");
+    policy.excluded_relative_roots.iter().any(|excluded| {
+        relative_text == excluded.as_str()
+            || relative_text.starts_with(&format!("{}/", excluded.as_str()))
+    })
 }
 
 fn relative_path(root: &Path, path: &Path) -> Result<ProjectPathRef, ProjectError> {
@@ -845,6 +1160,16 @@ fn language_for(path: &Path) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn git(root: &Path, arguments: &[&str]) {
+        let status = hidden_command("git")
+            .arg("-C")
+            .arg(root)
+            .args(arguments)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {arguments:?}");
+    }
+
     #[test]
     fn local_first_project_and_scan_manifest_use_only_relative_paths() {
         let root = std::env::temp_dir().join(format!(
@@ -859,9 +1184,15 @@ mod tests {
         fs::write(root.join(".ai-runs/ignored.log"), b"ignored").unwrap();
         let seed = ProjectSeed::discover(&root.canonicalize().unwrap()).unwrap();
         assert_eq!(seed.identity_scope, IdentityScope::Local);
-        let project = seed.attach(RootBindingId::new());
+        let attached = seed
+            .attach(
+                CheckoutId::new(),
+                RootBindingId::new(),
+                &root.canonicalize().unwrap(),
+            )
+            .unwrap();
         let observation = observe_project(
-            &project,
+            &attached.project,
             &root.canonicalize().unwrap(),
             &ScanPolicy::default(),
         )
@@ -877,5 +1208,114 @@ mod tests {
                 .limitations
                 .contains(&"sensitive_literal_discarded".to_owned())
         );
+    }
+
+    #[test]
+    fn verification_detects_changed_bytes_and_nested_ownership_excludes_child_sources() {
+        let root = std::env::temp_dir().join(format!(
+            "star-project-change-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        fs::create_dir_all(root.join("nested")).unwrap();
+        fs::write(root.join("root.txt"), b"root\n").unwrap();
+        fs::write(root.join("nested/child.txt"), b"child\n").unwrap();
+        let seed = ProjectSeed::discover(&root.canonicalize().unwrap()).unwrap();
+        let attached = seed
+            .attach(
+                CheckoutId::new(),
+                RootBindingId::new(),
+                &root.canonicalize().unwrap(),
+            )
+            .unwrap();
+        let policy = ScanPolicy {
+            excluded_relative_roots: vec![ProjectPathRef::parse("nested").unwrap()],
+            ..ScanPolicy::default()
+        };
+        let observation =
+            observe_project(&attached.project, &root.canonicalize().unwrap(), &policy).unwrap();
+        assert_eq!(observation.files.len(), 1);
+        assert_eq!(observation.files[0].path.as_str(), "root.txt");
+        fs::write(root.join("root.txt"), b"changed\n").unwrap();
+        assert_eq!(
+            verify_observed_files(&root.canonicalize().unwrap(), &observation.files),
+            vec!["SCAN_SOURCE_CHANGED_DURING_RUN".to_owned()]
+        );
+    }
+
+    #[test]
+    fn workspace_change_observation_separates_staged_unstaged_untracked_and_rename() {
+        let root = std::env::temp_dir().join(format!(
+            "star-project-dirty-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/lib.rs"), b"pub fn value() -> u32 { 1 }\n").unwrap();
+        fs::write(root.join("src/old.rs"), b"pub fn old() {}\n").unwrap();
+        git(&root, &["init", "--initial-branch=main"]);
+        git(&root, &["config", "user.email", "fixture@example.invalid"]);
+        git(&root, &["config", "user.name", "Fixture"]);
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-m", "baseline"]);
+        fs::write(root.join("src/lib.rs"), b"pub fn value() -> u32 { 2 }\n").unwrap();
+        git(&root, &["add", "src/lib.rs"]);
+        fs::write(root.join("src/lib.rs"), b"pub fn value() -> u32 { 3 }\n").unwrap();
+        git(&root, &["mv", "src/old.rs", "src/new.rs"]);
+        fs::write(root.join("src/untracked.rs"), b"pub fn untracked() {}\n").unwrap();
+
+        let canonical = root.canonicalize().unwrap();
+        let seed = ProjectSeed::discover(&canonical).unwrap();
+        let attached = seed
+            .attach(CheckoutId::new(), RootBindingId::new(), &canonical)
+            .unwrap();
+        let observation =
+            observe_project(&attached.project, &canonical, &ScanPolicy::default()).unwrap();
+        let current_sources = observation
+            .files
+            .iter()
+            .map(|file| star_contracts::index::SourceEntry {
+                canonical_source_id: CanonicalSourceId::from_stable_bytes(
+                    file.path.as_str().as_bytes(),
+                ),
+                path: file.path.clone(),
+                content_sha256: file.content_sha256.clone(),
+                size_bytes: file.size_bytes,
+                source_class: star_contracts::index::SourceClass::Source,
+                facets: vec![],
+                language_id: file
+                    .language_id
+                    .clone()
+                    .unwrap_or_else(|| "text".to_owned()),
+                encoding: "utf-8".to_owned(),
+                owner_project_id: attached.project.project_id.clone(),
+                owner_checkout_id: attached.checkout.checkout_id.clone(),
+                analysis_eligible: true,
+                content_fingerprint: file.content_sha256.clone(),
+            })
+            .collect::<Vec<_>>();
+        let changes =
+            observe_workspace_changes(&attached.project, &canonical, &current_sources).unwrap();
+        assert_eq!(changes.completeness, Completeness::Complete);
+        let modified = changes
+            .entries
+            .iter()
+            .find(|entry| entry.path.as_str() == "src/lib.rs")
+            .unwrap();
+        assert!(modified.staged && modified.unstaged && !modified.untracked);
+        assert!(modified.before_sha256.is_some() && modified.after_sha256.is_some());
+        let renamed = changes
+            .entries
+            .iter()
+            .find(|entry| entry.path.as_str() == "src/new.rs")
+            .unwrap();
+        assert_eq!(renamed.change_kind, ObservedChangeKind::Rename);
+        assert_eq!(renamed.rename_from.as_ref().unwrap().as_str(), "src/old.rs");
+        let untracked = changes
+            .entries
+            .iter()
+            .find(|entry| entry.path.as_str() == "src/untracked.rs")
+            .unwrap();
+        assert!(untracked.untracked && untracked.before_sha256.is_none());
     }
 }

@@ -1,6 +1,8 @@
 //! Rule, Finding, ValidationResult, and GateDecision semantics.
 
 pub mod planning;
+pub mod runner;
+pub mod rust_style;
 
 use std::collections::BTreeMap;
 
@@ -444,6 +446,25 @@ pub fn validate_patch_result(
     current_findings: &[Finding],
     decisions: &DecisionEvaluation,
 ) -> Result<(ValidationResult, GateDecision), ValidationError> {
+    validate_patch_result_with_plan(
+        patch_set,
+        scan_run,
+        current_findings,
+        decisions,
+        "star.validation.trailing-whitespace.v1",
+    )
+}
+
+pub fn validate_patch_result_with_plan(
+    patch_set: &PatchSet,
+    scan_run: &ScanRun,
+    current_findings: &[Finding],
+    decisions: &DecisionEvaluation,
+    validation_plan_ref: &str,
+) -> Result<(ValidationResult, GateDecision), ValidationError> {
+    if validation_plan_ref.trim().is_empty() {
+        return Err(ValidationError::InconsistentGraph);
+    }
     let started_at = Utc::now();
     let unresolved: Vec<_> = patch_set
         .affected_finding_ids
@@ -474,6 +495,7 @@ pub fn validate_patch_result(
         &serde_json::json!({
             "patch_set_id":patch_set.patch_set_id,
             "scan_run_id":scan_run.scan_run_id,
+            "validation_plan_ref":validation_plan_ref,
             "outcome":outcome,
             "unresolved":unresolved,
         }),
@@ -489,7 +511,7 @@ pub fn validate_patch_result(
         project_id: patch_set.project_id.clone(),
         project_revision_id: scan_run.project_revision_id.clone(),
         workspace_snapshot_id: scan_run.workspace_snapshot_id.clone(),
-        validation_plan_ref: "star.validation.trailing-whitespace.v1".to_owned(),
+        validation_plan_ref: validation_plan_ref.to_owned(),
         validation_run_refs: vec![scan_run.scan_run_id.as_str().to_owned()],
         effective_config_fingerprint: scan_run.effective_config_fingerprint.clone(),
         outcome,

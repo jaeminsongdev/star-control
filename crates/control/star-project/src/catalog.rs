@@ -557,9 +557,9 @@ mod tests {
     const LIVE_CATALOG: &str = include_str!("../../../../catalog/projects.toml");
 
     #[test]
-    fn tracked_catalog_has_exactly_thirteen_active_projects_and_registration_is_disabled() {
+    fn tracked_catalog_has_exactly_thirteen_active_projects_and_registration_is_enabled() {
         let manifest = parse_project_catalog(LIVE_CATALOG).unwrap();
-        assert!(!manifest.registration_enabled);
+        assert!(manifest.registration_enabled);
         assert_eq!(
             manifest
                 .projects
