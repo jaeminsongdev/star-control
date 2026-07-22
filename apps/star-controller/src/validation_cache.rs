@@ -457,7 +457,7 @@ mod tests {
             revision: "a".repeat(40),
             requested_profile: Some(ValidationProfile::Target),
             requested_unit: None,
-            requested_unit_required_profile: None,
+            empty_change_required_profile: None,
             workspace_unit_id: "workspace".to_owned(),
             changed_files: Vec::new(),
             dependencies: Vec::new(),

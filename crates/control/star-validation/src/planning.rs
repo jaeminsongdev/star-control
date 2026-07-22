@@ -65,7 +65,7 @@ pub struct ValidationPlanningInput {
     pub revision: String,
     pub requested_profile: Option<ValidationProfile>,
     pub requested_unit: Option<String>,
-    pub requested_unit_required_profile: Option<ValidationProfile>,
+    pub empty_change_required_profile: Option<ValidationProfile>,
     pub workspace_unit_id: String,
     pub changed_files: Vec<ValidationChangedFile>,
     pub dependencies: Vec<UnitDependency>,
@@ -192,7 +192,7 @@ pub fn build_validation_plan(
     normalize_changed_files(&mut input.changed_files)?;
     let mut required = if input.changed_files.is_empty() {
         input
-            .requested_unit_required_profile
+            .empty_change_required_profile
             .unwrap_or(ValidationProfile::Target)
     } else {
         ValidationProfile::Quick
@@ -790,7 +790,7 @@ mod tests {
             revision: "0123456789abcdef".to_owned(),
             requested_profile: None,
             requested_unit: None,
-            requested_unit_required_profile: None,
+            empty_change_required_profile: None,
             workspace_unit_id: "workspace".to_owned(),
             changed_files: files,
             dependencies: vec![
@@ -856,17 +856,34 @@ mod tests {
     fn clean_explicit_unit_uses_the_unit_profile_instead_of_workspace_default() {
         let mut docs = input(Vec::new());
         docs.requested_unit = Some("docs".to_owned());
-        docs.requested_unit_required_profile = Some(ValidationProfile::Quick);
+        docs.empty_change_required_profile = Some(ValidationProfile::Quick);
         let plan = build_validation_plan(docs).unwrap();
         assert_eq!(plan.profile.selected, ValidationProfile::Quick);
         assert_eq!(plan.direct_units[0].unit_id, "docs");
 
         let mut package = input(Vec::new());
         package.requested_unit = Some("star-validation".to_owned());
-        package.requested_unit_required_profile = Some(ValidationProfile::Target);
+        package.empty_change_required_profile = Some(ValidationProfile::Target);
         let plan = build_validation_plan(package).unwrap();
         assert_eq!(plan.profile.selected, ValidationProfile::Target);
         assert_eq!(plan.direct_units[0].unit_id, "star-validation");
+    }
+
+    #[test]
+    fn clean_whole_workspace_uses_the_explicit_profile_as_required() {
+        let mut full = input(Vec::new());
+        full.requested_profile = Some(ValidationProfile::Full);
+        full.empty_change_required_profile = Some(ValidationProfile::Full);
+        let plan = build_validation_plan(full).unwrap();
+        assert_eq!(plan.profile.required, ValidationProfile::Full);
+        assert_eq!(plan.profile.selected, ValidationProfile::Full);
+
+        let mut release = input(Vec::new());
+        release.requested_profile = Some(ValidationProfile::Release);
+        release.empty_change_required_profile = Some(ValidationProfile::Release);
+        let plan = build_validation_plan(release).unwrap();
+        assert_eq!(plan.profile.required, ValidationProfile::Release);
+        assert_eq!(plan.profile.selected, ValidationProfile::Release);
     }
 
     #[test]

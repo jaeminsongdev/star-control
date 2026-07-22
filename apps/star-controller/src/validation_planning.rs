@@ -235,13 +235,11 @@ pub fn build_project_validation_plan(
         policy_schema_version: manifest.policy_schema_version,
         evidence_schema_version: manifest.evidence_schema_version,
     };
-    let requested_unit_required_profile = requested_unit.as_deref().map(|unit| {
-        if unit == "docs" {
-            ValidationProfile::Quick
-        } else {
-            ValidationProfile::Target
-        }
-    });
+    let empty_change_required_profile = empty_change_required_profile(
+        changed.is_empty(),
+        requested_unit.as_deref(),
+        requested_profile,
+    );
     let checks = check_definitions(requested_unit.as_deref());
     let public_graph_complete = changed.iter().all(|file| {
         file.change_class != ValidationChangeClass::PublicContract
@@ -260,7 +258,7 @@ pub fn build_project_validation_plan(
         revision,
         requested_profile,
         requested_unit,
-        requested_unit_required_profile,
+        empty_change_required_profile,
         workspace_unit_id: manifest.workspace_unit,
         changed_files: changed,
         dependencies: cargo.dependencies,
@@ -285,6 +283,21 @@ pub fn build_project_validation_plan(
 
 const fn validation_cache_reuse_allowed(readiness: ValidationPlanReadiness) -> bool {
     !matches!(readiness, ValidationPlanReadiness::Blocked)
+}
+
+fn empty_change_required_profile(
+    changed_files_empty: bool,
+    requested_unit: Option<&str>,
+    requested_profile: Option<ValidationProfile>,
+) -> Option<ValidationProfile> {
+    if !changed_files_empty {
+        return None;
+    }
+    Some(match requested_unit {
+        Some("docs") => ValidationProfile::Quick,
+        Some(_) => ValidationProfile::Target,
+        None => requested_profile.unwrap_or(ValidationProfile::Target),
+    })
 }
 
 pub fn resolve_project_validation_target(
@@ -895,6 +908,26 @@ mod tests {
         assert!(!validation_cache_reuse_allowed(
             ValidationPlanReadiness::Blocked
         ));
+    }
+
+    #[test]
+    fn clean_workspace_profile_binding_matches_the_native_validator() {
+        assert_eq!(
+            empty_change_required_profile(true, None, Some(ValidationProfile::Full)),
+            Some(ValidationProfile::Full)
+        );
+        assert_eq!(
+            empty_change_required_profile(true, None, Some(ValidationProfile::Release)),
+            Some(ValidationProfile::Release)
+        );
+        assert_eq!(
+            empty_change_required_profile(true, Some("docs"), Some(ValidationProfile::Full)),
+            Some(ValidationProfile::Quick)
+        );
+        assert_eq!(
+            empty_change_required_profile(false, None, Some(ValidationProfile::Full)),
+            None
+        );
     }
 
     #[test]
