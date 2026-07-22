@@ -4,8 +4,11 @@ members = [
     "crates/foundation/star-domain",
     "crates/foundation/star-ports",
     "crates/control/star-project",
+    "crates/control/star-planning",
     "crates/control/star-validation",
     "crates/control/star-execution",
+    "crates/control/star-development",
+    "crates/control/star-release",
     "crates/control/star-application",
     "crates/control/star-updater-core",
     "crates/infrastructure/star-state",
@@ -13,6 +16,7 @@ members = [
     "crates/adapters/star-ipc",
     "crates/adapters/star-adapter-windows",
     "crates/adapters/star-adapter-codex",
+    "crates/adapters/star-adapter-rust-index",
     "apps/star-mcp",
     "apps/star-cli",
     "apps/star-controller",
@@ -47,6 +51,8 @@ serde_json_canonicalizer = "0.3.2"
 sha2 = "0.10.9"
 subtle = "2.6.1"
 thiserror = "2.0.16"
+tree-sitter = "=0.26.11"
+tree-sitter-rust = "=0.24.2"
 tokio = { version = "1.47.1", features = ["io-std", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 toml = "0.9.7"
 ulid = { version = "1.2.1", features = ["serde"] }

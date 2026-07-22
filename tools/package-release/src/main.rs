@@ -15,11 +15,13 @@ use star_contracts::{
     },
     parse_no_duplicate_keys,
 };
+use star_controller::authenticode::{AuthenticodeStatus, verify_authenticode};
 
 type DynResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 const HELP: &str = "star-package-release stage --architecture x64|arm64 --binary-dir <dir> --output <dir> --source-revision <value>\n\
 star-package-release reseal --architecture x64|arm64 --stage <dist-stage-dir> --source-revision <value>\n\
+star-package-release seal-signed --architecture x64|arm64 --stage <dist-stage-dir> --source-revision <value>\n\
 star-package-release verify --architecture x64|arm64 --stage <dir>";
 
 #[derive(Debug)]
@@ -31,6 +33,11 @@ enum Action {
         source_revision: String,
     },
     Reseal {
+        architecture: TargetArchitecture,
+        stage: PathBuf,
+        source_revision: String,
+    },
+    SealSigned {
         architecture: TargetArchitecture,
         stage: PathBuf,
         source_revision: String,
@@ -82,7 +89,12 @@ fn run() -> DynResult<()> {
             stage,
             source_revision,
         } => {
-            let manifest = reseal_release_stage(&stage, architecture, &source_revision)?;
+            let manifest = reseal_release_stage(
+                &stage,
+                architecture,
+                &source_revision,
+                PackageSigningState::UnsignedLocal,
+            )?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({
@@ -91,6 +103,30 @@ fn run() -> DynResult<()> {
                     "target_architecture": manifest.target_architecture,
                     "file_count": manifest.files.len(),
                     "set_sha256": manifest.set_sha256,
+                    "resealed": true,
+                }))?
+            );
+        }
+        Action::SealSigned {
+            architecture,
+            stage,
+            source_revision,
+        } => {
+            let manifest = reseal_release_stage(
+                &stage,
+                architecture,
+                &source_revision,
+                PackageSigningState::Signed,
+            )?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "stage": stage,
+                    "product_version": manifest.product_version,
+                    "target_architecture": manifest.target_architecture,
+                    "file_count": manifest.files.len(),
+                    "set_sha256": manifest.set_sha256,
+                    "signing": manifest.signing,
                     "resealed": true,
                 }))?
             );
@@ -108,6 +144,8 @@ fn run() -> DynResult<()> {
                     "target_architecture": manifest.target_architecture,
                     "file_count": manifest.files.len(),
                     "set_sha256": manifest.set_sha256,
+                    "source_revision": manifest.source_revision,
+                    "signing": manifest.signing,
                 }))?
             );
         }
@@ -162,7 +200,7 @@ fn parse(args: Vec<String>) -> DynResult<Action> {
                 source_revision,
             })
         }
-        "reseal" => {
+        "reseal" | "seal-signed" => {
             reject_unknown(
                 &options,
                 &["--architecture", "--stage", "--source-revision"],
@@ -171,11 +209,28 @@ fn parse(args: Vec<String>) -> DynResult<Action> {
             if source_revision.trim().is_empty() || source_revision.len() > 256 {
                 return Err("--source-revision must be 1..256 characters".into());
             }
-            Ok(Action::Reseal {
-                architecture,
-                stage: value("--stage")?.into(),
-                source_revision,
-            })
+            if action == "seal-signed"
+                && (!matches!(source_revision.len(), 40 | 64)
+                    || source_revision
+                        .bytes()
+                        .any(|byte| !byte.is_ascii_hexdigit()))
+            {
+                return Err("seal-signed requires an exact 40 or 64 hex source revision".into());
+            }
+            let stage = value("--stage")?.into();
+            if action == "seal-signed" {
+                Ok(Action::SealSigned {
+                    architecture,
+                    stage,
+                    source_revision,
+                })
+            } else {
+                Ok(Action::Reseal {
+                    architecture,
+                    stage,
+                    source_revision,
+                })
+            }
         }
         "verify" => {
             reject_unknown(&options, &["--architecture", "--stage"])?;
@@ -279,13 +334,15 @@ fn stage_release(
 }
 
 /// Re-seals an already staged package after an allowed package-side
-/// transformation (for example signing), without granting mutation access to
-/// an installed product root.  The stage must be below this repository's
+/// transformation without granting mutation access to an installed product
+/// root. `Signed` is accepted only after every staged executable passes the
+/// offline Authenticode policy. The stage must be below this repository's
 /// `dist/stage` root and retain the current package identity.
 fn reseal_release_stage(
     stage: &Path,
     expected_architecture: TargetArchitecture,
     source_revision: &str,
+    signing: PackageSigningState,
 ) -> DynResult<ReleaseFileManifest> {
     let stage = stage.canonicalize()?;
     let allowed_root = workspace_root().join("dist").join("stage").canonicalize()?;
@@ -309,6 +366,11 @@ fn reseal_release_stage(
     {
         return Err("reseal stage has an incompatible release manifest".into());
     }
+    if signing == PackageSigningState::Signed {
+        verify_inventory_matches_manifest(&stage, &current, expected_architecture)?;
+        verify_signed_executables(&stage)?;
+    }
+    reseal_runtime_generation(&stage, expected_architecture, source_revision, signing)?;
     let files = collect_release_entries(&stage)?;
     let set_sha256 = canonical_sha256(&serde_json::to_value(&files)?)?;
     let manifest = ReleaseFileManifest {
@@ -321,13 +383,179 @@ fn reseal_release_stage(
         files,
         generated_files: vec!["star-control-install.v1.json".to_owned()],
         set_sha256,
-        signing: PackageSigningState::UnsignedLocal,
+        signing,
     };
     let mut bytes = serde_json::to_vec_pretty(&manifest)?;
     bytes.push(b'\n');
     fs::write(&manifest_path, bytes)?;
     verify_stage(&stage, expected_architecture)?;
     Ok(manifest)
+}
+
+fn reseal_runtime_generation(
+    stage: &Path,
+    expected_architecture: TargetArchitecture,
+    source_revision: &str,
+    signing: PackageSigningState,
+) -> DynResult<()> {
+    let generations = stage.join("runtime").join("generations");
+    let directories = fs::read_dir(&generations)?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .collect::<Vec<_>>();
+    if directories.len() != 1 {
+        return Err("stage must contain exactly one Runtime Generation".into());
+    }
+    let root = directories[0].path();
+    let manifest_path = root.join("runtime-generation.v1.json");
+    let manifest_text = fs::read_to_string(&manifest_path)?;
+    let mut generation: RuntimeGenerationManifest =
+        serde_json::from_value(parse_no_duplicate_keys(&manifest_text)?)?;
+    if generation.schema_id != RUNTIME_GENERATION_MANIFEST_SCHEMA_ID
+        || generation.schema_version != 1
+        || generation.generation.generation_id != directories[0].file_name().to_string_lossy()
+        || generation.target_architecture != expected_architecture
+    {
+        return Err("Runtime Generation cannot be resealed".into());
+    }
+    let controller_path = root.join("star-controller.exe");
+    let cli_path = root.join("star-cli-runtime.exe");
+    verify_pe_architecture(&controller_path, expected_architecture)?;
+    verify_pe_architecture(&cli_path, expected_architecture)?;
+    let controller_sha256 = Sha256Hash::digest_reader(fs::File::open(&controller_path)?)?;
+
+    let mut runtime_files = Vec::new();
+    for relative in collect_relative_files(&root)? {
+        if matches!(
+            relative.as_str(),
+            "runtime-release-manifest.json" | "runtime-generation.v1.json"
+        ) {
+            continue;
+        }
+        let path = root.join(relative.replace('/', "\\"));
+        let metadata = fs::metadata(&path)?;
+        runtime_files.push(ReleaseFileEntry {
+            path: relative,
+            size: metadata.len(),
+            sha256: Sha256Hash::digest_reader(fs::File::open(path)?)?,
+        });
+    }
+    runtime_files.sort_by(|left, right| left.path.cmp(&right.path));
+    let runtime_set_sha256 = canonical_sha256(&serde_json::to_value(&runtime_files)?)?;
+    let runtime_release = ReleaseFileManifest {
+        schema_id: RELEASE_FILE_MANIFEST_SCHEMA_ID.to_owned(),
+        schema_version: INSTALLATION_SCHEMA_VERSION,
+        product_version: env!("CARGO_PKG_VERSION").to_owned(),
+        target_architecture: expected_architecture,
+        created_at: Utc::now(),
+        source_revision: source_revision.to_owned(),
+        files: runtime_files,
+        generated_files: vec!["runtime-generation.v1.json".to_owned()],
+        set_sha256: runtime_set_sha256,
+        signing,
+    };
+    let mut runtime_release_bytes = serde_json::to_vec_pretty(&runtime_release)?;
+    runtime_release_bytes.push(b'\n');
+    fs::write(
+        root.join("runtime-release-manifest.json"),
+        &runtime_release_bytes,
+    )?;
+
+    generation.generation.release_manifest_sha256 = Sha256Hash::digest(&runtime_release_bytes);
+    generation.product_version = env!("CARGO_PKG_VERSION").to_owned();
+    generation.target_architecture = expected_architecture;
+    generation.controller_sha256 = controller_sha256;
+    let mut generation_bytes = serde_json::to_vec_pretty(&generation)?;
+    generation_bytes.push(b'\n');
+    fs::write(manifest_path, generation_bytes)?;
+    Ok(())
+}
+
+fn verify_signed_executables(stage: &Path) -> DynResult<()> {
+    let mut executables = Vec::new();
+    collect_executables(stage, stage, &mut executables)?;
+    if executables.is_empty() {
+        return Err("signed release stage contains no executables".into());
+    }
+    for executable in executables {
+        let bytes = fs::read(&executable)?;
+        let digest = Sha256Hash::digest(&bytes);
+        let evidence = verify_authenticode(&executable, &digest, "require_valid", None)
+            .map_err(|_| format!("Authenticode verification failed: {}", executable.display()))?;
+        if evidence.status != AuthenticodeStatus::Valid {
+            return Err(format!(
+                "Authenticode verification was not valid: {}",
+                executable.display()
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+fn verify_inventory_matches_manifest(
+    stage: &Path,
+    manifest: &ReleaseFileManifest,
+    expected_architecture: TargetArchitecture,
+) -> DynResult<()> {
+    let mut expected = BTreeSet::new();
+    let mut casefolded = BTreeSet::new();
+    let mut previous: Option<&str> = None;
+    for entry in &manifest.files {
+        if !valid_relative_path(&entry.path)
+            || previous.is_some_and(|value| value >= entry.path.as_str())
+            || !expected.insert(entry.path.clone())
+            || !casefolded.insert(entry.path.to_ascii_lowercase())
+        {
+            return Err("release manifest inventory paths are not canonical and unique".into());
+        }
+        previous = Some(&entry.path);
+    }
+    let actual = collect_relative_files(stage)?
+        .into_iter()
+        .filter(|path| path != "release-manifest.json")
+        .collect::<BTreeSet<_>>();
+    if actual != expected {
+        return Err("signed reseal cannot add or remove staged files".into());
+    }
+    for name in [
+        "star.exe",
+        "star-controller.exe",
+        "star-mcp.exe",
+        "star-updater.exe",
+    ] {
+        if !expected.contains(name) {
+            return Err(format!("signed reseal is missing required runtime: {name}").into());
+        }
+        verify_pe_architecture(&stage.join(name), expected_architecture)?;
+    }
+    Ok(())
+}
+
+fn collect_executables(root: &Path, directory: &Path, output: &mut Vec<PathBuf>) -> DynResult<()> {
+    let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() {
+            return Err(format!("release stage contains a symlink: {}", path.display()).into());
+        }
+        if metadata.is_dir() {
+            collect_executables(root, &path, output)?;
+        } else if metadata.is_file()
+            && path
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+        {
+            if !path.starts_with(root) {
+                return Err("executable escaped the release stage".into());
+            }
+            output.push(path);
+        }
+    }
+    Ok(())
 }
 
 fn stage_runtime_generation(
@@ -434,7 +662,6 @@ fn verify_stage(
         || manifest.target_architecture != expected_architecture
         || manifest.source_revision.trim().is_empty()
         || manifest.source_revision.len() > 256
-        || manifest.signing != PackageSigningState::UnsignedLocal
         || manifest.generated_files != ["star-control-install.v1.json"]
         || manifest.files.is_empty()
     {
@@ -485,13 +712,23 @@ fn verify_stage(
         }
         verify_pe_architecture(&stage.join(name), expected_architecture)?;
     }
-    verify_runtime_generation(&stage, expected_architecture)?;
+    if manifest.signing == PackageSigningState::Signed {
+        verify_signed_executables(&stage)?;
+    }
+    verify_runtime_generation(
+        &stage,
+        expected_architecture,
+        manifest.signing,
+        &manifest.source_revision,
+    )?;
     Ok(manifest)
 }
 
 fn verify_runtime_generation(
     stage: &Path,
     expected_architecture: TargetArchitecture,
+    expected_signing: PackageSigningState,
+    expected_source_revision: &str,
 ) -> DynResult<()> {
     let generations = stage.join("runtime").join("generations");
     let directories = fs::read_dir(&generations)?
@@ -532,15 +769,25 @@ fn verify_runtime_generation(
         || runtime_release.schema_version != INSTALLATION_SCHEMA_VERSION
         || runtime_release.product_version != env!("CARGO_PKG_VERSION")
         || runtime_release.target_architecture != expected_architecture
+        || runtime_release.signing != expected_signing
+        || runtime_release.source_revision != expected_source_revision
         || runtime_release.generated_files != ["runtime-generation.v1.json"]
     {
         return Err("Runtime Generation release contract mismatch".into());
     }
-    let expected = runtime_release
-        .files
-        .iter()
-        .map(|entry| entry.path.clone())
-        .collect::<BTreeSet<_>>();
+    let mut expected = BTreeSet::new();
+    let mut casefolded = BTreeSet::new();
+    let mut previous: Option<&str> = None;
+    for entry in &runtime_release.files {
+        if !valid_relative_path(&entry.path)
+            || previous.is_some_and(|value| value >= entry.path.as_str())
+            || !expected.insert(entry.path.clone())
+            || !casefolded.insert(entry.path.to_ascii_lowercase())
+        {
+            return Err("Runtime Generation file paths are not canonical and unique".into());
+        }
+        previous = Some(&entry.path);
+    }
     let actual = collect_relative_files(&root)?
         .into_iter()
         .filter(|path| {
@@ -765,6 +1012,41 @@ mod tests {
             )
             .is_err()
         );
+        assert!(matches!(
+            parse(
+                [
+                    "seal-signed",
+                    "--architecture",
+                    "x64",
+                    "--stage",
+                    r"D:\dist\stage\0.1.0\x64",
+                    "--source-revision",
+                    "0123456789abcdef0123456789abcdef01234567",
+                ]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            )
+            .unwrap(),
+            Action::SealSigned { .. }
+        ));
+        assert!(
+            parse(
+                [
+                    "seal-signed",
+                    "--architecture",
+                    "x64",
+                    "--stage",
+                    r"D:\dist\stage\0.1.0\x64",
+                    "--source-revision",
+                    "dirty:0123456789abcdef0123456789abcdef01234567",
+                ]
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -783,5 +1065,51 @@ mod tests {
             other => panic!("unsupported test architecture {other}"),
         };
         verify_pe_architecture(&std::env::current_exe().unwrap(), expected).unwrap();
+    }
+
+    #[test]
+    fn signed_seal_rejects_an_unsigned_or_invalid_executable() {
+        let root = std::env::temp_dir().join(format!(
+            "star-package-release-unsigned-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let executable = root.join(format!(
+            "fixture-{}.exe",
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        fs::write(executable, b"MZ unsigned fixture").unwrap();
+        assert!(verify_signed_executables(&root).is_err());
+    }
+
+    #[test]
+    fn signed_reseal_rejects_inventory_drift_before_rehashing() {
+        let root = std::env::temp_dir().join(format!(
+            "star-package-release-inventory-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("declared.bin"), b"declared").unwrap();
+        fs::write(root.join("unexpected.bin"), b"unexpected").unwrap();
+        let manifest = ReleaseFileManifest {
+            schema_id: RELEASE_FILE_MANIFEST_SCHEMA_ID.to_owned(),
+            schema_version: INSTALLATION_SCHEMA_VERSION,
+            product_version: env!("CARGO_PKG_VERSION").to_owned(),
+            target_architecture: TargetArchitecture::X64,
+            created_at: Utc::now(),
+            source_revision: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+            files: vec![ReleaseFileEntry {
+                path: "declared.bin".to_owned(),
+                size: 8,
+                sha256: Sha256Hash::digest(b"declared"),
+            }],
+            generated_files: vec!["star-control-install.v1.json".to_owned()],
+            set_sha256: Sha256Hash::digest(b"fixture"),
+            signing: PackageSigningState::UnsignedLocal,
+        };
+        assert!(
+            verify_inventory_matches_manifest(&root, &manifest, TargetArchitecture::X64).is_err()
+        );
     }
 }

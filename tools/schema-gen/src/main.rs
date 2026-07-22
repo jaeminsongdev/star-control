@@ -15,7 +15,42 @@ type DynResult<T> = Result<T, Box<dyn std::error::Error>>;
 type GeneratedFile = (PathBuf, Vec<u8>);
 
 const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
+    "task-invocation-v2.schema.json",
+    "validation-run-v2.schema.json",
+    "gate-decision-v2.schema.json",
+    "evidence-bundle-v2.schema.json",
+    "diagnostic-v2.schema.json",
+    "validation-plan-v2.schema.json",
+    "task-spec.schema.json",
+    "scope-revision.schema.json",
+    "change-set.schema.json",
+    "impact-analysis.schema.json",
+    "risk-path-descriptor.schema.json",
+    "planning-bundle.schema.json",
+    "goal-record.schema.json",
+    "managed-registry-snapshot.schema.json",
+    "compatibility-report.schema.json",
+    "clean-room-doctor-report.schema.json",
+    "reproduction-pack.schema.json",
+    "maintenance-radar.schema.json",
+    "migration-run.schema.json",
+    "performance-comparison.schema.json",
+    "change-bundle.schema.json",
+    "change-bundle-handoff.schema.json",
+    "release-manifest-v2.schema.json",
+    "evaluation-run-v2.schema.json",
+    "evaluation-catalog-item.schema.json",
+    "rust-toolchain-binding.schema.json",
+    "rust-style-policy-snapshot.schema.json",
+    "rust-style-coverage-matrix.schema.json",
+    "rust-style-step-execution.schema.json",
     "project.schema.json",
+    "project-v1.schema.json",
+    "project-checkout.schema.json",
+    "project-catalog-snapshot.schema.json",
+    "code-index-snapshot.schema.json",
+    "project-v1-to-v2-migration-plan.schema.json",
+    "project-v1-to-v2-migration-result.schema.json",
     "project-revision.schema.json",
     "workspace-snapshot.schema.json",
     "scan-run.schema.json",
@@ -81,10 +116,18 @@ fn generated_files(root: &Path) -> DynResult<Vec<GeneratedFile>> {
             .ok_or("management fixture root is not an object")?
             .insert("unexpected".to_owned(), Value::Bool(true));
         let mut future = minimal.clone();
+        let current_version = minimal
+            .get("schema_version")
+            .or_else(|| full.get("schema_version"))
+            .and_then(Value::as_u64)
+            .unwrap_or(1);
         future
             .as_object_mut()
             .ok_or("management fixture root is not an object")?
-            .insert("schema_version".to_owned(), Value::from(2));
+            .insert(
+                "schema_version".to_owned(),
+                Value::from(current_version + 1),
+            );
         validate_fixture_set(name, schema, &minimal, &full, &invalid, &future)?;
         for (fixture_name, value) in [
             ("minimal.json", minimal),
@@ -262,18 +305,19 @@ fn sample_from_schema(
             Ok(Value::Object(object))
         }
         "array" => {
-            if minimal {
+            let minimum = schema.get("minItems").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let count = if minimal { minimum } else { minimum.max(1) };
+            if count == 0 {
                 return Ok(Value::Array(Vec::new()));
             }
             let Some(items) = schema.get("items") else {
                 return Ok(Value::Array(Vec::new()));
             };
-            Ok(Value::Array(vec![sample_from_schema(
-                items,
-                root,
-                minimal,
-                property_name,
-            )?]))
+            let mut values = Vec::with_capacity(count);
+            for _ in 0..count {
+                values.push(sample_from_schema(items, root, minimal, property_name)?);
+            }
+            Ok(Value::Array(values))
         }
         "integer" | "number" => Ok(schema
             .get("minimum")
@@ -311,7 +355,11 @@ fn sample_string(schema: &Value, property_name: Option<&str>) -> String {
     if name.contains("sha256") || name.contains("fingerprint") || name.ends_with("_hash") {
         return format!("sha256:{}", "0".repeat(64));
     }
-    let id_prefix = if name.contains("project_revision")
+    let id_prefix = if name.contains("project_catalog_snapshot") {
+        Some("pcs_")
+    } else if name.contains("code_index_snapshot") {
+        Some("cix_")
+    } else if name.contains("project_revision")
         || name.contains("source_revision")
         || name == "scope_revision"
         || name.ends_with("revision_id")
@@ -366,6 +414,8 @@ fn sample_string(schema: &Value, property_name: Option<&str>) -> String {
         Some("art_")
     } else if name.contains("root_binding") {
         Some("rtb_")
+    } else if name.contains("checkout") {
+        Some("cko_")
     } else if name.contains("generation") {
         Some("gen_")
     } else if name.contains("coordinated_operation") || name == "operation_id" {
@@ -378,7 +428,16 @@ fn sample_string(schema: &Value, property_name: Option<&str>) -> String {
         None
     };
     if let Some(prefix) = id_prefix {
-        return format!("{prefix}{}", "0".repeat(26));
+        let length = if matches!(
+            prefix,
+            "pcs_" | "cix_" | "prv_" | "wsp_" | "fnd_" | "occ_" | "srf_" | "sym_" | "src_"
+        ) {
+            52
+        } else {
+            26
+        };
+        let character = if length == 52 { "a" } else { "0" };
+        return format!("{prefix}{}", character.repeat(length));
     }
     match name {
         name if name.contains("path") => "src/lib.rs".to_owned(),
