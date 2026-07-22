@@ -2,7 +2,7 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 5단계인 **관리형 Symbol·상수·에러 코드 Registry**의 설계 정본이다. 현재 상태는 **설계 확정, 제품 구현 전**이다. 이 문서를 추가했다고 Registry manifest, generator, codemod, DB Schema, migration, CLI 또는 실제 상수·오류 코드 변경이 구현된 것은 아니다.
+이 문서는 Star-Control 5단계인 **관리형 Symbol·상수·에러 코드 Registry**의 설계 정본이다. 현재 상태는 **P-0046 첫 bounded 제품 Slice 구현**이다. `star-development::managed_registry`가 Git manifest parsing, stable declaration/lifecycle/alias 검증과 exact consumer migration plan을 구현했으며 generated Schema·fixture와 fault test가 있다. 범용 언어별 generator·codemod와 실제 외부 consumer 전환은 후속 Catalog item별 작업이며 이번 Slice의 완료 주장에 포함하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)에 고정한다.
 
 이 문서에서 **Managed Registry**는 여러 Project·언어·문서가 공유하는 계약 값을 관리하는 source 계약이다. 다음 세 Registry와 다른 domain이다.
 

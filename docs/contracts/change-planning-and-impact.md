@@ -2,7 +2,7 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 2단계인 **변경 계획, 영향 분석과 affected 검사 선택**의 설계 정본이다. 전체 M2 제품은 아직 구현 전이다. P-0031은 Git 추적 allowlist의 exact root와 project-local manifest만 읽는 `tracked_path_precursor`를 구현했으며, M1 persisted Catalog·Index, symbol/contract graph, TaskSpec·ScopeRevision·ChangePlan v2와 multi-project planning을 대신하지 않는다.
+이 문서는 Star-Control 2단계인 **변경 계획, 영향 분석과 affected 검사 선택**의 설계 정본이다. P-0043은 `TaskSpecDraft`를 current M1 snapshot과 결합해 sealed `TaskSpec`·`ScopeRevision`·planning-baseline `ChangeSet`·`ImpactAnalysis`·`FullValidationPlan`을 만드는 CLI-only 수직 Slice를 구현했다. `star-planning`은 filesystem·DB·process를 모르는 pure engine이고 Controller application만 current projection을 주입·재검증·영속화한다. P-0031의 `tracked_path_precursor`와 `ValidationPlan` v1은 이 v2 계획과 구분되는 역사적 실행 precursor다.
 
 2단계는 사용자가 직접 입력한 목표와 범위를 1단계의 read-only Project Catalog·Code Index에 결합해 다음 산출물을 만든다.
 
@@ -40,12 +40,20 @@
 | 선행조건 | 현재 정본 상태 | 2단계 사용 방식 |
 |---|---|---|
 | ProjectId, ProjectRevisionId, WorkspaceSnapshotId, source/DB/evidence 분리, Controller 단일 Writer | P0 첫 수직 Slice 구현·검증 완료 | ID·fingerprint·repository transaction을 재사용 |
-| ProjectCheckout, ProjectCatalogSnapshot, CodeIndexSnapshot | M1 설계 확정·제품 구현 전 | 구현된 것처럼 합성하지 않고 M2 구현 선행 gate로 둠 |
-| package·symbol·contract·dependency graph와 tier·coverage·limitation | M1 설계 확정·제품 구현 전 | current partition만 confirmed 근거로 사용 |
-| ChangeSet·ValidationPlan | 기존 설계 계약 | 2단계 target field와 선택 근거를 확장 |
+| ProjectCheckout, ProjectCatalogSnapshot, CodeIndexSnapshot | P-0041·P-0042 구현·FULL 통과 | exact Checkout과 current required partition만 입력으로 사용 |
+| package·symbol·contract·dependency graph와 tier·coverage·limitation | P-0042 text·Rust syntax/semantic graph 구현 | current required partition만 confirmed 근거로 사용 |
+| ChangeSet·ValidationPlan | P-0043 typed contract·Schema·fixture·engine 구현 | v1 precursor와 v2 full plan을 schema version으로 분리 |
 | ChangePlan v1 | P0 Finding·Recipe 수직 Slice 구현 | 일반 사용자 변경 계획을 수용하는 v2 target migration 필요 |
 
-0단계와 1단계의 의미 충돌은 없다. P0의 clean ProjectRevision과 dirty WorkspaceSnapshot 분리, M1의 actual workspace byte 우선, partition freshness와 `confirmed_empty` 구분은 그대로 유지한다. P-0031 precursor는 이 선행 Gate 밖에서 source를 쓰거나 M2 완료를 주장하지 않는다. M1 migration과 graph/query surface가 구현되기 전에는 full M2 graph/query 제품 구현을 시작하지 않는다.
+0단계와 1단계의 의미 충돌은 없다. P0의 clean ProjectRevision과 dirty WorkspaceSnapshot 분리, M1의 actual workspace byte 우선, partition freshness와 `confirmed_empty` 구분은 그대로 유지한다. P-0043은 계산 시작·publish 직전에 snapshot을 다시 probe하고 달라지면 `INDEX_NOT_CURRENT`로 중단한다. 계획 파일은 authenticated Project root의 bounded 상대경로만 읽고 source·Git·validator를 실행하거나 수정하지 않는다.
+
+### P-0043 구현 경계
+
+- `planning create <task-json>`과 `planning get <task-spec-id>`는 Controller IPC만 사용한다. task JSON은 1 MiB 이하 UTF-8, duplicate key 없음, final path가 authenticated Project root 안인 경우만 허용한다.
+- global store는 `task_spec_id`, idempotency input fingerprint와 sealed bundle fingerprint를 함께 저장한다. 같은 key·같은 입력은 기존 bundle을 반환하고 다른 입력은 `IdempotencyConflict`다.
+- exact target Checkout의 current `CodeIndexSnapshot`, complete catalog, staged·unstaged·untracked 관찰과 typed descriptor만 사용한다. optional semantic unavailable은 required text partition의 current 상태를 거짓으로 낮추지 않는다.
+- unresolved required Check, stale/partial collection, graph limit과 unbindable scope는 `ready`로 승격하지 않는다. package 범위를 증명하지 못하면 workspace 또는 Project full로 승격한다.
+- M2는 Check를 실행하지 않는다. M3가 sealed `CheckGraphV2`와 typed invocation을 그대로 소비한다.
 
 ### P-0031 tracked-path precursor 경계
 

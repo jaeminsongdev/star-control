@@ -4,7 +4,7 @@
 
 이 문서는 하나의 사용자 목표가 여러 Git repository의 source·contract·data·검사·원격 상태를 함께 바꿀 때 사용하는 9단계 정본이다. 1단계 Project Catalog, 2단계 영향 graph, 3단계 Validation Gate, 4단계 single-project PatchSet, 5단계 managed consumer, 8단계 migration·rollback 결과를 **project별 실행 단위로 유지한 채** 조정한다.
 
-이번 반영은 문서 설계뿐이다. 실제 worktree·branch·commit·merge를 만들거나 push·PR·remote merge·publish를 실행하지 않았고, 아래 contract type·Schema·state projection·CLI·Git/remote adapter도 아직 구현됐다고 보지 않는다.
+현재 상태는 **P-0050 첫 bounded 제품 Slice 구현**이다. `ChangeBundle`·`ChangeBundleHandoff` 계약과 generated Schema, dependency DAG·owned logical worktree·local merge queue, publish timeout의 무재시도/read-only reconcile, GoalId별 protected Controller projection과 `merge.status`·`handoff.get`을 구현했다. test adapter만 원격 결과를 흉내 냈으며 실제 push·PR·remote merge·publish는 실행하지 않았고 계속 exact action 승인을 요구한다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)에 고정한다.
 
 핵심 경계는 다음과 같다.
 

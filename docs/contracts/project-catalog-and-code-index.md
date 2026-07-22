@@ -2,18 +2,18 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 1단계인 **읽기 전용 Project Catalog와 Code Index**의 설계 정본이다. stable `ProjectCheckout`, `ProjectCatalogSnapshot`, `CodeIndexSnapshot`, DB migration·cache·watcher까지 포함한 M1 본체는 **설계 확정, 제품 구현 전**이다. 다만 P-0030에서 아래의 추적 allowlist 기반 운영 precursor와 read-only CLI/MCP action만 구현했다.
+이 문서는 Star-Control 1단계인 **읽기 전용 Project Catalog와 Code Index**의 설계 정본이다. P-0041에서 stable `ProjectCheckout` v1, `Project` v2, allowlist registration과 offline v1→v2 migration을 구현했다. P-0042에서 persisted `ProjectCatalogSnapshot`, `CodeIndexSnapshot`, classification/text/syntax/semantic partition, content-addressed file cache와 Controller query를 구현했다. watcher는 정확성 전제가 아니며 10,000-file Git dirty/non-Git 실측이 budget 안이므로 v0.1에는 추가하지 않는다.
 
 이 문서에서 **Project Catalog**는 사용자가 관리하는 project·checkout·workspace와 그 관계의 관찰 snapshot을 뜻한다. [설정과 Catalog 계약](config-and-catalog.md)의 built-in Task·Tool·Rule·Profile descriptor Catalog 및 `CatalogSnapshot`과 다른 domain이다. 이름 충돌을 피하기 위해 wire type은 항상 `ProjectCatalogSnapshot`을 사용한다.
 
 ### P-0030 추적 allowlist precursor 경계
 
-- `catalog/projects.toml`은 현재 운영 대상의 Git 추적 정본이다. 정확히 13개 `active_canonical` 프로젝트만 명시하며 `registration_enabled=false`로 고정한다.
+- `catalog/projects.toml`은 현재 운영 대상의 Git 추적 정본이다. 정확히 13개 `active_canonical` 프로젝트만 명시하며 P-0041부터 `registration_enabled=true`다.
 - P-0011에서 폐기한 구 관제 저장소·로컬 AI 실험, 하나_프로젝트의 nested Git, `임시문서`, `legacy/`·`래거시/`, backup·sandbox·bootstrap checkout, linked worktree와 Git 정본이 아닌 LAWOS는 명시적 제외 대상이다. 제외 대상은 인접 경로 탐색으로 다시 등록하지 않는다.
 - `star.core.project.list`, `star.core.project.status`, `star.core.doctor`는 이 파일에 선언된 정확한 경로만 읽는다. discovery root 재귀 탐색, 인접 checkout 자동 등록, 관리 DB write는 수행하지 않는다.
 - probe는 root 존재, Git top-level, checkout kind, origin, `git-common-dir`를 독립 상태로 보고한다. role schema는 `active_canonical`, `linked_worktree`, `read_only_migration_source`, `backup`, `sandbox`, `bootstrap_checkout`을 구분할 수 있지만 현재 운영 allowlist에는 `active_canonical`만 존재하며 unavailable·identity mismatch를 성공으로 숨기지 않는다.
 - 출력 `star.project-catalog-view`와 `star.project-status-view`는 P-0030 운영 view이며 M1의 persisted `ProjectCatalogSnapshot`이 아니다. 이후 DB projection을 추가하더라도 Git manifest가 정본이고 DB는 재생성 가능한 파생 상태다.
-- `project register`는 이 precursor를 DB에 쓰지 않으며 후속 Slice에서 allowlist membership, idempotency와 13개 활성 목록을 다시 검증한 뒤에만 연다.
+- `star project register <project-key> [--idempotency <key>]`는 allowlist의 exact `active_canonical` entry, authenticated client root, final canonical root와 repository identity가 모두 일치할 때만 쓴다. key가 없거나 root·origin identity가 다르면 등록하지 않으며 같은 idempotency key의 stable Project+Checkout payload만 replay한다.
 
 책임은 다음처럼 나눈다.
 
@@ -76,7 +76,7 @@
 5. `ProjectRef` v2는 `root_binding_id` 대신 `checkout_id`로 실제 작업 복사본을 선택한다.
 6. v1과 v2가 동시에 들어오면 동일 attachment임을 검증할 수 있을 때만 읽고, 불일치는 `PROJECT_CHECKOUT_IDENTITY_CONFLICT`로 중단한다.
 
-이 migration은 이 설계 작업에서 구현하지 않는다. Schema version, old-version fixture, backup과 rollback은 1단계 제품 구현의 첫 gate다. exact dry-run·ID allocation·binding 전환·rollback 순서는 [Version과 Migration 계약](versioning-and-migrations.md#1단계-project-v1v2-checkout-migration-target)이 소유한다. 기존 P0 row를 여러 checkout으로 추측 분할하거나 raw path hash를 identity로 사용하지 않는다.
+이 migration은 P-0041에서 구현됐다. `project-v1`, `project` v2, `project-checkout`은 각각 minimal/full/invalid/future fixture를 가지며, dry-run에서 발급한 CheckoutId를 승인 fingerprint에 고정한다. apply는 별도 검증 backup 뒤 project partition→protected binding→global store 순으로 checkpoint하고 global v1이 남은 중간 상태에서는 Controller write를 계속 차단한다. 동일 plan 재개·두 번째 zero-change apply와 exact backup fingerprint rollback을 지원한다. 기존 P0 row를 여러 checkout으로 추측 분할하거나 raw path·remote·HEAD hash를 identity로 사용하지 않는다.
 
 ## 핵심 용어와 경계
 
@@ -407,6 +407,8 @@ scan plan은 `required_tier`와 `max_tier`를 함께 고정한다. inventory·cl
 
 `semantic -> syntax -> text` fallback은 결과를 얻기 위한 순서이지 낮은 tier를 높은 tier로 표시하는 승격이 아니다. query는 반드시 `requested_tier`, `used_tier`, `coverage`, `resolution`, `confidence`, `limitations`를 반환한다.
 
+M1 `SourceRange`의 line·column은 1-based Unicode scalar index다. tree-sitter의 UTF-8 byte column과 rust-analyzer LSP의 UTF-16 character offset은 adapter 경계에서 이 좌표로 투영하며 원래 offset 단위를 그대로 섞지 않는다.
+
 ### parse·adapter 실패
 
 - syntax parse가 실패해도 SourceEntry와 text index는 가능한 범위에서 유지한다. syntax가 required tier면 ScanRun은 incomplete, optional이면 syntax partition만 incomplete다.
@@ -415,6 +417,20 @@ scan plan은 `required_tier`와 `max_tier`를 함께 고정한다. inventory·cl
 - parser crash·timeout·resource limit은 file별 error와 adapter health를 남기고 ScanRun completeness를 낮춘다.
 - 하나의 language partition 실패 때문에 다른 language의 complete partition을 삭제하지 않는다.
 - incomplete generation은 snapshot ID로 진단 조회할 수 있지만 current complete pointer를 대체하지 않는다.
+
+### P-0042 Rust 지원·limitation matrix
+
+| 범위 | current 동작 | 승격하지 않는 것 |
+|---|---|---|
+| toolchain | `rust-toolchain.toml`의 Rust·rust-analyzer 1.96.0, observed binary hash를 adapter fingerprint에 포함 | 다른 toolchain·version·binary를 호환된 것으로 간주하지 않음 |
+| syntax | `tree-sitter` 0.26.11 + `tree-sitter-rust` 0.24.2, 16 MiB/file·node/depth 상한, declaration만 `confirmed_definition` | syntax identifier를 resolved reference로 승격하지 않음 |
+| macro·cfg | macro declaration과 parse 가능한 cfg source declaration을 색인 | macro expansion, active feature/target/cfg, generated target 관계를 syntax 사실로 확정하지 않음 |
+| semantic | pinned rust-analyzer LSP `documentSymbol`·`references`, same-file exact target만 resolved | cross-file target은 `INDEX_RUST_ANALYZER_CROSS_FILE_TARGET_DEFERRED`, dynamic dispatch·reflection은 미확정 |
+| availability | exact pin을 resolve·probe·fingerprint하지 못하면 `INDEX_SEMANTIC_UNAVAILABLE` | syntax/text fallback을 semantic 결과로 표시하지 않음 |
+| resource | semantic workspace 256 Rust files, reference query 512개, request/readiness 45초 상한 | 상한 초과·timeout·process crash를 pass나 빈 성공으로 표시하지 않음 |
+| source class | source/test/migration만 semantic, config/schema까지 syntax, vendor/generated/cache/output은 제외 | 제외된 source의 0건을 `confirmed_empty`로 표시하지 않음 |
+
+두 parser dependency는 MIT이고 exact Cargo version·lockfile checksum으로 고정한다. syntax adapter는 build 뒤 network가 필요 없으며 locked offline metadata 검증을 통과했다. semantic executable path는 process memory에서만 사용하고 DB·cache·evidence에는 version과 opaque binary fingerprint만 남긴다.
 
 ### no-result 표현
 
@@ -720,7 +736,7 @@ error는 command 실패를 나타내고 limitation은 성공 snapshot 안의 cov
 
 cache는 current truth가 아니다. cache miss·삭제 뒤 같은 input으로 재구축할 수 있어야 하며 management backup·StoreVersionVector에 포함하지 않는다. cache key는 ProjectId, WorkspaceSnapshotId, partition, adapter fingerprint와 index config fingerprint다.
 
-cache directory에는 raw project name·path·사용자 이름을 쓰지 않는다. source file 전체 복사본, secret·개인 path와 민감 literal을 cache에 넣지 않는다. adapter가 안전하게 redaction할 수 없는 intermediate를 요구하면 disk cache를 쓰지 않고 partition limitation을 기록한다.
+cache directory에는 raw project name·path·사용자 이름을 쓰지 않는다. persisted projection payload는 current-user DPAPI로 암호화하고 `ProjectId + cache key`를 additional entropy로 결박하며, owner와 SYSTEM만 접근하는 protected DACL을 적용한다. 평문 v1·손상·다른 identity의 ciphertext는 cache miss와 원자적 재생성 대상으로만 취급하며 current projection을 바꾸지 않는다. source file 전체 복사본, secret·개인 path와 민감 literal을 cache에 넣지 않는다. adapter가 안전하게 redaction할 수 없는 intermediate를 요구하면 disk cache를 쓰지 않고 partition limitation을 기록한다.
 
 ### generation과 crash
 
@@ -766,9 +782,9 @@ query API는 task-specific traversal 결과를 저장하지 않는다. M2 applic
 
 이 문서는 위 Git CLI surface만 adapter input으로 선택한다. 특정 code indexer, parser framework, language server protocol, graph DB와 cache engine은 비교·fixture·운영 검증 없이 제품 계약에 고정하지 않는다.
 
-## 구현 순서
+## 구현 순서와 P-0042 결과
 
-제품 구현은 별도 승인 뒤 다음 순서로 진행한다.
+P-0042 수직 Slice는 다음 순서로 구현했다. 8번의 hardcoding Rule 제품화는 M7 Radar가 소유하므로 이번 Slice에서 candidate 승격을 만들지 않았다.
 
 1. `ProjectCheckout`, `ProjectCatalogSnapshot`, `CodeIndexSnapshot` Rust type·Schema·fixture와 Project v1→v2 migration contract
 2. read-only filesystem·Git port conformance와 path/root-binding redaction fixture
@@ -780,6 +796,15 @@ query API는 task-specific traversal 결과를 저장하지 않는다. M2 applic
 8. hardcoding Rule candidate·FindingView와 class별 false-positive fixture
 9. full/incremental generation, partition reuse·invalidation과 freshness probe
 10. CLI-only E2E, crash·limit·redaction·no source change 검증
+
+구현 증거는 다음과 같다.
+
+- 공개 Rust type·generated Schema·minimal/full/invalid/future fixture와 SQLite atomic current projection을 추가했다.
+- allowlist 등록 checkout, linked worktree/clone identity, nested registered root, Cargo workspace와 non-Git filesystem root를 분리했다.
+- unchanged는 eligible partition만 `reused`, 단일 file change는 classification/text/syntax/semantic 4개만 무효화한다. 같은 analysis input의 다른 content는 `INDEX_IDENTITY_CONFLICT`다.
+- cancelled·중간 SQLite failure는 이전 complete current를 유지하고 재시작 후 integrity를 통과한다. derived file cache의 corrupt/quota failure는 current truth를 바꾸지 않는다.
+- 10,000-file non-Git와 Git dirty cohort, 10,000-file Rust syntax cohort, 139,674,500-byte cache를 반복 실측했고 [x64 corpus 기준](../testing/m1-code-index-corpus-2026-07-20.md)에 120% budget을 동결했다.
+- invalid syntax, parser resource limit, LSP timeout·crash, semantic unavailable과 cross-file deferred를 서로 다른 limitation으로 검증했다.
 
 ## 설계 수용 기준
 

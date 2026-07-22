@@ -2,7 +2,7 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 4단계인 **안전한 Patch·Refactor·codemod 엔진**의 설계 정본이다. 현재 상태는 **설계 확정, 제품 구현 전**이다. 이 문서가 존재한다는 사실은 source rewrite, codemod 실행, Git worktree 생성, 파일 수정, Schema·migration, CLI 또는 제품 code가 구현됐다는 뜻이 아니다.
+이 문서는 Star-Control 4단계인 **안전한 Patch·Refactor·codemod 엔진**의 설계 정본이다. 현재 상태는 **공통 첫 수직 Slice 구현, 확장 Recipe 진행 전**이다. P-0045는 built-in trailing-whitespace Recipe에 대해 isolated in-memory preview, sealed immutable artifact, exact approval, before/after hash, pre-write TOCTOU 재관찰, atomic apply와 exact rollback을 구현했다. external mutator worktree와 모든 v2 selector·migration이 구현됐다는 뜻은 아니다.
 
 4단계는 새 scanner, planner, validator 또는 AI 실행기를 만들지 않는다. 다음 선행 계약과 같은 application service를 조합해 한 Project의 immutable 변경 제안을 만들고, 검증된 제안만 적용한다.
 
@@ -30,9 +30,9 @@
 | 선행조건 | 4단계가 소비하는 값 | 현재 상태 | 미충족 시 처리 |
 |---|---|---|---|
 | 0단계 공통 변경 계약 | `ChangeRecipe`, `ChangePlan`, immutable `PatchSet`, ID·fingerprint, Controller 단일 Writer | P0 첫 수직 Slice만 구현 | M4 target Schema·migration 전에는 historical v1을 자동 apply에 사용하지 않음 |
-| 1단계 Index | current `ProjectCatalogSnapshot`, `CodeIndexSnapshot`, symbol/reference·contract·generated ownership, tier·coverage·limitation | M1 설계 확정·제품 구현 전 | selector resolution·semantic rewrite 제품 구현 차단 |
-| 2단계 영향 분석 | accepted `ScopeRevision`, `ChangePlan` v2, `ImpactAnalysis`, `readiness=ready` `ValidationPlan` | M2 설계 확정·제품 구현 전 | Patch 준비·검사 선택 제품 구현 차단 |
-| 3단계 공통 Gate | current evidence binding, `patch_pre_apply`, `patch_post_apply`, B01·B02·B04와 EvidenceBundle | M3 설계 확정·제품 구현 전 | source write permit 발급 금지 |
+| 1단계 Index | current `ProjectCatalogSnapshot`, `CodeIndexSnapshot`, symbol/reference·contract·generated ownership, tier·coverage·limitation | M1 첫 Rust 수직 Slice 구현 | selector resolution·semantic rewrite는 current tier 증거가 없으면 차단 |
+| 2단계 영향 분석 | accepted `ScopeRevision`, `ChangePlan` v2, `ImpactAnalysis`, `readiness=ready` `ValidationPlan` | M2 첫 수직 Slice 구현 | Patch 준비·검사 선택 제품 구현 차단 |
+| 3단계 공통 Gate | current evidence binding, `patch_pre_apply`, `patch_post_apply`, B01·B02·B04와 EvidenceBundle | M3 공통 runner·evidence 첫 Slice 구현 | 미구현 Rule family가 필요한 write permit은 차단 |
 
 선행 계약 하나라도 current·complete하지 않으면 4단계는 최대 `recipe.validate`·`recipe.describe` 같은 정적 조회만 제공할 수 있다. 가짜 index, mock-only Gate 또는 사용자의 완료 설명으로 source write readiness를 합성하지 않는다.
 
@@ -884,4 +884,4 @@ event에는 큰 diff·source byte·tool output을 inline으로 넣지 않고 doc
 - 한 PatchSet은 한 Project·한 Checkout만 수정한다. M4 application은 항상 cross-project write를 거부하고, 9단계 ChangeBundle이 여러 project-local PatchSet application을 별도 participant로 조정한다.
 - CLI-only로 Recipe와 target을 지정할 수 있고 Codex dependency가 없다.
 - 이후 Codex와 5단계 Registry가 같은 ChangePlan·PatchSet application service를 호출한다.
-- 선행 M1·M2·M3 제품 gate가 미구현인 현재 상태를 4단계 제품 완료로 표시하지 않는다.
+- P-0042~P-0045의 M1·M2·M3·M4 첫 bounded Slice를 전체 Recipe family·CLI·post-apply 제품 완료로 확대 표시하지 않는다.

@@ -4,7 +4,7 @@
 
 이 문서는 Star-Control 사용자 로드맵 **7단계**의 의미 정본이다. 제품 로드맵의 `P7. 원격 저장소 연동`과 번호가 같아 보일 수 있으므로, 이 문서와 관련 Schema·CLI에서는 `M7`을 안정된 단계 식별자로 사용한다.
 
-현재 상태는 **문서 설계 확정 대상·제품 구현 전**이다. debugger, trace 수집기, secret scanner, vulnerability scanner, license scanner, dependency updater, package resolver, network client, 자체 취약점 DB와 PKI가 구현됐다는 뜻이 아니다.
+현재 상태는 **P-0048 첫 bounded 제품 Slice 구현**이다. `ReproductionPack`·`MaintenanceRadar` 공개 계약, 경로·PID·시각을 제거한 failure-family fingerprint, external condition의 `unverified` 보존과 Radar freshness 판정을 구현했다. debugger·trace/scanner/package-manager는 pinned external adapter가 소유하며 Star-Control이 취약점 DB·PKI·compiler를 재구현하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)에 고정한다.
 
 상위 소유권은 다음과 같다.
 

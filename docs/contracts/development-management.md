@@ -45,7 +45,7 @@
 | global store | Project directory projection, `root_binding_id`, identity scope, project-store locator, cross-project relation, `CoordinatedOperation`, global idempotency와 lifecycle summary; M2 target의 TaskSpec·ScopeRevision·ImpactAnalysis summary·ValidationPlan | project source 절대 경로, source byte, project별 scan graph·Finding·ImpactEdge detail |
 | project store | 해당 ProjectId의 revision·snapshot·source graph·scan·finding·local decision·ChangeSet·ImpactEdge·ChangePlan·validation·gate·ArtifactRef index | 다른 project의 detail, 다른 root binding, cross-project coordinator의 최종 상태 |
 
-이 표의 P0 field는 구현된 v1 배치다. 1단계 v2 migration 뒤 global store에서는 `root_binding_id`가 Project row가 아니라 ProjectCheckout attachment에 속하고 ProjectCatalogSnapshot이 cross-project discovery projection을 추가한다. project store에는 CodeIndexSnapshot partition이 추가된다. 2단계 target은 global planning coordinator와 project별 ChangeSet·Impact·ChangePlan participant를 추가하며 아직 구현되지 않았다. 모든 version에서 source byte는 저장하지 않는다.
+이 표의 P0 field는 구현된 v1 배치다. P-0041~P-0043은 v2 migration, ProjectCheckout attachment, ProjectCatalogSnapshot·CodeIndexSnapshot partition과 global planning coordinator의 첫 bounded Slice를 구현했다. 모든 version에서 source byte는 저장하지 않으며 후속 field 확장은 공개 migration 없이 기존 row에 덧씌우지 않는다.
 
 기본 관리 root는 `%LOCALAPPDATA%\Star-Control\management\`다. global store generation은 `global/` 아래, project store generation은 `projects/<project-id>/` 아래 둔다. `<project-id>` 외에 project 이름·repository 이름·사용자 이름·source path segment를 directory 이름에 사용하지 않는다. 이 위치는 배포 adapter 기본값이며 public config에 DB filename이나 backend를 노출한다는 뜻이 아니다.
 
@@ -282,7 +282,7 @@ P0 v1 ProjectRef의 persisted root reference는 raw LocalPathRef가 아니라 `r
 
 복수 clone·main/linked worktree를 지원하려면 Project의 공유 identity와 local attachment를 분리해야 한다. 1단계 `star.project` v2는 `root_binding_id`를 제거하고 `attached_checkout_ids`와 derived `registration_state`를 가지며, 각 binding·Git common/worktree observation은 `star.project-checkout`이 소유한다. ProjectRef v2도 `checkout_id`를 사용한다.
 
-이 변경은 아직 구현되지 않았다. 기존 v1 attached row 하나를 primary ProjectCheckout 하나로 옮기는 lossless schema migration, old-version fixture, pre-migration backup과 rollback이 먼저 필요하다. binding이 없거나 manifest ProjectId가 충돌하면 자동으로 여러 checkout을 만들지 않고 `detached` 또는 `PROJECT_CHECKOUT_IDENTITY_CONFLICT`로 중단한다. 정확한 field와 identity는 [Project Catalog·Code Index 계약의 호환성 gap](project-catalog-and-code-index.md#0단계-선행조건과-호환성-gap)을 따른다.
+P-0041은 기존 v1 attached row 하나를 primary ProjectCheckout 하나로 옮기는 lossless migration, old-version fixture, pre-migration backup·dry-run·resume·rollback을 구현했다. binding이 없거나 manifest ProjectId가 충돌하면 자동으로 여러 checkout을 만들지 않고 `detached` 또는 `PROJECT_CHECKOUT_IDENTITY_CONFLICT`로 중단한다. 정확한 field와 identity는 [Project Catalog·Code Index 계약의 호환성 gap](project-catalog-and-code-index.md#0단계-선행조건과-호환성-gap)을 따른다.
 
 최소 shared 선언은 다음 의미를 가진다.
 

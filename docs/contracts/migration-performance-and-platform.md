@@ -2,7 +2,7 @@
 
 ## 목적과 상태
 
-이 문서는 Star-Control 8단계인 **데이터·설정·DB migration, 성능·build, 언어·플랫폼 migration**의 설계 정본이다. 현재 상태는 **설계 확정, 제품 구현 전**이다. 이 문서가 존재한다는 사실은 migration 실행기, benchmark runner, profiler, compiler, DB Schema·migration, CLI 또는 제품 code가 구현됐다는 뜻이 아니다.
+이 문서는 Star-Control 8단계인 **데이터·설정·DB migration, 성능·build, 언어·플랫폼 migration**의 설계 정본이다. 현재 상태는 **P-0049 첫 bounded 제품 Slice 구현**이다. checkpoint/resume/reverse rollback state machine, comparable binding을 요구하는 p95 120% performance comparator와 ARM64 `native_unverified` platform evidence를 구현했다. compiler·profiler를 만들지 않으며 실제 platform native evidence가 없는 상태를 success로 승격하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)에 고정한다.
 
 8단계는 세 Profile을 하나의 공통 흐름에 연결한다.
 
