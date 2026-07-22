@@ -1,0 +1,609 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "CodeIndexCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "definitions": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "findings": {
+          "format": "uint64",
+          "minimum": 0,
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "integer"
+        },
+        "graph_edges": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "modules": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "packages": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "references": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sources": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "symbols": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sources",
+        "packages",
+        "modules",
+        "symbols",
+        "definitions",
+        "references",
+        "graph_edges",
+        "findings"
+      ],
+      "type": "object"
+    },
+    "FreshnessProof": {
+      "additionalProperties": false,
+      "properties": {
+        "indexed_adapter_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "indexed_catalog_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "indexed_config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "indexed_source_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "observed_source_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_key": {
+          "type": "string"
+        },
+        "probe_method": {
+          "type": "string"
+        },
+        "probed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "stale_reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "state": {
+          "$ref": "#/$defs/IndexFreshnessState"
+        },
+        "unverified_scope_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "partition_key",
+        "state",
+        "indexed_catalog_fingerprint",
+        "indexed_source_fingerprint",
+        "indexed_config_fingerprint",
+        "indexed_adapter_fingerprint",
+        "probe_method",
+        "probed_at",
+        "stale_reason_codes",
+        "unverified_scope_count"
+      ],
+      "type": "object"
+    },
+    "IndexCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "excluded_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "language_id": {
+          "type": "string"
+        },
+        "source_class": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "succeeded_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tier": {
+          "$ref": "#/$defs/IndexTier"
+        }
+      },
+      "required": [
+        "source_class",
+        "language_id",
+        "tier",
+        "target_count",
+        "succeeded_count",
+        "failed_count",
+        "excluded_count"
+      ],
+      "type": "object"
+    },
+    "IndexFreshnessState": {
+      "enum": [
+        "current",
+        "stale_catalog",
+        "stale_source",
+        "stale_config",
+        "stale_adapter",
+        "partial",
+        "unverified",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "IndexLimitation": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "scope": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "IndexPartition": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_hit": {
+          "type": "boolean"
+        },
+        "excluded_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexed_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "kind": {
+          "$ref": "#/$defs/IndexPartitionKind"
+        },
+        "limitations": {
+          "items": {
+            "$ref": "#/$defs/IndexLimitation"
+          },
+          "type": "array"
+        },
+        "output_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_key": {
+          "type": "string"
+        },
+        "requested_tier": {
+          "$ref": "#/$defs/IndexTier"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "#/$defs/IndexPartitionState"
+        },
+        "target_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "used_tier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IndexTier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "partition_key",
+        "kind",
+        "required",
+        "requested_tier",
+        "state",
+        "input_fingerprint",
+        "target_count",
+        "indexed_count",
+        "failed_count",
+        "excluded_count",
+        "cache_hit",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "IndexPartitionKind": {
+      "enum": [
+        "inventory",
+        "classification",
+        "text",
+        "syntax",
+        "semantic",
+        "graph",
+        "finding"
+      ],
+      "type": "string"
+    },
+    "IndexPartitionState": {
+      "enum": [
+        "not_planned",
+        "queued",
+        "running",
+        "succeeded",
+        "incomplete",
+        "failed",
+        "cancelled",
+        "reused"
+      ],
+      "type": "string"
+    },
+    "IndexTier": {
+      "enum": [
+        "text",
+        "syntax",
+        "semantic"
+      ],
+      "type": "string"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SourceClass": {
+      "enum": [
+        "source",
+        "test",
+        "docs",
+        "config",
+        "schema",
+        "migration",
+        "vendor",
+        "generated",
+        "cache",
+        "output",
+        "unknown"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.code-index-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "analysis_input_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "artifact_refs": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "type": "array"
+    },
+    "checkout_id": {
+      "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "checkout_observation_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "classification_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "code_index_snapshot_id": {
+      "pattern": "^cix_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "counts": {
+      "$ref": "#/$defs/CodeIndexCounts"
+    },
+    "coverage": {
+      "items": {
+        "$ref": "#/$defs/IndexCoverage"
+      },
+      "type": "array"
+    },
+    "freshness": {
+      "items": {
+        "$ref": "#/$defs/FreshnessProof"
+      },
+      "type": "array"
+    },
+    "generation_id": {
+      "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "index_config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "limitations": {
+      "items": {
+        "$ref": "#/$defs/IndexLimitation"
+      },
+      "type": "array"
+    },
+    "max_tier": {
+      "$ref": "#/$defs/IndexTier"
+    },
+    "partitions": {
+      "items": {
+        "$ref": "#/$defs/IndexPartition"
+      },
+      "type": "array"
+    },
+    "project_catalog_snapshot_id": {
+      "pattern": "^pcs_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "project_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "required_tier": {
+      "$ref": "#/$defs/IndexTier"
+    },
+    "scan_config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "scan_run_id": {
+      "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.code-index-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "code_index_snapshot_id",
+    "project_id",
+    "checkout_id",
+    "project_catalog_snapshot_id",
+    "checkout_observation_fingerprint",
+    "project_revision_id",
+    "workspace_snapshot_id",
+    "scan_run_id",
+    "generation_id",
+    "analysis_input_fingerprint",
+    "scan_config_fingerprint",
+    "index_config_fingerprint",
+    "required_tier",
+    "max_tier",
+    "adapter_set_fingerprint",
+    "classification_fingerprint",
+    "partitions",
+    "coverage",
+    "counts",
+    "freshness",
+    "limitations",
+    "artifact_refs",
+    "content_fingerprint"
+  ],
+  "title": "CodeIndexSnapshot",
+  "type": "object"
+}

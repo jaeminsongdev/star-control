@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "PerformanceState": {
+      "enum": [
+        "pass",
+        "regression",
+        "incomparable",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.performance-comparison:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "binding_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "budget_ratio": {
+      "format": "double",
+      "type": "number"
+    },
+    "candidate_p95_ms": {
+      "format": "double",
+      "type": "number"
+    },
+    "candidate_samples_ms": {
+      "items": {
+        "format": "double",
+        "type": "number"
+      },
+      "type": "array"
+    },
+    "comparison_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "reference_p95_ms": {
+      "format": "double",
+      "type": "number"
+    },
+    "reference_samples_ms": {
+      "items": {
+        "format": "double",
+        "type": "number"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.performance-comparison",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/PerformanceState"
+    },
+    "workload_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "workload_id",
+    "binding_fingerprint",
+    "reference_samples_ms",
+    "candidate_samples_ms",
+    "reference_p95_ms",
+    "candidate_p95_ms",
+    "budget_ratio",
+    "state",
+    "comparison_fingerprint"
+  ],
+  "title": "PerformanceComparison",
+  "type": "object"
+}

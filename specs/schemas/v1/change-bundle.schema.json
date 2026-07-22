@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "BundleDependency": {
+      "additionalProperties": false,
+      "properties": {
+        "from_participant_id": {
+          "type": "string"
+        },
+        "to_participant_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_participant_id",
+        "to_participant_id"
+      ],
+      "type": "object"
+    },
+    "BundleParticipantState": {
+      "enum": [
+        "planned",
+        "worktree_ready",
+        "validated",
+        "merge_queued",
+        "merged_local",
+        "remote_verified",
+        "blocked",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "ChangeBundleParticipant": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_revision": {
+          "type": "string"
+        },
+        "gate_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "owned_worktree": {
+          "type": "string"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "patch_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "resulting_commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/BundleParticipantState"
+        }
+      },
+      "required": [
+        "participant_id",
+        "project_id",
+        "checkout_revision",
+        "owned_worktree",
+        "patch_fingerprint",
+        "gate_fingerprint",
+        "state"
+      ],
+      "type": "object"
+    },
+    "RemoteOutcome": {
+      "enum": [
+        "not_requested",
+        "verified",
+        "failed",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.change-bundle:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bundle_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "bundle_id": {
+      "type": "string"
+    },
+    "dependencies": {
+      "items": {
+        "$ref": "#/$defs/BundleDependency"
+      },
+      "type": "array"
+    },
+    "goal_id": {
+      "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "merge_order": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "participants": {
+      "items": {
+        "$ref": "#/$defs/ChangeBundleParticipant"
+      },
+      "type": "array"
+    },
+    "remote_outcome": {
+      "$ref": "#/$defs/RemoteOutcome"
+    },
+    "remote_snapshot_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.change-bundle",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "bundle_id",
+    "goal_id",
+    "revision",
+    "participants",
+    "dependencies",
+    "merge_order",
+    "remote_outcome",
+    "limitations",
+    "bundle_fingerprint"
+  ],
+  "title": "ChangeBundle",
+  "type": "object"
+}

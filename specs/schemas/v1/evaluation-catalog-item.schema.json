@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "EvaluationCatalogLifecycle": {
+      "enum": [
+        "active",
+        "deprecated",
+        "retired",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.evaluation-catalog-item:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "compatibility_deadline": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "corpus_ref": {
+      "type": "string"
+    },
+    "definition_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "item_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "item_id": {
+      "type": "string"
+    },
+    "item_version": {
+      "type": "string"
+    },
+    "last_evaluation_run_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/EvaluationCatalogLifecycle"
+    },
+    "migration_guide_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "owner": {
+      "type": "string"
+    },
+    "replacement_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_id": {
+      "const": "star.evaluation-catalog-item",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "tombstone_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "item_id",
+    "item_version",
+    "definition_fingerprint",
+    "lifecycle",
+    "owner",
+    "corpus_ref",
+    "item_fingerprint"
+  ],
+  "title": "EvaluationCatalogItem",
+  "type": "object"
+}

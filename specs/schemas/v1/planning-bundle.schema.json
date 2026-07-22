@@ -1,0 +1,2138 @@
+{
+  "$defs": {
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string"
+        },
+        "actor_type": {
+          "$ref": "#/$defs/ActorType"
+        },
+        "auth_source": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_type",
+        "actor_id",
+        "display_name",
+        "auth_source"
+      ],
+      "type": "object"
+    },
+    "ActorType": {
+      "enum": [
+        "user",
+        "codex",
+        "system",
+        "controller",
+        "mcp",
+        "tool"
+      ],
+      "type": "string"
+    },
+    "AffectedProject": {
+      "additionalProperties": false,
+      "properties": {
+        "certainty": {
+          "$ref": "#/$defs/ImpactCertainty"
+        },
+        "closure_complete": {
+          "type": "boolean"
+        },
+        "impacted_node_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "certainty",
+        "closure_complete",
+        "impacted_node_count"
+      ],
+      "type": "object"
+    },
+    "AffectedScope": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "requested_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "selected_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "selectors": {
+          "items": {
+            "$ref": "#/$defs/PlanningSelector"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "requested_level",
+        "selected_level",
+        "selectors",
+        "reason_codes",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "BaselinePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/BaselinePolicyKind"
+        },
+        "reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "BaselinePolicyKind": {
+      "enum": [
+        "current_workspace",
+        "explicit_revision",
+        "previous_success"
+      ],
+      "type": "string"
+    },
+    "ChangeEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "after_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "before_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "binary": {
+          "type": "boolean"
+        },
+        "change_kind": {
+          "$ref": "#/$defs/ObservedChangeKind"
+        },
+        "entry_id": {
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/ChangeOrigin"
+        },
+        "path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "rename_from": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope_relation": {
+          "$ref": "#/$defs/ScopeRelation"
+        },
+        "source_class": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "staged": {
+          "type": "boolean"
+        },
+        "unstaged": {
+          "type": "boolean"
+        },
+        "untracked": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "entry_id",
+        "path",
+        "change_kind",
+        "staged",
+        "unstaged",
+        "untracked",
+        "binary",
+        "source_class",
+        "origin",
+        "scope_relation"
+      ],
+      "type": "object"
+    },
+    "ChangeOrigin": {
+      "enum": [
+        "preexisting",
+        "task_declared",
+        "tool_applied",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "ChangeSet": {
+      "additionalProperties": false,
+      "properties": {
+        "base_revision_id": {
+          "type": "string"
+        },
+        "captured_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "change_set_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "change_set_id": {
+          "pattern": "^chg_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "change_set_kind": {
+          "$ref": "#/$defs/ChangeSetKind"
+        },
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "collection_limits": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "collection_state": {
+          "$ref": "#/$defs/CollectionState"
+        },
+        "comparison_scope": {
+          "items": {
+            "$ref": "#/$defs/PlanningSelector"
+          },
+          "type": "array"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ChangeEntry"
+          },
+          "type": "array"
+        },
+        "observed_workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope_revision_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "task_spec_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "change_set_id",
+        "task_spec_ref",
+        "scope_revision_ref",
+        "project_id",
+        "checkout_id",
+        "change_set_kind",
+        "base_revision_id",
+        "observed_workspace_snapshot_id",
+        "comparison_scope",
+        "entries",
+        "collection_limits",
+        "collection_state",
+        "change_set_fingerprint",
+        "captured_at"
+      ],
+      "type": "object"
+    },
+    "ChangeSetKind": {
+      "enum": [
+        "planning_baseline",
+        "previous_success_delta",
+        "recipe_preview",
+        "observed_after_change",
+        "merge_result"
+      ],
+      "type": "string"
+    },
+    "CheckApplicability": {
+      "enum": [
+        "applicable",
+        "not_applicable",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "CheckCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "applicability": {
+          "$ref": "#/$defs/CheckApplicability"
+        },
+        "check_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "family": {
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CheckResolutionOutcome"
+        },
+        "reason_code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "applicability",
+        "outcome",
+        "evidence_refs",
+        "reason_code"
+      ],
+      "type": "object"
+    },
+    "CheckGraphEdgeV2": {
+      "additionalProperties": false,
+      "properties": {
+        "from_plan_item_id": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string"
+        },
+        "to_plan_item_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_plan_item_id",
+        "to_plan_item_id",
+        "relation"
+      ],
+      "type": "object"
+    },
+    "CheckGraphV2": {
+      "additionalProperties": false,
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/CheckGraphEdgeV2"
+          },
+          "type": "array"
+        },
+        "failure_policy": {
+          "type": "string"
+        },
+        "max_parallel": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "nodes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "nodes",
+        "edges",
+        "max_parallel",
+        "failure_policy"
+      ],
+      "type": "object"
+    },
+    "CheckInvocationTemplate": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expected_exit_codes": {
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "logical_executable": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "logical_executable",
+        "args",
+        "timeout_ms",
+        "expected_exit_codes"
+      ],
+      "type": "object"
+    },
+    "CheckOverride": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CheckOverrideKind"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "kind",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "CheckOverrideKind": {
+      "enum": [
+        "add",
+        "promote",
+        "omit"
+      ],
+      "type": "string"
+    },
+    "CheckPlanV2": {
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "evidence_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "fallback_floor": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "family": {
+          "type": "string"
+        },
+        "impact_edge_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "invocation": {
+          "$ref": "#/$defs/CheckInvocationTemplate"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CheckResolutionOutcome"
+        },
+        "plan_item_id": {
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "risk_path_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "scope_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "tool_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_item_id",
+        "check_id",
+        "tool_id",
+        "family",
+        "project_id",
+        "scope_level",
+        "outcome",
+        "reason_codes",
+        "impact_edge_ids",
+        "risk_path_ids",
+        "invocation",
+        "fallback_floor",
+        "evidence_kinds"
+      ],
+      "type": "object"
+    },
+    "CheckResolutionOutcome": {
+      "enum": [
+        "selected_required",
+        "selected_optional",
+        "omitted_not_applicable",
+        "unresolved_not_found",
+        "blocked_unavailable",
+        "user_waived"
+      ],
+      "type": "string"
+    },
+    "CollectionState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ExcludedScope": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_to": {
+          "$ref": "#/$defs/ScopeAxis"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        }
+      },
+      "required": [
+        "selector",
+        "applies_to",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "FallbackDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "to_level": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "trigger": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "from_level",
+        "to_level",
+        "trigger",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "FullValidationPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "affected_scope": {
+          "items": {
+            "$ref": "#/$defs/AffectedScope"
+          },
+          "type": "array"
+        },
+        "candidate_checks": {
+          "items": {
+            "$ref": "#/$defs/CheckCandidate"
+          },
+          "type": "array"
+        },
+        "catalog_snapshot_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "change_set_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "check_graph": {
+          "$ref": "#/$defs/CheckGraphV2"
+        },
+        "config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "fallback_decisions": {
+          "items": {
+            "$ref": "#/$defs/FallbackDecision"
+          },
+          "type": "array"
+        },
+        "gate_policy": {
+          "$ref": "#/$defs/GatePolicyV2"
+        },
+        "impact_analysis_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "independent_review": {
+          "$ref": "#/$defs/ReviewRequirementV2"
+        },
+        "manual_observations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "omitted_checks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "optional_checks": {
+          "items": {
+            "$ref": "#/$defs/CheckPlanV2"
+          },
+          "type": "array"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "previous_success_comparisons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ValidationPlanV2Readiness"
+        },
+        "required_checks": {
+          "items": {
+            "$ref": "#/$defs/CheckPlanV2"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "risk_level": {
+          "$ref": "#/$defs/ValidationRiskLevel"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope_revision": {
+          "format": "uint64",
+          "minimum": 1,
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "integer"
+        },
+        "scope_revision_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "selection_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "task_spec_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "unresolved_checks": {
+          "items": {
+            "$ref": "#/$defs/UnresolvedCheck"
+          },
+          "type": "array"
+        },
+        "validation_plan_id": {
+          "pattern": "^vpl_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "validation_plan_id",
+        "revision",
+        "task_spec_ref",
+        "scope_revision",
+        "scope_revision_ref",
+        "phase",
+        "change_set_refs",
+        "impact_analysis_ref",
+        "risk_level",
+        "affected_scope",
+        "candidate_checks",
+        "required_checks",
+        "optional_checks",
+        "check_graph",
+        "omitted_checks",
+        "unresolved_checks",
+        "previous_success_comparisons",
+        "fallback_decisions",
+        "manual_observations",
+        "independent_review",
+        "gate_policy",
+        "config_fingerprint",
+        "catalog_snapshot_ref",
+        "selection_fingerprint",
+        "readiness"
+      ],
+      "type": "object"
+    },
+    "GatePolicyV2": {
+      "additionalProperties": false,
+      "properties": {
+        "fail_on_flaky": {
+          "type": "boolean"
+        },
+        "fail_on_partial": {
+          "type": "boolean"
+        },
+        "fail_on_required_failure": {
+          "type": "boolean"
+        },
+        "fail_on_unverified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "fail_on_required_failure",
+        "fail_on_partial",
+        "fail_on_unverified",
+        "fail_on_flaky"
+      ],
+      "type": "object"
+    },
+    "ImpactAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "affected_projects": {
+          "items": {
+            "$ref": "#/$defs/AffectedProject"
+          },
+          "type": "array"
+        },
+        "calculation_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "catalog_snapshot_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "change_set_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "confidence_summary": {
+          "$ref": "#/$defs/ImpactConfidenceSummary"
+        },
+        "effective_config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "impact_analysis_id": {
+          "pattern": "^imp_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "impact_edges": {
+          "items": {
+            "$ref": "#/$defs/ImpactEdge"
+          },
+          "type": "array"
+        },
+        "impacted_nodes": {
+          "items": {
+            "$ref": "#/$defs/ImpactedNode"
+          },
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "no_results": {
+          "items": {
+            "$ref": "#/$defs/NoResult"
+          },
+          "type": "array"
+        },
+        "project_inputs": {
+          "items": {
+            "$ref": "#/$defs/ImpactProjectInput"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "risk_paths": {
+          "items": {
+            "$ref": "#/$defs/RiskPathFinding"
+          },
+          "type": "array"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope_revision_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "seeds": {
+          "items": {
+            "$ref": "#/$defs/ImpactSeed"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/ImpactStatus"
+        },
+        "task_spec_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "impact_analysis_id",
+        "revision",
+        "task_spec_ref",
+        "scope_revision_ref",
+        "project_inputs",
+        "change_set_refs",
+        "catalog_snapshot_ref",
+        "effective_config_fingerprint",
+        "seeds",
+        "impacted_nodes",
+        "impact_edges",
+        "risk_paths",
+        "affected_projects",
+        "no_results",
+        "limitations",
+        "confidence_summary",
+        "calculation_fingerprint",
+        "status",
+        "generated_at"
+      ],
+      "type": "object"
+    },
+    "ImpactCertainty": {
+      "enum": [
+        "confirmed",
+        "possible"
+      ],
+      "type": "string"
+    },
+    "ImpactConfidence": {
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "type": "string"
+    },
+    "ImpactConfidenceSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "confirmed": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "high": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "low": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "medium": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "possible": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "confirmed",
+        "possible",
+        "high",
+        "medium",
+        "low"
+      ],
+      "type": "object"
+    },
+    "ImpactEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "certainty": {
+          "$ref": "#/$defs/ImpactCertainty"
+        },
+        "confidence": {
+          "$ref": "#/$defs/ImpactConfidence"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "distance": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "edge_id": {
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freshness": {
+          "$ref": "#/$defs/IndexFreshnessState"
+        },
+        "from_entity_key": {
+          "type": "string"
+        },
+        "impact_kind": {
+          "$ref": "#/$defs/ImpactKind"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "path_edge_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "relation": {
+          "type": "string"
+        },
+        "resolution": {
+          "$ref": "#/$defs/ImpactResolution"
+        },
+        "tier": {
+          "$ref": "#/$defs/IndexTier"
+        },
+        "to_entity_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "edge_id",
+        "project_id",
+        "from_entity_key",
+        "to_entity_key",
+        "relation",
+        "impact_kind",
+        "distance",
+        "certainty",
+        "confidence",
+        "resolution",
+        "tier",
+        "freshness",
+        "evidence_refs",
+        "path_edge_ids",
+        "limitations",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ImpactKind": {
+      "enum": [
+        "direct",
+        "transitive"
+      ],
+      "type": "string"
+    },
+    "ImpactProjectInput": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "code_index_snapshot_id": {
+          "pattern": "^cix_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "freshness": {
+          "$ref": "#/$defs/IndexFreshnessState"
+        },
+        "project_catalog_snapshot_id": {
+          "pattern": "^pcs_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "project_catalog_snapshot_id",
+        "code_index_snapshot_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "freshness"
+      ],
+      "type": "object"
+    },
+    "ImpactResolution": {
+      "enum": [
+        "resolved",
+        "ambiguous",
+        "unresolved",
+        "external"
+      ],
+      "type": "string"
+    },
+    "ImpactSeed": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "resolution": {
+          "$ref": "#/$defs/SeedResolution"
+        },
+        "seed_id": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        }
+      },
+      "required": [
+        "seed_id",
+        "project_id",
+        "selector",
+        "resolution",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "ImpactStatus": {
+      "enum": [
+        "complete",
+        "partial",
+        "blocked",
+        "invalidated"
+      ],
+      "type": "string"
+    },
+    "ImpactedNode": {
+      "additionalProperties": false,
+      "properties": {
+        "certainty": {
+          "$ref": "#/$defs/ImpactCertainty"
+        },
+        "confidence": {
+          "$ref": "#/$defs/ImpactConfidence"
+        },
+        "entity_key": {
+          "type": "string"
+        },
+        "impact_kind": {
+          "$ref": "#/$defs/ImpactKind"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "minimum_distance": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "entity_key",
+        "kind",
+        "impact_kind",
+        "certainty",
+        "confidence",
+        "minimum_distance"
+      ],
+      "type": "object"
+    },
+    "IndexFreshnessState": {
+      "enum": [
+        "current",
+        "stale_catalog",
+        "stale_source",
+        "stale_config",
+        "stale_adapter",
+        "partial",
+        "unverified",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "IndexTier": {
+      "enum": [
+        "text",
+        "syntax",
+        "semantic"
+      ],
+      "type": "string"
+    },
+    "IntendedChange": {
+      "additionalProperties": false,
+      "properties": {
+        "change_id": {
+          "type": "string"
+        },
+        "change_kind": {
+          "$ref": "#/$defs/IntendedChangeKind"
+        },
+        "intended_postcondition": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        }
+      },
+      "required": [
+        "change_id",
+        "selector",
+        "change_kind",
+        "intended_postcondition"
+      ],
+      "type": "object"
+    },
+    "IntendedChangeKind": {
+      "enum": [
+        "add",
+        "modify",
+        "delete",
+        "rename",
+        "contract_change"
+      ],
+      "type": "string"
+    },
+    "NoResult": {
+      "additionalProperties": false,
+      "properties": {
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "query_kind": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/NoResultReason"
+        },
+        "required_tier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IndexTier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "searched_scope": {
+          "items": {
+            "$ref": "#/$defs/PlanningSelector"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "query_kind",
+        "reason",
+        "searched_scope",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "NoResultReason": {
+      "enum": [
+        "confirmed_empty",
+        "not_indexed",
+        "unsupported_language",
+        "parse_failed",
+        "semantic_unavailable",
+        "excluded_by_policy",
+        "stale",
+        "partial",
+        "ambiguous",
+        "limit_exceeded",
+        "no_seed_mapping",
+        "descriptor_not_found",
+        "not_applicable"
+      ],
+      "type": "string"
+    },
+    "ObservedChangeKind": {
+      "enum": [
+        "add",
+        "modify",
+        "delete",
+        "rename",
+        "mode",
+        "binary",
+        "submodule"
+      ],
+      "type": "string"
+    },
+    "PlanningSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SelectorKind"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ProjectTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/ProjectTargetRole"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "role",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "ProjectTargetRole": {
+      "enum": [
+        "planned_change",
+        "read_only_impact",
+        "validation_only"
+      ],
+      "type": "string"
+    },
+    "ReviewKind": {
+      "enum": [
+        "none",
+        "human_semantic",
+        "codex_independent"
+      ],
+      "type": "string"
+    },
+    "ReviewRequirementV2": {
+      "additionalProperties": false,
+      "properties": {
+        "absence_behavior": {
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "review_kind": {
+          "$ref": "#/$defs/ReviewKind"
+        }
+      },
+      "required": [
+        "required",
+        "review_kind",
+        "reason_codes",
+        "absence_behavior"
+      ],
+      "type": "object"
+    },
+    "RiskPathFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "certainty": {
+          "$ref": "#/$defs/ImpactCertainty"
+        },
+        "fallback_floor": {
+          "$ref": "#/$defs/ValidationScopeLevel"
+        },
+        "finding_id": {
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "impact_edge_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "required_check_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "risk_id": {
+          "type": "string"
+        },
+        "risk_version": {
+          "type": "string"
+        },
+        "seed_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "severity_floor": {
+          "$ref": "#/$defs/RiskSeverityFloor"
+        }
+      },
+      "required": [
+        "finding_id",
+        "risk_id",
+        "risk_version",
+        "project_id",
+        "seed_ids",
+        "impact_edge_ids",
+        "certainty",
+        "severity_floor",
+        "required_check_families",
+        "fallback_floor",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "RiskSeverityFloor": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "ScopeApprovalState": {
+      "enum": [
+        "accepted",
+        "proposed",
+        "rejected",
+        "superseded"
+      ],
+      "type": "string"
+    },
+    "ScopeAxis": {
+      "enum": [
+        "analysis",
+        "planned_change",
+        "validation",
+        "all"
+      ],
+      "type": "string"
+    },
+    "ScopeDerivedAddition": {
+      "additionalProperties": false,
+      "properties": {
+        "axis": {
+          "$ref": "#/$defs/ScopeAxis"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        },
+        "source": {
+          "$ref": "#/$defs/ScopeItemSource"
+        }
+      },
+      "required": [
+        "axis",
+        "selector",
+        "source",
+        "reason_code",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "ScopeItemSource": {
+      "enum": [
+        "user",
+        "task_descriptor",
+        "impact",
+        "risk_path",
+        "fallback",
+        "user_override"
+      ],
+      "type": "string"
+    },
+    "ScopeReasonCode": {
+      "enum": [
+        "initial",
+        "user_edit",
+        "unexpected_impact",
+        "new_risk",
+        "source_changed",
+        "check_fallback"
+      ],
+      "type": "string"
+    },
+    "ScopeRelation": {
+      "enum": [
+        "planned",
+        "necessary_expansion",
+        "unrelated",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "ScopeRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "analysis_scope": {
+          "$ref": "#/$defs/ScopeSet"
+        },
+        "approval_state": {
+          "$ref": "#/$defs/ScopeApprovalState"
+        },
+        "changed_fields": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "created_by": {
+          "$ref": "#/$defs/ActorRef"
+        },
+        "derived_additions": {
+          "items": {
+            "$ref": "#/$defs/ScopeDerivedAddition"
+          },
+          "type": "array"
+        },
+        "planned_change_scope": {
+          "$ref": "#/$defs/ScopeSet"
+        },
+        "previous_scope_revision_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reason_code": {
+          "$ref": "#/$defs/ScopeReasonCode"
+        },
+        "requested_scope": {
+          "$ref": "#/$defs/ScopeSet"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "scope_revision_id": {
+          "pattern": "^scp_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "source_snapshot_refs": {
+          "items": {
+            "$ref": "#/$defs/ScopeSourceSnapshotRef"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "task_spec_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "user_decisions": {
+          "items": {
+            "$ref": "#/$defs/ScopeUserDecision"
+          },
+          "type": "array"
+        },
+        "validation_scope": {
+          "$ref": "#/$defs/ScopeSet"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "scope_revision_id",
+        "revision",
+        "task_spec_ref",
+        "reason_code",
+        "reason",
+        "requested_scope",
+        "analysis_scope",
+        "planned_change_scope",
+        "validation_scope",
+        "source_snapshot_refs",
+        "derived_additions",
+        "user_decisions",
+        "changed_fields",
+        "approval_state",
+        "scope_hash",
+        "created_by",
+        "created_at"
+      ],
+      "type": "object"
+    },
+    "ScopeSet": {
+      "additionalProperties": false,
+      "properties": {
+        "exclusions": {
+          "items": {
+            "$ref": "#/$defs/ExcludedScope"
+          },
+          "type": "array"
+        },
+        "project_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "selectors": {
+          "items": {
+            "$ref": "#/$defs/ScopedSelector"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_ids",
+        "selectors",
+        "exclusions"
+      ],
+      "type": "object"
+    },
+    "ScopeSourceSnapshotRef": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "code_index_snapshot_id": {
+          "pattern": "^cix_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "freshness": {
+          "$ref": "#/$defs/IndexFreshnessState"
+        },
+        "project_catalog_snapshot_id": {
+          "pattern": "^pcs_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "project_catalog_snapshot_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "code_index_snapshot_id",
+        "freshness"
+      ],
+      "type": "object"
+    },
+    "ScopeUserDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/ActorRef"
+        },
+        "decision_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        },
+        "state": {
+          "$ref": "#/$defs/ScopeApprovalState"
+        }
+      },
+      "required": [
+        "decision_id",
+        "state",
+        "selector",
+        "reason",
+        "actor"
+      ],
+      "type": "object"
+    },
+    "ScopedSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        },
+        "source": {
+          "$ref": "#/$defs/ScopeItemSource"
+        }
+      },
+      "required": [
+        "selector",
+        "source",
+        "reason_code",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "SeedResolution": {
+      "enum": [
+        "resolved",
+        "ambiguous",
+        "unresolved",
+        "excluded",
+        "stale"
+      ],
+      "type": "string"
+    },
+    "SelectorKind": {
+      "enum": [
+        "path",
+        "package",
+        "workspace",
+        "symbol",
+        "contract",
+        "config_key",
+        "schema",
+        "source_class"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SourceClass": {
+      "enum": [
+        "source",
+        "test",
+        "docs",
+        "config",
+        "schema",
+        "migration",
+        "vendor",
+        "generated",
+        "cache",
+        "output",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "SuccessCriterion": {
+      "additionalProperties": false,
+      "properties": {
+        "criterion_id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "verification": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "criterion_id",
+        "description",
+        "verification",
+        "required"
+      ],
+      "type": "object"
+    },
+    "TaskSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline_policy": {
+          "$ref": "#/$defs/BaselinePolicy"
+        },
+        "check_overrides": {
+          "items": {
+            "$ref": "#/$defs/CheckOverride"
+          },
+          "type": "array"
+        },
+        "constraints": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "created_by": {
+          "$ref": "#/$defs/ActorRef"
+        },
+        "excluded_scope": {
+          "items": {
+            "$ref": "#/$defs/ExcludedScope"
+          },
+          "type": "array"
+        },
+        "forbidden_actions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "included_scope": {
+          "items": {
+            "$ref": "#/$defs/PlanningSelector"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "intended_changes": {
+          "items": {
+            "$ref": "#/$defs/IntendedChange"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "objective": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "project_targets": {
+          "items": {
+            "$ref": "#/$defs/ProjectTarget"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "requested_checks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "success_criteria": {
+          "items": {
+            "$ref": "#/$defs/SuccessCriterion"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "task_spec_id": {
+          "pattern": "^tsk_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "task_spec_id",
+        "revision",
+        "title",
+        "objective",
+        "project_targets",
+        "included_scope",
+        "excluded_scope",
+        "intended_changes",
+        "success_criteria",
+        "constraints",
+        "forbidden_actions",
+        "baseline_policy",
+        "requested_checks",
+        "check_overrides",
+        "assumptions",
+        "created_by",
+        "created_at",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "UnresolvedCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "readiness_impact": {
+          "$ref": "#/$defs/ValidationPlanV2Readiness"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "required_coverage": {
+          "type": "string"
+        },
+        "searched_catalog_scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "family",
+        "reason",
+        "searched_catalog_scope",
+        "required_coverage",
+        "readiness_impact"
+      ],
+      "type": "object"
+    },
+    "ValidationPlanV2Readiness": {
+      "enum": [
+        "draft",
+        "ready",
+        "blocked",
+        "invalidated"
+      ],
+      "type": "string"
+    },
+    "ValidationRiskLevel": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "ValidationScopeLevel": {
+      "enum": [
+        "package",
+        "workspace",
+        "project_full"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.planning-bundle:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bundle_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "change_sets": {
+      "items": {
+        "$ref": "#/$defs/ChangeSet"
+      },
+      "type": "array"
+    },
+    "impact_analysis": {
+      "$ref": "#/$defs/ImpactAnalysis"
+    },
+    "schema_id": {
+      "const": "star.planning-bundle",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_revision": {
+      "$ref": "#/$defs/ScopeRevision",
+      "pattern": "^prv_[a-z2-7]{52}$"
+    },
+    "task_spec": {
+      "$ref": "#/$defs/TaskSpec"
+    },
+    "validation_plan": {
+      "$ref": "#/$defs/FullValidationPlan"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "task_spec",
+    "scope_revision",
+    "change_sets",
+    "impact_analysis",
+    "validation_plan",
+    "bundle_fingerprint"
+  ],
+  "title": "PlanningBundle",
+  "type": "object"
+}

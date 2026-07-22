@@ -1,0 +1,463 @@
+{
+  "$defs": {
+    "CaseAdjudication": {
+      "enum": [
+        "confirmed_defect",
+        "false_positive",
+        "unresolved",
+        "not_applicable"
+      ],
+      "type": "string"
+    },
+    "ComparabilityState": {
+      "enum": [
+        "compatible",
+        "not_comparable"
+      ],
+      "type": "string"
+    },
+    "EvaluationCaseResult": {
+      "additionalProperties": false,
+      "properties": {
+        "adjudication": {
+          "$ref": "#/$defs/CaseAdjudication"
+        },
+        "baseline_detected": {
+          "type": "boolean"
+        },
+        "baseline_duration_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "baseline_outcome": {
+          "$ref": "#/$defs/EvaluationOutcome"
+        },
+        "baseline_rework_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "baseline_run_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "candidate_detected": {
+          "type": "boolean"
+        },
+        "candidate_duration_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_flaky": {
+          "type": "boolean"
+        },
+        "candidate_outcome": {
+          "$ref": "#/$defs/EvaluationOutcome"
+        },
+        "candidate_rework_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_run_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "case_id": {
+          "type": "string"
+        },
+        "case_version": {
+          "type": "string"
+        },
+        "corpus_ref": {
+          "type": "string"
+        },
+        "evaluation_context": {
+          "$ref": "#/$defs/EvaluationContext"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_source_binding": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "case_id",
+        "case_version",
+        "corpus_ref",
+        "evaluation_context",
+        "task_source_binding",
+        "baseline_run_refs",
+        "candidate_run_refs",
+        "adjudication",
+        "baseline_detected",
+        "candidate_detected",
+        "baseline_duration_ms",
+        "candidate_duration_ms",
+        "baseline_rework_count",
+        "candidate_rework_count",
+        "baseline_outcome",
+        "candidate_outcome",
+        "candidate_flaky",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "EvaluationComparability": {
+      "additionalProperties": false,
+      "properties": {
+        "dimension": {
+          "type": "string"
+        },
+        "evidence_ref": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ComparabilityState"
+        }
+      },
+      "required": [
+        "dimension",
+        "state",
+        "evidence_ref"
+      ],
+      "type": "object"
+    },
+    "EvaluationContext": {
+      "enum": [
+        "cli_only",
+        "codex_integrated"
+      ],
+      "type": "string"
+    },
+    "EvaluationDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "resolved_closure_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "subject": {
+          "$ref": "#/$defs/EvaluationSubject"
+        }
+      },
+      "required": [
+        "subject",
+        "resolved_closure_fingerprint",
+        "policy_fingerprint"
+      ],
+      "type": "object"
+    },
+    "EvaluationMetricSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_rework_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "baseline_total_duration_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_false_negatives": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_false_positives": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_flaky": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_rework_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_rollbacks": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_total_duration_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "confirmed_defects": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sample_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unresolved": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sample_count",
+        "confirmed_defects",
+        "candidate_false_negatives",
+        "candidate_false_positives",
+        "unresolved",
+        "candidate_flaky",
+        "baseline_total_duration_ms",
+        "candidate_total_duration_ms",
+        "baseline_rework_count",
+        "candidate_rework_count",
+        "candidate_rollbacks"
+      ],
+      "type": "object"
+    },
+    "EvaluationMode": {
+      "enum": [
+        "offline",
+        "replay",
+        "shadow"
+      ],
+      "type": "string"
+    },
+    "EvaluationOutcome": {
+      "enum": [
+        "success",
+        "failure",
+        "rollback",
+        "accepted",
+        "rejected",
+        "reverted",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "EvaluationRecommendation": {
+      "enum": [
+        "keep",
+        "trial",
+        "accept",
+        "reject",
+        "needs_review"
+      ],
+      "type": "string"
+    },
+    "EvaluationSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/EvaluationSubjectKind"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "item_id",
+        "version",
+        "definition_fingerprint"
+      ],
+      "type": "object"
+    },
+    "EvaluationSubjectKind": {
+      "enum": [
+        "route_policy",
+        "rule",
+        "check",
+        "profile",
+        "recipe"
+      ],
+      "type": "string"
+    },
+    "ProtectedMetricResult": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_ref": {
+          "type": "string"
+        },
+        "metric_id": {
+          "type": "string"
+        },
+        "weakened": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "metric_id",
+        "weakened",
+        "evidence_ref"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.evaluation-run:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baseline": {
+      "$ref": "#/$defs/EvaluationDefinition"
+    },
+    "candidate": {
+      "$ref": "#/$defs/EvaluationDefinition"
+    },
+    "case_results": {
+      "items": {
+        "$ref": "#/$defs/EvaluationCaseResult"
+      },
+      "type": "array"
+    },
+    "case_selection_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "comparability": {
+      "items": {
+        "$ref": "#/$defs/EvaluationComparability"
+      },
+      "type": "array"
+    },
+    "comparison": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "corpus_ref": {
+      "type": "string"
+    },
+    "decision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "efficiency_metrics": {
+      "$ref": "#/$defs/EvaluationMetricSummary"
+    },
+    "evaluation_context": {
+      "$ref": "#/$defs/EvaluationContext"
+    },
+    "evaluation_run_id": {
+      "pattern": "^evr_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "finding_metrics": {
+      "$ref": "#/$defs/EvaluationMetricSummary",
+      "pattern": "^fnd_[a-z2-7]{52}$"
+    },
+    "ground_truth_summary": {
+      "$ref": "#/$defs/EvaluationMetricSummary"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "measurement_protocol_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "mode": {
+      "$ref": "#/$defs/EvaluationMode"
+    },
+    "protected_metric_results": {
+      "items": {
+        "$ref": "#/$defs/ProtectedMetricResult"
+      },
+      "type": "array"
+    },
+    "radar_item_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "recommendation": {
+      "$ref": "#/$defs/EvaluationRecommendation"
+    },
+    "run_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.evaluation-run",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "subject": {
+      "$ref": "#/$defs/EvaluationSubject"
+    },
+    "subject_kind": {
+      "$ref": "#/$defs/EvaluationSubjectKind"
+    },
+    "usage_and_cost_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "evaluation_run_id",
+    "subject_kind",
+    "subject",
+    "evaluation_context",
+    "baseline",
+    "candidate",
+    "mode",
+    "corpus_ref",
+    "case_selection_fingerprint",
+    "measurement_protocol_fingerprint",
+    "case_results",
+    "ground_truth_summary",
+    "finding_metrics",
+    "efficiency_metrics",
+    "usage_and_cost_refs",
+    "comparability",
+    "protected_metric_results",
+    "limitations",
+    "comparison",
+    "recommendation",
+    "radar_item_refs",
+    "run_fingerprint"
+  ],
+  "title": "EvaluationRunV2",
+  "type": "object"
+}

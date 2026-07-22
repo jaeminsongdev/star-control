@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "EvidenceCompleteness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "RadarItem": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking": {
+          "type": "boolean"
+        },
+        "fresh": {
+          "type": "boolean"
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/RadarKind"
+        },
+        "priority": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "source_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "kind",
+        "subject",
+        "priority",
+        "source",
+        "source_fingerprint",
+        "fresh",
+        "blocking"
+      ],
+      "type": "object"
+    },
+    "RadarKind": {
+      "enum": [
+        "failure",
+        "dependency",
+        "security",
+        "supply_chain"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.maintenance-radar:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completeness": {
+      "$ref": "#/$defs/EvidenceCompleteness"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/RadarItem"
+      },
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "radar_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.maintenance-radar",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "items",
+    "completeness",
+    "limitations",
+    "radar_fingerprint"
+  ],
+  "title": "MaintenanceRadar",
+  "type": "object"
+}

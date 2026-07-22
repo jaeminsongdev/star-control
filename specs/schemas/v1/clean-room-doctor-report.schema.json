@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "DoctorCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "observed": {
+          "type": "string"
+        },
+        "required": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/DoctorCheckState"
+        }
+      },
+      "required": [
+        "check_id",
+        "state",
+        "observed",
+        "required"
+      ],
+      "type": "object"
+    },
+    "DoctorCheckState": {
+      "enum": [
+        "pass",
+        "block",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.clean-room-doctor-report:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/DoctorCheck"
+      },
+      "type": "array"
+    },
+    "dependency_download": {
+      "type": "string"
+    },
+    "package_install": {
+      "type": "string"
+    },
+    "report_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.clean-room-doctor-report",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/DoctorCheckState"
+    },
+    "system_mutation": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "dependency_download",
+    "package_install",
+    "system_mutation",
+    "checks",
+    "state",
+    "report_fingerprint"
+  ],
+  "title": "CleanRoomDoctorReport",
+  "type": "object"
+}

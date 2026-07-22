@@ -1,0 +1,196 @@
+{
+  "$defs": {
+    "GoalPlanItem": {
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/GoalPlanItemStatus"
+        },
+        "step": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "step",
+        "status"
+      ],
+      "type": "object"
+    },
+    "GoalPlanItemStatus": {
+      "enum": [
+        "pending",
+        "in_progress",
+        "completed",
+        "blocked"
+      ],
+      "type": "string"
+    },
+    "GoalQuestion": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "question_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "question_id",
+        "prompt"
+      ],
+      "type": "object"
+    },
+    "GoalRunState": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "continued_at": {
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/GoalRunStatus"
+        }
+      },
+      "required": [
+        "run_id",
+        "attempt",
+        "status",
+        "continued_at"
+      ],
+      "type": "object"
+    },
+    "GoalRunStatus": {
+      "enum": [
+        "running",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "GoalStatus": {
+      "enum": [
+        "active",
+        "waiting_question",
+        "paused",
+        "completed",
+        "blocked",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.goal-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "goal_id": {
+      "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "objective": {
+      "type": "string"
+    },
+    "pending_question": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GoalQuestion"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "plan_items": {
+      "items": {
+        "$ref": "#/$defs/GoalPlanItem"
+      },
+      "type": "array"
+    },
+    "plan_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "project_key": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "run": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GoalRunState"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_id": {
+      "const": "star.goal-record",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/GoalStatus"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "goal_id",
+    "revision",
+    "objective",
+    "status",
+    "plan_revision",
+    "plan_items",
+    "created_at",
+    "updated_at",
+    "content_fingerprint"
+  ],
+  "title": "GoalRecord",
+  "type": "object"
+}

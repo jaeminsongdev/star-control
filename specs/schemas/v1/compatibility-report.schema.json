@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "CompatibilityFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CompatibilityOutcome"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "subject",
+        "outcome",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "CompatibilityOutcome": {
+      "enum": [
+        "compatible",
+        "breaking",
+        "human_review",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ContractKind": {
+      "enum": [
+        "api",
+        "schema",
+        "config",
+        "docs"
+      ],
+      "type": "string"
+    },
+    "EvidenceCompleteness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.compatibility-report:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "after_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "before_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "completeness": {
+      "$ref": "#/$defs/EvidenceCompleteness"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/CompatibilityFinding",
+        "pattern": "^fnd_[a-z2-7]{52}$"
+      },
+      "type": "array"
+    },
+    "kind": {
+      "$ref": "#/$defs/ContractKind"
+    },
+    "outcome": {
+      "$ref": "#/$defs/CompatibilityOutcome"
+    },
+    "report_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.compatibility-report",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "kind",
+    "before_sha256",
+    "after_sha256",
+    "outcome",
+    "findings",
+    "completeness",
+    "report_fingerprint"
+  ],
+  "title": "CompatibilityReport",
+  "type": "object"
+}

@@ -1,0 +1,135 @@
+{
+  "$defs": {
+    "MigrationCheckpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "completed_step_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "current_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "completed_step_ids",
+        "current_version",
+        "state_fingerprint"
+      ],
+      "type": "object"
+    },
+    "MigrationRunState": {
+      "enum": [
+        "planned",
+        "running",
+        "interrupted",
+        "completed",
+        "rollback_required",
+        "rolled_back",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "MigrationStep": {
+      "additionalProperties": false,
+      "properties": {
+        "from_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "step_id": {
+          "type": "string"
+        },
+        "to_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "step_id",
+        "from_version",
+        "to_version",
+        "input_fingerprint"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.migration-run:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "checkpoint": {
+      "$ref": "#/$defs/MigrationCheckpoint"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "migration_id": {
+      "type": "string"
+    },
+    "run_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.migration-run",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/MigrationRunState"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/MigrationStep"
+      },
+      "type": "array"
+    },
+    "target_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "migration_id",
+    "source_version",
+    "target_version",
+    "steps",
+    "checkpoint",
+    "state",
+    "limitations",
+    "run_fingerprint"
+  ],
+  "title": "MigrationRun",
+  "type": "object"
+}

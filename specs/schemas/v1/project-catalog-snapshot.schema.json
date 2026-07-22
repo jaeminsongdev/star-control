@@ -1,0 +1,302 @@
+{
+  "$defs": {
+    "Completeness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "IndexLimitation": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "scope": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "parameters"
+      ],
+      "type": "object"
+    },
+    "ProjectCatalogCheckoutRef": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "observation_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkout_id",
+        "project_id",
+        "observation_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ProjectCatalogCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "checkouts": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "errors": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "excluded": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projects": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "roots": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "workspaces": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "roots",
+        "projects",
+        "checkouts",
+        "workspaces",
+        "excluded",
+        "errors"
+      ],
+      "type": "object"
+    },
+    "ProjectCatalogEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "from_checkout_id": {
+          "type": "string"
+        },
+        "from_project_id": {
+          "type": "string"
+        },
+        "relation": {
+          "$ref": "#/$defs/ProjectCatalogEdgeKind"
+        },
+        "to_checkout_id": {
+          "type": "string"
+        },
+        "to_project_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_project_id",
+        "from_checkout_id",
+        "to_project_id",
+        "to_checkout_id",
+        "relation",
+        "evidence_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ProjectCatalogEdgeKind": {
+      "enum": [
+        "nested",
+        "submodule",
+        "workspace_member",
+        "same_repository"
+      ],
+      "type": "string"
+    },
+    "ProjectCatalogProjectRef": {
+      "additionalProperties": false,
+      "properties": {
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "WorkspaceKind": {
+      "enum": [
+        "cargo",
+        "generic"
+      ],
+      "type": "string"
+    },
+    "WorkspaceNode": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "evidence_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "kind": {
+          "$ref": "#/$defs/WorkspaceKind"
+        },
+        "marker_source": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "member_refs": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "workspace_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspace_key",
+        "kind",
+        "project_id",
+        "checkout_id",
+        "marker_source",
+        "member_refs",
+        "evidence_fingerprint"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.project-catalog-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "captured_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "checkout_refs": {
+      "items": {
+        "$ref": "#/$defs/ProjectCatalogCheckoutRef"
+      },
+      "type": "array"
+    },
+    "completeness": {
+      "$ref": "#/$defs/Completeness"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "counts": {
+      "$ref": "#/$defs/ProjectCatalogCounts"
+    },
+    "discovery_config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "discovery_scope_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "limitations": {
+      "items": {
+        "$ref": "#/$defs/IndexLimitation"
+      },
+      "type": "array"
+    },
+    "project_catalog_snapshot_id": {
+      "pattern": "^pcs_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "project_edges": {
+      "items": {
+        "$ref": "#/$defs/ProjectCatalogEdge"
+      },
+      "type": "array"
+    },
+    "project_refs": {
+      "items": {
+        "$ref": "#/$defs/ProjectCatalogProjectRef"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.project-catalog-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "workspace_nodes": {
+      "items": {
+        "$ref": "#/$defs/WorkspaceNode"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "project_catalog_snapshot_id",
+    "discovery_scope_fingerprint",
+    "discovery_config_fingerprint",
+    "project_refs",
+    "checkout_refs",
+    "workspace_nodes",
+    "project_edges",
+    "counts",
+    "completeness",
+    "limitations",
+    "captured_at",
+    "content_fingerprint"
+  ],
+  "title": "ProjectCatalogSnapshot",
+  "type": "object"
+}

@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "RemoteOutcome": {
+      "enum": [
+        "not_requested",
+        "verified",
+        "failed",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.change-bundle-handoff:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_fingerprints": {
+      "items": {
+        "$ref": "#/$defs/Sha256Hash"
+      },
+      "type": "array"
+    },
+    "blockers": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "bundle_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "bundle_id": {
+      "type": "string"
+    },
+    "bundle_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "handoff_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "participant_commits": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "ready": {
+      "type": "boolean"
+    },
+    "remote_outcome": {
+      "$ref": "#/$defs/RemoteOutcome"
+    },
+    "schema_id": {
+      "const": "star.change-bundle-handoff",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "bundle_id",
+    "bundle_revision",
+    "bundle_fingerprint",
+    "participant_commits",
+    "artifact_fingerprints",
+    "remote_outcome",
+    "ready",
+    "blockers",
+    "handoff_fingerprint"
+  ],
+  "title": "ChangeBundleHandoff",
+  "type": "object"
+}
