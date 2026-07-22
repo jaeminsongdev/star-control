@@ -1,0 +1,17 @@
+{
+  "binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "budget_ratio": 1,
+  "candidate_p95_ms": 1,
+  "candidate_samples_ms": [
+    1
+  ],
+  "comparison_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "reference_p95_ms": 1,
+  "reference_samples_ms": [
+    1
+  ],
+  "schema_id": "star.performance-comparison",
+  "schema_version": 1,
+  "state": "pass",
+  "workload_id": "fixture"
+}

@@ -1,0 +1,34 @@
+{
+  "bundle_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "bundle_id": "fixture",
+  "dependencies": [
+    {
+      "from_participant_id": "fixture",
+      "to_participant_id": "fixture"
+    }
+  ],
+  "goal_id": "gol_00000000000000000000000000",
+  "limitations": [
+    "fixture"
+  ],
+  "merge_order": [
+    "fixture"
+  ],
+  "participants": [
+    {
+      "checkout_revision": "cko_00000000000000000000000000",
+      "gate_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "owned_worktree": "fixture",
+      "participant_id": "fixture",
+      "patch_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "project_id": "prj_00000000000000000000000000",
+      "resulting_commit": "fixture",
+      "state": "planned"
+    }
+  ],
+  "remote_outcome": "not_requested",
+  "remote_snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "revision": 0,
+  "schema_id": "star.change-bundle",
+  "schema_version": 1
+}

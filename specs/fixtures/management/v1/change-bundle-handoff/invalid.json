@@ -1,0 +1,14 @@
+{
+  "artifact_fingerprints": [],
+  "blockers": [],
+  "bundle_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "bundle_id": "fixture",
+  "bundle_revision": 0,
+  "handoff_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "participant_commits": [],
+  "ready": false,
+  "remote_outcome": "not_requested",
+  "schema_id": "star.change-bundle-handoff",
+  "schema_version": 1,
+  "unexpected": true
+}

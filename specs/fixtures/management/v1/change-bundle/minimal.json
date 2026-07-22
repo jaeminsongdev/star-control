@@ -1,0 +1,13 @@
+{
+  "bundle_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "bundle_id": "fixture",
+  "dependencies": [],
+  "goal_id": "gol_00000000000000000000000000",
+  "limitations": [],
+  "merge_order": [],
+  "participants": [],
+  "remote_outcome": "not_requested",
+  "revision": 0,
+  "schema_id": "star.change-bundle",
+  "schema_version": 1
+}

@@ -1,0 +1,16 @@
+{
+  "checkpoint": {
+    "completed_step_ids": [],
+    "current_version": 0,
+    "state_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "limitations": [],
+  "migration_id": "fixture",
+  "run_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.migration-run",
+  "schema_version": 2,
+  "source_version": 0,
+  "state": "planned",
+  "steps": [],
+  "target_version": 0
+}
