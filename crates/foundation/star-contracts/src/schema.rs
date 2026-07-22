@@ -2,12 +2,26 @@ use schemars::JsonSchema;
 use serde_json::{Map, Value};
 
 use crate::{
+    development::{
+        CHANGE_BUNDLE_HANDOFF_SCHEMA_ID, CHANGE_BUNDLE_SCHEMA_ID,
+        CLEAN_ROOM_DOCTOR_REPORT_SCHEMA_ID, COMPATIBILITY_REPORT_SCHEMA_ID, ChangeBundle,
+        ChangeBundleHandoff, CleanRoomDoctorReport, CompatibilityReport,
+        MAINTENANCE_RADAR_SCHEMA_ID, MANAGED_REGISTRY_SNAPSHOT_SCHEMA_ID, MIGRATION_RUN_SCHEMA_ID,
+        MaintenanceRadar, ManagedRegistrySnapshot, MigrationRun, PERFORMANCE_COMPARISON_SCHEMA_ID,
+        PerformanceComparison, REPRODUCTION_PACK_SCHEMA_ID, ReproductionPack,
+    },
     evidence::{
         ArtifactRef, DIAGNOSTIC_SCHEMA_ID, Diagnostic, EVIDENCE_BUNDLE_SCHEMA_ID, EvidenceBundle,
         GATE_DECISION_SCHEMA_ID, GateDecision, VALIDATION_PLAN_SCHEMA_ID, VALIDATION_RUN_SCHEMA_ID,
         ValidationPlan, ValidationRun,
     },
+    evidence_v2::{
+        DIAGNOSTIC_V2_SCHEMA_ID, DiagnosticV2, EVIDENCE_BUNDLE_V2_SCHEMA_ID, EvidenceBundleV2,
+        GATE_DECISION_V2_SCHEMA_ID, GateDecisionV2, TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2,
+        VALIDATION_RUN_V2_SCHEMA_ID, ValidationRunV2,
+    },
     fixed_mcp::{CallInput, McpToolResult, fixed_input_schema, fixed_result_schema},
+    index::{CodeIndexSnapshot, ProjectCatalogSnapshot},
     installation::{
         CODEX_INTEGRATION_RECORD_SCHEMA_ID, CodexIntegrationRecord, INSTALLATION_RECORD_SCHEMA_ID,
         INTEGRATION_CANDIDATE_REVIEW_SCHEMA_ID, InstallationRecord, IntegrationCandidateReview,
@@ -19,14 +33,31 @@ use crate::{
     ipc::{IpcChallenge, IpcHandshakeError, IpcHello, IpcRequest, IpcResponse, IpcWelcome},
     management::{
         Baseline, CanonicalSource, ChangePlan, ChangeRecipe, CoordinatedOperation, Disposition,
-        Finding, ManagementStoreStatus, Occurrence, PatchSet, Project, ProjectRevision, Rule,
+        Finding, ManagementStoreStatus, Occurrence, PatchSet, Project, ProjectCheckout,
+        ProjectRevision, ProjectV1, ProjectV1ToV2MigrationPlan, ProjectV1ToV2MigrationResult, Rule,
         ScanRun, Suppression, Symbol, SymbolReference, ValidationResult, WorkspaceSnapshot,
     },
     manifest::ToolPackageManifest,
+    orchestration::{GOAL_RECORD_SCHEMA_ID, GoalRecord},
+    planning::{
+        CHANGE_SET_SCHEMA_ID, ChangeSet, FULL_VALIDATION_PLAN_SCHEMA_ID, FullValidationPlan,
+        IMPACT_ANALYSIS_SCHEMA_ID, ImpactAnalysis, PlanningBundle, RISK_PATH_DESCRIPTOR_SCHEMA_ID,
+        RiskPathDescriptor, SCOPE_REVISION_SCHEMA_ID, ScopeRevision, TASK_SPEC_SCHEMA_ID, TaskSpec,
+    },
     registry::{RegistrySnapshot, ToolRegistryCache},
+    release_v2::{
+        EVALUATION_CATALOG_ITEM_SCHEMA_ID, EVALUATION_RUN_V2_SCHEMA_ID, EvaluationCatalogItem,
+        EvaluationRunV2, RELEASE_MANIFEST_V2_SCHEMA_ID, ReleaseManifestV2,
+    },
     runtime::{
         ExecutableIdentity, ExternalToolCancel, ExternalToolCancelAck, ExternalToolProbeRequest,
         ExternalToolProbeResponse, ExternalToolProgress, ExternalToolRequest, ExternalToolResponse,
+    },
+    rust_style::{
+        RUST_STYLE_COVERAGE_MATRIX_SCHEMA_ID, RUST_STYLE_POLICY_SNAPSHOT_SCHEMA_ID,
+        RUST_STYLE_STEP_EXECUTION_SCHEMA_ID, RUST_TOOLCHAIN_BINDING_SCHEMA_ID,
+        RustStyleCoverageMatrix, RustStylePolicySnapshot, RustStyleStepExecution,
+        RustToolchainBinding,
     },
     trust::ToolTrustRecord,
 };
@@ -47,7 +78,18 @@ pub fn schema_document<T: JsonSchema>(schema_id: &str) -> Value {
 }
 
 fn management_schema_document<T: JsonSchema>(schema_id: &str) -> Value {
+    management_schema_document_version::<T>(schema_id, 1)
+}
+
+fn management_schema_document_version<T: JsonSchema>(schema_id: &str, version: u32) -> Value {
     let mut value = schema_document::<T>(schema_id);
+    value
+        .as_object_mut()
+        .expect("schema root is an object")
+        .insert(
+            "$id".to_owned(),
+            Value::String(format!("urn:star-control:schema:{schema_id}:v{version}")),
+        );
     let properties = value
         .as_object_mut()
         .and_then(|root| root.get_mut("properties"))
@@ -59,7 +101,7 @@ fn management_schema_document<T: JsonSchema>(schema_id: &str) -> Value {
     );
     properties.insert(
         "schema_version".to_owned(),
-        serde_json::json!({"type":"integer","const":1}),
+        serde_json::json!({"type":"integer","const":version}),
     );
     strengthen_management_scalars(&mut value, None);
     value
@@ -116,7 +158,9 @@ fn strengthen_management_scalars(value: &mut Value, property_name: Option<&str>)
 }
 
 fn management_id_is_source_derived(name: &str) -> bool {
-    name.contains("project_revision")
+    name.contains("project_catalog_snapshot")
+        || name.contains("code_index_snapshot")
+        || name.contains("project_revision")
         || name.contains("source_revision")
         || name == "scope_revision"
         || name == "latest_revision_id"
@@ -131,8 +175,28 @@ fn management_id_is_source_derived(name: &str) -> bool {
 }
 
 fn management_id_prefix(name: &str) -> Option<&'static str> {
-    if name == "project_id" {
+    if name.contains("task_spec_id") {
+        Some("tsk_")
+    } else if name.contains("scope_revision_id") {
+        Some("scp_")
+    } else if name.contains("impact_analysis_id") {
+        Some("imp_")
+    } else if name.contains("change_set_id") {
+        Some("chg_")
+    } else if name.contains("validation_plan_id") {
+        Some("vpl_")
+    } else if name == "goal_id" {
+        Some("gol_")
+    } else if name == "run_id" {
+        Some("run_")
+    } else if name.contains("project_catalog_snapshot") {
+        Some("pcs_")
+    } else if name.contains("code_index_snapshot") {
+        Some("cix_")
+    } else if name == "project_id" {
         Some("prj_")
+    } else if name == "checkout_id" || name.ends_with("checkout_ids") {
+        Some("cko_")
     } else if name.contains("project_revision")
         || name.contains("source_revision")
         || name == "scope_revision"
@@ -183,6 +247,10 @@ fn management_id_prefix(name: &str) -> Option<&'static str> {
         Some("cop_")
     } else if name.contains("store_id") {
         Some("mst_")
+    } else if name.contains("release_manifest_id") {
+        Some("rel_")
+    } else if name.contains("evaluation_run_id") {
+        Some("evr_")
     } else {
         None
     }
@@ -195,8 +263,138 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             schema_document::<ValidationPlan>(VALIDATION_PLAN_SCHEMA_ID),
         ),
         (
+            "validation-plan-v2.schema.json",
+            management_schema_document_version::<FullValidationPlan>(
+                FULL_VALIDATION_PLAN_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "task-spec.schema.json",
+            management_schema_document::<TaskSpec>(TASK_SPEC_SCHEMA_ID),
+        ),
+        (
+            "scope-revision.schema.json",
+            management_schema_document::<ScopeRevision>(SCOPE_REVISION_SCHEMA_ID),
+        ),
+        (
+            "change-set.schema.json",
+            management_schema_document::<ChangeSet>(CHANGE_SET_SCHEMA_ID),
+        ),
+        (
+            "impact-analysis.schema.json",
+            management_schema_document::<ImpactAnalysis>(IMPACT_ANALYSIS_SCHEMA_ID),
+        ),
+        (
+            "risk-path-descriptor.schema.json",
+            management_schema_document::<RiskPathDescriptor>(RISK_PATH_DESCRIPTOR_SCHEMA_ID),
+        ),
+        (
+            "planning-bundle.schema.json",
+            management_schema_document::<PlanningBundle>("star.planning-bundle"),
+        ),
+        (
+            "goal-record.schema.json",
+            management_schema_document::<GoalRecord>(GOAL_RECORD_SCHEMA_ID),
+        ),
+        (
+            "managed-registry-snapshot.schema.json",
+            management_schema_document::<ManagedRegistrySnapshot>(
+                MANAGED_REGISTRY_SNAPSHOT_SCHEMA_ID,
+            ),
+        ),
+        (
+            "compatibility-report.schema.json",
+            management_schema_document::<CompatibilityReport>(COMPATIBILITY_REPORT_SCHEMA_ID),
+        ),
+        (
+            "clean-room-doctor-report.schema.json",
+            management_schema_document::<CleanRoomDoctorReport>(CLEAN_ROOM_DOCTOR_REPORT_SCHEMA_ID),
+        ),
+        (
+            "reproduction-pack.schema.json",
+            management_schema_document::<ReproductionPack>(REPRODUCTION_PACK_SCHEMA_ID),
+        ),
+        (
+            "maintenance-radar.schema.json",
+            management_schema_document::<MaintenanceRadar>(MAINTENANCE_RADAR_SCHEMA_ID),
+        ),
+        (
+            "migration-run.schema.json",
+            management_schema_document::<MigrationRun>(MIGRATION_RUN_SCHEMA_ID),
+        ),
+        (
+            "performance-comparison.schema.json",
+            management_schema_document::<PerformanceComparison>(PERFORMANCE_COMPARISON_SCHEMA_ID),
+        ),
+        (
+            "change-bundle.schema.json",
+            management_schema_document::<ChangeBundle>(CHANGE_BUNDLE_SCHEMA_ID),
+        ),
+        (
+            "change-bundle-handoff.schema.json",
+            management_schema_document::<ChangeBundleHandoff>(CHANGE_BUNDLE_HANDOFF_SCHEMA_ID),
+        ),
+        (
+            "release-manifest-v2.schema.json",
+            management_schema_document_version::<ReleaseManifestV2>(
+                RELEASE_MANIFEST_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "evaluation-run-v2.schema.json",
+            management_schema_document_version::<EvaluationRunV2>(EVALUATION_RUN_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "evaluation-catalog-item.schema.json",
+            management_schema_document::<EvaluationCatalogItem>(EVALUATION_CATALOG_ITEM_SCHEMA_ID),
+        ),
+        (
+            "rust-toolchain-binding.schema.json",
+            management_schema_document::<RustToolchainBinding>(RUST_TOOLCHAIN_BINDING_SCHEMA_ID),
+        ),
+        (
+            "rust-style-policy-snapshot.schema.json",
+            management_schema_document::<RustStylePolicySnapshot>(
+                RUST_STYLE_POLICY_SNAPSHOT_SCHEMA_ID,
+            ),
+        ),
+        (
+            "rust-style-coverage-matrix.schema.json",
+            management_schema_document::<RustStyleCoverageMatrix>(
+                RUST_STYLE_COVERAGE_MATRIX_SCHEMA_ID,
+            ),
+        ),
+        (
+            "rust-style-step-execution.schema.json",
+            management_schema_document::<RustStyleStepExecution>(
+                RUST_STYLE_STEP_EXECUTION_SCHEMA_ID,
+            ),
+        ),
+        (
             "validation-run.schema.json",
             schema_document::<ValidationRun>(VALIDATION_RUN_SCHEMA_ID),
+        ),
+        (
+            "task-invocation-v2.schema.json",
+            management_schema_document_version::<TaskInvocationV2>(TASK_INVOCATION_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "validation-run-v2.schema.json",
+            management_schema_document_version::<ValidationRunV2>(VALIDATION_RUN_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "gate-decision-v2.schema.json",
+            management_schema_document_version::<GateDecisionV2>(GATE_DECISION_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "evidence-bundle-v2.schema.json",
+            management_schema_document_version::<EvidenceBundleV2>(EVIDENCE_BUNDLE_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "diagnostic-v2.schema.json",
+            management_schema_document_version::<DiagnosticV2>(DIAGNOSTIC_V2_SCHEMA_ID, 2),
         ),
         (
             "gate-decision.schema.json",
@@ -244,7 +442,35 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         ),
         (
             "project.schema.json",
-            management_schema_document::<Project>("star.project"),
+            management_schema_document_version::<Project>("star.project", 2),
+        ),
+        (
+            "project-v1.schema.json",
+            management_schema_document::<ProjectV1>("star.project"),
+        ),
+        (
+            "project-checkout.schema.json",
+            management_schema_document::<ProjectCheckout>("star.project-checkout"),
+        ),
+        (
+            "project-catalog-snapshot.schema.json",
+            management_schema_document::<ProjectCatalogSnapshot>("star.project-catalog-snapshot"),
+        ),
+        (
+            "code-index-snapshot.schema.json",
+            management_schema_document::<CodeIndexSnapshot>("star.code-index-snapshot"),
+        ),
+        (
+            "project-v1-to-v2-migration-plan.schema.json",
+            management_schema_document::<ProjectV1ToV2MigrationPlan>(
+                "star.management.project-v1-to-v2-migration-plan",
+            ),
+        ),
+        (
+            "project-v1-to-v2-migration-result.schema.json",
+            management_schema_document::<ProjectV1ToV2MigrationResult>(
+                "star.management.project-v1-to-v2-migration-result",
+            ),
         ),
         (
             "project-revision.schema.json",

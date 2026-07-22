@@ -187,6 +187,7 @@ prefixed_id!(ApprovalId, "apr_");
 prefixed_id!(ToolTrustId, "trt_");
 prefixed_id!(ToolCacheId, "trc_");
 prefixed_id!(ProjectId, "prj_");
+prefixed_id!(CheckoutId, "cko_");
 prefixed_id!(GoalId, "gol_");
 prefixed_id!(RunId, "run_");
 prefixed_id!(StageId, "stg_");
@@ -198,8 +199,14 @@ prefixed_id!(GateId, "gat_");
 prefixed_id!(EvidenceBundleId, "evb_");
 prefixed_id!(TaskInvocationId, "inv_");
 prefixed_id!(WaiverId, "wav_");
+prefixed_id!(TaskSpecId, "tsk_");
+prefixed_id!(ScopeRevisionId, "scp_");
+prefixed_id!(ImpactAnalysisId, "imp_");
+prefixed_id!(ChangeSetId, "chg_");
 derived_id!(ProjectRevisionId, "prv_");
 derived_id!(WorkspaceSnapshotId, "wsp_");
+derived_id!(ProjectCatalogSnapshotId, "pcs_");
+derived_id!(CodeIndexSnapshotId, "cix_");
 prefixed_id!(ScanRunId, "scn_");
 derived_id!(FindingId, "fnd_");
 derived_id!(OccurrenceId, "occ_");
@@ -218,6 +225,8 @@ prefixed_id!(RootBindingId, "rtb_");
 prefixed_id!(GenerationId, "gen_");
 prefixed_id!(EventId, "evt_");
 prefixed_id!(InstallationId, "ins_");
+prefixed_id!(ReleaseManifestId, "rel_");
+prefixed_id!(EvaluationRunId, "evr_");
 
 /// Monotonic process-local ULID source for IDs where clock regression must not
 /// reorder IDs created by this process.

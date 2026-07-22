@@ -5,24 +5,32 @@
 //! process, or transport dependency.
 
 pub mod canonical;
+pub mod development;
 pub mod evidence;
+pub mod evidence_v2;
 pub mod fixed_mcp;
 pub mod ids;
+pub mod index;
 pub mod installation;
 pub mod ipc;
 pub mod management;
 pub mod manifest;
+pub mod orchestration;
+pub mod planning;
 pub mod registry;
+pub mod release_v2;
 pub mod runtime;
+pub mod rust_style;
 pub mod schema;
 pub mod strict_json;
 pub mod trust;
 
 pub use canonical::{Sha256Hash, canonical_sha256, jcs_bytes};
 pub use ids::{
-    ApprovalId, ArtifactId, DiagnosticId, EvidenceBundleId, GateId, GoalId, InstallationId,
-    OperationId, ProjectId, RequestId, RunId, StageId, TaskInvocationId, ToolCacheId, ToolTrustId,
-    ValidationPlanId, ValidationRunId, WaiverId,
+    ApprovalId, ArtifactId, ChangeSetId, CheckoutId, DiagnosticId, EvaluationRunId,
+    EvidenceBundleId, GateId, GoalId, ImpactAnalysisId, InstallationId, OperationId, ProjectId,
+    ReleaseManifestId, RequestId, RunId, ScopeRevisionId, StageId, TaskInvocationId, TaskSpecId,
+    ToolCacheId, ToolTrustId, ValidationPlanId, ValidationRunId, WaiverId,
 };
 pub use management::{MANAGEMENT_STORE_VERSION, REDACTION_CONTRACT_VERSION};
 pub use manifest::{ToolPackageManifest, parse_manifest_v1};

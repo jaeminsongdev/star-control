@@ -11,14 +11,14 @@ use crate::{
     Sha256Hash,
     evidence::ArtifactRef,
     ids::{
-        BaselineId, CanonicalSourceId, ChangePlanId, CoordinatedOperationId, DispositionId,
-        FindingId, GenerationId, ManagementStoreId, OccurrenceId, PatchSetId, ProjectId,
-        ProjectRevisionId, RootBindingId, ScanRunId, SuppressionId, SymbolId, SymbolReferenceId,
-        ValidationResultId, WorkspaceSnapshotId,
+        BaselineId, CanonicalSourceId, ChangePlanId, CheckoutId, CoordinatedOperationId,
+        DispositionId, FindingId, GenerationId, ManagementStoreId, OccurrenceId, PatchSetId,
+        ProjectId, ProjectRevisionId, RootBindingId, ScanRunId, SuppressionId, SymbolId,
+        SymbolReferenceId, ValidationResultId, WorkspaceSnapshotId,
     },
 };
 
-pub const MANAGEMENT_STORE_VERSION: u32 = 1;
+pub const MANAGEMENT_STORE_VERSION: u32 = 2;
 pub const REDACTION_CONTRACT_VERSION: u32 = 1;
 
 #[derive(Debug, Error)]
@@ -37,6 +37,14 @@ pub fn decode_current_management_document<T: serde::de::DeserializeOwned>(
     input: &str,
     expected_schema_id: &str,
 ) -> Result<T, ManagementDecodeError> {
+    decode_management_document(input, expected_schema_id, 1)
+}
+
+pub fn decode_management_document<T: serde::de::DeserializeOwned>(
+    input: &str,
+    expected_schema_id: &str,
+    expected_schema_version: u32,
+) -> Result<T, ManagementDecodeError> {
     let value =
         crate::parse_no_duplicate_keys(input).map_err(|_| ManagementDecodeError::InvalidJson)?;
     let object = value.as_object().ok_or(ManagementDecodeError::Shape)?;
@@ -46,7 +54,7 @@ pub fn decode_current_management_document<T: serde::de::DeserializeOwned>(
     if object
         .get("schema_version")
         .and_then(serde_json::Value::as_u64)
-        != Some(1)
+        != Some(u64::from(expected_schema_version))
     {
         return Err(ManagementDecodeError::SchemaVersion);
     }
@@ -143,6 +151,29 @@ string_enum!(RegistrationState {
     Attached,
     Detached,
     Invalid
+});
+string_enum!(CheckoutKind {
+    MainWorktree,
+    LinkedWorktree,
+    Clone,
+    FilesystemRoot
+});
+string_enum!(CheckoutHeadState {
+    Branch,
+    Detached,
+    Unborn,
+    Unavailable
+});
+string_enum!(CheckoutAttachmentState {
+    Attached,
+    Detached,
+    Missing,
+    IdentityConflict,
+    Unsupported
+});
+string_enum!(MigrationApplyState {
+    Completed,
+    Interrupted
 });
 string_enum!(Completeness {
     Complete,
@@ -290,7 +321,7 @@ pub struct SourceRange {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct Project {
+pub struct ProjectV1 {
     pub schema_id: String,
     pub schema_version: u32,
     pub project_id: ProjectId,
@@ -303,6 +334,93 @@ pub struct Project {
     pub root_binding_id: Option<RootBindingId>,
     pub latest_revision_id: Option<ProjectRevisionId>,
     pub latest_workspace_snapshot_id: Option<WorkspaceSnapshotId>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Project {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub project_id: ProjectId,
+    pub identity_scope: IdentityScope,
+    pub display_name: String,
+    pub repository_kind: RepositoryKind,
+    pub source_of_truth: Vec<String>,
+    pub declaration_fingerprint: Sha256Hash,
+    pub registration_state: RegistrationState,
+    pub attached_checkout_ids: Vec<CheckoutId>,
+    pub latest_revision_id: Option<ProjectRevisionId>,
+    pub latest_workspace_snapshot_id: Option<WorkspaceSnapshotId>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RemoteIdentity {
+    pub host: String,
+    pub owner: String,
+    pub repository: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectCheckout {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub checkout_id: CheckoutId,
+    pub project_id: ProjectId,
+    pub root_binding_id: Option<RootBindingId>,
+    pub repository_kind: RepositoryKind,
+    pub checkout_kind: CheckoutKind,
+    pub repository_binding_id: Option<String>,
+    pub worktree_binding_id: Option<String>,
+    pub object_format: Option<String>,
+    pub head_state: CheckoutHeadState,
+    pub head_ref: Option<String>,
+    pub head_commit_id: Option<String>,
+    pub head_tree_id: Option<String>,
+    pub upstream_ref: Option<String>,
+    pub default_branch_hint: Option<String>,
+    pub remote_identity: Option<RemoteIdentity>,
+    pub attachment_state: CheckoutAttachmentState,
+    pub last_observed_at: DateTime<Utc>,
+    pub limitations: Vec<String>,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectV1ToV2MigrationEntry {
+    pub project_id: ProjectId,
+    pub source_project: ProjectV1,
+    pub source_project_fingerprint: Sha256Hash,
+    pub source_updated_at: String,
+    pub source_root_binding_id: Option<RootBindingId>,
+    pub project: Project,
+    pub checkout: Option<ProjectCheckout>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectV1ToV2MigrationPlan {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub source_store_version: u32,
+    pub target_store_version: u32,
+    pub entries: Vec<ProjectV1ToV2MigrationEntry>,
+    pub limitations: Vec<String>,
+    pub plan_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectV1ToV2MigrationResult {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub state: MigrationApplyState,
+    pub completed_steps: usize,
+    pub total_steps: usize,
+    pub plan_fingerprint: Sha256Hash,
+    pub backup_fingerprint: Sha256Hash,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -761,13 +879,22 @@ mod tests {
         directory: &str,
         schema_id: &str,
     ) {
+        assert_fixture_version::<T>(root, directory, schema_id, 1);
+    }
+
+    fn assert_fixture_version<T: serde::de::DeserializeOwned>(
+        root: &std::path::Path,
+        directory: &str,
+        schema_id: &str,
+        schema_version: u32,
+    ) {
         for name in ["minimal.json", "full.json"] {
             let source = std::fs::read_to_string(root.join(directory).join(name)).unwrap();
-            decode_current_management_document::<T>(&source, schema_id).unwrap();
+            decode_management_document::<T>(&source, schema_id, schema_version).unwrap();
         }
         for name in ["invalid.json", "future.json"] {
             let source = std::fs::read_to_string(root.join(directory).join(name)).unwrap();
-            assert!(decode_current_management_document::<T>(&source, schema_id).is_err());
+            assert!(decode_management_document::<T>(&source, schema_id, schema_version).is_err());
         }
     }
 
@@ -808,7 +935,7 @@ mod tests {
         let hash = Sha256Hash::digest(b"project");
         let minimal = serde_json::json!({
             "schema_id":"star.project",
-            "schema_version":1,
+            "schema_version":2,
             "project_id":project_id,
             "identity_scope":"local",
             "display_name":"Local project",
@@ -816,20 +943,20 @@ mod tests {
             "source_of_truth":["source"],
             "declaration_fingerprint":hash,
             "registration_state":"detached",
-            "root_binding_id":null,
+            "attached_checkout_ids":[],
             "latest_revision_id":null,
             "latest_workspace_snapshot_id":null
         });
         let encoded = serde_json::to_string(&minimal).unwrap();
-        assert!(decode_current_management_document::<Project>(&encoded, "star.project").is_ok());
-        let future = encoded.replace("\"schema_version\":1", "\"schema_version\":2");
+        assert!(decode_management_document::<Project>(&encoded, "star.project", 2).is_ok());
+        let future = encoded.replace("\"schema_version\":2", "\"schema_version\":3");
         assert!(matches!(
-            decode_current_management_document::<Project>(&future, "star.project"),
+            decode_management_document::<Project>(&future, "star.project", 2),
             Err(ManagementDecodeError::SchemaVersion)
         ));
         let duplicate = encoded.replacen("{", "{\"schema_id\":\"star.project\",", 1);
         assert!(matches!(
-            decode_current_management_document::<Project>(&duplicate, "star.project"),
+            decode_management_document::<Project>(&duplicate, "star.project", 2),
             Err(ManagementDecodeError::InvalidJson)
         ));
         let mut unknown = minimal;
@@ -838,9 +965,10 @@ mod tests {
             .unwrap()
             .insert("unexpected".to_owned(), true.into());
         assert!(matches!(
-            decode_current_management_document::<Project>(
+            decode_management_document::<Project>(
                 &serde_json::to_string(&unknown).unwrap(),
-                "star.project"
+                "star.project",
+                2
             ),
             Err(ManagementDecodeError::Shape)
         ));
@@ -850,7 +978,19 @@ mod tests {
     fn generated_management_fixtures_round_trip_through_strict_rust_types() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../../specs/fixtures/management/v1");
-        assert_fixture::<Project>(&root, "project", "star.project");
+        assert_fixture_version::<Project>(&root, "project", "star.project", 2);
+        assert_fixture::<ProjectV1>(&root, "project-v1", "star.project");
+        assert_fixture::<ProjectCheckout>(&root, "project-checkout", "star.project-checkout");
+        assert_fixture::<ProjectV1ToV2MigrationPlan>(
+            &root,
+            "project-v1-to-v2-migration-plan",
+            "star.management.project-v1-to-v2-migration-plan",
+        );
+        assert_fixture::<ProjectV1ToV2MigrationResult>(
+            &root,
+            "project-v1-to-v2-migration-result",
+            "star.management.project-v1-to-v2-migration-result",
+        );
         assert_fixture::<ProjectRevision>(&root, "project-revision", "star.project-revision");
         assert_fixture::<WorkspaceSnapshot>(&root, "workspace-snapshot", "star.workspace-snapshot");
         assert_fixture::<ScanRun>(&root, "scan-run", "star.scan-run");

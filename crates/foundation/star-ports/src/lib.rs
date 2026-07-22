@@ -7,18 +7,26 @@ use serde::{Deserialize, Serialize};
 use star_contracts::{
     Sha256Hash,
     evidence::{ArtifactRef, GateDecision},
-    ids::{CoordinatedOperationId, FindingId, PatchSetId, ProjectId, RootBindingId, ScanRunId},
+    evidence_v2::{DiagnosticV2, EvidenceBundleV2, GateDecisionV2, ValidationRunV2},
+    ids::{
+        CheckoutId, CodeIndexSnapshotId, CoordinatedOperationId, EvidenceBundleId, FindingId,
+        PatchSetId, ProjectId, RootBindingId, ScanRunId, TaskSpecId,
+    },
+    index::{CodeIndexSnapshot, IndexEdge, IndexEntity, ProjectCatalogSnapshot, SourceEntry},
     management::{
         Baseline, CanonicalSource, ChangePlan, CoordinatedOperation, Disposition, Finding,
-        ManagementStoreStatus, Occurrence, ParticipantReceipt, PatchSet, Project, ProjectRevision,
-        ScanRun, Suppression, Symbol, SymbolReference, ValidationResult, WorkspaceSnapshot,
+        ManagementStoreStatus, Occurrence, ParticipantReceipt, PatchSet, Project, ProjectCheckout,
+        ProjectRevision, ScanRun, Suppression, Symbol, SymbolReference, ValidationResult,
+        WorkspaceSnapshot,
     },
+    planning::PlanningBundle,
 };
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProjectRootAttachment {
     pub project_id: ProjectId,
+    pub checkout_id: CheckoutId,
     pub root_binding_id: RootBindingId,
 }
 
@@ -62,8 +70,37 @@ pub struct ScanCommit {
     pub references: Vec<SymbolReference>,
     pub findings: Vec<Finding>,
     pub occurrences: Vec<Occurrence>,
+    pub code_index: Option<CodeIndexSnapshot>,
+    pub source_entries: Vec<SourceEntry>,
+    pub index_entities: Vec<IndexEntity>,
+    pub index_edges: Vec<IndexEdge>,
     pub idempotency_key: String,
     pub payload_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StoredCodeIndexProjection {
+    pub snapshot: CodeIndexSnapshot,
+    pub source_entries: Vec<SourceEntry>,
+    pub entities: Vec<IndexEntity>,
+    pub edges: Vec<IndexEdge>,
+    pub symbols: Vec<Symbol>,
+    pub references: Vec<SymbolReference>,
+}
+
+pub trait CodeIndexCache: Send + Sync {
+    fn load(
+        &self,
+        project_id: &ProjectId,
+        cache_key: &Sha256Hash,
+    ) -> Result<Option<StoredCodeIndexProjection>, RepositoryError>;
+    fn store(
+        &self,
+        project_id: &ProjectId,
+        cache_key: &Sha256Hash,
+        projection: &StoredCodeIndexProjection,
+    ) -> Result<(), RepositoryError>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,11 +132,41 @@ pub trait GlobalManagementRepository: Send + Sync {
     fn register_project(
         &self,
         project: &Project,
+        checkout: &ProjectCheckout,
         idempotency_key: &str,
         payload_fingerprint: &Sha256Hash,
     ) -> Result<Project, RepositoryError>;
     fn get_project(&self, project_id: &ProjectId) -> Result<Option<Project>, RepositoryError>;
     fn list_projects(&self) -> Result<Vec<Project>, RepositoryError>;
+    fn get_project_checkout(
+        &self,
+        checkout_id: &CheckoutId,
+    ) -> Result<Option<ProjectCheckout>, RepositoryError>;
+    fn list_project_checkouts(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<Vec<ProjectCheckout>, RepositoryError>;
+    fn put_project_catalog_snapshot(
+        &self,
+        snapshot: &ProjectCatalogSnapshot,
+    ) -> Result<(), RepositoryError>;
+    fn latest_project_catalog_snapshot(
+        &self,
+    ) -> Result<Option<ProjectCatalogSnapshot>, RepositoryError>;
+    fn put_planning_bundle(
+        &self,
+        bundle: &PlanningBundle,
+        idempotency_key: &str,
+        input_fingerprint: &Sha256Hash,
+    ) -> Result<PlanningBundle, RepositoryError>;
+    fn get_planning_bundle(
+        &self,
+        task_spec_id: &TaskSpecId,
+    ) -> Result<Option<PlanningBundle>, RepositoryError>;
+    fn get_planning_bundle_by_idempotency_key(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<(PlanningBundle, Sha256Hash)>, RepositoryError>;
     fn put_coordination(&self, operation: &CoordinatedOperation) -> Result<(), RepositoryError>;
     fn get_coordination(
         &self,
@@ -129,6 +196,13 @@ pub trait ProjectManagementRepository: Send + Sync {
     ) -> Result<Option<ScanRun>, RepositoryError>;
     fn commit_scan(&self, commit: &ScanCommit) -> Result<ScanRun, RepositoryError>;
     fn latest_scan(&self) -> Result<Option<ScanRun>, RepositoryError>;
+    fn latest_code_index_projection(
+        &self,
+    ) -> Result<Option<StoredCodeIndexProjection>, RepositoryError>;
+    fn get_code_index_snapshot(
+        &self,
+        snapshot_id: &CodeIndexSnapshotId,
+    ) -> Result<Option<CodeIndexSnapshot>, RepositoryError>;
     fn get_workspace_snapshot(
         &self,
         workspace_snapshot_id: &star_contracts::ids::WorkspaceSnapshotId,
@@ -172,6 +246,17 @@ pub trait ProjectManagementRepository: Send + Sync {
         result: &ValidationResult,
         decision: &GateDecision,
     ) -> Result<(), RepositoryError>;
+    fn save_check_graph_evidence(
+        &self,
+        runs: &[ValidationRunV2],
+        diagnostics: &[DiagnosticV2],
+        decision: &GateDecisionV2,
+        bundle: &EvidenceBundleV2,
+    ) -> Result<(), RepositoryError>;
+    fn get_evidence_bundle_v2(
+        &self,
+        evidence_bundle_id: &EvidenceBundleId,
+    ) -> Result<Option<EvidenceBundleV2>, RepositoryError>;
     fn artifact_refs_for_scan(
         &self,
         scan_run_id: &ScanRunId,
@@ -202,8 +287,16 @@ pub trait ProjectRootBindingStore: Send + Sync {
         &self,
         project_id: &ProjectId,
     ) -> Result<Option<ProjectRootAttachment>, RepositoryError>;
-    fn attach(&self, project_id: &ProjectId, root: &Path)
-    -> Result<RootBindingId, RepositoryError>;
+    fn find_by_checkout(
+        &self,
+        checkout_id: &CheckoutId,
+    ) -> Result<Option<ProjectRootAttachment>, RepositoryError>;
+    fn attach(
+        &self,
+        project_id: &ProjectId,
+        checkout_id: &CheckoutId,
+        root: &Path,
+    ) -> Result<RootBindingId, RepositoryError>;
     fn resolve(&self, binding_id: &RootBindingId) -> Result<std::path::PathBuf, RepositoryError>;
 }
 
