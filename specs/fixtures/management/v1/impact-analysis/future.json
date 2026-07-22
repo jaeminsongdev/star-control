@@ -1,0 +1,72 @@
+{
+  "affected_projects": [],
+  "calculation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "catalog_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "change_set_refs": [
+    {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "confidence_summary": {
+    "confirmed": 0,
+    "high": 0,
+    "low": 0,
+    "medium": 0,
+    "possible": 0
+  },
+  "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "impact_analysis_id": "imp_00000000000000000000000000",
+  "impact_edges": [],
+  "impacted_nodes": [],
+  "limitations": [],
+  "no_results": [],
+  "project_inputs": [
+    {
+      "checkout_id": "cko_00000000000000000000000000",
+      "code_index_snapshot_id": "cix_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "freshness": "current",
+      "project_catalog_snapshot_id": "pcs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "project_id": "prj_00000000000000000000000000",
+      "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "revision": 1,
+  "risk_paths": [],
+  "schema_id": "star.impact-analysis",
+  "schema_version": 2,
+  "scope_revision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "seeds": [
+    {
+      "evidence_refs": [],
+      "project_id": "prj_00000000000000000000000000",
+      "resolution": "resolved",
+      "seed_id": "fixture",
+      "selector": {
+        "kind": "path",
+        "value": "fixture"
+      }
+    }
+  ],
+  "status": "complete",
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "entity_kinds": [
+    "fixture"
+  ],
+  "fallback_floor": "package",
+  "required_check_families": [
+    "fixture"
+  ],
+  "risk_id": "fixture",
+  "schema_id": "star.risk-path-descriptor",
+  "schema_version": 1,
+  "selector_kinds": [
+    "path"
+  ],
+  "severity_floor": "info",
+  "source_classes": [
+    "source"
+  ],
+  "version": "fixture"
+}

@@ -1,0 +1,28 @@
+{
+  "base_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "captured_at": "2026-01-01T00:00:00Z",
+  "change_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "change_set_id": "chg_00000000000000000000000000",
+  "change_set_kind": "planning_baseline",
+  "checkout_id": "cko_00000000000000000000000000",
+  "collection_limits": [],
+  "collection_state": "complete",
+  "comparison_scope": [],
+  "entries": [],
+  "observed_workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.change-set",
+  "schema_version": 1,
+  "scope_revision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

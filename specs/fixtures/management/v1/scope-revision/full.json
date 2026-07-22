@@ -1,0 +1,186 @@
+{
+  "analysis_scope": {
+    "exclusions": [
+      {
+        "applies_to": "analysis",
+        "reason": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        }
+      }
+    ],
+    "project_ids": [
+      "fixture"
+    ],
+    "selectors": [
+      {
+        "evidence_refs": [
+          "fixture"
+        ],
+        "reason_code": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        },
+        "source": "user"
+      }
+    ]
+  },
+  "approval_state": "accepted",
+  "changed_fields": [
+    "fixture"
+  ],
+  "created_at": "2026-01-01T00:00:00Z",
+  "created_by": {
+    "actor_id": "fixture",
+    "actor_type": "user",
+    "auth_source": "fixture",
+    "display_name": "fixture"
+  },
+  "derived_additions": [
+    {
+      "axis": "analysis",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "reason_code": "fixture",
+      "selector": {
+        "kind": "path",
+        "value": "fixture"
+      },
+      "source": "user"
+    }
+  ],
+  "planned_change_scope": {
+    "exclusions": [
+      {
+        "applies_to": "analysis",
+        "reason": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        }
+      }
+    ],
+    "project_ids": [
+      "fixture"
+    ],
+    "selectors": [
+      {
+        "evidence_refs": [
+          "fixture"
+        ],
+        "reason_code": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        },
+        "source": "user"
+      }
+    ]
+  },
+  "previous_scope_revision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "reason": "fixture",
+  "reason_code": "initial",
+  "requested_scope": {
+    "exclusions": [
+      {
+        "applies_to": "analysis",
+        "reason": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        }
+      }
+    ],
+    "project_ids": [
+      "fixture"
+    ],
+    "selectors": [
+      {
+        "evidence_refs": [
+          "fixture"
+        ],
+        "reason_code": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        },
+        "source": "user"
+      }
+    ]
+  },
+  "revision": 1,
+  "schema_id": "star.scope-revision",
+  "schema_version": 1,
+  "scope_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "scope_revision_id": "scp_00000000000000000000000000",
+  "source_snapshot_refs": [
+    {
+      "checkout_id": "cko_00000000000000000000000000",
+      "code_index_snapshot_id": "cix_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "freshness": "current",
+      "project_catalog_snapshot_id": "pcs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "project_id": "prj_00000000000000000000000000",
+      "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "user_decisions": [
+    {
+      "actor": {
+        "actor_id": "fixture",
+        "actor_type": "user",
+        "auth_source": "fixture",
+        "display_name": "fixture"
+      },
+      "decision_id": "fixture",
+      "reason": "fixture",
+      "selector": {
+        "kind": "path",
+        "value": "fixture"
+      },
+      "state": "accepted"
+    }
+  ],
+  "validation_scope": {
+    "exclusions": [
+      {
+        "applies_to": "analysis",
+        "reason": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        }
+      }
+    ],
+    "project_ids": [
+      "fixture"
+    ],
+    "selectors": [
+      {
+        "evidence_refs": [
+          "fixture"
+        ],
+        "reason_code": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        },
+        "source": "user"
+      }
+    ]
+  }
+}

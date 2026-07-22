@@ -1,0 +1,82 @@
+{
+  "assumptions": [
+    "fixture"
+  ],
+  "baseline_policy": {
+    "kind": "current_workspace",
+    "reference": "fixture"
+  },
+  "check_overrides": [
+    {
+      "family": "fixture",
+      "kind": "add",
+      "reason": "fixture"
+    }
+  ],
+  "constraints": [
+    "fixture"
+  ],
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "created_by": {
+    "actor_id": "fixture",
+    "actor_type": "user",
+    "auth_source": "fixture",
+    "display_name": "fixture"
+  },
+  "excluded_scope": [
+    {
+      "applies_to": "analysis",
+      "reason": "fixture",
+      "selector": {
+        "kind": "path",
+        "value": "fixture"
+      }
+    }
+  ],
+  "forbidden_actions": [
+    "fixture"
+  ],
+  "included_scope": [
+    {
+      "kind": "path",
+      "value": "fixture"
+    }
+  ],
+  "intended_changes": [
+    {
+      "change_id": "fixture",
+      "change_kind": "add",
+      "intended_postcondition": "fixture",
+      "selector": {
+        "kind": "path",
+        "value": "fixture"
+      }
+    }
+  ],
+  "objective": "fixture",
+  "project_targets": [
+    {
+      "checkout_id": "cko_00000000000000000000000000",
+      "project_id": "prj_00000000000000000000000000",
+      "reason": "fixture",
+      "role": "planned_change"
+    }
+  ],
+  "requested_checks": [
+    "fixture"
+  ],
+  "revision": 1,
+  "schema_id": "star.task-spec",
+  "schema_version": 1,
+  "success_criteria": [
+    {
+      "criterion_id": "fixture",
+      "description": "fixture",
+      "required": false,
+      "verification": "fixture"
+    }
+  ],
+  "task_spec_id": "tsk_00000000000000000000000000",
+  "title": "fixture"
+}

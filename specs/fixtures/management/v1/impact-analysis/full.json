@@ -1,0 +1,156 @@
+{
+  "affected_projects": [
+    {
+      "certainty": "confirmed",
+      "closure_complete": false,
+      "impacted_node_count": 0,
+      "project_id": "prj_00000000000000000000000000"
+    }
+  ],
+  "calculation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "catalog_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "change_set_refs": [
+    {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "confidence_summary": {
+    "confirmed": 0,
+    "high": 0,
+    "low": 0,
+    "medium": 0,
+    "possible": 0
+  },
+  "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "impact_analysis_id": "imp_00000000000000000000000000",
+  "impact_edges": [
+    {
+      "certainty": "confirmed",
+      "confidence": "high",
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "distance": 0,
+      "edge_id": "fixture",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "freshness": "current",
+      "from_entity_key": "fixture",
+      "impact_kind": "direct",
+      "limitations": [
+        "fixture"
+      ],
+      "path_edge_ids": [
+        "src/lib.rs"
+      ],
+      "project_id": "prj_00000000000000000000000000",
+      "relation": "fixture",
+      "resolution": "resolved",
+      "tier": "text",
+      "to_entity_key": "fixture"
+    }
+  ],
+  "impacted_nodes": [
+    {
+      "certainty": "confirmed",
+      "confidence": "high",
+      "entity_key": "fixture",
+      "impact_kind": "direct",
+      "kind": "fixture",
+      "minimum_distance": 0,
+      "project_id": "prj_00000000000000000000000000"
+    }
+  ],
+  "limitations": [
+    "fixture"
+  ],
+  "no_results": [
+    {
+      "limitations": [
+        "fixture"
+      ],
+      "query_kind": "fixture",
+      "reason": "confirmed_empty",
+      "required_tier": "text",
+      "searched_scope": [
+        {
+          "kind": "path",
+          "value": "fixture"
+        }
+      ]
+    }
+  ],
+  "project_inputs": [
+    {
+      "checkout_id": "cko_00000000000000000000000000",
+      "code_index_snapshot_id": "cix_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "freshness": "current",
+      "project_catalog_snapshot_id": "pcs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "project_id": "prj_00000000000000000000000000",
+      "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "revision": 1,
+  "risk_paths": [
+    {
+      "certainty": "confirmed",
+      "fallback_floor": "package",
+      "finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "impact_edge_ids": [
+        "fixture"
+      ],
+      "limitations": [
+        "fixture"
+      ],
+      "project_id": "prj_00000000000000000000000000",
+      "required_check_families": [
+        "fixture"
+      ],
+      "risk_id": "fixture",
+      "risk_version": "fixture",
+      "seed_ids": [
+        "fixture"
+      ],
+      "severity_floor": "info"
+    }
+  ],
+  "schema_id": "star.impact-analysis",
+  "schema_version": 1,
+  "scope_revision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "seeds": [
+    {
+      "entity_key": "fixture",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "project_id": "prj_00000000000000000000000000",
+      "resolution": "resolved",
+      "seed_id": "fixture",
+      "selector": {
+        "kind": "path",
+        "value": "fixture"
+      }
+    }
+  ],
+  "status": "complete",
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}
