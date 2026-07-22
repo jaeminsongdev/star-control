@@ -1,0 +1,33 @@
+{
+  "blocking_diagnostic_refs": [],
+  "decided_at": "2026-01-01T00:00:00Z",
+  "decided_by": {
+    "actor_id": "fixture",
+    "actor_type": "user",
+    "auth_source": "fixture",
+    "display_name": "fixture"
+  },
+  "decision": "human_review",
+  "decision_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "gate_id": "gat_00000000000000000000000000",
+  "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "reason_codes": [],
+  "remaining_risks": [],
+  "required_run_refs": [],
+  "revision": 0,
+  "satisfied_run_refs": [],
+  "schema_id": "star.gate-decision",
+  "schema_version": 3,
+  "scope": {
+    "goal_id": "gol_00000000000000000000000000",
+    "kind": "goal",
+    "revision": 0,
+    "run_id": "run_00000000000000000000000000"
+  },
+  "validation_plan_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

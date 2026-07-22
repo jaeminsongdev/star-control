@@ -1,0 +1,26 @@
+{
+  "blocking": false,
+  "code": "fixture",
+  "confidence": "low",
+  "diagnostic_id": "dia_00000000000000000000000000",
+  "evidence_refs": [],
+  "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "first_seen_at": "2026-01-01T00:00:00Z",
+  "last_seen_at": "2026-01-01T00:00:00Z",
+  "message": "fixture",
+  "plan_item_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "rule_ref": {
+    "catalog_id": "fixture",
+    "format_version": 0,
+    "item_version": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "schema_id": "star.diagnostic",
+  "schema_version": 2,
+  "sequence": 0,
+  "severity": "info",
+  "status": "confirmed",
+  "title": "fixture",
+  "validation_run_id": "val_00000000000000000000000000"
+}

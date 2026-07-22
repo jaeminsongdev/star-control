@@ -1,0 +1,26 @@
+{
+  "args": [],
+  "cwd": "fixture",
+  "env_refs": {},
+  "executable": "fixture",
+  "executable_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "expected_exit_codes": [],
+  "idempotency_key": "fixture",
+  "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "invocation_id": "fixture",
+  "output_limits": {
+    "artifact_bytes": 1,
+    "stderr_bytes": 1,
+    "stdout_bytes": 1
+  },
+  "permission_action": "fixture",
+  "schema_id": "star.task-invocation",
+  "schema_version": 2,
+  "timeout_ms": 0,
+  "tool_ref": {
+    "catalog_id": "fixture",
+    "format_version": 0,
+    "item_version": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

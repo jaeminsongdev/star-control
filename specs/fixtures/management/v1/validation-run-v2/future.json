@@ -1,0 +1,48 @@
+{
+  "artifact_refs": [],
+  "attempt": 0,
+  "completeness": "complete",
+  "diagnostic_ids": [],
+  "invocation": {
+    "args": [],
+    "cwd": "fixture",
+    "env_refs": {},
+    "executable": "fixture",
+    "executable_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "expected_exit_codes": [],
+    "idempotency_key": "fixture",
+    "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "invocation_id": "fixture",
+    "output_limits": {
+      "artifact_bytes": 1,
+      "stderr_bytes": 1,
+      "stdout_bytes": 1
+    },
+    "permission_action": "fixture",
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "timeout_ms": 0,
+    "tool_ref": {
+      "catalog_id": "fixture",
+      "format_version": 0,
+      "item_version": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "outcome": "pass",
+  "phase": "fixture",
+  "plan_item_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "revision": 0,
+  "schema_id": "star.validation-run",
+  "schema_version": 3,
+  "stability": "stable",
+  "validation_plan_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "validation_run_id": "val_00000000000000000000000000"
+}

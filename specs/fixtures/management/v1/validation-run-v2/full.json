@@ -1,0 +1,107 @@
+{
+  "artifact_refs": [
+    {
+      "artifact_id": "art_00000000000000000000000000",
+      "created_at": "2026-01-01T00:00:00Z",
+      "kind": "log",
+      "media_type": "fixture",
+      "producer": {
+        "build_id": "fixture",
+        "component": "fixture",
+        "platform": "fixture",
+        "product_version": "fixture"
+      },
+      "project_id": "prj_00000000000000000000000000",
+      "redaction_status": "not_needed",
+      "relative_path": "src/lib.rs",
+      "retention_class": "temporary",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 0,
+      "source_artifact_ref": null
+    }
+  ],
+  "attempt": 0,
+  "completeness": "complete",
+  "diagnostic_ids": [
+    "dia_00000000000000000000000000"
+  ],
+  "exit_code": 1,
+  "finished_at": "2026-01-01T00:00:00Z",
+  "invocation": {
+    "args": [
+      "fixture"
+    ],
+    "cwd": "fixture",
+    "env_refs": {
+      "fixture": {
+        "source": "literal",
+        "value": "fixture"
+      }
+    },
+    "executable": "fixture",
+    "executable_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "expected_exit_codes": [
+      1
+    ],
+    "idempotency_key": "fixture",
+    "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "invocation_id": "fixture",
+    "output_limits": {
+      "artifact_bytes": 1,
+      "stderr_bytes": 1,
+      "stdout_bytes": 1
+    },
+    "permission_action": "fixture",
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "stdin_ref": {
+      "artifact_id": "art_00000000000000000000000000",
+      "created_at": "2026-01-01T00:00:00Z",
+      "kind": "log",
+      "media_type": "fixture",
+      "producer": {
+        "build_id": "fixture",
+        "component": "fixture",
+        "platform": "fixture",
+        "product_version": "fixture"
+      },
+      "project_id": "prj_00000000000000000000000000",
+      "redaction_status": "not_needed",
+      "relative_path": "src/lib.rs",
+      "retention_class": "temporary",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 0,
+      "source_artifact_ref": null
+    },
+    "timeout_ms": 0,
+    "tool_ref": {
+      "catalog_id": "fixture",
+      "format_version": 0,
+      "item_version": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "observed_tool": {
+    "executable_path": "src/lib.rs",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "version": "fixture"
+  },
+  "outcome": "pass",
+  "phase": "fixture",
+  "plan_item_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "revision": 0,
+  "schema_id": "star.validation-run",
+  "schema_version": 2,
+  "stability": "stable",
+  "started_at": "2026-01-01T00:00:00Z",
+  "termination_reason": "exited",
+  "validation_plan_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "validation_run_id": "val_00000000000000000000000000"
+}
