@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/change-bundle-handoff-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id", "schema_version", "bundle_id", "bundle_revision",
+    "bundle_fingerprint", "participant_commits", "artifact_fingerprints",
+    "remote_outcome", "ready", "blockers", "handoff_fingerprint"
+  ],
+  "properties": {
+    "schema_id": { "const": "star.change-bundle-handoff" },
+    "schema_version": { "const": 1 },
+    "bundle_id": { "$ref": "#/$defs/token" },
+    "bundle_revision": { "type": "integer", "minimum": 1 },
+    "bundle_fingerprint": { "$ref": "#/$defs/sha256" },
+    "participant_commits": {
+      "type": "array", "maxItems": 256,
+      "items": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" }
+    },
+    "artifact_fingerprints": {
+      "type": "array", "maxItems": 1024,
+      "items": { "$ref": "#/$defs/sha256" }
+    },
+    "remote_outcome": { "enum": ["not_requested", "verified", "failed", "outcome_unknown"] },
+    "ready": { "type": "boolean" },
+    "blockers": {
+      "type": "array", "maxItems": 256,
+      "items": { "type": "string", "minLength": 1, "maxLength": 4096 }
+    },
+    "handoff_fingerprint": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "token": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

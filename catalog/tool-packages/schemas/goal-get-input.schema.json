@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/goal-get-input-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["goal_id"],
+  "properties": {
+    "goal_id": { "type": "string", "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

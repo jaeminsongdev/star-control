@@ -1,0 +1,30 @@
+schema_version = 1
+profile_id = "rust_style_auto_fix"
+profile_version = "1.0.0"
+pipeline_ref = "rust_style_v1@1"
+default_policy = "safe_default"
+supported_policies = ["safe_default", "personal_auto"]
+toolchain_release = "1.96.0"
+source_effect = "isolated_preview_then_exact_patch"
+network = "denied"
+steps = [
+  "resolve",
+  "current_check",
+  "scope",
+  "isolated_preview",
+  "rustfmt_first",
+  "clippy_allowlisted_fix",
+  "rustfmt_final",
+  "side_effect_validation",
+  "idempotence_replay",
+  "candidate_validation",
+  "immutable_patch_set",
+  "exact_approval",
+  "pre_gate",
+  "single_use_permit",
+  "patch_apply",
+  "post_gate",
+]
+required_gates = ["patch_pre_apply", "patch_post_apply"]
+allowed_live_operations = ["modify_handwritten_in_scope_rs"]
+built_in_clippy_fix_allowlist = []

@@ -1,6 +1,6 @@
 schema_version = 1
 catalog_id = "star-control-development-projects"
-registration_enabled = false
+registration_enabled = true
 root_env = "STAR_DEVELOPMENT_ROOT"
 default_root = "D:/개발"
 

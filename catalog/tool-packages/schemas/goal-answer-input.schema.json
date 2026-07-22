@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/goal-answer-input-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["goal_id", "expected_revision", "question_id", "answer"],
+  "properties": {
+    "goal_id": { "$ref": "#/$defs/goal_id" },
+    "expected_revision": { "type": "integer", "minimum": 1 },
+    "question_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "answer": { "type": "string", "minLength": 1, "maxLength": 16384 }
+  },
+  "$defs": {
+    "goal_id": { "type": "string", "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

@@ -18,6 +18,8 @@ description = "Starts a durable Star-Control goal through the typed Controller c
 permission_actions = ["local_write"]
 paid_action = "no"
 idempotency = "non_idempotent"
+input_schema_file = "schemas/goal-start-input.schema.json"
+output_schema_file = "schemas/goal-record-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.goal.answer"
@@ -29,6 +31,8 @@ description = "Records a typed answer for a goal that is waiting for user input.
 permission_actions = ["local_write"]
 paid_action = "no"
 idempotency = "non_idempotent"
+input_schema_file = "schemas/goal-answer-input.schema.json"
+output_schema_file = "schemas/goal-record-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.plan.get"
@@ -40,6 +44,8 @@ description = "Reads the current durable plan without making a change."
 permission_actions = ["local_read"]
 paid_action = "no"
 idempotency = "read_only"
+input_schema_file = "schemas/goal-get-input.schema.json"
+output_schema_file = "schemas/plan-get-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.plan.update"
@@ -51,6 +57,8 @@ description = "Applies a typed update to the durable plan."
 permission_actions = ["local_write"]
 paid_action = "no"
 idempotency = "non_idempotent"
+input_schema_file = "schemas/plan-update-input.schema.json"
+output_schema_file = "schemas/goal-record-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.run.continue"
@@ -62,6 +70,8 @@ description = "Continues a run after the Controller confirms its current policy 
 permission_actions = ["local_delete", "external_write"]
 paid_action = "no"
 idempotency = "non_idempotent"
+input_schema_file = "schemas/goal-mutation-input.schema.json"
+output_schema_file = "schemas/goal-record-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.status.get"
@@ -73,6 +83,8 @@ description = "Reads the typed status of one durable goal."
 permission_actions = ["local_read"]
 paid_action = "no"
 idempotency = "read_only"
+input_schema_file = "schemas/goal-get-input.schema.json"
+output_schema_file = "schemas/goal-record-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.goal.pause"
@@ -84,6 +96,8 @@ description = "Requests a durable goal pause through the Controller."
 permission_actions = ["local_write"]
 paid_action = "no"
 idempotency = "idempotent"
+input_schema_file = "schemas/goal-mutation-input.schema.json"
+output_schema_file = "schemas/goal-record-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.goal.resume"
@@ -95,6 +109,8 @@ description = "Requests a durable goal resume through the Controller."
 permission_actions = ["local_write"]
 paid_action = "no"
 idempotency = "idempotent"
+input_schema_file = "schemas/goal-mutation-input.schema.json"
+output_schema_file = "schemas/goal-record-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.goal.cancel"
@@ -106,6 +122,8 @@ description = "Requests cancellation of a durable goal and its authorized child 
 permission_actions = ["local_delete", "external_write"]
 paid_action = "no"
 idempotency = "idempotent"
+input_schema_file = "schemas/goal-mutation-input.schema.json"
+output_schema_file = "schemas/goal-record-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.evidence.get"
@@ -130,6 +148,8 @@ description = "Reads the current merge readiness and conflict status."
 permission_actions = ["local_read"]
 paid_action = "no"
 idempotency = "read_only"
+input_schema_file = "schemas/goal-get-input.schema.json"
+output_schema_file = "schemas/change-bundle-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.handoff.get"
@@ -141,6 +161,8 @@ description = "Reads the current typed handoff record for a goal."
 permission_actions = ["local_read"]
 paid_action = "no"
 idempotency = "read_only"
+input_schema_file = "schemas/goal-get-input.schema.json"
+output_schema_file = "schemas/change-bundle-handoff-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.doctor"

@@ -1,0 +1,22 @@
+schema_version = 1
+profile_ref = "rust_style_auto_fix"
+pipeline_ref = "rust_style_v1@1"
+toolchain_release = "1.96.0"
+coverage_policy_ref = "rust-style-default-feature-host-v1"
+feature_policy = "project_declared_compatible_union_or_default"
+max_files = 512
+max_hunks = 512
+max_changed_bytes = 16777216
+built_in_fix_allowlist = []
+forbidden_operations = [
+  "cargo_or_lockfile_write",
+  "config_or_toolchain_write",
+  "create",
+  "delete",
+  "generated_write",
+  "mode_change",
+  "non_rust_write",
+  "out_of_scope_write",
+  "rename",
+  "vendor_write",
+]

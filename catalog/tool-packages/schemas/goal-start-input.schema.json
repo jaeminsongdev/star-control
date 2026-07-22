@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/goal-start-input-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["objective", "idempotency_key"],
+  "properties": {
+    "objective": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "project_key": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$" },
+    "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "prompt"],
+      "properties": {
+        "question_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+        "prompt": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      }
+    }
+  }
+}

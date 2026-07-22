@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/goal-record-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id", "schema_version", "goal_id", "revision", "objective", "status",
+    "plan_revision", "plan_items", "created_at", "updated_at", "content_fingerprint"
+  ],
+  "properties": {
+    "schema_id": { "const": "star.goal-record" },
+    "schema_version": { "const": 1 },
+    "goal_id": { "$ref": "#/$defs/goal_id" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "objective": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "project_key": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$" },
+    "status": { "$ref": "#/$defs/goal_status" },
+    "plan_revision": { "type": "integer", "minimum": 0 },
+    "plan_items": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/plan_item" }
+    },
+    "pending_question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "prompt"],
+      "properties": {
+        "question_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+        "prompt": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "answer": { "type": "string", "minLength": 1, "maxLength": 16384 }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "attempt", "status", "continued_at"],
+      "properties": {
+        "run_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "attempt": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["running", "completed", "failed", "cancelled"] },
+        "continued_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "content_fingerprint": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "goal_id": { "type": "string", "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "goal_status": { "enum": ["active", "waiting_question", "paused", "completed", "blocked", "cancelled"] },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "plan_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_id", "step", "status"],
+      "properties": {
+        "item_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+        "step": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "status": { "enum": ["pending", "in_progress", "completed", "blocked"] }
+      }
+    }
+  }
+}

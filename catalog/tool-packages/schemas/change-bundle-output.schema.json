@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/change-bundle-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id", "schema_version", "bundle_id", "goal_id", "revision",
+    "participants", "dependencies", "merge_order", "remote_outcome",
+    "limitations", "bundle_fingerprint"
+  ],
+  "properties": {
+    "schema_id": { "const": "star.change-bundle" },
+    "schema_version": { "const": 1 },
+    "bundle_id": { "$ref": "#/$defs/token" },
+    "goal_id": { "type": "string", "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "participants": {
+      "type": "array", "minItems": 1, "maxItems": 256,
+      "items": { "$ref": "#/$defs/participant" }
+    },
+    "dependencies": {
+      "type": "array", "maxItems": 4096,
+      "items": { "$ref": "#/$defs/dependency" }
+    },
+    "merge_order": {
+      "type": "array", "minItems": 1, "maxItems": 256,
+      "items": { "$ref": "#/$defs/token" }
+    },
+    "remote_outcome": { "$ref": "#/$defs/remote_outcome" },
+    "remote_snapshot_fingerprint": {
+      "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+    },
+    "limitations": {
+      "type": "array", "maxItems": 256,
+      "items": { "type": "string", "minLength": 1, "maxLength": 4096 }
+    },
+    "bundle_fingerprint": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "token": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "remote_outcome": { "enum": ["not_requested", "verified", "failed", "outcome_unknown"] },
+    "participant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "participant_id", "project_id", "checkout_revision", "owned_worktree",
+        "patch_fingerprint", "gate_fingerprint", "state"
+      ],
+      "properties": {
+        "participant_id": { "$ref": "#/$defs/token" },
+        "project_id": { "type": "string", "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "checkout_revision": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "owned_worktree": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "patch_fingerprint": { "$ref": "#/$defs/sha256" },
+        "gate_fingerprint": { "$ref": "#/$defs/sha256" },
+        "state": { "enum": ["planned", "worktree_ready", "validated", "merge_queued", "merged_local", "remote_verified", "blocked", "outcome_unknown"] },
+        "resulting_commit": {
+          "oneOf": [
+            { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_participant_id", "to_participant_id"],
+      "properties": {
+        "from_participant_id": { "$ref": "#/$defs/token" },
+        "to_participant_id": { "$ref": "#/$defs/token" }
+      }
+    }
+  }
+}

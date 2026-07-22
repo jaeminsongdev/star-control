@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/plan-get-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["goal_id", "goal_revision", "plan_revision", "status", "items", "goal_fingerprint"],
+  "properties": {
+    "goal_id": { "type": "string", "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "goal_revision": { "type": "integer", "minimum": 1 },
+    "plan_revision": { "type": "integer", "minimum": 0 },
+    "status": { "enum": ["active", "waiting_question", "paused", "completed", "blocked", "cancelled"] },
+    "items": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item_id", "step", "status"],
+        "properties": {
+          "item_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+          "step": { "type": "string", "minLength": 1, "maxLength": 4096 },
+          "status": { "enum": ["pending", "in_progress", "completed", "blocked"] }
+        }
+      }
+    },
+    "goal_fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}
