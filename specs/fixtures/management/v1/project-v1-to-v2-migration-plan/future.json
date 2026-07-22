@@ -1,0 +1,9 @@
+{
+  "entries": [],
+  "limitations": [],
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management.project-v1-to-v2-migration-plan",
+  "schema_version": 2,
+  "source_store_version": 0,
+  "target_store_version": 0
+}

@@ -1,7 +1,4 @@
 {
-  "attached_checkout_ids": [
-    "cko_00000000000000000000000000"
-  ],
   "declaration_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "display_name": "fixture",
   "identity_scope": "shared",
@@ -10,8 +7,9 @@
   "project_id": "prj_00000000000000000000000000",
   "registration_state": "attached",
   "repository_kind": "git",
+  "root_binding_id": "rtb_00000000000000000000000000",
   "schema_id": "star.project",
-  "schema_version": 2,
+  "schema_version": 1,
   "source_of_truth": [
     "fixture"
   ]

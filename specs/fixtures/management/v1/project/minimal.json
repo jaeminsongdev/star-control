@@ -1,4 +1,5 @@
 {
+  "attached_checkout_ids": [],
   "declaration_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "display_name": "fixture",
   "identity_scope": "shared",
@@ -6,6 +7,6 @@
   "registration_state": "attached",
   "repository_kind": "git",
   "schema_id": "star.project",
-  "schema_version": 1,
+  "schema_version": 2,
   "source_of_truth": []
 }

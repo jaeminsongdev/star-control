@@ -1,0 +1,13 @@
+{
+  "attachment_state": "attached",
+  "checkout_id": "cko_00000000000000000000000000",
+  "checkout_kind": "main_worktree",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "head_state": "branch",
+  "last_observed_at": "2026-01-01T00:00:00Z",
+  "limitations": [],
+  "project_id": "prj_00000000000000000000000000",
+  "repository_kind": "git",
+  "schema_id": "star.project-checkout",
+  "schema_version": 1
+}

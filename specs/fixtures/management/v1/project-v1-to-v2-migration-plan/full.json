@@ -1,0 +1,81 @@
+{
+  "entries": [
+    {
+      "checkout": {
+        "attachment_state": "attached",
+        "checkout_id": "cko_00000000000000000000000000",
+        "checkout_kind": "main_worktree",
+        "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "default_branch_hint": "fixture",
+        "head_commit_id": "fixture",
+        "head_ref": "fixture",
+        "head_state": "branch",
+        "head_tree_id": "fixture",
+        "last_observed_at": "2026-01-01T00:00:00Z",
+        "limitations": [
+          "fixture"
+        ],
+        "object_format": "fixture",
+        "project_id": "prj_00000000000000000000000000",
+        "remote_identity": {
+          "host": "fixture",
+          "owner": "fixture",
+          "repository": "fixture"
+        },
+        "repository_binding_id": "fixture",
+        "repository_kind": "git",
+        "root_binding_id": "rtb_00000000000000000000000000",
+        "schema_id": "fixture",
+        "schema_version": 0,
+        "upstream_ref": "fixture",
+        "worktree_binding_id": "fixture"
+      },
+      "project": {
+        "attached_checkout_ids": [
+          "cko_00000000000000000000000000"
+        ],
+        "declaration_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "display_name": "fixture",
+        "identity_scope": "shared",
+        "latest_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "latest_workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000000000000",
+        "registration_state": "attached",
+        "repository_kind": "git",
+        "schema_id": "fixture",
+        "schema_version": 0,
+        "source_of_truth": [
+          "fixture"
+        ]
+      },
+      "project_id": "prj_00000000000000000000000000",
+      "source_project": {
+        "declaration_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "display_name": "fixture",
+        "identity_scope": "shared",
+        "latest_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "latest_workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000000000000",
+        "registration_state": "attached",
+        "repository_kind": "git",
+        "root_binding_id": "rtb_00000000000000000000000000",
+        "schema_id": "fixture",
+        "schema_version": 0,
+        "source_of_truth": [
+          "fixture"
+        ]
+      },
+      "source_project_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "source_root_binding_id": "rtb_00000000000000000000000000",
+      "source_updated_at": "fixture"
+    }
+  ],
+  "limitations": [
+    "fixture"
+  ],
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management.project-v1-to-v2-migration-plan",
+  "schema_version": 1,
+  "source_store_version": 0,
+  "target_store_version": 0
+}
