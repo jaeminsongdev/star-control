@@ -1,0 +1,85 @@
+{
+  "baseline": {
+    "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "resolved_closure_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "subject": {
+      "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "item_id": "fixture",
+      "kind": "route_policy",
+      "version": "fixture"
+    }
+  },
+  "candidate": {
+    "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "resolved_closure_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "subject": {
+      "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "item_id": "fixture",
+      "kind": "route_policy",
+      "version": "fixture"
+    }
+  },
+  "case_results": [],
+  "case_selection_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "comparability": [],
+  "comparison": [],
+  "corpus_ref": "fixture",
+  "efficiency_metrics": {
+    "baseline_rework_count": 0,
+    "baseline_total_duration_ms": 0,
+    "candidate_false_negatives": 0,
+    "candidate_false_positives": 0,
+    "candidate_flaky": 0,
+    "candidate_rework_count": 0,
+    "candidate_rollbacks": 0,
+    "candidate_total_duration_ms": 0,
+    "confirmed_defects": 0,
+    "sample_count": 0,
+    "unresolved": 0
+  },
+  "evaluation_context": "cli_only",
+  "evaluation_run_id": "evr_00000000000000000000000000",
+  "finding_metrics": {
+    "baseline_rework_count": 0,
+    "baseline_total_duration_ms": 0,
+    "candidate_false_negatives": 0,
+    "candidate_false_positives": 0,
+    "candidate_flaky": 0,
+    "candidate_rework_count": 0,
+    "candidate_rollbacks": 0,
+    "candidate_total_duration_ms": 0,
+    "confirmed_defects": 0,
+    "sample_count": 0,
+    "unresolved": 0
+  },
+  "ground_truth_summary": {
+    "baseline_rework_count": 0,
+    "baseline_total_duration_ms": 0,
+    "candidate_false_negatives": 0,
+    "candidate_false_positives": 0,
+    "candidate_flaky": 0,
+    "candidate_rework_count": 0,
+    "candidate_rollbacks": 0,
+    "candidate_total_duration_ms": 0,
+    "confirmed_defects": 0,
+    "sample_count": 0,
+    "unresolved": 0
+  },
+  "limitations": [],
+  "measurement_protocol_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "mode": "offline",
+  "protected_metric_results": [],
+  "radar_item_refs": [],
+  "recommendation": "keep",
+  "run_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.evaluation-run",
+  "schema_version": 3,
+  "subject": {
+    "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "item_id": "fixture",
+    "kind": "route_policy",
+    "version": "fixture"
+  },
+  "subject_kind": "route_policy",
+  "usage_and_cost_refs": []
+}

@@ -1,0 +1,11 @@
+{
+  "corpus_ref": "fixture",
+  "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "item_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "item_id": "fixture",
+  "item_version": "fixture",
+  "lifecycle": "active",
+  "owner": "fixture",
+  "schema_id": "star.evaluation-catalog-item",
+  "schema_version": 1
+}

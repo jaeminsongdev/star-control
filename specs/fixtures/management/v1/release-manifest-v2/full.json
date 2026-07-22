@@ -1,0 +1,131 @@
+{
+  "after_remote_snapshot_refs": [
+    "fixture"
+  ],
+  "approval_request_refs": [
+    "fixture"
+  ],
+  "artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "artifacts": [
+    {
+      "architecture": "x64",
+      "logical_name": "fixture",
+      "media_type": "fixture",
+      "role": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 0
+    }
+  ],
+  "before_remote_snapshot_refs": [
+    "fixture"
+  ],
+  "build_invocation_refs": [
+    "fixture"
+  ],
+  "channel": "fixture",
+  "compatibility": [
+    {
+      "architecture": "x64",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "limitations": [
+        "fixture"
+      ],
+      "minimum_windows_build": 0,
+      "runtime_verification": "native_verified",
+      "support_tier": "stable"
+    }
+  ],
+  "external_gates": [
+    "fixture"
+  ],
+  "identity_binding": {
+    "catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "environment_fingerprints": [
+      "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    ],
+    "profile_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "tool_descriptor_fingerprints": [
+      "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    ]
+  },
+  "included_files_manifest_ref": "fixture",
+  "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "metadata_refs": [
+    "fixture"
+  ],
+  "product_id": "fixture",
+  "provenance_ref": "fixture",
+  "release_gate_refs": [
+    "fixture"
+  ],
+  "release_manifest_id": "rel_00000000000000000000000000",
+  "remaining_risks": [
+    "fixture"
+  ],
+  "remote_actions": [
+    {
+      "action_id": "fixture",
+      "after_snapshot_ref": "fixture",
+      "approval_request_ref": "fixture",
+      "before_snapshot_ref": "fixture",
+      "destination": "fixture",
+      "immutable_subject_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "publish",
+      "provider": "fixture",
+      "receipt_ref": "fixture",
+      "state": "planned"
+    }
+  ],
+  "remote_operation_refs": [
+    "fixture"
+  ],
+  "revision": 0,
+  "rollback_artifact_ref": "art_00000000000000000000000000",
+  "rollback_plan_ref": "fixture",
+  "sbom_ref": "fixture",
+  "schema_id": "star.release-manifest",
+  "schema_version": 2,
+  "scope_revision_ref": "fixture",
+  "signature_refs": [
+    "fixture"
+  ],
+  "source_revisions": [
+    {
+      "project_id": "prj_00000000000000000000000000",
+      "revision": "fixture"
+    }
+  ],
+  "status": "draft",
+  "supersedes": "fixture",
+  "supply_chain_applicability": [
+    {
+      "evidence_ref": "fixture",
+      "kind": "sbom",
+      "policy_ref": "fixture",
+      "reason": "fixture",
+      "state": "not_required"
+    }
+  ],
+  "task_spec_ref": "fixture",
+  "user_data_policy": "fixture",
+  "validation_refs": [
+    "fixture"
+  ],
+  "verification_layers": [
+    {
+      "artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "completeness": "complete",
+      "gate_ref": "fixture",
+      "layer": "local_quick",
+      "limitations": [
+        "fixture"
+      ],
+      "validation_plan_ref": "fixture",
+      "validation_run_ref": "val_00000000000000000000000000"
+    }
+  ],
+  "version": "fixture"
+}

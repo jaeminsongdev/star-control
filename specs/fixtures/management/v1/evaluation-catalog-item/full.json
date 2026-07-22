@@ -1,0 +1,16 @@
+{
+  "compatibility_deadline": "fixture",
+  "corpus_ref": "fixture",
+  "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "item_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "item_id": "fixture",
+  "item_version": "fixture",
+  "last_evaluation_run_ref": "fixture",
+  "lifecycle": "active",
+  "migration_guide_ref": "fixture",
+  "owner": "fixture",
+  "replacement_ref": "fixture",
+  "schema_id": "star.evaluation-catalog-item",
+  "schema_version": 1,
+  "tombstone_ref": "fixture"
+}
