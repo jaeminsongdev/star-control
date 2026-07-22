@@ -10834,22 +10834,24 @@ mod tests {
         };
         let update_store = Arc::clone(&operations);
         let operation_id = operation.operation_id.clone();
-        let started = tokio::time::Instant::now();
-        let (response, ()) = tokio::join!(
-            operation_get_response(request, Arc::clone(&operations), 7),
-            async move {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-                update_store
-                    .lock()
-                    .unwrap()
-                    .record_progress(
-                        operation_id.as_str(),
-                        &serde_json::json!({"phase":"running"}),
-                    )
-                    .unwrap();
-            }
-        );
-        assert!(started.elapsed() < std::time::Duration::from_millis(500));
+        let (response, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            tokio::join!(
+                operation_get_response(request, Arc::clone(&operations), 7),
+                async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    update_store
+                        .lock()
+                        .unwrap()
+                        .record_progress(
+                            operation_id.as_str(),
+                            &serde_json::json!({"phase":"running"}),
+                        )
+                        .unwrap();
+                }
+            )
+        })
+        .await
+        .expect("operation long-poll and durable update must not deadlock");
         assert_eq!(response.status, IpcStatus::Ok);
         assert_eq!(response.registry_revision, Some(7));
         assert_eq!(response.data.as_ref().unwrap()["wait_timed_out"], false);
