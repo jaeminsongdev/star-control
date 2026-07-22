@@ -81,7 +81,7 @@ Project Catalog와 Code Index는 Git source를 대체하지 않는 derived proje
 - 4단계 Recipe preview가 실제 add·modify·delete·rename을 만들면 `recipe_preview` ChangeSet으로 영향·risk·Profile closure·affected Check를 다시 reconcile하고 새 범위·change class가 나오면 apply 대신 재계획
 - Registry 변경이면 namespace·alias·lifecycle·minimum supported version과 미전환 consumer를 영향 graph에 포함하고, 다른 Project에는 read-only ChangePlan만 제안
 
-CLI-only mode에서 A04는 Codex·AI, test runner와 source-write port를 사용하지 않는다. stale·partial graph는 confirmed impact가 아니며 safe fallback이나 human review 근거다. 이 확장은 현재 **2단계 설계 확정·제품 구현 전이며 planner·graph traversal·affected selector 구현 완료를 뜻하지 않는다**.
+CLI-only mode에서 A04는 Codex·AI, test runner와 source-write port를 사용하지 않는다. stale·partial graph는 confirmed impact가 아니며 safe fallback이나 human review 근거다. P-0043은 TaskSpec→ImpactAnalysis→ready ValidationPlan의 첫 bounded 제품 Slice를 구현했다. 다만 전체 language/provider graph traversal과 모든 affected selector까지 완료했다는 뜻은 아니다.
 
 4단계는 A04를 복제하지 않는다. [안전한 Patch·Refactor·codemod 엔진](../contracts/safe-patch-and-codemod.md)이 immutable PatchSet preview를 만든 뒤 같은 A04·M2 application use case로 impact와 ValidationPlan을 reconcile한다. runner가 즉석에서 검사 범위를 넓히거나 literal 수만으로 영향이 없다고 판정하지 않는다.
 

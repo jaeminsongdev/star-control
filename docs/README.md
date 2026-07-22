@@ -41,7 +41,7 @@
 35. [설치와 공개 배포](operations/installation.md)
 36. [Windows 설치와 Codex 연동 계약](contracts/windows-installation-and-codex-integration.md) — 선택형 경로·manifest·Plugin 렌더링·설치 수명주기 정본
 37. [최종 구현 로드맵](roadmap/final-implementation.md)
-38. [MCP 구현 검증 행렬](testing/mcp-verification-matrix.md) — 실제 Codex same-session 완료 gate와 [현재 완료 감사](testing/mcp-completion-audit.md), [Windows 설치·Codex Plugin 로컬 실증](testing/windows-installation-evidence-2026-07-14.md), [Star Updater restart E2E](testing/star-updater-restart-e2e-2026-07-18.md)
+38. [MCP 구현 검증 행렬](testing/mcp-verification-matrix.md) — 실제 Codex same-session 완료 gate와 [현재 완료 감사](testing/mcp-completion-audit.md), [Windows 설치·Codex Plugin 로컬 실증](testing/windows-installation-evidence-2026-07-14.md), [Star Updater restart E2E](testing/star-updater-restart-e2e-2026-07-18.md), [P-0053 최종 출시 감사](testing/p53-final-release-audit-2026-07-20.md)
 39. [용어](product/glossary.md)
 40. [구현 대상 기능](features/README.md) — 23개 구현 기능과 최종 16개 작업 Profile
 41. [최종 Repository·Package·문서 구조](architecture/repository-layout.md) — 물리 위치, Package 의존 방향, 확장 절차

@@ -85,7 +85,7 @@ Profile 단계 template은 다음 순서다.
 
 여러 Project는 exported entity·Project relation을 이용해 read-only로 계산하고 Project별 ChangeSet·affected scope를 유지한다. cross-repo source 수정, worktree·merge·remote write는 이 Profile의 output도 side effect도 아니다. 9단계 [CrossRepo ChangeBundle](../contracts/cross-repo-change-bundle.md)은 이 project relation·ChangePlan을 current participant에 다시 bind해 사용하며 `change_planning` 결과를 실행 승인으로 재사용하지 않는다.
 
-상세 계산, fallback과 3단계 입력 계약은 [변경 계획·영향 분석 정본](../contracts/change-planning-and-impact.md)이 소유한다. 이 확장은 현재 **2단계 설계 확정·제품 구현 전이며 planner·selector·runner·CLI 구현 완료를 뜻하지 않는다**.
+상세 계산, fallback과 3단계 입력 계약은 [변경 계획·영향 분석 정본](../contracts/change-planning-and-impact.md)이 소유한다. P-0043은 deterministic planner·selector와 planning create/get CLI-only bounded Slice를 구현했다. 이 상태는 모든 후속 Profile selector나 외부 tool runner까지 구현됐다는 뜻이 아니다.
 
 ### `refactor_codemod`
 
@@ -140,7 +140,7 @@ Profile 단계 template은 다음 순서다.
 
 `change prepare`와 `patch apply`는 별도 command다. prepare에 숨은 `--apply` 경로를 두지 않으며 PatchSet은 한 Project·한 Checkout만 소유한다. 9단계에서도 이를 cross-project PatchSet으로 넓히지 않고 `ChangeBundleParticipant`가 project별 Profile 실행을 조정한다. merge·commit·push는 M4 Profile completion이 아니며 별도 9단계 Git/remote permission·Gate를 따른다.
 
-이 Profile은 현재 **4단계 설계 확정·제품 구현 전**이다. M1·M2·M3 제품 gate, Recipe/PatchSet v2 Schema·migration, transformer·source mutation·worktree adapter, CLI와 Corpus가 구현됐다는 뜻이 아니다.
+P-0045는 trailing-whitespace Recipe의 immutable PatchSet, isolated byte preview, exact approval, TOCTOU 재관찰, atomic apply·rollback bounded Slice와 CLI apply 경로를 구현했다. 이 상태는 모든 Recipe/PatchSet v2 migration·transformer·worktree adapter가 구현됐다는 뜻이 아니다.
 
 ### `api_contract_change`
 
@@ -184,7 +184,7 @@ Profile 단계 template은 다음 순서다.
 
 첫 6단계 수직 Slice는 explicit baseline의 error code·CLI machine output 비교다. display message만 고치면 stable code를 유지하고, 의미·owner·retry·exit mapping이 달라지면 breaking replacement와 migration을 요구한다. 그 뒤 Schema, config key, public API와 file format을 순차 지원한다.
 
-cross-project 영향과 migration table은 read-only output이다. 9단계 [ChangeBundle](../contracts/cross-repo-change-bundle.md)이 provider compatibility open → consumer transition → provider removal 순서와 finite window를 current participant별 PatchSet·Gate로 조정한다. 이 Profile 자체는 여러 Project 적용·merge·commit·push writer가 아니며 현재 상태는 **6단계 설계 확정·제품 구현 전**이다.
+cross-project 영향과 migration table은 read-only output이다. 9단계 [ChangeBundle](../contracts/cross-repo-change-bundle.md)이 provider compatibility open → consumer transition → provider removal 순서와 finite window를 current participant별 PatchSet·Gate로 조정한다. P-0047은 API·Schema·config·docs comparator와 clean-room doctor bounded Slice를 구현했으며 이 Profile 자체는 여러 Project 적용·merge·commit·push writer가 아니다.
 
 ### `docs_config_environment`
 
@@ -234,7 +234,7 @@ cross-project 영향과 migration table은 read-only output이다. 9단계 [Chan
 
 사용되지 않는 config key는 complete semantic reader coverage가 있을 때만 확정한다. text-only 후보, dynamic command, 자연어 support promise, 플랫폼 의미처럼 결정적 판정이 불가능한 항목은 AI 없이 `HUMAN_REVIEW`다. doctor가 설치나 system mutation을 필요로 하면 `mutation-required`와 수동 remediation만 내며 자동 실행하지 않는다.
 
-이 Profile은 현재 **6단계 설계 확정·제품 구현 전**이다. docs validator, config tracer, doctor, clean-room runner나 environment probe가 구현됐다는 뜻이 아니다.
+P-0047은 docs/config comparator와 non-mutating clean-room doctor bounded Slice를 구현했다. package 설치·download나 모든 환경별 probe를 수행하는 범용 clean-room runner까지 구현됐다는 뜻은 아니다.
 
 ### `debug_recovery`
 
@@ -279,7 +279,7 @@ cross-project 영향과 migration table은 read-only output이다. 9단계 [Chan
 7. rollback·roll-forward·restore를 서로 다른 RecoveryPlan으로 만들고 rehearsal·검증 상태를 기록한다.
 8. M3가 current subject·evidence completeness·flaky·redaction을 판정한다.
 
-`not_reproduced`는 fixed가 아니다. 외부 service·device·clock·network 조건을 확인할 수 없으면 `blocked_external` 또는 `unverified`다. 이 Profile은 현재 **7단계 설계 확정·제품 구현 전**이다.
+`not_reproduced`는 fixed가 아니다. 외부 service·device·clock·network 조건을 확인할 수 없으면 `blocked_external` 또는 `unverified`다. P-0048은 normalized failure family·ReproductionPack·Radar bounded Slice를 구현했으며 debugger·trace adapter 실행은 외부 tool integration으로 남는다.
 
 ### `security_supply_chain`
 
@@ -316,7 +316,7 @@ cross-project 영향과 migration table은 read-only output이다. 9단계 [Chan
 7. 여러 producer의 중복 현상은 evidence를 유지한 correlation으로 묶고 별도 DB를 만들지 않는다.
 8. M3가 redaction·freshness·coverage·protected risk를 최종 판정한다.
 
-refresh가 필요하면 `network_read` 승인 대기 상태를 출력한다. 승인이 없으면 offline snapshot과 stale/unknown 경고를 보존하고 network에 접근하지 않는다. 이 Profile은 현재 **7단계 설계 확정·제품 구현 전**이다.
+refresh가 필요하면 `network_read` 승인 대기 상태를 출력한다. 승인이 없으면 offline snapshot과 stale/unknown 경고를 보존하고 network에 접근하지 않는다. P-0048 bounded Slice는 external condition을 `unverified`로 보존하며 실제 network scanner·advisory refresh는 연결하지 않았다.
 
 ### `dependency_upgrade`
 
@@ -362,7 +362,7 @@ refresh가 필요하면 `network_read` 승인 대기 상태를 출력한다. 승
 9. 사용자가 exact PatchSet을 승인한 뒤에만 M4 apply와 M3 post Gate를 수행한다.
 10. 실패하면 partial success로 포장하지 않고 이전 lockfile 보존 상태와 rollback readiness를 표시한다.
 
-package 추가는 upgrade 승인에 포함되지 않는다. `personal_auto`도 이 Profile의 network/download/dependency change를 자동 승인하지 않는다. 이 Profile은 현재 **7단계 설계 확정·제품 구현 전**이다.
+package 추가는 upgrade 승인에 포함되지 않는다. `personal_auto`도 이 Profile의 network/download/dependency change를 자동 승인하지 않는다. P-0048 bounded Slice는 dependency/security/supply-chain limitation과 Radar 판정을 구현했으며 package-manager mutation adapter는 연결하지 않았다.
 
 internal dependency가 여러 Project에 걸리면 각 Project의 package-manager-owned PatchSet·previous lockfile·Gate·rollback을 유지한 read-only participant input을 만든다. 9단계 ChangeBundle이 provider package revision과 consumer constraint/lockfile 순서를 current base에 다시 bind하며 이 Profile 하나가 cross-repo apply·merge·push를 수행하지 않는다.
 
@@ -421,7 +421,7 @@ Star-Control 자체 관리 DB의 `management_store_version` migration은 이 Pro
 11. 실패 시 rollback·roll-forward·restore를 별도 attempt로 수행하고 post-rollback Gate를 통과해야 `rolled_back`이다.
 12. 여러 Project가 필요하면 project별 plan·PatchSet·Gate·restore/rollback ref를 `CrossProjectMigrationHandoff`로 내보내고 실행하지 않는다. 9단계 ChangeBundle은 이를 current participant에 다시 bind한 뒤에만 project-local effect를 조정한다.
 
-`partially_succeeded`는 success가 아니다. backup file과 checksum만 있으면 `restore_rehearsed`가 아니며, tool exit 0만 있으면 migration 완료가 아니다. 이 Profile은 현재 **8단계 설계 확정·제품 구현 전**이며 실제 migration, backup, restore와 DB 변경을 실행하지 않았다.
+`partially_succeeded`는 success가 아니다. backup file과 checksum만 있으면 `restore_rehearsed`가 아니며, tool exit 0만 있으면 migration 완료가 아니다. P-0049 bounded Slice는 checkpoint/resume/reverse rollback engine과 fixture를 구현했으며 사용자 Project의 live migration·backup·restore를 실행하지 않았다.
 
 ### `performance_build`
 
@@ -476,7 +476,7 @@ Star-Control 자체 관리 DB의 `management_store_version` migration은 이 Pro
 
 baseline/candidate revision이 코드 비교 때문에 다르면 각 cohort는 단일 exact revision이고 차이는 declared ChangeSet/PatchSet이어야 한다. toolchain/config/cache 비교라면 revision은 양쪽 동일하며 해당 axis만 exact delta다. 여러 axis가 동시에 달라지고 factorial plan이 없으면 causal improvement를 만들지 않는다. high noise, sample 부족과 의도하지 않은 environment 차이는 `inconclusive|not_comparable`이며 regression/pass가 아니다.
 
-이 Profile은 현재 **8단계 설계 확정·제품 구현 전**이다. benchmark, profiler, build analyzer, compiler 또는 build cache를 실행·구현하지 않았다.
+P-0049 bounded Slice는 comparable binding과 p95 120% performance comparator를 구현했다. profiler·compiler·build cache를 재구현하지 않으며 Project별 실제 workload adapter는 별도 연결 대상이다.
 
 ### `ci_release_deploy`
 
@@ -525,7 +525,7 @@ Profile 단계 template은 다음 순서다.
 
 `ready`, `approved`, `published`는 서로 다른 상태다. signing이 final byte를 바꾸면 signing 뒤 artifact가 새 candidate이며 이전 unsigned 검사 결과를 상속하지 않는다. Star-Control은 CI runner, compiler, package manager, installer, signer, artifact registry와 deploy service를 구현하지 않고 registered adapter·공통 Gate·evidence를 사용한다.
 
-이 Profile의 release/evaluation type·Schema·runner·installer·provider adapter는 현재 **10단계 설계 확정·제품 구현 전**이다. 이 문서와 package 예시를 실제 clean build·install·publish evidence로 사용하지 않는다.
+P-0051은 ReleaseManifest/EvaluationRun v2, build-once candidate와 fake provider fault engine을 구현했고 P-0053은 local x64 lifecycle·ARM64 simulation을 감사했다. 실제 signer·clean signed installer lifecycle·GitHub provider effect가 없으므로 이 문서와 unsigned package를 public release evidence로 사용하지 않는다.
 
 ### `language_platform_migration`
 
@@ -584,7 +584,7 @@ Profile 단계 template은 다음 순서다.
 
 reflection, FFI, unsafe, concurrency, numeric/encoding, platform API와 dynamic dispatch처럼 기계적으로 의미를 확정할 수 없는 항목은 `HUMAN_REVIEW`다. Star-Control local runner는 Windows 밖 runtime을 검증했다고 주장하지 않으며 authenticated remote/CI evidence도 exact subject·tool·environment가 있어야 한다.
 
-이 Profile은 현재 **8단계 설계 확정·제품 구현 전**이다. compiler, transpiler, codegen, codemod, target OS runtime과 cutover를 실행·구현하지 않았다.
+P-0049 bounded Slice는 platform migration evidence와 ARM64 `native_unverified` 판정을 구현했다. compiler, transpiler, codegen, codemod, target OS runtime과 live cutover는 실행·구현하지 않았다.
 
 ### `ai_development_validation`
 
@@ -626,7 +626,7 @@ Profile metadata 기본값은 다음과 같다.
 
 다른 revision의 evidence, required `not_run|partial|unverified|stale|flaky`, contradicted claim과 out-of-scope change가 있으면 `AUTO_PASS`할 수 없다. CLI-only mode는 AI 독립 검토 부재를 실패로 만들지 않으며, 의미 검토가 필수이면 `HUMAN_REVIEW` 상태에서 사용자를 기다린다.
 
-이 Profile은 현재 **3단계 설계 확정 대상·제품 구현 전**이다. Codex 결과를 검증하는 validator, runner, Corpus나 DB가 이미 구현됐다는 뜻이 아니다.
+P-0044는 이 Profile이 공통으로 소비할 CheckGraph runner, Diagnostic v2, GateDecision v2와 EvidenceBundle v2의 첫 bounded 제품 Slice를 구현했다. 다만 **Codex 결과 전용 validator·Corpus·baseline/suppression ratchet은 아직 구현되지 않았다**. 따라서 generic M3 runner의 존재를 이 Profile의 end-to-end 완료나 Codex 결과 검증 완료로 해석하지 않는다.
 
 ### `test_correctness`
 
@@ -771,4 +771,4 @@ Profile은 다음을 하지 않는다.
 - `cargo clippy --fix --allow-dirty`를 live checkout에서 실행하지 않는다. isolated preview에서도 dirty manifest가 앞 rustfmt step과 정확히 대응되고 staged byte가 0일 때만 사용하며 `--allow-staged`·`--broken-code`는 금지한다.
 - partial/stale/unverified/failed result나 post Gate 실패·partial apply를 성공으로 표시하지 않는다.
 
-CLI surface는 `star style rust inspect|check|prepare|auto-apply`이고 Patch 조회·상태·복구는 기존 `patch show|status|recover`를 재사용한다. 현재 상태는 **M11 설계 확정·제품 구현 전**이며 M1→M2→M3→M4 제품 Gate가 실제 통과하기 전 source mutation 구현을 시작하지 않는다.
+목표 CLI surface는 `star style rust inspect|check|prepare|auto-apply`이고 Patch 조회·상태·복구는 기존 `patch show|status|recover`를 재사용한다. P-0052 bounded Slice는 fixed adapter, isolated candidate/PatchSet, idempotence, exact human·`personal_auto` permit와 recovery state를 구현했지만 이 목표 CLI orchestration과 실제 사용자 source apply는 연결·실행하지 않았다.

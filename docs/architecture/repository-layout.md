@@ -4,9 +4,9 @@
 
 이 문서는 [구현 대상 기능](../features/README.md)의 A01~D03과 최종 16개 작업 Profile을 모두 구현했을 때 Star-Control 저장소가 가져야 할 최종 물리 구조와 책임 경계를 정한다.
 
-문서 폴더 migration과 첫 MCP 수직 Slice의 `star-contracts`, `star-ipc`, `star-controller`, `star-mcp`, `star-cli`·검증 도구는 구현됐다. P0에서는 `star-domain`, `star-ports`, `star-project`, `star-validation`, `star-execution`, `star-application`, `star-state`, `star-evidence`의 최소 Package와 private persistence adapter를 만들었다. M1 Project Catalog·Code Index, M2 변경 계획·affected 선택, M3 공통 검증·품질 Gate, M4 안전한 Patch·Refactor·codemod 엔진, M5 관리형 Symbol Registry, M6 API·계약·문서·설정·개발 환경 관리, M7 실패 재현·보안·의존성 유지보수, M8 migration·performance·language/platform, 9단계 CrossRepo ChangeBundle, 10단계 CI·Release·평가·최종 제품 완성과 M11 Rust 코드 스타일 자동 교정의 상세 module·target 계약은 현재 **설계만 확정하는 범위**이며 제품 code·Schema·DB migration·validator·runner·rewrite·worktree·merge queue·ChangeBundle·remote writer·release/evaluation/Rust style engine·Registry/contract/release manifest·generator·codemod·doctor·clean-room runner·debugger·scanner·dependency updater·network client·Corpus는 아직 구현된 것으로 보지 않는다. generated 관리 Schema·fixture와 실제 완료 판정은 [최종 구현 로드맵](../roadmap/final-implementation.md)·`PLANS.md`를 따른다. 아래 큰 module tree 중 아직 구현하지 않은 module을 현재 존재하는 것으로 읽지 않는다.
+문서 폴더 migration과 첫 MCP 수직 Slice의 `star-contracts`, `star-ipc`, `star-controller`, `star-mcp`, `star-cli`·검증 도구는 구현됐다. P0에서는 `star-domain`, `star-ports`, `star-project`, `star-validation`, `star-execution`, `star-application`, `star-state`, `star-evidence`의 최소 Package와 private persistence adapter를 만들었다. P-0041~P-0053은 M1 Project Catalog·Code Index부터 M11 Rust 코드 스타일 자동 교정과 M10 release/evaluation까지 계획에 지정한 bounded 제품 Slice, generated 관리 Schema·fixture, fake/isolated adapter와 Corpus를 구현했다. 이는 아래 최종 물리 구조에 적힌 모든 확장 module·provider adapter가 존재하거나 public release가 완료됐다는 뜻은 아니다. 실제 구현·검증·외부 Gate 상태는 [최종 구현 로드맵](../roadmap/final-implementation.md), 단계별 증거와 `PLANS.md`를 따른다.
 
-P-0031의 예외 범위는 `.star-control/project.toml`, `star-contracts::evidence::ValidationPlan` v1, `star-validation::planning` pure policy와 Controller `validation_planning` adapter다. 후속 bounded 전환은 `validation_execution`과 프로젝트별 ignored derived cache를 연결했다. 이는 아래 full M2/M3 module tree, generic runner·authoritative Gate/evidence writer가 구현됐다는 뜻이 아니다.
+P-0031은 `.star-control/project.toml`, `star-contracts::evidence::ValidationPlan` v1, `star-validation::planning` pure policy와 Controller `validation_planning` adapter를 먼저 제공한 역사적 Slice다. P-0043~P-0045가 이를 current TaskSpec·ImpactAnalysis·CheckGraph runner·authoritative Gate/evidence와 Patch 경로로 확장했다. 아래 tree의 미래 확장 항목은 current bounded Slice와 구분한다.
 
 [7단계 의미 정본](../contracts/failure-security-and-dependency-maintenance.md)은 이 문서의 M7 module·Schema·Catalog·evidence 위치가 구현해야 할 failure/security/dependency/Radar 계약을 소유한다.
 
@@ -93,7 +93,7 @@ Star-Control/
 ├─ LICENSE
 ├─ Cargo.toml                       # workspace와 공통 dependency 정책
 ├─ Cargo.lock
-├─ rust-toolchain.toml              # 최종 pinned build 구조 목표; 현재 실제 파일은 없음
+├─ rust-toolchain.toml              # exact Rust 1.96과 rustfmt·Clippy·rust-analyzer component pin
 ├─ deny.toml                        # dependency·license 정책
 ├─ .editorconfig
 ├─ .gitattributes
@@ -717,8 +717,7 @@ catalog/
 │  ├─ ai_development_validation.toml
 │  └─ rust_style_auto_fix.toml      # M11 fixed pipeline·exact allowlist·coverage·Gate metadata
 ├─ tool-packages/
-│  ├─ star-control-core.toml        # required core action도 Registry 선언
-│  └─ rust-style.toml               # M11 rustfmt/Clippy 4 role Tool·Check binding; raw shell 없음
+│  └─ star-control-core.toml        # required core action도 Registry 선언
 ├─ policies/
 │  ├─ actions.toml                  # 행동 분류와 기본 승인 성격
 │  ├─ risk-paths.toml               # versioned RiskPathDescriptor required set
@@ -1524,8 +1523,8 @@ CI runner, compiler, package manager, installer, signer, artifact registry와 de
 |---|---|---|---|
 | Cargo workspace/package/target/feature와 config/toolchain 후보 | Project Git source, `star-project/rust_workspace·rust_style_config` | read-only project adapter | source write·install·network 없음 |
 | RustToolchainBinding·RustStylePolicySnapshot·RustStyleCoverageMatrix·RustStyleStepExecution | `star-contracts/rust_style` nested type | `star-application/rust_style`, `star-validation/rust_style` | existing Recipe/Patch/Validation/Evidence record에 ref; 별도 run truth 없음 |
-| `rust_style_v1` Profile·Tool·Check·policy | `catalog/profiles/rust_style_auto_fix.toml`, `tool-packages/rust-style.toml`, `policies/rust-style.toml` | `star-config` Catalog resolution | raw shell·rustfmt/lint/config 값 복제 금지 |
-| cargo/rustfmt/Clippy process | Tool Registry·resolved executable identity | `star-execution/rust_style_process`, ToolExecutorPort | trusted isolated cwd, owned target dir; live source write·download 금지 |
+| `rust_style_v1` Profile·Tool·Check·policy | `catalog/profiles/rust_style_auto_fix.toml`, `catalog/policies/rust-style.toml`, project `.star-control/rust-style.toml` | `star-application/rust_style_runtime`의 strict Catalog resolution | raw shell·rustfmt/lint/config 값 복제 금지 |
+| cargo/rustfmt/Clippy process | exact `rust-toolchain.toml`과 resolved executable identity | private `star-execution::rust_style` fixed adapter | trusted isolated cwd, owned target dir; live source write·download 금지 |
 | Diagnostic·coverage·hunk·side effect·replay | raw artifact + common Diagnostic contract | `star-validation/rust_style`, `star-evidence/rust_style` | pure 판정·derived evidence; lint suppression writer 아님 |
 | preview·PatchSet·apply·recovery | M4 RecipeExecution/PatchSet/PatchApplication | existing preview/SourceMutationPort/recovery | preview external write만, target은 immutable `.rs` Patch operation만 |
 | `personal_auto` exact approval | user StarConfig standing grant + ApprovalRequest contract | `star-policy/approval`, `star-application/rust_style` | exact candidate 평가 뒤 policy resolution; pre/post Gate·permit 우회 없음 |
@@ -1771,7 +1770,7 @@ release
 | M11 | read-only Cargo/toolchain/config discovery → Rust nested contract/coverage → rustfmt/Clippy check → isolated rustfmt PatchSet → exact allowlisted Clippy hunk → convergence/replay → candidate/post Gate → `personal_auto` exact approval → Windows x64 CLI-only·ARM64 target/cfg simulation Corpus. M1→M2→M3→M4 제품 Gate 뒤 mutation을 시작하고 P9 전에 conformance를 완료 |
 | P9 | ReleaseManifest v2·evidence v6, final 16 Profile·M11 conformance, release tier/Gate, build-once artifact set, `packaging/windows`, clean x64 Stable install lifecycle·ARM64 Preview simulation, approval·GitHub publish after-state와 최종 운영 문서 |
 
-M1·M2·M3·M4·M5·M6·M7·M8과 사용자 9·10·11단계는 이 문서에서 지정한 관리 확장을 뜻하며 기존 제품 로드맵의 P1·P2·P3·P7 번호와 다르다. M3 제품 구현은 로드맵 P5 첫 수직 Slice이고 M4는 그 Gate를 소비한 뒤 P6 병렬·merge보다 좁은 single-project worktree capability부터 사용한다. M5~M8은 새 기능별 Package 없이 read-only Index·planning·Patch·Gate·check·evidence 경계에 Registry, compatibility/environment, maintenance와 migration/performance/equivalence 계약을 조립한다. 9단계도 새 Package를 만들지 않고 P6 `star-vcs` local integration과 P7 `star-execution/star-application` coordination·remote adapter를 조립한다. 10단계는 P8 `star-evaluation`과 P9 release/packaging을 같은 Gate·evidence 위에 조립한다. M11은 기존 Project/Tool/Patch/Gate/Evidence module에 Rust bounded adapter를 조립하고 P9 공개 배포 conformance 앞에 둔다. 현재 M1~11단계의 관리·release/evaluation 기능은 구조·계약 문서만 확정했고 module·migration·validator·runner·rewrite·worktree·merge queue·ChangeBundle·remote operation·release/evaluation/Rust style engine·Registry/contract/maintenance/migration·codemod·doctor·clean-room runner·debugger·scanner·dependency updater·benchmark·profiler·compiler·CI/signer/deploy adapter·network client·Corpus를 구현하지 않았다. 예외로 P-0026은 M10 전체와 분리된 installation transport만 구현해 technical release-file manifest·installation record·Inno Setup installer·Codex Plugin 렌더링을 제공한다. P0의 backend·dependency는 별도 승인 뒤에만 추가한다. 이미 구현된 P1 MCP와 P-0026 수직 Slice는 그 역사와 검증 상태를 유지하지만 M1~11단계 관리 계약이나 M10 release `ready`가 구현됐다는 근거가 되지 않는다. 각 단계는 다음 단계가 실제로 필요로 하는 공개 계약까지만 먼저 만들고 미래 Package의 빈 폴더와 사용되지 않는 추상화를 만들지 않는다.
+M1·M2·M3·M4·M5·M6·M7·M8과 사용자 9·10·11단계는 이 문서에서 지정한 관리 확장을 뜻하며 기존 제품 로드맵의 P1·P2·P3·P7 번호와 다르다. P-0041~P-0052는 이 관리 확장의 current bounded Slice를 existing Package와 필요한 최소 Package에 조립했다. 여기에는 v1→v2 migration, Catalog·Rust index, planning, CheckGraph·Gate·Goal, immutable Patch, Git-source Registry, comparator·doctor, maintenance·Radar, migration/performance, ChangeBundle·merge/handoff, release/evaluation pure engine과 Rust style fixed workflow가 포함된다. P-0053 local audit는 build-once x64와 ARM64 simulation stage·manifest·lifecycle model을 검증했지만 signed clean install·current installed 17/17·GitHub publication은 완료하지 않았다. 따라서 current source implementation과 최종 tree의 아직 없는 확장 adapter를 구분하며, 서명·원격 효과는 계속 `blocked_external`로 남긴다. 각 단계는 다음 단계가 실제로 필요로 하는 공개 계약까지만 만들고 미래 Package의 빈 폴더와 사용되지 않는 추상화를 만들지 않는다.
 
 ## 구조 검증 항목
 

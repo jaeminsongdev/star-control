@@ -2,7 +2,7 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 3단계인 **공통 검증·품질 Gate**의 실행 의미와 구현 순서를 소유한다. generic M3 CheckGraph runner·Gate·EvidenceBundle writer 제품은 구현 전이다. P-0031은 runner 입력이 될 tracked-path ValidationPlan, immutable run/ref를 대조하는 cache 재사용 pure policy와 EvidenceBundle 이후 AI 압축 함수를 구현했다. P-0035는 bounded precursor로 exact tracked `scripts/validate.ps1`을 실행하고 sealed plan과 native report를 대조하며 report evidence를 조회한다. 현재 precursor는 프로젝트별 ignored derived cache를 읽고 쓰지만 Diagnostic normalization, GateDecision 또는 EvidenceBundle은 만들지 않는다.
+이 문서는 Star-Control 3단계인 **공통 검증·품질 Gate**의 실행 의미와 구현 순서를 소유한다. P-0044는 ready ValidationPlan v2의 CheckGraph를 실행해 Diagnostic v2, GateDecision v2와 EvidenceBundle v2를 만드는 generic bounded 제품 Slice를 구현했다. P-0031의 tracked-path ValidationPlan·cache pure policy와 P-0035의 native validation precursor는 별도 v1 운영 경로로 유지한다. baseline/suppression ratchet, 전체 B01~B09 Rule family와 provider별 adapter는 후속 확장이며 첫 Slice의 pass로 완료 처리하지 않는다.
 
 3단계는 제품 로드맵 [P5 검사·증거·이어하기](../roadmap/final-implementation.md#p5-검사증거이어하기)의 첫 공통 수직 Slice다. 이 문서에서는 이를 `M3`라고 부른다. 기존 P0의 Finding·ValidationResult·GateDecision 수직 Slice를 폐기하지 않고, M1 Project Catalog·Code Index와 M2 ChangeSet·ImpactAnalysis·ValidationPlan을 소비할 수 있도록 versioned target으로 확장한다.
 
@@ -50,18 +50,18 @@ M3 자체는 다음을 만들지 않는다.
 
 외부 도구가 필요하지만 등록·신뢰·사용 가능 상태가 아니면 `not_run` 또는 unresolved 상태와 reason code를 남긴다. 해당 도구가 없다는 사실을 `not_applicable`이나 성공으로 바꾸지 않는다.
 
-## 선행조건과 현재 gap
+## 선행조건과 현재 경계
 
 | 선행조건 | M3가 요구하는 상태 | 현재 상태와 처리 |
 |---|---|---|
 | P0 공통 ID·Finding·Scan·Evidence·Gate 기반 | source/DB/evidence 분리, immutable snapshot, Controller 단일 Writer | 첫 수직 Slice 구현. 그대로 재사용 |
-| M1 ProjectCatalogSnapshot·CodeIndexSnapshot | 대상 partition의 current/partial/stale와 coverage를 exact ref로 조회 | 설계 확정·제품 구현 전. M3 제품 구현 blocker |
-| M2 TaskSpec·ScopeRevision·ChangeSet·ImpactAnalysis·ValidationPlan | `readiness=ready`, accepted scope, bound TaskInvocation과 current fingerprint | P-0031 tracked-path precursor만 구현. full M2 제품 Gate는 계속 blocker |
+| M1 ProjectCatalogSnapshot·CodeIndexSnapshot | 대상 partition의 current/partial/stale와 coverage를 exact ref로 조회 | P-0042 첫 Rust bounded Slice 구현. unsupported·unverified partition은 pass로 승격하지 않음 |
+| M2 TaskSpec·ScopeRevision·ChangeSet·ImpactAnalysis·ValidationPlan | `readiness=ready`, accepted scope, bound TaskInvocation과 current fingerprint | P-0043 full planning bundle 첫 Slice 구현. P-0031 precursor와 구분 |
 | Baseline·Suppression | Finding과 모든 Diagnostic의 existing/new/worsened·active/expired 구분 | P0 v1은 Finding 중심. M3 target v2와 migration 필요 |
-| ValidationRun evidence binding | subject revision·workspace·ChangeSet·config·Catalog·Check·Tool identity exact 결합 | M3 target field와 invalidation rule 필요 |
-| Validator Registry | stable Rule/Check mapping, fingerprint contract, fixture manifest | 목표 Catalog 계약과 conformance 필요 |
+| ValidationRun evidence binding | subject revision·workspace·ChangeSet·config·Catalog·Check·Tool identity exact 결합 | P-0044 generic runner/writer 첫 Slice 구현. provider별 확장 필요 |
+| Validator Registry | stable Rule/Check mapping, fingerprint contract, fixture manifest | generic executable binding 구현. 전체 Rule family·Corpus conformance는 후속 확장 |
 
-M3 implementation은 M1과 M2의 제품 gate가 실제로 통과하기 전에 시작하지 않는다. 단위 수준 pure decision engine fixture는 contract type을 먼저 구현한 뒤 만들 수 있지만, fake M1/M2 input으로 통합 완료를 주장하지 않는다.
+P-0044 bounded Slice는 P-0042 M1과 P-0043 M2 계약·fixture를 선행 입력으로 구현했다. 이후 확장도 current M1/M2 binding을 요구하며 fake input이나 pure engine fixture만으로 통합 완료를 주장하지 않는다.
 
 ## 핵심 축과 용어
 

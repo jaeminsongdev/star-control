@@ -2,7 +2,7 @@
 
 ## 1. 상태와 문서 소유권
 
-이 문서는 Star-Control의 16번째 C01 작업 Profile인 `rust_style_auto_fix`와 고정 pipeline `rust_style_v1`의 의미 정본이다. 현재 상태는 **M11 설계 확정 대상, 제품 구현 전**이다. 이 문서가 존재한다는 사실은 Rust type, Schema, Catalog TOML, fixture, Cargo/rustfmt/Clippy adapter, CLI command, Patch engine 또는 자동 적용 code가 구현됐다는 뜻이 아니다.
+이 문서는 Star-Control의 16번째 C01 작업 Profile인 `rust_style_auto_fix`와 고정 pipeline `rust_style_v1`의 의미 정본이다. 현재 상태는 **P-0052 bounded 제품 Slice 구현**이다. toolchain/policy/coverage/step 계약과 generated fixture, private fixed cargo rustfmt·Clippy adapter, Controller/application/CLI `inspect|check|prepare|auto-apply`, `rustfmt → allowlisted MachineApplicable Clippy → rustfmt`, isolated immutable PatchSet, full-pipeline second-run zero diff, exact human approval·`personal_auto` single-use permit와 apply·rollback recovery를 구현했다. background apply·live target tool 실행·generated/vendor write는 계속 금지한다. disposable fixture에서 exact apply와 rollback을 검증했지만 사용자 checkout에는 적용하지 않았다. 구현 증거는 [M11 Rust 자동 교정 Slice](../testing/m11-rust-style-evidence-2026-07-20.md)에 고정한다.
 
 이 Profile은 다음 기존 정본을 조합한다.
 
@@ -22,7 +22,7 @@
 
 M11은 새 최상위 persisted document나 별도 mutable run record를 만들지 않는다. `RecipeExecution`, `PatchSet`, `PatchApplication`, `ValidationRun`, `GateDecision`, `EvidenceBundle`과 `ReviewPack`에 이 문서의 nested versioned type을 연결한다. DB는 derived projection이며 Git source·Cargo/rustfmt/Clippy config·versioned Catalog policy가 계속 정본이다.
 
-2026-07-20 현재 Star-Control 저장소 자체의 root `Cargo.toml`은 workspace, `edition = "2024"`, `rust-version = "1.96"`이지만 `rust-toolchain.toml`은 실제로 존재하지 않는다. 최종 구조 문서에 그 파일이 적혀 있다는 이유로 현재 구현 사실이나 pinned toolchain으로 간주하지 않으며, M11 문서 작업에서 해당 파일을 생성하지 않는다.
+현재 Star-Control root `Cargo.toml`은 workspace, `edition = "2024"`, `rust-version = "1.96"`을 선언하고 `rust-toolchain.toml`은 exact `1.96.0`과 `rustfmt`, `clippy`, `rust-analyzer` component를 고정한다. ARM64 target은 manifest가 자동 설치하지 않으며 release simulation은 이미 설치된 exact-version toolchain과 `aarch64-pc-windows-msvc` standard library를 read-only로 발견할 때만 실행한다. component·target이 없거나 identity가 다르면 설치·업데이트하지 않고 unavailable/unverified로 중단한다.
 
 ## 2. 목표와 사용자 효용
 
@@ -731,7 +731,7 @@ M11 구현은 다음을 모두 증명할 때만 완료다.
 - ToolDescriptor/Catalog/Schema/adapter fingerprint drift가 stale을 만들고 missing component/target를 설치하지 않는다.
 - 독립 검토자가 새 문서와 referenced contract만으로 첫 수직 Slice의 type, state transition, failure와 test를 추가 결정 없이 구현할 수 있다.
 
-문서 수용은 제품 완료가 아니다. 현재 M11 상태는 설계 확정·구현 전이며 P9 공개 배포 Gate는 M11 conformance evidence가 생기기 전까지 완료될 수 없다.
+문서 수용만으로 제품 완료가 되지는 않는다. P-0052 bounded Slice는 contract·adapter·pipeline·PatchSet·approval/recovery·Corpus conformance evidence를 생성했다. P9 공개 배포 Gate는 이 evidence의 workspace FULL과 release profile 재검증, 실제 signed candidate lifecycle이 끝나기 전까지 완료될 수 없다.
 
 ## 20. 공식 자료
 

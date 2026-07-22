@@ -47,13 +47,13 @@ Stable 설치 evidence는 disposable clean Windows x64에서 수집한다. ARM64
 
 주 배포 방식은 **installer-first**다. P-0026에서 architecture별 current-user Inno Setup 6 `.exe` 설치 파일을 선택하고 구현했다. 설치 마법사의 기본값은 `%LOCALAPPDATA%\Programs\Star-Control`이며 사용자가 바꿀 수 있고, update·repair는 같은 AppId의 이전 선택 경로를 재사용한다. portable archive는 개발·복구용 선택 산출물일 뿐 installer와 같은 수명주기 지원을 뜻하지 않는다.
 
-P-0026/P-0039는 설치 transport, 네 Runtime binary, release-file manifest, installation record, 로컬 Codex Marketplace 렌더링과 updater one-shot 경계를 구현한다. M10 `ReleaseManifest` 상태기계, CI·공개 승격, 서명·SBOM·provenance까지 완료됐다는 뜻은 아니다. 로컬 빌드는 항상 `unsigned_local`로 기록하며 실제 서명 검증이 없는 입력으로 `signed`를 선택할 수 없다. Authenticode certificate나 timestamp provider가 없으면 unsigned Stable로 낮추지 않고 `blocked_external`을 유지한다.
+P-0026/P-0039는 설치 transport, 네 Runtime binary, release-file manifest, installation record, 로컬 Codex Marketplace 렌더링과 updater one-shot 경계를 구현한다. P-0051은 M10 `ReleaseManifest` 상태기계를, P-0053은 actual Authenticode를 통과한 staged `.exe`만 `seal-signed`로 재봉인하는 경계를 구현한다. 로컬 최초 빌드는 항상 `unsigned_local`이며 실제 서명 검증이 없는 입력으로 `signed`를 선택할 수 없다. Authenticode certificate나 timestamp provider가 없으면 unsigned Stable로 낮추지 않고 `blocked_external`을 유지한다.
 
 Installer는 current-user Controller startup entry를 눈에 띄게 설명하고 기본 활성화한다. 설치 화면에서 해제할 수 있어야 하며 설치 후 `star controller autostart enable|disable|status`와 제거 방법을 제공한다. entry는 `star-controller.exe --background`만 시작하며 Goal이나 개발 작업을 예약·실행하지 않는다.
 
 관리자 권한 executor나 service는 설치하지 않는다. 실제 기능에 elevation이 필수라는 use case, 최소 권한 protocol과 별도 위협 모델이 승인된 뒤에만 후속 설계로 추가할 수 있다.
 
-`star doctor`는 현재 문서에 정의된 **목표 command이며 아직 구현되지 않았다**. 설치 성공을 주장하는 근거로 예시 출력을 사용하지 않는다.
+`star doctor`는 required core `star.core.doctor`의 current read-only command로 구현됐다. 다만 현재 설치된 과거 6-action Runtime과 source candidate를 구분하며, source handler·Schema readiness를 installed candidate 성공으로 승격하지 않는다. 설치 성공은 current signed candidate의 실제 doctor output과 clean lifecycle 증거로만 판정한다.
 
 2026-07-14 현재 PC에서 수행한 x64 실제 설치·Codex Plugin 설치와 x64·ARM64 패키지 검증 값은 [Windows 설치·Codex Plugin 로컬 실증](../testing/windows-installation-evidence-2026-07-14.md)에 분리해 기록한다. 이 근거는 native ARM64, 현재 release candidate의 clean x64 제거, 서명·공개 배포 Gate를 대신하지 않는다.
 

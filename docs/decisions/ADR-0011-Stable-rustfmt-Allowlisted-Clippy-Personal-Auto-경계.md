@@ -5,7 +5,7 @@
 - 상태: 채택
 - 결정일: 2026-07-14
 - 적용 단계: M11 Rust 코드 스타일 자동 교정 Profile
-- 구현 상태: 설계 확정, 제품 구현 전
+- 구현 상태: P-0052 bounded 제품 Slice 구현. 실제 사용자 source에 대한 CLI orchestration·apply는 후속 경계
 
 ## 맥락
 
