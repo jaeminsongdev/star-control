@@ -746,6 +746,20 @@ fn validate_project_registration_allowlist(
             "project_key must identify one tracked catalog entry.",
         ))?;
     let (manifest, catalog_root) = load_project_catalog_manifest_and_root()?;
+    validate_project_registration_allowlist_with_catalog(
+        project_key,
+        request_root,
+        &manifest,
+        &catalog_root,
+    )
+}
+
+fn validate_project_registration_allowlist_with_catalog(
+    project_key: &str,
+    request_root: &std::path::Path,
+    manifest: &ProjectCatalogManifest,
+    catalog_root: &std::path::Path,
+) -> Result<(), RuntimeFailure> {
     if !manifest.registration_enabled {
         return Err((
             "PROJECT_REGISTRATION_DISABLED",
@@ -766,7 +780,7 @@ fn validate_project_registration_allowlist(
             "Only an active canonical catalog entry can be registered by this command.",
         ));
     }
-    let status = inspect_project_catalog_entry(&manifest, &catalog_root, project_key).ok_or((
+    let status = inspect_project_catalog_entry(manifest, catalog_root, project_key).ok_or((
         "PROJECT_NOT_ALLOWLISTED",
         "The project key is not present in the tracked registration allowlist.",
     ))?;
@@ -9278,57 +9292,32 @@ mod tests {
                 false
             );
         }
-        let manifest = parse_project_catalog(PROJECT_CATALOG_SOURCE).unwrap();
+        let tracked_manifest = parse_project_catalog(PROJECT_CATALOG_SOURCE).unwrap();
         assert_eq!(
-            manifest
+            tracked_manifest
                 .projects
                 .iter()
                 .filter(|project| project.role == CatalogProjectRole::ActiveCanonical)
                 .count(),
             13
         );
-        assert!(manifest.registration_enabled);
+        assert!(tracked_manifest.registration_enabled);
         let manifest_directory = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let repository = manifest_directory
             .parent()
             .and_then(std::path::Path::parent)
             .unwrap()
             .to_path_buf();
-        assert_eq!(
-            validate_project_registration_allowlist(
-                &serde_json::json!({"project_key":"star-control"}),
-                &repository.canonicalize().unwrap(),
-            ),
-            Ok(())
-        );
-        assert_eq!(
-            validate_project_registration_allowlist(
-                &serde_json::json!({"project_key":"star-control"}),
-                &repository.join("apps").canonicalize().unwrap(),
-            )
-            .unwrap_err()
-            .0,
-            "PROJECT_ROOT_NOT_ALLOWLISTED"
-        );
-        assert_eq!(
-            validate_project_registration_allowlist(
-                &serde_json::json!({"project_key":"missing"}),
-                &repository.canonicalize().unwrap(),
-            )
-            .unwrap_err()
-            .0,
-            "PROJECT_NOT_ALLOWLISTED"
-        );
         let catalog_root = repository.parent().unwrap().to_path_buf();
         let relative_path = repository
             .file_name()
             .unwrap()
             .to_string_lossy()
             .into_owned();
-        let test_catalog = ProjectCatalogManifest {
+        let mut test_catalog = ProjectCatalogManifest {
             schema_version: 1,
             catalog_id: "star-controller-test".to_owned(),
-            registration_enabled: false,
+            registration_enabled: true,
             root_env: "STAR_CONTROL_TEST_ROOT".to_owned(),
             default_root: catalog_root.to_string_lossy().into_owned(),
             projects: vec![star_project::catalog::ProjectCatalogEntry {
@@ -9343,6 +9332,38 @@ mod tests {
                 canonical_project_key: None,
             }],
         };
+        assert_eq!(
+            validate_project_registration_allowlist_with_catalog(
+                "star-control",
+                &repository.canonicalize().unwrap(),
+                &test_catalog,
+                &catalog_root,
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            validate_project_registration_allowlist_with_catalog(
+                "star-control",
+                &repository.join("apps").canonicalize().unwrap(),
+                &test_catalog,
+                &catalog_root,
+            )
+            .unwrap_err()
+            .0,
+            "PROJECT_ROOT_NOT_ALLOWLISTED"
+        );
+        assert_eq!(
+            validate_project_registration_allowlist_with_catalog(
+                "missing",
+                &repository.canonicalize().unwrap(),
+                &test_catalog,
+                &catalog_root,
+            )
+            .unwrap_err()
+            .0,
+            "PROJECT_NOT_ALLOWLISTED"
+        );
+        test_catalog.registration_enabled = false;
         let plan: star_contracts::evidence::ValidationPlan = serde_json::from_value(
             run_validation_plan_command_with_catalog(
                 &serde_json::json!({
