@@ -1,0 +1,682 @@
+{
+  "bundle_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "change_sets": [
+    {
+      "base_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "captured_at": "2026-01-01T00:00:00Z",
+      "change_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "change_set_id": "chg_00000000000000000000000000",
+      "change_set_kind": "planning_baseline",
+      "checkout_id": "cko_00000000000000000000000000",
+      "collection_limits": [
+        "fixture"
+      ],
+      "collection_state": "complete",
+      "comparison_scope": [
+        {
+          "kind": "path",
+          "value": "fixture"
+        }
+      ],
+      "entries": [
+        {
+          "after_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "before_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "binary": false,
+          "change_kind": "add",
+          "entry_id": "fixture",
+          "origin": "preexisting",
+          "path": "src/lib.rs",
+          "rename_from": "fixture",
+          "scope_relation": "planned",
+          "source_class": "source",
+          "staged": false,
+          "unstaged": false,
+          "untracked": false
+        }
+      ],
+      "observed_workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "project_id": "prj_00000000000000000000000000",
+      "schema_id": "fixture",
+      "schema_version": 0,
+      "scope_revision_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "task_spec_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ],
+  "impact_analysis": {
+    "affected_projects": [
+      {
+        "certainty": "confirmed",
+        "closure_complete": false,
+        "impacted_node_count": 0,
+        "project_id": "prj_00000000000000000000000000"
+      }
+    ],
+    "calculation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "catalog_snapshot_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "change_set_refs": [
+      {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "confidence_summary": {
+      "confirmed": 0,
+      "high": 0,
+      "low": 0,
+      "medium": 0,
+      "possible": 0
+    },
+    "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "generated_at": "2026-01-01T00:00:00Z",
+    "impact_analysis_id": "imp_00000000000000000000000000",
+    "impact_edges": [
+      {
+        "certainty": "confirmed",
+        "confidence": "high",
+        "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "distance": 0,
+        "edge_id": "fixture",
+        "evidence_refs": [
+          "fixture"
+        ],
+        "freshness": "current",
+        "from_entity_key": "fixture",
+        "impact_kind": "direct",
+        "limitations": [
+          "fixture"
+        ],
+        "path_edge_ids": [
+          "src/lib.rs"
+        ],
+        "project_id": "prj_00000000000000000000000000",
+        "relation": "fixture",
+        "resolution": "resolved",
+        "tier": "text",
+        "to_entity_key": "fixture"
+      }
+    ],
+    "impacted_nodes": [
+      {
+        "certainty": "confirmed",
+        "confidence": "high",
+        "entity_key": "fixture",
+        "impact_kind": "direct",
+        "kind": "fixture",
+        "minimum_distance": 0,
+        "project_id": "prj_00000000000000000000000000"
+      }
+    ],
+    "limitations": [
+      "fixture"
+    ],
+    "no_results": [
+      {
+        "limitations": [
+          "fixture"
+        ],
+        "query_kind": "fixture",
+        "reason": "confirmed_empty",
+        "required_tier": "text",
+        "searched_scope": [
+          {
+            "kind": "path",
+            "value": "fixture"
+          }
+        ]
+      }
+    ],
+    "project_inputs": [
+      {
+        "checkout_id": "cko_00000000000000000000000000",
+        "code_index_snapshot_id": "cix_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "freshness": "current",
+        "project_catalog_snapshot_id": "pcs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000000000000",
+        "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "revision": 1,
+    "risk_paths": [
+      {
+        "certainty": "confirmed",
+        "fallback_floor": "package",
+        "finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "impact_edge_ids": [
+          "fixture"
+        ],
+        "limitations": [
+          "fixture"
+        ],
+        "project_id": "prj_00000000000000000000000000",
+        "required_check_families": [
+          "fixture"
+        ],
+        "risk_id": "fixture",
+        "risk_version": "fixture",
+        "seed_ids": [
+          "fixture"
+        ],
+        "severity_floor": "info"
+      }
+    ],
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "scope_revision_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "seeds": [
+      {
+        "entity_key": "fixture",
+        "evidence_refs": [
+          "fixture"
+        ],
+        "project_id": "prj_00000000000000000000000000",
+        "resolution": "resolved",
+        "seed_id": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        }
+      }
+    ],
+    "status": "complete",
+    "task_spec_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "schema_id": "star.planning-bundle",
+  "schema_version": 1,
+  "scope_revision": {
+    "analysis_scope": {
+      "exclusions": [
+        {
+          "applies_to": "analysis",
+          "reason": "fixture",
+          "selector": {
+            "kind": "path",
+            "value": "fixture"
+          }
+        }
+      ],
+      "project_ids": [
+        "fixture"
+      ],
+      "selectors": [
+        {
+          "evidence_refs": [
+            "fixture"
+          ],
+          "reason_code": "fixture",
+          "selector": {
+            "kind": "path",
+            "value": "fixture"
+          },
+          "source": "user"
+        }
+      ]
+    },
+    "approval_state": "accepted",
+    "changed_fields": [
+      "fixture"
+    ],
+    "created_at": "2026-01-01T00:00:00Z",
+    "created_by": {
+      "actor_id": "fixture",
+      "actor_type": "user",
+      "auth_source": "fixture",
+      "display_name": "fixture"
+    },
+    "derived_additions": [
+      {
+        "axis": "analysis",
+        "evidence_refs": [
+          "fixture"
+        ],
+        "reason_code": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        },
+        "source": "user"
+      }
+    ],
+    "planned_change_scope": {
+      "exclusions": [
+        {
+          "applies_to": "analysis",
+          "reason": "fixture",
+          "selector": {
+            "kind": "path",
+            "value": "fixture"
+          }
+        }
+      ],
+      "project_ids": [
+        "fixture"
+      ],
+      "selectors": [
+        {
+          "evidence_refs": [
+            "fixture"
+          ],
+          "reason_code": "fixture",
+          "selector": {
+            "kind": "path",
+            "value": "fixture"
+          },
+          "source": "user"
+        }
+      ]
+    },
+    "previous_scope_revision_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "reason": "fixture",
+    "reason_code": "initial",
+    "requested_scope": {
+      "exclusions": [
+        {
+          "applies_to": "analysis",
+          "reason": "fixture",
+          "selector": {
+            "kind": "path",
+            "value": "fixture"
+          }
+        }
+      ],
+      "project_ids": [
+        "fixture"
+      ],
+      "selectors": [
+        {
+          "evidence_refs": [
+            "fixture"
+          ],
+          "reason_code": "fixture",
+          "selector": {
+            "kind": "path",
+            "value": "fixture"
+          },
+          "source": "user"
+        }
+      ]
+    },
+    "revision": 1,
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "scope_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "scope_revision_id": "scp_00000000000000000000000000",
+    "source_snapshot_refs": [
+      {
+        "checkout_id": "cko_00000000000000000000000000",
+        "code_index_snapshot_id": "cix_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "freshness": "current",
+        "project_catalog_snapshot_id": "pcs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "project_id": "prj_00000000000000000000000000",
+        "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "task_spec_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "user_decisions": [
+      {
+        "actor": {
+          "actor_id": "fixture",
+          "actor_type": "user",
+          "auth_source": "fixture",
+          "display_name": "fixture"
+        },
+        "decision_id": "fixture",
+        "reason": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        },
+        "state": "accepted"
+      }
+    ],
+    "validation_scope": {
+      "exclusions": [
+        {
+          "applies_to": "analysis",
+          "reason": "fixture",
+          "selector": {
+            "kind": "path",
+            "value": "fixture"
+          }
+        }
+      ],
+      "project_ids": [
+        "fixture"
+      ],
+      "selectors": [
+        {
+          "evidence_refs": [
+            "fixture"
+          ],
+          "reason_code": "fixture",
+          "selector": {
+            "kind": "path",
+            "value": "fixture"
+          },
+          "source": "user"
+        }
+      ]
+    }
+  },
+  "task_spec": {
+    "assumptions": [
+      "fixture"
+    ],
+    "baseline_policy": {
+      "kind": "current_workspace",
+      "reference": "fixture"
+    },
+    "check_overrides": [
+      {
+        "family": "fixture",
+        "kind": "add",
+        "reason": "fixture"
+      }
+    ],
+    "constraints": [
+      "fixture"
+    ],
+    "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "created_at": "2026-01-01T00:00:00Z",
+    "created_by": {
+      "actor_id": "fixture",
+      "actor_type": "user",
+      "auth_source": "fixture",
+      "display_name": "fixture"
+    },
+    "excluded_scope": [
+      {
+        "applies_to": "analysis",
+        "reason": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        }
+      }
+    ],
+    "forbidden_actions": [
+      "fixture"
+    ],
+    "included_scope": [
+      {
+        "kind": "path",
+        "value": "fixture"
+      }
+    ],
+    "intended_changes": [
+      {
+        "change_id": "fixture",
+        "change_kind": "add",
+        "intended_postcondition": "fixture",
+        "selector": {
+          "kind": "path",
+          "value": "fixture"
+        }
+      }
+    ],
+    "objective": "fixture",
+    "project_targets": [
+      {
+        "checkout_id": "cko_00000000000000000000000000",
+        "project_id": "prj_00000000000000000000000000",
+        "reason": "fixture",
+        "role": "planned_change"
+      }
+    ],
+    "requested_checks": [
+      "fixture"
+    ],
+    "revision": 1,
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "success_criteria": [
+      {
+        "criterion_id": "fixture",
+        "description": "fixture",
+        "required": false,
+        "verification": "fixture"
+      }
+    ],
+    "task_spec_id": "tsk_00000000000000000000000000",
+    "title": "fixture"
+  },
+  "validation_plan": {
+    "affected_scope": [
+      {
+        "limitations": [
+          "fixture"
+        ],
+        "project_id": "prj_00000000000000000000000000",
+        "reason_codes": [
+          "fixture"
+        ],
+        "requested_level": "package",
+        "selected_level": "package",
+        "selectors": [
+          {
+            "kind": "path",
+            "value": "fixture"
+          }
+        ]
+      }
+    ],
+    "candidate_checks": [
+      {
+        "applicability": "applicable",
+        "check_id": "fixture",
+        "evidence_refs": [
+          "fixture"
+        ],
+        "family": "fixture",
+        "outcome": "selected_required",
+        "reason_code": "fixture"
+      }
+    ],
+    "catalog_snapshot_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "change_set_refs": [
+      {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "check_graph": {
+      "edges": [
+        {
+          "from_plan_item_id": "fixture",
+          "relation": "fixture",
+          "to_plan_item_id": "fixture"
+        }
+      ],
+      "failure_policy": "fixture",
+      "max_parallel": 1,
+      "nodes": [
+        "fixture"
+      ]
+    },
+    "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "fallback_decisions": [
+      {
+        "evidence_refs": [
+          "fixture"
+        ],
+        "from_level": "package",
+        "project_id": "prj_00000000000000000000000000",
+        "to_level": "package",
+        "trigger": "fixture"
+      }
+    ],
+    "gate_policy": {
+      "fail_on_flaky": false,
+      "fail_on_partial": false,
+      "fail_on_required_failure": false,
+      "fail_on_unverified": false
+    },
+    "impact_analysis_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "independent_review": {
+      "absence_behavior": "fixture",
+      "reason_codes": [
+        "fixture"
+      ],
+      "required": false,
+      "review_kind": "none"
+    },
+    "manual_observations": [
+      "fixture"
+    ],
+    "omitted_checks": [
+      "fixture"
+    ],
+    "optional_checks": [
+      {
+        "check_id": "fixture",
+        "evidence_kinds": [
+          "fixture"
+        ],
+        "fallback_floor": "package",
+        "family": "fixture",
+        "impact_edge_ids": [
+          "fixture"
+        ],
+        "invocation": {
+          "args": [
+            "fixture"
+          ],
+          "expected_exit_codes": [
+            1
+          ],
+          "logical_executable": "fixture",
+          "timeout_ms": 0
+        },
+        "outcome": "selected_required",
+        "plan_item_id": "fixture",
+        "project_id": "prj_00000000000000000000000000",
+        "reason_codes": [
+          "fixture"
+        ],
+        "risk_path_ids": [
+          "src/lib.rs"
+        ],
+        "scope_level": "package",
+        "tool_id": "fixture"
+      }
+    ],
+    "phase": "fixture",
+    "previous_success_comparisons": [
+      "fixture"
+    ],
+    "readiness": "draft",
+    "required_checks": [
+      {
+        "check_id": "fixture",
+        "evidence_kinds": [
+          "fixture"
+        ],
+        "fallback_floor": "package",
+        "family": "fixture",
+        "impact_edge_ids": [
+          "fixture"
+        ],
+        "invocation": {
+          "args": [
+            "fixture"
+          ],
+          "expected_exit_codes": [
+            1
+          ],
+          "logical_executable": "fixture",
+          "timeout_ms": 0
+        },
+        "outcome": "selected_required",
+        "plan_item_id": "fixture",
+        "project_id": "prj_00000000000000000000000000",
+        "reason_codes": [
+          "fixture"
+        ],
+        "risk_path_ids": [
+          "src/lib.rs"
+        ],
+        "scope_level": "package",
+        "tool_id": "fixture"
+      }
+    ],
+    "revision": 1,
+    "risk_level": "low",
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "scope_revision": 1,
+    "scope_revision_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "selection_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "task_spec_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "unresolved_checks": [
+      {
+        "family": "fixture",
+        "readiness_impact": "draft",
+        "reason": "fixture",
+        "required_coverage": "fixture",
+        "searched_catalog_scope": "fixture"
+      }
+    ],
+    "validation_plan_id": "vpl_00000000000000000000000000"
+  }
+}

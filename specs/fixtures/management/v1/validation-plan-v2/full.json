@@ -1,0 +1,200 @@
+{
+  "affected_scope": [
+    {
+      "limitations": [
+        "fixture"
+      ],
+      "project_id": "prj_00000000000000000000000000",
+      "reason_codes": [
+        "fixture"
+      ],
+      "requested_level": "package",
+      "selected_level": "package",
+      "selectors": [
+        {
+          "kind": "path",
+          "value": "fixture"
+        }
+      ]
+    }
+  ],
+  "candidate_checks": [
+    {
+      "applicability": "applicable",
+      "check_id": "fixture",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "family": "fixture",
+      "outcome": "selected_required",
+      "reason_code": "fixture"
+    }
+  ],
+  "catalog_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "change_set_refs": [
+    {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "check_graph": {
+    "edges": [
+      {
+        "from_plan_item_id": "fixture",
+        "relation": "fixture",
+        "to_plan_item_id": "fixture"
+      }
+    ],
+    "failure_policy": "fixture",
+    "max_parallel": 1,
+    "nodes": [
+      "fixture"
+    ]
+  },
+  "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "fallback_decisions": [
+    {
+      "evidence_refs": [
+        "fixture"
+      ],
+      "from_level": "package",
+      "project_id": "prj_00000000000000000000000000",
+      "to_level": "package",
+      "trigger": "fixture"
+    }
+  ],
+  "gate_policy": {
+    "fail_on_flaky": false,
+    "fail_on_partial": false,
+    "fail_on_required_failure": false,
+    "fail_on_unverified": false
+  },
+  "impact_analysis_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "independent_review": {
+    "absence_behavior": "fixture",
+    "reason_codes": [
+      "fixture"
+    ],
+    "required": false,
+    "review_kind": "none"
+  },
+  "manual_observations": [
+    "fixture"
+  ],
+  "omitted_checks": [
+    "fixture"
+  ],
+  "optional_checks": [
+    {
+      "check_id": "fixture",
+      "evidence_kinds": [
+        "fixture"
+      ],
+      "fallback_floor": "package",
+      "family": "fixture",
+      "impact_edge_ids": [
+        "fixture"
+      ],
+      "invocation": {
+        "args": [
+          "fixture"
+        ],
+        "expected_exit_codes": [
+          1
+        ],
+        "logical_executable": "fixture",
+        "timeout_ms": 0
+      },
+      "outcome": "selected_required",
+      "plan_item_id": "fixture",
+      "project_id": "prj_00000000000000000000000000",
+      "reason_codes": [
+        "fixture"
+      ],
+      "risk_path_ids": [
+        "src/lib.rs"
+      ],
+      "scope_level": "package",
+      "tool_id": "fixture"
+    }
+  ],
+  "phase": "fixture",
+  "previous_success_comparisons": [
+    "fixture"
+  ],
+  "readiness": "draft",
+  "required_checks": [
+    {
+      "check_id": "fixture",
+      "evidence_kinds": [
+        "fixture"
+      ],
+      "fallback_floor": "package",
+      "family": "fixture",
+      "impact_edge_ids": [
+        "fixture"
+      ],
+      "invocation": {
+        "args": [
+          "fixture"
+        ],
+        "expected_exit_codes": [
+          1
+        ],
+        "logical_executable": "fixture",
+        "timeout_ms": 0
+      },
+      "outcome": "selected_required",
+      "plan_item_id": "fixture",
+      "project_id": "prj_00000000000000000000000000",
+      "reason_codes": [
+        "fixture"
+      ],
+      "risk_path_ids": [
+        "src/lib.rs"
+      ],
+      "scope_level": "package",
+      "tool_id": "fixture"
+    }
+  ],
+  "revision": 1,
+  "risk_level": "low",
+  "schema_id": "star.validation-plan",
+  "schema_version": 2,
+  "scope_revision": 1,
+  "scope_revision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "selection_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "unresolved_checks": [
+    {
+      "family": "fixture",
+      "readiness_impact": "draft",
+      "reason": "fixture",
+      "required_coverage": "fixture",
+      "searched_catalog_scope": "fixture"
+    }
+  ],
+  "validation_plan_id": "vpl_00000000000000000000000000"
+}

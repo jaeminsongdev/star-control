@@ -1,0 +1,13 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "goal_id": "gol_00000000000000000000000000",
+  "objective": "fixture",
+  "plan_items": [],
+  "plan_revision": 0,
+  "revision": 0,
+  "schema_id": "star.goal-record",
+  "schema_version": 2,
+  "status": "active",
+  "updated_at": "2026-01-01T00:00:00Z"
+}

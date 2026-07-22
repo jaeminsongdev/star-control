@@ -1,0 +1,31 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "goal_id": "gol_00000000000000000000000000",
+  "objective": "fixture",
+  "pending_question": {
+    "answer": "fixture",
+    "prompt": "fixture",
+    "question_id": "fixture"
+  },
+  "plan_items": [
+    {
+      "item_id": "fixture",
+      "status": "pending",
+      "step": "fixture"
+    }
+  ],
+  "plan_revision": 0,
+  "project_key": "fixture",
+  "revision": 0,
+  "run": {
+    "attempt": 0,
+    "continued_at": "fixture",
+    "run_id": "run_00000000000000000000000000",
+    "status": "running"
+  },
+  "schema_id": "star.goal-record",
+  "schema_version": 1,
+  "status": "active",
+  "updated_at": "2026-01-01T00:00:00Z"
+}
