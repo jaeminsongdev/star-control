@@ -1,0 +1,6 @@
+schema_version = 1
+feature_union_compatible = true
+
+[[packages]]
+package = "rust-style-app"
+features = ["cli"]

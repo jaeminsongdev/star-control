@@ -1,0 +1,21 @@
+[package]
+name = "rust-style-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+[features]
+default = []
+cli = []
+
+[dependencies]
+rust-style-macros = { path = "../macros" }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "rust-style-corpus-cli"
+path = "src/main.rs"
+required-features = ["cli"]
