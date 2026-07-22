@@ -1,0 +1,118 @@
+{
+  "schema_id": "star.m1-code-index-performance-reference",
+  "schema_version": 1,
+  "captured_on": "2026-07-20",
+  "status": "accepted",
+  "profile": "release",
+  "host": {
+    "os": "Microsoft Windows 11 Pro",
+    "os_version": "10.0.26200",
+    "architecture": "x86_64",
+    "cpu": "AMD Ryzen 7 9700X 8-Core Processor",
+    "logical_processors": 16,
+    "memory_bytes": 33408593920,
+    "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+    "target": "x86_64-pc-windows-msvc"
+  },
+  "corpus": {
+    "rust_file_count": 10000,
+    "source_bytes": 687780,
+    "repetitions": 5,
+    "syntax_adapter": "tree-sitter 0.26.11 + tree-sitter-rust 0.24.2; separate 10000-file tier corpus",
+    "semantic_adapter": "rust-analyzer 1.96.0 ac68faa2; adjudicated LSP fixture plus 10000-file semantic_unavailable fallback corpus"
+  },
+  "measurements": {
+    "full_scan": {
+      "samples_ms": [8389, 7694, 7647, 7599, 7447],
+      "p95_ms": 8389,
+      "budget_p95_ms": 10067
+    },
+    "incremental_unchanged": {
+      "samples_ms": [5131, 5050, 5173, 5171, 5086],
+      "p95_ms": 5173,
+      "budget_p95_ms": 6208
+    },
+    "incremental_single_file": {
+      "samples_ms": [5057, 5161, 5198, 5357, 5490],
+      "p95_ms": 5490,
+      "budget_p95_ms": 6588
+    },
+    "cache_miss_index_only": {
+      "samples_ms": [6885, 7102, 7006, 7177, 6975],
+      "p95_ms": 7177,
+      "budget_p95_ms": 8613
+    },
+    "cache_hit_index_only": {
+      "samples_ms": [4696, 4585, 4671, 4577, 4538],
+      "p95_ms": 4696,
+      "budget_p95_ms": 5636
+    },
+    "file_cache_store": {
+      "samples_ms": [10217, 10331, 10344, 10488, 10361],
+      "p95_ms": 10488,
+      "budget_p95_ms": 12586
+    },
+    "file_cache_hit": {
+      "samples_ms": [11018, 10844, 10787, 10639, 10610],
+      "p95_ms": 11018,
+      "budget_p95_ms": 13222
+    },
+    "rust_syntax_10000_files": {
+      "samples_ms": [368, 365, 362, 361, 362],
+      "p95_ms": 368,
+      "budget_p95_ms": 442
+    },
+    "git_dirty_full_scan": {
+      "samples_ms": [7877, 7542, 7447, 8012, 7472],
+      "p95_ms": 8012,
+      "budget_p95_ms": 9615
+    },
+    "git_dirty_incremental_unchanged": {
+      "samples_ms": [5126, 5090, 5145, 5273, 5071],
+      "p95_ms": 5273,
+      "budget_p95_ms": 6328
+    },
+    "git_dirty_incremental_single_file": {
+      "samples_ms": [5069, 5171, 5834, 6172, 6136],
+      "p95_ms": 6172,
+      "budget_p95_ms": 7407
+    },
+    "git_dirty_index_only_miss": {
+      "samples_ms": [8416, 7991, 7992, 8796, 8145],
+      "p95_ms": 8796,
+      "budget_p95_ms": 10556
+    },
+    "git_dirty_index_only_reuse": {
+      "samples_ms": [5381, 5405, 5525, 5429, 5476],
+      "p95_ms": 5525,
+      "budget_p95_ms": 6630
+    },
+    "peak_working_set_bytes": 2064920576,
+    "budget_peak_working_set_bytes": 2477904692,
+    "projection_serialized_bytes": 139674500
+  },
+  "correctness": {
+    "classification_partition_count": 10000,
+    "unchanged_reused_partition_count": 20001,
+    "changed_reused_partition_count": 19999,
+    "changed_invalidated_partition_count": 4,
+    "semantic_unavailable_count": 10000,
+    "rust_syntax_definition_count": 50000,
+    "rust_syntax_reference_count": 80000,
+    "rust_syntax_parse_failure_count": 0,
+    "file_cache_protection": "dpapi_current_user",
+    "file_cache_retained_entry_count": 2,
+    "file_cache_retained_entry_bytes": 372466920,
+    "file_cache_entry_limit_bytes": 268435456,
+    "git_dirty_classification_partition_count": 10001,
+    "git_dirty_changed_invalidated_partition_count": 4,
+    "bad_confirmed_definition_count": 0,
+    "bad_confirmed_reference_count": 0
+  },
+  "source_evidence": [
+    "target/m1-corpus/x64-reference-with-classification-20260720.json",
+    "target/m1-corpus/x64-rust-syntax-20260720.json",
+    "target/m1-corpus/x64-file-cache-20260720.json",
+    "target/m1-corpus/x64-git-dirty-reference-20260720.json"
+  ]
+}

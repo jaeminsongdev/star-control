@@ -1,0 +1,204 @@
+{
+  "schema_id": "star.p53-release-audit",
+  "schema_version": 1,
+  "recorded_at": "2026-07-21T06:14:00Z",
+  "product_version": "0.1.0",
+  "publication_channel": "github_releases",
+  "source": {
+    "head": "4f01948b5b31198cd45f6f539ef5d1cb3a361e25",
+    "worktree_state": "dirty",
+    "candidate_ref": "dirty:4f01948b5b31198cd45f6f539ef5d1cb3a361e25:p0053-refresh-20260721T060528Z",
+    "public_candidate": false
+  },
+  "host": {
+    "os": "Microsoft Windows 11 Pro",
+    "windows_version": "10.0.26200",
+    "architecture": "x64"
+  },
+  "rust": {
+    "release": "1.96.0",
+    "commit": "ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96",
+    "arm64_target": "aarch64-pc-windows-msvc",
+    "target_install_performed": false
+  },
+  "x64": {
+    "support_tier": "stable",
+    "runtime_verification": "native_isolated_unsigned",
+    "stage": "dist/stage/p0053-refresh-20260721T060528Z/x64-pristine",
+    "stage_file_count": 279,
+    "stage_set_sha256": "sha256:ee64250702fa053193cad7789b17da237bb8add9b0d04912cbb56ef23704b99c",
+    "stage_manifest_sha256": "sha256:c7817459dd94516b56308907daf631d38e8fcd825f699da3a3bca169fe464dbf",
+    "stage_signing": "unsigned_local",
+    "runtimes": [
+      {
+        "name": "star.exe",
+        "size": 5672448,
+        "sha256": "sha256:d42caae5e9a80ba7a61214e705b706673d2014636f4424a38d3492682369d2a1",
+        "pe_machine": "0x8664",
+        "signature": "not_signed"
+      },
+      {
+        "name": "star-controller.exe",
+        "size": 25761280,
+        "sha256": "sha256:c1feb9795e923d6ba911055c095218fbf43d06d2989c9b8449c20ba946a30373",
+        "pe_machine": "0x8664",
+        "signature": "not_signed"
+      },
+      {
+        "name": "star-mcp.exe",
+        "size": 6405632,
+        "sha256": "sha256:62d211c5ee2dba28cf27862f55fad71848c97d11a415ee8c5dd0cfc1f65fd290",
+        "pe_machine": "0x8664",
+        "signature": "not_signed"
+      },
+      {
+        "name": "star-updater.exe",
+        "size": 5265408,
+        "sha256": "sha256:eb684956b325ef01ac5f605dce904e92f450c63817244e5fd37c1177fea8a378",
+        "pe_machine": "0x8664",
+        "signature": "not_signed"
+      }
+    ],
+    "installer_model": {
+      "path": "target/p0053-installer-model-20260721T060528Z/x64/star-control-windows-x64-0.1.0-setup.exe",
+      "compiler": "Inno Setup 6.7.3",
+      "size": 14698617,
+      "sha256": "sha256:88bc4a9a47694142b3346c386c85e23b71f7ba011cfb18adb4db55c7a7cdf9a0",
+      "signature": "not_signed",
+      "public_candidate": false
+    },
+    "isolated_stage_lifecycle": {
+      "subject_stage_copy": "target/p0053-x64-lifecycle-copy-20260721T060528Z/stage",
+      "source_stage_manifest_sha256": "sha256:c7817459dd94516b56308907daf631d38e8fcd825f699da3a3bca169fe464dbf",
+      "installation_finalize": "pass",
+      "bridge_initialize": "pass",
+      "installation_status_verified": true,
+      "release_manifest_sha256": "sha256:c7817459dd94516b56308907daf631d38e8fcd825f699da3a3bca169fe464dbf",
+      "runtime_release_manifest_sha256": "sha256:9172673ed322edcefa9da9c90d227524a86d537ae14dc51e5641034b3ff5ecd4",
+      "actual_signed_inno_lifecycle": "not_run"
+    }
+  },
+  "arm64": {
+    "support_tier": "preview",
+    "runtime_verification": "native_unverified",
+    "stage": "dist/stage/p0053-refresh-20260721T060528Z/arm64",
+    "stage_file_count": 279,
+    "stage_set_sha256": "sha256:bbb659c44090b06f9b1fc612b166083f04b8ba1f5941c99965d843b501a90c94",
+    "stage_manifest_sha256": "sha256:32d49c777c93b15b57c866e47ac44ba92c736383f3f2f38f1e3eac8e429cc8fc",
+    "stage_signing": "unsigned_local",
+    "runtimes": [
+      {
+        "name": "star.exe",
+        "size": 4670976,
+        "sha256": "sha256:6f2001f880440e2771f0aa16d57ff597ed465de14098cdfcc5fe65ca5144fe67",
+        "pe_machine": "0xaa64",
+        "signature": "not_signed"
+      },
+      {
+        "name": "star-controller.exe",
+        "size": 21381632,
+        "sha256": "sha256:9eac3878a7232e4419515e5f5b3bd9cfc206eee23d60321a42bd406ec6b2a75a",
+        "pe_machine": "0xaa64",
+        "signature": "not_signed"
+      },
+      {
+        "name": "star-mcp.exe",
+        "size": 5424640,
+        "sha256": "sha256:ab0ff596723f36dc3e4f0939701d72da1b410e4390c4a29ca7e21d343621fe66",
+        "pe_machine": "0xaa64",
+        "signature": "not_signed"
+      },
+      {
+        "name": "star-updater.exe",
+        "size": 4335616,
+        "sha256": "sha256:6ff780283f0d87c959cb3ca2a576f24dd78ad0afd020ffb6601d38cb9a453aae",
+        "pe_machine": "0xaa64",
+        "signature": "not_signed"
+      }
+    ],
+    "installer_model": {
+      "path": "target/p0053-installer-model-20260721T060528Z/arm64/star-control-windows-arm64-0.1.0-setup.exe",
+      "compiler": "Inno Setup 6.7.3",
+      "size": 13788474,
+      "sha256": "sha256:e2bdf0d7a80f7b649cc02f98a293e591fb7f3bda00160510e1c6c684ebb1f8b6",
+      "signature": "not_signed",
+      "public_candidate": false
+    },
+    "cross_build": "pass",
+    "rust_style_corpus": "arm64_check_and_clippy_complete",
+    "fake_lifecycle": "pass",
+    "native_execution": "not_run"
+  },
+  "signed_seal_negative_gate": {
+    "x64_exit_code": 2,
+    "arm64_exit_code": 2,
+    "reason": "authenticode_verification_failed",
+    "manifest_hashes_unchanged": true,
+    "source_identity": "d971198b7ee3f2c1afca8cb1db6b34271c188b584bf84473b0ef49eef2960af5",
+    "x64_subject": "dist/stage/p0053-refresh-20260721T060528Z/x64-signing-negative",
+    "arm64_subject": "dist/stage/p0053-refresh-20260721T060528Z/arm64-signing-negative"
+  },
+  "current_installed_runtime": {
+    "registry_revision": 4,
+    "registry_snapshot_sha256": "sha256:2f5dfee8bf746dbc07320e7d2881cf4ff347ae3669f20328b4b9ab1a7b35ee90",
+    "ready_action_count": 6,
+    "source_required_action_count": 17,
+    "candidate_installed": false,
+    "inspector_version": "0.22.0",
+    "inspector_tools_list_count": 12,
+    "inspector_tools_list_sha256": "sha256:b193ad92f3c5a85854e51788e11bba7b244102e557121a43d15930f86dafe690"
+  },
+  "validation": {
+    "full": {
+      "operation_id": "opn_01KY1M9RNEM0052W730W3SN9TH",
+      "report": "target/validation/20260721T060240092Z-3220/report.json",
+      "sha256": "sha256:0606fd2f4adc684af04b2adf4d7a5d368a0f9d4f06525e1427ee13a8bd1c3d69",
+      "checks_passed": 10,
+      "checks_total": 10,
+      "status": "pass",
+      "completeness": "complete",
+      "stability": "stable"
+    },
+    "release": {
+      "operation_id": "opn_01KY1MVADFM1KX6XB5PASCCBCJ",
+      "report": "target/validation/20260721T061214465Z-31000/report.json",
+      "sha256": "sha256:0e53bc8c0ce48987c2ecdabe88f0d58d0a57fe8b07c40667694ed37ed330e13b",
+      "checks_passed": 13,
+      "checks_total": 15,
+      "status": "fail",
+      "completeness": "unverified",
+      "blocking_checks": [
+        "release-clean-worktree",
+        "release-external-signing-publication"
+      ]
+    }
+  },
+  "excluded_local_artifacts": [
+    {
+      "path": "target/p0053-x64-lifecycle-copy-20260721T042805Z/userprofile/.rustup",
+      "reason": "cargo was invoked after USERPROFILE isolation and bootstrapped an exact Rust 1.96 toolchain into the disposable target tree; it is not package, lifecycle, or release evidence",
+      "file_count": 177,
+      "bytes": 693271047,
+      "cleanup_performed": false
+    },
+    {
+      "path": "dist/stage/p0053-refresh-20260721T042805Z/x64",
+      "reason": "installation bridge lifecycle mutated this working stage; only x64-pristine is package evidence",
+      "cleanup_performed": false
+    }
+  ],
+  "release_decision": {
+    "local_implementation": "complete",
+    "local_candidate": "blocked_unsealed_dirty_worktree",
+    "public_release_after_local_seal": "blocked_external",
+    "blocking_gates": [
+      "p0040_p0053_local_commit_seal",
+      "approved_authenticode_certificate_and_timestamp_provider",
+      "signed_runtime_and_installer_new_candidate",
+      "clean_signed_x64_installer_lifecycle",
+      "installed_candidate_core_17_of_17_codex_and_inspector_evidence",
+      "sbom_and_provenance",
+      "exact_github_action_approvals_and_remote_digest_reconciliation"
+    ]
+  }
+}
