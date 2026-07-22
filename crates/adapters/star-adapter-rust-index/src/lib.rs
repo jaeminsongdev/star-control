@@ -336,6 +336,7 @@ fn run_rust_analyzer(
 ) -> Result<BTreeMap<String, PreparedSemanticEntry>, AdapterFailure> {
     let mut prepared = BTreeMap::new();
     let mut uri_to_path = BTreeMap::new();
+    let mut path_to_uri = BTreeMap::new();
     let text_by_path = files
         .iter()
         .filter_map(|file| {
@@ -354,6 +355,7 @@ fn run_rust_analyzer(
             return Err(AdapterFailure::Unavailable);
         }
         let uri = file_uri(&absolute)?;
+        path_to_uri.insert(file.path.as_str().to_owned(), uri.clone());
         uri_to_path.insert(normalized_uri_key(&uri), file.path.as_str().to_owned());
         prepared.insert(
             file.path.as_str().to_owned(),
@@ -451,9 +453,8 @@ fn run_rust_analyzer(
 
     let reference_budget_exhausted = definitions.len() > max_reference_queries;
     for definition in definitions.iter().take(max_reference_queries) {
-        let definition_uri = uri_to_path
-            .iter()
-            .find_map(|(uri, path)| (path == &definition.path).then_some(uri))
+        let definition_uri = path_to_uri
+            .get(&definition.path)
             .ok_or(AdapterFailure::Unavailable)?;
         let result = client.request(
             "textDocument/references",
@@ -912,7 +913,14 @@ impl LspClient {
 
 #[cfg(test)]
 fn report_lsp_parse_failure(stage: &str, message: &serde_json::Value) {
-    eprintln!("rust-analyzer LSP ParseFailed at {stage}: {message}");
+    let code = message
+        .pointer("/error/code")
+        .map_or_else(|| "unknown".to_owned(), |value| value.to_string());
+    let detail = message
+        .pointer("/error/message")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("serverStatus payload rejected");
+    eprintln!("rust-analyzer LSP ParseFailed code={code} detail={detail} stage={stage}");
 }
 
 #[cfg(not(test))]
