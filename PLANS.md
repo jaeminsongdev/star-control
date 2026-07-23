@@ -31,7 +31,7 @@
 | P-0053 local | historical `DONE` | source 17/17 MCP readiness, x64 isolated lifecycle, ARM64 simulation, pre-sign supply chain과 signing-negative audit |
 | P-0053 public | `blocked_external` | trusted signing, signed clean install, current Codex 17/17 invoke, final provenance와 remote reconcile 필요 |
 | P-0054 | `DONE / internal product seal` | 최신 `main` 기준 Recovery Slice, M1~M11, 최종 16 Profile의 내부 contract→engine→repository→Controller→CLI를 구현하고 requested TARGET→effective FULL 10/10을 통과. 외부·물리 Gate는 별도 상태 유지 |
-| P-0055 | `IN_PROGRESS / non-signing external seal` | 사용자가 비서명 외부 effect 전체를 승인했다. M7~M10 adapter, clean x64 lifecycle, current Codex 17/17, GitHub draft/readback, ARM64 cross-build·simulation, commit/tag/push와 최종 증거를 닫는다. Authenticode와 서명 필수 공개 Stable만 범위 밖이다. |
+| P-0055 | `BLOCKED_HOST_POLICY / implementation and isolated evidence complete` | M7~M10 adapter·복구 receipt consume, x64 격리 lifecycle, ARM64 cross-build/simulation, SBOM·audit·pre-sign provenance, candidate Inspector 17/17과 authenticated GitHub draft byte roundtrip·cleanup은 완료했다. host가 `git commit`을 거부해 clean revision·push·exact candidate target draft를 만들지 못했고 current 설치본은 6/17이므로 전체 seal은 미완료다. Authenticode와 서명 필수 공개 Stable도 별도 `blocked_external`이다. |
 
 P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 `b29c178..ac3ca70` commit chain으로 보존한다. P-0054 기준선은 `main` `a93de7e68aff3ac02315d3a324aeaa497e1ede38`이다. 문서의 단계 설명이나 Rust type 존재만으로 완료를 판정하지 않고 Controller 경유 실제 경로, 실어댑터, stable JSON CLI, 저장·복구, negative corpus와 disposable E2E가 함께 닫혀야 완료다.
 
@@ -44,7 +44,7 @@ P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 `b29c178..ac3c
 - **M10:** Controller/CLI가 `star-release`의 build-once candidate, byte verify, M3 evidence, promote/lifecycle, EvaluationRun/Catalog와 exact `ReleaseAssetBindingV1`을 사용한다. GitHub publisher는 draft-first/no-clobber/readback/reconcile을 구현했고, signer가 없으면 unsigned Stable publish apply는 fail-closed다.
 - **M11:** owned isolated preview, pinned rustfmt/Clippy, candidate build/test, exact durable `personal_auto`, M2 Profile→M4 PatchSetV2→M3 pre/post Gate와 recovery를 연결했다.
 - **16 Profile:** `catalog/profiles`의 정확한 16개 release source, strict descriptor/loader/resolver, parent closure·strict floor merge·fingerprint, `TaskSpec`/`ValidationPlan`/Evidence binding과 `star profile list|show|resolve`를 구현했다.
-- **공통:** P-0054 기준 generated Schema manifest 186개에 P-0055 `DevelopmentEffectReceiptV1`·`ReleaseAssetBindingV1`을 더해 현재 188개와 해당 fixture를 생성·검사했다. P-0055 최종 FULL/RELEASE·외부 증거는 현재 Slice 완료 Gate에서 별도로 봉인한다.
+- **공통:** P-0054 기준 generated Schema manifest 186개에 P-0055 `DevelopmentEffectReceiptV1`·`ReleaseAssetBindingV1`을 더해 현재 188개와 해당 fixture를 생성·검사했다. final FULL은 10/10 PASS다. RELEASE는 source code·x64·ARM64·lifecycle 13 PASS, signing/publication 1 unverified, host commit 정책에 따른 clean-worktree 1 fail이다.
 
 감사 상세와 항목별 구현 증거는 [P-0054 실제 기능 완성 감사](docs/testing/p0054-functional-completion-audit-2026-07-23.md)에 유지한다. 미구현 항목은 실제 코드·테스트가 닫히기 전 `DONE`으로 바꾸지 않는다.
 
@@ -70,12 +70,22 @@ P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 `b29c178..ac3c
 5. code review와 `git diff --check`, format, Schema check, requested `TARGET`→effective `FULL` 10/10을 통과했다. 최종 report는 `target/validation/20260723T113308437Z-12820/report.json`, duration 122,292 ms다.
 6. 실제 Authenticode signing, signed 설치, Codex runtime 변경, authenticated remote와 GitHub publish는 별도 승인·외부 Gate로 유지한다.
 
+## P-0055 현재 증거와 unblock 순서
+
+1. final code candidate는 branch `codex/p0055-nonsigning-external-seal`의 staged index tree `2eb3680b3f0cf5a8ae6b0daadff6fe54f003e067`이다. implementation 530 paths가 staged이고, 이번 최종 감사·원장 동기화는 그 implementation commit 뒤 별도 docs commit으로 stage할 documentation-only delta다.
+2. final FULL은 `target/validation/20260723T151125247Z-6868/report.json`, 10/10 complete·stable PASS, report `sha256:52ca57a2a84d45314fc7d35977ef0c5cea21b09d5dda7ae5ee30015fcf681a4b`다.
+3. final RELEASE는 `target/validation/20260723T151902921Z-24688/report.json`, 13/15 PASS, failed 1, unverified 1이다. non-pass는 `release-clean-worktree`와 `release-external-signing-publication`뿐이다.
+4. candidate stage는 x64/ARM64 각각 473파일이며 set digest는 `bf38c214…6325`/`fcf34fe1…ae9d`다. x64 네 EXE는 `0x8664`, ARM64 네 EXE는 `0xaa64`; ARM64 runtime은 `native_unverified`다.
+5. x64 isolated finalize·Bridge v2·status, SPDX SBOM 각 7 packages, RustSec 223 dependencies vulnerability/warning 0, pre-sign provenance `sha256:117b600a…ecf5`, official Inspector fixed 12/12·core 17/17이 통과했다.
+6. disposable GitHub draft asset `sha256:761d2714…0130`은 provider digest와 download digest가 일치했고 release/tag를 모두 정리했다. candidate commit이 없어 target은 base `a93de7e…`였으므로 exact target evidence는 아니다.
+7. unblock은 (a) 현재 staged implementation tree의 local commit, (b) 이 감사·원장 docs delta stage/commit, (c) branch push와 remote source readback, (d) final commit SHA로 package/provenance/GitHub target 재봉인, (e) Codex를 닫은 별도 창에서 candidate install·새 task core 17/17 순서다. 서명·public publish는 그 뒤에도 별도 blocker다.
+
 ## 현재 Context Pack
 
 - repo: `D:\개발\관제\Star-Control`
-- branch: `main`
-- base/head: `a93de7e68aff3ac02315d3a324aeaa497e1ede38`
-- 현재 Slice: P-0055 비서명 외부 Gate 전체 구현·운영 seal. P-0054 구현 변경을 보존하고 그 위에서 진행한다.
+- branch: `codex/p0055-nonsigning-external-seal`
+- base/head: `a93de7e68aff3ac02315d3a324aeaa497e1ede38`; staged index tree `2eb3680b3f0cf5a8ae6b0daadff6fe54f003e067`
+- 현재 Slice: P-0055 구현·격리 증거는 완료. host commit/push, exact candidate GitHub target, current Codex candidate install 17/17을 unblock해야 전체 seal이다.
 - 먼저 읽기: `README.md`, `docs/README.md`, `docs/contracts/development-management.md`, `docs/contracts/events-and-state.md`, `docs/contracts/validation-and-evidence.md`, `docs/contracts/versioning-and-migrations.md`, `docs/architecture/state-and-artifacts.md`, `docs/architecture/repository-layout.md`, `docs/roadmap/final-implementation.md`, ADR-0006~0008
 - 승인됨: package/dependency 설치, network·외부 도구, disposable install/update/repair/uninstall, GitHub draft·push·tag·remote readback. 각 effect는 exact target을 재검증하고 증거를 남긴다.
 - 금지: Authenticode signing, unsigned Stable 공개 publish, `legacy/`·`target/` 정리, 실제 사용자 project/data 손상, installer·AI/browser/scheduler 재개방
