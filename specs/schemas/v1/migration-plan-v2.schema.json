@@ -1,0 +1,375 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "IdempotencyContract": {
+      "enum": [
+        "replay_safe",
+        "detect_already_applied",
+        "not_replay_safe"
+      ],
+      "type": "string"
+    },
+    "MigrationEffectClass": {
+      "enum": [
+        "read_only",
+        "copy_write",
+        "live_nondestructive",
+        "live_destructive"
+      ],
+      "type": "string"
+    },
+    "MigrationPhasePlan": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_output": {
+          "type": "string"
+        },
+        "input_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "stop_condition": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "phase",
+        "required",
+        "input_refs",
+        "expected_output",
+        "stop_condition"
+      ],
+      "type": "object"
+    },
+    "MigrationStrategy": {
+      "enum": [
+        "side_by_side",
+        "atomic_replace",
+        "transactional_in_place"
+      ],
+      "type": "string"
+    },
+    "MigrationSupportDecision": {
+      "enum": [
+        "current_supported",
+        "migratable",
+        "read_only_supported",
+        "future_version",
+        "chain_gap",
+        "ambiguous_chain",
+        "unknown_version",
+        "corrupt"
+      ],
+      "type": "string"
+    },
+    "MigrationVersionEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "axis_id": {
+          "type": "string"
+        },
+        "coverage": {
+          "$ref": "#/$defs/CoverageState"
+        },
+        "observation_state": {
+          "$ref": "#/$defs/VersionObservationState"
+        },
+        "observed_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "owner": {
+          "type": "string"
+        },
+        "source_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_ref": {
+          "type": "string"
+        },
+        "version_scheme": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "axis_id",
+        "owner",
+        "version_scheme",
+        "source_ref",
+        "source_fingerprint",
+        "coverage",
+        "observation_state"
+      ],
+      "type": "object"
+    },
+    "MigrationVersionVector": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/MigrationVersionEntry"
+          },
+          "type": "array"
+        },
+        "vector_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "entries",
+        "vector_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ResolvedMigrationStep": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "effect_class": {
+          "$ref": "#/$defs/MigrationEffectClass"
+        },
+        "from_version": {
+          "type": "string"
+        },
+        "idempotency_contract": {
+          "$ref": "#/$defs/IdempotencyContract"
+        },
+        "invocation_template_ref": {
+          "type": "string"
+        },
+        "order": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rollback_ref": {
+          "type": "string"
+        },
+        "step_id": {
+          "type": "string"
+        },
+        "step_version": {
+          "type": "string"
+        },
+        "to_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "order",
+        "step_id",
+        "step_version",
+        "definition_fingerprint",
+        "from_version",
+        "to_version",
+        "effect_class",
+        "idempotency_contract",
+        "invocation_template_ref",
+        "rollback_ref"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "VersionObservationState": {
+      "enum": [
+        "observed",
+        "unknown",
+        "corrupt"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.migration-plan:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_plan": {
+      "$ref": "#/$defs/MigrationPhasePlan"
+    },
+    "backup_plan": {
+      "$ref": "#/$defs/MigrationPhasePlan"
+    },
+    "blockers": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "checkout_id": {
+      "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "consumer_compatibility_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "cross_project_handoff_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dry_run_plan": {
+      "$ref": "#/$defs/MigrationPhasePlan"
+    },
+    "impact_analysis_ref": {
+      "type": "string"
+    },
+    "invariant_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "manifest_ref": {
+      "type": "string"
+    },
+    "migration_plan_id": {
+      "type": "string"
+    },
+    "observed_version_vector": {
+      "$ref": "#/$defs/MigrationVersionVector"
+    },
+    "ordered_steps": {
+      "items": {
+        "$ref": "#/$defs/ResolvedMigrationStep"
+      },
+      "type": "array"
+    },
+    "permission_checkpoints": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "rehearsal_plan": {
+      "$ref": "#/$defs/MigrationPhasePlan"
+    },
+    "resource_estimate": {
+      "type": "string"
+    },
+    "resume_plan": {
+      "$ref": "#/$defs/MigrationPhasePlan"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rollback_plan_ref": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.migration-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "scope_revision_ref": {
+      "type": "string"
+    },
+    "source_patch_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "source_subject_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "strategy": {
+      "$ref": "#/$defs/MigrationStrategy"
+    },
+    "support_decision": {
+      "$ref": "#/$defs/MigrationSupportDecision"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "target_version_vector": {
+      "$ref": "#/$defs/MigrationVersionVector"
+    },
+    "task_spec_ref": {
+      "type": "string"
+    },
+    "validation_plan_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "migration_plan_id",
+    "revision",
+    "task_spec_ref",
+    "scope_revision_ref",
+    "impact_analysis_ref",
+    "project_id",
+    "checkout_id",
+    "source_subject_fingerprint",
+    "manifest_ref",
+    "manifest_fingerprint",
+    "target_id",
+    "observed_version_vector",
+    "target_version_vector",
+    "support_decision",
+    "ordered_steps",
+    "strategy",
+    "resource_estimate",
+    "dry_run_plan",
+    "backup_plan",
+    "rehearsal_plan",
+    "activation_plan",
+    "resume_plan",
+    "rollback_plan_ref",
+    "plan_fingerprint"
+  ],
+  "title": "MigrationPlanV2",
+  "type": "object"
+}

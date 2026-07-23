@@ -95,6 +95,7 @@
       "$ref": "#/$defs/Sha256Hash"
     },
     "bundle_id": {
+      "pattern": "^lsb_[0-9A-HJKMNP-TV-Z]{26}$",
       "type": "string"
     },
     "dependencies": {

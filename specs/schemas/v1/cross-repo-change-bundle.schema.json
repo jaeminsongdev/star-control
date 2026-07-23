@@ -1,0 +1,422 @@
+{
+  "$defs": {
+    "BundleAggregateState": {
+      "enum": [
+        "preparing",
+        "prepared",
+        "awaiting_apply",
+        "applying",
+        "partially_applied",
+        "awaiting_validation",
+        "validating",
+        "rollback_required",
+        "held",
+        "outcome_unknown",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "BundleEdgeKind": {
+      "enum": [
+        "requires",
+        "provider_before_consumer",
+        "schema_before_codegen",
+        "reader_before_writer",
+        "consumer_before_provider_removal",
+        "validation_before_integration",
+        "local_before_remote"
+      ],
+      "type": "string"
+    },
+    "BundleStep": {
+      "additionalProperties": false,
+      "properties": {
+        "completion_condition": {
+          "type": "string"
+        },
+        "expected_effect": {
+          "type": "string"
+        },
+        "input_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "output_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required_gate_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stage_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "step_id": {
+          "type": "string"
+        },
+        "step_kind": {
+          "$ref": "#/$defs/BundleStepKind"
+        }
+      },
+      "required": [
+        "step_id",
+        "step_kind",
+        "input_refs",
+        "output_refs",
+        "expected_effect",
+        "required_gate_refs",
+        "completion_condition"
+      ],
+      "type": "object"
+    },
+    "BundleStepEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_kind": {
+          "$ref": "#/$defs/BundleEdgeKind"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from_step_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "to_step_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_step_id",
+        "to_step_id",
+        "edge_kind",
+        "reason",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "BundleStepGraph": {
+      "additionalProperties": false,
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/BundleStepEdge"
+          },
+          "type": "array"
+        },
+        "graph_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/BundleStep"
+          },
+          "type": "array"
+        },
+        "topological_order": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "steps",
+        "edges",
+        "topological_order",
+        "graph_fingerprint"
+      ],
+      "type": "object"
+    },
+    "BundleStepKind": {
+      "enum": [
+        "provider_compatibility_open",
+        "project_patch_apply",
+        "project_migration",
+        "project_validate",
+        "consumer_transition",
+        "project_local_integrate",
+        "provider_compatibility_close",
+        "remote_push",
+        "remote_pr",
+        "remote_merge",
+        "bundle_goal_validate"
+      ],
+      "type": "string"
+    },
+    "CompletionLevel": {
+      "enum": [
+        "none",
+        "validated_participants",
+        "local_integrated",
+        "remote_merged",
+        "release_handoff_ready"
+      ],
+      "type": "string"
+    },
+    "RemotePolicy": {
+      "enum": [
+        "disabled",
+        "observe_only",
+        "approved_actions_only"
+      ],
+      "type": "string"
+    },
+    "ResourceBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_limit_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_weight_limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_active_worktrees": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_concurrent_writes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_parallel_projects": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_processes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memory_limit_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wall_time_limit_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "worktree_disk_limit_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_parallel_projects",
+        "max_active_worktrees",
+        "max_concurrent_writes",
+        "max_processes",
+        "cpu_weight_limit",
+        "memory_limit_bytes",
+        "worktree_disk_limit_bytes",
+        "artifact_limit_bytes",
+        "wall_time_limit_ms"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.cross-repo-change-bundle:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "budget_snapshot_ref": {
+      "type": "string"
+    },
+    "bundle_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "change_bundle_id": {
+      "pattern": "^lsb_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "compatibility_window_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "completion_level_reached": {
+      "$ref": "#/$defs/CompletionLevel"
+    },
+    "completion_target": {
+      "$ref": "#/$defs/CompletionLevel"
+    },
+    "gate_policy_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "goal_gate_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hold_reasons": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "input_handoff_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "merge_policy": {
+      "type": "string"
+    },
+    "multi_project_goal_ref": {
+      "type": "string"
+    },
+    "open_effect_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "participant_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "pending_approval_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "permission_plan_ref": {
+      "type": "string"
+    },
+    "prepare_gate_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "previous_revision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "remaining_risks": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "remote_policy": {
+      "$ref": "#/$defs/RemotePolicy"
+    },
+    "resource_budget": {
+      "$ref": "#/$defs/ResourceBudget"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.cross-repo-change-bundle",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_revision_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "state": {
+      "$ref": "#/$defs/BundleAggregateState"
+    },
+    "step_graph": {
+      "$ref": "#/$defs/BundleStepGraph"
+    },
+    "supersedes_bundle_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "task_spec_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "change_bundle_id",
+    "revision",
+    "multi_project_goal_ref",
+    "task_spec_refs",
+    "scope_revision_refs",
+    "input_handoff_refs",
+    "participant_refs",
+    "step_graph",
+    "compatibility_window_refs",
+    "merge_policy",
+    "remote_policy",
+    "resource_budget",
+    "budget_snapshot_ref",
+    "permission_plan_ref",
+    "gate_policy_fingerprint",
+    "state",
+    "completion_target",
+    "completion_level_reached",
+    "open_effect_refs",
+    "pending_approval_refs",
+    "remaining_risks",
+    "hold_reasons",
+    "bundle_fingerprint"
+  ],
+  "title": "CrossRepoChangeBundle",
+  "type": "object"
+}

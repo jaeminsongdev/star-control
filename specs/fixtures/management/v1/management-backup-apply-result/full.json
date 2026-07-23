@@ -1,0 +1,30 @@
+{
+  "applied_at": "2026-01-01T00:00:00Z",
+  "approved_plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "backup_set_id": "bks_00000000000000000000000000",
+  "manifest": {
+    "backup_set_id": "bks_00000000000000000000000000",
+    "created_at": "2026-01-01T00:00:00Z",
+    "entries": [
+      {
+        "byte_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "generation": 0,
+        "management_store_version": 0,
+        "relative_locator": "fixture",
+        "scope": {
+          "kind": "global"
+        },
+        "size_bytes": 0,
+        "store_id": "mst_00000000000000000000000000",
+        "store_revision": 0
+      }
+    ],
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "source_active_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-backup-apply-result",
+  "schema_version": 1
+}

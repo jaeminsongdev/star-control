@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "BackupStoreEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "byte_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "management_store_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "relative_locator": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/StoreScope"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "store_id": {
+          "pattern": "^mst_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "store_revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scope",
+        "store_id",
+        "generation",
+        "management_store_version",
+        "store_revision",
+        "relative_locator",
+        "size_bytes",
+        "byte_sha256"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StoreScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "global",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-backup-set-manifest:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "backup_set_id": {
+      "pattern": "^bks_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/BackupStoreEntry"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.management-backup-set-manifest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "source_active_set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "backup_set_id",
+    "created_at",
+    "source_active_set_fingerprint",
+    "entries",
+    "set_fingerprint"
+  ],
+  "title": "BackupSetManifest",
+  "type": "object"
+}

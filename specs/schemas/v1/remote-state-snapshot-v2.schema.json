@@ -1,0 +1,249 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "RemoteCheckObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "conclusion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "subject_object_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "check_id",
+        "subject_object_id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "RemotePullRequestObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "base_ref": {
+          "type": "string"
+        },
+        "head_object_id": {
+          "type": "string"
+        },
+        "merge_object_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider_ref": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "updated_revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_ref",
+        "head_object_id",
+        "base_ref",
+        "state",
+        "updated_revision"
+      ],
+      "type": "object"
+    },
+    "RemoteRefObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "object_id": {
+          "type": "string"
+        },
+        "object_kind": {
+          "type": "string"
+        },
+        "provider_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_ref",
+        "object_id",
+        "object_kind"
+      ],
+      "type": "object"
+    },
+    "RemoteReleaseObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "provider_ref": {
+          "type": "string"
+        },
+        "source_object_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_ref",
+        "tag",
+        "source_object_id",
+        "artifact_refs",
+        "status"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.remote-state-snapshot-v2:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_descriptor_ref": {
+      "type": "string"
+    },
+    "capabilities": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "type": "object"
+    },
+    "captured_at": {
+      "type": "string"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/RemoteCheckObservation"
+      },
+      "type": "array"
+    },
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "local_subject_ref": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "pull_requests": {
+      "items": {
+        "$ref": "#/$defs/RemotePullRequestObservation"
+      },
+      "type": "array"
+    },
+    "query_scope": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "raw_artifact_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "refs": {
+      "items": {
+        "$ref": "#/$defs/RemoteRefObservation"
+      },
+      "type": "array"
+    },
+    "releases": {
+      "items": {
+        "$ref": "#/$defs/RemoteReleaseObservation"
+      },
+      "type": "array"
+    },
+    "remote_identity": {
+      "type": "string"
+    },
+    "remote_kind": {
+      "type": "string"
+    },
+    "remote_snapshot_id": {
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.remote-state-snapshot-v2",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "snapshot_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "valid_until": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "remote_snapshot_id",
+    "revision",
+    "project_id",
+    "remote_kind",
+    "adapter_descriptor_ref",
+    "remote_identity",
+    "local_subject_ref",
+    "query_scope",
+    "refs",
+    "pull_requests",
+    "checks",
+    "releases",
+    "capabilities",
+    "captured_at",
+    "valid_until",
+    "completeness",
+    "limitations",
+    "snapshot_fingerprint"
+  ],
+  "title": "RemoteStateSnapshotV2",
+  "type": "object"
+}

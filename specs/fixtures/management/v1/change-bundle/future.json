@@ -1,6 +1,6 @@
 {
   "bundle_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-  "bundle_id": "fixture",
+  "bundle_id": "lsb_00000000000000000000000000",
   "dependencies": [],
   "goal_id": "gol_00000000000000000000000000",
   "limitations": [],

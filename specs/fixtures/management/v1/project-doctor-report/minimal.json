@@ -1,0 +1,16 @@
+{
+  "clean_room_readiness": "ready",
+  "completeness": "complete",
+  "constraint_evaluations": [],
+  "environment_snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "environment_snapshot_ref": "fixture",
+  "manifest_observations": [],
+  "project_id": "prj_00000000000000000000000000",
+  "report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "report_id": "fixture",
+  "schema_id": "star.project-doctor-report",
+  "schema_version": 1,
+  "state": "pass",
+  "subject_revision": "fixture",
+  "toolchain_observations": []
+}

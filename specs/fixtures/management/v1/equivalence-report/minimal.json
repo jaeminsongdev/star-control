@@ -1,0 +1,18 @@
+{
+  "baseline_subject": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "build_compile_result": "fixture",
+  "candidate_subject": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "consumer_results": [],
+  "dimension_results": [],
+  "equivalence_report_id": "fixture",
+  "equivalence_state": "not_evaluated",
+  "gate_refs": [],
+  "performance_comparison_refs": [],
+  "plan_ref": "fixture",
+  "platform_matrix_results": [],
+  "report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.equivalence-report",
+  "schema_version": 1,
+  "test_contract_results": [],
+  "unknown_semantics": []
+}

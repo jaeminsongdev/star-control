@@ -1,0 +1,12 @@
+{
+  "bundle_id": "lsb_00000000000000000000000000",
+  "destination_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "expected_store_revision": 0,
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "schema_id": "star.management-local-state-export-plan",
+  "schema_version": 1,
+  "source_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

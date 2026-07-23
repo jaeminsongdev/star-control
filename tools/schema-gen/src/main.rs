@@ -17,9 +17,15 @@ type GeneratedFile = (PathBuf, Vec<u8>);
 const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "task-invocation-v2.schema.json",
     "validation-run-v2.schema.json",
+    "validation-result-v2.schema.json",
     "gate-decision-v2.schema.json",
     "evidence-bundle-v2.schema.json",
     "diagnostic-v2.schema.json",
+    "baseline-v2.schema.json",
+    "suppression-v2.schema.json",
+    "disposition-v2.schema.json",
+    "review-pack.schema.json",
+    "rework-directive.schema.json",
     "validation-plan-v2.schema.json",
     "task-spec.schema.json",
     "scope-revision.schema.json",
@@ -29,7 +35,54 @@ const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "planning-bundle.schema.json",
     "goal-record.schema.json",
     "managed-registry-snapshot.schema.json",
+    "managed-registry-manifest.schema.json",
+    "managed-registry-fragment.schema.json",
+    "managed-registry-snapshot-v2.schema.json",
+    "registry-consistency-record.schema.json",
+    "managed-declaration-change-intent.schema.json",
     "compatibility-report.schema.json",
+    "project-contract-manifest.schema.json",
+    "contract-surface-snapshot.schema.json",
+    "compatibility-report-v2.schema.json",
+    "documentation-snapshot.schema.json",
+    "config-key-trace.schema.json",
+    "environment-snapshot.schema.json",
+    "project-doctor-report.schema.json",
+    "clean-room-specification.schema.json",
+    "dependency-security-input-manifest.schema.json",
+    "failure-record.schema.json",
+    "reproduction-pack-v2.schema.json",
+    "regression-record.schema.json",
+    "recovery-plan-v2.schema.json",
+    "dependency-snapshot.schema.json",
+    "supply-chain-snapshot.schema.json",
+    "external-data-snapshot.schema.json",
+    "dependency-update-plan.schema.json",
+    "maintenance-radar-snapshot.schema.json",
+    "project-migration-manifest.schema.json",
+    "migration-plan-v2.schema.json",
+    "migration-checkpoint-v2.schema.json",
+    "migration-attempt.schema.json",
+    "migration-validation-report.schema.json",
+    "restore-verification-record.schema.json",
+    "performance-workload-spec.schema.json",
+    "performance-run.schema.json",
+    "performance-comparison-v2.schema.json",
+    "language-migration-plan.schema.json",
+    "equivalence-report.schema.json",
+    "cross-project-migration-handoff.schema.json",
+    "multi-project-goal.schema.json",
+    "cross-repo-change-bundle.schema.json",
+    "change-bundle-participant-v2.schema.json",
+    "worktree-record.schema.json",
+    "overlap-analysis.schema.json",
+    "merge-plan-v2.schema.json",
+    "merge-queue-record.schema.json",
+    "merge-conflict-record.schema.json",
+    "project-merge-result.schema.json",
+    "remote-state-snapshot-v2.schema.json",
+    "remote-operation-record.schema.json",
+    "change-bundle-release-handoff.schema.json",
     "clean-room-doctor-report.schema.json",
     "reproduction-pack.schema.json",
     "maintenance-radar.schema.json",
@@ -38,12 +91,19 @@ const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "change-bundle.schema.json",
     "change-bundle-handoff.schema.json",
     "release-manifest-v2.schema.json",
+    "release-asset-binding-v1.schema.json",
+    "development-effect-receipt-v1.schema.json",
     "evaluation-run-v2.schema.json",
     "evaluation-catalog-item.schema.json",
     "rust-toolchain-binding.schema.json",
     "rust-style-policy-snapshot.schema.json",
     "rust-style-coverage-matrix.schema.json",
     "rust-style-step-execution.schema.json",
+    "rust-style-policy-approval-request.schema.json",
+    "rust-style-policy-approval-decision.schema.json",
+    "development-profile-descriptor.schema.json",
+    "development-profile-catalog-snapshot.schema.json",
+    "development-profile-resolution.schema.json",
     "project.schema.json",
     "project-v1.schema.json",
     "project-checkout.schema.json",
@@ -70,6 +130,20 @@ const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "gate-decision.schema.json",
     "artifact-ref.schema.json",
     "management-store-status.schema.json",
+    "management-active-set.schema.json",
+    "management-backup-plan.schema.json",
+    "management-backup-set-manifest.schema.json",
+    "management-backup-apply-result.schema.json",
+    "management-recovery-status.schema.json",
+    "management-restore-plan.schema.json",
+    "management-restore-apply-result.schema.json",
+    "management-rebuild-plan.schema.json",
+    "management-rebuild-apply-result.schema.json",
+    "management-local-state-bundle.schema.json",
+    "management-local-state-export-plan.schema.json",
+    "management-local-state-export-result.schema.json",
+    "management-local-state-import-plan.schema.json",
+    "management-local-state-import-result.schema.json",
     "coordinated-operation.schema.json",
 ];
 
@@ -355,7 +429,11 @@ fn sample_string(schema: &Value, property_name: Option<&str>) -> String {
     if name.contains("sha256") || name.contains("fingerprint") || name.ends_with("_hash") {
         return format!("sha256:{}", "0".repeat(64));
     }
-    let id_prefix = if name.contains("project_catalog_snapshot") {
+    let id_prefix = if name.contains("managed_registry_snapshot") {
+        Some("mrs_")
+    } else if name.contains("registry_consistency_record") {
+        Some("rcr_")
+    } else if name.contains("project_catalog_snapshot") {
         Some("pcs_")
     } else if name.contains("code_index_snapshot") {
         Some("cix_")
@@ -418,6 +496,12 @@ fn sample_string(schema: &Value, property_name: Option<&str>) -> String {
         Some("cko_")
     } else if name.contains("generation") {
         Some("gen_")
+    } else if name.contains("backup_set") {
+        Some("bks_")
+    } else if name.contains("recovery_plan") {
+        Some("rcp_")
+    } else if name.contains("bundle_id") {
+        Some("lsb_")
     } else if name.contains("coordinated_operation") || name == "operation_id" {
         Some("cop_")
     } else if name.contains("store_id") {
@@ -430,7 +514,17 @@ fn sample_string(schema: &Value, property_name: Option<&str>) -> String {
     if let Some(prefix) = id_prefix {
         let length = if matches!(
             prefix,
-            "pcs_" | "cix_" | "prv_" | "wsp_" | "fnd_" | "occ_" | "srf_" | "sym_" | "src_"
+            "mrs_"
+                | "rcr_"
+                | "pcs_"
+                | "cix_"
+                | "prv_"
+                | "wsp_"
+                | "fnd_"
+                | "occ_"
+                | "srf_"
+                | "sym_"
+                | "src_"
         ) {
             52
         } else {

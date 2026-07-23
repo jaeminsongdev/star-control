@@ -1,0 +1,8 @@
+{
+  "allowed_operations": [],
+  "mode": "normal",
+  "schema_id": "star.management-recovery-status",
+  "schema_version": 1,
+  "status_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "stores": []
+}

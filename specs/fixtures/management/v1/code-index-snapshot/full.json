@@ -66,6 +66,81 @@
     }
   ],
   "generation_id": "gen_00000000000000000000000000",
+  "guidance": [
+    {
+      "applicable_scope": "fixture",
+      "checkout_id": "cko_00000000000000000000000000",
+      "conflict": false,
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "freshness": "current",
+      "heading_anchors": [
+        "fixture"
+      ],
+      "kind": "project_manifest",
+      "limitations": [
+        {
+          "code": "fixture",
+          "parameters": {
+            "fixture": "fixture"
+          },
+          "scope": "fixture"
+        }
+      ],
+      "priority": 0,
+      "priority_reason": "fixture",
+      "project_id": "prj_00000000000000000000000000",
+      "record_key": "fixture",
+      "redacted_summary": "fixture",
+      "source_ref": "fixture",
+      "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "supersedes": [
+        "fixture"
+      ]
+    }
+  ],
+  "hardcoding_candidates": [
+    {
+      "assessment": "candidate",
+      "candidate_key": "fixture",
+      "canonical_source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "category": "absolute_path",
+      "confidence": "fixture",
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "false_positive_guards": [
+        "fixture"
+      ],
+      "length_bucket": "fixture",
+      "limitations": [
+        {
+          "code": "fixture",
+          "parameters": {
+            "fixture": "fixture"
+          },
+          "scope": "fixture"
+        }
+      ],
+      "literal_shape": "fixture",
+      "matched_predicate": "fixture",
+      "parameter_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "redaction_state": "not_needed",
+      "related_entity_key": "fixture",
+      "rule_id": "fixture",
+      "rule_version": "fixture",
+      "source_class": "source",
+      "source_content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "source_facets": [
+        "fixture"
+      ],
+      "source_range": {
+        "end_column": 0,
+        "end_line": 0,
+        "start_column": 0,
+        "start_line": 0
+      },
+      "source_ref": "fixture",
+      "used_tier": "text"
+    }
+  ],
   "index_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "limitations": [
     {
@@ -108,8 +183,53 @@
   "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "required_tier": "text",
   "scan_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "scan_mode": "full",
   "scan_run_id": "scn_00000000000000000000000000",
   "schema_id": "star.code-index-snapshot",
   "schema_version": 1,
+  "toolchains": [
+    {
+      "build_system": "fixture",
+      "checkout_id": "cko_00000000000000000000000000",
+      "commands": [
+        {
+          "args": [
+            "fixture"
+          ],
+          "command_id": "fixture",
+          "confidence": "fixture",
+          "cwd_scope": "fixture",
+          "declaration_kind": "declared",
+          "executable_hint": "fixture",
+          "source_ref": "fixture"
+        }
+      ],
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "language_ids": [
+        "fixture"
+      ],
+      "limitations": [
+        {
+          "code": "fixture",
+          "parameters": {
+            "fixture": "fixture"
+          },
+          "scope": "fixture"
+        }
+      ],
+      "lockfile_ref": "fixture",
+      "lockfile_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "manifest_ref": "fixture",
+      "package_manager": "fixture",
+      "project_id": "prj_00000000000000000000000000",
+      "provenance": "declared",
+      "record_key": "fixture",
+      "toolchain_constraint": "fixture",
+      "toolchain_file_ref": "fixture"
+    }
+  ],
   "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }

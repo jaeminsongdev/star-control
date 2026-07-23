@@ -1,0 +1,75 @@
+{
+  "completeness": "complete",
+  "created_at": "2026-01-01T00:00:00Z",
+  "freshness": "current",
+  "normalizer_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "outcome": "pass",
+  "project_id": "prj_00000000000000000000000000",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "revision": 0,
+  "run_satisfactions": [],
+  "schema_id": "star.validation-result",
+  "schema_version": 2,
+  "stability": "stable",
+  "stale_reasons": [],
+  "subject_binding": {
+    "binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "catalog_snapshot_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "change_plan_refs": [],
+    "change_set_refs": [],
+    "checkout_id": "cko_00000000000000000000000000",
+    "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "execution_environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "freshness": "current",
+    "gate_phase": "during_stage",
+    "gate_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "impact_analysis_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "normalizer_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "probed_at": "2026-01-01T00:00:00Z",
+    "profile_resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "project_id": "prj_00000000000000000000000000",
+    "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "rule_refs": [],
+    "scope_revision_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "stale_reasons": [],
+    "task_spec_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "validation_plan_ref": {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "validator_registry_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "workspace_content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "unexpected": true,
+  "validation_plan_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "validation_result_id": "vrs_00000000000000000000000000",
+  "validation_run_refs": []
+}

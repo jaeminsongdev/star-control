@@ -1,0 +1,30 @@
+schema_version = 1
+profile_id = "refactor_codemod"
+profile_version = "1.0.0"
+display_name = "Refactor Codemod"
+summary = "typed Recipe에서 immutable PatchSet, exact apply와 pre/post Gate·복구를 수행한다."
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+triggers = ["codemod", "managed_symbol_change", "refactor"]
+stage_template = ["recipe_resolve", "dry_run", "patch_set", "pre_gate", "exact_apply", "post_gate", "recovery"]
+context_rules = ["current_index", "exact_before_hash", "owned_path_scope"]
+route_hints = ["safe_patch", "validation"]
+permission_actions = ["patch.apply"]
+gate_phases = ["patch_pre_apply", "patch_post_apply", "goal_exit"]
+required_rule_families = ["patch_scope", "postcondition", "replay_idempotence"]
+required_check_families = ["architecture", "test"]
+optional_check_families = ["format", "lint"]
+always_run_for = ["patch_apply", "public_change"]
+baseline_policy = "clean_only"
+suppression_policy = "approved_expiring"
+claim_policy = ["change", "patch", "recovery"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["gate", "patch_application", "patch_set", "recipe_execution"]
+corpus_requirements = ["idempotence", "stale_precondition"]
+approval_checkpoints = ["patch_apply"]
+default_stop_state = "awaiting_apply_approval"
+allowed_effect_classes = ["read", "plan", "validate", "workspace_mutation"]
+permission_floor = "exact_durable_approval"
+
+[review_policy]
+cli_only = "none"
+codex_managed = "independent_human"

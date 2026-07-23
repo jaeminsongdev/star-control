@@ -1,0 +1,15 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "permanent": false,
+  "project_id": "prj_00000000000000000000000000",
+  "reason": "fixture",
+  "reason_code": "fixture",
+  "revision": 0,
+  "schema_id": "star.suppression",
+  "schema_version": 2,
+  "scope_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "status": "active",
+  "subject_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "suppression_id": "sup_00000000000000000000000000"
+}

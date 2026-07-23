@@ -2,7 +2,9 @@
   "args": [
     "fixture"
   ],
-  "cwd": "fixture",
+  "cwd": {
+    "kind": "project_root"
+  },
   "env_refs": {
     "fixture": {
       "source": "literal",

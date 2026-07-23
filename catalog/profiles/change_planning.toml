@@ -1,0 +1,30 @@
+schema_version = 1
+profile_id = "change_planning"
+profile_version = "1.0.0"
+display_name = "변경 계획"
+summary = "TaskSpec에서 영향 graph, ChangePlan과 exact ValidationPlan을 만든다."
+parent_profile = { profile_id = "project_understanding", profile_version = "1.0.0" }
+triggers = ["contract_change", "multi_file_change", "multi_project_change"]
+stage_template = ["task_spec", "scope_revision", "change_set", "impact_analysis", "validation_plan"]
+context_rules = ["current_catalog", "current_index", "explicit_exclusions"]
+route_hints = ["planning", "project_graph"]
+permission_actions = []
+gate_phases = ["during_stage", "stage_exit"]
+required_rule_families = ["scope_integrity", "validation_coverage"]
+required_check_families = ["architecture"]
+optional_check_families = ["test"]
+always_run_for = ["scope_revision"]
+baseline_policy = "report_only"
+suppression_policy = "bounded_expiring"
+claim_policy = ["change", "scope"]
+stability_policy = "report_flaky"
+evidence_requirements = ["change_set", "impact_analysis", "validation_plan"]
+corpus_requirements = ["planning_fixture"]
+approval_checkpoints = []
+default_stop_state = "plan_ready"
+allowed_effect_classes = ["read", "plan"]
+permission_floor = "local_read_only"
+
+[review_policy]
+cli_only = "none"
+codex_managed = "human_semantic"

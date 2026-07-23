@@ -1,0 +1,341 @@
+{
+  "$defs": {
+    "IdempotencyContract": {
+      "enum": [
+        "replay_safe",
+        "detect_already_applied",
+        "not_replay_safe"
+      ],
+      "type": "string"
+    },
+    "MigrationChain": {
+      "additionalProperties": false,
+      "properties": {
+        "chain_id": {
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/MigrationStepDefinition"
+          },
+          "type": "array"
+        },
+        "target_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "chain_id",
+        "target_id",
+        "steps"
+      ],
+      "type": "object"
+    },
+    "MigrationEffectClass": {
+      "enum": [
+        "read_only",
+        "copy_write",
+        "live_nondestructive",
+        "live_destructive"
+      ],
+      "type": "string"
+    },
+    "MigrationInvariantSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "after_check_ref": {
+          "type": "string"
+        },
+        "before_check_ref": {
+          "type": "string"
+        },
+        "invariant_id": {
+          "type": "string"
+        },
+        "invariant_kind": {
+          "type": "string"
+        },
+        "loss_budget": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "invariant_id",
+        "invariant_kind",
+        "required",
+        "before_check_ref",
+        "after_check_ref"
+      ],
+      "type": "object"
+    },
+    "MigrationStepDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_policy": {
+          "type": "string"
+        },
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "effect_class": {
+          "$ref": "#/$defs/MigrationEffectClass"
+        },
+        "expected_output": {
+          "type": "string"
+        },
+        "from_version": {
+          "type": "string"
+        },
+        "idempotency_contract": {
+          "$ref": "#/$defs/IdempotencyContract"
+        },
+        "invariant_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "invocation_template_ref": {
+          "type": "string"
+        },
+        "normalizer_ref": {
+          "type": "string"
+        },
+        "preconditions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rollback_ref": {
+          "type": "string"
+        },
+        "step_id": {
+          "type": "string"
+        },
+        "step_version": {
+          "type": "string"
+        },
+        "to_version": {
+          "type": "string"
+        },
+        "tool_ref": {
+          "type": "string"
+        },
+        "unknown_field_policy": {
+          "$ref": "#/$defs/UnknownFieldPolicy"
+        },
+        "write_scope": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_id",
+        "step_version",
+        "from_version",
+        "to_version",
+        "invocation_template_ref",
+        "effect_class",
+        "idempotency_contract",
+        "checkpoint_policy",
+        "unknown_field_policy",
+        "expected_output",
+        "rollback_ref",
+        "tool_ref",
+        "normalizer_ref",
+        "definition_fingerprint"
+      ],
+      "type": "object"
+    },
+    "MigrationTargetKind": {
+      "enum": [
+        "data",
+        "config",
+        "database",
+        "state",
+        "file_format"
+      ],
+      "type": "string"
+    },
+    "MigrationTargetSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "current_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "locator_class": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "sensitivity": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "string"
+        },
+        "target_kind": {
+          "$ref": "#/$defs/MigrationTargetKind"
+        },
+        "target_version": {
+          "type": "string"
+        },
+        "version_source_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_id",
+        "target_kind",
+        "owner",
+        "locator_class",
+        "sensitivity",
+        "version_source_ref",
+        "target_version"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "UnknownFieldPolicy": {
+      "enum": [
+        "preserve",
+        "opaque",
+        "block"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.project-migration-manifest:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_specs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "backup_specs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "check_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "consumer_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "cross_project_relations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "invariant_specs": {
+      "items": {
+        "$ref": "#/$defs/MigrationInvariantSpec"
+      },
+      "type": "array"
+    },
+    "manifest_id": {
+      "type": "string"
+    },
+    "manifest_version": {
+      "type": "string"
+    },
+    "migration_chains": {
+      "items": {
+        "$ref": "#/$defs/MigrationChain"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "rehearsal_specs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "rollback_specs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.project-migration-manifest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "target_specs": {
+      "items": {
+        "$ref": "#/$defs/MigrationTargetSpec"
+      },
+      "type": "array"
+    },
+    "tool_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "manifest_id",
+    "manifest_version",
+    "project_id",
+    "target_specs",
+    "migration_chains",
+    "invariant_specs",
+    "content_fingerprint"
+  ],
+  "title": "ProjectMigrationManifest",
+  "type": "object"
+}

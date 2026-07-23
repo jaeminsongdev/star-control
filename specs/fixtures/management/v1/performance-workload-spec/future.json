@@ -1,0 +1,17 @@
+{
+  "build_mode": "fixture",
+  "correctness_check_refs": [],
+  "environment_class": "fixture",
+  "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "measured_count": 0,
+  "metrics": [],
+  "noise_budget_ratio": 1,
+  "outlier_policy": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.performance-workload-spec",
+  "schema_version": 2,
+  "specification_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "task_ref": "fixture",
+  "warmup_count": 0,
+  "workload_id": "fixture"
+}

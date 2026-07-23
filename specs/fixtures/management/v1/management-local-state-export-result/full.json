@@ -1,0 +1,116 @@
+{
+  "applied_at": "2026-01-01T00:00:00Z",
+  "approved_plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "bundle": {
+    "active_change_plans": [
+      {
+        "change_plan_id": "cpl_00000000000000000000000000",
+        "created_at": "2026-01-01T00:00:00Z",
+        "expected_paths": [
+          "src/lib.rs"
+        ],
+        "finding_refs": [
+          "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "parameters": {
+          "fixture": "fixture"
+        },
+        "permission_plan_ref": "fixture",
+        "preconditions": [
+          "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "project_id": "prj_00000000000000000000000000",
+        "recipe_refs": [
+          {
+            "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "recipe_id": "fixture",
+            "recipe_version": "fixture"
+          }
+        ],
+        "revision": 0,
+        "risk": "fixture",
+        "schema_id": "fixture",
+        "schema_version": 0,
+        "status": "draft",
+        "target_workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "updated_at": "2026-01-01T00:00:00Z",
+        "validation_plan_ref": "fixture"
+      }
+    ],
+    "bundle_id": "lsb_00000000000000000000000000",
+    "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "local_baselines": [
+      {
+        "baseline_id": "bas_00000000000000000000000000",
+        "created_at": "2026-01-01T00:00:00Z",
+        "finding_fingerprints": [
+          "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "project_id": "prj_00000000000000000000000000",
+        "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "reason": "fixture",
+        "reviewed": false,
+        "revision": 0,
+        "rule_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "scan_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "schema_id": "fixture",
+        "schema_version": 0,
+        "scope_kind": "shared",
+        "set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "status": "active",
+        "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "local_dispositions": [
+      {
+        "decided_at": "2026-01-01T00:00:00Z",
+        "decision": "needs_action",
+        "disposition_id": "dsp_00000000000000000000000000",
+        "duplicate_of_finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "expires_at": "2026-01-01T00:00:00Z",
+        "finding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "provenance": "fixture",
+        "reason": "fixture",
+        "reason_code": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "schema_version": 0,
+        "scope_revision": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "status": "active"
+      }
+    ],
+    "local_suppressions": [
+      {
+        "config_fingerprint_constraint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "created_at": "2026-01-01T00:00:00Z",
+        "expires_at": "2026-01-01T00:00:00Z",
+        "justification": "fixture",
+        "permanent": false,
+        "project_id": "prj_00000000000000000000000000",
+        "provenance": "fixture",
+        "reason": "fixture",
+        "reason_code": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "schema_version": 0,
+        "scope_kind": "shared",
+        "selector": "fixture",
+        "source_revision_constraint": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "status": "active",
+        "suppression_id": "sup_00000000000000000000000000"
+      }
+    ],
+    "project_id": "prj_00000000000000000000000000",
+    "redaction_contract_version": 0,
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "source_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "payload_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-local-state-export-result",
+  "schema_version": 1
+}

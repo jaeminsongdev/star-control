@@ -91,12 +91,13 @@ function Add-StarTargetCargoChecks {
         [Parameter(Mandatory)]$Context,
         [string[]]$Packages = @()
     )
+    $selectedPackages = @($Packages | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
     $packageArguments = [Collections.Generic.List[string]]::new()
-    foreach ($package in @($Packages | Sort-Object -Unique)) {
+    foreach ($package in $selectedPackages) {
         $packageArguments.Add("-p")
         $packageArguments.Add($package)
     }
-    $unit = if ($Packages.Count -eq 1) { $Packages[0] } elseif ($Packages.Count -gt 1) { "affected-packages" } else { "workspace" }
+    $unit = if ($selectedPackages.Count -eq 1) { $selectedPackages[0] } elseif ($selectedPackages.Count -gt 1) { "affected-packages" } else { "workspace" }
     $fmtArguments = @("fmt") + @($packageArguments) + @("--", "--check")
     $checkArguments = @("check") + @($packageArguments) + @("--all-targets", "--locked")
     $testArguments = @("test") + @($packageArguments) + @("--locked")

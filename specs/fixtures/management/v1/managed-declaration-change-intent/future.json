@@ -1,0 +1,45 @@
+{
+  "change_kind": "create",
+  "desired_fields": {
+    "declaration": {
+      "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "description": "fixture",
+      "item_version": "fixture",
+      "kind": "error_code",
+      "lifecycle": {
+        "introduced_in_registry_version": "fixture"
+      },
+      "managed_declaration_id": "fixture",
+      "namespace": "fixture",
+      "owner": {
+        "approval_policy_ref": {
+          "catalog_id": "fixture",
+          "format_version": 0,
+          "item_version": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "project_id": "prj_00000000000000000000000000"
+      },
+      "semantic_key": "fixture",
+      "source_path": "src/lib.rs",
+      "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "status": "active",
+      "uniqueness_scope": "fixture",
+      "value_role": "stable_identifier",
+      "value_type": "fixture"
+    },
+    "kind": "create"
+  },
+  "expected_manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "intent_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "reason": "fixture",
+  "registry_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "requested_consumer_scope": [],
+  "schema_id": "star.managed-declaration-change-intent",
+  "schema_version": 2
+}

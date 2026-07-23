@@ -939,6 +939,8 @@ Recipe에는 raw shell, 동적 script, AI prompt와 backend SQL을 넣지 않는
 
 ProfileDescriptor는 최종 16개 개발 작업 유형을 표현한다.
 
+P-0054 구현 정본은 `catalog/profiles/*.toml`의 정확한 16개 source와 `crates/foundation/star-contracts/src/profile.rs`의 `DevelopmentProfileDescriptorV1`, `DevelopmentProfileCatalogSnapshotV1`, `DevelopmentProfileResolutionV1`이다. loader는 bounded TOML regular file·filename/ID 일치·exact set·version·definition hash·부모 존재/순환을 검사하고, resolver는 deterministic closure와 required field union·strict floor merge를 수행한다. 결과는 generated `development-profile-descriptor.schema.json`, `development-profile-catalog-snapshot.schema.json`, `development-profile-resolution.schema.json`, `TaskSpec.profile_ids`, `ValidationPlan.profile_resolution`, Evidence fingerprint와 Controller/CLI `profile list|show|resolve`에 동일하게 연결된다.
+
 - 적용 대상 작업 성격과 선택 조건
 - 단계 template와 단계 사이 의존 관계
 - Context 수집 규칙

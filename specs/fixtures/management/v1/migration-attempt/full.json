@@ -1,0 +1,28 @@
+{
+  "attempt_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "attempt_id": "fixture",
+  "attempt_no": 0,
+  "checkpoint_after_ref": "fixture",
+  "checkpoint_before_ref": "fixture",
+  "diagnostic_refs": [
+    "fixture"
+  ],
+  "effect_committed": false,
+  "gate_decision_ref": "gtd_00000000000000000000000000",
+  "invocation_ref": "fixture",
+  "loss_observed": false,
+  "permission_decision_ref": "fixture",
+  "phase": "dry_run",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_ref": "fixture",
+  "receipt_refs": [
+    "fixture"
+  ],
+  "schema_id": "star.migration-attempt",
+  "schema_version": 1,
+  "state": "planned",
+  "step_ref": "fixture",
+  "subject_binding_after": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_binding_before": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "tool_observation_ref": "fixture"
+}

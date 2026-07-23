@@ -14,13 +14,17 @@ use star_contracts::{
         SymbolReferenceId,
     },
     index::{
-        CodeIndexCounts, CodeIndexSnapshot, FreshnessProof, IndexCoverage, IndexEdge, IndexEntity,
-        IndexEntityKind, IndexFreshnessState, IndexLimitation, IndexPartition, IndexPartitionKind,
-        IndexPartitionState, IndexRelation, IndexTier, ProjectCatalogSnapshot, SourceClass,
-        SourceEntry,
+        CodeIndexCounts, CodeIndexSnapshot, DiscoveryProvenance, FreshnessProof, GuidanceKind,
+        GuidanceRecord, HardcodingAssessment, HardcodingCandidate, HardcodingCategory,
+        HardcodingRedactionState, IndexCoverage, IndexEdge, IndexEntity, IndexEntityKind,
+        IndexFreshnessState, IndexLimitation, IndexPartition, IndexPartitionKind,
+        IndexPartitionState, IndexRelation, IndexScanMode, IndexTier, ProjectCatalogSnapshot,
+        SourceClass, SourceEntry, ToolchainCommandDeclaration, ToolchainCommandKind,
+        ToolchainRecord,
     },
     management::{
-        Project, ProjectCheckout, SourceRange, Symbol, SymbolReference, SymbolResolution,
+        Project, ProjectCheckout, ProjectPathRef, SourceRange, Symbol, SymbolReference,
+        SymbolResolution,
     },
 };
 use star_domain::versioned_fingerprint;
@@ -125,6 +129,7 @@ pub struct CodeIndexBuildRequest<'a> {
     pub policy: &'a IndexPolicy,
     pub syntax_adapters: &'a [&'a dyn SyntaxAdapter],
     pub semantic_adapters: &'a [&'a dyn SemanticAdapter],
+    pub scan_mode: IndexScanMode,
     pub previous: Option<&'a CodeIndexProjection>,
 }
 
@@ -165,17 +170,18 @@ pub fn build_code_index(
         .observation
         .workspace_snapshot_id(&request.project.project_id)?;
 
-    let can_reuse = request.previous.is_some_and(|previous| {
-        previous.snapshot.project_id == request.project.project_id
-            && previous.snapshot.checkout_id == request.checkout.checkout_id
-            && previous.snapshot.checkout_observation_fingerprint
-                == checkout_ref.observation_fingerprint
-            && previous.snapshot.scan_config_fingerprint
-                == request.observation.scan_config_fingerprint
-            && previous.snapshot.index_config_fingerprint == index_config_fingerprint
-            && previous.snapshot.adapter_set_fingerprint == adapter_set_fingerprint
-            && previous.snapshot.classification_fingerprint == classification_fingerprint
-    });
+    let can_reuse = request.scan_mode == IndexScanMode::Incremental
+        && request.previous.is_some_and(|previous| {
+            previous.snapshot.project_id == request.project.project_id
+                && previous.snapshot.checkout_id == request.checkout.checkout_id
+                && previous.snapshot.checkout_observation_fingerprint
+                    == checkout_ref.observation_fingerprint
+                && previous.snapshot.scan_config_fingerprint
+                    == request.observation.scan_config_fingerprint
+                && previous.snapshot.index_config_fingerprint == index_config_fingerprint
+                && previous.snapshot.adapter_set_fingerprint == adapter_set_fingerprint
+                && previous.snapshot.classification_fingerprint == classification_fingerprint
+        });
     let previous_index = request
         .previous
         .filter(|_| can_reuse)
@@ -184,6 +190,9 @@ pub fn build_code_index(
     let mut projection = ProjectionAccumulator::default();
     for file in &request.observation.files {
         let source = source_entry(request, file)?;
+        projection
+            .entities
+            .push(source_index_entity(file, &source)?);
         let reusable = previous_index
             .as_ref()
             .and_then(|index| index.source_entries.get(source.path.as_str()))
@@ -353,7 +362,50 @@ pub fn build_code_index(
         .partitions
         .sort_by(|left, right| left.partition_key.cmp(&right.partition_key));
 
+    let hardcoding_candidates =
+        detect_hardcoding_candidates(request, &projection.source_entries, &projection.entities)?;
+    let finding_input = versioned_fingerprint(
+        "star.index-partition-input.hardcoding",
+        1,
+        &serde_json::json!({
+            "entries_fingerprint":request.observation.entries_fingerprint,
+            "classification_fingerprint":classification_fingerprint,
+            "rule_version":"1.0.0",
+        }),
+    )
+    .map_err(|_| ProjectError::Fingerprint)?;
+    let finding_output = versioned_fingerprint(
+        "star.index-partition-output.hardcoding",
+        1,
+        &hardcoding_candidates,
+    )
+    .map_err(|_| ProjectError::Fingerprint)?;
+    projection.partitions.push(IndexPartition {
+        partition_key: "finding:hardcoding".to_owned(),
+        kind: IndexPartitionKind::Finding,
+        required: false,
+        requested_tier: IndexTier::Text,
+        used_tier: Some(IndexTier::Text),
+        state: IndexPartitionState::Succeeded,
+        input_fingerprint: finding_input,
+        output_fingerprint: Some(finding_output),
+        target_count: projection.source_entries.len() as u64,
+        indexed_count: projection.source_entries.len() as u64,
+        failed_count: 0,
+        excluded_count: projection
+            .source_entries
+            .iter()
+            .filter(|source| !hardcoding_source_eligible(source))
+            .count() as u64,
+        cache_hit: false,
+        limitations: Vec::new(),
+    });
+    projection
+        .partitions
+        .sort_by(|left, right| left.partition_key.cmp(&right.partition_key));
     let coverage = coverage(&projection.source_entries, &projection.partitions);
+    let toolchains = discover_toolchains(request)?;
+    let guidance = discover_guidance(request)?;
     let counts = CodeIndexCounts {
         sources: projection.source_entries.len() as u64,
         packages: projection
@@ -370,7 +422,7 @@ pub fn build_code_index(
         definitions: projection.symbols.len() as u64,
         references: projection.references.len() as u64,
         graph_edges: projection.edges.len() as u64,
-        findings: 0,
+        findings: hardcoding_candidates.len() as u64,
     };
     let analysis_input_fingerprint = versioned_fingerprint(
         "star.code-index-analysis-input",
@@ -385,7 +437,11 @@ pub fn build_code_index(
             "index_config_fingerprint":index_config_fingerprint,
             "classification_fingerprint":classification_fingerprint,
             "adapter_set_fingerprint":adapter_set_fingerprint,
+            "scan_mode":request.scan_mode,
             "partition_inputs":projection.partitions.iter().map(|item| (&item.partition_key,&item.input_fingerprint)).collect::<Vec<_>>(),
+            "toolchains":toolchains.iter().map(|item| (&item.record_key,&item.content_fingerprint)).collect::<Vec<_>>(),
+            "guidance":guidance.iter().map(|item| (&item.record_key,&item.content_fingerprint)).collect::<Vec<_>>(),
+            "hardcoding_candidates":hardcoding_candidates.iter().map(|item| (&item.candidate_key,&item.content_fingerprint)).collect::<Vec<_>>(),
         }),
     )
     .map_err(|_| ProjectError::Fingerprint)?;
@@ -418,6 +474,9 @@ pub fn build_code_index(
             "references":projection.references.iter().map(|item| &item.symbol_reference_id).collect::<Vec<_>>(),
             "coverage":coverage,
             "counts":counts,
+            "toolchains":toolchains,
+            "guidance":guidance,
+            "hardcoding_candidates":hardcoding_candidates,
             "limitations":projection.limitations,
         }),
     )
@@ -480,6 +539,7 @@ pub fn build_code_index(
         analysis_input_fingerprint,
         scan_config_fingerprint: request.observation.scan_config_fingerprint.clone(),
         index_config_fingerprint,
+        scan_mode: request.scan_mode,
         required_tier: request.policy.required_tier,
         max_tier: request.policy.max_tier,
         adapter_set_fingerprint,
@@ -488,6 +548,9 @@ pub fn build_code_index(
         coverage,
         counts,
         freshness,
+        toolchains,
+        guidance,
+        hardcoding_candidates,
         limitations: projection.limitations,
         artifact_refs: Vec::new(),
         content_fingerprint,
@@ -500,6 +563,1060 @@ pub fn build_code_index(
         symbols: projection.symbols,
         references: projection.references,
     })
+}
+
+fn discover_toolchains(
+    request: &CodeIndexBuildRequest<'_>,
+) -> Result<Vec<ToolchainRecord>, ProjectError> {
+    let mut records = Vec::new();
+    for manifest in &request.observation.files {
+        let path = manifest.path.as_str();
+        let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+        let scope = path.rsplit_once('/').map(|(scope, _)| scope);
+        let descriptor = match name.as_str() {
+            "cargo.toml" => Some((
+                vec!["rust".to_owned()],
+                Some("cargo".to_owned()),
+                Some("cargo".to_owned()),
+                vec![
+                    ("check", vec!["check"]),
+                    ("test", vec!["test"]),
+                    ("clippy", vec!["clippy"]),
+                    ("fmt-check", vec!["fmt", "--check"]),
+                ],
+                &["Cargo.lock"][..],
+                &["rust-toolchain.toml", "rust-toolchain"][..],
+            )),
+            "package.json" => Some((
+                vec!["javascript".to_owned(), "typescript".to_owned()],
+                Some("node".to_owned()),
+                package_manager_from_package_json(manifest.text.as_deref()),
+                Vec::new(),
+                &["pnpm-lock.yaml", "yarn.lock", "package-lock.json"][..],
+                &[".nvmrc", ".node-version"][..],
+            )),
+            "pyproject.toml" => Some((
+                vec!["python".to_owned()],
+                Some("pyproject".to_owned()),
+                Some("python".to_owned()),
+                Vec::new(),
+                &["poetry.lock", "uv.lock", "Pipfile.lock"][..],
+                &[".python-version"][..],
+            )),
+            "go.mod" => Some((
+                vec!["go".to_owned()],
+                Some("go_modules".to_owned()),
+                Some("go".to_owned()),
+                vec![("test", vec!["test", "./..."])],
+                &["go.sum"][..],
+                &["go.work"][..],
+            )),
+            "pom.xml" => Some((
+                vec!["java".to_owned()],
+                Some("maven".to_owned()),
+                Some("maven".to_owned()),
+                vec![("test", vec!["test"])],
+                &["mvnw", ".mvn/wrapper/maven-wrapper.properties"][..],
+                &[".mvn/jvm.config"][..],
+            )),
+            "build.gradle" | "build.gradle.kts" => Some((
+                vec!["java".to_owned(), "kotlin".to_owned()],
+                Some("gradle".to_owned()),
+                Some("gradle".to_owned()),
+                vec![("test", vec!["test"])],
+                &["gradle.lockfile", "gradlew"][..],
+                &["gradle.properties"][..],
+            )),
+            _ if name.ends_with(".csproj") || name.ends_with(".sln") => Some((
+                vec!["csharp".to_owned()],
+                Some("dotnet".to_owned()),
+                Some("nuget".to_owned()),
+                vec![("test", vec!["test"])],
+                &["packages.lock.json"][..],
+                &["global.json"][..],
+            )),
+            _ => None,
+        };
+        let Some((
+            mut language_ids,
+            build_system,
+            mut package_manager,
+            suggested,
+            lock_names,
+            toolchain_names,
+        )) = descriptor
+        else {
+            continue;
+        };
+        language_ids.sort();
+        language_ids.dedup();
+
+        let lockfile = first_observed_relative(request.observation, scope, lock_names);
+        let toolchain = first_observed_relative(request.observation, scope, toolchain_names)
+            .or_else(|| first_observed_relative(request.observation, None, toolchain_names));
+        let mut commands = if name == "package.json" {
+            package_json_commands(manifest, package_manager.as_deref().unwrap_or("npm"))
+        } else {
+            suggested
+                .into_iter()
+                .map(|(command_id, args)| ToolchainCommandDeclaration {
+                    command_id: command_id.to_owned(),
+                    executable_hint: executable_for(build_system.as_deref()),
+                    args: args.into_iter().map(str::to_owned).collect(),
+                    cwd_scope: scope.and_then(project_path),
+                    source_ref: manifest.path.clone(),
+                    declaration_kind: ToolchainCommandKind::Suggested,
+                    confidence: "medium".to_owned(),
+                })
+                .collect::<Vec<_>>()
+        };
+        commands.sort_by(|left, right| left.command_id.cmp(&right.command_id));
+        commands.dedup_by(|left, right| left.command_id == right.command_id);
+
+        if package_manager.is_none() {
+            package_manager = build_system.clone();
+        }
+        let toolchain_constraint = toolchain
+            .and_then(|file| extract_toolchain_constraint(&name, file.text.as_deref()))
+            .or_else(|| extract_manifest_constraint(&name, manifest.text.as_deref()));
+        let mut evidence_refs = vec![manifest.path.clone()];
+        if let Some(file) = lockfile {
+            evidence_refs.push(file.path.clone());
+        }
+        if let Some(file) = toolchain {
+            evidence_refs.push(file.path.clone());
+        }
+        evidence_refs.sort();
+        evidence_refs.dedup();
+        let record_key = format!("toolchain:{}", manifest.path.as_str());
+        let content_fingerprint = versioned_fingerprint(
+            "star.toolchain-record",
+            1,
+            &serde_json::json!({
+                "record_key":record_key,
+                "project_id":request.project.project_id,
+                "checkout_id":request.checkout.checkout_id,
+                "language_ids":language_ids,
+                "build_system":build_system,
+                "package_manager":package_manager,
+                "manifest_ref":manifest.path,
+                "lockfile_ref":lockfile.map(|file| &file.path),
+                "lockfile_sha256":lockfile.map(|file| &file.content_sha256),
+                "toolchain_file_ref":toolchain.map(|file| &file.path),
+                "toolchain_constraint":toolchain_constraint,
+                "provenance":DiscoveryProvenance::Declared,
+                "commands":commands,
+                "evidence_refs":evidence_refs,
+            }),
+        )
+        .map_err(|_| ProjectError::Fingerprint)?;
+        records.push(ToolchainRecord {
+            record_key,
+            project_id: request.project.project_id.clone(),
+            checkout_id: request.checkout.checkout_id.clone(),
+            language_ids,
+            build_system,
+            package_manager,
+            manifest_ref: Some(manifest.path.clone()),
+            lockfile_ref: lockfile.map(|file| file.path.clone()),
+            lockfile_sha256: lockfile.map(|file| file.content_sha256.clone()),
+            toolchain_file_ref: toolchain.map(|file| file.path.clone()),
+            toolchain_constraint,
+            provenance: DiscoveryProvenance::Declared,
+            commands,
+            evidence_refs,
+            limitations: Vec::new(),
+            content_fingerprint,
+        });
+    }
+    records.sort_by(|left, right| left.record_key.cmp(&right.record_key));
+    Ok(records)
+}
+
+fn first_observed_relative<'a>(
+    observation: &'a ProjectObservation,
+    scope: Option<&str>,
+    names: &[&str],
+) -> Option<&'a FileObservation> {
+    names.iter().find_map(|name| {
+        let candidate = match scope {
+            Some(scope) => format!("{scope}/{name}"),
+            None => (*name).to_owned(),
+        };
+        observation
+            .files
+            .iter()
+            .find(|file| file.path.as_str().eq_ignore_ascii_case(&candidate))
+    })
+}
+
+fn project_path(value: &str) -> Option<ProjectPathRef> {
+    ProjectPathRef::parse(value.to_owned()).ok()
+}
+
+fn executable_for(build_system: Option<&str>) -> String {
+    match build_system {
+        Some("maven") => "mvn",
+        Some("gradle") => "gradle",
+        Some("dotnet") => "dotnet",
+        Some("go_modules") => "go",
+        Some(value) => value,
+        None => "unknown",
+    }
+    .to_owned()
+}
+
+fn package_manager_from_package_json(text: Option<&str>) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(text?).ok()?;
+    if let Some(declared) = value
+        .get("packageManager")
+        .and_then(serde_json::Value::as_str)
+    {
+        let manager = declared.split('@').next().unwrap_or(declared);
+        if matches!(manager, "npm" | "pnpm" | "yarn" | "bun") {
+            return Some(manager.to_owned());
+        }
+    }
+    Some("npm".to_owned())
+}
+
+fn package_json_commands(
+    file: &FileObservation,
+    package_manager: &str,
+) -> Vec<ToolchainCommandDeclaration> {
+    let value = file
+        .text
+        .as_deref()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok());
+    let mut script_names = value
+        .as_ref()
+        .and_then(|value| value.get("scripts"))
+        .and_then(serde_json::Value::as_object)
+        .map(|scripts| scripts.keys().cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    script_names.sort();
+    script_names
+        .into_iter()
+        .filter(|name| {
+            !name.is_empty()
+                && name.len() <= 80
+                && name.chars().all(|character| {
+                    character.is_ascii_alphanumeric() || "-_:./".contains(character)
+                })
+        })
+        .map(|name| ToolchainCommandDeclaration {
+            command_id: format!("script:{name}"),
+            executable_hint: package_manager.to_owned(),
+            args: vec!["run".to_owned(), name],
+            cwd_scope: file
+                .path
+                .as_str()
+                .rsplit_once('/')
+                .and_then(|(scope, _)| project_path(scope)),
+            source_ref: file.path.clone(),
+            declaration_kind: ToolchainCommandKind::Declared,
+            confidence: "high".to_owned(),
+        })
+        .collect()
+}
+
+fn extract_toolchain_constraint(manifest_name: &str, text: Option<&str>) -> Option<String> {
+    let text = text?;
+    if manifest_name == "cargo.toml"
+        && let Ok(value) = toml::from_str::<toml::Value>(text)
+        && let Some(channel) = value
+            .get("toolchain")
+            .and_then(|value| value.get("channel"))
+            .and_then(toml::Value::as_str)
+    {
+        return safe_constraint(channel);
+    }
+    safe_constraint(text.lines().find(|line| !line.trim().is_empty())?.trim())
+}
+
+fn extract_manifest_constraint(manifest_name: &str, text: Option<&str>) -> Option<String> {
+    let text = text?;
+    match manifest_name {
+        "package.json" => {
+            let value: serde_json::Value = serde_json::from_str(text).ok()?;
+            value
+                .get("engines")
+                .and_then(|value| value.get("node"))
+                .and_then(serde_json::Value::as_str)
+                .and_then(safe_constraint)
+        }
+        "pyproject.toml" => {
+            let value: toml::Value = toml::from_str(text).ok()?;
+            value
+                .get("project")
+                .and_then(|value| value.get("requires-python"))
+                .and_then(toml::Value::as_str)
+                .and_then(safe_constraint)
+        }
+        "go.mod" => text
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("go "))
+            .and_then(safe_constraint),
+        _ => None,
+    }
+}
+
+fn safe_constraint(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.len() > 128
+        || !value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || ".,_+<>=^~* -".contains(character)
+        })
+    {
+        return None;
+    }
+    Some(value.to_owned())
+}
+
+fn discover_guidance(
+    request: &CodeIndexBuildRequest<'_>,
+) -> Result<Vec<GuidanceRecord>, ProjectError> {
+    let mut records = request
+        .observation
+        .files
+        .iter()
+        .filter_map(|file| {
+            let (kind, priority, priority_reason) = guidance_descriptor(file.path.as_str())?;
+            let applicable_scope = file
+                .path
+                .as_str()
+                .rsplit_once('/')
+                .and_then(|(scope, _)| project_path(scope));
+            let heading_anchors = file
+                .text
+                .as_deref()
+                .map(guidance_heading_anchors)
+                .unwrap_or_default();
+            let limitations = if file.text.is_some() {
+                Vec::new()
+            } else {
+                vec![IndexLimitation {
+                    code: "GUIDANCE_CONTENT_UNAVAILABLE".to_owned(),
+                    scope: Some(file.path.as_str().to_owned()),
+                    parameters: BTreeMap::new(),
+                }]
+            };
+            let record_key = format!("guidance:{}", file.path.as_str());
+            let content_fingerprint = versioned_fingerprint(
+                "star.guidance-record",
+                1,
+                &serde_json::json!({
+                    "record_key":record_key,
+                    "project_id":request.project.project_id,
+                    "checkout_id":request.checkout.checkout_id,
+                    "kind":kind,
+                    "source_ref":file.path,
+                    "source_sha256":file.content_sha256,
+                    "applicable_scope":applicable_scope,
+                    "priority":priority,
+                    "priority_reason":priority_reason,
+                    "heading_anchors":heading_anchors,
+                    "freshness":IndexFreshnessState::Current,
+                    "limitations":limitations,
+                }),
+            )
+            .ok()?;
+            Some(GuidanceRecord {
+                record_key,
+                project_id: request.project.project_id.clone(),
+                checkout_id: request.checkout.checkout_id.clone(),
+                kind,
+                source_ref: file.path.clone(),
+                source_sha256: file.content_sha256.clone(),
+                applicable_scope,
+                priority,
+                priority_reason: priority_reason.to_owned(),
+                supersedes: Vec::new(),
+                heading_anchors,
+                redacted_summary: None,
+                freshness: IndexFreshnessState::Current,
+                conflict: false,
+                limitations,
+                content_fingerprint,
+            })
+        })
+        .collect::<Vec<_>>();
+    records.sort_by(|left, right| {
+        (left.priority, &left.record_key).cmp(&(right.priority, &right.record_key))
+    });
+    for index in 0..records.len() {
+        let scope = records[index].applicable_scope.clone();
+        let priority = records[index].priority;
+        let same_precedence = records
+            .iter()
+            .enumerate()
+            .filter(|(other, record)| {
+                *other != index && record.priority == priority && record.applicable_scope == scope
+            })
+            .count();
+        records[index].conflict = same_precedence > 0;
+        records[index].supersedes = records
+            .iter()
+            .filter(|record| record.priority > priority && record.applicable_scope == scope)
+            .map(|record| record.record_key.clone())
+            .collect();
+    }
+    for record in &mut records {
+        record.content_fingerprint = versioned_fingerprint(
+            "star.guidance-record-final",
+            1,
+            &serde_json::json!({
+                "base":record.content_fingerprint,
+                "supersedes":record.supersedes,
+                "conflict":record.conflict,
+            }),
+        )
+        .map_err(|_| ProjectError::Fingerprint)?;
+    }
+    Ok(records)
+}
+
+fn guidance_descriptor(path: &str) -> Option<(GuidanceKind, u32, &'static str)> {
+    let lower = path.to_ascii_lowercase();
+    let name = lower.rsplit('/').next().unwrap_or(&lower);
+    if lower.starts_with(".star-control/") {
+        return Some((
+            GuidanceKind::ProjectManifest,
+            10,
+            "explicit_project_declaration",
+        ));
+    }
+    if name == "agents.md" {
+        return Some((GuidanceKind::Agents, 20, "agents_scope_chain"));
+    }
+    if lower == "docs/readme.md" {
+        return Some((
+            GuidanceKind::ReadingOrder,
+            30,
+            "canonical_docs_reading_order",
+        ));
+    }
+    if !lower.contains('/') && (name == "readme.md" || name == "readme") {
+        return Some((GuidanceKind::Readme, 40, "root_readme"));
+    }
+    if name.starts_with("contributing") {
+        return Some((GuidanceKind::Contribution, 45, "contribution_guidance"));
+    }
+    if lower.starts_with("docs/architecture/") {
+        return Some((GuidanceKind::Architecture, 50, "architecture_document"));
+    }
+    if lower.starts_with("docs/contracts/") {
+        return Some((GuidanceKind::Contract, 55, "contract_document"));
+    }
+    if matches!(
+        name,
+        "cargo.toml"
+            | "package.json"
+            | "pyproject.toml"
+            | "go.mod"
+            | "pom.xml"
+            | "build.gradle"
+            | "build.gradle.kts"
+    ) {
+        return Some((GuidanceKind::BuildManifest, 60, "build_manifest"));
+    }
+    if name.contains("guidance") || name.contains("instruction") {
+        return Some((GuidanceKind::Heuristic, 70, "filename_heuristic"));
+    }
+    None
+}
+
+fn guidance_heading_anchors(text: &str) -> Vec<String> {
+    let mut anchors = text
+        .lines()
+        .filter_map(|line| {
+            let heading = line
+                .trim_start()
+                .strip_prefix('#')?
+                .trim_start_matches('#')
+                .trim();
+            if heading.is_empty() || heading.len() > 160 {
+                return None;
+            }
+            let mut anchor = String::new();
+            let mut dash = false;
+            for character in heading.chars() {
+                if character.is_alphanumeric() {
+                    anchor.extend(character.to_lowercase());
+                    dash = false;
+                } else if !dash && !anchor.is_empty() {
+                    anchor.push('-');
+                    dash = true;
+                }
+            }
+            let anchor = anchor.trim_end_matches('-');
+            (!anchor.is_empty()).then(|| anchor.chars().take(128).collect::<String>())
+        })
+        .take(64)
+        .collect::<Vec<_>>();
+    anchors.sort();
+    anchors.dedup();
+    anchors
+}
+
+#[derive(Clone)]
+struct HardcodingSeed<'a> {
+    file: &'a FileObservation,
+    source: &'a SourceEntry,
+    category: HardcodingCategory,
+    start_byte: usize,
+    end_byte: usize,
+    line_index: usize,
+    matched_predicate: &'static str,
+    literal_shape: &'static str,
+    confidence: &'static str,
+    assessment: HardcodingAssessment,
+    guards: Vec<String>,
+}
+
+fn detect_hardcoding_candidates(
+    request: &CodeIndexBuildRequest<'_>,
+    sources: &[SourceEntry],
+    entities: &[IndexEntity],
+) -> Result<Vec<HardcodingCandidate>, ProjectError> {
+    let source_by_path = sources
+        .iter()
+        .map(|source| (source.path.as_str(), source))
+        .collect::<BTreeMap<_, _>>();
+    let parameter_fingerprint = versioned_fingerprint(
+        "star.rule.hardcoding.parameters",
+        1,
+        &serde_json::json!({
+            "categories":["absolute_path","endpoint","timeout_retry_limit","raw_command","duplicate_error","config_duplicate"],
+            "production_classes":["source","migration"],
+            "literal_persistence":"shape_only",
+        }),
+    )
+    .map_err(|_| ProjectError::Fingerprint)?;
+    let mut seeds = Vec::new();
+    let mut duplicate_errors = BTreeMap::<String, Vec<HardcodingSeed<'_>>>::new();
+    let mut duplicate_configs = BTreeMap::<String, Vec<HardcodingSeed<'_>>>::new();
+    for file in &request.observation.files {
+        let Some(source) = source_by_path.get(file.path.as_str()).copied() else {
+            return Err(ProjectError::InvalidManifest);
+        };
+        if !hardcoding_source_eligible(source) {
+            continue;
+        }
+        let Some(text) = file.text.as_deref() else {
+            continue;
+        };
+        for (line_index, line) in text.lines().enumerate() {
+            if line.len() > 16 * 1024 {
+                continue;
+            }
+            for (start, end, predicate, shape) in endpoint_matches(line) {
+                seeds.push(HardcodingSeed {
+                    file,
+                    source,
+                    category: HardcodingCategory::Endpoint,
+                    start_byte: start,
+                    end_byte: end,
+                    line_index,
+                    matched_predicate: predicate,
+                    literal_shape: shape,
+                    confidence: "medium",
+                    assessment: HardcodingAssessment::Candidate,
+                    guards: default_hardcoding_guards("endpoint_grammar"),
+                });
+            }
+            for (start, end, predicate, shape) in absolute_path_matches(line) {
+                seeds.push(HardcodingSeed {
+                    file,
+                    source,
+                    category: HardcodingCategory::AbsolutePath,
+                    start_byte: start,
+                    end_byte: end,
+                    line_index,
+                    matched_predicate: predicate,
+                    literal_shape: shape,
+                    confidence: "medium",
+                    assessment: HardcodingAssessment::Candidate,
+                    guards: default_hardcoding_guards("absolute_path_grammar"),
+                });
+            }
+            if let Some((start, end)) = timeout_retry_limit_match(line) {
+                seeds.push(HardcodingSeed {
+                    file,
+                    source,
+                    category: HardcodingCategory::TimeoutRetryLimit,
+                    start_byte: start,
+                    end_byte: end,
+                    line_index,
+                    matched_predicate: "numeric_literal_with_control_identifier",
+                    literal_shape: "numeric_control_value",
+                    confidence: "medium",
+                    assessment: HardcodingAssessment::Candidate,
+                    guards: default_hardcoding_guards("identifier_and_unit_context"),
+                });
+            }
+            if let Some((start, end)) = raw_command_match(line) {
+                seeds.push(HardcodingSeed {
+                    file,
+                    source,
+                    category: HardcodingCategory::RawCommand,
+                    start_byte: start,
+                    end_byte: end,
+                    line_index,
+                    matched_predicate: "process_or_shell_sink",
+                    literal_shape: "command_sink_expression",
+                    confidence: "medium",
+                    assessment: HardcodingAssessment::Review,
+                    guards: default_hardcoding_guards("typed_command_declaration_not_matched"),
+                });
+            }
+            if let Some((normalized, start, end)) = error_literal_match(line) {
+                duplicate_errors
+                    .entry(normalized)
+                    .or_default()
+                    .push(HardcodingSeed {
+                        file,
+                        source,
+                        category: HardcodingCategory::DuplicateError,
+                        start_byte: start,
+                        end_byte: end,
+                        line_index,
+                        matched_predicate: "duplicate_production_error_literal",
+                        literal_shape: "error_message_literal",
+                        confidence: "high",
+                        assessment: HardcodingAssessment::Warning,
+                        guards: default_hardcoding_guards("safe_literal_and_distinct_location"),
+                    });
+            }
+            if let Some((normalized, start, end, shape)) = config_literal_match(line) {
+                duplicate_configs
+                    .entry(normalized)
+                    .or_default()
+                    .push(HardcodingSeed {
+                        file,
+                        source,
+                        category: HardcodingCategory::ConfigDuplicate,
+                        start_byte: start,
+                        end_byte: end,
+                        line_index,
+                        matched_predicate: "duplicate_config_literal",
+                        literal_shape: shape,
+                        confidence: "medium",
+                        assessment: HardcodingAssessment::Review,
+                        guards: default_hardcoding_guards(
+                            "config_identifier_and_distinct_location",
+                        ),
+                    });
+            }
+        }
+    }
+    for group in duplicate_errors.into_values() {
+        let distinct_locations = group
+            .iter()
+            .map(|seed| (seed.source.canonical_source_id.as_str(), seed.line_index))
+            .collect::<BTreeSet<_>>();
+        if distinct_locations.len() > 1 {
+            seeds.extend(group);
+        }
+    }
+    for group in duplicate_configs.into_values() {
+        let distinct_locations = group
+            .iter()
+            .map(|seed| (seed.source.canonical_source_id.as_str(), seed.line_index))
+            .collect::<BTreeSet<_>>();
+        if distinct_locations.len() > 1 {
+            seeds.extend(group);
+        }
+    }
+    seeds.sort_by(|left, right| {
+        (
+            left.source.path.as_str(),
+            left.line_index,
+            left.start_byte,
+            left.category,
+        )
+            .cmp(&(
+                right.source.path.as_str(),
+                right.line_index,
+                right.start_byte,
+                right.category,
+            ))
+    });
+    seeds.dedup_by(|left, right| {
+        left.source.canonical_source_id == right.source.canonical_source_id
+            && left.line_index == right.line_index
+            && left.start_byte == right.start_byte
+            && left.category == right.category
+    });
+    seeds
+        .into_iter()
+        .map(|seed| hardcoding_candidate(seed, &parameter_fingerprint, entities))
+        .collect()
+}
+
+fn hardcoding_source_eligible(source: &SourceEntry) -> bool {
+    matches!(
+        source.source_class,
+        SourceClass::Source | SourceClass::Migration
+    ) && !source
+        .facets
+        .iter()
+        .any(|facet| matches!(facet.as_str(), "fixture" | "docs_example" | "generated"))
+}
+
+fn hardcoding_candidate(
+    seed: HardcodingSeed<'_>,
+    parameter_fingerprint: &Sha256Hash,
+    entities: &[IndexEntity],
+) -> Result<HardcodingCandidate, ProjectError> {
+    let line = seed
+        .file
+        .text
+        .as_deref()
+        .and_then(|text| text.lines().nth(seed.line_index))
+        .ok_or(ProjectError::InvalidManifest)?;
+    let start_column = line[..seed.start_byte].chars().count() + 1;
+    let end_column = line[..seed.end_byte].chars().count() + 1;
+    let source_range = SourceRange {
+        start_line: u32::try_from(seed.line_index + 1).unwrap_or(u32::MAX),
+        start_column: u32::try_from(start_column).unwrap_or(u32::MAX),
+        end_line: u32::try_from(seed.line_index + 1).unwrap_or(u32::MAX),
+        end_column: u32::try_from(end_column.max(start_column + 1)).unwrap_or(u32::MAX),
+    };
+    let related_entity_key =
+        hardcoding_owner_entity(&seed.source.canonical_source_id, &source_range, entities);
+    let identity = versioned_fingerprint(
+        "star.identity.hardcoding-candidate",
+        1,
+        &serde_json::json!({
+            "rule_id":"star.rule.hardcoding-candidate",
+            "rule_version":"1.0.0",
+            "parameter_fingerprint":parameter_fingerprint,
+            "canonical_source_id":seed.source.canonical_source_id,
+            "source_content_sha256":seed.file.content_sha256,
+            "source_range":source_range,
+            "category":seed.category,
+            "matched_predicate":seed.matched_predicate,
+        }),
+    )
+    .map_err(|_| ProjectError::Fingerprint)?;
+    let candidate_key = format!("hardcoding:{}", identity.as_str());
+    let length_bucket = length_bucket(seed.end_byte.saturating_sub(seed.start_byte));
+    let content_fingerprint = versioned_fingerprint(
+        "star.hardcoding-candidate",
+        1,
+        &serde_json::json!({
+            "candidate_key":candidate_key,
+            "source_class":seed.source.source_class,
+            "source_facets":seed.source.facets,
+            "used_tier":IndexTier::Text,
+            "false_positive_guards":seed.guards,
+            "confidence":seed.confidence,
+            "redaction_state":HardcodingRedactionState::ShapeOnly,
+            "literal_shape":seed.literal_shape,
+            "length_bucket":length_bucket,
+            "assessment":seed.assessment,
+            "related_entity_key":related_entity_key,
+        }),
+    )
+    .map_err(|_| ProjectError::Fingerprint)?;
+    Ok(HardcodingCandidate {
+        candidate_key,
+        rule_id: "star.rule.hardcoding-candidate".to_owned(),
+        rule_version: "1.0.0".to_owned(),
+        parameter_fingerprint: parameter_fingerprint.clone(),
+        category: seed.category,
+        canonical_source_id: seed.source.canonical_source_id.clone(),
+        source_ref: seed.source.path.clone(),
+        source_content_sha256: seed.file.content_sha256.clone(),
+        source_range,
+        source_class: seed.source.source_class,
+        source_facets: seed.source.facets.clone(),
+        used_tier: IndexTier::Text,
+        matched_predicate: seed.matched_predicate.to_owned(),
+        related_entity_key,
+        false_positive_guards: seed.guards,
+        confidence: seed.confidence.to_owned(),
+        redaction_state: HardcodingRedactionState::ShapeOnly,
+        literal_shape: seed.literal_shape.to_owned(),
+        length_bucket,
+        assessment: seed.assessment,
+        limitations: Vec::new(),
+        content_fingerprint,
+    })
+}
+
+fn hardcoding_owner_entity(
+    source_id: &CanonicalSourceId,
+    candidate: &SourceRange,
+    entities: &[IndexEntity],
+) -> Option<String> {
+    entities
+        .iter()
+        .filter(|entity| entity.canonical_source_id.as_ref() == Some(source_id))
+        .filter_map(|entity| {
+            let range = entity.source_range.as_ref()?;
+            if !source_range_contains(range, candidate) {
+                return None;
+            }
+            let line_span = range.end_line.saturating_sub(range.start_line);
+            let column_span = if line_span == 0 {
+                range.end_column.saturating_sub(range.start_column)
+            } else {
+                u32::MAX
+            };
+            let kind_rank = match entity.kind {
+                IndexEntityKind::Symbol => 0_u8,
+                IndexEntityKind::Contract
+                | IndexEntityKind::ConfigKey
+                | IndexEntityKind::SchemaId => 1,
+                IndexEntityKind::Module | IndexEntityKind::Package => 2,
+                _ => 3,
+            };
+            Some((
+                (line_span, column_span, kind_rank, &entity.entity_key),
+                entity,
+            ))
+        })
+        .min_by(|left, right| left.0.cmp(&right.0))
+        .map(|(_, entity)| entity.entity_key.clone())
+}
+
+fn source_range_contains(owner: &SourceRange, candidate: &SourceRange) -> bool {
+    let starts_before =
+        (owner.start_line, owner.start_column) <= (candidate.start_line, candidate.start_column);
+    let ends_after =
+        (owner.end_line, owner.end_column) >= (candidate.end_line, candidate.end_column);
+    starts_before && ends_after
+}
+
+fn default_hardcoding_guards(specific: &str) -> Vec<String> {
+    vec![
+        "production_source_only".to_owned(),
+        "docs_test_generated_vendor_excluded".to_owned(),
+        "raw_literal_not_persisted_or_hashed".to_owned(),
+        specific.to_owned(),
+    ]
+}
+
+fn endpoint_matches(line: &str) -> Vec<(usize, usize, &'static str, &'static str)> {
+    let lower = line.to_ascii_lowercase();
+    let mut matches = Vec::new();
+    for (needle, predicate, shape) in [
+        ("https://", "url_with_https_scheme", "https_endpoint"),
+        ("http://", "url_with_http_scheme", "http_endpoint"),
+    ] {
+        let mut offset = 0;
+        while let Some(relative) = lower[offset..].find(needle) {
+            let start = offset + relative;
+            let end = token_end(line, start, 512);
+            matches.push((start, end, predicate, shape));
+            offset = end.max(start + needle.len());
+            if offset >= line.len() {
+                break;
+            }
+        }
+    }
+    matches
+}
+
+fn absolute_path_matches(line: &str) -> Vec<(usize, usize, &'static str, &'static str)> {
+    let bytes = line.as_bytes();
+    let mut matches = Vec::new();
+    for index in 0..bytes.len().saturating_sub(2) {
+        if bytes[index].is_ascii_alphabetic()
+            && bytes[index + 1] == b':'
+            && matches!(bytes[index + 2], b'\\' | b'/')
+        {
+            matches.push((
+                index,
+                token_end(line, index, 512),
+                "windows_drive_absolute_path",
+                "windows_absolute_path",
+            ));
+        }
+    }
+    for prefix in [
+        "\"/Users/",
+        "'/Users/",
+        "\"/home/",
+        "'/home/",
+        "\"/var/",
+        "'/var/",
+        "\"/etc/",
+        "'/etc/",
+        "\"/tmp/",
+        "'/tmp/",
+    ] {
+        let mut offset = 0;
+        while let Some(relative) = line[offset..].find(prefix) {
+            let start = offset + relative + 1;
+            let end = token_end(line, start, 512);
+            matches.push((start, end, "posix_absolute_path", "posix_absolute_path"));
+            offset = end.max(start + prefix.len() - 1);
+            if offset >= line.len() {
+                break;
+            }
+        }
+    }
+    matches
+}
+
+fn timeout_retry_limit_match(line: &str) -> Option<(usize, usize)> {
+    let lower = line.to_ascii_lowercase();
+    if ![
+        "timeout", "retry", "retries", "limit", "max_", "max-", "ttl",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
+    {
+        return None;
+    }
+    let start = line.as_bytes().iter().position(u8::is_ascii_digit)?;
+    let end = line.as_bytes()[start..]
+        .iter()
+        .position(|byte| !byte.is_ascii_digit() && *byte != b'_')
+        .map(|relative| start + relative)
+        .unwrap_or(line.len());
+    Some((start, end))
+}
+
+fn raw_command_match(line: &str) -> Option<(usize, usize)> {
+    let lower = line.to_ascii_lowercase();
+    [
+        "command::new(",
+        "process::command",
+        "std::process::command",
+        "shell_execute",
+        "cmd.exe /c",
+        "powershell -command",
+    ]
+    .iter()
+    .find_map(|needle| {
+        lower
+            .find(needle)
+            .map(|start| (start, start + needle.len()))
+    })
+}
+
+fn error_literal_match(line: &str) -> Option<(String, usize, usize)> {
+    let start = ["Err(\"", "panic!(\"", "anyhow!(\"", "bail!(\""]
+        .iter()
+        .filter_map(|needle| line.find(needle).map(|index| (index, needle.len())))
+        .min_by_key(|(index, _)| *index)?;
+    let literal_start = start.0 + start.1;
+    let bytes = line.as_bytes();
+    let mut index = literal_start;
+    let mut escaped = false;
+    while index < bytes.len() {
+        if bytes[index] == b'"' && !escaped {
+            break;
+        }
+        escaped = bytes[index] == b'\\' && !escaped;
+        if bytes[index] != b'\\' {
+            escaped = false;
+        }
+        index += 1;
+    }
+    if index >= bytes.len() || index == literal_start || index - literal_start > 512 {
+        return None;
+    }
+    let raw = &line[literal_start..index];
+    let lower = raw.to_ascii_lowercase();
+    if raw.chars().count() < 8
+        || [
+            "password",
+            "secret",
+            "token",
+            "credential",
+            "http://",
+            "https://",
+            "/users/",
+            "/home/",
+        ]
+        .iter()
+        .any(|needle| lower.contains(needle))
+        || lower.contains(":\\")
+    {
+        return None;
+    }
+    let normalized = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    Some((normalized, literal_start, index))
+}
+
+fn config_literal_match(line: &str) -> Option<(String, usize, usize, &'static str)> {
+    let lower = line.to_ascii_lowercase();
+    if !["config", "setting", "option", "default"]
+        .iter()
+        .any(|marker| lower.contains(marker))
+    {
+        return None;
+    }
+    let assignment = line.find('=').or_else(|| line.find(':'))?;
+    let tail = &line[assignment + 1..];
+    if let Some(relative_quote) = tail.find(['\"', '\'']) {
+        let quote_start = assignment + 1 + relative_quote;
+        let quote = line.as_bytes()[quote_start];
+        let rest = &line[quote_start + 1..];
+        let relative_end = rest.as_bytes().iter().position(|byte| *byte == quote)?;
+        if !(3..=128).contains(&relative_end) {
+            return None;
+        }
+        let end = quote_start + 1 + relative_end;
+        let normalized = rest[..relative_end]
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_ascii_lowercase();
+        if normalized.is_empty() {
+            return None;
+        }
+        return Some((normalized, quote_start + 1, end, "config_string_literal"));
+    }
+    let digit_start = tail.find(|character: char| character.is_ascii_digit())?;
+    let start = assignment + 1 + digit_start;
+    let length = line[start..]
+        .chars()
+        .take_while(|character| character.is_ascii_digit() || *character == '_')
+        .map(char::len_utf8)
+        .sum::<usize>();
+    if length == 0 || length > 32 {
+        return None;
+    }
+    let end = start + length;
+    Some((
+        line[start..end].replace('_', ""),
+        start,
+        end,
+        "config_numeric_literal",
+    ))
+}
+
+fn token_end(line: &str, start: usize, max_len: usize) -> usize {
+    let mut limit = line.len().min(start.saturating_add(max_len));
+    while limit > start && !line.is_char_boundary(limit) {
+        limit -= 1;
+    }
+    line.as_bytes()[start..limit]
+        .iter()
+        .position(|byte| {
+            byte.is_ascii_whitespace()
+                || matches!(*byte, b'"' | b'\'' | b')' | b']' | b'}' | b',' | b';')
+        })
+        .map(|relative| start + relative)
+        .unwrap_or(limit)
+        .max(start + 1)
+}
+
+fn length_bucket(length: usize) -> String {
+    match length {
+        0..=8 => "1-8",
+        9..=32 => "9-32",
+        33..=128 => "33-128",
+        _ => "129+",
+    }
+    .to_owned()
 }
 
 #[derive(Default)]
@@ -677,6 +1794,51 @@ fn source_entry(
         owner_project_id: request.project.project_id.clone(),
         owner_checkout_id: request.checkout.checkout_id.clone(),
         analysis_eligible,
+        content_fingerprint,
+    })
+}
+
+fn source_index_entity(
+    file: &FileObservation,
+    source: &SourceEntry,
+) -> Result<IndexEntity, ProjectError> {
+    let source_range = file.text.as_deref().map(|text| {
+        let mut lines = text.lines();
+        let mut line_count = 0_u32;
+        let mut last_column = 1_u32;
+        for line in &mut lines {
+            line_count = line_count.saturating_add(1);
+            last_column = u32::try_from(line.chars().count().saturating_add(1)).unwrap_or(u32::MAX);
+        }
+        SourceRange {
+            start_line: 1,
+            start_column: 1,
+            end_line: line_count.max(1),
+            end_column: last_column,
+        }
+    });
+    let entity_key = format!("source:{}", source.canonical_source_id.as_str());
+    let content_fingerprint = versioned_fingerprint(
+        "star.index-source-entity",
+        1,
+        &serde_json::json!({
+            "entity_key":entity_key,
+            "canonical_source_id":source.canonical_source_id,
+            "path":source.path,
+            "source_content_sha256":source.content_sha256,
+            "source_range":source_range,
+        }),
+    )
+    .map_err(|_| ProjectError::Fingerprint)?;
+    Ok(IndexEntity {
+        entity_key,
+        kind: IndexEntityKind::Source,
+        canonical_source_id: Some(source.canonical_source_id.clone()),
+        symbol_id: None,
+        qualified_name: source.path.as_str().to_owned(),
+        source_range,
+        tier: IndexTier::Text,
+        confidence: "high".to_owned(),
         content_fingerprint,
     })
 }
@@ -1709,6 +2871,41 @@ mod tests {
             policy: &IndexPolicy::default(),
             syntax_adapters: &[],
             semantic_adapters: &[],
+            scan_mode: IndexScanMode::Incremental,
+            previous,
+        })
+        .unwrap()
+    }
+
+    fn build_with_mode(
+        root: &std::path::Path,
+        project: &Project,
+        checkout: &ProjectCheckout,
+        previous: Option<&CodeIndexProjection>,
+        scan_mode: IndexScanMode,
+    ) -> CodeIndexProjection {
+        let catalog = build_project_catalog_snapshot(
+            &[CatalogSnapshotInput {
+                project,
+                checkout,
+                root,
+            }],
+            &DiscoveryConfig::default(),
+        )
+        .unwrap();
+        let observation = observe_project(project, root, &ScanPolicy::default()).unwrap();
+        build_code_index(&CodeIndexBuildRequest {
+            project_root: Some(root),
+            project,
+            checkout,
+            catalog_snapshot: &catalog,
+            observation: &observation,
+            scan_run_id: &ScanRunId::new(),
+            generation_id: &GenerationId::new(),
+            policy: &IndexPolicy::default(),
+            syntax_adapters: &[],
+            semantic_adapters: &[],
+            scan_mode,
             previous,
         })
         .unwrap()
@@ -1778,6 +2975,50 @@ mod tests {
     }
 
     #[test]
+    fn hardcoding_owner_keeps_same_literal_occurrences_separate_by_symbol() {
+        let source_id = CanonicalSourceId::new();
+        let entity = |key: &str, start_line: u32, end_line: u32| IndexEntity {
+            entity_key: key.to_owned(),
+            kind: IndexEntityKind::Symbol,
+            canonical_source_id: Some(source_id.clone()),
+            symbol_id: None,
+            qualified_name: key.to_owned(),
+            source_range: Some(SourceRange {
+                start_line,
+                start_column: 1,
+                end_line,
+                end_column: 120,
+            }),
+            tier: IndexTier::Syntax,
+            confidence: "high".to_owned(),
+            content_fingerprint: Sha256Hash::digest(key.as_bytes()),
+        };
+        let entities = vec![entity("symbol:first", 1, 3), entity("symbol:second", 5, 7)];
+        let first = hardcoding_owner_entity(
+            &source_id,
+            &SourceRange {
+                start_line: 2,
+                start_column: 10,
+                end_line: 2,
+                end_column: 20,
+            },
+            &entities,
+        );
+        let second = hardcoding_owner_entity(
+            &source_id,
+            &SourceRange {
+                start_line: 6,
+                start_column: 10,
+                end_line: 6,
+                end_column: 20,
+            },
+            &entities,
+        );
+        assert_eq!(first.as_deref(), Some("symbol:first"));
+        assert_eq!(second.as_deref(), Some("symbol:second"));
+    }
+
+    #[test]
     fn source_classification_matches_default_analysis_boundaries() {
         let cases = [
             ("src/lib.rs", SourceClass::Source),
@@ -1802,6 +3043,95 @@ mod tests {
         assert!(class_semantic_eligible(SourceClass::Migration));
         assert!(!class_text_eligible(SourceClass::Generated));
         assert!(!class_text_eligible(SourceClass::Vendor));
+    }
+
+    #[test]
+    fn toolchain_guidance_hardcoding_and_full_scan_are_persisted_without_raw_literals() {
+        let (root, project, checkout) = fixture();
+        fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
+        fs::write(
+            root.join("rust-toolchain.toml"),
+            "[toolchain]\nchannel = \"1.96.0\"\n",
+        )
+        .unwrap();
+        fs::write(root.join("AGENTS.md"), "# Build rules\n## Validation\n").unwrap();
+        fs::write(
+            root.join("src/hardcoded.rs"),
+            concat!(
+                "const ENDPOINT: &str = \"https://example.invalid/api\";\n",
+                "const RETRY_LIMIT: u32 = 7;\n",
+                "fn run() { std::process::Command::new(\"tool\"); }\n",
+                "fn first() { panic!(\"stable duplicate failure\"); }\n",
+                "fn second() { panic!(\"stable duplicate failure\"); }\n",
+                "fn config_first() { let config_mode = \"private-stage\"; }\n",
+                "fn config_second() { let config_mode = \"private-stage\"; }\n",
+            ),
+        )
+        .unwrap();
+
+        let incremental =
+            build_with_mode(&root, &project, &checkout, None, IndexScanMode::Incremental);
+        assert_eq!(incremental.snapshot.toolchains.len(), 1);
+        let toolchain = &incremental.snapshot.toolchains[0];
+        assert_eq!(toolchain.build_system.as_deref(), Some("cargo"));
+        assert_eq!(
+            toolchain.lockfile_ref.as_ref().unwrap().as_str(),
+            "Cargo.lock"
+        );
+        assert_eq!(toolchain.toolchain_constraint.as_deref(), Some("1.96.0"));
+        assert!(
+            incremental
+                .snapshot
+                .guidance
+                .iter()
+                .any(|record| record.source_ref.as_str() == "AGENTS.md")
+        );
+        let categories = incremental
+            .snapshot
+            .hardcoding_candidates
+            .iter()
+            .map(|candidate| candidate.category)
+            .collect::<BTreeSet<_>>();
+        assert!(
+            categories.contains(&HardcodingCategory::Endpoint),
+            "detected categories: {categories:?}; sources: {:?}; limitations: {:?}",
+            incremental
+                .source_entries
+                .iter()
+                .map(|source| (
+                    source.path.as_str(),
+                    source.source_class,
+                    source.facets.clone()
+                ))
+                .collect::<Vec<_>>(),
+            incremental.snapshot.limitations,
+        );
+        assert!(categories.contains(&HardcodingCategory::TimeoutRetryLimit));
+        assert!(categories.contains(&HardcodingCategory::RawCommand));
+        assert!(categories.contains(&HardcodingCategory::DuplicateError));
+        assert!(categories.contains(&HardcodingCategory::ConfigDuplicate));
+        let encoded = serde_json::to_string(&incremental.snapshot.hardcoding_candidates).unwrap();
+        assert!(!encoded.contains("example.invalid"));
+        assert!(!encoded.contains("stable duplicate failure"));
+        assert!(!encoded.contains("private-stage"));
+
+        let full = build_with_mode(
+            &root,
+            &project,
+            &checkout,
+            Some(&incremental),
+            IndexScanMode::Full,
+        );
+        assert_eq!(full.snapshot.scan_mode, IndexScanMode::Full);
+        assert!(full.snapshot.partitions.iter().all(|partition| {
+            partition.kind == IndexPartitionKind::Finding
+                || partition.state != IndexPartitionState::Reused
+        }));
     }
 
     struct FixtureSyntaxAdapter;
@@ -1868,6 +3198,7 @@ mod tests {
             policy: &IndexPolicy::default(),
             syntax_adapters: &syntax_adapters,
             semantic_adapters: &[],
+            scan_mode: IndexScanMode::Incremental,
             previous: None,
         })
         .unwrap();
@@ -1884,6 +3215,7 @@ mod tests {
             policy: &IndexPolicy::default(),
             syntax_adapters: &syntax_adapters,
             semantic_adapters: &[],
+            scan_mode: IndexScanMode::Incremental,
             previous: Some(&first),
         })
         .unwrap();

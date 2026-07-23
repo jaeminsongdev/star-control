@@ -5,13 +5,16 @@ use serde::{Deserialize, Serialize};
 use star_contracts::{
     ArtifactId, ProjectId, Sha256Hash,
     evidence::{ArtifactKind, ArtifactRef, ProducerRef, RedactionStatus, RetentionClass},
+    fixed_mcp::ApprovalDecision,
     ids::{ChangePlanId, PatchSetId, WorkspaceSnapshotId},
     management::{FileOperationKind, PatchFileOperation, PatchSet, PatchSetStatus, ProjectPathRef},
     rust_style::{
         ClippySuggestion, RUST_STYLE_PIPELINE_ID, RUST_STYLE_PIPELINE_VERSION,
-        RUST_STYLE_STEP_EXECUTION_SCHEMA_ID, RustAutoPolicy, RustSideEffectResult, RustStepResult,
-        RustStyleCoverageMatrix, RustStylePolicySnapshot, RustStyleStepExecution,
-        RustToolchainBinding,
+        RUST_STYLE_POLICY_APPROVAL_DECISION_SCHEMA_ID,
+        RUST_STYLE_POLICY_APPROVAL_REQUEST_SCHEMA_ID, RUST_STYLE_STEP_EXECUTION_SCHEMA_ID,
+        RustAutoPolicy, RustSideEffectResult, RustStepResult, RustStyleCoverageMatrix,
+        RustStylePolicyApprovalDecision, RustStylePolicyApprovalRequest, RustStylePolicySnapshot,
+        RustStyleStepExecution, RustToolchainBinding,
     },
 };
 use star_domain::versioned_fingerprint;
@@ -339,13 +342,101 @@ pub fn authorize_exact_human(
     permit(candidate, approved_candidate_fingerprint.clone(), false)
 }
 
+pub struct PersonalAutoAuthorization<'a> {
+    pub candidate: &'a RustStyleCandidate,
+    pub policy: &'a RustStylePolicySnapshot,
+    pub grant: &'a RustAutoApplyGrant,
+    pub approved_patch_set_id: &'a PatchSetId,
+    pub approved_patch_fingerprint: &'a Sha256Hash,
+    pub approval_request: &'a RustStylePolicyApprovalRequest,
+    pub approval_decision: &'a RustStylePolicyApprovalDecision,
+    pub pre_gate: PreApplyGateVerdict,
+    pub now: DateTime<Utc>,
+}
+
 pub fn authorize_personal_auto(
+    authorization: PersonalAutoAuthorization<'_>,
+) -> Result<RustApplyPermit, RustStyleWorkflowError> {
+    let PersonalAutoAuthorization {
+        candidate,
+        policy,
+        grant,
+        approved_patch_set_id,
+        approved_patch_fingerprint,
+        approval_request,
+        approval_decision,
+        pre_gate,
+        now,
+    } = authorization;
+    let expected_request = prepare_personal_auto_approval_request_for_patch(
+        candidate,
+        policy,
+        grant,
+        approved_patch_set_id,
+        approved_patch_fingerprint,
+        pre_gate,
+        approval_request.pre_gate_id.clone(),
+        approval_request.pre_gate_revision,
+        approval_request.pre_gate_fingerprint.clone(),
+        now,
+    )?;
+    let sealed_decision = seal_rust_style_policy_approval_decision(approval_decision.clone())?;
+    if &expected_request != approval_request
+        || &sealed_decision != approval_decision
+        || approval_decision.request_fingerprint != approval_request.request_fingerprint
+        || approval_decision.decision != ApprovalDecision::Approve
+    {
+        return Err(RustStyleWorkflowError::ApprovalRequired);
+    }
+    permit(
+        candidate,
+        approval_decision.decision_fingerprint.clone(),
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn prepare_personal_auto_approval_request(
     candidate: &RustStyleCandidate,
     policy: &RustStylePolicySnapshot,
     grant: &RustAutoApplyGrant,
     pre_gate: PreApplyGateVerdict,
+    pre_gate_id: star_contracts::ids::GateId,
+    pre_gate_revision: u64,
+    pre_gate_fingerprint: Sha256Hash,
     now: DateTime<Utc>,
-) -> Result<RustApplyPermit, RustStyleWorkflowError> {
+) -> Result<RustStylePolicyApprovalRequest, RustStyleWorkflowError> {
+    let patch_set = candidate
+        .patch_set
+        .as_ref()
+        .ok_or(RustStyleWorkflowError::ApprovalRequired)?;
+    prepare_personal_auto_approval_request_for_patch(
+        candidate,
+        policy,
+        grant,
+        &patch_set.patch_set_id,
+        &patch_set.patch_fingerprint,
+        pre_gate,
+        pre_gate_id,
+        pre_gate_revision,
+        pre_gate_fingerprint,
+        now,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn prepare_personal_auto_approval_request_for_patch(
+    candidate: &RustStyleCandidate,
+    policy: &RustStylePolicySnapshot,
+    grant: &RustAutoApplyGrant,
+    approved_patch_set_id: &PatchSetId,
+    approved_patch_fingerprint: &Sha256Hash,
+    pre_gate: PreApplyGateVerdict,
+    pre_gate_id: star_contracts::ids::GateId,
+    pre_gate_revision: u64,
+    pre_gate_fingerprint: Sha256Hash,
+    now: DateTime<Utc>,
+) -> Result<RustStylePolicyApprovalRequest, RustStyleWorkflowError> {
     let expires_at = DateTime::parse_from_rfc3339(&grant.expires_at)
         .map_err(|_| RustStyleWorkflowError::ApprovalRequired)?
         .with_timezone(&Utc);
@@ -395,7 +486,126 @@ pub fn authorize_personal_auto(
     if expected_grant != grant.grant_fingerprint {
         return Err(RustStyleWorkflowError::ApprovalRequired);
     }
-    permit(candidate, grant.grant_fingerprint.clone(), true)
+    let mut scope_paths = grant.scope_paths.clone();
+    scope_paths.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    scope_paths.dedup();
+    let mut changed_paths = candidate
+        .changes
+        .iter()
+        .map(|change| change.path.clone())
+        .collect::<Vec<_>>();
+    changed_paths.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    changed_paths.dedup();
+    let request = RustStylePolicyApprovalRequest {
+        schema_id: RUST_STYLE_POLICY_APPROVAL_REQUEST_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        contract_version: 1,
+        project_id: candidate.project_id.clone(),
+        profile_ref: policy.profile_ref.clone(),
+        pipeline_ref: policy.pipeline_ref.clone(),
+        patch_set_id: approved_patch_set_id.clone(),
+        patch_fingerprint: approved_patch_fingerprint.clone(),
+        candidate_fingerprint: candidate.candidate_fingerprint.clone(),
+        before_fingerprint: candidate.before_fingerprint.clone(),
+        expected_after_fingerprint: candidate.expected_after_fingerprint.clone(),
+        toolchain_fingerprint: candidate.toolchain_fingerprint.clone(),
+        policy_fingerprint: candidate.policy_fingerprint.clone(),
+        coverage_fingerprint: candidate.coverage_fingerprint.clone(),
+        fixed_adapter_fingerprint: candidate.fixed_adapter_fingerprint.clone(),
+        standing_grant_fingerprint: grant.grant_fingerprint.clone(),
+        pre_gate_id,
+        pre_gate_revision,
+        pre_gate_fingerprint,
+        scope_paths,
+        changed_paths,
+        request_fingerprint: Sha256Hash::digest(b"pending-rust-style-policy-approval"),
+    };
+    seal_rust_style_policy_approval_request(request)
+}
+
+pub fn seal_rust_style_policy_approval_request(
+    mut request: RustStylePolicyApprovalRequest,
+) -> Result<RustStylePolicyApprovalRequest, RustStyleWorkflowError> {
+    if request.schema_id != RUST_STYLE_POLICY_APPROVAL_REQUEST_SCHEMA_ID
+        || request.schema_version != 1
+        || request.contract_version != 1
+        || request.profile_ref.trim().is_empty()
+        || request.pipeline_ref.trim().is_empty()
+        || request.pre_gate_revision == 0
+        || request.scope_paths.is_empty()
+        || request.changed_paths.is_empty()
+    {
+        return Err(RustStyleWorkflowError::ApprovalRequired);
+    }
+    request
+        .scope_paths
+        .sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    request.scope_paths.dedup();
+    request
+        .changed_paths
+        .sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    request.changed_paths.dedup();
+    request.request_fingerprint = rust_style_policy_approval_request_fingerprint(&request)?;
+    Ok(request)
+}
+
+pub fn seal_rust_style_policy_approval_decision(
+    mut decision: RustStylePolicyApprovalDecision,
+) -> Result<RustStylePolicyApprovalDecision, RustStyleWorkflowError> {
+    if decision.schema_id != RUST_STYLE_POLICY_APPROVAL_DECISION_SCHEMA_ID
+        || decision.schema_version != 1
+        || decision.contract_version != 1
+        || decision.resolved_at.trim().is_empty()
+        || DateTime::parse_from_rfc3339(&decision.resolved_at).is_err()
+    {
+        return Err(RustStyleWorkflowError::ApprovalRequired);
+    }
+    decision.decision_fingerprint = versioned_fingerprint(
+        "star.rust-style-policy-approval-decision",
+        1,
+        &serde_json::json!({
+            "approval_id":decision.approval_id,
+            "scope_hash":decision.scope_hash,
+            "request_fingerprint":decision.request_fingerprint,
+            "decision":decision.decision,
+            "resolved_at":decision.resolved_at,
+        }),
+    )
+    .map_err(|_| RustStyleWorkflowError::Fingerprint)?;
+    Ok(decision)
+}
+
+fn rust_style_policy_approval_request_fingerprint(
+    request: &RustStylePolicyApprovalRequest,
+) -> Result<Sha256Hash, RustStyleWorkflowError> {
+    versioned_fingerprint(
+        "star.rust-style-policy-approval-request",
+        1,
+        &serde_json::json!({
+            "schema_id":request.schema_id,
+            "schema_version":request.schema_version,
+            "contract_version":request.contract_version,
+            "project_id":request.project_id,
+            "profile_ref":request.profile_ref,
+            "pipeline_ref":request.pipeline_ref,
+            "patch_set_id":request.patch_set_id,
+            "patch_fingerprint":request.patch_fingerprint,
+            "candidate_fingerprint":request.candidate_fingerprint,
+            "before_fingerprint":request.before_fingerprint,
+            "expected_after_fingerprint":request.expected_after_fingerprint,
+            "toolchain_fingerprint":request.toolchain_fingerprint,
+            "policy_fingerprint":request.policy_fingerprint,
+            "coverage_fingerprint":request.coverage_fingerprint,
+            "fixed_adapter_fingerprint":request.fixed_adapter_fingerprint,
+            "standing_grant_fingerprint":request.standing_grant_fingerprint,
+            "pre_gate_id":request.pre_gate_id,
+            "pre_gate_revision":request.pre_gate_revision,
+            "pre_gate_fingerprint":request.pre_gate_fingerprint,
+            "scope_paths":request.scope_paths,
+            "changed_paths":request.changed_paths,
+        }),
+    )
+    .map_err(|_| RustStyleWorkflowError::Fingerprint)
 }
 
 pub fn apply_with_permit(
@@ -1307,24 +1517,73 @@ mod tests {
             }),
         )
         .unwrap();
-        let permit = authorize_personal_auto(
+        let approval_request = prepare_personal_auto_approval_request(
             &candidate,
             &personal_policy,
             &grant,
             PreApplyGateVerdict::AutoPass,
+            star_contracts::ids::GateId::new(),
+            1,
+            Sha256Hash::digest(b"pre-gate"),
             Utc::now(),
         )
         .unwrap();
+        let approval_decision =
+            seal_rust_style_policy_approval_decision(RustStylePolicyApprovalDecision {
+                schema_id: RUST_STYLE_POLICY_APPROVAL_DECISION_SCHEMA_ID.to_owned(),
+                schema_version: 1,
+                contract_version: 1,
+                approval_id: star_contracts::ids::ApprovalId::new(),
+                scope_hash: Sha256Hash::digest(b"approval-scope"),
+                request_fingerprint: approval_request.request_fingerprint.clone(),
+                decision: ApprovalDecision::Approve,
+                resolved_at: Utc::now().to_rfc3339(),
+                decision_fingerprint: Sha256Hash::digest(b"pending-decision"),
+            })
+            .unwrap();
+        let permit = authorize_personal_auto(PersonalAutoAuthorization {
+            candidate: &candidate,
+            policy: &personal_policy,
+            grant: &grant,
+            approved_patch_set_id: &approval_request.patch_set_id,
+            approved_patch_fingerprint: &approval_request.patch_fingerprint,
+            approval_request: &approval_request,
+            approval_decision: &approval_decision,
+            pre_gate: PreApplyGateVerdict::AutoPass,
+            now: Utc::now(),
+        })
+        .unwrap();
         assert!(permit.automatic);
+        let mut denied = approval_decision.clone();
+        denied.decision = ApprovalDecision::Deny;
+        denied = seal_rust_style_policy_approval_decision(denied).unwrap();
+        assert!(
+            authorize_personal_auto(PersonalAutoAuthorization {
+                candidate: &candidate,
+                policy: &personal_policy,
+                grant: &grant,
+                approved_patch_set_id: &approval_request.patch_set_id,
+                approved_patch_fingerprint: &approval_request.patch_fingerprint,
+                approval_request: &approval_request,
+                approval_decision: &denied,
+                pre_gate: PreApplyGateVerdict::AutoPass,
+                now: Utc::now(),
+            })
+            .is_err()
+        );
         let safe_policy = policy(candidate.project_id.clone(), RustAutoPolicy::SafeDefault);
         assert!(
-            authorize_personal_auto(
-                &candidate,
-                &safe_policy,
-                &grant,
-                PreApplyGateVerdict::AutoPass,
-                Utc::now()
-            )
+            authorize_personal_auto(PersonalAutoAuthorization {
+                candidate: &candidate,
+                policy: &safe_policy,
+                grant: &grant,
+                approved_patch_set_id: &approval_request.patch_set_id,
+                approved_patch_fingerprint: &approval_request.patch_fingerprint,
+                approval_request: &approval_request,
+                approval_decision: &approval_decision,
+                pre_gate: PreApplyGateVerdict::AutoPass,
+                now: Utc::now(),
+            })
             .is_err()
         );
     }

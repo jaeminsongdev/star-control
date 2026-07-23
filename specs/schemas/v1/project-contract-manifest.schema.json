@@ -1,0 +1,299 @@
+{
+  "$defs": {
+    "AssumptionSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "assumption_id": {
+          "type": "string"
+        },
+        "expected": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "assumption_id",
+        "kind",
+        "subject",
+        "expected",
+        "required"
+      ],
+      "type": "object"
+    },
+    "BaselinePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "activated_at": {
+          "type": "string"
+        },
+        "approval_ref": {
+          "type": "string"
+        },
+        "baseline_ref": {
+          "type": "string"
+        },
+        "baseline_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "minimum_consumer_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "supported_until": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "baseline_ref",
+        "baseline_sha256",
+        "approval_ref",
+        "activated_at"
+      ],
+      "type": "object"
+    },
+    "ContractSurfaceDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "compatibility_policy_ref": {
+          "type": "string"
+        },
+        "consumer_contract_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "declaration_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "documentation_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "generated_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/ContractSurfaceKind"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "type": "boolean"
+        },
+        "schema_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "source_selector": {
+          "type": "string"
+        },
+        "surface_id": {
+          "type": "string"
+        },
+        "visibility_policy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface_id",
+        "kind",
+        "owner",
+        "source_path",
+        "source_selector",
+        "compatibility_policy_ref",
+        "visibility_policy"
+      ],
+      "type": "object"
+    },
+    "ContractSurfaceKind": {
+      "enum": [
+        "api",
+        "cli",
+        "schema",
+        "file_format",
+        "config",
+        "error_code"
+      ],
+      "type": "string"
+    },
+    "DocumentationTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "required_commands": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required_config_keys": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required_references": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_id",
+        "source_path"
+      ],
+      "type": "object"
+    },
+    "EnvironmentConstraint": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "constraint_id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "constraint_id",
+        "kind",
+        "subject",
+        "accepted",
+        "required"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.project-contract-manifest:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "assumptions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/AssumptionSpec"
+      },
+      "type": "array"
+    },
+    "baseline_policy": {
+      "$ref": "#/$defs/BaselinePolicy"
+    },
+    "clean_room_spec_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "documentation": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DocumentationTarget"
+      },
+      "type": "array"
+    },
+    "environment_constraints": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EnvironmentConstraint"
+      },
+      "type": "array"
+    },
+    "manifest_id": {
+      "type": "string"
+    },
+    "manifest_version": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.project-contract-manifest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "surfaces": {
+      "items": {
+        "$ref": "#/$defs/ContractSurfaceDescriptor"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "manifest_id",
+    "manifest_version",
+    "project_id",
+    "baseline_policy",
+    "surfaces",
+    "source_fingerprint"
+  ],
+  "title": "ProjectContractManifest",
+  "type": "object"
+}

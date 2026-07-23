@@ -1,0 +1,159 @@
+{
+  "$defs": {
+    "EquivalenceDimensionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "dimension_id": {
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "#/$defs/EquivalenceDimensionState"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dimension_id",
+        "required",
+        "state",
+        "evidence_refs",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "EquivalenceDimensionState": {
+      "enum": [
+        "equivalent",
+        "not_equivalent",
+        "partial",
+        "not_run",
+        "unverified",
+        "human_review",
+        "not_required"
+      ],
+      "type": "string"
+    },
+    "EquivalenceState": {
+      "enum": [
+        "not_evaluated",
+        "partial",
+        "equivalent",
+        "not_equivalent",
+        "human_review",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.equivalence-report:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baseline_subject": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "build_compile_result": {
+      "type": "string"
+    },
+    "candidate_subject": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "consumer_results": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "dimension_results": {
+      "items": {
+        "$ref": "#/$defs/EquivalenceDimensionResult"
+      },
+      "type": "array"
+    },
+    "equivalence_report_id": {
+      "type": "string"
+    },
+    "equivalence_state": {
+      "$ref": "#/$defs/EquivalenceState"
+    },
+    "gate_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "performance_comparison_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "plan_ref": {
+      "type": "string"
+    },
+    "platform_matrix_results": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "report_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.equivalence-report",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "test_contract_results": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "unknown_semantics": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "equivalence_report_id",
+    "plan_ref",
+    "baseline_subject",
+    "candidate_subject",
+    "dimension_results",
+    "build_compile_result",
+    "test_contract_results",
+    "performance_comparison_refs",
+    "platform_matrix_results",
+    "consumer_results",
+    "unknown_semantics",
+    "equivalence_state",
+    "gate_refs",
+    "report_fingerprint"
+  ],
+  "title": "EquivalenceReport",
+  "type": "object"
+}

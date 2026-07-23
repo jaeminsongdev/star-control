@@ -1,0 +1,61 @@
+{
+  "adapter_descriptor_ref": "fixture",
+  "capabilities": {
+    "fixture": false
+  },
+  "captured_at": "2026-01-01T00:00:00Z",
+  "checks": [
+    {
+      "check_id": "fixture",
+      "conclusion": "fixture",
+      "status": "fixture",
+      "subject_object_id": "fixture"
+    }
+  ],
+  "completeness": "complete",
+  "limitations": [
+    "fixture"
+  ],
+  "local_subject_ref": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "pull_requests": [
+    {
+      "base_ref": "fixture",
+      "head_object_id": "fixture",
+      "merge_object_id": "fixture",
+      "provider_ref": "fixture",
+      "state": "fixture",
+      "updated_revision": "fixture"
+    }
+  ],
+  "query_scope": [
+    "fixture"
+  ],
+  "raw_artifact_ref": "art_00000000000000000000000000",
+  "refs": [
+    {
+      "object_id": "fixture",
+      "object_kind": "fixture",
+      "provider_ref": "fixture"
+    }
+  ],
+  "releases": [
+    {
+      "artifact_refs": [
+        "art_00000000000000000000000000"
+      ],
+      "provider_ref": "fixture",
+      "source_object_id": "fixture",
+      "status": "fixture",
+      "tag": "fixture"
+    }
+  ],
+  "remote_identity": "fixture",
+  "remote_kind": "fixture",
+  "remote_snapshot_id": "fixture",
+  "revision": 0,
+  "schema_id": "star.remote-state-snapshot-v2",
+  "schema_version": 2,
+  "snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "valid_until": "fixture"
+}

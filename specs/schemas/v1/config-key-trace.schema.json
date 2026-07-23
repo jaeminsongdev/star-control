@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "ConfigOverrideObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "precedence": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "provenance": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provenance",
+        "present",
+        "precedence"
+      ],
+      "type": "object"
+    },
+    "ConfigReaderObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "reader_ref": {
+          "type": "string"
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "state": {
+          "$ref": "#/$defs/EvaluationState"
+        }
+      },
+      "required": [
+        "reader_ref",
+        "source_path",
+        "source_sha256",
+        "state"
+      ],
+      "type": "object"
+    },
+    "EvaluationState": {
+      "enum": [
+        "pass",
+        "block",
+        "human_review",
+        "unknown",
+        "not_applicable"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.config-key-trace:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "declaration_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "effective_provenance": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "key_ref": {
+      "type": "string"
+    },
+    "lifecycle": {
+      "type": "string"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "overrides": {
+      "items": {
+        "$ref": "#/$defs/ConfigOverrideObservation"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "readers": {
+      "items": {
+        "$ref": "#/$defs/ConfigReaderObservation"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.config-key-trace",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/EvaluationState"
+    },
+    "trace_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "value_redacted": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "trace_id",
+    "project_id",
+    "key_ref",
+    "lifecycle",
+    "readers",
+    "overrides",
+    "value_redacted",
+    "state",
+    "trace_fingerprint"
+  ],
+  "title": "ConfigKeyTrace",
+  "type": "object"
+}

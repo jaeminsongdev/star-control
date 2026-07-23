@@ -1,0 +1,21 @@
+{
+  "checkout_id": "cko_00000000000000000000000000",
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "declarations": [],
+  "freshness": "current",
+  "git_revision": "fixture",
+  "managed_registry_snapshot_id": "mrs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "manifest_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_source_refs": [],
+  "namespace_claims": [],
+  "owner_project_id": "fixture",
+  "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "registry_id": "fixture",
+  "registry_version": "fixture",
+  "resolution_state": "valid",
+  "schema_id": "star.managed-registry-snapshot",
+  "schema_version": 3,
+  "tombstone_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

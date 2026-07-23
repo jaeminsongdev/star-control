@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "PerformanceCohort": {
+      "enum": [
+        "baseline",
+        "candidate"
+      ],
+      "type": "string"
+    },
+    "PerformanceMeasurement": {
+      "additionalProperties": false,
+      "properties": {
+        "collector": {
+          "type": "string"
+        },
+        "metric_id": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "value": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "metric_id",
+        "value",
+        "unit",
+        "collector"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.performance-run:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempt": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "build_mode": {
+      "type": "string"
+    },
+    "cohort": {
+      "$ref": "#/$defs/PerformanceCohort"
+    },
+    "correctness_passed": {
+      "type": "boolean"
+    },
+    "environment_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "measurements": {
+      "items": {
+        "$ref": "#/$defs/PerformanceMeasurement"
+      },
+      "type": "array"
+    },
+    "run_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "run_id": {
+      "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.performance-run",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "subject_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "toolchain_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "warmup": {
+      "type": "boolean"
+    },
+    "workload_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "workload_ref": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "run_id",
+    "workload_ref",
+    "workload_fingerprint",
+    "cohort",
+    "attempt",
+    "warmup",
+    "subject_fingerprint",
+    "environment_fingerprint",
+    "toolchain_fingerprint",
+    "build_mode",
+    "measurements",
+    "correctness_passed",
+    "evidence_refs",
+    "run_fingerprint"
+  ],
+  "title": "PerformanceRun",
+  "type": "object"
+}

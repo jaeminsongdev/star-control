@@ -1,0 +1,26 @@
+{
+  "authoritative_gate_decision_ref": {
+    "gate_id": "gat_00000000000000000000000000",
+    "revision": 0,
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "completeness": "complete",
+  "created_at": "2026-01-01T00:00:00Z",
+  "evidence_bundle_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "missing_reasons": [],
+  "questions": [],
+  "rendered_artifact_refs": [],
+  "required_action_refs": [],
+  "review_pack_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "review_pack_id": "fixture",
+  "revision": 0,
+  "schema_id": "star.review-pack",
+  "schema_version": 1,
+  "section_order": [],
+  "sections": []
+}

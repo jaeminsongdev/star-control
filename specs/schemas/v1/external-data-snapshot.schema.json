@@ -1,0 +1,175 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ExternalDataObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "advisory_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "license_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_evidence_ref": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "status",
+        "advisory_refs",
+        "license_refs",
+        "source_evidence_ref"
+      ],
+      "type": "object"
+    },
+    "ExternalDataSourceDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "integrity_policy": {
+          "type": "string"
+        },
+        "license_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "maximum_age_seconds": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "retrieval_mode": {
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^src_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "source_kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "source_kind",
+        "provider",
+        "retrieval_mode",
+        "integrity_policy",
+        "maximum_age_seconds"
+      ],
+      "type": "object"
+    },
+    "ExternalFreshness": {
+      "enum": [
+        "current",
+        "stale",
+        "expired",
+        "unknown",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.external-data-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "evaluation_time": {
+      "type": "string"
+    },
+    "freshness": {
+      "$ref": "#/$defs/ExternalFreshness"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/ExternalDataObservation"
+      },
+      "type": "array"
+    },
+    "retrieved_at": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.external-data-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ExternalDataSourceDescriptor"
+    },
+    "source_artifact_ref": {
+      "type": "string"
+    },
+    "source_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "valid_until": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "snapshot_id",
+    "source",
+    "retrieved_at",
+    "valid_until",
+    "evaluation_time",
+    "source_artifact_ref",
+    "source_sha256",
+    "observations",
+    "freshness",
+    "completeness",
+    "content_fingerprint"
+  ],
+  "title": "ExternalDataSnapshot",
+  "type": "object"
+}

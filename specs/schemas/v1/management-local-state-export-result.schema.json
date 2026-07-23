@@ -1,0 +1,578 @@
+{
+  "$defs": {
+    "Baseline": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_id": {
+          "pattern": "^bas_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "finding_fingerprints": {
+          "items": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reviewed": {
+          "type": "boolean"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rule_set_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "scan_config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope_kind": {
+          "$ref": "#/$defs/BaselineScope"
+        },
+        "set_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "status": {
+          "$ref": "#/$defs/BaselineStatus"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "baseline_id",
+        "revision",
+        "scope_kind",
+        "project_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "scan_config_fingerprint",
+        "rule_set_fingerprint",
+        "finding_fingerprints",
+        "set_fingerprint",
+        "created_at",
+        "reason",
+        "reviewed",
+        "status"
+      ],
+      "type": "object"
+    },
+    "BaselineScope": {
+      "enum": [
+        "shared",
+        "local"
+      ],
+      "type": "string"
+    },
+    "BaselineStatus": {
+      "enum": [
+        "active",
+        "superseded",
+        "invalid"
+      ],
+      "type": "string"
+    },
+    "ChangePlan": {
+      "additionalProperties": false,
+      "properties": {
+        "change_plan_id": {
+          "pattern": "^cpl_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "expected_paths": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "finding_refs": {
+          "items": {
+            "pattern": "^fnd_[a-z2-7]{52}$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "permission_plan_ref": {
+          "type": "string"
+        },
+        "preconditions": {
+          "items": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "recipe_refs": {
+          "items": {
+            "$ref": "#/$defs/ChangeRecipeRef"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "risk": {
+          "type": "string"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/ChangePlanStatus"
+        },
+        "target_workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "validation_plan_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "change_plan_id",
+        "revision",
+        "project_id",
+        "target_workspace_snapshot_id",
+        "finding_refs",
+        "recipe_refs",
+        "parameters",
+        "expected_paths",
+        "preconditions",
+        "risk",
+        "permission_plan_ref",
+        "validation_plan_ref",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "type": "object"
+    },
+    "ChangePlanStatus": {
+      "enum": [
+        "draft",
+        "ready",
+        "applied",
+        "validated",
+        "blocked",
+        "abandoned"
+      ],
+      "type": "string"
+    },
+    "ChangeRecipeRef": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "recipe_id": {
+          "type": "string"
+        },
+        "recipe_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "recipe_id",
+        "recipe_version",
+        "definition_fingerprint"
+      ],
+      "type": "object"
+    },
+    "Disposition": {
+      "additionalProperties": false,
+      "properties": {
+        "decided_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "decision": {
+          "$ref": "#/$defs/DispositionDecision"
+        },
+        "disposition_id": {
+          "pattern": "^dsp_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "duplicate_of_finding_id": {
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expires_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "finding_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "finding_id": {
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "provenance": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope_revision": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/DispositionStatus"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "disposition_id",
+        "revision",
+        "finding_id",
+        "finding_fingerprint",
+        "decision",
+        "reason_code",
+        "reason",
+        "decided_at",
+        "provenance",
+        "status"
+      ],
+      "type": "object"
+    },
+    "DispositionDecision": {
+      "enum": [
+        "needs_action",
+        "accepted_risk",
+        "false_positive",
+        "deferred",
+        "duplicate",
+        "fixed"
+      ],
+      "type": "string"
+    },
+    "DispositionStatus": {
+      "enum": [
+        "active",
+        "stale",
+        "revoked"
+      ],
+      "type": "string"
+    },
+    "LocalStateBundle": {
+      "additionalProperties": false,
+      "properties": {
+        "active_change_plans": {
+          "items": {
+            "$ref": "#/$defs/ChangePlan"
+          },
+          "type": "array"
+        },
+        "bundle_id": {
+          "pattern": "^lsb_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "effective_config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "local_baselines": {
+          "items": {
+            "$ref": "#/$defs/Baseline"
+          },
+          "type": "array"
+        },
+        "local_dispositions": {
+          "items": {
+            "$ref": "#/$defs/Disposition"
+          },
+          "type": "array"
+        },
+        "local_suppressions": {
+          "items": {
+            "$ref": "#/$defs/Suppression"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "redaction_contract_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "bundle_id",
+        "project_id",
+        "source_revision_id",
+        "effective_config_fingerprint",
+        "redaction_contract_version",
+        "local_suppressions",
+        "local_baselines",
+        "local_dispositions",
+        "active_change_plans",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "Suppression": {
+      "additionalProperties": false,
+      "properties": {
+        "config_fingerprint_constraint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "justification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "permanent": {
+          "type": "boolean"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "provenance": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope_kind": {
+          "$ref": "#/$defs/SuppressionScope"
+        },
+        "selector": {
+          "type": "string"
+        },
+        "source_revision_constraint": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/SuppressionStatus"
+        },
+        "suppression_id": {
+          "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "suppression_id",
+        "revision",
+        "scope_kind",
+        "project_id",
+        "selector",
+        "reason_code",
+        "reason",
+        "created_at",
+        "permanent",
+        "status",
+        "provenance"
+      ],
+      "type": "object"
+    },
+    "SuppressionScope": {
+      "enum": [
+        "shared",
+        "local"
+      ],
+      "type": "string"
+    },
+    "SuppressionStatus": {
+      "enum": [
+        "active",
+        "expired",
+        "revoked",
+        "stale"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-local-state-export-result:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applied_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "approved_plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "bundle": {
+      "$ref": "#/$defs/LocalStateBundle"
+    },
+    "payload_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "recovery_plan_id": {
+      "pattern": "^rcp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "result_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.management-local-state-export-result",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "recovery_plan_id",
+    "applied_at",
+    "approved_plan_fingerprint",
+    "bundle",
+    "payload_sha256",
+    "result_fingerprint"
+  ],
+  "title": "LocalStateExportResult",
+  "type": "object"
+}

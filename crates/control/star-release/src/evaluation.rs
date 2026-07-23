@@ -14,6 +14,7 @@ use star_domain::versioned_fingerprint;
 
 use crate::ReleaseError;
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvaluationInput {
     pub evaluation_context: EvaluationContext,
     pub baseline: EvaluationDefinition,
@@ -172,6 +173,38 @@ pub fn transition_catalog_item(
         return Err(ReleaseError::Blocked);
     }
     item.lifecycle = next;
+    seal_catalog_item(item)
+}
+
+pub fn seal_catalog_item(
+    mut item: EvaluationCatalogItem,
+) -> Result<EvaluationCatalogItem, ReleaseError> {
+    if item.schema_id != EVALUATION_CATALOG_ITEM_SCHEMA_ID
+        || item.schema_version != 1
+        || !catalog_token(&item.item_id, 192)
+        || !catalog_token(&item.item_version, 128)
+        || item.owner.trim().is_empty()
+        || item.corpus_ref.trim().is_empty()
+        || match item.lifecycle {
+            EvaluationCatalogLifecycle::Active => false,
+            EvaluationCatalogLifecycle::Deprecated => {
+                item.replacement_ref.is_none()
+                    || item.migration_guide_ref.is_none()
+                    || item.compatibility_deadline.is_none()
+                    || item.last_evaluation_run_ref.is_none()
+            }
+            EvaluationCatalogLifecycle::Retired => {
+                item.tombstone_ref.is_none()
+                    || item.migration_guide_ref.is_none()
+                    || item.last_evaluation_run_ref.is_none()
+            }
+            EvaluationCatalogLifecycle::Rejected => {
+                item.tombstone_ref.is_none() || item.last_evaluation_run_ref.is_none()
+            }
+        }
+    {
+        return Err(ReleaseError::Invalid);
+    }
     item.item_fingerprint = versioned_fingerprint(
         EVALUATION_CATALOG_ITEM_SCHEMA_ID,
         1,
@@ -191,6 +224,14 @@ pub fn transition_catalog_item(
     )
     .map_err(|_| ReleaseError::Fingerprint)?;
     Ok(item)
+}
+
+fn catalog_token(value: &str, max: usize) -> bool {
+    !value.is_empty()
+        && value.len() <= max
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 fn validate_input(input: &EvaluationInput) -> Result<(), ReleaseError> {

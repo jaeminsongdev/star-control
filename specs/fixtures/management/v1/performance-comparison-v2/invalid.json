@@ -1,0 +1,16 @@
+{
+  "baseline_run_refs": [],
+  "candidate_run_refs": [],
+  "comparable": false,
+  "comparison_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "comparison_id": "fixture",
+  "correctness_verified": false,
+  "limitations": [],
+  "metric_comparisons": [],
+  "schema_id": "star.performance-comparison",
+  "schema_version": 2,
+  "state": "pass",
+  "unexpected": true,
+  "workload_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "workload_ref": "fixture"
+}

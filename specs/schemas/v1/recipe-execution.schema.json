@@ -1,0 +1,543 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "Completeness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RecipeExecutionStateV1": {
+      "enum": [
+        "started",
+        "previewed",
+        "already_satisfied",
+        "replan_required",
+        "failed",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "RecipeRefV2": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "recipe_id": {
+          "type": "string"
+        },
+        "recipe_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "recipe_id",
+        "recipe_version",
+        "definition_fingerprint"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "TargetSelector": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "expected_content_fingerprints": {
+              "additionalProperties": false,
+              "patternProperties": {
+                "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$": {
+                  "$ref": "#/$defs/Sha256Hash"
+                }
+              },
+              "type": "object"
+            },
+            "kind": {
+              "const": "path",
+              "type": "string"
+            },
+            "paths": {
+              "items": {
+                "minLength": 1,
+                "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id",
+            "paths",
+            "expected_content_fingerprints"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "expected_definition_fingerprints": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Sha256Hash"
+              },
+              "type": "object"
+            },
+            "kind": {
+              "const": "symbol",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            },
+            "symbol_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id",
+            "symbol_ids",
+            "expected_definition_fingerprints"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "expected_finding_fingerprints": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Sha256Hash"
+              },
+              "type": "object"
+            },
+            "finding_ids": {
+              "items": {
+                "pattern": "^fnd_[a-z2-7]{52}$",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "finding",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id",
+            "finding_ids",
+            "expected_finding_fingerprints"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "declaration_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "expected_declaration_fingerprints": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Sha256Hash"
+              },
+              "type": "object"
+            },
+            "kind": {
+              "const": "managed_declaration",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id",
+            "declaration_ids",
+            "expected_declaration_fingerprints"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "contract_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "expected_surface_fingerprints": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Sha256Hash"
+              },
+              "type": "object"
+            },
+            "kind": {
+              "const": "contract",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id",
+            "contract_ids",
+            "expected_surface_fingerprints"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "expected_input_fingerprints": {
+              "additionalProperties": false,
+              "patternProperties": {
+                "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$": {
+                  "$ref": "#/$defs/Sha256Hash"
+                }
+              },
+              "type": "object"
+            },
+            "input_paths": {
+              "items": {
+                "minLength": 1,
+                "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "generator_input",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id",
+            "input_paths",
+            "expected_input_fingerprints"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "urn:star-control:schema:star.recipe-execution:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "base_workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "checkout_id": {
+      "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "completeness": {
+      "$ref": "#/$defs/Completeness"
+    },
+    "execution_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "first_preview_artifact_refs": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "type": "array"
+    },
+    "idempotence_proved": {
+      "type": "boolean"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "parameter_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "parameters": true,
+    "preview_change_set_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "recipe_execution_id": {
+      "type": "string"
+    },
+    "recipe_ref": {
+      "$ref": "#/$defs/RecipeRefV2"
+    },
+    "replan_bundle_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "replay_preview_artifact_refs": {
+      "items": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.recipe-execution",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "started_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/RecipeExecutionStateV1"
+    },
+    "target_selector": {
+      "$ref": "#/$defs/TargetSelector"
+    },
+    "target_selector_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "worktree_decision_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "recipe_execution_id",
+    "revision",
+    "recipe_ref",
+    "project_id",
+    "checkout_id",
+    "base_workspace_snapshot_id",
+    "target_selector",
+    "target_selector_fingerprint",
+    "parameters",
+    "parameter_fingerprint",
+    "worktree_decision_ref",
+    "first_preview_artifact_refs",
+    "replay_preview_artifact_refs",
+    "idempotence_proved",
+    "completeness",
+    "limitations",
+    "state",
+    "started_at",
+    "execution_fingerprint"
+  ],
+  "title": "RecipeExecution",
+  "type": "object"
+}

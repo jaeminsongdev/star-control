@@ -1,0 +1,172 @@
+{
+  "$defs": {
+    "MigrationAttemptState": {
+      "enum": [
+        "planned",
+        "running",
+        "succeeded",
+        "failed",
+        "blocked",
+        "outcome_unknown",
+        "partially_applied",
+        "rolled_back"
+      ],
+      "type": "string"
+    },
+    "MigrationPhase": {
+      "enum": [
+        "dry_run",
+        "backup",
+        "backup_verify",
+        "restore_rehearsal",
+        "migration_rehearsal",
+        "pre_execute_gate",
+        "execute",
+        "resume",
+        "validate",
+        "activate",
+        "consumer_validate",
+        "rollback",
+        "post_rollback_validate",
+        "reconcile"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.migration-attempt:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempt_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "attempt_id": {
+      "type": "string"
+    },
+    "attempt_no": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "checkpoint_after_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "checkpoint_before_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "diagnostic_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "effect_committed": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "gate_decision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "invocation_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "loss_observed": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "permission_decision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "phase": {
+      "$ref": "#/$defs/MigrationPhase"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "plan_ref": {
+      "type": "string"
+    },
+    "receipt_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.migration-attempt",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/MigrationAttemptState"
+    },
+    "step_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "subject_binding_after": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "subject_binding_before": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "tool_observation_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "attempt_id",
+    "attempt_no",
+    "plan_ref",
+    "plan_fingerprint",
+    "phase",
+    "subject_binding_before",
+    "state",
+    "attempt_fingerprint"
+  ],
+  "title": "MigrationAttempt",
+  "type": "object"
+}

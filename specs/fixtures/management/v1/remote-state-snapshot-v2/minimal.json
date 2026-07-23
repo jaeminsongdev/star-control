@@ -1,0 +1,22 @@
+{
+  "adapter_descriptor_ref": "fixture",
+  "capabilities": {},
+  "captured_at": "2026-01-01T00:00:00Z",
+  "checks": [],
+  "completeness": "complete",
+  "limitations": [],
+  "local_subject_ref": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "pull_requests": [],
+  "query_scope": [],
+  "refs": [],
+  "releases": [],
+  "remote_identity": "fixture",
+  "remote_kind": "fixture",
+  "remote_snapshot_id": "fixture",
+  "revision": 0,
+  "schema_id": "star.remote-state-snapshot-v2",
+  "schema_version": 2,
+  "snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "valid_until": "fixture"
+}

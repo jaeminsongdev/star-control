@@ -1,0 +1,261 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "EnvironmentContractPresence": {
+      "additionalProperties": false,
+      "properties": {
+        "declaration_ref": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ObservationState"
+        }
+      },
+      "required": [
+        "declaration_ref",
+        "required",
+        "scope",
+        "state"
+      ],
+      "type": "object"
+    },
+    "ManifestObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "completeness": {
+          "$ref": "#/$defs/CoverageState"
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "ecosystem": {
+          "type": "string"
+        },
+        "logical_path": {
+          "type": "string"
+        },
+        "manifest_kind": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "relation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "ecosystem",
+        "manifest_kind",
+        "logical_path",
+        "content_sha256",
+        "owner",
+        "completeness"
+      ],
+      "type": "object"
+    },
+    "ObservationState": {
+      "enum": [
+        "present",
+        "missing",
+        "version_mismatch",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ToolchainObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "declared_range": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "discovered_from": {
+          "type": "string"
+        },
+        "evidence_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "executable_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/ObservationState"
+        },
+        "toolchain_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "toolchain_id",
+        "discovered_from",
+        "state"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.environment-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "architecture": {
+      "type": "string"
+    },
+    "case_behavior": {
+      "type": "string"
+    },
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "environment_contract_presence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EnvironmentContractPresence"
+      },
+      "type": "array"
+    },
+    "environment_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "filesystem_kind": {
+      "type": "string"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "line_ending_policy": {
+      "type": "string"
+    },
+    "long_path_capability": {
+      "type": "string"
+    },
+    "manifests": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ManifestObservation"
+      },
+      "type": "array"
+    },
+    "os_family": {
+      "type": "string"
+    },
+    "os_release": {
+      "type": "string"
+    },
+    "path_depth": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "path_kind": {
+      "type": "string"
+    },
+    "path_length_bucket": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.environment-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "subject_revision": {
+      "type": "string"
+    },
+    "symlink_capability": {
+      "type": "string"
+    },
+    "task_descriptor_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "text_encoding_policy": {
+      "type": "string"
+    },
+    "toolchains": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ToolchainObservation"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "snapshot_id",
+    "project_id",
+    "subject_revision",
+    "os_family",
+    "os_release",
+    "architecture",
+    "filesystem_kind",
+    "case_behavior",
+    "symlink_capability",
+    "long_path_capability",
+    "path_kind",
+    "path_depth",
+    "path_length_bucket",
+    "text_encoding_policy",
+    "line_ending_policy",
+    "completeness",
+    "environment_fingerprint"
+  ],
+  "title": "EnvironmentSnapshot",
+  "type": "object"
+}

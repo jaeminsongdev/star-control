@@ -13,7 +13,7 @@ use star_contracts::{
     rust_style::{RustAutoPolicy, RustSourceOwnership},
 };
 use star_domain::versioned_fingerprint;
-use star_validation::rust_style::RustFileSnapshot;
+use star_validation::rust_style::{RustFileChange, RustFileSnapshot};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
@@ -325,6 +325,26 @@ impl CargoRustStyleAdapter {
             "--offline".to_owned(),
         ])
     }
+
+    /// Executes the affected Rust build check inside the already-owned preview.
+    /// It never enables an unbounded feature union and keeps Cargo offline.
+    pub fn run_cargo_check(&mut self) -> Result<RustToolOutput, RustStyleAdapterError> {
+        let mut args = vec!["check".to_owned()];
+        args.extend(self.scope.cargo_selection_args()?);
+        append_feature_args(&mut args, &self.features);
+        args.extend(["--all-targets".to_owned(), "--offline".to_owned()]);
+        self.run_fixed(&args)
+    }
+
+    /// Compiles the affected test targets without executing project test code.
+    /// Runtime test execution remains an M2/M3 selected project check.
+    pub fn run_cargo_test_no_run(&mut self) -> Result<RustToolOutput, RustStyleAdapterError> {
+        let mut args = vec!["test".to_owned(), "--no-run".to_owned()];
+        args.extend(self.scope.cargo_selection_args()?);
+        append_feature_args(&mut args, &self.features);
+        args.extend(["--all-targets".to_owned(), "--offline".to_owned()]);
+        self.run_fixed(&args)
+    }
 }
 
 pub fn effective_cargo_home() -> Result<PathBuf, RustStyleAdapterError> {
@@ -419,6 +439,55 @@ pub fn materialize_owned_preview(
     )
     .map_err(|_| RustStyleAdapterError::Io)?;
     Ok(())
+}
+
+/// Applies an already-reviewed Rust style candidate only inside a Star-owned
+/// preview. The exact before/after hashes are rechecked around every write so
+/// this helper cannot be repurposed as an unbounded source-tree writer.
+pub fn apply_owned_preview_changes(
+    preview_root: &Path,
+    changes: &[RustFileChange],
+) -> Result<(), RustStyleAdapterError> {
+    validate_owned_marker(preview_root)?;
+    let canonical_root = preview_root
+        .canonicalize()
+        .map_err(|_| RustStyleAdapterError::InvalidPath)?;
+    if changes.is_empty() {
+        return Err(RustStyleAdapterError::InvalidPath);
+    }
+    for change in changes {
+        if Sha256Hash::digest(&change.before_bytes) != change.before_sha256
+            || Sha256Hash::digest(&change.after_bytes) != change.after_sha256
+        {
+            return Err(RustStyleAdapterError::InvalidPath);
+        }
+        let path = resolve_relative(&canonical_root, change.path.as_str())?;
+        let metadata = fs::symlink_metadata(&path).map_err(|_| RustStyleAdapterError::Io)?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() || is_reparse_point(&metadata) {
+            return Err(RustStyleAdapterError::InvalidPath);
+        }
+        let canonical_path = path
+            .canonicalize()
+            .map_err(|_| RustStyleAdapterError::InvalidPath)?;
+        if !canonical_path.starts_with(&canonical_root)
+            || Sha256Hash::digest(
+                &fs::read(&canonical_path).map_err(|_| RustStyleAdapterError::Io)?,
+            ) != change.before_sha256
+        {
+            return Err(RustStyleAdapterError::InvalidPath);
+        }
+        fs::write(&canonical_path, &change.after_bytes).map_err(|_| RustStyleAdapterError::Io)?;
+        if Sha256Hash::digest(&fs::read(&canonical_path).map_err(|_| RustStyleAdapterError::Io)?)
+            != change.after_sha256
+        {
+            return Err(RustStyleAdapterError::Io);
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_owned_preview_root(root: &Path) -> Result<(), RustStyleAdapterError> {
+    validate_owned_marker(root)
 }
 
 fn copy_owned_tree(

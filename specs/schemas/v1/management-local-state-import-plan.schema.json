@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "LocalStateConflict": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string"
+        },
+        "entity_kind": {
+          "type": "string"
+        },
+        "reason_code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity_kind",
+        "entity_id",
+        "reason_code"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-local-state-import-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baseline_ids": {
+      "items": {
+        "pattern": "^bas_[0-9A-HJKMNP-TV-Z]{26}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "bundle_id": {
+      "pattern": "^lsb_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "change_plan_ids": {
+      "items": {
+        "pattern": "^cpl_[0-9A-HJKMNP-TV-Z]{26}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "conflicts": {
+      "items": {
+        "$ref": "#/$defs/LocalStateConflict"
+      },
+      "type": "array"
+    },
+    "disposition_ids": {
+      "items": {
+        "pattern": "^dsp_[0-9A-HJKMNP-TV-Z]{26}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "expected_config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "expected_source_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "expected_store_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "payload_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "recovery_plan_id": {
+      "pattern": "^rcp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.management-local-state-import-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "suppression_ids": {
+      "items": {
+        "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$",
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "recovery_plan_id",
+    "bundle_id",
+    "project_id",
+    "expected_source_revision_id",
+    "expected_config_fingerprint",
+    "expected_store_revision",
+    "payload_sha256",
+    "suppression_ids",
+    "baseline_ids",
+    "disposition_ids",
+    "change_plan_ids",
+    "conflicts",
+    "plan_fingerprint"
+  ],
+  "title": "LocalStateImportPlan",
+  "type": "object"
+}

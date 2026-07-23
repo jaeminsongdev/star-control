@@ -1,0 +1,30 @@
+schema_version = 1
+profile_id = "test_correctness"
+profile_version = "1.0.0"
+display_name = "Test Correctness"
+summary = "관련 테스트, 약화 탐지, 수정 전후 회귀와 고위험 추가 검사를 결합한다."
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+triggers = ["bug_fix", "core_logic_change", "test_change"]
+stage_template = ["affected_tests", "weakening_guard", "regression", "advanced_checks", "goal_gate"]
+context_rules = ["exact_change_set", "previous_failure", "test_ownership"]
+route_hints = ["validation"]
+permission_actions = []
+gate_phases = ["during_stage", "stage_exit", "goal_exit"]
+required_rule_families = ["regression", "test_coverage", "test_weakening"]
+required_check_families = ["test"]
+optional_check_families = ["fuzz", "mutation", "property"]
+always_run_for = ["bug_fix", "test_weakening"]
+baseline_policy = "clean_only"
+suppression_policy = "approved_expiring"
+claim_policy = ["correctness", "regression"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["diagnostic", "gate", "regression_record", "validation_run"]
+corpus_requirements = ["regression", "test_weakening"]
+approval_checkpoints = []
+default_stop_state = "correctness_gate_decided"
+allowed_effect_classes = ["read", "plan", "validate"]
+permission_floor = "local_read_only"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"

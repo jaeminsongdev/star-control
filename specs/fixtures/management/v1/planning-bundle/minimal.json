@@ -235,6 +235,12 @@
     "required_checks": [
       {
         "check_id": "fixture",
+        "descriptor_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
         "evidence_kinds": [],
         "fallback_floor": "package",
         "family": "fixture",

@@ -716,6 +716,8 @@ GateDecision은 모든 selected Check에 RunSatisfaction을 만들되 `required_
 
 artifact를 DB에서 참조하기 전 temp write, redaction, size·hash 검증과 atomic finalize를 끝낸다. DB transaction이 실패한 artifact는 orphan이며 evidence로 노출하지 않고 retention이 격리한다.
 
+P-0054의 `.ai-runs` 저장 adapter는 각 immutable artifact에 `<artifact>.artifact-ref.json` sidecar를 함께 쓴다. sidecar는 같은 ProjectId partition, `.ai-runs/star-control` 아래 normalized relative path, ArtifactId·kind·media type·producer·redaction, 실제 byte size와 SHA-256을 고정한다. replay와 rebuild discovery는 duplicate/unknown field, symlink·root escape, 다른 project, ID/path/hash/size 불일치와 redaction 위반을 fail-closed로 거부한다. 검증된 sidecar만 DB ArtifactRef index에 넣고 rejected count와 `ARTIFACT_REF_VERIFICATION_FAILED` loss를 별도로 보고하며, artifact JSON을 ValidationResult·GateDecision 같은 semantic document로 자동 승격하지 않는다.
+
 ## EvidenceBundle과 ReviewPack
 
 EvidenceBundle은 실행 사실을 기계가 읽는 정본으로 묶고 ReviewPack은 사람이 판단하기 쉬운 순서로 참조한다.

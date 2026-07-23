@@ -175,6 +175,42 @@
         }
       ]
     },
+    "InvocationWorkingDirectoryV2": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project_root",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project_path",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "OutputLimits": {
       "additionalProperties": false,
       "properties": {
@@ -260,9 +296,7 @@
       "type": "array"
     },
     "cwd": {
-      "minLength": 1,
-      "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
-      "type": "string"
+      "$ref": "#/$defs/InvocationWorkingDirectoryV2"
     },
     "env_refs": {
       "additionalProperties": {

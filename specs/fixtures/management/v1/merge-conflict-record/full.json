@@ -1,0 +1,45 @@
+{
+  "base_commit_oid": "fixture",
+  "conflict_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "conflict_id": "fixture",
+  "conflict_items": [
+    {
+      "axis": "file",
+      "disposition": "disjoint",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "left_participant_ref": "fixture",
+      "reason": "fixture",
+      "right_participant_ref": "fixture",
+      "subject_ref": "fixture"
+    }
+  ],
+  "contract_refs": [
+    "fixture"
+  ],
+  "left_intent_refs": [
+    "fixture"
+  ],
+  "left_revision": "fixture",
+  "merge_plan_ref": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "queue_entry_refs": [
+    "fixture"
+  ],
+  "raw_conflict_artifact_ref": "art_00000000000000000000000000",
+  "resolution_class": "mechanical_safe",
+  "resolution_decision_ref": "fixture",
+  "resolution_patch_set_ref": "pat_00000000000000000000000000",
+  "revalidation_refs": [
+    "fixture"
+  ],
+  "revision": 0,
+  "right_intent_refs": [
+    "fixture"
+  ],
+  "right_revision": "fixture",
+  "schema_id": "star.merge-conflict-record",
+  "schema_version": 1,
+  "state": "open"
+}

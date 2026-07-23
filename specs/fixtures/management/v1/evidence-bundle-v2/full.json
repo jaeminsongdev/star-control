@@ -30,7 +30,275 @@
   },
   "authoritative_gate_state": "passed",
   "bundle_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "claim_evaluations": [
+    {
+      "actual_evidence_refs": [
+        {
+          "document_ref": {
+            "document_id": "fixture",
+            "revision": 0,
+            "schema_id": "fixture",
+            "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "kind": "document"
+        }
+      ],
+      "claim_ref": {
+        "claim_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "claim_id": "fixture",
+        "required": false
+      },
+      "current_subject_binding": {
+        "binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "catalog_snapshot_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "change_plan_refs": [
+          {
+            "document_id": "fixture",
+            "revision": 0,
+            "schema_id": "fixture",
+            "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "change_set_refs": [
+          {
+            "document_id": "fixture",
+            "revision": 0,
+            "schema_id": "fixture",
+            "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "check_descriptor_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "checkout_id": "cko_00000000000000000000000000",
+        "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "execution_environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "freshness": "current",
+        "gate_phase": "during_stage",
+        "gate_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "impact_analysis_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "invocation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "normalizer_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "observed_tool_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "patch_set_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "probed_at": "2026-01-01T00:00:00Z",
+        "profile_resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "project_id": "prj_00000000000000000000000000",
+        "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "rule_refs": [
+          {
+            "catalog_id": "fixture",
+            "format_version": 0,
+            "item_version": "fixture",
+            "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "scope_revision_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "stale_reasons": [
+          "fixture"
+        ],
+        "task_spec_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "tool_descriptor_ref": {
+          "catalog_id": "fixture",
+          "format_version": 0,
+          "item_version": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "tool_registry_snapshot_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "validation_plan_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "validator_registry_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "workspace_content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "diagnostic_refs": [
+        {
+          "diagnostic_id": "dia_00000000000000000000000000",
+          "sequence": 0,
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "evaluation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "gate_effect": "none",
+      "reason_codes": [
+        "fixture"
+      ],
+      "status": "verified"
+    }
+  ],
   "completeness": "complete",
+  "completion_claims": [
+    {
+      "assertion": {
+        "after_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "kind": "change",
+        "operation": "add"
+      },
+      "claim_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "claim_id": "fixture",
+      "created_at": "2026-01-01T00:00:00Z",
+      "kind": "change",
+      "reported_evidence_refs": [
+        {
+          "document_ref": {
+            "document_id": "fixture",
+            "revision": 0,
+            "schema_id": "fixture",
+            "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "kind": "document"
+        }
+      ],
+      "reported_subject_binding": {
+        "binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "catalog_snapshot_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "change_plan_refs": [
+          {
+            "document_id": "fixture",
+            "revision": 0,
+            "schema_id": "fixture",
+            "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "change_set_refs": [
+          {
+            "document_id": "fixture",
+            "revision": 0,
+            "schema_id": "fixture",
+            "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "check_descriptor_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "checkout_id": "cko_00000000000000000000000000",
+        "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "execution_environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "freshness": "current",
+        "gate_phase": "during_stage",
+        "gate_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "impact_analysis_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "invocation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "normalizer_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "observed_tool_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "patch_set_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "probed_at": "2026-01-01T00:00:00Z",
+        "profile_resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "project_id": "prj_00000000000000000000000000",
+        "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "rule_refs": [
+          {
+            "catalog_id": "fixture",
+            "format_version": 0,
+            "item_version": "fixture",
+            "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "scope_revision_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "stale_reasons": [
+          "fixture"
+        ],
+        "task_spec_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "tool_descriptor_ref": {
+          "catalog_id": "fixture",
+          "format_version": 0,
+          "item_version": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "tool_registry_snapshot_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "validation_plan_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "validator_registry_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "workspace_content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "required": false,
+      "source_actor": {
+        "actor_id": "fixture",
+        "actor_type": "user",
+        "auth_source": "fixture",
+        "display_name": "fixture"
+      },
+      "subject": {
+        "kind": "project",
+        "project_id": "prj_00000000000000000000000000"
+      }
+    }
+  ],
   "created_at": "2026-01-01T00:00:00Z",
   "diagnostic_refs": [
     {
@@ -39,7 +307,7 @@
       "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
     }
   ],
-  "evidence_bundle_id": "fixture",
+  "evidence_bundle_id": "lsb_00000000000000000000000000",
   "gate_decision_ref": {
     "gate_id": "gat_00000000000000000000000000",
     "revision": 0,
@@ -91,6 +359,7 @@
     "schema_id": "fixture",
     "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
   },
+  "subject_binding_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "task_spec_ref": {
     "document_id": "fixture",
     "revision": 0,
@@ -103,6 +372,14 @@
     "schema_id": "fixture",
     "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
   },
+  "validation_result_refs": [
+    {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
   "validation_run_refs": [
     {
       "revision": 0,

@@ -1,0 +1,133 @@
+{
+  "compatibility_windows": [
+    {
+      "close_step_ref": "fixture",
+      "contract_ref": "fixture",
+      "current_consumer_state_refs": [
+        "fixture"
+      ],
+      "deadline": "fixture",
+      "evidence_close_condition": "fixture",
+      "new_accepted_version": "fixture",
+      "old_accepted_version": "fixture",
+      "open_step_ref": "fixture",
+      "opened_revision_ref": "fixture",
+      "provider_project_id": "fixture",
+      "required_consumer_project_ids": [
+        "fixture"
+      ],
+      "rollback_trigger": "fixture",
+      "state": "planned",
+      "window_id": "fixture"
+    }
+  ],
+  "completion_target": "none",
+  "cross_project_invariants": [
+    "fixture"
+  ],
+  "goal_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "goal_spec_ref": "fixture",
+  "multi_project_goal_id": "fixture",
+  "participants": [
+    {
+      "project_id": "prj_00000000000000000000000000",
+      "required": false,
+      "roles": [
+        "provider"
+      ],
+      "source_of_truth_refs": [
+        "fixture"
+      ]
+    }
+  ],
+  "permission_floor_ref": "fixture",
+  "previous_revision_ref": "fixture",
+  "project_relations": [
+    {
+      "accepted_versions": [
+        "fixture"
+      ],
+      "certainty": "confirmed",
+      "consumer_project_id": "fixture",
+      "contract_refs": [
+        "fixture"
+      ],
+      "evidence_refs": [
+        "fixture"
+      ],
+      "freshness": "complete",
+      "limitations": [
+        "fixture"
+      ],
+      "minimum_provider_version": "fixture",
+      "provider_project_id": "fixture",
+      "relation_id": "fixture",
+      "relation_kind": "api"
+    }
+  ],
+  "questions": [
+    "fixture"
+  ],
+  "resource_budget": {
+    "artifact_limit_bytes": 0,
+    "cpu_weight_limit": 0,
+    "max_active_worktrees": 0,
+    "max_concurrent_writes": 0,
+    "max_parallel_projects": 0,
+    "max_processes": 0,
+    "memory_limit_bytes": 0,
+    "wall_time_limit_ms": 0,
+    "worktree_disk_limit_bytes": 0
+  },
+  "revision": 0,
+  "schema_id": "star.multi-project-goal",
+  "schema_version": 1,
+  "scope_revision_refs": [
+    "fixture"
+  ],
+  "source_snapshot_refs": [
+    "fixture"
+  ],
+  "step_graph": {
+    "edges": [
+      {
+        "edge_kind": "requires",
+        "evidence_refs": [
+          "fixture"
+        ],
+        "from_step_id": "fixture",
+        "reason": "fixture",
+        "to_step_id": "fixture"
+      }
+    ],
+    "graph_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "steps": [
+      {
+        "completion_condition": "fixture",
+        "expected_effect": "fixture",
+        "input_refs": [
+          "fixture"
+        ],
+        "output_refs": [
+          "fixture"
+        ],
+        "project_id": "prj_00000000000000000000000000",
+        "required_gate_refs": [
+          "fixture"
+        ],
+        "stage_ref": "fixture",
+        "step_id": "fixture",
+        "step_kind": "provider_compatibility_open"
+      }
+    ],
+    "topological_order": [
+      "fixture"
+    ]
+  },
+  "task_spec_refs": [
+    "fixture"
+  ],
+  "unknowns": [
+    "fixture"
+  ]
+}

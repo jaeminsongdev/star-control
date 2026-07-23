@@ -1,0 +1,40 @@
+{
+  "behavior_contract_refs": [],
+  "boundary_adapter_specs": [],
+  "checkout_id": "cko_00000000000000000000000000",
+  "codegen_refs": [],
+  "coexistence_phases": [],
+  "comparison_plan_refs": [],
+  "compatibility_window": "fixture",
+  "consumer_transition_order": [],
+  "cutover_plan": "fixture",
+  "impact_analysis_ref": "fixture",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_id": "fixture",
+  "platform_evidence_matrix": [],
+  "project_id": "prj_00000000000000000000000000",
+  "recipe_refs": [],
+  "revision": 0,
+  "rollback_plan_ref": "fixture",
+  "schema_id": "star.language-migration-plan",
+  "schema_version": 2,
+  "source_stack": {
+    "architecture": "fixture",
+    "language": "fixture",
+    "os": "fixture",
+    "runtime": "fixture",
+    "sdk": "fixture",
+    "toolchain_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "state": "fixture",
+  "target_stack": {
+    "architecture": "fixture",
+    "language": "fixture",
+    "os": "fixture",
+    "runtime": "fixture",
+    "sdk": "fixture",
+    "toolchain_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "task_spec_ref": "fixture",
+  "unknown_semantics": []
+}

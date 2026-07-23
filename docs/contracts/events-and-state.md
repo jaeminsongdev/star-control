@@ -292,8 +292,8 @@ Handoff의 요약은 evidence를 대체하지 않으며 모든 완료 주장은 
 
 1. Controller 한 process만 management repository, event와 snapshot을 쓴다. current-user 단일 writer lease를 얻지 못하면 두 번째 Controller는 시작하지 않는다.
 2. 모든 mutating command는 expected store revision·version vector·exact source hash·승인된 plan fingerprint 중 command 의미에 맞는 stale-write precondition을 받는다. 현재 값이 다르면 `STATE_REVISION_CONFLICT`로 거부하고 최신 상태를 돌려준다.
-3. 재시도 가능한 command는 `idempotency_key`가 필수다. 같은 key와 같은 payload는 이전 결과를 돌려주고, payload가 다르면 충돌이다.
-4. 큰 artifact는 먼저 임시 위치에 쓰고 redaction·size·hash를 검증한 뒤 `.ai-runs`에서 안전하게 교체한다. 이후 이를 참조하는 event와 projection을 같은 project store transaction으로 commit한다.
+3. 일반 document의 재시도 가능한 command는 `idempotency_key`가 필수다. lifecycle plan/apply는 exact plan fingerprint와 private typed result receipt를 같은 역할로 사용한다. 같은 key·plan과 같은 payload는 이전 결과를 돌려주고, payload나 bound state가 다르면 충돌이다.
+4. 큰 artifact는 먼저 임시 위치에 쓰고 redaction·size·hash를 검증한 뒤 `.ai-runs`에서 안전하게 교체한다. immutable artifact byte 옆의 `.artifact-ref.json` sidecar도 같은 ProjectId·path·size·SHA-256·redaction을 고정한다. 이후 이를 참조하는 event와 projection을 같은 project store transaction으로 commit한다.
 5. event, idempotency record, store revision과 현재 projection은 **한 logical store 안에서** 한 repository transaction이다. 여러 store를 바꾸면 global prepared operation과 project participant receipt를 사용하고 완료 전 성공으로 표시하지 않는다. `.ai-runs`의 JSONL·manifest view는 commit 뒤 생성하는 파생 export이며 DB와 충돌하면 재생성한다.
 6. DB event chain, exported JSONL 마지막 행 또는 artifact hash가 맞지 않으면 조용히 버리지 않고 격리, Diagnostic과 recovery event를 만든다.
 7. 외부 side effect는 실행 전에 `effect.requested`를 commit하고 안정 idempotency key를 전달한다. 종료 뒤 completed 또는 failed를 기록한다.
@@ -302,6 +302,10 @@ Handoff의 요약은 evidence를 대체하지 않으며 모든 완료 주장은 
 10. CLI·MCP handler와 향후 Codex entry adapter는 repository handle을 소유하지 않는다. 모든 query·mutation은 같은 application service를 통한다.
 11. CrossRepoChangeBundle source effect는 participant별 Git/remote transaction과 receipt를 사용한다. 여러 repository lock·commit·merge를 cross-store `CoordinatedOperation` 하나로 원자화했다고 주장하지 않는다.
 12. remote upload·PR·merge·publish effect는 exact action ApprovalRequest와 current before snapshot 뒤에 시작하고 after snapshot으로 결과를 재확인한다.
+13. startup은 검증된 top-level `active-set.json`이 가리키는 global/project generation 조합만 연다. manifest 밖 directory를 이름·mtime·generation 숫자로 추측하지 않는다.
+14. backup·restore·rebuild·local-state export/import apply는 exact plan fingerprint를 승인받고, 완료 결과 receipt를 durable하게 쓴다. effect 뒤 응답 전 crash가 발생하면 active set·manifest·entity set을 다시 검증한 뒤 같은 typed result를 반환한다.
+15. restore와 rebuild는 candidate generation 전체의 backend integrity·event chain·project relation·header fingerprint를 확인한 후 top-level active set을 한 번만 atomic replace한다. activation 전에는 모두 이전 set, activation 뒤에는 모두 새 set으로 관찰돼야 한다.
+16. source rebuild의 새 scan·event는 새 ID·timestamp를 사용한다. verified artifact sidecar만 ArtifactRef index로 복구하고, local-only decision·actor·timestamp·idempotency 손실을 과거 event로 합성하지 않는다.
 
 ## 상태 전이 검증
 

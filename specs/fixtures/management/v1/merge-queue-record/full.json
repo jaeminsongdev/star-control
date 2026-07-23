@@ -1,0 +1,30 @@
+{
+  "active_entry_ref": "fixture",
+  "current_base_commit_oid": "fixture",
+  "entries": [
+    {
+      "attempt_refs": [
+        "fixture"
+      ],
+      "dependency_entry_refs": [
+        "fixture"
+      ],
+      "entry_id": "fixture",
+      "expected_predecessor_commit_oid": "fixture",
+      "merge_plan_ref": "fixture",
+      "participant_ref": "fixture",
+      "state": "queued"
+    }
+  ],
+  "integration_target_ref": "fixture",
+  "merge_queue_id": "fixture",
+  "previous_revision_ref": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "queue_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "repository_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "repository_lock_ref": "fixture",
+  "resource_reservation_ref": "fixture",
+  "revision": 0,
+  "schema_id": "star.merge-queue-record",
+  "schema_version": 1
+}

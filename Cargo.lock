@@ -1249,6 +1249,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "star-adapter-github"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "star-contracts",
+ "star-domain",
+ "star-release",
+ "thiserror",
+]
+
+[[package]]
 name = "star-adapter-rust-index"
 version = "0.1.0"
 dependencies = [
@@ -1340,6 +1352,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "star-adapter-github",
  "star-adapter-rust-index",
  "star-adapter-windows",
  "star-application",
@@ -1349,6 +1362,7 @@ dependencies = [
  "star-ipc",
  "star-planning",
  "star-project",
+ "star-release",
  "star-state",
  "star-updater-core",
  "thiserror",

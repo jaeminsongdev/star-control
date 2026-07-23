@@ -33,14 +33,16 @@ Project·ScanRun·Finding·PatchSet·Baseline·Suppression과 관리 DB lifecycl
 | 위치 | 저장 내용 | 저장하지 않는 것 |
 |---|---|---|
 | 대상 Git repository | Project 선언, source, config, Rule·Check·Gate metadata·ChangeRecipe, Managed Registry root·fragment, shared suppression·baseline, Schema·Catalog, 검토된 Corpus fixture | local scan/validation projection, 개인 path, raw log |
-| `%LOCALAPPDATA%\Star-Control\management\global\` | Project directory, ProjectCheckout relation, ProjectCatalogSnapshot, TaskSpec·ScopeRevision·ImpactAnalysis summary·ValidationPlan, cross-project relation·coordination, MultiProjectGoal·CrossRepoChangeBundle·ChangeBundleReleaseHandoff와 global lifecycle summary | project scan·edge/participant detail, source file byte, raw project root |
-| `%LOCALAPPDATA%\Star-Control\management\projects\<project-id>\` | project별 revision·workspace·CodeIndexSnapshot·ManagedRegistrySnapshot partition, graph·Finding·Registry binding/consumer·Diagnostic query projection, ChangeSet·ImpactEdge·ChangePlan participant state, RecipeExecution·PatchSet·PatchApplication·recovery journal, ValidationRun·Result·Gate participant, M7 failure/dependency/supply-chain/update/Radar, M8 migration/checkpoint/validation·performance comparison·language equivalence와 9단계 ChangeBundleParticipant·Worktree·MergeQueue·Conflict·MergeResult·Remote snapshot/operation projection, local Baseline·Suppression·Disposition·operation·evidence index | 다른 project detail, source/manifest/lockfile/data/worktree byte·큰 diff·log·dump·trace·profile, tool별 별도 DB, raw project root |
+| `%LOCALAPPDATA%\Star-Control\management\global\generations\<generation>\` | Project directory, ProjectCheckout relation, ProjectCatalogSnapshot, TaskSpec·ScopeRevision·ImpactAnalysis summary·ValidationPlan, cross-project relation·coordination, MultiProjectGoal·CrossRepoChangeBundle·ChangeBundleReleaseHandoff와 global lifecycle summary | project scan·edge/participant detail, source file byte, raw project root |
+| `%LOCALAPPDATA%\Star-Control\management\projects\<project-id>\generations\<generation>\` | project별 revision·workspace·CodeIndexSnapshot·ManagedRegistrySnapshot partition, graph·Finding·Registry binding/consumer·Diagnostic query projection, ChangeSet·ImpactEdge·ChangePlan participant state, RecipeExecution·PatchSet·PatchApplication·recovery journal, ValidationRun·Result·Gate participant, M7 failure/dependency/supply-chain/update/Radar, M8 migration/checkpoint/validation·performance comparison·language equivalence와 9단계 ChangeBundleParticipant·Worktree·MergeQueue·Conflict·MergeResult·Remote snapshot/operation projection, local Baseline·Suppression·Disposition·operation·evidence index | 다른 project detail, source/manifest/lockfile/data/worktree byte·큰 diff·log·dump·trace·profile, tool별 별도 DB, raw project root |
 | `%LOCALAPPDATA%\Star-Control\cache\project-index\<project-id>\` | adapter·input fingerprint별 다시 만들 수 있는 content-addressed index intermediate | current pointer, source 전체 복사본, local decision, backup 대상 자료 |
 | `<project>\.ai-runs\star-control\` | hash가 있는 diff·patch·redacted log·trace·external report, ReproductionPack·dependency/release manifest, M8 migration manifest/receipt·performance sample/profile·equivalence report, Diagnostic manifest·EvidenceBundle·ReviewPack export | DB backend file, migration 대상 data/DB copy, raw secret·PII, 다른 project 절대 path, source Corpus 정본 |
 
 Git source가 공유 정본이다. 관리 DB는 source-derived projection과 local-only 운영 상태를 함께 가지지만 source code의 유일한 정본이 아니다. `.ai-runs`는 큰 evidence byte를 소유하고 DB는 ArtifactRef만 저장한다.
 
 Managed Registry에서도 Git root·fragment가 정본이고 DB snapshot은 rebuildable derived Index다. source와 다르면 DB를 stale로 표시하고 source를 DB 값으로 되쓰지 않는다.
+
+P-0054 복구 Slice는 아래 generation layout, active-set manifest와 plan fingerprint receipt를 private `star-state` adapter에 구현했다. 이 구현 상태는 M1~M11의 나머지 영속 lifecycle과 provider가 완료됐다는 뜻이 아니다.
 
 ### Controller 상태
 
@@ -56,17 +58,15 @@ Managed Registry에서도 Git root·fragment가 정본이고 DB snapshot은 rebu
   management\
     active-set.json        # global+project generation header·relative locator를 고정하는 hash manifest
     global\
-      active\             # 현재 global opaque store generation
-      generations\        # migration·rebuild 후보
-      backups\            # verified backup
-      recovery\           # 손상 원본의 보존 copy
+      generations\
+        <generation>\      # immutable locator의 global store; active 여부는 manifest가 결정
     projects\
       <project-id>\
-        active\           # 이 ProjectId의 현재 generation
         generations\
-        backups\
-        recovery\
-    backup-sets\           # 함께 복구할 generation vector manifest
+          <generation>\    # 같은 active-set에 묶이는 project store
+    recovery-receipts\     # plan fingerprint별 private typed apply 결과
+    rc\<plan-token>\       # source rebuild short-path staging; 정본·active generation 아님
+    quarantine\            # 미활성/결과 미확정 candidate 진단
   root-bindings\          # current-user protected opaque checkout root binding
   cache\
     project-index\
@@ -76,6 +76,8 @@ Managed Registry에서도 Git root·fragment가 정본이고 DB snapshot은 rebu
   migration-workspaces\   # ProjectId·plan ID별 protected candidate/copy; evidence나 정본 아님
   logs\                   # redaction·retention 적용
 ```
+
+기존 `*/active/` layout은 startup 시 명시적으로 한 번 채택할 수 있는 legacy input일 뿐 새 generation 선택 규칙이 아니다. backup set은 사용자가 지정한 management root 밖 destination에 만들며 `stores/...` byte를 먼저 검증한 후 manifest를 마지막에 쓴다. 실제 backend filename·receipt filename과 DACL 구현은 public contract가 아니다.
 
 global DB에는 Project directory·ProjectCheckout·ProjectCatalogSnapshot·cross-project coordination, TaskSpec·ScopeRevision·ImpactAnalysis summary, ValidationPlan과 multi-project Gate summary를, ProjectId별 DB에는 source-derived CodeIndexSnapshot partition, project별 ChangeSet·ImpactEdge·ChangePlan, ValidationRun·ValidationResult·DiagnosticEvaluation participant, event·projection, local decision과 application 상태를 둔다. EvidenceSubjectBinding·GateDecision은 global summary와 project detail을 content fingerprinted ref로 연결하며 다른 Project의 source 위치·Diagnostic detail을 복제하지 않는다. TaskSpec·ScopeRevision에는 사용자가 선언한 ProjectPathRef·stable selector를 보존할 수 있지만 observed source range·literal·private symbol detail은 project store의 fingerprinted ref로만 연결한다. 이 planning/validation document는 local operational state이며 source scan만으로 복구됐다고 주장하지 않는다. raw project root는 어느 DB에도 저장하지 않고 `root_binding_id`만 둔다. 실제 root locator는 별도 adapter가 Windows current-user protection으로 암호화한 opaque locator를 해석하며 plaintext는 process memory 밖으로 노출하지 않는다. root binding은 management backup·export에 포함하지 않는다.
 
@@ -362,15 +364,16 @@ M8 migration backup/candidate와 evidence retention도 분리한다. plan·attem
 
 ## backup·손상·재구축
 
-- migration·repair·active generation 교체 전 store별 consistent backup을 만든다. 여러 store가 관련되면 global과 affected project generation의 hash·revision을 한 backup-set manifest로 고정한다.
+- migration·repair·active generation 교체 전 store별 consistent online backup을 만든다. 여러 store가 관련되면 global과 affected project generation의 version·revision·size·SHA-256을 한 backup-set manifest와 source active-set fingerprint로 고정한다.
 - backup byte·manifest 생성은 restore 가능성의 증명이 아니다. integrity 확인, 별도 generation restore, structural invariant와 required behavior Gate를 통과한 수준을 `created_unverified|integrity_verified|restore_rehearsed|restore_validated`로 구분한다.
 - backend structural check, relation·partition, event/projection revision, fingerprint와 ArtifactRef hash를 계층적으로 검사한다.
-- 손상이 의심되면 read-write open을 중단한다. Controller recovery component가 제시한 read-only mode, verified restore 또는 rebuild 중 활성화할 generation은 사용자가 선택하며 자동 전환하지 않는다.
-- 손상 store를 덮어쓰지 않고 verified backup restore 또는 side-by-side rebuild를 수행한다.
+- 손상이 의심되면 normal read-write open을 중단하되 인증 IPC와 writer lease를 가진 recovery-only Controller는 유지한다. verified restore 또는 rebuild 중 활성화할 generation은 exact plan fingerprint 승인으로 사용자가 선택하며 자동 전환하지 않는다.
+- 손상 store를 덮어쓰거나 삭제하지 않고 verified backup restore 또는 source rebuild를 side-by-side candidate에 수행한다.
 - Git 선언·source와 같은 scan 입력이 있으면 current ProjectCatalogSnapshot, ProjectRevision, WorkspaceSnapshot, CodeIndexSnapshot, ManagedRegistrySnapshot, Symbol, Reference와 Finding projection을 재구축할 수 있다.
-- `.ai-runs` canonical manifest가 남아 있으면 ValidationRun·ValidationResult·Diagnostic·GateDecision·EvidenceBundle과 ArtifactRef relation을 provenance·completeness와 함께 제한적으로 reindex할 수 있다. export만으로 current subject binding을 재검증했다고 주장하지 않는다.
-- local-only Baseline·Suppression·Disposition, TaskSpec·ScopeRevision·ImpactAnalysis·ChangePlan·ValidationPlan, 진행 상태, 과거 actor·timestamp와 idempotency는 backup·export가 없으면 복구할 수 없다고 보고한다.
-- 새 generation set 전체를 검증한 뒤에만 `active-set.json` pointer를 atomic replace하고 이전·손상 generation은 승인 전 삭제하지 않는다.
+- `.ai-runs` artifact byte와 strict sidecar의 ProjectId·path·size·hash·redaction이 맞으면 ArtifactRef relation만 reindex한다. artifact를 ValidationResult·GateDecision 같은 semantic document로 자동 승격하지 않는다.
+- local-only Baseline·Suppression·Disposition과 active ChangePlan은 exact source/config binding의 redacted bundle로 export/import할 수 있다. backup·export가 없으면 진행 상태, 과거 actor·timestamp와 idempotency를 복구할 수 없다고 구조화해 보고한다.
+- 새 generation set 전체를 검증한 뒤에만 `active-set.json`을 flush·atomic replace하고 이전·손상 generation은 승인 전 삭제하지 않는다. activation crash는 all-old 또는 all-new set만 허용한다.
+- backup·restore·rebuild·export·import apply는 plan fingerprint별 durable receipt를 남기며 effect 뒤 응답 전 crash 재시도도 같은 typed result로 수렴한다.
 
 ## 비밀정보
 

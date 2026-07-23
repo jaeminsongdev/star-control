@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "DocumentationObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/DocumentationObservationKind"
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "state": {
+          "$ref": "#/$defs/EvaluationState"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_id",
+        "kind",
+        "subject",
+        "state",
+        "source_path",
+        "source_sha256",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "DocumentationObservationKind": {
+      "enum": [
+        "link",
+        "anchor",
+        "command",
+        "snippet",
+        "example",
+        "config_key",
+        "reference"
+      ],
+      "type": "string"
+    },
+    "EvaluationState": {
+      "enum": [
+        "pass",
+        "block",
+        "human_review",
+        "unknown",
+        "not_applicable"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.documentation-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/DocumentationObservation"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.documentation-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "subject_revision": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "snapshot_id",
+    "project_id",
+    "subject_revision",
+    "observations",
+    "completeness",
+    "content_fingerprint"
+  ],
+  "title": "DocumentationSnapshot",
+  "type": "object"
+}

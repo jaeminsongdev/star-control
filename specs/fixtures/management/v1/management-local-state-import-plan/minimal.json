@@ -1,0 +1,17 @@
+{
+  "baseline_ids": [],
+  "bundle_id": "lsb_00000000000000000000000000",
+  "change_plan_ids": [],
+  "conflicts": [],
+  "disposition_ids": [],
+  "expected_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "expected_source_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "expected_store_revision": 0,
+  "payload_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "schema_id": "star.management-local-state-import-plan",
+  "schema_version": 1,
+  "suppression_ids": []
+}

@@ -1,0 +1,15 @@
+{
+  "baseline_policy": {
+    "activated_at": "fixture",
+    "approval_ref": "fixture",
+    "baseline_ref": "bas_00000000000000000000000000",
+    "baseline_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "manifest_id": "fixture",
+  "manifest_version": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.project-contract-manifest",
+  "schema_version": 2,
+  "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "surfaces": []
+}

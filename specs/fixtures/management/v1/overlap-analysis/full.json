@@ -1,0 +1,59 @@
+{
+  "analysis_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "change_bundle_ref": "fixture",
+  "items": [
+    {
+      "axis": "file",
+      "disposition": "disjoint",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "left_participant_ref": "fixture",
+      "reason": "fixture",
+      "right_participant_ref": "fixture",
+      "subject_ref": "fixture"
+    }
+  ],
+  "limitations": [
+    "fixture"
+  ],
+  "merge_ready": false,
+  "overall": "disjoint",
+  "overlap_analysis_id": "fixture",
+  "parallel_safe": false,
+  "revision": 0,
+  "schema_id": "star.overlap-analysis",
+  "schema_version": 1,
+  "subjects": [
+    {
+      "contract_refs": [
+        "fixture"
+      ],
+      "coverage": "complete",
+      "dependency_refs": [
+        "fixture"
+      ],
+      "file_refs": [
+        "fixture"
+      ],
+      "generated_owner_refs": [
+        "fixture"
+      ],
+      "participant_ref": "fixture",
+      "project_id": "prj_00000000000000000000000000",
+      "range_refs": [
+        "fixture"
+      ],
+      "rename_refs": [
+        "fixture"
+      ],
+      "repository_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "repository_policy_refs": [
+        "fixture"
+      ],
+      "symbol_refs": [
+        "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ]
+    }
+  ]
+}

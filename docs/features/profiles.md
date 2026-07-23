@@ -2,6 +2,8 @@
 
 상위 범위와 공통 선정 기준은 [구현 대상 기능](README.md)에서 확인한다.
 
+P-0054 current source는 `catalog/profiles/*.toml`의 정확한 16개 built-in descriptor, strict loader·validator, parent closure, required Rule/Check/evidence union, 가장 엄격한 permission/review/stability floor merge와 deterministic `profile_resolution_fingerprint`를 구현했다. `TaskSpec.profile_ids`에서 M2 `ValidationPlan.profile_resolution`과 M3 Evidence까지 같은 resolution을 bind하며 Controller/CLI `profile list|show|resolve`가 이를 조회한다. Profile은 외부 compiler·scanner·debugger·profiler·package manager·CI/publisher를 대신하지 않고 등록 adapter가 없는 효과를 완료로 합성하지 않는다.
+
 
 ## C01. 16개 작업 유형별 Profile
 
@@ -771,4 +773,4 @@ Profile은 다음을 하지 않는다.
 - `cargo clippy --fix --allow-dirty`를 live checkout에서 실행하지 않는다. isolated preview에서도 dirty manifest가 앞 rustfmt step과 정확히 대응되고 staged byte가 0일 때만 사용하며 `--allow-staged`·`--broken-code`는 금지한다.
 - partial/stale/unverified/failed result나 post Gate 실패·partial apply를 성공으로 표시하지 않는다.
 
-목표 CLI surface는 `star style rust inspect|check|prepare|auto-apply`이고 Patch 조회·상태·복구는 기존 `patch show|status|recover`를 재사용한다. P-0052 bounded Slice는 fixed adapter, isolated candidate/PatchSet, idempotence, exact human·`personal_auto` permit와 recovery state를 구현했지만 이 목표 CLI orchestration과 실제 사용자 source apply는 연결·실행하지 않았다.
+제품 CLI surface는 `star style rust inspect|check|prepare|auto-apply`이고 Patch 조회·상태·복구는 기존 `patch show|status|recover`를 재사용한다. P-0054는 이 CLI를 Controller/application의 M2 Profile→M4 PatchSetV2→M3 pre/post Gate·durable approval·recovery 흐름에 연결했다. disposable fixture에서는 exact apply/recovery를 검증했지만 실제 사용자 checkout apply는 실행하지 않았다.

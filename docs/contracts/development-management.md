@@ -4,7 +4,7 @@
 
 이 문서는 Star-Control 0단계인 공통 개발 관리 계약과 로컬 관리 DB 기반의 의미 정본이다. 이후 scanner, validator, patch 도구, CLI와 Codex 진입점은 이 계약을 공유한다.
 
-현재 상태는 **설계 확정, P0 첫 수직 Slice 구현·로컬 검증 완료**다. 이 문서는 전체 목표 계약을 소유하며 첫 Slice보다 넓은 lifecycle·query 항목은 [최종 구현 로드맵](../roadmap/final-implementation.md)과 `PLANS.md`에서 후속 범위로 구분한다. 저장소 topology와 운영 기본값은 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)이 확정한다.
+현재 상태는 **설계 확정, P0 첫 수직 Slice와 P-0054 실사용 전 복구 Slice 구현·로컬 검증 완료**다. P-0054는 typed backup/restore/rebuild/local-state plan·apply, recovery-only Controller·CLI, active-set 원자 활성화와 disposable 손상 복구 Corpus까지 구현했다. 이 문서는 전체 목표 계약을 소유하며 P-0054보다 넓은 1~11단계 lifecycle·query 항목은 [최종 구현 로드맵](../roadmap/final-implementation.md)과 `PLANS.md`에서 후속 범위로 구분한다. 저장소 topology와 운영 기본값은 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)이 확정한다.
 
 이 문서가 소유하는 범위는 다음과 같다.
 
@@ -155,16 +155,22 @@ star MCP ───────┘                                 │
 | `patch.recover` M4 | PatchApplication, actual reconciliation, reverse/discard strategy | 새 recovery revision | 예 |
 | `validation.run` | PatchSet 또는 WorkspaceSnapshot, ValidationPlan | ValidationResult | 예 |
 | `gate.evaluate` | target revision, ValidationResult refs, policy | GateDecision | 예 |
-| `management.status` | 없음 | StoreStatus | 아니요 |
-| `management.backup`, `management.migrate` | expected StoreStatus, 승인 범위 | lifecycle result | 예 |
-| `management.rebuild.plan` | protected root binding inventory | 재구축 가능 ProjectId·복구 불가 local state·plan fingerprint | 아니요 |
-| `management.rebuild.apply` | 최신 plan fingerprint, 명시적 승인 | 새 Project·Scan projection과 loss report | 예 |
+| `management.status` | 없음 | normal StoreStatus summary 또는 recovery-only RecoveryStatus와 allowed operation | 아니요 |
+| `management.backup.plan` | management root 밖의 기존 destination | active-set·store vector·destination에 고정된 BackupPlan | 아니요 |
+| `management.backup.apply` | BackupPlan, exact plan fingerprint 승인 | 검증된 BackupSetManifest와 BackupApplyResult | 예 |
+| `management.restore.plan` | verified backup-set root | side-by-side candidate와 candidate active-set에 고정된 RestorePlan | 아니요 |
+| `management.restore.apply` | RestorePlan, exact plan fingerprint 승인 | 원자 활성화된 RestoreApplyResult | 예 |
+| `management.rebuild.plan` | protected root binding·source revision·config·artifact inventory | 재구축 Project와 local-only 손실에 고정된 RebuildPlan | 아니요 |
+| `management.rebuild.apply` | RebuildPlan, exact plan fingerprint 승인 | 새 source-derived projection·검증된 ArtifactRef index·loss report | 예 |
+| `management.local-state.export.plan/apply` | ProjectId, destination, exact plan fingerprint 승인 | redacted LocalStateBundle과 export result | plan은 아니요, apply는 예 |
+| `management.local-state.import.plan/apply` | bundle, current source/config/store revision, exact plan fingerprint 승인 | conflict 또는 imported local-state result | plan은 아니요, apply는 예 |
+| `management.migrate` | expected StoreStatus, 승인 범위 | lifecycle result | 예 |
 | `management.retention.plan` | policy snapshot | 삭제 후보와 영향 | 아니요 |
 | `management.retention.apply` | plan fingerprint, approval | 적용 결과 | 예 |
 
-두 store 이상을 바꾸는 command는 성공 결과에 `coordinated_operation_id`와 최종 `StoreVersionVector`를 포함한다. `completed`가 아닌 operation을 성공으로 표시하지 않는다.
+일반 application command가 두 store 이상을 바꾸면 성공 결과에 `coordinated_operation_id`와 최종 `StoreVersionVector`를 포함한다. generation 전체를 교체하는 backup·restore·rebuild는 별도 lifecycle 계약으로 active-set·backup-set fingerprint와 typed result를 남긴다. 어느 경로든 `completed`가 아닌 operation을 성공으로 표시하지 않는다.
 
-모든 mutating command는 `idempotency_key`와 stale-write precondition을 가진다. 일반 document 갱신은 `expected_revision`, cross-store command는 `expected_version_vector`, patch는 exact base·before hash와 승인 fingerprint, retention·rebuild는 현재 store revision을 포함한 plan fingerprint가 precondition이다. 같은 key와 같은 canonical input은 이전 결과를 반환하고, 같은 key에 다른 input은 `MANAGEMENT_IDEMPOTENCY_CONFLICT`다. 순수 plan query와 terminal result query에는 idempotency key가 필요 없다.
+일반 document mutating command는 `idempotency_key`와 stale-write precondition을 가진다. 일반 document 갱신은 `expected_revision`, cross-store command는 `expected_version_vector`, patch는 exact base·before hash와 승인 fingerprint를 precondition으로 사용한다. lifecycle apply는 destination·source/store vector·revision을 포함한 exact plan fingerprint가 idempotency key 역할을 하며 private `recovery-receipts`의 typed result로 crash 뒤 같은 요청을 재생한다. 같은 canonical 요청은 기존 결과를 반환하고 다른 payload·stale state는 충돌로 거부한다. 순수 plan query와 terminal result query에는 별도 idempotency key가 필요 없다.
 
 ## 공통 식별과 fingerprint
 
@@ -1015,9 +1021,12 @@ network, AI 판단과 현재 source file 내용에 migration 의미를 의존시
 
 - migration·repair·active pointer 교체 전에는 consistent backup이 필수다.
 - 수동 backup과 startup opportunistic backup은 자체 예약 실행이 아니다. 별도 scheduler를 만들지 않는다.
-- backup은 store generation, version, store revision, byte hash, created_at, reason과 product version manifest를 가진다.
-- cross-store backup manifest는 global generation과 관련 project generation·revision·hash의 `StoreVersionVector`를 가진다. 서로 다른 coordination 시점의 generation을 하나의 consistent backup이라고 부르지 않는다.
+- `BackupPlan`은 source active-set fingerprint, `StoreVersionVector`, destination fingerprint와 각 store의 scope·ID·generation·version·revision을 고정하고 apply는 exact `plan_fingerprint` 승인을 요구한다.
+- `BackupSetManifest`는 backup set ID·생성 시각, 각 store의 상대 locator·size·SHA-256과 전체 set fingerprint를 가진다. global과 관련 project가 같은 plan vector에 없으면 consistent backup이라고 부르지 않는다.
 - project raw root binding과 secret store는 management backup에 포함하지 않는다.
+- destination은 absolute normalized path여야 하고 이미 존재하는 parent 아래 management root 밖에 있어야 하며 plan 시점에는 존재하지 않아야 한다. 열린 SQLite WAL 파일을 복사하지 않고 online backup API로 store별 정지점을 만든 뒤 manifest를 마지막에 쓴다.
+- manifest를 공개하기 전에 각 store를 read-only로 열어 backend integrity, event chain, project relation, version·revision과 byte hash를 검증한다. 하나라도 실패하면 restore 후보가 아니다.
+- apply가 manifest 작성 뒤 중단되거나 응답 전달 전에 중단돼도 같은 plan은 검증된 set과 durable result receipt를 대조해 같은 typed result로 수렴한다.
 - 최소한 latest known-good와 각 pre-migration backup을 hold한다. 삭제는 retention plan과 permission을 거친다.
 - backend가 online consistent backup을 보장하지 않으면 writer를 quiesce하고 shadow copy를 만든다.
 
@@ -1042,7 +1051,7 @@ integrity check는 다음 순서로 수행한다.
 4. 새 generation이 검증된 뒤에만 active pointer를 교체한다.
 5. 원래 store와 backup은 retention 승인 전 삭제하지 않는다.
 
-read-only recovery는 status, non-sensitive metadata export와 backup 선택만 허용한다. scan, suppression, patch apply와 migration write를 허용하지 않는다.
+recovery-only Controller는 인증 IPC와 single-writer lease를 유지하면서 `status`, `restore.plan/apply`, `rebuild.plan/apply`, `local-state.export.plan/apply`만 허용한다. 일반 project·scan·decision·patch·validation·migration·backup과 local-state import는 차단한다. import는 검증된 generation을 활성화하고 normal mode로 다시 연 뒤 current ProjectId·source revision·config fingerprint·store revision을 재확인해 수행한다.
 
 ### 재구축 가능 범위
 
@@ -1055,15 +1064,21 @@ read-only recovery는 status, non-sensitive metadata export와 backup 선택만 
 | Symbol·Reference·Finding·Occurrence | 현재 source는 예 | 같은 config·Rule로 rescan | 과거 scan 시각·instance ID와 사라진 source occurrence |
 | shared Suppression·Baseline | 예 | Git 선언 import | local-only revision |
 | local Suppression·Disposition | 아니요 | backup·export 필요 | actor·reason·decision 전체 |
-| ChangePlan·PatchSet | 일부 | plan export와 patch ArtifactRef reindex | 진행 상태·idempotency history |
-| ValidationResult·GateDecision | 일부 | `.ai-runs` manifest와 canonical JSON reindex | DB-only query/event history |
+| ChangePlan·PatchSet | ChangePlan은 export가 있으면 일부 | local-state import와 verified ArtifactRef reindex | PatchSet 의미·진행 상태·idempotency history |
+| ValidationResult·GateDecision | 현재 P-0054에서는 아니요 | 검증된 byte의 ArtifactRef만 reindex | semantic document·DB-only query/event history |
 | 큰 evidence | DB와 무관 | `.ai-runs` hash 검증 | artifact 자체가 삭제됐으면 복구 불가 |
 
 rebuild는 새 ScanRunId와 event 시각을 만들며 과거 실행을 한 것처럼 재현하지 않는다. reconstructed record에는 원본 event가 아니라 `reconstructed_from` provenance와 completeness를 둔다.
 
-`management.rebuild.plan`은 protected root-binding store를 열거하되 raw root를 반환하지 않고 global directory에 없는 ProjectId만 정렬한다. 결과에는 `rebuildable_categories`, `not_rebuildable_without_backup`과 이 두 집합·ProjectId 목록의 fingerprint를 넣는다. `management.rebuild.apply`는 같은 fingerprint를 명시적으로 승인받은 경우에만 각 opaque binding을 Controller 내부에서 resolve해 `project.register -> scan.run`을 같은 application service로 수행한다. 일부 project 뒤 crash하면 완료된 project를 숨기지 않고 새 plan의 더 작은 대상 집합을 다시 승인받는다.
+`management.rebuild.plan`은 protected root-binding store를 열거하되 raw root를 반환하지 않는다. 각 input은 ProjectId·CheckoutId·RootBindingId·current source revision·effective config fingerprint와 `.ai-runs` verified/rejected inventory fingerprint·count를 고정한다. apply는 exact fingerprint 승인 뒤 각 opaque binding을 Controller 내부에서 resolve해 새 candidate generation에서 `project.register -> scan.run`을 같은 application service로 수행한다. 검증된 `.artifact-ref.json` sidecar만 reindex하고 hash·partition·redaction 검증에 실패한 ref는 구조화된 `ArtifactReference/Lost` 항목으로 보고한다.
 
-global DB가 단순히 없어서 새 empty generation이 열린 경우 위 plan/apply를 바로 사용할 수 있다. corrupt·future-version active generation은 read-write service를 만들지 않으므로 status 외 mutation을 거부한다. recovery component가 원본을 보존한 candidate generation을 준비하고 사용자가 `verified_restore` 또는 `source_rebuild`를 선택한 뒤에만 새 writable generation에서 apply한다. CLI가 corrupt DB 파일을 직접 열거나 바꾸는 fallback은 없다.
+global DB가 단순히 없으면 새 empty generation을 열 수 있다. corrupt·future-version·active-set mismatch이면 normal read-write service를 만들지 않고 recovery application만 연다. recovery component는 손상 generation을 그대로 보존하면서 side-by-side candidate를 준비하고, 사용자가 exact restore/rebuild plan을 승인한 뒤 전체 candidate set을 검증해 top-level `active-set.json`을 flush·atomic replace한다. activation 전 crash는 이전 set, activation 뒤 crash는 새 set만 열며 자동으로 최신 directory를 추측하지 않는다. CLI·MCP가 DB 파일을 직접 열거나 바꾸는 fallback은 없다.
+
+### local-only state export/import
+
+`LocalStateBundle` v1이 포함하는 값은 ProjectId·source revision·effective config fingerprint·redaction contract version, local Suppression·Baseline·Disposition과 `draft|ready|blocked` active ChangePlan이다. source byte, shared 선언, root locator·절대 경로, secret·사용자 이름·전체 source line, 과거 actor·event timestamp·idempotency history와 이미 terminal인 plan은 의도적으로 제외한다. shared 값은 Git에서 다시 투영하고 제외된 역사 자료는 current decision 복구에 필요하지 않거나 안전한 portable payload가 아니기 때문이다.
+
+export/import는 모두 versioned JSON, payload SHA-256, plan fingerprint와 typed result를 사용한다. export destination과 import source는 absolute normalized JSON path이며 plan/apply 사이 ProjectId·source revision·config fingerprint·schema version·store revision·payload가 달라지면 적용하지 않는다. 동일 ID가 이미 있거나 bundle scope가 다르면 `LocalStateConflict`를 반환하고 자동 merge·overwrite하지 않는다. exact apply 재시도는 private receipt와 현재 imported entity set을 대조해 같은 결과로 수렴한다.
 
 ## retention
 

@@ -1,0 +1,250 @@
+{
+  "$defs": {
+    "CompatibilityClass": {
+      "enum": [
+        "unchanged",
+        "compatible",
+        "additive",
+        "breaking",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "ConsumerImpactRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "$ref": "#/$defs/CompatibilityClass"
+        },
+        "consumer_ref": {
+          "type": "string"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "migration_required": {
+          "type": "boolean"
+        },
+        "minimum_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "observed_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/EvaluationState"
+        },
+        "surface_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "consumer_ref",
+        "surface_id",
+        "classification",
+        "migration_required",
+        "state"
+      ],
+      "type": "object"
+    },
+    "ContractChangeRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "after_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "before_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "change_kind": {
+          "$ref": "#/$defs/SurfaceChangeKind"
+        },
+        "classification": {
+          "$ref": "#/$defs/CompatibilityClass"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/ContractSurfaceKind"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "surface_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface_id",
+        "kind",
+        "change_kind",
+        "classification",
+        "rule_id",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "ContractSurfaceKind": {
+      "enum": [
+        "api",
+        "cli",
+        "schema",
+        "file_format",
+        "config",
+        "error_code"
+      ],
+      "type": "string"
+    },
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "EvaluationState": {
+      "enum": [
+        "pass",
+        "block",
+        "human_review",
+        "unknown",
+        "not_applicable"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SurfaceChangeKind": {
+      "enum": [
+        "unchanged",
+        "added",
+        "removed",
+        "modified",
+        "renamed",
+        "coverage_changed"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.compatibility-report:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baseline_snapshot_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "baseline_snapshot_ref": {
+      "type": "string"
+    },
+    "changes": {
+      "items": {
+        "$ref": "#/$defs/ContractChangeRecord"
+      },
+      "type": "array"
+    },
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "consumer_impacts": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ConsumerImpactRecord"
+      },
+      "type": "array"
+    },
+    "current_snapshot_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "current_snapshot_ref": {
+      "type": "string"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "manifest_ref": {
+      "type": "string"
+    },
+    "outcome": {
+      "$ref": "#/$defs/CompatibilityClass"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "report_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "report_id": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.compatibility-report",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "report_id",
+    "project_id",
+    "manifest_ref",
+    "manifest_fingerprint",
+    "baseline_snapshot_ref",
+    "baseline_snapshot_fingerprint",
+    "current_snapshot_ref",
+    "current_snapshot_fingerprint",
+    "changes",
+    "outcome",
+    "completeness",
+    "report_fingerprint"
+  ],
+  "title": "CompatibilityReportV2",
+  "type": "object"
+}

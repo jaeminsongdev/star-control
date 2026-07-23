@@ -1,0 +1,29 @@
+schema_version = 1
+profile_id = "project_understanding"
+profile_version = "1.0.0"
+display_name = "Project Understanding"
+summary = "Project Catalog, checkout, source 분류, index graph와 freshness를 수집한다."
+triggers = ["large_scope_start", "new_project", "stale_catalog"]
+stage_template = ["project_catalog", "checkout_inventory", "source_classification", "code_index", "context_pack"]
+context_rules = ["current_checkout", "current_workspace", "source_manifest_canonical"]
+route_hints = ["project_catalog", "project_index"]
+permission_actions = []
+gate_phases = ["during_stage", "stage_exit"]
+required_rule_families = ["catalog_freshness", "source_identity"]
+required_check_families = ["architecture"]
+optional_check_families = ["semantic_index"]
+always_run_for = ["stale_catalog"]
+baseline_policy = "report_only"
+suppression_policy = "exact"
+claim_policy = ["catalog", "context"]
+stability_policy = "report_flaky"
+evidence_requirements = ["code_index_snapshot", "project_catalog_snapshot"]
+corpus_requirements = ["source_classification"]
+approval_checkpoints = []
+default_stop_state = "context_ready"
+allowed_effect_classes = ["read", "local_state_write"]
+permission_floor = "local_read_only"
+
+[review_policy]
+cli_only = "none"
+codex_managed = "none"

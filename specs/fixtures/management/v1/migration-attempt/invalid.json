@@ -1,0 +1,13 @@
+{
+  "attempt_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "attempt_id": "fixture",
+  "attempt_no": 0,
+  "phase": "dry_run",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_ref": "fixture",
+  "schema_id": "star.migration-attempt",
+  "schema_version": 1,
+  "state": "planned",
+  "subject_binding_before": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "unexpected": true
+}

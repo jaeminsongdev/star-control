@@ -1,0 +1,20 @@
+{
+  "arguments_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "descriptor_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "effect_kind": "security_refresh",
+  "exact_subject_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "exact_subject_ref": "fixture",
+  "executable_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "observed_at": "2026-01-01T00:00:00Z",
+  "operation_id": "cop_00000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "receipt_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "receipt_id": "fixture",
+  "revision": 0,
+  "schema_id": "star.development-effect-receipt",
+  "schema_version": 1,
+  "source_effect_started": false,
+  "state": "succeeded",
+  "tool_id": "fixture",
+  "unexpected": true
+}

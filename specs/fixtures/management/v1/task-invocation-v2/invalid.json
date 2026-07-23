@@ -1,6 +1,8 @@
 {
   "args": [],
-  "cwd": "fixture",
+  "cwd": {
+    "kind": "project_root"
+  },
   "env_refs": {},
   "executable": "fixture",
   "executable_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",

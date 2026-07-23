@@ -1,0 +1,505 @@
+{
+  "$defs": {
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string"
+        },
+        "actor_type": {
+          "$ref": "#/$defs/ActorType"
+        },
+        "auth_source": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_type",
+        "actor_id",
+        "display_name",
+        "auth_source"
+      ],
+      "type": "object"
+    },
+    "ActorType": {
+      "enum": [
+        "user",
+        "codex",
+        "system",
+        "controller",
+        "mcp",
+        "tool"
+      ],
+      "type": "string"
+    },
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Completeness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "GateDecisionKind": {
+      "enum": [
+        "auto_pass",
+        "human_review",
+        "block"
+      ],
+      "type": "string"
+    },
+    "GuardComparisonOutcomeV2": {
+      "enum": [
+        "equivalent",
+        "strengthened",
+        "weakened",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "GuardComparisonV2": {
+      "additionalProperties": false,
+      "properties": {
+        "comparison_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "coverage": {
+          "items": {
+            "$ref": "#/$defs/GuardFixtureKindV2"
+          },
+          "type": "array"
+        },
+        "current_value_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          },
+          "type": "array"
+        },
+        "outcome": {
+          "$ref": "#/$defs/GuardComparisonOutcomeV2"
+        },
+        "previous_value_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "protected_field_path": {
+          "type": "string"
+        },
+        "rule_ref": {
+          "$ref": "#/$defs/CatalogRef"
+        }
+      },
+      "required": [
+        "protected_field_path",
+        "previous_value_fingerprint",
+        "current_value_fingerprint",
+        "rule_ref",
+        "coverage",
+        "outcome",
+        "evidence_refs",
+        "comparison_fingerprint"
+      ],
+      "type": "object"
+    },
+    "GuardExecutorIdentityV2": {
+      "additionalProperties": false,
+      "properties": {
+        "executable_binding_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "executable_image_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "tool_ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "trust_evidence_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "tool_ref",
+        "executable_image_sha256",
+        "executable_binding_fingerprint",
+        "trust_evidence_ref"
+      ],
+      "type": "object"
+    },
+    "GuardFixtureKindV2": {
+      "enum": [
+        "positive",
+        "negative",
+        "edge",
+        "regression",
+        "adversarial"
+      ],
+      "type": "string"
+    },
+    "GuardFixtureResultV2": {
+      "additionalProperties": false,
+      "properties": {
+        "current_completeness": {
+          "$ref": "#/$defs/Completeness"
+        },
+        "current_outcome": {
+          "$ref": "#/$defs/ValidationOutcome"
+        },
+        "current_result_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "expected_diagnostic_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_gate_decision": {
+          "$ref": "#/$defs/GateDecisionKind"
+        },
+        "fixture_kind": {
+          "$ref": "#/$defs/GuardFixtureKindV2"
+        },
+        "input_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "previous_completeness": {
+          "$ref": "#/$defs/Completeness"
+        },
+        "previous_outcome": {
+          "$ref": "#/$defs/ValidationOutcome"
+        },
+        "previous_result_ref": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "result_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "rule_ref": {
+          "$ref": "#/$defs/CatalogRef"
+        }
+      },
+      "required": [
+        "fixture_kind",
+        "rule_ref",
+        "input_sha256",
+        "expected_gate_decision",
+        "previous_outcome",
+        "previous_completeness",
+        "current_outcome",
+        "current_completeness",
+        "previous_result_ref",
+        "current_result_ref",
+        "result_fingerprint"
+      ],
+      "type": "object"
+    },
+    "GuardTrustedSourceV2": {
+      "enum": [
+        "planning_baseline",
+        "last_known_good",
+        "release_minimum"
+      ],
+      "type": "string"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ValidationOutcome": {
+      "enum": [
+        "pass",
+        "fail",
+        "not_run",
+        "error",
+        "cancelled"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.validator-guard-evidence:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate_executor": {
+      "$ref": "#/$defs/GuardExecutorIdentityV2"
+    },
+    "candidate_registry_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "comparisons": {
+      "items": {
+        "$ref": "#/$defs/GuardComparisonV2"
+      },
+      "type": "array"
+    },
+    "current_snapshot_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "evidence_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "fixture_results": {
+      "items": {
+        "$ref": "#/$defs/GuardFixtureResultV2"
+      },
+      "type": "array"
+    },
+    "guard_evidence_id": {
+      "type": "string"
+    },
+    "previous_snapshot_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "produced_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "produced_by": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.validator-guard-evidence",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "security_sensitive": {
+      "type": "boolean"
+    },
+    "task_spec_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "trusted_executor": {
+      "$ref": "#/$defs/GuardExecutorIdentityV2"
+    },
+    "trusted_registry_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "trusted_source": {
+      "$ref": "#/$defs/GuardTrustedSourceV2"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "guard_evidence_id",
+    "revision",
+    "project_id",
+    "task_spec_ref",
+    "trusted_source",
+    "trusted_registry_fingerprint",
+    "candidate_registry_fingerprint",
+    "trusted_executor",
+    "candidate_executor",
+    "previous_snapshot_fingerprint",
+    "current_snapshot_fingerprint",
+    "security_sensitive",
+    "fixture_results",
+    "comparisons",
+    "produced_by",
+    "produced_at",
+    "evidence_fingerprint"
+  ],
+  "title": "ValidatorGuardEvidenceV2",
+  "type": "object"
+}

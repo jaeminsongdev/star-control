@@ -1,0 +1,230 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "OverlapAxis": {
+      "enum": [
+        "file",
+        "rename",
+        "range",
+        "symbol",
+        "contract",
+        "generated",
+        "dependency",
+        "repository_policy"
+      ],
+      "type": "string"
+    },
+    "OverlapDisposition": {
+      "enum": [
+        "disjoint",
+        "ordered_overlap",
+        "conflict_possible",
+        "conflict_confirmed",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "OverlapItem": {
+      "additionalProperties": false,
+      "properties": {
+        "axis": {
+          "$ref": "#/$defs/OverlapAxis"
+        },
+        "disposition": {
+          "$ref": "#/$defs/OverlapDisposition"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "left_participant_ref": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "right_participant_ref": {
+          "type": "string"
+        },
+        "subject_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "left_participant_ref",
+        "right_participant_ref",
+        "axis",
+        "subject_ref",
+        "disposition",
+        "reason",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "OverlapSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "coverage": {
+          "$ref": "#/$defs/CoverageState"
+        },
+        "dependency_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "file_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "generated_owner_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "participant_ref": {
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "range_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rename_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "repository_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "repository_policy_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "symbol_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "participant_ref",
+        "project_id",
+        "repository_fingerprint",
+        "file_refs",
+        "rename_refs",
+        "range_refs",
+        "symbol_refs",
+        "contract_refs",
+        "generated_owner_refs",
+        "dependency_refs",
+        "repository_policy_refs",
+        "coverage"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.overlap-analysis:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analysis_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "change_bundle_ref": {
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/OverlapItem"
+      },
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "merge_ready": {
+      "type": "boolean"
+    },
+    "overall": {
+      "$ref": "#/$defs/OverlapDisposition"
+    },
+    "overlap_analysis_id": {
+      "type": "string"
+    },
+    "parallel_safe": {
+      "type": "boolean"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.overlap-analysis",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "subjects": {
+      "items": {
+        "$ref": "#/$defs/OverlapSubject"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "overlap_analysis_id",
+    "revision",
+    "change_bundle_ref",
+    "subjects",
+    "items",
+    "overall",
+    "parallel_safe",
+    "merge_ready",
+    "limitations",
+    "analysis_fingerprint"
+  ],
+  "title": "OverlapAnalysis",
+  "type": "object"
+}

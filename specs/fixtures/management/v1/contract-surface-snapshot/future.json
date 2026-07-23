@@ -1,0 +1,12 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "coverage": "complete",
+  "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.contract-surface-snapshot",
+  "schema_version": 2,
+  "snapshot_id": "fixture",
+  "snapshot_role": "baseline",
+  "subject_revision": "fixture",
+  "surfaces": []
+}

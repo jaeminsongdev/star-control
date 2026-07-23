@@ -1,0 +1,9 @@
+{
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "evaluation_time": "fixture",
+  "items": [],
+  "schema_id": "star.maintenance-radar-snapshot",
+  "schema_version": 1,
+  "snapshot_id": "fixture"
+}

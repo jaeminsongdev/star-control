@@ -7,6 +7,7 @@ use crate::{
 };
 
 pub const RELEASE_MANIFEST_V2_SCHEMA_ID: &str = "star.release-manifest";
+pub const RELEASE_ASSET_BINDING_V1_SCHEMA_ID: &str = "star.release-asset-binding";
 pub const EVALUATION_RUN_V2_SCHEMA_ID: &str = "star.evaluation-run";
 pub const EVALUATION_CATALOG_ITEM_SCHEMA_ID: &str = "star.evaluation-catalog-item";
 
@@ -151,6 +152,43 @@ pub struct ReleaseArtifactV2 {
     pub size: u64,
     pub media_type: String,
     pub sha256: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseAssetSourceV1 {
+    pub logical_name: String,
+    pub remote_name: String,
+    pub role: String,
+    pub architecture: ReleaseArchitecture,
+    pub media_type: String,
+    pub relative_path: String,
+    pub size: u64,
+    pub sha256: Sha256Hash,
+}
+
+/// Controller-owned local path binding for one immutable release manifest.
+///
+/// The public `ReleaseManifestV2` remains backend neutral and contains no
+/// machine-local paths. This companion document binds those exact bytes to a
+/// GitHub destination only inside the management store so publication can
+/// re-read and verify every byte immediately before an external effect.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseAssetBindingV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub release_manifest_id: ReleaseManifestId,
+    pub project_id: ProjectId,
+    pub artifact_set_digest: Sha256Hash,
+    pub assets: Vec<ReleaseAssetSourceV1>,
+    pub repository: String,
+    pub tag: String,
+    pub target_commitish: String,
+    pub title: String,
+    pub notes_relative_path: String,
+    pub prerelease: bool,
+    pub binding_fingerprint: Sha256Hash,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

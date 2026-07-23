@@ -1,0 +1,20 @@
+{
+  "action": "push",
+  "before_snapshot_ref": "fixture",
+  "change_bundle_ref": "fixture",
+  "diagnostic_refs": [],
+  "expected_remote_precondition": "fixture",
+  "idempotency_key": "fixture",
+  "local_source_revision": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "operation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "participant_ref": "fixture",
+  "permission_plan_ref": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "remote_operation_id": "fixture",
+  "request_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "revision": 0,
+  "schema_id": "star.remote-operation-record",
+  "schema_version": 2,
+  "state": "planned",
+  "target": "fixture"
+}

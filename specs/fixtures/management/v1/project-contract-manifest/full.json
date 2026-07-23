@@ -1,0 +1,75 @@
+{
+  "assumptions": [
+    {
+      "assumption_id": "fixture",
+      "expected": "fixture",
+      "kind": "fixture",
+      "required": false,
+      "subject": "fixture"
+    }
+  ],
+  "baseline_policy": {
+    "activated_at": "fixture",
+    "approval_ref": "fixture",
+    "baseline_ref": "bas_00000000000000000000000000",
+    "baseline_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "minimum_consumer_version": "fixture",
+    "supported_until": "fixture"
+  },
+  "clean_room_spec_ref": "fixture",
+  "documentation": [
+    {
+      "required_commands": [
+        "fixture"
+      ],
+      "required_config_keys": [
+        "fixture"
+      ],
+      "required_references": [
+        "fixture"
+      ],
+      "source_path": "src/lib.rs",
+      "target_id": "fixture"
+    }
+  ],
+  "environment_constraints": [
+    {
+      "accepted": [
+        "fixture"
+      ],
+      "constraint_id": "fixture",
+      "kind": "fixture",
+      "required": false,
+      "subject": "fixture"
+    }
+  ],
+  "manifest_id": "fixture",
+  "manifest_version": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.project-contract-manifest",
+  "schema_version": 1,
+  "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "surfaces": [
+    {
+      "compatibility_policy_ref": "fixture",
+      "consumer_contract_refs": [
+        "fixture"
+      ],
+      "declaration_ref": "fixture",
+      "documentation_refs": [
+        "fixture"
+      ],
+      "generated_refs": [
+        "fixture"
+      ],
+      "kind": "api",
+      "owner": "fixture",
+      "required": false,
+      "schema_ref": "fixture",
+      "source_path": "src/lib.rs",
+      "source_selector": "fixture",
+      "surface_id": "fixture",
+      "visibility_policy": "fixture"
+    }
+  ]
+}

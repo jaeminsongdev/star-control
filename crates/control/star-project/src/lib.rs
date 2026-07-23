@@ -323,6 +323,16 @@ impl ProjectSeed {
         root_binding_id: RootBindingId,
         root: &Path,
     ) -> Result<AttachedProjectSeed, ProjectError> {
+        self.attach_with_repository_binding(checkout_id, root_binding_id, root, None)
+    }
+
+    pub fn attach_with_repository_binding(
+        self,
+        checkout_id: CheckoutId,
+        root_binding_id: RootBindingId,
+        root: &Path,
+        existing_repository_binding_id: Option<String>,
+    ) -> Result<AttachedProjectSeed, ProjectError> {
         let checkout_kind = match self.repository_kind {
             RepositoryKind::Git if root.join(".git").is_file() => CheckoutKind::LinkedWorktree,
             RepositoryKind::Git => CheckoutKind::MainWorktree,
@@ -347,7 +357,7 @@ impl ProjectSeed {
                     head_commit.ok(),
                     head_tree.ok(),
                     object_format.ok(),
-                    vec!["repository_binding_deferred_to_m1_probe".to_owned()],
+                    Vec::new(),
                 )
             } else {
                 (
@@ -360,6 +370,12 @@ impl ProjectSeed {
                 )
             };
         limitations.sort();
+        let repository_binding_id = (self.repository_kind == RepositoryKind::Git).then(|| {
+            existing_repository_binding_id
+                .unwrap_or_else(|| format!("repository-binding:{}", root_binding_id.as_str()))
+        });
+        let worktree_binding_id = (self.repository_kind == RepositoryKind::Git)
+            .then(|| format!("worktree-binding:{}", root_binding_id.as_str()));
         let fingerprint_payload = serde_json::json!({
             "identity_contract_version":1,
             "checkout_id":checkout_id,
@@ -367,8 +383,8 @@ impl ProjectSeed {
             "root_binding_id":root_binding_id,
             "repository_kind":self.repository_kind,
             "checkout_kind":checkout_kind,
-            "repository_binding_id":null,
-            "worktree_binding_id":null,
+            "repository_binding_id":repository_binding_id,
+            "worktree_binding_id":worktree_binding_id,
             "object_format":object_format,
             "head_state":head_state,
             "head_ref":head_ref,
@@ -407,8 +423,8 @@ impl ProjectSeed {
                 root_binding_id: Some(root_binding_id),
                 repository_kind: self.repository_kind,
                 checkout_kind,
-                repository_binding_id: None,
-                worktree_binding_id: None,
+                repository_binding_id,
+                worktree_binding_id,
                 object_format,
                 head_state,
                 head_ref,
@@ -424,6 +440,26 @@ impl ProjectSeed {
             },
         })
     }
+}
+
+pub fn git_common_directory(root: &Path) -> Result<Option<PathBuf>, ProjectError> {
+    if !root.is_absolute() || !root.is_dir() {
+        return Err(ProjectError::InvalidRoot);
+    }
+    if !root.join(".git").exists() {
+        return Ok(None);
+    }
+    let value = git_text(
+        root,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )?;
+    let path = PathBuf::from(value);
+    let path = if path.is_absolute() {
+        path
+    } else {
+        root.join(path)
+    };
+    path.canonicalize().map(Some).map_err(|_| ProjectError::Io)
 }
 
 #[derive(Clone, Debug, Serialize)]

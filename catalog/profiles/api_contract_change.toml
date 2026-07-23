@@ -1,0 +1,30 @@
+schema_version = 1
+profile_id = "api_contract_change"
+profile_version = "1.0.0"
+display_name = "API 계약 변경"
+summary = "공개 API, CLI, Schema, 파일 형식과 안정 ID의 호환성 변경을 검증한다."
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+triggers = ["api_change", "cli_contract_change", "config_id_change", "schema_change"]
+stage_template = ["contract_snapshot", "compatibility_compare", "consumer_validation", "migration_guide", "goal_gate"]
+context_rules = ["current_consumers", "exact_contract_surface", "version_policy"]
+route_hints = ["compatibility", "managed_registry"]
+permission_actions = []
+gate_phases = ["during_stage", "stage_exit", "goal_exit", "merge"]
+required_rule_families = ["compatibility", "contract_surface", "consumer_floor"]
+required_check_families = ["contract", "test"]
+optional_check_families = ["consumer_integration"]
+always_run_for = ["breaking_change", "public_schema"]
+baseline_policy = "clean_only"
+suppression_policy = "approved_expiring"
+claim_policy = ["compatibility", "contract", "migration"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["compatibility_report", "contract_snapshot", "gate", "validation_run"]
+corpus_requirements = ["backward_compatibility", "schema_fixture"]
+approval_checkpoints = []
+default_stop_state = "compatibility_decided"
+allowed_effect_classes = ["read", "plan", "validate"]
+permission_floor = "local_read_only"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"

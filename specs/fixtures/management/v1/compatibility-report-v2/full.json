@@ -1,0 +1,47 @@
+{
+  "baseline_snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "baseline_snapshot_ref": "bas_00000000000000000000000000",
+  "changes": [
+    {
+      "after_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "before_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "change_kind": "unchanged",
+      "classification": "unchanged",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "kind": "api",
+      "rule_id": "fixture",
+      "summary": "fixture",
+      "surface_id": "fixture"
+    }
+  ],
+  "completeness": "complete",
+  "consumer_impacts": [
+    {
+      "classification": "unchanged",
+      "consumer_ref": "fixture",
+      "limitations": [
+        "fixture"
+      ],
+      "migration_required": false,
+      "minimum_version": "fixture",
+      "observed_revision": "fixture",
+      "state": "pass",
+      "surface_id": "fixture"
+    }
+  ],
+  "current_snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "current_snapshot_ref": "fixture",
+  "limitations": [
+    "fixture"
+  ],
+  "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_ref": "fixture",
+  "outcome": "unchanged",
+  "project_id": "prj_00000000000000000000000000",
+  "report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "report_id": "fixture",
+  "schema_id": "star.compatibility-report",
+  "schema_version": 2
+}

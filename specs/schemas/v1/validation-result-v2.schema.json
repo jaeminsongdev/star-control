@@ -1,0 +1,486 @@
+{
+  "$defs": {
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "CheckRequirementV2": {
+      "enum": [
+        "required",
+        "optional"
+      ],
+      "type": "string"
+    },
+    "Completeness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "EvidenceFreshnessV2": {
+      "enum": [
+        "current",
+        "stale_source",
+        "stale_plan",
+        "stale_config",
+        "stale_catalog",
+        "stale_tool",
+        "stale_environment",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "EvidenceSubjectBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "catalog_snapshot_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "change_plan_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "change_set_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "check_descriptor_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "effective_config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "execution_environment_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "freshness": {
+          "$ref": "#/$defs/EvidenceFreshnessV2"
+        },
+        "gate_phase": {
+          "$ref": "#/$defs/GatePhaseV2"
+        },
+        "gate_policy_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "impact_analysis_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "invocation_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "normalizer_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "observed_tool_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "patch_set_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "probed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "profile_resolution_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "rule_refs": {
+          "items": {
+            "$ref": "#/$defs/CatalogRef"
+          },
+          "type": "array"
+        },
+        "scope_revision_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "stale_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_spec_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "tool_descriptor_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool_registry_snapshot_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validation_plan_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "validator_registry_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "workspace_content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "workspace_content_fingerprint",
+        "task_spec_ref",
+        "scope_revision_ref",
+        "impact_analysis_ref",
+        "change_set_refs",
+        "change_plan_refs",
+        "validation_plan_ref",
+        "gate_phase",
+        "profile_resolution_fingerprint",
+        "effective_config_fingerprint",
+        "gate_policy_fingerprint",
+        "catalog_snapshot_ref",
+        "validator_registry_fingerprint",
+        "rule_refs",
+        "execution_environment_fingerprint",
+        "normalizer_fingerprint",
+        "freshness",
+        "stale_reasons",
+        "binding_fingerprint",
+        "probed_at"
+      ],
+      "type": "object"
+    },
+    "GatePhaseV2": {
+      "enum": [
+        "during_stage",
+        "goal_exit",
+        "patch_pre_apply",
+        "patch_post_apply"
+      ],
+      "type": "string"
+    },
+    "RunGateEffectV2": {
+      "enum": [
+        "none",
+        "human_review",
+        "block"
+      ],
+      "type": "string"
+    },
+    "RunSatisfactionStateV2": {
+      "enum": [
+        "clean_pass",
+        "ratchet_satisfied",
+        "unsatisfied",
+        "waived_for_review"
+      ],
+      "type": "string"
+    },
+    "RunSatisfactionV2": {
+      "additionalProperties": false,
+      "properties": {
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "diagnostic_evaluation_fingerprints": {
+          "items": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "type": "array"
+        },
+        "gate_effect": {
+          "$ref": "#/$defs/RunGateEffectV2"
+        },
+        "plan_item_id": {
+          "type": "string"
+        },
+        "policy_reason": {
+          "type": "string"
+        },
+        "raw_outcomes": {
+          "items": {
+            "$ref": "#/$defs/ValidationOutcome"
+          },
+          "type": "array"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "requirement": {
+          "$ref": "#/$defs/CheckRequirementV2"
+        },
+        "satisfaction": {
+          "$ref": "#/$defs/RunSatisfactionStateV2"
+        },
+        "validation_run_refs": {
+          "items": {
+            "$ref": "#/$defs/ValidationRunRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "plan_item_id",
+        "requirement",
+        "validation_run_refs",
+        "raw_outcomes",
+        "satisfaction",
+        "gate_effect",
+        "reason_code",
+        "diagnostic_evaluation_fingerprints",
+        "policy_reason",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ValidationOutcome": {
+      "enum": [
+        "pass",
+        "fail",
+        "not_run",
+        "error",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "ValidationRunRef": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "validation_run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "validation_run_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ValidationStabilityV2": {
+      "enum": [
+        "stable",
+        "flaky",
+        "not_evaluated"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.validation-result:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completeness": {
+      "$ref": "#/$defs/Completeness"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "freshness": {
+      "$ref": "#/$defs/EvidenceFreshnessV2"
+    },
+    "normalizer_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "outcome": {
+      "$ref": "#/$defs/ValidationOutcome"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "result_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "run_satisfactions": {
+      "items": {
+        "$ref": "#/$defs/RunSatisfactionV2"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.validation-result",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "stability": {
+      "$ref": "#/$defs/ValidationStabilityV2"
+    },
+    "stale_reasons": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "subject_binding": {
+      "$ref": "#/$defs/EvidenceSubjectBinding"
+    },
+    "validation_plan_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "validation_result_id": {
+      "pattern": "^vrs_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "validation_run_refs": {
+      "items": {
+        "$ref": "#/$defs/ValidationRunRef"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "validation_result_id",
+    "revision",
+    "validation_plan_ref",
+    "project_id",
+    "subject_binding",
+    "validation_run_refs",
+    "outcome",
+    "completeness",
+    "freshness",
+    "stale_reasons",
+    "stability",
+    "run_satisfactions",
+    "normalizer_fingerprint",
+    "created_at",
+    "result_fingerprint"
+  ],
+  "title": "ValidationResultV2",
+  "type": "object"
+}

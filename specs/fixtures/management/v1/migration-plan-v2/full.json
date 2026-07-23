@@ -1,0 +1,128 @@
+{
+  "activation_plan": {
+    "expected_output": "fixture",
+    "input_refs": [
+      "fixture"
+    ],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "backup_plan": {
+    "expected_output": "fixture",
+    "input_refs": [
+      "fixture"
+    ],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "blockers": [
+    "fixture"
+  ],
+  "checkout_id": "cko_00000000000000000000000000",
+  "consumer_compatibility_refs": [
+    "fixture"
+  ],
+  "cross_project_handoff_ref": "fixture",
+  "dry_run_plan": {
+    "expected_output": "fixture",
+    "input_refs": [
+      "fixture"
+    ],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "impact_analysis_ref": "fixture",
+  "invariant_refs": [
+    "fixture"
+  ],
+  "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_ref": "fixture",
+  "migration_plan_id": "fixture",
+  "observed_version_vector": {
+    "entries": [
+      {
+        "axis_id": "fixture",
+        "coverage": "complete",
+        "observation_state": "observed",
+        "observed_version": "fixture",
+        "owner": "fixture",
+        "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "source_ref": "fixture",
+        "version_scheme": "fixture"
+      }
+    ],
+    "vector_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "ordered_steps": [
+    {
+      "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "effect_class": "read_only",
+      "from_version": "fixture",
+      "idempotency_contract": "replay_safe",
+      "invocation_template_ref": "fixture",
+      "order": 0,
+      "rollback_ref": "fixture",
+      "step_id": "fixture",
+      "step_version": "fixture",
+      "to_version": "fixture"
+    }
+  ],
+  "permission_checkpoints": [
+    "fixture"
+  ],
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "rehearsal_plan": {
+    "expected_output": "fixture",
+    "input_refs": [
+      "fixture"
+    ],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "resource_estimate": "fixture",
+  "resume_plan": {
+    "expected_output": "fixture",
+    "input_refs": [
+      "fixture"
+    ],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "revision": 0,
+  "rollback_plan_ref": "fixture",
+  "schema_id": "star.migration-plan",
+  "schema_version": 2,
+  "scope_revision_ref": "fixture",
+  "source_patch_refs": [
+    "fixture"
+  ],
+  "source_subject_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "strategy": "side_by_side",
+  "support_decision": "current_supported",
+  "target_id": "fixture",
+  "target_version_vector": {
+    "entries": [
+      {
+        "axis_id": "fixture",
+        "coverage": "complete",
+        "observation_state": "observed",
+        "observed_version": "fixture",
+        "owner": "fixture",
+        "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "source_ref": "fixture",
+        "version_scheme": "fixture"
+      }
+    ],
+    "vector_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "task_spec_ref": "fixture",
+  "validation_plan_refs": [
+    "fixture"
+  ]
+}

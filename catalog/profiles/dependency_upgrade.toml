@@ -1,0 +1,30 @@
+schema_version = 1
+profile_id = "dependency_upgrade"
+profile_version = "1.0.0"
+display_name = "Dependency Upgrade"
+summary = "manifest와 lockfile 기반 후보, 호환성·보안 Gate와 rollback을 준비한다."
+parent_profile = { profile_id = "security_supply_chain", profile_version = "1.0.0" }
+triggers = ["dependency_change", "framework_upgrade", "lockfile_change"]
+stage_template = ["dependency_snapshot", "candidate_plan", "isolated_prepare", "compatibility_gate", "apply_approval"]
+context_rules = ["exact_manifest", "exact_lockfile", "offline_first"]
+route_hints = ["dependency_maintenance", "safe_patch"]
+permission_actions = ["dependency.change", "network.read"]
+gate_phases = ["during_stage", "patch_pre_apply", "patch_post_apply", "goal_exit"]
+required_rule_families = ["dependency_compatibility", "dependency_security", "rollback"]
+required_check_families = ["build", "dependency", "security", "test"]
+optional_check_families = ["license"]
+always_run_for = ["lockfile_change", "major_upgrade"]
+baseline_policy = "clean_only"
+suppression_policy = "approved_expiring"
+claim_policy = ["compatibility", "dependency", "security"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["dependency_snapshot", "dependency_update_plan", "gate", "patch_set"]
+corpus_requirements = ["rollback", "version_candidate"]
+approval_checkpoints = ["dependency_change", "download", "network", "patch_apply"]
+default_stop_state = "awaiting_apply_approval"
+allowed_effect_classes = ["read", "plan", "validate", "network_read", "workspace_mutation"]
+permission_floor = "exact_durable_approval"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"

@@ -1,0 +1,12 @@
+{
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "environment_snapshot_ref": "fixture",
+  "manifest_id": "fixture",
+  "manifest_observations": [],
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.dependency-security-input-manifest",
+  "schema_version": 2,
+  "subject_revision": "fixture",
+  "toolchain_observations": []
+}

@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.migration-checkpoint:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "checkpoint_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "checkpoint_id": {
+      "type": "string"
+    },
+    "completed_step_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "in_progress_step_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_receipt_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "plan_ref": {
+      "type": "string"
+    },
+    "reconciliation_required": {
+      "type": "boolean"
+    },
+    "replay_safe": {
+      "type": "boolean"
+    },
+    "schema_id": {
+      "const": "star.migration-checkpoint",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "target_state_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "target_version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "checkpoint_id",
+    "plan_ref",
+    "plan_fingerprint",
+    "completed_step_refs",
+    "target_version",
+    "target_state_fingerprint",
+    "replay_safe",
+    "reconciliation_required",
+    "checkpoint_fingerprint"
+  ],
+  "title": "MigrationCheckpointV2",
+  "type": "object"
+}

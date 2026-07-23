@@ -1,0 +1,15 @@
+{
+  "analysis_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "change_bundle_ref": "fixture",
+  "items": [],
+  "limitations": [],
+  "merge_ready": false,
+  "overall": "disjoint",
+  "overlap_analysis_id": "fixture",
+  "parallel_safe": false,
+  "revision": 0,
+  "schema_id": "star.overlap-analysis",
+  "schema_version": 1,
+  "subjects": [],
+  "unexpected": true
+}

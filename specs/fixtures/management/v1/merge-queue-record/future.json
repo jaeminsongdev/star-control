@@ -1,0 +1,12 @@
+{
+  "current_base_commit_oid": "fixture",
+  "entries": [],
+  "integration_target_ref": "fixture",
+  "merge_queue_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "queue_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "repository_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "revision": 0,
+  "schema_id": "star.merge-queue-record",
+  "schema_version": 2
+}

@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "DispositionDecision": {
+      "enum": [
+        "needs_action",
+        "accepted_risk",
+        "false_positive",
+        "deferred",
+        "duplicate",
+        "fixed"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.disposition:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active": {
+      "type": "boolean"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "decided_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "decision": {
+      "$ref": "#/$defs/DispositionDecision"
+    },
+    "diagnostic_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "disposition_id": {
+      "pattern": "^dsp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.disposition",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "subject_binding_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "disposition_id",
+    "revision",
+    "project_id",
+    "diagnostic_fingerprint",
+    "subject_binding_fingerprint",
+    "decision",
+    "reason_code",
+    "reason",
+    "active",
+    "decided_at",
+    "content_fingerprint"
+  ],
+  "title": "DispositionV2",
+  "type": "object"
+}

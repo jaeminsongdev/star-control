@@ -1,0 +1,30 @@
+schema_version = 1
+profile_id = "security_supply_chain"
+profile_version = "1.0.0"
+display_name = "Security Supply Chain"
+summary = "secret, auth, dependency, workflow, release integrity와 external-data freshness를 검증한다."
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+triggers = ["auth_change", "dependency_change", "release_material", "security_finding", "workflow_change"]
+stage_template = ["redaction", "sensitive_change", "dependency_snapshot", "workflow_security", "release_integrity", "freshness_gate"]
+context_rules = ["offline_first", "redacted_values", "source_provenance"]
+route_hints = ["security", "dependency_maintenance"]
+permission_actions = ["network.read"]
+gate_phases = ["during_stage", "stage_exit", "goal_exit", "release"]
+required_rule_families = ["dependency_supply_chain", "external_data_freshness", "release_integrity", "secret_redaction", "sensitive_change", "workflow_security"]
+required_check_families = ["security"]
+optional_check_families = ["license", "vulnerability"]
+always_run_for = ["auth_change", "release_material", "secret_candidate"]
+baseline_policy = "clean_only"
+suppression_policy = "approved_expiring"
+claim_policy = ["security", "supply_chain"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["external_data_snapshot", "supply_chain_snapshot", "validation_run"]
+corpus_requirements = ["redaction", "stale_external_data"]
+approval_checkpoints = ["network"]
+default_stop_state = "offline_snapshot_decided"
+allowed_effect_classes = ["read", "plan", "validate", "network_read"]
+permission_floor = "exact_prompt"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"

@@ -1,0 +1,65 @@
+{
+  "activation_plan": {
+    "expected_output": "fixture",
+    "input_refs": [],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "backup_plan": {
+    "expected_output": "fixture",
+    "input_refs": [],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "checkout_id": "cko_00000000000000000000000000",
+  "dry_run_plan": {
+    "expected_output": "fixture",
+    "input_refs": [],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "impact_analysis_ref": "fixture",
+  "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_ref": "fixture",
+  "migration_plan_id": "fixture",
+  "observed_version_vector": {
+    "entries": [],
+    "vector_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "ordered_steps": [],
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "rehearsal_plan": {
+    "expected_output": "fixture",
+    "input_refs": [],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "resource_estimate": "fixture",
+  "resume_plan": {
+    "expected_output": "fixture",
+    "input_refs": [],
+    "phase": "fixture",
+    "required": false,
+    "stop_condition": "fixture"
+  },
+  "revision": 0,
+  "rollback_plan_ref": "fixture",
+  "schema_id": "star.migration-plan",
+  "schema_version": 2,
+  "scope_revision_ref": "fixture",
+  "source_subject_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "strategy": "side_by_side",
+  "support_decision": "current_supported",
+  "target_id": "fixture",
+  "target_version_vector": {
+    "entries": [],
+    "vector_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "task_spec_ref": "fixture",
+  "unexpected": true
+}

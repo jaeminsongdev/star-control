@@ -55,6 +55,9 @@
     }
   ],
   "objective": "fixture",
+  "profile_ids": [
+    "fixture"
+  ],
   "project_targets": [
     {
       "checkout_id": "cko_00000000000000000000000000",

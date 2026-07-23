@@ -1,0 +1,164 @@
+{
+  "$defs": {
+    "ContractSurfaceKind": {
+      "enum": [
+        "api",
+        "cli",
+        "schema",
+        "file_format",
+        "config",
+        "error_code"
+      ],
+      "type": "string"
+    },
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SurfaceObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "coverage": {
+          "$ref": "#/$defs/CoverageState"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/ContractSurfaceKind"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "normalized_shape": {
+          "type": "string"
+        },
+        "observation_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_path": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "surface_id": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface_id",
+        "kind",
+        "normalized_shape",
+        "visibility",
+        "source_path",
+        "source_sha256",
+        "coverage",
+        "observation_fingerprint"
+      ],
+      "type": "object"
+    },
+    "SurfaceSnapshotRole": {
+      "enum": [
+        "baseline",
+        "current"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.contract-surface-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "coverage": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "registry_snapshot_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_id": {
+      "const": "star.contract-surface-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "snapshot_role": {
+      "$ref": "#/$defs/SurfaceSnapshotRole"
+    },
+    "subject_revision": {
+      "type": "string"
+    },
+    "surfaces": {
+      "items": {
+        "$ref": "#/$defs/SurfaceObservation"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "snapshot_id",
+    "snapshot_role",
+    "project_id",
+    "subject_revision",
+    "manifest_fingerprint",
+    "surfaces",
+    "coverage",
+    "content_fingerprint"
+  ],
+  "title": "ContractSurfaceSnapshot",
+  "type": "object"
+}

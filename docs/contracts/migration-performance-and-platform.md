@@ -2,7 +2,7 @@
 
 ## 목적과 상태
 
-이 문서는 Star-Control 8단계인 **데이터·설정·DB migration, 성능·build, 언어·플랫폼 migration**의 설계 정본이다. 현재 상태는 **P-0049 첫 bounded 제품 Slice 구현**이다. checkpoint/resume/reverse rollback state machine, comparable binding을 요구하는 p95 120% performance comparator와 ARM64 `native_unverified` platform evidence를 구현했다. compiler·profiler를 만들지 않으며 실제 platform native evidence가 없는 상태를 success로 승격하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)에 고정한다.
+이 문서는 Star-Control 8단계인 **데이터·설정·DB migration, 성능·build, 언어·플랫폼 migration**의 설계·구현 정본이다. P-0049 engine과 P-0054의 공개 계약·Schema·append-only persistence·Controller·CLI 위에 P-0055가 registered Tool의 실제 process Operation을 `DevelopmentEffectReceiptV1`로 봉인하고 migration execute/resume/rollback, performance run, language cutover가 그 영수증을 검증해 결과를 소비하는 경로를 연결했다. 외부 도구는 exact descriptor·arguments·executable SHA-256·permission·Gate·approval 없이 실행할 수 없고, 영수증 없는 payload나 stale subject는 apply 결과가 될 수 없다. ARM64 교차 빌드·simulation은 Preview의 `native_unverified` 증거이며 native runtime success가 아니다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md), [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md), [P-0055 비서명 외부 봉인](../testing/p0055-nonsigning-external-seal-2026-07-23.md)에 고정한다.
 
 8단계는 세 Profile을 하나의 공통 흐름에 연결한다.
 
@@ -765,6 +765,25 @@ rollback은 old adapter/implementation이 여전히 compatible하고 target writ
 
 network read/download, package install, system setting, live target write, destructive step, process attach, remote execution, cutover와 rollback은 각각 Permission Action으로 분리한다. 하나의 “migration 승인”으로 모두 묶지 않는다.
 
+### 실제 외부 effect 영수증 경계
+
+P-0055부터 외부 effect는 다음 닫힌 경로를 사용한다.
+
+```text
+registered ToolDescriptor + exact descriptor hash + bounded arguments
+  -> tool.invoke
+  -> durable Operation(process/executable/permission/approval/result)
+  -> development.effect.record
+  -> DevelopmentEffectReceiptV1
+  -> migration/performance/language apply가 exact receipt 검증
+```
+
+- `DevelopmentEffectReceiptV1`은 Project, effect kind, exact subject ref/fingerprint, OperationId, tool/descriptor/arguments/executable SHA-256, approval·permission·Gate ref, 시작·종료 시각, source-effect 여부, artifact·result fingerprint와 limitation을 canonical fingerprint에 포함한다.
+- effect state는 `succeeded|failed|partial|outcome_unknown`을 보존한다. process exit 0만으로 succeeded를 합성하거나 partial/unknown을 재실행하지 않는다.
+- `migration_execute`, `performance_run`, `language_cutover`는 각각 전용 Permission Action을 요구하고 destructive lane은 durable approval·permission·Gate가 모두 없으면 영수증을 만들 수 없다.
+- migration attempt의 tool observation·receipt, performance run의 evidence ref, language cutover의 effect receipt가 exact plan/workload fingerprint와 다르면 stale input으로 거부한다.
+- source mutation을 만드는 codegen/codemod는 이 영수증만으로 canonical source가 되지 않는다. M4 immutable PatchSet과 pre/post Gate를 계속 사용한다.
+
 ## M3 Gate 결합
 
 M8 adapter는 GateDecision을 만들지 않는다. M2가 Profile rule/check/evidence floor를 ValidationPlan에 materialize하고 M3가 다음 phase를 판정한다.
@@ -785,32 +804,34 @@ M8 adapter는 GateDecision을 만들지 않는다. M2가 Profile rule/check/evid
 - complete evidence 뒤 남은 의미 판단은 CLI-only `HUMAN_REVIEW`다.
 - evidence missing/stale, destructive approval 누락, outcome unknown, live partial, rollback 실패는 `BLOCK`이다.
 
-## CLI 목표 surface
+## 현재 CLI surface
 
-모든 command는 Controller application service를 호출하며 DB/evidence/target을 직접 열지 않는다. 아래는 목표 설계이고 현재 구현된 명령이 아니다.
+모든 command는 Controller application service를 호출하며 DB/evidence/target을 직접 열지 않는다. 외부 process effect는 먼저 generic registered Tool 경로로 실행하고 durable Operation을 exact 영수증으로 바꾼 뒤 도메인 command가 소비한다.
 
 ```text
-star migration inspect --project <id> --target <id>
-star migration plan --task-spec <ref> --target <id>
-star migration dry-run --plan <id> --fingerprint <sha256>
-star migration backup --plan <id> --fingerprint <sha256>
-star migration rehearse --plan <id> --fingerprint <sha256>
-star migration execute --plan <id> --fingerprint <sha256>
-star migration resume --plan <id> --checkpoint <id>
-star migration rollback --plan <id> --recovery-plan <id>
-star migration status --plan <id>
+star tools call <tool-id> <descriptor-sha256> <arguments-json> --lane <fixed-lane> --wait completed
+star operations get <operation-id>
+star development effect record <project-id> <receipt-id> <effect-kind> <subject-ref> <subject-sha256> <operation-id> --arguments <json-file> [--approval <ref>] [--permission <ref>] [--gate <ref>]
 
-star performance plan --workload <id> --baseline <subject> --candidate <subject>
-star performance run --plan <id> --cohort baseline|candidate
-star performance compare --plan <id>
+star migration inspect <project-id> <target-id> [--manifest <path>]
+star migration plan <project-id> <input-json> [--manifest <path>]
+star migration checkpoint <project-id> <plan-id> <checkpoint-json>
+star migration dry-run|backup|rehearse|execute|resume|validate|rollback <project-id> <plan-id> <attempt-json> --fingerprint <sha256>
+star migration validation-report <project-id> <report-json>
+star migration restore-verify <project-id> <record-json>
+star migration status <project-id> <plan-id>
 
-star language-migration plan --task-spec <ref>
-star language-migration equivalence --plan <id>
-star language-migration cutover --plan <id> --fingerprint <sha256>
-star language-migration status --plan <id>
+star performance plan <project-id> <workload-json>
+star performance run <project-id> <workload-id> <run-json>
+star performance compare <project-id> <workload-id> <comparison-id> --baseline-runs <json-file> --candidate-runs <json-file>
+
+star language-migration plan <project-id> <plan-json>
+star language-migration equivalence <project-id> <plan-id> <report-json>
+star language-migration cutover <project-id> <plan-id> <equivalence-report-id> <effect-receipt-id> --fingerprint <sha256>
+star language-migration status <project-id> <plan-id>
 ```
 
-`plan`, `inspect`, `status`, `compare`는 source/target read-only다. `dry-run`도 live target write가 없어야 한다. `backup`, `rehearse`, `execute`, `resume`, `rollback`, performance run과 cutover는 effect·target·permission을 명시한다. CLI 이름이 같아도 approval을 암시하지 않는다.
+`plan`, `inspect`, `status`, `compare`는 source/target read-only다. `dry-run`도 live target write가 없어야 한다. `backup`, `rehearse`, `execute`, `resume`, `rollback`, performance run과 cutover는 effect·target·permission을 명시한다. effect를 실제 실행한 `tool.invoke`와 그 결과를 기록하는 command는 분리되어 있으며 CLI 이름이나 exit 0이 approval·Gate·도메인 성공을 암시하지 않는다.
 
 ## Stable Diagnostic과 오류 범주
 

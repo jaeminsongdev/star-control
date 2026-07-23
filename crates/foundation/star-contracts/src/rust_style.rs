@@ -1,12 +1,21 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{ProjectId, Sha256Hash, management::ProjectPathRef};
+use crate::{
+    ProjectId, Sha256Hash,
+    fixed_mcp::ApprovalDecision,
+    ids::{ApprovalId, GateId, PatchSetId},
+    management::ProjectPathRef,
+};
 
 pub const RUST_TOOLCHAIN_BINDING_SCHEMA_ID: &str = "star.rust-toolchain-binding";
 pub const RUST_STYLE_POLICY_SNAPSHOT_SCHEMA_ID: &str = "star.rust-style-policy-snapshot";
 pub const RUST_STYLE_COVERAGE_MATRIX_SCHEMA_ID: &str = "star.rust-style-coverage-matrix";
 pub const RUST_STYLE_STEP_EXECUTION_SCHEMA_ID: &str = "star.rust-style-step-execution";
+pub const RUST_STYLE_POLICY_APPROVAL_REQUEST_SCHEMA_ID: &str =
+    "star.rust-style-policy-approval-request";
+pub const RUST_STYLE_POLICY_APPROVAL_DECISION_SCHEMA_ID: &str =
+    "star.rust-style-policy-approval-decision";
 pub const RUST_STYLE_PIPELINE_ID: &str = "rust_style_v1";
 pub const RUST_STYLE_PIPELINE_VERSION: u32 = 1;
 
@@ -164,6 +173,53 @@ pub struct ClippyFixAllowlistEntry {
 pub enum RustAutoPolicy {
     SafeDefault,
     PersonalAuto,
+}
+
+/// Exact, immutable `personal_auto` policy decision subject.
+///
+/// The standing grant is only a ceiling. This request binds a separate policy
+/// decision to one prepared PatchSet, its authoritative pre Gate, and every
+/// tool/policy/coverage identity that produced the candidate.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RustStylePolicyApprovalRequest {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub contract_version: u32,
+    pub project_id: ProjectId,
+    pub profile_ref: String,
+    pub pipeline_ref: String,
+    pub patch_set_id: PatchSetId,
+    pub patch_fingerprint: Sha256Hash,
+    pub candidate_fingerprint: Sha256Hash,
+    pub before_fingerprint: Sha256Hash,
+    pub expected_after_fingerprint: Sha256Hash,
+    pub toolchain_fingerprint: Sha256Hash,
+    pub policy_fingerprint: Sha256Hash,
+    pub coverage_fingerprint: Sha256Hash,
+    pub fixed_adapter_fingerprint: Sha256Hash,
+    pub standing_grant_fingerprint: Sha256Hash,
+    pub pre_gate_id: GateId,
+    pub pre_gate_revision: u64,
+    pub pre_gate_fingerprint: Sha256Hash,
+    pub scope_paths: Vec<ProjectPathRef>,
+    pub changed_paths: Vec<ProjectPathRef>,
+    pub request_fingerprint: Sha256Hash,
+}
+
+/// Durable policy evaluator outcome for one exact Rust style approval request.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RustStylePolicyApprovalDecision {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub contract_version: u32,
+    pub approval_id: ApprovalId,
+    pub scope_hash: Sha256Hash,
+    pub request_fingerprint: Sha256Hash,
+    pub decision: ApprovalDecision,
+    pub resolved_at: String,
+    pub decision_fingerprint: Sha256Hash,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

@@ -1,0 +1,142 @@
+{
+  "catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "entries": [
+    {
+      "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "descriptor": {
+        "allowed_effect_classes": [
+          "read"
+        ],
+        "always_run_for": [
+          "fixture"
+        ],
+        "approval_checkpoints": [
+          "network"
+        ],
+        "baseline_policy": "off",
+        "claim_policy": [
+          "fixture"
+        ],
+        "context_rules": [
+          "fixture"
+        ],
+        "corpus_requirements": [
+          "fixture"
+        ],
+        "default_stop_state": "fixture",
+        "display_name": "fixture",
+        "evidence_requirements": [
+          "fixture"
+        ],
+        "extensions": {
+          "migration": {
+            "backup_policy": "fixture",
+            "default_pending_action": "fixture",
+            "destructive_policy": "fixture",
+            "invariant_families": [
+              "fixture"
+            ],
+            "rehearsal_policy": "fixture",
+            "restore_policy": "fixture",
+            "resume_policy": "fixture",
+            "strategy_floor": "fixture",
+            "target_kinds": [
+              "fixture"
+            ]
+          },
+          "release": {
+            "approval_state_policy_ref": "fixture",
+            "evaluation_contexts": [
+              "fixture"
+            ],
+            "evaluation_policy_refs": [
+              "fixture"
+            ],
+            "package_lifecycle_refs": [
+              "fixture"
+            ],
+            "release_policy_ref": "fixture",
+            "supply_chain_applicability_ref": "fixture",
+            "target_environment_refs": [
+              "fixture"
+            ],
+            "validation_layer_refs": [
+              "fixture"
+            ]
+          },
+          "rust_style": {
+            "allowed_live_operations": [
+              "fixture"
+            ],
+            "built_in_clippy_fix_allowlist": [
+              "fixture"
+            ],
+            "default_policy": "fixture",
+            "network": "fixture",
+            "pipeline_ref": "fixture",
+            "profile_kind": "fixture",
+            "required_gates": [
+              "fixture"
+            ],
+            "source_effect": "fixture",
+            "steps": [
+              "fixture"
+            ],
+            "supported_policies": [
+              "fixture"
+            ],
+            "tool_role_refs": [
+              "fixture"
+            ],
+            "toolchain_release": "fixture"
+          }
+        },
+        "gate_phases": [
+          "during_stage"
+        ],
+        "optional_check_families": [
+          "fixture"
+        ],
+        "parent_profile": {
+          "profile_id": "fixture",
+          "profile_version": "fixture"
+        },
+        "permission_actions": [
+          "fixture"
+        ],
+        "permission_floor": "local_read_only",
+        "profile_id": "fixture",
+        "profile_version": "fixture",
+        "required_check_families": [
+          "fixture"
+        ],
+        "required_rule_families": [
+          "fixture"
+        ],
+        "review_policy": {
+          "cli_only": "none",
+          "codex_managed": "none"
+        },
+        "route_hints": [
+          "fixture"
+        ],
+        "schema_version": 0,
+        "stability_policy": "report_flaky",
+        "stage_template": [
+          "fixture"
+        ],
+        "summary": "fixture",
+        "suppression_policy": "exact",
+        "triggers": [
+          "fixture"
+        ]
+      },
+      "profile_ref": {
+        "profile_id": "fixture",
+        "profile_version": "fixture"
+      }
+    }
+  ],
+  "schema_id": "star.development-profile-catalog-snapshot",
+  "schema_version": 1
+}

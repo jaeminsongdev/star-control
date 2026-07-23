@@ -1,10 +1,15 @@
 //! Deterministic M5-M9 development maintenance engines.
 
 pub mod compatibility;
+pub mod compatibility_v2;
 pub mod coordination;
+pub mod coordination_v2;
 pub mod maintenance;
+pub mod maintenance_v2;
 pub mod managed_registry;
+pub mod managed_registry_v2;
 pub mod migration;
+pub mod migration_v2;
 
 use star_contracts::Sha256Hash;
 use star_domain::versioned_fingerprint;

@@ -1,0 +1,11 @@
+{
+  "approval_id": "fixture",
+  "contract_version": 0,
+  "decision": "approve",
+  "decision_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "request_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "resolved_at": "fixture",
+  "schema_id": "star.rust-style-policy-approval-decision",
+  "schema_version": 1,
+  "scope_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

@@ -1,0 +1,244 @@
+{
+  "$defs": {
+    "DependencyUpdateStatus": {
+      "enum": [
+        "observed",
+        "candidate",
+        "awaiting_refresh_approval",
+        "awaiting_patch_preparation_approval",
+        "patch_prepared",
+        "awaiting_apply_approval",
+        "applied",
+        "validated",
+        "blocked",
+        "rolled_back",
+        "superseded",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ExternalFreshness": {
+      "enum": [
+        "current",
+        "stale",
+        "expired",
+        "unknown",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "UpdateCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "affected_project_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "affected_surfaces": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "candidate_id": {
+          "type": "string"
+        },
+        "current_requested_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "current_resolved_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dependency_id": {
+          "type": "string"
+        },
+        "direct": {
+          "type": "boolean"
+        },
+        "package_manager_adapter_ref": {
+          "type": "string"
+        },
+        "proposed_constraint": {
+          "type": "string"
+        },
+        "proposed_resolution": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "required_approval_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required_plan_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "risk_markers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_change": {
+          "type": "boolean"
+        },
+        "source_evidence_ref": {
+          "type": "string"
+        },
+        "source_freshness": {
+          "$ref": "#/$defs/ExternalFreshness"
+        },
+        "update_kind": {
+          "$ref": "#/$defs/UpdateKind"
+        },
+        "version_delta": {
+          "$ref": "#/$defs/VersionDelta"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "dependency_id",
+        "proposed_constraint",
+        "update_kind",
+        "version_delta",
+        "direct",
+        "source_change",
+        "reason",
+        "source_evidence_ref",
+        "source_freshness",
+        "package_manager_adapter_ref"
+      ],
+      "type": "object"
+    },
+    "UpdateKind": {
+      "enum": [
+        "patch",
+        "minor",
+        "major",
+        "security",
+        "internal"
+      ],
+      "type": "string"
+    },
+    "VersionDelta": {
+      "enum": [
+        "patch",
+        "minor",
+        "major",
+        "non_semver",
+        "unknown"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.dependency-update-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blockers": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "candidate": {
+      "$ref": "#/$defs/UpdateCandidate"
+    },
+    "dependency_snapshot_ref": {
+      "type": "string"
+    },
+    "expected_lockfile_paths": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "expected_manifest_paths": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "patch_set_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "previous_lockfile_artifact_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "rollback_recipe_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_id": {
+      "const": "star.dependency-update-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/DependencyUpdateStatus"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "plan_id",
+    "project_id",
+    "dependency_snapshot_ref",
+    "candidate",
+    "expected_manifest_paths",
+    "expected_lockfile_paths",
+    "status",
+    "plan_fingerprint"
+  ],
+  "title": "DependencyUpdatePlan",
+  "type": "object"
+}

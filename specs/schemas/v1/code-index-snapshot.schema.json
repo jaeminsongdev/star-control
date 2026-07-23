@@ -142,6 +142,14 @@
       ],
       "type": "object"
     },
+    "DiscoveryProvenance": {
+      "enum": [
+        "declared",
+        "inferred",
+        "observed"
+      ],
+      "type": "string"
+    },
     "FreshnessProof": {
       "additionalProperties": false,
       "properties": {
@@ -205,6 +213,251 @@
         "unverified_scope_count"
       ],
       "type": "object"
+    },
+    "GuidanceKind": {
+      "enum": [
+        "project_manifest",
+        "agents",
+        "reading_order",
+        "readme",
+        "contribution",
+        "architecture",
+        "contract",
+        "build_manifest",
+        "heuristic"
+      ],
+      "type": "string"
+    },
+    "GuidanceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "applicable_scope": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "conflict": {
+          "type": "boolean"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "freshness": {
+          "$ref": "#/$defs/IndexFreshnessState"
+        },
+        "heading_anchors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/GuidanceKind"
+        },
+        "limitations": {
+          "items": {
+            "$ref": "#/$defs/IndexLimitation"
+          },
+          "type": "array"
+        },
+        "priority": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "priority_reason": {
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "redacted_summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_ref": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "supersedes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "record_key",
+        "project_id",
+        "checkout_id",
+        "kind",
+        "source_ref",
+        "source_sha256",
+        "priority",
+        "priority_reason",
+        "supersedes",
+        "heading_anchors",
+        "freshness",
+        "conflict",
+        "limitations",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "HardcodingAssessment": {
+      "enum": [
+        "candidate",
+        "warning",
+        "review",
+        "allowed"
+      ],
+      "type": "string"
+    },
+    "HardcodingCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "assessment": {
+          "$ref": "#/$defs/HardcodingAssessment"
+        },
+        "candidate_key": {
+          "type": "string"
+        },
+        "canonical_source_id": {
+          "pattern": "^src_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "category": {
+          "$ref": "#/$defs/HardcodingCategory"
+        },
+        "confidence": {
+          "type": "string"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "false_positive_guards": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "length_bucket": {
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "$ref": "#/$defs/IndexLimitation"
+          },
+          "type": "array"
+        },
+        "literal_shape": {
+          "type": "string"
+        },
+        "matched_predicate": {
+          "type": "string"
+        },
+        "parameter_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "redaction_state": {
+          "$ref": "#/$defs/HardcodingRedactionState"
+        },
+        "related_entity_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "rule_version": {
+          "type": "string"
+        },
+        "source_class": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "source_content_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_facets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_range": {
+          "$ref": "#/$defs/SourceRange"
+        },
+        "source_ref": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "used_tier": {
+          "$ref": "#/$defs/IndexTier"
+        }
+      },
+      "required": [
+        "candidate_key",
+        "rule_id",
+        "rule_version",
+        "parameter_fingerprint",
+        "category",
+        "canonical_source_id",
+        "source_ref",
+        "source_content_sha256",
+        "source_range",
+        "source_class",
+        "source_facets",
+        "used_tier",
+        "matched_predicate",
+        "false_positive_guards",
+        "confidence",
+        "redaction_state",
+        "literal_shape",
+        "length_bucket",
+        "assessment",
+        "limitations",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "HardcodingCategory": {
+      "enum": [
+        "absolute_path",
+        "endpoint",
+        "timeout_retry_limit",
+        "raw_command",
+        "duplicate_error",
+        "config_duplicate"
+      ],
+      "type": "string"
+    },
+    "HardcodingRedactionState": {
+      "enum": [
+        "not_needed",
+        "shape_only",
+        "discarded"
+      ],
+      "type": "string"
     },
     "IndexCoverage": {
       "additionalProperties": false,
@@ -400,6 +653,13 @@
       ],
       "type": "string"
     },
+    "IndexScanMode": {
+      "enum": [
+        "full",
+        "incremental"
+      ],
+      "type": "string"
+    },
     "IndexTier": {
       "enum": [
         "text",
@@ -470,6 +730,203 @@
         "unknown"
       ],
       "type": "string"
+    },
+    "SourceRange": {
+      "additionalProperties": false,
+      "properties": {
+        "end_column": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "end_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_column": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_line",
+        "start_column",
+        "end_line",
+        "end_column"
+      ],
+      "type": "object"
+    },
+    "ToolchainCommandDeclaration": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "command_id": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string"
+        },
+        "cwd_scope": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "declaration_kind": {
+          "$ref": "#/$defs/ToolchainCommandKind"
+        },
+        "executable_hint": {
+          "type": "string"
+        },
+        "source_ref": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_id",
+        "executable_hint",
+        "args",
+        "source_ref",
+        "declaration_kind",
+        "confidence"
+      ],
+      "type": "object"
+    },
+    "ToolchainCommandKind": {
+      "enum": [
+        "declared",
+        "suggested",
+        "observed"
+      ],
+      "type": "string"
+    },
+    "ToolchainRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "build_system": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/ToolchainCommandDeclaration"
+          },
+          "type": "array"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evidence_refs": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "language_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "$ref": "#/$defs/IndexLimitation"
+          },
+          "type": "array"
+        },
+        "lockfile_ref": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lockfile_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifest_ref": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "package_manager": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/DiscoveryProvenance"
+        },
+        "record_key": {
+          "type": "string"
+        },
+        "toolchain_constraint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "toolchain_file_ref": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "record_key",
+        "project_id",
+        "checkout_id",
+        "language_ids",
+        "provenance",
+        "commands",
+        "evidence_refs",
+        "limitations",
+        "content_fingerprint"
+      ],
+      "type": "object"
     }
   },
   "$id": "urn:star-control:schema:star.code-index-snapshot:v1",
@@ -524,6 +981,20 @@
       "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$",
       "type": "string"
     },
+    "guidance": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/GuidanceRecord"
+      },
+      "type": "array"
+    },
+    "hardcoding_candidates": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/HardcodingCandidate"
+      },
+      "type": "array"
+    },
     "index_config_fingerprint": {
       "$ref": "#/$defs/Sha256Hash"
     },
@@ -560,6 +1031,10 @@
     "scan_config_fingerprint": {
       "$ref": "#/$defs/Sha256Hash"
     },
+    "scan_mode": {
+      "$ref": "#/$defs/IndexScanMode",
+      "default": "incremental"
+    },
     "scan_run_id": {
       "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
       "type": "string"
@@ -571,6 +1046,13 @@
     "schema_version": {
       "const": 1,
       "type": "integer"
+    },
+    "toolchains": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ToolchainRecord"
+      },
+      "type": "array"
     },
     "workspace_snapshot_id": {
       "pattern": "^wsp_[a-z2-7]{52}$",

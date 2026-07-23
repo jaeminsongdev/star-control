@@ -1,0 +1,15 @@
+{
+  "active": false,
+  "baseline_id": "bas_00000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "entries": [],
+  "project_id": "prj_00000000000000000000000000",
+  "reason": "fixture",
+  "reviewed": false,
+  "revision": 0,
+  "rule_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.baseline",
+  "schema_version": 2,
+  "set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

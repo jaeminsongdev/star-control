@@ -1,0 +1,63 @@
+{
+  "actual_subject_binding_ref": "fixture",
+  "base_commit_oid": "fixture",
+  "base_project_revision_ref": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "baseline_workspace_snapshot_ref": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "change_bundle_ref": "fixture",
+  "change_plan_refs": [
+    "cpl_00000000000000000000000000"
+  ],
+  "checkout_id": "cko_00000000000000000000000000",
+  "compensation_refs": [
+    "fixture"
+  ],
+  "dirty_manifest_ref": "fixture",
+  "dirty_state": "clean",
+  "evidence_bundle_refs": [
+    "fixture"
+  ],
+  "gate_decision_refs": [
+    "gtd_00000000000000000000000000"
+  ],
+  "git_object_format": "fixture",
+  "merge_plan_ref": "fixture",
+  "merge_queue_ref": "fixture",
+  "migration_plan_refs": [
+    "fixture"
+  ],
+  "participant_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "participant_id": "fixture",
+  "patch_set_refs": [
+    "pat_00000000000000000000000000"
+  ],
+  "pending_action": "fixture",
+  "preexisting_change_set_ref": "fixture",
+  "previous_revision_ref": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "project_merge_result_ref": "fixture",
+  "recovery_plan_ref": "rcp_00000000000000000000000000",
+  "remote_operation_refs": [
+    "fixture"
+  ],
+  "remote_snapshot_refs": [
+    "fixture"
+  ],
+  "repository_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "required": false,
+  "revision": 0,
+  "roles": [
+    "provider"
+  ],
+  "schema_id": "star.change-bundle-participant",
+  "schema_version": 2,
+  "state": "preparing",
+  "step_ids": [
+    "fixture"
+  ],
+  "validation_plan_refs": [
+    "fixture"
+  ],
+  "worktree_record_refs": [
+    "fixture"
+  ]
+}

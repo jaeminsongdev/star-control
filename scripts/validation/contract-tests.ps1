@@ -84,6 +84,26 @@ if ($targetExample.Count -eq 1) {
     Assert-ValidationContract -Condition (-not @($targetCargo | Where-Object { "-p" -notin $_.Arguments }).Count) -Message "TARGET Cargo must select affected packages"
 }
 
+$cleanTargetContext = [pscustomobject]@{
+    Root = $repositoryRoot
+    Profile = "target"
+    RequestedProfile = "target"
+    RequiredProfile = "target"
+    Unit = $null
+    BaseRef = $null
+    ChangedPaths = @()
+    ValidationFiles = @()
+    PathsFile = $schemaPath
+    WholeProject = $true
+    NoImpact = $false
+    AffectedUnits = @()
+}
+$cleanTargetSpecs = @(& $config.BuildChecks $cleanTargetContext)
+$cleanTargetCargo = @($cleanTargetSpecs | Where-Object { $_.Executable -eq "cargo" })
+Assert-ValidationContract -Condition ($cleanTargetCargo.Count -eq 4) -Message "clean TARGET must execute the workspace Cargo gate"
+Assert-ValidationContract -Condition (-not @($cleanTargetCargo | Where-Object { $_.Unit -ne "workspace" }).Count) -Message "clean TARGET Cargo unit must be workspace"
+Assert-ValidationContract -Condition (-not @($cleanTargetCargo | Where-Object { "-p" -in $_.Arguments }).Count) -Message "clean TARGET must not emit an empty package selector"
+
 Assert-ValidationContract -Condition ((Resolve-ValidationProfile -RequestedProfile "target" -RequiredProfile "quick") -eq "quick") -Message "target must adapt down to quick"
 Assert-ValidationContract -Condition ((Resolve-ValidationProfile -RequestedProfile "quick" -RequiredProfile "target") -eq "target") -Message "quick must promote to target"
 Assert-ValidationContract -Condition ((Resolve-ValidationProfile -RequestedProfile "target" -RequiredProfile "full") -eq "full") -Message "target must promote to full"

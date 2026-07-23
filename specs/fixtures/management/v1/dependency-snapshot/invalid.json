@@ -1,0 +1,15 @@
+{
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "dependencies": [],
+  "manifest_path": "src/lib.rs",
+  "manifest_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "package_manager_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "resolver_mode": "fixture",
+  "schema_id": "star.dependency-snapshot",
+  "schema_version": 1,
+  "snapshot_id": "fixture",
+  "subject_revision": "fixture",
+  "unexpected": true
+}

@@ -1,0 +1,44 @@
+{
+  "completeness": "complete",
+  "declaration_ref": {
+    "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "item_version": "fixture",
+    "managed_declaration_id": "fixture"
+  },
+  "evidence_refs": [
+    {
+      "artifact_id": "art_00000000000000000000000000",
+      "created_at": "2026-01-01T00:00:00Z",
+      "kind": "log",
+      "media_type": "fixture",
+      "producer": {
+        "build_id": "fixture",
+        "component": "fixture",
+        "platform": "fixture",
+        "product_version": "fixture"
+      },
+      "project_id": "prj_00000000000000000000000000",
+      "redaction_status": "not_needed",
+      "relative_path": "src/lib.rs",
+      "retention_class": "temporary",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 0,
+      "source_artifact_ref": null
+    }
+  ],
+  "expected_value": "fixture",
+  "observed_value": "fixture",
+  "record_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "registry_consistency_record_id": "rcr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "registry_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "remediation": "fixture",
+  "schema_id": "star.registry-consistency-record",
+  "schema_version": 1,
+  "status": "current",
+  "subject": "fixture"
+}

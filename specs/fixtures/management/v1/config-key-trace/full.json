@@ -1,0 +1,31 @@
+{
+  "declaration_ref": "fixture",
+  "effective_provenance": "fixture",
+  "key_ref": "fixture",
+  "lifecycle": "fixture",
+  "limitations": [
+    "fixture"
+  ],
+  "overrides": [
+    {
+      "precedence": 0,
+      "present": false,
+      "provenance": "fixture"
+    }
+  ],
+  "project_id": "prj_00000000000000000000000000",
+  "readers": [
+    {
+      "reader_ref": "fixture",
+      "source_path": "src/lib.rs",
+      "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "state": "pass"
+    }
+  ],
+  "schema_id": "star.config-key-trace",
+  "schema_version": 1,
+  "state": "pass",
+  "trace_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "trace_id": "fixture",
+  "value_redacted": false
+}

@@ -2,7 +2,7 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 3단계인 **공통 검증·품질 Gate**의 실행 의미와 구현 순서를 소유한다. P-0044는 ready ValidationPlan v2의 CheckGraph를 실행해 Diagnostic v2, GateDecision v2와 EvidenceBundle v2를 만드는 generic bounded 제품 Slice를 구현했다. P-0031의 tracked-path ValidationPlan·cache pure policy와 P-0035의 native validation precursor는 별도 v1 운영 경로로 유지한다. baseline/suppression ratchet, 전체 B01~B09 Rule family와 provider별 adapter는 후속 확장이며 첫 Slice의 pass로 완료 처리하지 않는다.
+이 문서는 Star-Control 3단계인 **공통 검증·품질 Gate**의 실행 의미와 구현 순서를 소유한다. P-0044는 ready ValidationPlan v2의 CheckGraph를 실행하는 첫 제품 Slice를 구현했고, P-0054는 typed real-process executor, Rule/Baseline/Suppression/Disposition·ReviewPack, exact Task/source/Profile binding, durable evidence, single-use permit와 `patch_pre_apply|patch_post_apply` Controller·CLI 경로까지 확장했다. P-0031의 tracked-path ValidationPlan·cache pure policy와 P-0035의 native validation precursor는 별도 v1 운영 경로로 유지한다. 등록 provider가 없는 Rule family는 결과를 합성하지 않으며 외부 scanner·debugger 실행을 내부 완료 근거로 쓰지 않는다.
 
 3단계는 제품 로드맵 [P5 검사·증거·이어하기](../roadmap/final-implementation.md#p5-검사증거이어하기)의 첫 공통 수직 Slice다. 이 문서에서는 이를 `M3`라고 부른다. 기존 P0의 Finding·ValidationResult·GateDecision 수직 Slice를 폐기하지 않고, M1 Project Catalog·Code Index와 M2 ChangeSet·ImpactAnalysis·ValidationPlan을 소비할 수 있도록 versioned target으로 확장한다.
 

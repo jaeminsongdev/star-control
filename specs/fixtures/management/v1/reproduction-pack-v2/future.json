@@ -1,0 +1,31 @@
+{
+  "attempts": [],
+  "completeness": "complete",
+  "dirty_state": "fixture",
+  "environment_compatibility_class": "fixture",
+  "environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "expected_result": "fixture",
+  "failure_record_ref": "fixture",
+  "family_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "invocation": {
+    "command_descriptor": "fixture",
+    "executable_identity": "fixture",
+    "logical_cwd": "fixture",
+    "structured_args": [],
+    "timeout_ms": 0
+  },
+  "observed_result": "fixture",
+  "occurrence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "pack_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "reproduction_pack_id": "fixture",
+  "result": "reproduced",
+  "schema_id": "star.reproduction-pack",
+  "schema_version": 3,
+  "subject_binding": {
+    "checkout_ref": "cko_00000000000000000000000000",
+    "project_id": "prj_00000000000000000000000000",
+    "project_revision_ref": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "validation_run_ref": "val_00000000000000000000000000",
+    "workspace_snapshot_ref": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}

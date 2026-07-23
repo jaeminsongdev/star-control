@@ -1,0 +1,18 @@
+{
+  "architectures": [],
+  "cache_state": "fixture",
+  "dependency_download": "fixture",
+  "package_install": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.clean-room-specification",
+  "schema_version": 1,
+  "source_revision": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "specification_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "specification_id": "fixture",
+  "system_mutation": "fixture",
+  "target_os": [],
+  "tasks": [],
+  "test_network_policy": "fixture",
+  "unexpected": true
+}

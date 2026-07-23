@@ -1,0 +1,85 @@
+{
+  "authoritative_gate_decision_ref": {
+    "gate_id": "gat_00000000000000000000000000",
+    "revision": 0,
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "completeness": "complete",
+  "created_at": "2026-01-01T00:00:00Z",
+  "evidence_bundle_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "missing_reasons": [
+    "fixture"
+  ],
+  "questions": [
+    {
+      "impact": "fixture",
+      "options": [
+        "fixture"
+      ],
+      "prompt": "fixture",
+      "question_id": "fixture"
+    }
+  ],
+  "rendered_artifact_refs": [
+    {
+      "artifact_id": "art_00000000000000000000000000",
+      "created_at": "2026-01-01T00:00:00Z",
+      "kind": "log",
+      "media_type": "fixture",
+      "producer": {
+        "build_id": "fixture",
+        "component": "fixture",
+        "platform": "fixture",
+        "product_version": "fixture"
+      },
+      "project_id": "prj_00000000000000000000000000",
+      "redaction_status": "not_needed",
+      "relative_path": "src/lib.rs",
+      "retention_class": "temporary",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 0,
+      "source_artifact_ref": null
+    }
+  ],
+  "required_action_refs": [
+    {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "review_pack_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "review_pack_id": "fixture",
+  "revision": 0,
+  "schema_id": "star.review-pack",
+  "schema_version": 1,
+  "section_order": [
+    "fixture"
+  ],
+  "sections": [
+    {
+      "items": [
+        {
+          "evidence_refs": [
+            {
+              "document_id": "fixture",
+              "revision": 0,
+              "schema_id": "fixture",
+              "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          ],
+          "item_kind": "fixture",
+          "status": "fixture",
+          "summary": "fixture"
+        }
+      ],
+      "key": "fixture"
+    }
+  ]
+}

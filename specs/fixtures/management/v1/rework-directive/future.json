@@ -1,0 +1,20 @@
+{
+  "blocking_diagnostic_refs": [],
+  "created_at": "2026-01-01T00:00:00Z",
+  "directive_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "expected_actual_differences": [],
+  "failed_or_missing_plan_item_ids": [],
+  "gate_decision_ref": {
+    "gate_id": "gat_00000000000000000000000000",
+    "revision": 0,
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "replan_required": false,
+  "required_rechecks": [],
+  "rerunnable_same_plan": false,
+  "revision": 0,
+  "rework_directive_id": "fixture",
+  "safe_remediations": [],
+  "schema_id": "star.rework-directive",
+  "schema_version": 2
+}

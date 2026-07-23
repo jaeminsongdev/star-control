@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "PerformanceMetricSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "budget_ratio": {
+          "format": "double",
+          "type": "number"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "metric_id": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric_id",
+        "unit",
+        "direction",
+        "budget_ratio",
+        "required"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.performance-workload-spec:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "build_mode": {
+      "type": "string"
+    },
+    "correctness_check_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "environment_class": {
+      "type": "string"
+    },
+    "input_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "measured_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "metrics": {
+      "items": {
+        "$ref": "#/$defs/PerformanceMetricSpec"
+      },
+      "type": "array"
+    },
+    "noise_budget_ratio": {
+      "format": "double",
+      "type": "number"
+    },
+    "outlier_policy": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.performance-workload-spec",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "specification_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "task_ref": {
+      "type": "string"
+    },
+    "warmup_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "workload_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "workload_id",
+    "project_id",
+    "task_ref",
+    "input_fingerprint",
+    "environment_class",
+    "build_mode",
+    "warmup_count",
+    "measured_count",
+    "outlier_policy",
+    "noise_budget_ratio",
+    "metrics",
+    "correctness_check_refs",
+    "specification_fingerprint"
+  ],
+  "title": "PerformanceWorkloadSpec",
+  "type": "object"
+}

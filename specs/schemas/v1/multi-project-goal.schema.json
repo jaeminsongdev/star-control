@@ -1,0 +1,578 @@
+{
+  "$defs": {
+    "BundleEdgeKind": {
+      "enum": [
+        "requires",
+        "provider_before_consumer",
+        "schema_before_codegen",
+        "reader_before_writer",
+        "consumer_before_provider_removal",
+        "validation_before_integration",
+        "local_before_remote"
+      ],
+      "type": "string"
+    },
+    "BundleStep": {
+      "additionalProperties": false,
+      "properties": {
+        "completion_condition": {
+          "type": "string"
+        },
+        "expected_effect": {
+          "type": "string"
+        },
+        "input_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "output_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required_gate_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stage_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "step_id": {
+          "type": "string"
+        },
+        "step_kind": {
+          "$ref": "#/$defs/BundleStepKind"
+        }
+      },
+      "required": [
+        "step_id",
+        "step_kind",
+        "input_refs",
+        "output_refs",
+        "expected_effect",
+        "required_gate_refs",
+        "completion_condition"
+      ],
+      "type": "object"
+    },
+    "BundleStepEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_kind": {
+          "$ref": "#/$defs/BundleEdgeKind"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from_step_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "to_step_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_step_id",
+        "to_step_id",
+        "edge_kind",
+        "reason",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "BundleStepGraph": {
+      "additionalProperties": false,
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/BundleStepEdge"
+          },
+          "type": "array"
+        },
+        "graph_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/BundleStep"
+          },
+          "type": "array"
+        },
+        "topological_order": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "steps",
+        "edges",
+        "topological_order",
+        "graph_fingerprint"
+      ],
+      "type": "object"
+    },
+    "BundleStepKind": {
+      "enum": [
+        "provider_compatibility_open",
+        "project_patch_apply",
+        "project_migration",
+        "project_validate",
+        "consumer_transition",
+        "project_local_integrate",
+        "provider_compatibility_close",
+        "remote_push",
+        "remote_pr",
+        "remote_merge",
+        "bundle_goal_validate"
+      ],
+      "type": "string"
+    },
+    "CompatibilityWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "close_step_ref": {
+          "type": "string"
+        },
+        "contract_ref": {
+          "type": "string"
+        },
+        "current_consumer_state_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "deadline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence_close_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "new_accepted_version": {
+          "type": "string"
+        },
+        "old_accepted_version": {
+          "type": "string"
+        },
+        "open_step_ref": {
+          "type": "string"
+        },
+        "opened_revision_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider_project_id": {
+          "type": "string"
+        },
+        "required_consumer_project_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rollback_trigger": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/CompatibilityWindowState"
+        },
+        "window_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "window_id",
+        "contract_ref",
+        "provider_project_id",
+        "required_consumer_project_ids",
+        "open_step_ref",
+        "close_step_ref",
+        "old_accepted_version",
+        "new_accepted_version",
+        "current_consumer_state_refs",
+        "rollback_trigger",
+        "state"
+      ],
+      "type": "object"
+    },
+    "CompatibilityWindowState": {
+      "enum": [
+        "planned",
+        "open",
+        "closing_ready",
+        "closed",
+        "expired_unresolved",
+        "blocked"
+      ],
+      "type": "string"
+    },
+    "CompletionLevel": {
+      "enum": [
+        "none",
+        "validated_participants",
+        "local_integrated",
+        "remote_merged",
+        "release_handoff_ready"
+      ],
+      "type": "string"
+    },
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "GoalParticipant": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/$defs/ParticipantRole"
+          },
+          "type": "array"
+        },
+        "source_of_truth_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "required",
+        "roles",
+        "source_of_truth_refs"
+      ],
+      "type": "object"
+    },
+    "ParticipantRole": {
+      "enum": [
+        "provider",
+        "consumer",
+        "data_owner",
+        "tooling",
+        "validation_only"
+      ],
+      "type": "string"
+    },
+    "ProjectRelation": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_versions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "certainty": {
+          "$ref": "#/$defs/RelationCertainty"
+        },
+        "consumer_project_id": {
+          "type": "string"
+        },
+        "contract_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freshness": {
+          "$ref": "#/$defs/CoverageState"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "minimum_provider_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider_project_id": {
+          "type": "string"
+        },
+        "relation_id": {
+          "type": "string"
+        },
+        "relation_kind": {
+          "$ref": "#/$defs/ProjectRelationKind"
+        }
+      },
+      "required": [
+        "relation_id",
+        "provider_project_id",
+        "consumer_project_id",
+        "relation_kind",
+        "contract_refs",
+        "accepted_versions",
+        "certainty",
+        "evidence_refs",
+        "freshness",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "ProjectRelationKind": {
+      "enum": [
+        "api",
+        "schema",
+        "format",
+        "config",
+        "error_code",
+        "artifact",
+        "dependency",
+        "data",
+        "tooling",
+        "runtime"
+      ],
+      "type": "string"
+    },
+    "RelationCertainty": {
+      "enum": [
+        "confirmed",
+        "possible",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "ResourceBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_limit_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cpu_weight_limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_active_worktrees": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_concurrent_writes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_parallel_projects": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_processes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memory_limit_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wall_time_limit_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "worktree_disk_limit_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_parallel_projects",
+        "max_active_worktrees",
+        "max_concurrent_writes",
+        "max_processes",
+        "cpu_weight_limit",
+        "memory_limit_bytes",
+        "worktree_disk_limit_bytes",
+        "artifact_limit_bytes",
+        "wall_time_limit_ms"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.multi-project-goal:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "compatibility_windows": {
+      "items": {
+        "$ref": "#/$defs/CompatibilityWindow"
+      },
+      "type": "array"
+    },
+    "completion_target": {
+      "$ref": "#/$defs/CompletionLevel"
+    },
+    "cross_project_invariants": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "goal_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "goal_spec_ref": {
+      "type": "string"
+    },
+    "multi_project_goal_id": {
+      "type": "string"
+    },
+    "participants": {
+      "items": {
+        "$ref": "#/$defs/GoalParticipant"
+      },
+      "type": "array"
+    },
+    "permission_floor_ref": {
+      "type": "string"
+    },
+    "previous_revision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_relations": {
+      "items": {
+        "$ref": "#/$defs/ProjectRelation"
+      },
+      "type": "array"
+    },
+    "questions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "resource_budget": {
+      "$ref": "#/$defs/ResourceBudget"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.multi-project-goal",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_revision_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "source_snapshot_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "step_graph": {
+      "$ref": "#/$defs/BundleStepGraph"
+    },
+    "task_spec_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "unknowns": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "multi_project_goal_id",
+    "revision",
+    "goal_spec_ref",
+    "task_spec_refs",
+    "scope_revision_refs",
+    "participants",
+    "project_relations",
+    "step_graph",
+    "compatibility_windows",
+    "cross_project_invariants",
+    "completion_target",
+    "resource_budget",
+    "permission_floor_ref",
+    "source_snapshot_refs",
+    "unknowns",
+    "questions",
+    "goal_fingerprint"
+  ],
+  "title": "MultiProjectGoal",
+  "type": "object"
+}

@@ -1,0 +1,180 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "DependencyRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "advisory_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "affected_project_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dependency_id": {
+          "type": "string"
+        },
+        "direct": {
+          "type": "boolean"
+        },
+        "ecosystem": {
+          "type": "string"
+        },
+        "integrity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "license_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "package_identity": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "requested_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resolved_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dependency_id",
+        "purpose",
+        "ecosystem",
+        "package_identity",
+        "source",
+        "direct"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.dependency-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "dependencies": {
+      "items": {
+        "$ref": "#/$defs/DependencyRecord"
+      },
+      "type": "array"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "lockfile_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lockfile_sha256": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "manifest_path": {
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "package_manager_id": {
+      "type": "string"
+    },
+    "package_manager_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "resolver_mode": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.dependency-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "subject_revision": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "snapshot_id",
+    "project_id",
+    "subject_revision",
+    "package_manager_id",
+    "resolver_mode",
+    "manifest_path",
+    "manifest_sha256",
+    "dependencies",
+    "completeness",
+    "content_fingerprint"
+  ],
+  "title": "DependencySnapshot",
+  "type": "object"
+}

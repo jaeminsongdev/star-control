@@ -1,0 +1,159 @@
+{
+  "$defs": {
+    "RecoveryKind": {
+      "enum": [
+        "rollback",
+        "roll_forward",
+        "restore",
+        "rebuild"
+      ],
+      "type": "string"
+    },
+    "RecoveryPlanState": {
+      "enum": [
+        "planned",
+        "awaiting_permission",
+        "ready",
+        "blocked",
+        "applied",
+        "validated",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "RecoveryStepV2": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "destructive_effect": {
+          "type": "boolean"
+        },
+        "evidence_slots": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expected_checkpoint": {
+          "type": "string"
+        },
+        "fallback_step_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "order": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "permission_required": {
+          "type": "boolean"
+        },
+        "prerequisite_step_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "step_id": {
+          "type": "string"
+        },
+        "stop_condition": {
+          "type": "string"
+        },
+        "validation_check_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "step_id",
+        "order",
+        "action",
+        "destructive_effect",
+        "permission_required",
+        "expected_checkpoint",
+        "validation_check_ref",
+        "stop_condition"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.recovery-plan:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blockers": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "exact_subject_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "failure_record_ref": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "recovery_kind": {
+      "$ref": "#/$defs/RecoveryKind"
+    },
+    "recovery_plan_id": {
+      "pattern": "^rcp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.recovery-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/RecoveryPlanState"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/RecoveryStepV2"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "recovery_plan_id",
+    "project_id",
+    "failure_record_ref",
+    "recovery_kind",
+    "exact_subject_fingerprint",
+    "steps",
+    "owner",
+    "state",
+    "plan_fingerprint"
+  ],
+  "title": "RecoveryPlanV2",
+  "type": "object"
+}

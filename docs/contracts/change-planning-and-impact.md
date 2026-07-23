@@ -55,6 +55,16 @@
 - unresolved required Check, stale/partial collection, graph limit과 unbindable scope는 `ready`로 승격하지 않는다. package 범위를 증명하지 못하면 workspace 또는 Project full로 승격한다.
 - M2는 Check를 실행하지 않는다. M3가 sealed `CheckGraphV2`와 typed invocation을 그대로 소비한다.
 
+### P-0054 실제 제품 확장
+
+- `planning create|get|show|status|history`, `planning scope revise`, `planning impact inspect`, `planning affected-checks show`, `planning override|waiver`, `planning invalidate|replan`은 모두 authenticated Controller IPC를 거친다. write command는 1~128자 idempotency key와 bounded reason을 요구한다.
+- 최초 bundle과 후속 revision은 `planning_bundle_revisions(task_spec_id, bundle_revision)`에 append-only로 저장하고 `planning_bundles`는 latest projection만 소유한다. 과거 idempotency key는 latest 갱신 뒤에도 exact input/result를 재생하며 새 key는 정확히 다음 bundle revision만 쓸 수 있다.
+- scope revise는 같은 TaskSpec·ScopeRevision·ImpactAnalysis·ValidationPlan document identity를 유지하면서 각 document revision, `previous_scope_revision_ref`, reason code와 changed fields를 갱신한다. invalidate는 ImpactAnalysis와 ValidationPlan만 다음 revision의 `invalidated`로 봉인하고 M3 실행을 차단한다.
+- M1 `ToolchainRecord`의 declared/suggested command는 project-scoped `CheckDescriptor`와 immutable `descriptor_ref`로 변환된다. executable은 실행하지 않고 PATH에서 읽기 전용으로 availability를 확인하며, 찾지 못한 descriptor와 찾았지만 unavailable인 tool을 다른 outcome으로 남긴다.
+- candidate outcome은 `selected_required`, `selected_optional`, `omitted_not_applicable`, `unresolved_not_found`, `blocked_unavailable`, `user_waived`를 구분한다. waiver는 reason·remaining observation과 independent human review 요구를 보존한다.
+- project evidence store의 complete authoritative pass를 실제 조회하고, 이전 plan의 exact source snapshot·descriptor/tool/invocation·affected scope·config·gate policy가 같을 때만 `reusable`로 판정한다. 어느 항목이 달라졌는지는 `not_reusable_*` comparison으로 남긴다.
+- partial collection, unresolved seed, graph limit, stale/current pin 변경과 unresolved required Check는 `ready`로 승격하지 않는다. M3는 latest ready plan의 exact CheckGraph만 소비한다.
+
 ### P-0031 tracked-path precursor 경계
 
 현재 구현은 `.star-control/project.toml`이 있는 identity-matched active canonical Git root 하나에서만 동작한다. `revision`, staged diff, unstaged diff, untracked content, toolchain, lockfile, project manifest, validation script, config, command, policy/evidence Schema version을 각각 해시해 plan과 check별 cache key를 봉인한다. fingerprint 입력이 없거나 bounded read와 tool identity 확인을 완료하지 못하면 cache reuse를 끄고 project `FULL`·`human_review`로 승격한다. M2 planner 자체는 directory 재귀 탐색, 관리 DB write, 명령 실행 또는 authoritative EvidenceBundle write를 하지 않는다. 별도 bounded execution layer만 같은 binding을 재관찰한 complete·stable pass를 프로젝트의 ignored derived cache에 보존한다.

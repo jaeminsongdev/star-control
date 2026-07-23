@@ -109,7 +109,7 @@ impl ApprovalStore {
     }
 
     pub fn load(path: PathBuf) -> Result<Self, ApprovalStoreError> {
-        let file = match fs::read(&path) {
+        let file: ApprovalFile = match fs::read(&path) {
             Ok(bytes) => {
                 let text = std::str::from_utf8(&bytes).map_err(|_| ApprovalStoreError::Corrupt)?;
                 let value =
@@ -124,6 +124,31 @@ impl ApprovalStore {
         };
         if file.format_version != FORMAT_VERSION {
             return Err(ApprovalStoreError::Corrupt);
+        }
+        for (key, record) in &file.records {
+            let scope = ApprovalScope {
+                operation_id: record.operation_id.clone(),
+                tool_id: record.tool_id.clone(),
+                descriptor_hash: record.descriptor_hash.clone(),
+                arguments_hash: record.arguments_hash.clone(),
+                permission_actions: record.permission_actions.clone(),
+                paid_limit: record.paid_limit.clone(),
+                target_refs: record.target_refs.clone(),
+                expected_revision: record.expected_revision,
+                arguments: record.arguments.clone(),
+                actor: record.actor.clone(),
+                runtime_scope: record.runtime_scope.clone(),
+            };
+            let mut normalized_permissions = record.permission_actions.clone();
+            normalized_permissions.sort();
+            normalized_permissions.dedup();
+            if key != record.approval_id.as_str()
+                || normalized_permissions != record.permission_actions
+                || approval_scope_hash(&record.approval_id, &scope)? != record.scope_hash
+                || record.decision.is_some() != record.resolved_at.is_some()
+            {
+                return Err(ApprovalStoreError::Corrupt);
+            }
         }
         Ok(Self { path, file })
     }
@@ -161,6 +186,33 @@ impl ApprovalStore {
             .insert(approval_id.to_string(), record.clone());
         self.persist()?;
         Ok(record)
+    }
+
+    /// Returns the durable approval record without changing its decision.
+    ///
+    /// Remote coordination uses this read path immediately before a Git
+    /// effect so an earlier approval response cannot be substituted for the
+    /// exact, currently persisted scope.
+    pub fn get(&self, approval_id: &ApprovalId) -> Option<ApprovalRecord> {
+        self.file.records.get(approval_id.as_str()).cloned()
+    }
+
+    pub fn find_unresolved_exact(
+        &self,
+        tool_id: &str,
+        arguments_hash: &Sha256Hash,
+        expected_revision: Option<u64>,
+    ) -> Option<ApprovalRecord> {
+        self.file
+            .records
+            .values()
+            .find(|record| {
+                record.tool_id == tool_id
+                    && &record.arguments_hash == arguments_hash
+                    && record.expected_revision == expected_revision
+                    && record.decision.is_none()
+            })
+            .cloned()
     }
 
     pub fn resolve(

@@ -1,0 +1,12 @@
+{
+  "after_subject_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "after_validation_ref": "fixture",
+  "before_failure_ref": "fixture",
+  "family_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "record_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "regression_record_id": "fixture",
+  "schema_id": "star.regression-record",
+  "schema_version": 1,
+  "state": "fixed",
+  "verification_state": "verified"
+}

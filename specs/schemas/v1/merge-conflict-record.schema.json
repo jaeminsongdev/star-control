@@ -1,0 +1,210 @@
+{
+  "$defs": {
+    "ConflictResolutionClass": {
+      "enum": [
+        "mechanical_safe",
+        "requires_replan",
+        "human_review",
+        "blocked"
+      ],
+      "type": "string"
+    },
+    "MergeConflictState": {
+      "enum": [
+        "open",
+        "proposed",
+        "resolved_pending_validation",
+        "resolved",
+        "blocked"
+      ],
+      "type": "string"
+    },
+    "OverlapAxis": {
+      "enum": [
+        "file",
+        "rename",
+        "range",
+        "symbol",
+        "contract",
+        "generated",
+        "dependency",
+        "repository_policy"
+      ],
+      "type": "string"
+    },
+    "OverlapDisposition": {
+      "enum": [
+        "disjoint",
+        "ordered_overlap",
+        "conflict_possible",
+        "conflict_confirmed",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "OverlapItem": {
+      "additionalProperties": false,
+      "properties": {
+        "axis": {
+          "$ref": "#/$defs/OverlapAxis"
+        },
+        "disposition": {
+          "$ref": "#/$defs/OverlapDisposition"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "left_participant_ref": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "right_participant_ref": {
+          "type": "string"
+        },
+        "subject_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "left_participant_ref",
+        "right_participant_ref",
+        "axis",
+        "subject_ref",
+        "disposition",
+        "reason",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.merge-conflict-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "base_commit_oid": {
+      "type": "string"
+    },
+    "conflict_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "conflict_id": {
+      "type": "string"
+    },
+    "conflict_items": {
+      "items": {
+        "$ref": "#/$defs/OverlapItem"
+      },
+      "type": "array"
+    },
+    "contract_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "left_intent_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "left_revision": {
+      "type": "string"
+    },
+    "merge_plan_ref": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "queue_entry_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "raw_conflict_artifact_ref": {
+      "type": "string"
+    },
+    "resolution_class": {
+      "$ref": "#/$defs/ConflictResolutionClass"
+    },
+    "resolution_decision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resolution_patch_set_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revalidation_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "right_intent_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "right_revision": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.merge-conflict-record",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/MergeConflictState"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "conflict_id",
+    "revision",
+    "project_id",
+    "merge_plan_ref",
+    "queue_entry_refs",
+    "base_commit_oid",
+    "left_revision",
+    "right_revision",
+    "conflict_items",
+    "left_intent_refs",
+    "right_intent_refs",
+    "contract_refs",
+    "raw_conflict_artifact_ref",
+    "resolution_class",
+    "revalidation_refs",
+    "state",
+    "conflict_fingerprint"
+  ],
+  "title": "MergeConflictRecord",
+  "type": "object"
+}

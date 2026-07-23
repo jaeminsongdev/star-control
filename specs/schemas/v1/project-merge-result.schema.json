@@ -1,0 +1,157 @@
+{
+  "$defs": {
+    "MergeStrategyV2": {
+      "enum": [
+        "fast_forward_only",
+        "merge_commit",
+        "squash",
+        "apply_patch"
+      ],
+      "type": "string"
+    },
+    "ProjectMergeResultState": {
+      "enum": [
+        "validated_worktree",
+        "integrated_uncommitted",
+        "local_commit",
+        "local_branch_updated",
+        "conflicted",
+        "failed",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.project-merge-result:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actual_change_set_ref": {
+      "type": "string"
+    },
+    "actual_strategy": {
+      "$ref": "#/$defs/MergeStrategyV2"
+    },
+    "adapter_receipt_ref": {
+      "type": "string"
+    },
+    "branch_update_approval_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "commit_parent_oids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "evidence_bundle_ref": {
+      "type": "string"
+    },
+    "gate_decision_ref": {
+      "type": "string"
+    },
+    "integration_after_commit_oid": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "integration_before_commit_oid": {
+      "type": "string"
+    },
+    "local_branch_updated": {
+      "type": "boolean"
+    },
+    "merge_plan_ref": {
+      "type": "string"
+    },
+    "preexisting_change_preservation_ref": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "project_merge_result_id": {
+      "type": "string"
+    },
+    "queue_entry_ref": {
+      "type": "string"
+    },
+    "repository_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "result": {
+      "$ref": "#/$defs/ProjectMergeResultState"
+    },
+    "result_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rollback_capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.project-merge-result",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_deviation_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "validation_plan_ref": {
+      "type": "string"
+    },
+    "working_tree_snapshot_ref": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "project_merge_result_id",
+    "revision",
+    "project_id",
+    "repository_fingerprint",
+    "merge_plan_ref",
+    "queue_entry_ref",
+    "integration_before_commit_oid",
+    "working_tree_snapshot_ref",
+    "actual_strategy",
+    "commit_parent_oids",
+    "adapter_receipt_ref",
+    "preexisting_change_preservation_ref",
+    "actual_change_set_ref",
+    "scope_deviation_refs",
+    "validation_plan_ref",
+    "gate_decision_ref",
+    "evidence_bundle_ref",
+    "local_branch_updated",
+    "rollback_capabilities",
+    "result",
+    "result_fingerprint"
+  ],
+  "title": "ProjectMergeResult",
+  "type": "object"
+}

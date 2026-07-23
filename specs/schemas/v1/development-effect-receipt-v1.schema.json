@@ -1,0 +1,164 @@
+{
+  "$defs": {
+    "DevelopmentEffectKind": {
+      "enum": [
+        "security_refresh",
+        "debugger_capture",
+        "license_scan",
+        "dependency_prepare",
+        "dependency_apply",
+        "updater_apply",
+        "migration_execute",
+        "performance_run",
+        "language_cutover",
+        "remote_recovery"
+      ],
+      "type": "string"
+    },
+    "DevelopmentEffectState": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "partial",
+        "outcome_unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.development-effect-receipt:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "approval_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "arguments_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "descriptor_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "effect_kind": {
+      "$ref": "#/$defs/DevelopmentEffectKind"
+    },
+    "exact_subject_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "exact_subject_ref": {
+      "type": "string"
+    },
+    "executable_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "gate_decision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "limitation_codes": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "observed_at": {
+      "type": "string"
+    },
+    "operation_id": {
+      "pattern": "^cop_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "output_artifact_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Sha256Hash"
+      },
+      "type": "array"
+    },
+    "permission_decision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "receipt_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "receipt_id": {
+      "type": "string"
+    },
+    "result_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.development-effect-receipt",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_effect_started": {
+      "type": "boolean"
+    },
+    "started_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "state": {
+      "$ref": "#/$defs/DevelopmentEffectState"
+    },
+    "tool_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "receipt_id",
+    "revision",
+    "project_id",
+    "effect_kind",
+    "exact_subject_ref",
+    "exact_subject_fingerprint",
+    "operation_id",
+    "tool_id",
+    "descriptor_hash",
+    "arguments_hash",
+    "executable_sha256",
+    "observed_at",
+    "state",
+    "source_effect_started",
+    "receipt_fingerprint"
+  ],
+  "title": "DevelopmentEffectReceiptV1",
+  "type": "object"
+}

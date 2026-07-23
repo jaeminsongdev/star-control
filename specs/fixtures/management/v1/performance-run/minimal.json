@@ -1,0 +1,18 @@
+{
+  "attempt": 0,
+  "build_mode": "fixture",
+  "cohort": "baseline",
+  "correctness_passed": false,
+  "environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "evidence_refs": [],
+  "measurements": [],
+  "run_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "run_id": "run_00000000000000000000000000",
+  "schema_id": "star.performance-run",
+  "schema_version": 1,
+  "subject_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "toolchain_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "warmup": false,
+  "workload_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "workload_ref": "fixture"
+}

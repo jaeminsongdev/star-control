@@ -1,0 +1,30 @@
+{
+  "approval_ref": "fixture",
+  "arguments_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "descriptor_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "effect_kind": "security_refresh",
+  "exact_subject_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "exact_subject_ref": "fixture",
+  "executable_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "gate_decision_ref": "gtd_00000000000000000000000000",
+  "limitation_codes": [
+    "fixture"
+  ],
+  "observed_at": "2026-01-01T00:00:00Z",
+  "operation_id": "cop_00000000000000000000000000",
+  "output_artifact_refs": [
+    "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  ],
+  "permission_decision_ref": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "receipt_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "receipt_id": "fixture",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "revision": 0,
+  "schema_id": "star.development-effect-receipt",
+  "schema_version": 1,
+  "source_effect_started": false,
+  "started_at": "2026-01-01T00:00:00Z",
+  "state": "succeeded",
+  "tool_id": "fixture"
+}

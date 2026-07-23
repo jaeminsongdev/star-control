@@ -1,0 +1,17 @@
+{
+  "completeness": "complete",
+  "record_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "registry_consistency_record_id": "rcr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "registry_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "remediation": "fixture",
+  "schema_id": "star.registry-consistency-record",
+  "schema_version": 1,
+  "status": "current",
+  "subject": "fixture",
+  "unexpected": true
+}

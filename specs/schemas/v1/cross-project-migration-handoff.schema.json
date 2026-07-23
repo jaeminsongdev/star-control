@@ -1,0 +1,92 @@
+{
+  "$defs": {
+    "MigrationParticipant": {
+      "additionalProperties": false,
+      "properties": {
+        "ordering_hint": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "plan_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "plan_ref": {
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "plan_ref",
+        "plan_fingerprint",
+        "state",
+        "ordering_hint"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.cross-project-migration-handoff:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blockers": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "dependency_edges": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "handoff_id": {
+      "type": "string"
+    },
+    "participants": {
+      "items": {
+        "$ref": "#/$defs/MigrationParticipant"
+      },
+      "type": "array"
+    },
+    "ready_for_change_bundle": {
+      "type": "boolean"
+    },
+    "schema_id": {
+      "const": "star.cross-project-migration-handoff",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "handoff_id",
+    "participants",
+    "dependency_edges",
+    "blockers",
+    "ready_for_change_bundle",
+    "content_fingerprint"
+  ],
+  "title": "CrossProjectMigrationHandoff",
+  "type": "object"
+}

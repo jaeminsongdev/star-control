@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "InvariantResult": {
+      "additionalProperties": false,
+      "properties": {
+        "after_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "before_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "invariant_ref": {
+          "type": "string"
+        },
+        "loss_observed": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "invariant_ref",
+        "before_fingerprint",
+        "after_fingerprint",
+        "state",
+        "loss_observed",
+        "evidence_refs"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.migration-validation-report:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempt_ref": {
+      "type": "string"
+    },
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "gate_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "invariant_results": {
+      "items": {
+        "$ref": "#/$defs/InvariantResult"
+      },
+      "type": "array"
+    },
+    "plan_ref": {
+      "type": "string"
+    },
+    "reference_validation_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "report_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "report_id": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.migration-validation-report",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "type": "string"
+    },
+    "target_version_observed": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "report_id",
+    "plan_ref",
+    "attempt_ref",
+    "invariant_results",
+    "reference_validation_refs",
+    "gate_refs",
+    "state",
+    "completeness",
+    "report_fingerprint"
+  ],
+  "title": "MigrationValidationReport",
+  "type": "object"
+}

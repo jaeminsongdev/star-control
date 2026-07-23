@@ -2,7 +2,7 @@
 
 ## 상태와 목적
 
-이 문서는 6단계 **API·계약·문서·설정·개발 환경 관리**의 정본이다. 현재 상태는 **P-0047 첫 bounded 제품 Slice 구현**이다. `CompatibilityReport`·`CleanRoomDoctorReport` 공개 계약과 API·Schema·config·docs deterministic comparator, install/download/system mutation을 수행하지 않는 doctor engine을 구현했다. provider별 full public-surface extractor와 실제 clean VM 실행은 후속 adapter 범위이며 unverified를 pass로 승격하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)에 고정한다.
+이 문서는 6단계 **API·계약·문서·설정·개발 환경 관리**의 정본이다. P-0047의 comparator·doctor engine 위에 P-0054가 contract baseline/diff·compatibility window, docs/config trace·drift, environment snapshot·clean-room report, append-only persistence와 Controller·CLI를 연결했다. doctor는 install/download/system/source mutation을 하지 않고 missing probe를 pass로 승격하지 않는다. provider별 full public-surface extractor, clean VM과 외부 package 설치는 등록 adapter·별도 승인 범위다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)와 [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)에 고정한다.
 
 6단계의 목적은 다음 질문에 결정적으로 답하는 것이다.
 

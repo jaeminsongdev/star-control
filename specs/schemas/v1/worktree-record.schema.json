@@ -1,0 +1,147 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "WorktreeRole": {
+      "enum": [
+        "participant_apply",
+        "participant_validation",
+        "project_integration",
+        "conflict_resolution"
+      ],
+      "type": "string"
+    },
+    "WorktreeState": {
+      "enum": [
+        "planned",
+        "creating",
+        "ready",
+        "dirty",
+        "validating",
+        "merge_ready",
+        "retained",
+        "discard_ready",
+        "discarded",
+        "orphaned",
+        "ownership_unknown"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.worktree-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "base_commit_oid": {
+      "type": "string"
+    },
+    "before_manifest_ref": {
+      "type": "string"
+    },
+    "branch_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "creation_receipt_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "current_manifest_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "evidence_hold": {
+      "type": "boolean"
+    },
+    "last_probe_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "owner_token_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "participant_id": {
+      "type": "string"
+    },
+    "previous_revision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "record_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "repository_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "retention": {
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "role": {
+      "$ref": "#/$defs/WorktreeRole"
+    },
+    "root_binding_id": {
+      "pattern": "^rtb_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.worktree-record",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/WorktreeState"
+    },
+    "step_id": {
+      "type": "string"
+    },
+    "worktree_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "worktree_id",
+    "revision",
+    "project_id",
+    "participant_id",
+    "step_id",
+    "repository_fingerprint",
+    "base_commit_oid",
+    "root_binding_id",
+    "role",
+    "before_manifest_ref",
+    "owner_token_fingerprint",
+    "state",
+    "retention",
+    "evidence_hold",
+    "record_fingerprint"
+  ],
+  "title": "WorktreeRecord",
+  "type": "object"
+}

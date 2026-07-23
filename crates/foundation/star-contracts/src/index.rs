@@ -72,6 +72,47 @@ string_enum!(SourceClass {
     Unknown
 });
 string_enum!(WorkspaceKind { Cargo, Generic });
+string_enum!(IndexScanMode { Full, Incremental });
+string_enum!(DiscoveryProvenance {
+    Declared,
+    Inferred,
+    Observed
+});
+string_enum!(ToolchainCommandKind {
+    Declared,
+    Suggested,
+    Observed
+});
+string_enum!(GuidanceKind {
+    ProjectManifest,
+    Agents,
+    ReadingOrder,
+    Readme,
+    Contribution,
+    Architecture,
+    Contract,
+    BuildManifest,
+    Heuristic
+});
+string_enum!(HardcodingCategory {
+    AbsolutePath,
+    Endpoint,
+    TimeoutRetryLimit,
+    RawCommand,
+    DuplicateError,
+    ConfigDuplicate
+});
+string_enum!(HardcodingAssessment {
+    Candidate,
+    Warning,
+    Review,
+    Allowed
+});
+string_enum!(HardcodingRedactionState {
+    NotNeeded,
+    ShapeOnly,
+    Discarded
+});
 string_enum!(ProjectCatalogEdgeKind {
     Nested,
     Submodule,
@@ -266,6 +307,87 @@ pub struct SourceEntry {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct ToolchainCommandDeclaration {
+    pub command_id: String,
+    pub executable_hint: String,
+    pub args: Vec<String>,
+    pub cwd_scope: Option<ProjectPathRef>,
+    pub source_ref: ProjectPathRef,
+    pub declaration_kind: ToolchainCommandKind,
+    pub confidence: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ToolchainRecord {
+    pub record_key: String,
+    pub project_id: ProjectId,
+    pub checkout_id: CheckoutId,
+    pub language_ids: Vec<String>,
+    pub build_system: Option<String>,
+    pub package_manager: Option<String>,
+    pub manifest_ref: Option<ProjectPathRef>,
+    pub lockfile_ref: Option<ProjectPathRef>,
+    pub lockfile_sha256: Option<Sha256Hash>,
+    pub toolchain_file_ref: Option<ProjectPathRef>,
+    pub toolchain_constraint: Option<String>,
+    pub provenance: DiscoveryProvenance,
+    pub commands: Vec<ToolchainCommandDeclaration>,
+    pub evidence_refs: Vec<ProjectPathRef>,
+    pub limitations: Vec<IndexLimitation>,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GuidanceRecord {
+    pub record_key: String,
+    pub project_id: ProjectId,
+    pub checkout_id: CheckoutId,
+    pub kind: GuidanceKind,
+    pub source_ref: ProjectPathRef,
+    pub source_sha256: Sha256Hash,
+    pub applicable_scope: Option<ProjectPathRef>,
+    pub priority: u32,
+    pub priority_reason: String,
+    pub supersedes: Vec<String>,
+    pub heading_anchors: Vec<String>,
+    pub redacted_summary: Option<String>,
+    pub freshness: IndexFreshnessState,
+    pub conflict: bool,
+    pub limitations: Vec<IndexLimitation>,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HardcodingCandidate {
+    pub candidate_key: String,
+    pub rule_id: String,
+    pub rule_version: String,
+    pub parameter_fingerprint: Sha256Hash,
+    pub category: HardcodingCategory,
+    pub canonical_source_id: CanonicalSourceId,
+    pub source_ref: ProjectPathRef,
+    pub source_content_sha256: Sha256Hash,
+    pub source_range: SourceRange,
+    pub source_class: SourceClass,
+    pub source_facets: Vec<String>,
+    pub used_tier: IndexTier,
+    pub matched_predicate: String,
+    pub related_entity_key: Option<String>,
+    pub false_positive_guards: Vec<String>,
+    pub confidence: String,
+    pub redaction_state: HardcodingRedactionState,
+    pub literal_shape: String,
+    pub length_bucket: String,
+    pub assessment: HardcodingAssessment,
+    pub limitations: Vec<IndexLimitation>,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct IndexEntity {
     pub entity_key: String,
     pub kind: IndexEntityKind,
@@ -311,6 +433,8 @@ pub struct CodeIndexSnapshot {
     pub analysis_input_fingerprint: Sha256Hash,
     pub scan_config_fingerprint: Sha256Hash,
     pub index_config_fingerprint: Sha256Hash,
+    #[serde(default)]
+    pub scan_mode: IndexScanMode,
     pub required_tier: IndexTier,
     pub max_tier: IndexTier,
     pub adapter_set_fingerprint: Sha256Hash,
@@ -319,7 +443,20 @@ pub struct CodeIndexSnapshot {
     pub coverage: Vec<IndexCoverage>,
     pub counts: CodeIndexCounts,
     pub freshness: Vec<FreshnessProof>,
+    #[serde(default)]
+    pub toolchains: Vec<ToolchainRecord>,
+    #[serde(default)]
+    pub guidance: Vec<GuidanceRecord>,
+    #[serde(default)]
+    pub hardcoding_candidates: Vec<HardcodingCandidate>,
     pub limitations: Vec<IndexLimitation>,
     pub artifact_refs: Vec<ArtifactRef>,
     pub content_fingerprint: Sha256Hash,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for IndexScanMode {
+    fn default() -> Self {
+        Self::Incremental
+    }
 }

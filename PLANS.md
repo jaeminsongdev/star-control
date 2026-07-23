@@ -2,7 +2,7 @@
 
 ## 목적
 
-이 문서는 Star-Control `v0.1.0` 완성·출시 작업의 현재 판단에 필요한 bounded snapshot만 소유한다. 상세 계약은 [문서 읽는 순서](docs/README.md), 단계 정의는 [최종 구현 로드맵](docs/roadmap/final-implementation.md), 실측·감사는 `docs/testing/`, `benchmarks/`, Git history가 소유한다.
+이 문서는 Star-Control `v0.1.0` 완성·출시 작업의 현재 판단에 필요한 bounded snapshot만 소유한다. 상세 계약은 [문서 읽는 순서](docs/README.md), 단계 정의는 [최종 구현 로드맵](docs/roadmap/final-implementation.md), 실측·감사는 `docs/testing/`, `benchmarks/`, Git history가 소유한다. 과거 P-ID의 `DONE`은 해당 bounded Slice의 완료만 뜻하며 1~11단계 Master Checklist 전체 완료를 뜻하지 않는다.
 
 ## 확정 결정
 
@@ -25,32 +25,30 @@
 
 ## 현재 상태
 
-| 범위 | 상태 | local seal / 근거 |
+| 범위 | 상태 | bounded seal / 현재 판정 |
 |---|---|---|
-| P-0039 | DONE | `4f01948`, updater/lifecycle STRICT + FULL |
-| P-0040 | DONE | `416ed3e`, x64 Stable·ARM64 Preview 정책과 current inventory |
-| P-0041 | DONE | Project v1→v2 migration, register, backup/resume/rollback/conflict |
-| P-0042 | DONE | M1 Catalog·Rust index·scan·cache·10,000-file corpus |
-| P-0043~P-0045 | DONE | planning, CheckGraph/evidence, immutable PatchSet·TOCTOU·rollback |
-| P-0046~P-0050 | DONE | M5~M9 registry/doctor/radar/migration/change-bundle/merge/handoff |
-| P-0051 | DONE | M10 build-once release/evaluation engine과 fake provider fault corpus |
-| P-0052 | DONE | M11 Rust fixed pipeline, persisted pre/post Gate, exact apply/recovery |
-| P-0053 local | DONE | clean source seal, source 17/17, candidate Inspector 17/17, x64 isolated lifecycle, ARM64 simulation, pre-sign supply chain과 signing-negative audit |
+| P-0039~P-0052 | historical `DONE` | 각 P-ID에서 명시한 bounded Slice만 봉인. Master Checklist의 계약·실어댑터·CLI·E2E 완성 판정으로 승격하지 않음 |
+| P-0053 local | historical `DONE` | source 17/17 MCP readiness, x64 isolated lifecycle, ARM64 simulation, pre-sign supply chain과 signing-negative audit |
 | P-0053 public | `blocked_external` | trusted signing, signed clean install, current Codex 17/17 invoke, final provenance와 remote reconcile 필요 |
+| P-0054 | `DONE / internal product seal` | 최신 `main` 기준 Recovery Slice, M1~M11, 최종 16 Profile의 내부 contract→engine→repository→Controller→CLI를 구현하고 requested TARGET→effective FULL 10/10을 통과. 외부·물리 Gate는 별도 상태 유지 |
+| P-0055 | `IN_PROGRESS / non-signing external seal` | 사용자가 비서명 외부 effect 전체를 승인했다. M7~M10 adapter, clean x64 lifecycle, current Codex 17/17, GitHub draft/readback, ARM64 cross-build·simulation, commit/tag/push와 최종 증거를 닫는다. Authenticode와 서명 필수 공개 Stable만 범위 밖이다. |
 
-P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 branch `codex/p0041-p0053-completion`의 `b29c178..ac3ca70` commit chain으로 봉인했다. `ac3ca70`은 Windows CI에서 드러난 Rust semantic URI, project allowlist fixture와 long-poll scheduler 경계를 포함한 최종 candidate source revision이다. 큰 변경을 빌드 불가능한 P-ID snapshot으로 만들지 않도록 crate·Schema·fixture·문서 단위의 소규모 commit으로 나눴다.
+P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 `b29c178..ac3ca70` commit chain으로 보존한다. P-0054 기준선은 `main` `a93de7e68aff3ac02315d3a324aeaa497e1ede38`이다. 문서의 단계 설명이나 Rust type 존재만으로 완료를 판정하지 않고 Controller 경유 실제 경로, 실어댑터, stable JSON CLI, 저장·복구, negative corpus와 disposable E2E가 함께 닫혀야 완료다.
 
-## 구현 요약
+## P-0054 기능 감사 기준선
 
-- `Project` v2/`ProjectCheckout`, allowlisted idempotent register와 lossless offline migration을 구현했다.
-- persisted Catalog/CodeIndex, text/Rust syntax/optional semantic partition, incremental cache·recovery·large corpus를 구현했다.
-- Task planning, deterministic CheckGraph, diagnostics/Gate/evidence, durable Goal/Plan/Run과 required core 17/17 source readiness를 구현했다.
-- immutable PatchSet isolated preview, exact approval, TOCTOU apply와 reverse rollback을 구현했다.
-- M5~M9 registry·compatibility doctor·maintenance radar·migration/performance·ChangeBundle coordination을 구현했다.
-- M10 build-once candidate/evaluation ratchet와 timeout/digest/rollback/unknown-outcome fake providers를 구현했다.
-- M11 `rustfmt → allowlisted MachineApplicable Clippy → rustfmt`, sealed scope/config/toolchain/policy/coverage, persisted pre/post Gate, single-use `personal_auto`, atomic apply/recovery를 구현했다.
+- **복구 P0:** backend-neutral recovery 계약 14개, active-set startup, online backup manifest-last, recovery-only Controller·CLI, side-by-side restore/rebuild·원자 활성화, verified ArtifactRef reindex, local-state export/import와 disposable 16-scenario Corpus를 구현했다.
+- **M1~M4:** explicit multi-root·current index에서 revisioned planning, real process/rule/evidence Gate와 typed Recipe/PatchSetV2 apply·recovery까지 공통 lineage를 연결했다. M11 pre/post Gate도 같은 경로를 사용한다.
+- **M5~M8:** Managed Registry·compatibility와 failure/security/dependency/migration/performance/language의 contract·persistence·Controller/CLI에 registered Tool terminal Operation과 `DevelopmentEffectReceiptV1`을 연결했다. exact subject·tool·arguments·executable·permission·approval·Gate를 검증하며 partial/unknown을 성공으로 승격하지 않는다. canonical source mutation은 계속 M4 PatchSet을 사용한다.
+- **M9:** 실제 local Git worktree·merge·remote observation/push adapter와 exact durable approval를 연결했다. P-0055는 remote recovery provider Operation을 exact 영수증으로 봉인하고 plan/permission/Gate를 검증한 뒤에만 apply를 기록한다.
+- **M10:** Controller/CLI가 `star-release`의 build-once candidate, byte verify, M3 evidence, promote/lifecycle, EvaluationRun/Catalog와 exact `ReleaseAssetBindingV1`을 사용한다. GitHub publisher는 draft-first/no-clobber/readback/reconcile을 구현했고, signer가 없으면 unsigned Stable publish apply는 fail-closed다.
+- **M11:** owned isolated preview, pinned rustfmt/Clippy, candidate build/test, exact durable `personal_auto`, M2 Profile→M4 PatchSetV2→M3 pre/post Gate와 recovery를 연결했다.
+- **16 Profile:** `catalog/profiles`의 정확한 16개 release source, strict descriptor/loader/resolver, parent closure·strict floor merge·fingerprint, `TaskSpec`/`ValidationPlan`/Evidence binding과 `star profile list|show|resolve`를 구현했다.
+- **공통:** P-0054 기준 generated Schema manifest 186개에 P-0055 `DevelopmentEffectReceiptV1`·`ReleaseAssetBindingV1`을 더해 현재 188개와 해당 fixture를 생성·검사했다. P-0055 최종 FULL/RELEASE·외부 증거는 현재 Slice 완료 Gate에서 별도로 봉인한다.
 
-## 검증과 로컬 출시 증거
+감사 상세와 항목별 구현 증거는 [P-0054 실제 기능 완성 감사](docs/testing/p0054-functional-completion-audit-2026-07-23.md)에 유지한다. 미구현 항목은 실제 코드·테스트가 닫히기 전 `DONE`으로 바꾸지 않는다.
+
+## 과거 검증과 로컬 출시 증거
 
 - clean FULL: `target/validation/20260722T183736373Z-23820/report.json`, source `ac3ca70`, 10/10 complete PASS, report `sha256:059466b8c24911c70640192af8aed995933e0cde62840fc7e096fdc2050a4df4`.
 - clean release: `target/validation/20260722T183855005Z-11592/report.json`, source `ac3ca70`, 14/15 PASS, failed 0. 유일한 non-pass는 external signing/publication `unverified/not_run`이다.
@@ -63,22 +61,25 @@ P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 branch `codex/
 - official Inspector 0.22.0은 candidate stage의 fixed 12 tools, required core ready search 17/17과 describe 17/17을 통과했다.
 - x64·ARM64 SPDX SBOM, cargo-audit와 provenance는 pre-sign evidence로 생성했으며 signing 뒤 반드시 재생성한다.
 
-## 열린 Gate
+## P-0054 완료 Gate와 외부 잔여
 
-1. 승인된 Authenticode certificate·private key·timestamp provider를 공급한다. SDK `signtool.exe`는 확인됐지만 usable signing certificate는 CurrentUser·LocalMachine 모두 0개다.
-2. Runtime EXE 서명 → `seal-signed` → installer build·서명 → final digest/SBOM/provenance 순서로 새 candidate를 만든다.
-3. disposable clean x64 install·first run·update failure rollback·repair·uninstall/user-data 보존을 검증한다.
-4. signed candidate를 실제 Codex integration에 설치한 뒤 current Codex에서 required core 17/17 search·describe·invoke를 재감사한다.
-5. exact GitHub destination·manifest·digest가 일치할 때만 tag/draft/upload/publish하고 remote digest를 read-back한다.
+1. `TARGET` clean-workspace package normalization 회귀를 수정하고 계약 테스트를 고정했다. 수정 직후 영향 승격 FULL 10/10은 통과했다.
+2. 복구 P0를 계약 → port → state/evidence adapter → recovery application → Controller IPC → CLI → disposable Corpus 순서로 구현하고 정본 문서에 동기화했다.
+3. M1~M11과 16 Profile의 공용 contract·lineage·Controller/CLI·negative E2E 구현과 generated Schema/fixture 갱신을 완료했다.
+4. 정본 status와 P-0054 감사 문서를 실제 코드·focused 증거에 맞게 동기화했다.
+5. code review와 `git diff --check`, format, Schema check, requested `TARGET`→effective `FULL` 10/10을 통과했다. 최종 report는 `target/validation/20260723T113308437Z-12820/report.json`, duration 122,292 ms다.
+6. 실제 Authenticode signing, signed 설치, Codex runtime 변경, authenticated remote와 GitHub publish는 별도 승인·외부 Gate로 유지한다.
 
 ## 현재 Context Pack
 
 - repo: `D:\개발\관제\Star-Control`
-- branch: `codex/p0041-p0053-completion`
-- base: P-0040 `416ed3e`; implementation/candidate source chain `b29c178..ac3ca70`
-- 먼저 읽기: `README.md`, `docs/roadmap/final-implementation.md`, `docs/testing/p53-final-release-audit-2026-07-20.md`, `benchmarks/p53-release-audit-x64-arm64.json`
-- 다음 명령: trusted signing material이 공급되면 `seal-signed` 순서로 새 candidate 생성
-- public blocker: trusted Authenticode signing material과 signed clean-install/current-Codex-17/17/final-provenance/remote evidence
+- branch: `main`
+- base/head: `a93de7e68aff3ac02315d3a324aeaa497e1ede38`
+- 현재 Slice: P-0055 비서명 외부 Gate 전체 구현·운영 seal. P-0054 구현 변경을 보존하고 그 위에서 진행한다.
+- 먼저 읽기: `README.md`, `docs/README.md`, `docs/contracts/development-management.md`, `docs/contracts/events-and-state.md`, `docs/contracts/validation-and-evidence.md`, `docs/contracts/versioning-and-migrations.md`, `docs/architecture/state-and-artifacts.md`, `docs/architecture/repository-layout.md`, `docs/roadmap/final-implementation.md`, ADR-0006~0008
+- 승인됨: package/dependency 설치, network·외부 도구, disposable install/update/repair/uninstall, GitHub draft·push·tag·remote readback. 각 effect는 exact target을 재검증하고 증거를 남긴다.
+- 금지: Authenticode signing, unsigned Stable 공개 publish, `legacy/`·`target/` 정리, 실제 사용자 project/data 손상, installer·AI/browser/scheduler 재개방
+- ARM64 결정: native 장비 Gate를 재요구하지 않고 cross-build·PE 검증·simulation corpus로 `native_unverified` Preview를 봉인한다.
 
 ## Archive References
 

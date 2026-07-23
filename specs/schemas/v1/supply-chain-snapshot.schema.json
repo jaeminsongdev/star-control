@@ -1,0 +1,132 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ExternalFreshness": {
+      "enum": [
+        "current",
+        "stale",
+        "expired",
+        "unknown",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SupplyChainObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "observation_id": {
+          "type": "string"
+        },
+        "source_ref": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "state": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "observation_id",
+        "kind",
+        "subject",
+        "state",
+        "source_ref",
+        "source_sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.supply-chain-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "dependency_snapshot_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "dependency_snapshot_ref": {
+      "type": "string"
+    },
+    "external_data_snapshot_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "freshness": {
+      "$ref": "#/$defs/ExternalFreshness"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/SupplyChainObservation"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.supply-chain-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "subject_revision": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "snapshot_id",
+    "project_id",
+    "subject_revision",
+    "dependency_snapshot_ref",
+    "dependency_snapshot_fingerprint",
+    "observations",
+    "freshness",
+    "completeness",
+    "content_fingerprint"
+  ],
+  "title": "SupplyChainSnapshot",
+  "type": "object"
+}

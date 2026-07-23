@@ -1,0 +1,16 @@
+{
+  "activated_set": {
+    "entries": [],
+    "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "schema_id": "fixture",
+    "schema_version": 0
+  },
+  "applied_at": "2026-01-01T00:00:00Z",
+  "approved_plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "loss_report": [],
+  "rebuilt_projects": [],
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-rebuild-apply-result",
+  "schema_version": 2
+}

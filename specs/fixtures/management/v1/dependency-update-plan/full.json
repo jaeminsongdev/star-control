@@ -1,0 +1,52 @@
+{
+  "blockers": [
+    "fixture"
+  ],
+  "candidate": {
+    "affected_project_ids": [
+      "fixture"
+    ],
+    "affected_surfaces": [
+      "fixture"
+    ],
+    "candidate_id": "fixture",
+    "current_requested_version": "fixture",
+    "current_resolved_version": "fixture",
+    "dependency_id": "fixture",
+    "direct": false,
+    "package_manager_adapter_ref": "fixture",
+    "proposed_constraint": "fixture",
+    "proposed_resolution": "fixture",
+    "reason": "fixture",
+    "required_approval_refs": [
+      "fixture"
+    ],
+    "required_plan_refs": [
+      "fixture"
+    ],
+    "risk_markers": [
+      "fixture"
+    ],
+    "source_change": false,
+    "source_evidence_ref": "fixture",
+    "source_freshness": "current",
+    "update_kind": "patch",
+    "version_delta": "patch"
+  },
+  "dependency_snapshot_ref": "fixture",
+  "expected_lockfile_paths": [
+    "src/lib.rs"
+  ],
+  "expected_manifest_paths": [
+    "src/lib.rs"
+  ],
+  "patch_set_ref": "pat_00000000000000000000000000",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_id": "fixture",
+  "previous_lockfile_artifact_ref": "art_00000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "rollback_recipe_ref": "fixture",
+  "schema_id": "star.dependency-update-plan",
+  "schema_version": 1,
+  "status": "observed"
+}

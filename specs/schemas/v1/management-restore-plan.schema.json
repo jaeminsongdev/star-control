@@ -1,0 +1,216 @@
+{
+  "$defs": {
+    "ActiveSetManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ActiveStoreGeneration"
+          },
+          "type": "array"
+        },
+        "manifest_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "entries",
+        "manifest_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ActiveStoreGeneration": {
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "header_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "management_store_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "relative_locator": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/StoreScope"
+        },
+        "store_id": {
+          "pattern": "^mst_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "store_id",
+        "generation",
+        "management_store_version",
+        "relative_locator",
+        "header_fingerprint"
+      ],
+      "type": "object"
+    },
+    "RestoreStoreTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_relative_locator": {
+          "type": "string"
+        },
+        "management_store_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scope": {
+          "$ref": "#/$defs/StoreScope"
+        },
+        "source_byte_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "store_id": {
+          "pattern": "^mst_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "store_id",
+        "source_generation",
+        "candidate_generation",
+        "management_store_version",
+        "source_byte_sha256",
+        "candidate_relative_locator"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StoreScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "global",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-restore-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "backup_set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "backup_set_id": {
+      "pattern": "^bks_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "candidate_active_set": {
+      "$ref": "#/$defs/ActiveSetManifest"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "expected_active_set_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "recovery_plan_id": {
+      "pattern": "^rcp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.management-restore-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "stores": {
+      "items": {
+        "$ref": "#/$defs/RestoreStoreTarget"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "recovery_plan_id",
+    "backup_set_id",
+    "created_at",
+    "backup_set_fingerprint",
+    "stores",
+    "candidate_active_set",
+    "plan_fingerprint"
+  ],
+  "title": "RestorePlan",
+  "type": "object"
+}

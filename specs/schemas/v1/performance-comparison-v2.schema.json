@@ -1,0 +1,150 @@
+{
+  "$defs": {
+    "MetricComparison": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_median": {
+          "format": "double",
+          "type": "number"
+        },
+        "baseline_p95": {
+          "format": "double",
+          "type": "number"
+        },
+        "budget_ratio": {
+          "format": "double",
+          "type": "number"
+        },
+        "candidate_median": {
+          "format": "double",
+          "type": "number"
+        },
+        "candidate_p95": {
+          "format": "double",
+          "type": "number"
+        },
+        "metric_id": {
+          "type": "string"
+        },
+        "noise_ratio": {
+          "format": "double",
+          "type": "number"
+        },
+        "ratio": {
+          "format": "double",
+          "type": "number"
+        },
+        "state": {
+          "$ref": "#/$defs/PerformanceComparisonState"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric_id",
+        "unit",
+        "baseline_median",
+        "candidate_median",
+        "baseline_p95",
+        "candidate_p95",
+        "ratio",
+        "noise_ratio",
+        "budget_ratio",
+        "state"
+      ],
+      "type": "object"
+    },
+    "PerformanceComparisonState": {
+      "enum": [
+        "pass",
+        "regression",
+        "incomparable",
+        "noise_inconclusive",
+        "correctness_unverified",
+        "human_review"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.performance-comparison:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baseline_run_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "candidate_run_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "comparable": {
+      "type": "boolean"
+    },
+    "comparison_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "comparison_id": {
+      "type": "string"
+    },
+    "correctness_verified": {
+      "type": "boolean"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "metric_comparisons": {
+      "items": {
+        "$ref": "#/$defs/MetricComparison"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.performance-comparison",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/PerformanceComparisonState"
+    },
+    "workload_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "workload_ref": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "comparison_id",
+    "workload_ref",
+    "workload_fingerprint",
+    "baseline_run_refs",
+    "candidate_run_refs",
+    "metric_comparisons",
+    "correctness_verified",
+    "comparable",
+    "state",
+    "limitations",
+    "comparison_fingerprint"
+  ],
+  "title": "PerformanceComparisonV2",
+  "type": "object"
+}

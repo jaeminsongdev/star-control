@@ -1,0 +1,15 @@
+{
+  "active": false,
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "decided_at": "2026-01-01T00:00:00Z",
+  "decision": "needs_action",
+  "diagnostic_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "disposition_id": "dsp_00000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "reason": "fixture",
+  "reason_code": "fixture",
+  "revision": 0,
+  "schema_id": "star.disposition",
+  "schema_version": 2,
+  "subject_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

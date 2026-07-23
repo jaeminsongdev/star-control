@@ -1,5 +1,7 @@
 //! P0 domain invariants shared by every entry adapter.
 
+pub mod recovery;
+
 use std::collections::BTreeSet;
 
 use chrono::{Duration, Utc};
@@ -194,8 +196,14 @@ impl PersistenceRedactor {
         .any(|marker| lower.contains(marker));
         let bytes = value.as_bytes();
         let absolute_path = value.contains("\\\\")
-            || bytes.windows(3).any(|window| {
-                window[0].is_ascii_alphabetic()
+            || bytes.windows(3).enumerate().any(|(index, window)| {
+                let token_boundary = index == 0
+                    || !matches!(
+                        bytes[index - 1],
+                        b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'+' | b'-' | b'.'
+                    );
+                token_boundary
+                    && window[0].is_ascii_alphabetic()
                     && window[1] == b':'
                     && matches!(window[2], b'\\' | b'/')
             });
@@ -228,5 +236,6 @@ mod tests {
             );
         }
         assert!(redactor.validate("src/lib.rs").is_ok());
+        assert!(redactor.validate("https://example.invalid/api").is_ok());
     }
 }

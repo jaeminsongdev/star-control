@@ -4,7 +4,7 @@
 
 이 문서는 [구현 대상 기능](../features/README.md)의 A01~D03과 최종 16개 작업 Profile을 모두 구현했을 때 Star-Control 저장소가 가져야 할 최종 물리 구조와 책임 경계를 정한다.
 
-문서 폴더 migration과 첫 MCP 수직 Slice의 `star-contracts`, `star-ipc`, `star-controller`, `star-mcp`, `star-cli`·검증 도구는 구현됐다. P0에서는 `star-domain`, `star-ports`, `star-project`, `star-validation`, `star-execution`, `star-application`, `star-state`, `star-evidence`의 최소 Package와 private persistence adapter를 만들었다. P-0041~P-0053은 M1 Project Catalog·Code Index부터 M11 Rust 코드 스타일 자동 교정과 M10 release/evaluation까지 계획에 지정한 bounded 제품 Slice, generated 관리 Schema·fixture, fake/isolated adapter와 Corpus를 구현했다. 이는 아래 최종 물리 구조에 적힌 모든 확장 module·provider adapter가 존재하거나 public release가 완료됐다는 뜻은 아니다. 실제 구현·검증·외부 Gate 상태는 [최종 구현 로드맵](../roadmap/final-implementation.md), 단계별 증거와 `PLANS.md`를 따른다.
+문서 폴더 migration과 첫 MCP 수직 Slice의 `star-contracts`, `star-ipc`, `star-controller`, `star-mcp`, `star-cli`·검증 도구는 구현됐다. P0에서는 `star-domain`, `star-ports`, `star-project`, `star-validation`, `star-execution`, `star-application`, `star-state`, `star-evidence`의 최소 Package와 private persistence adapter를 만들었고, P-0054에서 management recovery 계약·active-set·backup/restore/rebuild·local-state export/import와 Controller/CLI 경로를 추가했다. P-0041~P-0053은 M1 Project Catalog·Code Index부터 M11 Rust 코드 스타일 자동 교정과 M10 release/evaluation까지 계획에 지정한 bounded 제품 Slice, generated 관리 Schema·fixture, fake/isolated adapter와 Corpus를 구현했다. 이는 아래 최종 물리 구조에 적힌 모든 확장 module·provider adapter가 존재하거나 public release가 완료됐다는 뜻은 아니다. 실제 구현·검증·외부 Gate 상태는 [최종 구현 로드맵](../roadmap/final-implementation.md), 단계별 증거와 `PLANS.md`를 따른다.
 
 P-0031은 `.star-control/project.toml`, `star-contracts::evidence::ValidationPlan` v1, `star-validation::planning` pure policy와 Controller `validation_planning` adapter를 먼저 제공한 역사적 Slice다. P-0043~P-0045가 이를 current TaskSpec·ImpactAnalysis·CheckGraph runner·authoritative Gate/evidence와 Patch 경로로 확장했다. 아래 tree의 미래 확장 항목은 current bounded Slice와 구분한다.
 
@@ -194,7 +194,7 @@ crates/foundation/
 │     ├─ merge.rs                   # project-local MergePlan v2·queue·conflict·ProjectMergeResult
 │     ├─ remote.rs                  # RemoteStateSnapshot v2·RemoteOperationRecord
 │     ├─ cost.rs                    # usage·time·rework metric
-│     ├─ recovery.rs                # M7 FailureRecord·ReproductionPack·RegressionRecord·RecoveryPlan
+│     ├─ recovery.rs                # P0 ActiveSet·Backup/Restore/Rebuild·LocalState recovery wire 계약
 │     ├─ event.rs                   # append-only event envelope
 │     ├─ ipc.rs                     # CLI·MCP·Controller local protocol DTO
 │     └─ version.rs                 # contract version과 compatibility
@@ -401,8 +401,10 @@ crates/control/
 │     ├─ atomic_write/              # 안전한 교체
 │     ├─ locks/                     # run·stage writer lock
 │     ├─ migration/                 # state version 이동
-│     ├─ recovery/                  # 손상·임시 파일 검사와 복구본
-│     ├─ backup/                    # consistent backup·manifest·restore
+│     ├─ active_set/                # 검증된 global/project generation set과 atomic activation
+│     ├─ recovery/                  # recovery-only status·side-by-side restore/rebuild·typed receipt
+│     ├─ backup/                    # online consistent backup·manifest-last·restore
+│     ├─ local_state/               # redacted export/import plan·apply
 │     ├─ integrity/                 # structure·relation·fingerprint·artifact 검사
 │     └─ retention/                 # 보존·정리 plan
 ├─ [infrastructure] star-evidence/
@@ -423,6 +425,7 @@ crates/control/
 │     ├─ costs/                     # 시간·사용량·재작업
 │     ├─ risks/                     # 남은 위험과 미확인
 │     ├─ bundle/                    # GateDecision을 참조하는 EvidenceBundle 조립·hash
+│     ├─ artifact_sidecar/          # immutable byte와 strict ArtifactRef sidecar·verified discovery
 │     ├─ review_pack/               # bundle 기반 구조화 ReviewPack·render
 │     ├─ rework/                    # blocking 근거 기반 ReworkDirective
 │     ├─ report/                    # 최종 보고
@@ -1283,17 +1286,15 @@ source tree와 runtime 상태를 섞지 않는다.
 ├─ management/
 │  ├─ active-set.json               # global+project generation hash manifest
 │  ├─ global/
-│  │  ├─ active/                    # backend-neutral global generation
-│  │  ├─ generations/
-│  │  ├─ backups/
-│  │  └─ recovery/
+│  │  └─ generations/
+│  │     └─ <generation>/           # active 여부는 top-level manifest가 결정
 │  ├─ projects/
 │  │  └─ <project-id>/
-│  │     ├─ active/                 # 이 project의 opaque generation
-│  │     ├─ generations/
-│  │     ├─ backups/
-│  │     └─ recovery/
-│  └─ backup-sets/                  # 호환 generation vector manifest
+│  │     └─ generations/
+│  │        └─ <generation>/        # global과 같은 active-set에 묶임
+│  ├─ recovery-receipts/            # exact plan fingerprint별 private typed result
+│  ├─ rc/<plan-token>/              # short-path source rebuild staging
+│  └─ quarantine/                   # 미활성·결과 미확정 candidate 진단
 ├─ root-bindings/                   # current-user protected opaque checkout locator
 ├─ worktrees/
 │  └─ <project-id>\<bundle-or-run-id>\<participant-or-stage-id>\<worktree-id>\
@@ -1309,7 +1310,7 @@ source tree와 runtime 상태를 섞지 않는다.
 └─ recovery/                        # DB 밖 제품 lifecycle 복구본
 ```
 
-`installation/`과 `integrations/`는 installer-owned local fact이며 Controller persisted projection이 아니다. 기본 uninstall은 installation record를 지우고, Codex 등록 해제가 확인될 때만 해당 Marketplace source를 지운다. 나머지 runtime state와 `%APPDATA%\Star-Control` 사용자 설정은 보존한다. 실제 DB filename, extension, connection string과 backend setting은 이 layout의 공개 계약이 아니다. directory name에는 ProjectId·stable adapter ID·content fingerprint 외 project 이름·repository 이름·사용자 이름·source path를 넣지 않는다. 관리 DB에는 `root_binding_id`만 두고 raw project absolute path는 저장하지 않는다. cache는 active generation·backup에 포함되지 않고 삭제 뒤 재scan할 수 있어야 하며 source 전체 byte와 민감 literal을 저장하지 않는다.
+`installation/`과 `integrations/`는 installer-owned local fact이며 Controller persisted projection이 아니다. 기본 uninstall은 installation record를 지우고, Codex 등록 해제가 확인될 때만 해당 Marketplace source를 지운다. 나머지 runtime state와 `%APPDATA%\Star-Control` 사용자 설정은 보존한다. 실제 DB filename, extension, connection string과 backend setting은 이 layout의 공개 계약이 아니다. directory name에는 ProjectId·stable adapter ID·content fingerprint 외 project 이름·repository 이름·사용자 이름·source path를 넣지 않는다. 관리 DB에는 `root_binding_id`만 두고 raw project absolute path는 저장하지 않는다. cache는 active generation·backup에 포함되지 않고 삭제 뒤 재scan할 수 있어야 하며 source 전체 byte와 민감 literal을 저장하지 않는다. P-0054 backup set은 이 management tree 안이 아니라 사용자가 선택한 외부 destination에 `stores/`와 manifest-last 구조로 생성한다. 기존 `active/` directory는 startup legacy adoption input으로만 허용하고 새 generation을 고르는 fallback으로 사용하지 않는다.
 
 ### 대상 프로젝트 증거
 

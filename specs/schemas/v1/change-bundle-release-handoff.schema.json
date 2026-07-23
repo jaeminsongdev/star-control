@@ -1,0 +1,295 @@
+{
+  "$defs": {
+    "CompatibilityWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "close_step_ref": {
+          "type": "string"
+        },
+        "contract_ref": {
+          "type": "string"
+        },
+        "current_consumer_state_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "deadline": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence_close_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "new_accepted_version": {
+          "type": "string"
+        },
+        "old_accepted_version": {
+          "type": "string"
+        },
+        "open_step_ref": {
+          "type": "string"
+        },
+        "opened_revision_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider_project_id": {
+          "type": "string"
+        },
+        "required_consumer_project_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rollback_trigger": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/CompatibilityWindowState"
+        },
+        "window_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "window_id",
+        "contract_ref",
+        "provider_project_id",
+        "required_consumer_project_ids",
+        "open_step_ref",
+        "close_step_ref",
+        "old_accepted_version",
+        "new_accepted_version",
+        "current_consumer_state_refs",
+        "rollback_trigger",
+        "state"
+      ],
+      "type": "object"
+    },
+    "CompatibilityWindowState": {
+      "enum": [
+        "planned",
+        "open",
+        "closing_ready",
+        "closed",
+        "expired_unresolved",
+        "blocked"
+      ],
+      "type": "string"
+    },
+    "CompletionLevel": {
+      "enum": [
+        "none",
+        "validated_participants",
+        "local_integrated",
+        "remote_merged",
+        "release_handoff_ready"
+      ],
+      "type": "string"
+    },
+    "ParticipantRole": {
+      "enum": [
+        "provider",
+        "consumer",
+        "data_owner",
+        "tooling",
+        "validation_only"
+      ],
+      "type": "string"
+    },
+    "ProjectReleaseInput": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "artifact_set_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "commit_oid": {
+          "type": "string"
+        },
+        "compatibility_state": {
+          "type": "string"
+        },
+        "evidence_bundle_ref": {
+          "type": "string"
+        },
+        "gate_decision_ref": {
+          "type": "string"
+        },
+        "git_object_format": {
+          "type": "string"
+        },
+        "local_branch_state_ref": {
+          "type": "string"
+        },
+        "migration_rollback_state": {
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_merge_result_ref": {
+          "type": "string"
+        },
+        "project_revision_ref": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "remote_merged_commit_oid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "remote_snapshot_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/$defs/ParticipantRole"
+          },
+          "type": "array"
+        },
+        "unresolved_risks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "project_id",
+        "roles",
+        "git_object_format",
+        "commit_oid",
+        "project_revision_ref",
+        "project_merge_result_ref",
+        "gate_decision_ref",
+        "evidence_bundle_ref",
+        "artifact_refs",
+        "artifact_set_fingerprint",
+        "local_branch_state_ref",
+        "migration_rollback_state",
+        "compatibility_state",
+        "unresolved_risks"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.change-bundle-release-handoff:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "change_bundle_ref": {
+      "type": "string"
+    },
+    "compatibility_windows": {
+      "items": {
+        "$ref": "#/$defs/CompatibilityWindow"
+      },
+      "type": "array"
+    },
+    "completion_level_reached": {
+      "$ref": "#/$defs/CompletionLevel"
+    },
+    "completion_target": {
+      "$ref": "#/$defs/CompletionLevel"
+    },
+    "dependency_order": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "handoff_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "multi_project_goal_ref": {
+      "type": "string"
+    },
+    "overall_gate_ref": {
+      "type": "string"
+    },
+    "project_inputs": {
+      "items": {
+        "$ref": "#/$defs/ProjectReleaseInput"
+      },
+      "type": "array"
+    },
+    "ready": {
+      "type": "boolean"
+    },
+    "release_handoff_id": {
+      "type": "string"
+    },
+    "remaining_risks": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.change-bundle-release-handoff",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "release_handoff_id",
+    "revision",
+    "change_bundle_ref",
+    "multi_project_goal_ref",
+    "completion_target",
+    "completion_level_reached",
+    "project_inputs",
+    "dependency_order",
+    "compatibility_windows",
+    "overall_gate_ref",
+    "remaining_risks",
+    "limitations",
+    "ready",
+    "handoff_fingerprint"
+  ],
+  "title": "ChangeBundleReleaseHandoff",
+  "type": "object"
+}

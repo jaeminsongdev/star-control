@@ -1,0 +1,229 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ExternalFreshness": {
+      "enum": [
+        "current",
+        "stale",
+        "expired",
+        "unknown",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "MaintenanceRadarItem": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking": {
+          "type": "boolean"
+        },
+        "category": {
+          "$ref": "#/$defs/RadarCategory"
+        },
+        "completeness": {
+          "$ref": "#/$defs/CoverageState"
+        },
+        "dependency_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "diagnostic_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "finding_refs": {
+          "default": [],
+          "items": {
+            "pattern": "^fnd_[a-z2-7]{52}$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freshness": {
+          "$ref": "#/$defs/ExternalFreshness"
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "priority": {
+          "$ref": "#/$defs/RadarPriority"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "regression_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "suppression_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "item_id",
+        "project_id",
+        "category",
+        "subject",
+        "priority",
+        "blocking",
+        "freshness",
+        "completeness"
+      ],
+      "type": "object"
+    },
+    "RadarCategory": {
+      "enum": [
+        "failure",
+        "suppression",
+        "dependency",
+        "security",
+        "flaky_test",
+        "contract_drift",
+        "recovery"
+      ],
+      "type": "string"
+    },
+    "RadarPriority": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking_rank": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence_rank": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "freshness_rank": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "regression_rank": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "risk_rank": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stable_identity": {
+          "type": "string"
+        },
+        "time_rank": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "blocking_rank",
+        "risk_rank",
+        "freshness_rank",
+        "regression_rank",
+        "evidence_rank",
+        "time_rank",
+        "stable_identity"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.maintenance-radar-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "evaluation_time": {
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/MaintenanceRadarItem"
+      },
+      "type": "array"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.maintenance-radar-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "valid_until": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "snapshot_id",
+    "evaluation_time",
+    "items",
+    "completeness",
+    "content_fingerprint"
+  ],
+  "title": "MaintenanceRadarSnapshot",
+  "type": "object"
+}

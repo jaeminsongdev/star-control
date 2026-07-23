@@ -1,0 +1,28 @@
+{
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "dependency_snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "dependency_snapshot_ref": "fixture",
+  "external_data_snapshot_refs": [
+    "fixture"
+  ],
+  "freshness": "current",
+  "limitations": [
+    "fixture"
+  ],
+  "observations": [
+    {
+      "kind": "fixture",
+      "observation_id": "fixture",
+      "source_ref": "fixture",
+      "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "state": "fixture",
+      "subject": "fixture"
+    }
+  ],
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.supply-chain-snapshot",
+  "schema_version": 1,
+  "snapshot_id": "fixture",
+  "subject_revision": "fixture"
+}

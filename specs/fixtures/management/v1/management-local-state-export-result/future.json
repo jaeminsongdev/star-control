@@ -1,0 +1,23 @@
+{
+  "applied_at": "2026-01-01T00:00:00Z",
+  "approved_plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "bundle": {
+    "active_change_plans": [],
+    "bundle_id": "lsb_00000000000000000000000000",
+    "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "local_baselines": [],
+    "local_dispositions": [],
+    "local_suppressions": [],
+    "project_id": "prj_00000000000000000000000000",
+    "redaction_contract_version": 0,
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "source_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "payload_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-local-state-export-result",
+  "schema_version": 2
+}

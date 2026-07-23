@@ -50,6 +50,8 @@ pub struct OperationSnapshot {
     pub descriptor_hash: String,
     pub arguments_hash: String,
     #[serde(default)]
+    pub permission_actions: Vec<String>,
+    #[serde(default)]
     pub goal_id: Option<String>,
     #[serde(default)]
     pub run_id: Option<String>,
@@ -118,6 +120,7 @@ pub struct OperationCreate {
     pub tool_id: String,
     pub descriptor_hash: String,
     pub arguments_hash: String,
+    pub permission_actions: Vec<String>,
     pub goal_id: Option<String>,
     pub run_id: Option<String>,
     pub stage_id: Option<String>,
@@ -215,6 +218,7 @@ impl OperationStore {
             tool_id,
             descriptor_hash,
             arguments_hash,
+            mut permission_actions,
             goal_id,
             run_id,
             stage_id,
@@ -223,6 +227,8 @@ impl OperationStore {
             idempotency_key,
             invocation_hash,
         } = request;
+        permission_actions.sort();
+        permission_actions.dedup();
         if let Some(key) = idempotency_key.as_deref()
             && let Some(existing) = self.file.idempotency.get(key)
         {
@@ -245,6 +251,7 @@ impl OperationStore {
             tool_id,
             descriptor_hash,
             arguments_hash,
+            permission_actions,
             goal_id,
             run_id,
             stage_id,
@@ -748,6 +755,7 @@ mod tests {
                 "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
             arguments_hash:
                 "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
+            permission_actions: vec!["read".to_owned()],
             goal_id: None,
             run_id: None,
             stage_id: None,

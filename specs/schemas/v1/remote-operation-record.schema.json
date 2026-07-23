@@ -1,0 +1,140 @@
+{
+  "$defs": {
+    "RemoteAction": {
+      "enum": [
+        "push",
+        "create_pr",
+        "update_pr",
+        "merge_pr",
+        "close_pr",
+        "publish"
+      ],
+      "type": "string"
+    },
+    "RemoteOperationState": {
+      "enum": [
+        "planned",
+        "awaiting_approval",
+        "executing",
+        "succeeded",
+        "failed",
+        "outcome_unknown",
+        "reconciled"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.remote-operation-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "$ref": "#/$defs/RemoteAction"
+    },
+    "adapter_receipt_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "after_snapshot_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "approval_request_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "before_snapshot_ref": {
+      "type": "string"
+    },
+    "change_bundle_ref": {
+      "type": "string"
+    },
+    "diagnostic_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "expected_remote_precondition": {
+      "type": "string"
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "local_source_revision": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "operation_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "participant_ref": {
+      "type": "string"
+    },
+    "permission_plan_ref": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "remote_operation_id": {
+      "type": "string"
+    },
+    "request_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.remote-operation-record",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/RemoteOperationState"
+    },
+    "target": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "remote_operation_id",
+    "revision",
+    "project_id",
+    "change_bundle_ref",
+    "participant_ref",
+    "action",
+    "before_snapshot_ref",
+    "local_source_revision",
+    "target",
+    "expected_remote_precondition",
+    "permission_plan_ref",
+    "idempotency_key",
+    "request_fingerprint",
+    "state",
+    "diagnostic_refs",
+    "operation_fingerprint"
+  ],
+  "title": "RemoteOperationRecord",
+  "type": "object"
+}

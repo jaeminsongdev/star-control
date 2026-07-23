@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "generation": 0,
+      "header_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "management_store_version": 0,
+      "relative_locator": "fixture",
+      "scope": {
+        "kind": "global"
+      },
+      "store_id": "mst_00000000000000000000000000"
+    }
+  ],
+  "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-active-set",
+  "schema_version": 1
+}

@@ -23,7 +23,7 @@
   "completeness": "complete",
   "created_at": "2026-01-01T00:00:00Z",
   "diagnostic_refs": [],
-  "evidence_bundle_id": "fixture",
+  "evidence_bundle_id": "lsb_00000000000000000000000000",
   "gate_decision_ref": {
     "gate_id": "gat_00000000000000000000000000",
     "revision": 0,
@@ -46,6 +46,7 @@
     "schema_id": "fixture",
     "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
   },
+  "subject_binding_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "task_spec_ref": {
     "document_id": "fixture",
     "revision": 0,
@@ -58,5 +59,6 @@
     "schema_id": "fixture",
     "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
   },
+  "validation_result_refs": [],
   "validation_run_refs": []
 }

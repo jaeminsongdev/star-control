@@ -1,0 +1,29 @@
+{
+  "attempt_ref": "fixture",
+  "completeness": "complete",
+  "gate_refs": [
+    "fixture"
+  ],
+  "invariant_results": [
+    {
+      "after_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "before_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "evidence_refs": [
+        "fixture"
+      ],
+      "invariant_ref": "fixture",
+      "loss_observed": false,
+      "state": "fixture"
+    }
+  ],
+  "plan_ref": "fixture",
+  "reference_validation_refs": [
+    "fixture"
+  ],
+  "report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "report_id": "fixture",
+  "schema_id": "star.migration-validation-report",
+  "schema_version": 1,
+  "state": "fixture",
+  "target_version_observed": "fixture"
+}

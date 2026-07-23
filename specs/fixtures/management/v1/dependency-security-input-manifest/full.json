@@ -1,0 +1,35 @@
+{
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "environment_snapshot_ref": "fixture",
+  "limitations": [
+    "fixture"
+  ],
+  "manifest_id": "fixture",
+  "manifest_observations": [
+    {
+      "completeness": "complete",
+      "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "ecosystem": "fixture",
+      "logical_path": "src/lib.rs",
+      "manifest_kind": "fixture",
+      "owner": "fixture",
+      "relation": "fixture"
+    }
+  ],
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.dependency-security-input-manifest",
+  "schema_version": 1,
+  "subject_revision": "fixture",
+  "toolchain_observations": [
+    {
+      "declared_range": "fixture",
+      "discovered_from": "fixture",
+      "evidence_ref": "fixture",
+      "executable_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "observed_version": "fixture",
+      "state": "present",
+      "toolchain_id": "fixture"
+    }
+  ]
+}

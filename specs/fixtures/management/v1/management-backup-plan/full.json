@@ -1,0 +1,37 @@
+{
+  "backup_set_id": "bks_00000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "destination_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-backup-plan",
+  "schema_version": 1,
+  "source_active_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "source_store_vector": {
+    "global": {
+      "generation": 0,
+      "revision": 0,
+      "store_id": "mst_00000000000000000000000000"
+    },
+    "projects": [
+      {
+        "point": {
+          "generation": 0,
+          "revision": 0,
+          "store_id": "mst_00000000000000000000000000"
+        },
+        "project_id": "prj_00000000000000000000000000"
+      }
+    ]
+  },
+  "stores": [
+    {
+      "generation": 0,
+      "management_store_version": 0,
+      "scope": {
+        "kind": "global"
+      },
+      "store_id": "mst_00000000000000000000000000",
+      "store_revision": 0
+    }
+  ]
+}

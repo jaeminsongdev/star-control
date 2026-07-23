@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "CoexistencePhase": {
+      "additionalProperties": false,
+      "properties": {
+        "consumer_state": {
+          "type": "string"
+        },
+        "fallback_available": {
+          "type": "boolean"
+        },
+        "order": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "phase_id": {
+          "type": "string"
+        },
+        "reader_state": {
+          "type": "string"
+        },
+        "source_state": {
+          "type": "string"
+        },
+        "writer_state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "phase_id",
+        "order",
+        "source_state",
+        "consumer_state",
+        "writer_state",
+        "reader_state",
+        "fallback_available"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StackBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "architecture": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "sdk": {
+          "type": "string"
+        },
+        "toolchain_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "language",
+        "runtime",
+        "sdk",
+        "architecture",
+        "os",
+        "toolchain_fingerprint"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.language-migration-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "behavior_contract_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "boundary_adapter_specs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "checkout_id": {
+      "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "codegen_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "coexistence_phases": {
+      "items": {
+        "$ref": "#/$defs/CoexistencePhase"
+      },
+      "type": "array"
+    },
+    "comparison_plan_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "compatibility_window": {
+      "type": "string"
+    },
+    "consumer_transition_order": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "cutover_plan": {
+      "type": "string"
+    },
+    "impact_analysis_ref": {
+      "type": "string"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "platform_evidence_matrix": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "recipe_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rollback_plan_ref": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.language-migration-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_stack": {
+      "$ref": "#/$defs/StackBinding"
+    },
+    "state": {
+      "type": "string"
+    },
+    "target_stack": {
+      "$ref": "#/$defs/StackBinding"
+    },
+    "task_spec_ref": {
+      "type": "string"
+    },
+    "unknown_semantics": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "plan_id",
+    "revision",
+    "task_spec_ref",
+    "impact_analysis_ref",
+    "project_id",
+    "checkout_id",
+    "source_stack",
+    "target_stack",
+    "behavior_contract_refs",
+    "boundary_adapter_specs",
+    "coexistence_phases",
+    "consumer_transition_order",
+    "recipe_refs",
+    "codegen_refs",
+    "comparison_plan_refs",
+    "compatibility_window",
+    "cutover_plan",
+    "rollback_plan_ref",
+    "platform_evidence_matrix",
+    "unknown_semantics",
+    "state",
+    "plan_fingerprint"
+  ],
+  "title": "LanguageMigrationPlan",
+  "type": "object"
+}

@@ -1,0 +1,23 @@
+{
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "evaluation_time": "fixture",
+  "freshness": "current",
+  "observations": [],
+  "retrieved_at": "fixture",
+  "schema_id": "star.external-data-snapshot",
+  "schema_version": 1,
+  "snapshot_id": "fixture",
+  "source": {
+    "integrity_policy": "fixture",
+    "maximum_age_seconds": 0,
+    "provider": "fixture",
+    "retrieval_mode": "fixture",
+    "source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_kind": "fixture"
+  },
+  "source_artifact_ref": "art_00000000000000000000000000",
+  "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "unexpected": true,
+  "valid_until": "fixture"
+}

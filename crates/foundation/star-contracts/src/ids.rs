@@ -207,6 +207,8 @@ derived_id!(ProjectRevisionId, "prv_");
 derived_id!(WorkspaceSnapshotId, "wsp_");
 derived_id!(ProjectCatalogSnapshotId, "pcs_");
 derived_id!(CodeIndexSnapshotId, "cix_");
+derived_id!(ManagedRegistrySnapshotId, "mrs_");
+derived_id!(RegistryConsistencyRecordId, "rcr_");
 prefixed_id!(ScanRunId, "scn_");
 derived_id!(FindingId, "fnd_");
 derived_id!(OccurrenceId, "occ_");
@@ -218,7 +220,13 @@ prefixed_id!(BaselineId, "bas_");
 prefixed_id!(DispositionId, "dsp_");
 prefixed_id!(ChangePlanId, "cpl_");
 prefixed_id!(PatchSetId, "pat_");
+prefixed_id!(RecipeExecutionId, "rcx_");
+prefixed_id!(PatchApplicationId, "pap_");
+prefixed_id!(WorktreeDecisionId, "wtd_");
 prefixed_id!(ValidationResultId, "vrs_");
+prefixed_id!(ReviewPackId, "rvp_");
+prefixed_id!(ReworkDirectiveId, "rwd_");
+prefixed_id!(ValidatorGuardEvidenceId, "vge_");
 prefixed_id!(ManagementStoreId, "mst_");
 prefixed_id!(CoordinatedOperationId, "cop_");
 prefixed_id!(RootBindingId, "rtb_");
@@ -227,6 +235,9 @@ prefixed_id!(EventId, "evt_");
 prefixed_id!(InstallationId, "ins_");
 prefixed_id!(ReleaseManifestId, "rel_");
 prefixed_id!(EvaluationRunId, "evr_");
+prefixed_id!(BackupSetId, "bks_");
+prefixed_id!(RecoveryPlanId, "rcp_");
+prefixed_id!(LocalStateBundleId, "lsb_");
 
 /// Monotonic process-local ULID source for IDs where clock regression must not
 /// reorder IDs created by this process.

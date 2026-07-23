@@ -1,0 +1,30 @@
+schema_version = 1
+profile_id = "debug_recovery"
+profile_version = "1.0.0"
+display_name = "Debug Recovery"
+summary = "실패 fingerprint, 재현 Pack, 수정 전후 회귀와 recovery plan을 고정한다."
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+triggers = ["flaky_failure", "repeated_failure", "root_cause_unknown", "rollback_required"]
+stage_template = ["failure_normalize", "reproduction_pack", "bounded_rerun", "root_cause", "regression", "recovery_plan"]
+context_rules = ["exact_environment", "redacted_artifacts", "stable_fingerprint"]
+route_hints = ["failure", "recovery"]
+permission_actions = ["debug.attach"]
+gate_phases = ["during_stage", "stage_exit", "goal_exit"]
+required_rule_families = ["failure_identity", "recovery_plan", "redaction", "regression_evidence", "reproduction"]
+required_check_families = ["reproduction", "test"]
+optional_check_families = ["debugger", "trace"]
+always_run_for = ["flaky_failure", "recovery_claim"]
+baseline_policy = "ratchet_new_and_worsened"
+suppression_policy = "approved_expiring"
+claim_policy = ["failure", "recovery", "regression"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["failure_record", "recovery_plan", "regression_record", "reproduction_pack"]
+corpus_requirements = ["failure_fingerprint", "redaction"]
+approval_checkpoints = ["debug_attach"]
+default_stop_state = "recovery_decided"
+allowed_effect_classes = ["read", "plan", "validate"]
+permission_floor = "exact_prompt"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"

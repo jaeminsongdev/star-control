@@ -1,0 +1,41 @@
+schema_version = 1
+profile_id = "data_config_db_migration"
+profile_version = "1.0.0"
+display_name = "Data Config DB Migration"
+summary = "version chain, backup, rehearsal, resume, rollback과 restore verification을 강제한다."
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+triggers = ["config_format_change", "data_format_change", "database_schema_change"]
+stage_template = ["inspect", "plan", "backup", "rehearse", "execute", "validate", "restore_verify"]
+context_rules = ["exact_source_version", "unknown_field_preservation", "verified_backup"]
+route_hints = ["migration"]
+permission_actions = ["migration.execute"]
+gate_phases = ["migration_pre_execute", "migration_post_execute", "migration_post_rollback", "goal_exit"]
+required_rule_families = ["migration_chain", "migration_invariant", "restore_verification"]
+required_check_families = ["migration", "test"]
+optional_check_families = ["performance"]
+always_run_for = ["destructive_migration", "unknown_field_loss"]
+baseline_policy = "clean_only"
+suppression_policy = "approved_expiring"
+claim_policy = ["migration", "recovery"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["backup_manifest", "migration_attempt", "restore_verification"]
+corpus_requirements = ["migration_chain", "resume", "rollback"]
+approval_checkpoints = ["destructive_migration", "migration_execute", "unknown_field_loss"]
+default_stop_state = "awaiting_approval"
+allowed_effect_classes = ["read", "plan", "validate", "local_state_write", "workspace_mutation"]
+permission_floor = "exact_durable_approval"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"
+
+[extensions.migration]
+target_kinds = ["config", "data", "database"]
+invariant_families = ["chain_continuity", "data_preservation", "schema_compatibility"]
+strategy_floor = "copy_then_activate"
+backup_policy = "verified_before_execute"
+restore_policy = "side_by_side_verified"
+rehearsal_policy = "required"
+resume_policy = "checkpointed"
+destructive_policy = "exact_prompt"
+default_pending_action = "execute"

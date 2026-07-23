@@ -1,0 +1,143 @@
+{
+  "$defs": {
+    "BaselineEntryV2": {
+      "additionalProperties": false,
+      "properties": {
+        "diagnostic_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "entry_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "rule_ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "scope_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "severity": {
+          "$ref": "#/$defs/DiagnosticSeverity"
+        }
+      },
+      "required": [
+        "diagnostic_fingerprint",
+        "rule_ref",
+        "severity",
+        "scope_fingerprint",
+        "entry_fingerprint"
+      ],
+      "type": "object"
+    },
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "DiagnosticSeverity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.baseline:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active": {
+      "type": "boolean"
+    },
+    "baseline_id": {
+      "pattern": "^bas_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/BaselineEntryV2"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reviewed": {
+      "type": "boolean"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rule_set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.baseline",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "subject_binding_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "baseline_id",
+    "revision",
+    "project_id",
+    "subject_binding_fingerprint",
+    "rule_set_fingerprint",
+    "entries",
+    "created_at",
+    "reason",
+    "reviewed",
+    "active",
+    "set_fingerprint"
+  ],
+  "title": "BaselineV2",
+  "type": "object"
+}

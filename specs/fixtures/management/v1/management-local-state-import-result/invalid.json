@@ -1,0 +1,14 @@
+{
+  "applied_at": "2026-01-01T00:00:00Z",
+  "approved_plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "bundle_id": "lsb_00000000000000000000000000",
+  "imported_baselines": 0,
+  "imported_change_plans": 0,
+  "imported_dispositions": 0,
+  "imported_suppressions": 0,
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-local-state-import-result",
+  "schema_version": 1,
+  "unexpected": true
+}

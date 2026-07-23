@@ -2,7 +2,7 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 4단계인 **안전한 Patch·Refactor·codemod 엔진**의 설계 정본이다. 현재 상태는 **공통 첫 수직 Slice 구현, 확장 Recipe 진행 전**이다. P-0045는 built-in trailing-whitespace Recipe에 대해 isolated in-memory preview, sealed immutable artifact, exact approval, before/after hash, pre-write TOCTOU 재관찰, atomic apply와 exact rollback을 구현했다. external mutator worktree와 모든 v2 selector·migration이 구현됐다는 뜻은 아니다.
+이 문서는 Star-Control 4단계인 **안전한 Patch·Refactor·codemod 엔진**의 설계 정본이다. P-0045의 trailing-whitespace 첫 Slice에 더해 P-0054가 `ChangeRecipeV2`·`RecipeExecution`·`PatchSetV2`·`PatchApplication`·`WorktreeDecision`, typed selector/operation, isolated prepare, exact approval/permit, source TOCTOU, atomic apply와 partial/outcome-unknown recovery를 Controller·CLI에 연결했다. M11과 Managed Registry rewrite가 같은 경로를 사용한다. 등록 external mutator가 없는 Recipe는 임의 shell로 대체하지 않으며 이번 감사에서 사용자 checkout에는 apply하지 않았다.
 
 4단계는 새 scanner, planner, validator 또는 AI 실행기를 만들지 않는다. 다음 선행 계약과 같은 application service를 조합해 한 Project의 immutable 변경 제안을 만들고, 검증된 제안만 적용한다.
 

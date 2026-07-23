@@ -1,0 +1,14 @@
+{
+  "active_change_plans": [],
+  "bundle_id": "lsb_00000000000000000000000000",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "local_baselines": [],
+  "local_dispositions": [],
+  "local_suppressions": [],
+  "project_id": "prj_00000000000000000000000000",
+  "redaction_contract_version": 0,
+  "schema_id": "star.management-local-state-bundle",
+  "schema_version": 2,
+  "source_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

@@ -2,6 +2,16 @@ use schemars::JsonSchema;
 use serde_json::{Map, Value};
 
 use crate::{
+    coordination_v2::{
+        CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID, CHANGE_BUNDLE_RELEASE_HANDOFF_SCHEMA_ID,
+        CROSS_REPO_CHANGE_BUNDLE_SCHEMA_ID, ChangeBundleParticipantV2, ChangeBundleReleaseHandoff,
+        CrossRepoChangeBundle, MERGE_CONFLICT_RECORD_SCHEMA_ID, MERGE_PLAN_V2_SCHEMA_ID,
+        MERGE_QUEUE_RECORD_SCHEMA_ID, MULTI_PROJECT_GOAL_SCHEMA_ID, MergeConflictRecord,
+        MergePlanV2, MergeQueueRecord, MultiProjectGoal, OVERLAP_ANALYSIS_SCHEMA_ID,
+        OverlapAnalysis, PROJECT_MERGE_RESULT_SCHEMA_ID, ProjectMergeResult,
+        REMOTE_OPERATION_RECORD_SCHEMA_ID, REMOTE_STATE_SNAPSHOT_V2_SCHEMA_ID,
+        RemoteOperationRecord, RemoteStateSnapshotV2, WORKTREE_RECORD_SCHEMA_ID, WorktreeRecord,
+    },
     development::{
         CHANGE_BUNDLE_HANDOFF_SCHEMA_ID, CHANGE_BUNDLE_SCHEMA_ID,
         CLEAN_ROOM_DOCTOR_REPORT_SCHEMA_ID, COMPATIBILITY_REPORT_SCHEMA_ID, ChangeBundle,
@@ -10,15 +20,29 @@ use crate::{
         MaintenanceRadar, ManagedRegistrySnapshot, MigrationRun, PERFORMANCE_COMPARISON_SCHEMA_ID,
         PerformanceComparison, REPRODUCTION_PACK_SCHEMA_ID, ReproductionPack,
     },
+    development_effect::{DEVELOPMENT_EFFECT_RECEIPT_V1_SCHEMA_ID, DevelopmentEffectReceiptV1},
+    development_v2::{
+        CLEAN_ROOM_SPECIFICATION_SCHEMA_ID, COMPATIBILITY_REPORT_V2_SCHEMA_ID,
+        CONFIG_KEY_TRACE_SCHEMA_ID, CONTRACT_SURFACE_SNAPSHOT_SCHEMA_ID, CleanRoomSpecification,
+        CompatibilityReportV2, ConfigKeyTrace, ContractSurfaceSnapshot,
+        DEPENDENCY_SECURITY_INPUT_MANIFEST_SCHEMA_ID, DOCUMENTATION_SNAPSHOT_SCHEMA_ID,
+        DependencySecurityInputManifest, DocumentationSnapshot, ENVIRONMENT_SNAPSHOT_SCHEMA_ID,
+        EnvironmentSnapshot, PROJECT_CONTRACT_MANIFEST_SCHEMA_ID, PROJECT_DOCTOR_REPORT_SCHEMA_ID,
+        ProjectContractManifest, ProjectDoctorReport,
+    },
     evidence::{
         ArtifactRef, DIAGNOSTIC_SCHEMA_ID, Diagnostic, EVIDENCE_BUNDLE_SCHEMA_ID, EvidenceBundle,
         GATE_DECISION_SCHEMA_ID, GateDecision, VALIDATION_PLAN_SCHEMA_ID, VALIDATION_RUN_SCHEMA_ID,
         ValidationPlan, ValidationRun,
     },
     evidence_v2::{
-        DIAGNOSTIC_V2_SCHEMA_ID, DiagnosticV2, EVIDENCE_BUNDLE_V2_SCHEMA_ID, EvidenceBundleV2,
-        GATE_DECISION_V2_SCHEMA_ID, GateDecisionV2, TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2,
-        VALIDATION_RUN_V2_SCHEMA_ID, ValidationRunV2,
+        BASELINE_V2_SCHEMA_ID, BaselineV2, DIAGNOSTIC_V2_SCHEMA_ID, DISPOSITION_V2_SCHEMA_ID,
+        DiagnosticV2, DispositionV2, EVIDENCE_BUNDLE_V2_SCHEMA_ID, EvidenceBundleV2,
+        GATE_DECISION_V2_SCHEMA_ID, GateDecisionV2, REVIEW_PACK_SCHEMA_ID,
+        REVIEW_PACK_SCHEMA_VERSION, REWORK_DIRECTIVE_SCHEMA_ID, REWORK_DIRECTIVE_SCHEMA_VERSION,
+        ReviewPackV1, ReworkDirectiveV1, SUPPRESSION_V2_SCHEMA_ID, SuppressionV2,
+        TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2, VALIDATION_RESULT_V2_SCHEMA_ID,
+        VALIDATION_RUN_V2_SCHEMA_ID, ValidationResultV2, ValidationRunV2,
     },
     fixed_mcp::{CallInput, McpToolResult, fixed_input_schema, fixed_result_schema},
     index::{CodeIndexSnapshot, ProjectCatalogSnapshot},
@@ -31,6 +55,22 @@ use crate::{
         RuntimeGenerationManifest,
     },
     ipc::{IpcChallenge, IpcHandshakeError, IpcHello, IpcRequest, IpcResponse, IpcWelcome},
+    maintenance_v2::{
+        DEPENDENCY_SNAPSHOT_SCHEMA_ID, DEPENDENCY_UPDATE_PLAN_SCHEMA_ID, DependencySnapshot,
+        DependencyUpdatePlan, EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID, ExternalDataSnapshot,
+        FAILURE_RECORD_SCHEMA_ID, FailureRecord, MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
+        MaintenanceRadarSnapshot, RECOVERY_PLAN_V2_SCHEMA_ID, REGRESSION_RECORD_SCHEMA_ID,
+        REPRODUCTION_PACK_V2_SCHEMA_ID, RecoveryPlanV2, RegressionRecord, ReproductionPackV2,
+        SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID, SupplyChainSnapshot,
+    },
+    managed_registry::{
+        MANAGED_DECLARATION_CHANGE_INTENT_SCHEMA_ID, MANAGED_REGISTRY_FRAGMENT_SCHEMA_ID,
+        MANAGED_REGISTRY_MANIFEST_SCHEMA_ID,
+        MANAGED_REGISTRY_SNAPSHOT_SCHEMA_ID as MANAGED_REGISTRY_SNAPSHOT_V2_SCHEMA_ID,
+        ManagedDeclarationChangeIntent, ManagedRegistryFragment, ManagedRegistryManifest,
+        ManagedRegistrySnapshot as ManagedRegistrySnapshotV2,
+        REGISTRY_CONSISTENCY_RECORD_SCHEMA_ID, RegistryConsistencyRecord,
+    },
     management::{
         Baseline, CanonicalSource, ChangePlan, ChangeRecipe, CoordinatedOperation, Disposition,
         Finding, ManagementStoreStatus, Occurrence, PatchSet, Project, ProjectCheckout,
@@ -38,28 +78,69 @@ use crate::{
         ScanRun, Suppression, Symbol, SymbolReference, ValidationResult, WorkspaceSnapshot,
     },
     manifest::ToolPackageManifest,
+    migration_v2::{
+        CROSS_PROJECT_MIGRATION_HANDOFF_SCHEMA_ID, CrossProjectMigrationHandoff,
+        EQUIVALENCE_REPORT_SCHEMA_ID, EquivalenceReport, LANGUAGE_MIGRATION_PLAN_SCHEMA_ID,
+        LanguageMigrationPlan, MIGRATION_ATTEMPT_SCHEMA_ID, MIGRATION_CHECKPOINT_V2_SCHEMA_ID,
+        MIGRATION_PLAN_V2_SCHEMA_ID, MIGRATION_VALIDATION_REPORT_SCHEMA_ID, MigrationAttempt,
+        MigrationCheckpointV2, MigrationPlanV2, MigrationValidationReport,
+        PERFORMANCE_COMPARISON_V2_SCHEMA_ID, PERFORMANCE_RUN_SCHEMA_ID,
+        PERFORMANCE_WORKLOAD_SPEC_SCHEMA_ID, PROJECT_MIGRATION_MANIFEST_SCHEMA_ID,
+        PerformanceComparisonV2, PerformanceRun, PerformanceWorkloadSpec, ProjectMigrationManifest,
+        RESTORE_VERIFICATION_RECORD_SCHEMA_ID, RestoreVerificationRecord,
+    },
     orchestration::{GOAL_RECORD_SCHEMA_ID, GoalRecord},
+    patch_v2::{
+        CHANGE_RECIPE_V2_SCHEMA_ID, ChangeRecipeV2, PATCH_APPLICATION_SCHEMA_ID,
+        PATCH_LIFECYCLE_SCHEMA_VERSION, PATCH_SET_V2_SCHEMA_ID,
+        PATCH_V1_TO_V2_MIGRATION_PLAN_SCHEMA_ID, PATCH_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID,
+        PATCH_V2_SCHEMA_VERSION, PatchApplication, PatchSetV2, PatchV1ToV2MigrationPlan,
+        PatchV1ToV2MigrationResult, RECIPE_EXECUTION_SCHEMA_ID, RecipeExecution,
+        WORKTREE_DECISION_SCHEMA_ID, WorktreeDecision,
+    },
     planning::{
         CHANGE_SET_SCHEMA_ID, ChangeSet, FULL_VALIDATION_PLAN_SCHEMA_ID, FullValidationPlan,
         IMPACT_ANALYSIS_SCHEMA_ID, ImpactAnalysis, PlanningBundle, RISK_PATH_DESCRIPTOR_SCHEMA_ID,
         RiskPathDescriptor, SCOPE_REVISION_SCHEMA_ID, ScopeRevision, TASK_SPEC_SCHEMA_ID, TaskSpec,
     },
+    profile::{
+        DEVELOPMENT_PROFILE_CATALOG_SCHEMA_ID, DEVELOPMENT_PROFILE_DESCRIPTOR_SCHEMA_ID,
+        DEVELOPMENT_PROFILE_RESOLUTION_SCHEMA_ID, DevelopmentProfileCatalogSnapshotV1,
+        DevelopmentProfileDescriptorV1, DevelopmentProfileResolutionV1,
+    },
+    recovery::{
+        ACTIVE_SET_MANIFEST_SCHEMA_ID, ActiveSetManifest, BACKUP_APPLY_RESULT_SCHEMA_ID,
+        BACKUP_PLAN_SCHEMA_ID, BACKUP_SET_MANIFEST_SCHEMA_ID, BackupApplyResult, BackupPlan,
+        BackupSetManifest, LOCAL_STATE_BUNDLE_SCHEMA_ID, LOCAL_STATE_EXPORT_PLAN_SCHEMA_ID,
+        LOCAL_STATE_EXPORT_RESULT_SCHEMA_ID, LOCAL_STATE_IMPORT_PLAN_SCHEMA_ID,
+        LOCAL_STATE_IMPORT_RESULT_SCHEMA_ID, LocalStateBundle, LocalStateExportPlan,
+        LocalStateExportResult, LocalStateImportPlan, LocalStateImportResult,
+        REBUILD_APPLY_RESULT_SCHEMA_ID, REBUILD_PLAN_SCHEMA_ID, RECOVERY_STATUS_SCHEMA_ID,
+        RESTORE_APPLY_RESULT_SCHEMA_ID, RESTORE_PLAN_SCHEMA_ID, RebuildApplyResult, RebuildPlan,
+        RecoveryStatus, RestoreApplyResult, RestorePlan,
+    },
     registry::{RegistrySnapshot, ToolRegistryCache},
     release_v2::{
         EVALUATION_CATALOG_ITEM_SCHEMA_ID, EVALUATION_RUN_V2_SCHEMA_ID, EvaluationCatalogItem,
-        EvaluationRunV2, RELEASE_MANIFEST_V2_SCHEMA_ID, ReleaseManifestV2,
+        EvaluationRunV2, RELEASE_ASSET_BINDING_V1_SCHEMA_ID, RELEASE_MANIFEST_V2_SCHEMA_ID,
+        ReleaseAssetBindingV1, ReleaseManifestV2,
     },
     runtime::{
         ExecutableIdentity, ExternalToolCancel, ExternalToolCancelAck, ExternalToolProbeRequest,
         ExternalToolProbeResponse, ExternalToolProgress, ExternalToolRequest, ExternalToolResponse,
     },
     rust_style::{
-        RUST_STYLE_COVERAGE_MATRIX_SCHEMA_ID, RUST_STYLE_POLICY_SNAPSHOT_SCHEMA_ID,
+        RUST_STYLE_COVERAGE_MATRIX_SCHEMA_ID, RUST_STYLE_POLICY_APPROVAL_DECISION_SCHEMA_ID,
+        RUST_STYLE_POLICY_APPROVAL_REQUEST_SCHEMA_ID, RUST_STYLE_POLICY_SNAPSHOT_SCHEMA_ID,
         RUST_STYLE_STEP_EXECUTION_SCHEMA_ID, RUST_TOOLCHAIN_BINDING_SCHEMA_ID,
-        RustStyleCoverageMatrix, RustStylePolicySnapshot, RustStyleStepExecution,
-        RustToolchainBinding,
+        RustStyleCoverageMatrix, RustStylePolicyApprovalDecision, RustStylePolicyApprovalRequest,
+        RustStylePolicySnapshot, RustStyleStepExecution, RustToolchainBinding,
     },
     trust::ToolTrustRecord,
+    validator_guard::{
+        VALIDATOR_GUARD_EVIDENCE_SCHEMA_ID, VALIDATOR_GUARD_EVIDENCE_SCHEMA_VERSION,
+        ValidatorGuardEvidenceV2,
+    },
 };
 
 pub fn schema_document<T: JsonSchema>(schema_id: &str) -> Value {
@@ -247,6 +328,12 @@ fn management_id_prefix(name: &str) -> Option<&'static str> {
         Some("cop_")
     } else if name.contains("store_id") {
         Some("mst_")
+    } else if name.contains("backup_set_id") {
+        Some("bks_")
+    } else if name.contains("recovery_plan_id") {
+        Some("rcp_")
+    } else if name.contains("bundle_id") {
+        Some("lsb_")
     } else if name.contains("release_manifest_id") {
         Some("rel_")
     } else if name.contains("evaluation_run_id") {
@@ -304,8 +391,253 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             ),
         ),
         (
+            "managed-registry-manifest.schema.json",
+            management_schema_document::<ManagedRegistryManifest>(
+                MANAGED_REGISTRY_MANIFEST_SCHEMA_ID,
+            ),
+        ),
+        (
+            "managed-registry-fragment.schema.json",
+            management_schema_document::<ManagedRegistryFragment>(
+                MANAGED_REGISTRY_FRAGMENT_SCHEMA_ID,
+            ),
+        ),
+        (
+            "managed-registry-snapshot-v2.schema.json",
+            management_schema_document_version::<ManagedRegistrySnapshotV2>(
+                MANAGED_REGISTRY_SNAPSHOT_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "registry-consistency-record.schema.json",
+            management_schema_document::<RegistryConsistencyRecord>(
+                REGISTRY_CONSISTENCY_RECORD_SCHEMA_ID,
+            ),
+        ),
+        (
+            "managed-declaration-change-intent.schema.json",
+            management_schema_document::<ManagedDeclarationChangeIntent>(
+                MANAGED_DECLARATION_CHANGE_INTENT_SCHEMA_ID,
+            ),
+        ),
+        (
             "compatibility-report.schema.json",
             management_schema_document::<CompatibilityReport>(COMPATIBILITY_REPORT_SCHEMA_ID),
+        ),
+        (
+            "project-contract-manifest.schema.json",
+            management_schema_document::<ProjectContractManifest>(
+                PROJECT_CONTRACT_MANIFEST_SCHEMA_ID,
+            ),
+        ),
+        (
+            "contract-surface-snapshot.schema.json",
+            management_schema_document::<ContractSurfaceSnapshot>(
+                CONTRACT_SURFACE_SNAPSHOT_SCHEMA_ID,
+            ),
+        ),
+        (
+            "compatibility-report-v2.schema.json",
+            management_schema_document_version::<CompatibilityReportV2>(
+                COMPATIBILITY_REPORT_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "documentation-snapshot.schema.json",
+            management_schema_document::<DocumentationSnapshot>(DOCUMENTATION_SNAPSHOT_SCHEMA_ID),
+        ),
+        (
+            "config-key-trace.schema.json",
+            management_schema_document::<ConfigKeyTrace>(CONFIG_KEY_TRACE_SCHEMA_ID),
+        ),
+        (
+            "environment-snapshot.schema.json",
+            management_schema_document::<EnvironmentSnapshot>(ENVIRONMENT_SNAPSHOT_SCHEMA_ID),
+        ),
+        (
+            "project-doctor-report.schema.json",
+            management_schema_document::<ProjectDoctorReport>(PROJECT_DOCTOR_REPORT_SCHEMA_ID),
+        ),
+        (
+            "clean-room-specification.schema.json",
+            management_schema_document::<CleanRoomSpecification>(
+                CLEAN_ROOM_SPECIFICATION_SCHEMA_ID,
+            ),
+        ),
+        (
+            "dependency-security-input-manifest.schema.json",
+            management_schema_document::<DependencySecurityInputManifest>(
+                DEPENDENCY_SECURITY_INPUT_MANIFEST_SCHEMA_ID,
+            ),
+        ),
+        (
+            "development-effect-receipt-v1.schema.json",
+            management_schema_document::<DevelopmentEffectReceiptV1>(
+                DEVELOPMENT_EFFECT_RECEIPT_V1_SCHEMA_ID,
+            ),
+        ),
+        (
+            "failure-record.schema.json",
+            management_schema_document::<FailureRecord>(FAILURE_RECORD_SCHEMA_ID),
+        ),
+        (
+            "reproduction-pack-v2.schema.json",
+            management_schema_document_version::<ReproductionPackV2>(
+                REPRODUCTION_PACK_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "regression-record.schema.json",
+            management_schema_document::<RegressionRecord>(REGRESSION_RECORD_SCHEMA_ID),
+        ),
+        (
+            "recovery-plan-v2.schema.json",
+            management_schema_document_version::<RecoveryPlanV2>(RECOVERY_PLAN_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "dependency-snapshot.schema.json",
+            management_schema_document::<DependencySnapshot>(DEPENDENCY_SNAPSHOT_SCHEMA_ID),
+        ),
+        (
+            "supply-chain-snapshot.schema.json",
+            management_schema_document::<SupplyChainSnapshot>(SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID),
+        ),
+        (
+            "external-data-snapshot.schema.json",
+            management_schema_document::<ExternalDataSnapshot>(EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID),
+        ),
+        (
+            "dependency-update-plan.schema.json",
+            management_schema_document::<DependencyUpdatePlan>(DEPENDENCY_UPDATE_PLAN_SCHEMA_ID),
+        ),
+        (
+            "maintenance-radar-snapshot.schema.json",
+            management_schema_document::<MaintenanceRadarSnapshot>(
+                MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
+            ),
+        ),
+        (
+            "project-migration-manifest.schema.json",
+            management_schema_document::<ProjectMigrationManifest>(
+                PROJECT_MIGRATION_MANIFEST_SCHEMA_ID,
+            ),
+        ),
+        (
+            "migration-plan-v2.schema.json",
+            management_schema_document_version::<MigrationPlanV2>(MIGRATION_PLAN_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "migration-checkpoint-v2.schema.json",
+            management_schema_document_version::<MigrationCheckpointV2>(
+                MIGRATION_CHECKPOINT_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "migration-attempt.schema.json",
+            management_schema_document::<MigrationAttempt>(MIGRATION_ATTEMPT_SCHEMA_ID),
+        ),
+        (
+            "migration-validation-report.schema.json",
+            management_schema_document::<MigrationValidationReport>(
+                MIGRATION_VALIDATION_REPORT_SCHEMA_ID,
+            ),
+        ),
+        (
+            "restore-verification-record.schema.json",
+            management_schema_document::<RestoreVerificationRecord>(
+                RESTORE_VERIFICATION_RECORD_SCHEMA_ID,
+            ),
+        ),
+        (
+            "performance-workload-spec.schema.json",
+            management_schema_document::<PerformanceWorkloadSpec>(
+                PERFORMANCE_WORKLOAD_SPEC_SCHEMA_ID,
+            ),
+        ),
+        (
+            "performance-run.schema.json",
+            management_schema_document::<PerformanceRun>(PERFORMANCE_RUN_SCHEMA_ID),
+        ),
+        (
+            "performance-comparison-v2.schema.json",
+            management_schema_document_version::<PerformanceComparisonV2>(
+                PERFORMANCE_COMPARISON_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "language-migration-plan.schema.json",
+            management_schema_document::<LanguageMigrationPlan>(LANGUAGE_MIGRATION_PLAN_SCHEMA_ID),
+        ),
+        (
+            "equivalence-report.schema.json",
+            management_schema_document::<EquivalenceReport>(EQUIVALENCE_REPORT_SCHEMA_ID),
+        ),
+        (
+            "cross-project-migration-handoff.schema.json",
+            management_schema_document::<CrossProjectMigrationHandoff>(
+                CROSS_PROJECT_MIGRATION_HANDOFF_SCHEMA_ID,
+            ),
+        ),
+        (
+            "multi-project-goal.schema.json",
+            management_schema_document::<MultiProjectGoal>(MULTI_PROJECT_GOAL_SCHEMA_ID),
+        ),
+        (
+            "cross-repo-change-bundle.schema.json",
+            management_schema_document::<CrossRepoChangeBundle>(CROSS_REPO_CHANGE_BUNDLE_SCHEMA_ID),
+        ),
+        (
+            "change-bundle-participant-v2.schema.json",
+            management_schema_document_version::<ChangeBundleParticipantV2>(
+                CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "worktree-record.schema.json",
+            management_schema_document::<WorktreeRecord>(WORKTREE_RECORD_SCHEMA_ID),
+        ),
+        (
+            "overlap-analysis.schema.json",
+            management_schema_document::<OverlapAnalysis>(OVERLAP_ANALYSIS_SCHEMA_ID),
+        ),
+        (
+            "merge-plan-v2.schema.json",
+            management_schema_document_version::<MergePlanV2>(MERGE_PLAN_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "merge-queue-record.schema.json",
+            management_schema_document::<MergeQueueRecord>(MERGE_QUEUE_RECORD_SCHEMA_ID),
+        ),
+        (
+            "merge-conflict-record.schema.json",
+            management_schema_document::<MergeConflictRecord>(MERGE_CONFLICT_RECORD_SCHEMA_ID),
+        ),
+        (
+            "project-merge-result.schema.json",
+            management_schema_document::<ProjectMergeResult>(PROJECT_MERGE_RESULT_SCHEMA_ID),
+        ),
+        (
+            "remote-state-snapshot-v2.schema.json",
+            management_schema_document_version::<RemoteStateSnapshotV2>(
+                REMOTE_STATE_SNAPSHOT_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "remote-operation-record.schema.json",
+            management_schema_document::<RemoteOperationRecord>(REMOTE_OPERATION_RECORD_SCHEMA_ID),
+        ),
+        (
+            "change-bundle-release-handoff.schema.json",
+            management_schema_document::<ChangeBundleReleaseHandoff>(
+                CHANGE_BUNDLE_RELEASE_HANDOFF_SCHEMA_ID,
+            ),
         ),
         (
             "clean-room-doctor-report.schema.json",
@@ -343,6 +675,10 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             ),
         ),
         (
+            "release-asset-binding-v1.schema.json",
+            management_schema_document::<ReleaseAssetBindingV1>(RELEASE_ASSET_BINDING_V1_SCHEMA_ID),
+        ),
+        (
             "evaluation-run-v2.schema.json",
             management_schema_document_version::<EvaluationRunV2>(EVALUATION_RUN_V2_SCHEMA_ID, 2),
         ),
@@ -373,6 +709,36 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             ),
         ),
         (
+            "rust-style-policy-approval-request.schema.json",
+            management_schema_document::<RustStylePolicyApprovalRequest>(
+                RUST_STYLE_POLICY_APPROVAL_REQUEST_SCHEMA_ID,
+            ),
+        ),
+        (
+            "rust-style-policy-approval-decision.schema.json",
+            management_schema_document::<RustStylePolicyApprovalDecision>(
+                RUST_STYLE_POLICY_APPROVAL_DECISION_SCHEMA_ID,
+            ),
+        ),
+        (
+            "development-profile-descriptor.schema.json",
+            management_schema_document::<DevelopmentProfileDescriptorV1>(
+                DEVELOPMENT_PROFILE_DESCRIPTOR_SCHEMA_ID,
+            ),
+        ),
+        (
+            "development-profile-catalog-snapshot.schema.json",
+            management_schema_document::<DevelopmentProfileCatalogSnapshotV1>(
+                DEVELOPMENT_PROFILE_CATALOG_SCHEMA_ID,
+            ),
+        ),
+        (
+            "development-profile-resolution.schema.json",
+            management_schema_document::<DevelopmentProfileResolutionV1>(
+                DEVELOPMENT_PROFILE_RESOLUTION_SCHEMA_ID,
+            ),
+        ),
+        (
             "validation-run.schema.json",
             schema_document::<ValidationRun>(VALIDATION_RUN_SCHEMA_ID),
         ),
@@ -385,6 +751,13 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             management_schema_document_version::<ValidationRunV2>(VALIDATION_RUN_V2_SCHEMA_ID, 2),
         ),
         (
+            "validation-result-v2.schema.json",
+            management_schema_document_version::<ValidationResultV2>(
+                VALIDATION_RESULT_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
             "gate-decision-v2.schema.json",
             management_schema_document_version::<GateDecisionV2>(GATE_DECISION_V2_SCHEMA_ID, 2),
         ),
@@ -395,6 +768,88 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "diagnostic-v2.schema.json",
             management_schema_document_version::<DiagnosticV2>(DIAGNOSTIC_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "baseline-v2.schema.json",
+            management_schema_document_version::<BaselineV2>(BASELINE_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "suppression-v2.schema.json",
+            management_schema_document_version::<SuppressionV2>(SUPPRESSION_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "disposition-v2.schema.json",
+            management_schema_document_version::<DispositionV2>(DISPOSITION_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "review-pack.schema.json",
+            management_schema_document_version::<ReviewPackV1>(
+                REVIEW_PACK_SCHEMA_ID,
+                REVIEW_PACK_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "rework-directive.schema.json",
+            management_schema_document_version::<ReworkDirectiveV1>(
+                REWORK_DIRECTIVE_SCHEMA_ID,
+                REWORK_DIRECTIVE_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "validator-guard-evidence-v2.schema.json",
+            management_schema_document_version::<ValidatorGuardEvidenceV2>(
+                VALIDATOR_GUARD_EVIDENCE_SCHEMA_ID,
+                VALIDATOR_GUARD_EVIDENCE_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "change-recipe-v2.schema.json",
+            management_schema_document_version::<ChangeRecipeV2>(
+                CHANGE_RECIPE_V2_SCHEMA_ID,
+                PATCH_V2_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "patch-set-v2.schema.json",
+            management_schema_document_version::<PatchSetV2>(
+                PATCH_SET_V2_SCHEMA_ID,
+                PATCH_V2_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "recipe-execution.schema.json",
+            management_schema_document_version::<RecipeExecution>(
+                RECIPE_EXECUTION_SCHEMA_ID,
+                PATCH_LIFECYCLE_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "patch-application.schema.json",
+            management_schema_document_version::<PatchApplication>(
+                PATCH_APPLICATION_SCHEMA_ID,
+                PATCH_LIFECYCLE_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "worktree-decision.schema.json",
+            management_schema_document_version::<WorktreeDecision>(
+                WORKTREE_DECISION_SCHEMA_ID,
+                PATCH_LIFECYCLE_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "patch-v1-to-v2-migration-plan.schema.json",
+            management_schema_document_version::<PatchV1ToV2MigrationPlan>(
+                PATCH_V1_TO_V2_MIGRATION_PLAN_SCHEMA_ID,
+                PATCH_LIFECYCLE_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "patch-v1-to-v2-migration-result.schema.json",
+            management_schema_document_version::<PatchV1ToV2MigrationResult>(
+                PATCH_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID,
+                PATCH_LIFECYCLE_SCHEMA_VERSION,
+            ),
         ),
         (
             "gate-decision.schema.json",
@@ -539,6 +994,66 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "management-store-status.schema.json",
             management_schema_document::<ManagementStoreStatus>("star.management-store-status"),
+        ),
+        (
+            "management-active-set.schema.json",
+            management_schema_document::<ActiveSetManifest>(ACTIVE_SET_MANIFEST_SCHEMA_ID),
+        ),
+        (
+            "management-backup-plan.schema.json",
+            management_schema_document::<BackupPlan>(BACKUP_PLAN_SCHEMA_ID),
+        ),
+        (
+            "management-backup-set-manifest.schema.json",
+            management_schema_document::<BackupSetManifest>(BACKUP_SET_MANIFEST_SCHEMA_ID),
+        ),
+        (
+            "management-backup-apply-result.schema.json",
+            management_schema_document::<BackupApplyResult>(BACKUP_APPLY_RESULT_SCHEMA_ID),
+        ),
+        (
+            "management-recovery-status.schema.json",
+            management_schema_document::<RecoveryStatus>(RECOVERY_STATUS_SCHEMA_ID),
+        ),
+        (
+            "management-restore-plan.schema.json",
+            management_schema_document::<RestorePlan>(RESTORE_PLAN_SCHEMA_ID),
+        ),
+        (
+            "management-restore-apply-result.schema.json",
+            management_schema_document::<RestoreApplyResult>(RESTORE_APPLY_RESULT_SCHEMA_ID),
+        ),
+        (
+            "management-rebuild-plan.schema.json",
+            management_schema_document::<RebuildPlan>(REBUILD_PLAN_SCHEMA_ID),
+        ),
+        (
+            "management-rebuild-apply-result.schema.json",
+            management_schema_document::<RebuildApplyResult>(REBUILD_APPLY_RESULT_SCHEMA_ID),
+        ),
+        (
+            "management-local-state-bundle.schema.json",
+            management_schema_document::<LocalStateBundle>(LOCAL_STATE_BUNDLE_SCHEMA_ID),
+        ),
+        (
+            "management-local-state-export-plan.schema.json",
+            management_schema_document::<LocalStateExportPlan>(LOCAL_STATE_EXPORT_PLAN_SCHEMA_ID),
+        ),
+        (
+            "management-local-state-export-result.schema.json",
+            management_schema_document::<LocalStateExportResult>(
+                LOCAL_STATE_EXPORT_RESULT_SCHEMA_ID,
+            ),
+        ),
+        (
+            "management-local-state-import-plan.schema.json",
+            management_schema_document::<LocalStateImportPlan>(LOCAL_STATE_IMPORT_PLAN_SCHEMA_ID),
+        ),
+        (
+            "management-local-state-import-result.schema.json",
+            management_schema_document::<LocalStateImportResult>(
+                LOCAL_STATE_IMPORT_RESULT_SCHEMA_ID,
+            ),
         ),
         (
             "coordinated-operation.schema.json",

@@ -1,0 +1,22 @@
+{
+  "architecture": "fixture",
+  "case_behavior": "fixture",
+  "completeness": "complete",
+  "environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "filesystem_kind": "fixture",
+  "line_ending_policy": "fixture",
+  "long_path_capability": "src/lib.rs",
+  "os_family": "fixture",
+  "os_release": "fixture",
+  "path_depth": 0,
+  "path_kind": "src/lib.rs",
+  "path_length_bucket": "src/lib.rs",
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.environment-snapshot",
+  "schema_version": 1,
+  "snapshot_id": "fixture",
+  "subject_revision": "fixture",
+  "symlink_capability": "fixture",
+  "text_encoding_policy": "fixture",
+  "unexpected": true
+}

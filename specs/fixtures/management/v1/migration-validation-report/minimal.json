@@ -1,0 +1,13 @@
+{
+  "attempt_ref": "fixture",
+  "completeness": "complete",
+  "gate_refs": [],
+  "invariant_results": [],
+  "plan_ref": "fixture",
+  "reference_validation_refs": [],
+  "report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "report_id": "fixture",
+  "schema_id": "star.migration-validation-report",
+  "schema_version": 1,
+  "state": "fixture"
+}

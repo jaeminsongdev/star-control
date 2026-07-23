@@ -18,6 +18,7 @@
         "contract",
         "config_key",
         "schema",
+        "managed_declaration",
         "source_class"
       ],
       "type": "string"

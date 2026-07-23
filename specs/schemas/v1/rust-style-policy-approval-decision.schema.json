@@ -1,0 +1,66 @@
+{
+  "$defs": {
+    "ApprovalDecision": {
+      "enum": [
+        "approve",
+        "deny"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.rust-style-policy-approval-decision:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Durable policy evaluator outcome for one exact Rust style approval request.",
+  "properties": {
+    "approval_id": {
+      "type": "string"
+    },
+    "contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "decision": {
+      "$ref": "#/$defs/ApprovalDecision"
+    },
+    "decision_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "request_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "resolved_at": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.rust-style-policy-approval-decision",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "contract_version",
+    "approval_id",
+    "scope_hash",
+    "request_fingerprint",
+    "decision",
+    "resolved_at",
+    "decision_fingerprint"
+  ],
+  "title": "RustStylePolicyApprovalDecision",
+  "type": "object"
+}

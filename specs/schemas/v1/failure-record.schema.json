@@ -1,0 +1,306 @@
+{
+  "$defs": {
+    "FailureCausalityRole": {
+      "enum": [
+        "root_candidate",
+        "cascade",
+        "independent",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "FailureInvocation": {
+      "additionalProperties": false,
+      "properties": {
+        "command_descriptor": {
+          "type": "string"
+        },
+        "executable_identity": {
+          "type": "string"
+        },
+        "logical_cwd": {
+          "type": "string"
+        },
+        "structured_args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "timeout_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_descriptor",
+        "executable_identity",
+        "structured_args",
+        "logical_cwd",
+        "timeout_ms"
+      ],
+      "type": "object"
+    },
+    "FailureKind": {
+      "enum": [
+        "compile",
+        "test",
+        "runtime",
+        "tool",
+        "environment"
+      ],
+      "type": "string"
+    },
+    "FailureSubjectBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "change_set_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkout_ref": {
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_ref": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "validation_run_ref": {
+          "type": "string"
+        },
+        "workspace_snapshot_ref": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_ref",
+        "workspace_snapshot_ref",
+        "project_revision_ref",
+        "validation_run_ref"
+      ],
+      "type": "object"
+    },
+    "PrimarySymptom": {
+      "additionalProperties": false,
+      "properties": {
+        "logical_owner": {
+          "type": "string"
+        },
+        "message_template": {
+          "type": "string"
+        },
+        "normalization_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "producer_code": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "producer_code",
+        "message_template",
+        "logical_owner",
+        "signature",
+        "normalization_version"
+      ],
+      "type": "object"
+    },
+    "RootCandidateRef": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "format": "double",
+          "type": "number"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "failure_record_ref": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "failure_record_ref",
+        "confidence",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "VerificationState": {
+      "enum": [
+        "verified",
+        "partially_verified",
+        "unverified",
+        "contradicted"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.failure-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "attempt_id": {
+      "type": "string"
+    },
+    "cascade_parent_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "causality_role": {
+      "$ref": "#/$defs/FailureCausalityRole"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "diagnostic_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "environment_compatibility_class": {
+      "type": "string"
+    },
+    "environment_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "failure_kind": {
+      "$ref": "#/$defs/FailureKind"
+    },
+    "failure_record_id": {
+      "type": "string"
+    },
+    "family_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "finding_refs": {
+      "default": [],
+      "items": {
+        "pattern": "^fnd_[a-z2-7]{52}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "input_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "invocation": {
+      "$ref": "#/$defs/FailureInvocation"
+    },
+    "observed_at": {
+      "type": "string"
+    },
+    "occurrence_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "occurrence_id": {
+      "pattern": "^occ_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "primary_symptom": {
+      "$ref": "#/$defs/PrimarySymptom"
+    },
+    "root_candidate_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RootCandidateRef"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.failure-record",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "seed": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "stderr_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "stdout_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "subject_binding": {
+      "$ref": "#/$defs/FailureSubjectBinding"
+    },
+    "verification_state": {
+      "$ref": "#/$defs/VerificationState"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "failure_record_id",
+    "occurrence_id",
+    "subject_binding",
+    "failure_kind",
+    "family_fingerprint",
+    "occurrence_fingerprint",
+    "primary_symptom",
+    "causality_role",
+    "invocation",
+    "environment_compatibility_class",
+    "environment_fingerprint",
+    "observed_at",
+    "attempt_id",
+    "verification_state",
+    "content_fingerprint"
+  ],
+  "title": "FailureRecord",
+  "type": "object"
+}

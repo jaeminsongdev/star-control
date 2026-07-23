@@ -1,0 +1,87 @@
+{
+  "activation_specs": [
+    "fixture"
+  ],
+  "backup_specs": [
+    "fixture"
+  ],
+  "check_refs": [
+    "fixture"
+  ],
+  "consumer_refs": [
+    "fixture"
+  ],
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "cross_project_relations": [
+    "fixture"
+  ],
+  "invariant_specs": [
+    {
+      "after_check_ref": "fixture",
+      "before_check_ref": "fixture",
+      "invariant_id": "fixture",
+      "invariant_kind": "fixture",
+      "loss_budget": "fixture",
+      "required": false
+    }
+  ],
+  "manifest_id": "fixture",
+  "manifest_version": "fixture",
+  "migration_chains": [
+    {
+      "chain_id": "fixture",
+      "steps": [
+        {
+          "checkpoint_policy": "fixture",
+          "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "effect_class": "read_only",
+          "expected_output": "fixture",
+          "from_version": "fixture",
+          "idempotency_contract": "replay_safe",
+          "invariant_refs": [
+            "fixture"
+          ],
+          "invocation_template_ref": "fixture",
+          "normalizer_ref": "fixture",
+          "preconditions": [
+            "fixture"
+          ],
+          "rollback_ref": "fixture",
+          "step_id": "fixture",
+          "step_version": "fixture",
+          "to_version": "fixture",
+          "tool_ref": "fixture",
+          "unknown_field_policy": "preserve",
+          "write_scope": [
+            "fixture"
+          ]
+        }
+      ],
+      "target_id": "fixture"
+    }
+  ],
+  "project_id": "prj_00000000000000000000000000",
+  "rehearsal_specs": [
+    "fixture"
+  ],
+  "rollback_specs": [
+    "fixture"
+  ],
+  "schema_id": "star.project-migration-manifest",
+  "schema_version": 1,
+  "target_specs": [
+    {
+      "current_version": "fixture",
+      "locator_class": "fixture",
+      "owner": "fixture",
+      "sensitivity": "fixture",
+      "target_id": "fixture",
+      "target_kind": "data",
+      "target_version": "fixture",
+      "version_source_ref": "fixture"
+    }
+  ],
+  "tool_refs": [
+    "fixture"
+  ]
+}

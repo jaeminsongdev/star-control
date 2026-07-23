@@ -1,0 +1,67 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.restore-verification-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "backup_artifact_ref": {
+      "type": "string"
+    },
+    "backup_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "behavior_check_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "integrity_verified": {
+      "type": "boolean"
+    },
+    "plan_ref": {
+      "type": "string"
+    },
+    "record_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "record_id": {
+      "type": "string"
+    },
+    "restored_subject_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.restore-verification-record",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "record_id",
+    "plan_ref",
+    "backup_artifact_ref",
+    "backup_fingerprint",
+    "restored_subject_fingerprint",
+    "integrity_verified",
+    "behavior_check_refs",
+    "state",
+    "record_fingerprint"
+  ],
+  "title": "RestoreVerificationRecord",
+  "type": "object"
+}

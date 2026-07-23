@@ -1,0 +1,17 @@
+{
+  "checkpoint_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "checkpoint_id": "fixture",
+  "completed_step_refs": [
+    "fixture"
+  ],
+  "in_progress_step_ref": "fixture",
+  "last_receipt_ref": "fixture",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_ref": "fixture",
+  "reconciliation_required": false,
+  "replay_safe": false,
+  "schema_id": "star.migration-checkpoint",
+  "schema_version": 2,
+  "target_state_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "target_version": "fixture"
+}

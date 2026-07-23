@@ -2,7 +2,16 @@
 
 ## 상태와 문서 소유권
 
-이 문서는 Star-Control 1단계인 **읽기 전용 Project Catalog와 Code Index**의 설계 정본이다. P-0041에서 stable `ProjectCheckout` v1, `Project` v2, allowlist registration과 offline v1→v2 migration을 구현했다. P-0042에서 persisted `ProjectCatalogSnapshot`, `CodeIndexSnapshot`, classification/text/syntax/semantic partition, content-addressed file cache와 Controller query를 구현했다. watcher는 정확성 전제가 아니며 10,000-file Git dirty/non-Git 실측이 budget 안이므로 v0.1에는 추가하지 않는다.
+이 문서는 Star-Control 1단계인 **읽기 전용 Project Catalog와 Code Index**의 설계 정본이다. P-0041에서 stable `ProjectCheckout` v1, `Project` v2, allowlist registration과 offline v1→v2 migration을 구현했다. P-0042에서 persisted `ProjectCatalogSnapshot`, `CodeIndexSnapshot`, classification/text/syntax/semantic partition, content-addressed file cache와 Controller query를 구현했다. P-0054는 latest `main` 감사에서 explicit multi-root·linked-worktree attach, full/incremental mode, source entity, toolchain·guidance, hardcoding ownership과 candidate query를 실제 Controller·CLI 경로에 추가했다. watcher는 정확성 전제가 아니며 10,000-file Git dirty/non-Git 실측이 budget 안이므로 v0.1에는 추가하지 않는다.
+
+### P-0054 실제 제품 경계
+
+- `project discover [<explicit-root> ...]`, `project checkout attach|list|show`는 authenticated absolute root만 받고, Git common directory가 같은 linked worktree를 같은 `ProjectId`와 서로 다른 `CheckoutId`로 보존한다. raw common-dir path는 저장하지 않고 process 안에서만 비교한다.
+- `scan run --mode full|incremental`은 mode를 input/cache fingerprint에 포함한다. `full`은 이전 projection·cache reuse를 금지하며 둘 다 publish 직전 current source·checkout 관찰을 다시 확인한다.
+- 모든 file은 stable `Source` entity를 가진다. path seed는 token 집합이 아니라 이 entity에 resolve되고 syntax·semantic ownership edge로 전파된다.
+- `ToolchainRecord`는 manifest·lockfile·toolchain constraint와 declared/suggested command를, `GuidanceRecord`는 `.star-control`·`AGENTS.md`·README·contract/build manifest 우선순위와 충돌을 기록한다. 둘 다 source content fingerprint에 묶인다.
+- hardcoding detector는 endpoint·absolute path·timeout/retry/limit·raw command·duplicate error/config literal을 production source에서만 후보화한다. raw literal은 persistence와 fingerprint에서 제외하고 source range·shape·length bucket·false-positive guard 및 owning symbol/source entity만 저장한다.
+- `index files`, `index search|definitions|references`, `index hardcoding`, `graph neighbors`, `index status`는 current 여부·used tier·limitation·`confirmed_empty`를 stable JSON으로 반환한다.
 
 이 문서에서 **Project Catalog**는 사용자가 관리하는 project·checkout·workspace와 그 관계의 관찰 snapshot을 뜻한다. [설정과 Catalog 계약](config-and-catalog.md)의 built-in Task·Tool·Rule·Profile descriptor Catalog 및 `CatalogSnapshot`과 다른 domain이다. 이름 충돌을 피하기 위해 wire type은 항상 `ProjectCatalogSnapshot`을 사용한다.
 

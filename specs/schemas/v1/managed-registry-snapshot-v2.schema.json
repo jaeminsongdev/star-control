@@ -1,0 +1,842 @@
+{
+  "$defs": {
+    "AliasRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expires_in_registry_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "introduced_in_registry_version": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "introduced_in_registry_version"
+      ],
+      "type": "object"
+    },
+    "BindingObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "type": "string"
+        },
+        "current": {
+          "type": "boolean"
+        },
+        "declaration_id": {
+          "type": "string"
+        },
+        "expected_value": {
+          "type": "string"
+        },
+        "observed_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "declaration_id",
+        "binding_id",
+        "path",
+        "expected_value",
+        "current",
+        "source_sha256"
+      ],
+      "type": "object"
+    },
+    "BindingSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "type": "string"
+        },
+        "expected_value": {
+          "type": "string"
+        },
+        "generator_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/ManagedBindingKind"
+        },
+        "path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "symbol_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "binding_id",
+        "kind",
+        "path",
+        "expected_value",
+        "required"
+      ],
+      "type": "object"
+    },
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ConsumerContract": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_values": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "consumer_surface_id": {
+          "type": "string"
+        },
+        "migration_window_end": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minimum_item_version": {
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "requirement": {
+          "$ref": "#/$defs/ManagedConsumerRequirement"
+        }
+      },
+      "required": [
+        "consumer_surface_id",
+        "project_id",
+        "requirement",
+        "minimum_item_version"
+      ],
+      "type": "object"
+    },
+    "DelegatedNamespaceClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_kinds": {
+          "items": {
+            "$ref": "#/$defs/ManagedDeclarationKind"
+          },
+          "type": "array"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "owner_project_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace",
+        "owner_project_id",
+        "allowed_kinds"
+      ],
+      "type": "object"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "EvidenceCompleteness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ManagedBindingKind": {
+      "enum": [
+        "definition",
+        "reference",
+        "schema",
+        "docs",
+        "generated_output"
+      ],
+      "type": "string"
+    },
+    "ManagedCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
+        "classification": {
+          "$ref": "#/$defs/ManagedDeclarationClassification"
+        },
+        "kind": {
+          "$ref": "#/$defs/ManagedDeclarationKind"
+        },
+        "observed_value": {
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "classification",
+        "kind",
+        "observed_value",
+        "path",
+        "source_sha256",
+        "reason_codes"
+      ],
+      "type": "object"
+    },
+    "ManagedConsumer": {
+      "additionalProperties": false,
+      "properties": {
+        "declaration_id": {
+          "type": "string"
+        },
+        "observed_item_version": {
+          "type": "string"
+        },
+        "observed_value": {
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "state": {
+          "$ref": "#/$defs/ManagedConsumerState"
+        }
+      },
+      "required": [
+        "declaration_id",
+        "project_id",
+        "path",
+        "observed_value",
+        "observed_item_version",
+        "state",
+        "source_sha256"
+      ],
+      "type": "object"
+    },
+    "ManagedConsumerRequirement": {
+      "enum": [
+        "required",
+        "optional",
+        "observed_only"
+      ],
+      "type": "string"
+    },
+    "ManagedConsumerState": {
+      "enum": [
+        "bound",
+        "alias",
+        "transition_required",
+        "below_minimum",
+        "unresolved",
+        "stale",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ManagedDeclaration": {
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AliasRecord"
+          },
+          "type": "array"
+        },
+        "binding_specs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BindingSpec"
+          },
+          "type": "array"
+        },
+        "consumer_contracts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ConsumerContract"
+          },
+          "type": "array"
+        },
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "description": {
+          "type": "string"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ManagedDeclarationKind"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/ManagedLifecycleRecord"
+        },
+        "managed_declaration_id": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "owner": {
+          "$ref": "#/$defs/ManagedOwnerRef"
+        },
+        "primary_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "semantic_key": {
+          "type": "string"
+        },
+        "source_path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "status": {
+          "$ref": "#/$defs/ManagedLifecycle"
+        },
+        "uniqueness_scope": {
+          "type": "string"
+        },
+        "value_role": {
+          "$ref": "#/$defs/ManagedValueRole"
+        },
+        "value_type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "managed_declaration_id",
+        "item_version",
+        "namespace",
+        "semantic_key",
+        "kind",
+        "owner",
+        "value_type",
+        "value_role",
+        "description",
+        "status",
+        "lifecycle",
+        "uniqueness_scope",
+        "source_path",
+        "source_sha256",
+        "definition_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ManagedDeclarationClassification": {
+      "enum": [
+        "managed_declaration",
+        "candidate",
+        "local_implementation_constant"
+      ],
+      "type": "string"
+    },
+    "ManagedDeclarationKind": {
+      "enum": [
+        "error_code",
+        "diagnostic_id",
+        "schema_id",
+        "schema_version",
+        "config_key",
+        "config_default",
+        "cli_command",
+        "cli_exit_code",
+        "event_id",
+        "capability_id",
+        "permission_id",
+        "feature_flag",
+        "format_id",
+        "resource_id",
+        "global_constant"
+      ],
+      "type": "string"
+    },
+    "ManagedLifecycle": {
+      "enum": [
+        "active",
+        "deprecated",
+        "reserved",
+        "removed"
+      ],
+      "type": "string"
+    },
+    "ManagedLifecycleRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "deprecated_in_registry_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "introduced_in_registry_version": {
+          "type": "string"
+        },
+        "migration_record_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "removed_in_registry_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "replacement_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "introduced_in_registry_version"
+      ],
+      "type": "object"
+    },
+    "ManagedOwnerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_policy_ref": {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        "contract_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_owner": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "module_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "approval_policy_ref"
+      ],
+      "type": "object"
+    },
+    "ManagedValueRole": {
+      "enum": [
+        "stable_identifier",
+        "config_default",
+        "compile_time_contract"
+      ],
+      "type": "string"
+    },
+    "NamespaceClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_kinds": {
+          "items": {
+            "$ref": "#/$defs/ManagedDeclarationKind"
+          },
+          "type": "array"
+        },
+        "delegated_child_namespaces": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DelegatedNamespaceClaim"
+          },
+          "type": "array"
+        },
+        "introduced_in_registry_version": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "owner_project_id": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/NamespaceClaimStatus"
+        },
+        "transfer_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "namespace",
+        "owner_project_id",
+        "allowed_kinds",
+        "status",
+        "introduced_in_registry_version"
+      ],
+      "type": "object"
+    },
+    "NamespaceClaimStatus": {
+      "enum": [
+        "active",
+        "reserved"
+      ],
+      "type": "string"
+    },
+    "RegistryFreshness": {
+      "enum": [
+        "current",
+        "stale_source",
+        "stale_catalog",
+        "partial",
+        "unverified",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "RegistryResolutionState": {
+      "enum": [
+        "valid",
+        "conflicted",
+        "invalid",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "RegistrySourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "path",
+        "source_sha256"
+      ],
+      "type": "object"
+    },
+    "RegistryTombstone": {
+      "additionalProperties": false,
+      "properties": {
+        "declaration_id": {
+          "type": "string"
+        },
+        "removed_in_registry_version": {
+          "type": "string"
+        },
+        "reserved_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tombstone_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "declaration_id",
+        "removed_in_registry_version",
+        "tombstone_fingerprint"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.managed-registry-snapshot:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "binding_observations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/BindingObservation"
+      },
+      "type": "array"
+    },
+    "candidates": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ManagedCandidate"
+      },
+      "type": "array"
+    },
+    "checkout_id": {
+      "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "code_index_snapshot_id": {
+      "pattern": "^cix_[a-z2-7]{52}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "completeness": {
+      "$ref": "#/$defs/EvidenceCompleteness"
+    },
+    "consumers": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ManagedConsumer"
+      },
+      "type": "array"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "declarations": {
+      "items": {
+        "$ref": "#/$defs/ManagedDeclaration"
+      },
+      "type": "array"
+    },
+    "diagnostic_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DocumentRef"
+      },
+      "type": "array"
+    },
+    "freshness": {
+      "$ref": "#/$defs/RegistryFreshness"
+    },
+    "git_revision": {
+      "type": "string"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "local_constants": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ManagedCandidate"
+      },
+      "type": "array"
+    },
+    "managed_registry_snapshot_id": {
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "manifest_source_refs": {
+      "items": {
+        "$ref": "#/$defs/RegistrySourceRef"
+      },
+      "type": "array"
+    },
+    "namespace_claims": {
+      "items": {
+        "$ref": "#/$defs/NamespaceClaim"
+      },
+      "type": "array"
+    },
+    "owner_project_id": {
+      "type": "string"
+    },
+    "project_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "registry_id": {
+      "type": "string"
+    },
+    "registry_version": {
+      "type": "string"
+    },
+    "resolution_state": {
+      "$ref": "#/$defs/RegistryResolutionState"
+    },
+    "schema_id": {
+      "const": "star.managed-registry-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "tombstone_set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "tombstones": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RegistryTombstone"
+      },
+      "type": "array"
+    },
+    "workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "managed_registry_snapshot_id",
+    "registry_id",
+    "registry_version",
+    "owner_project_id",
+    "checkout_id",
+    "project_revision_id",
+    "workspace_snapshot_id",
+    "git_revision",
+    "manifest_sha256",
+    "manifest_source_refs",
+    "namespace_claims",
+    "declarations",
+    "tombstone_set_fingerprint",
+    "resolution_state",
+    "freshness",
+    "completeness",
+    "content_fingerprint"
+  ],
+  "title": "ManagedRegistrySnapshot",
+  "type": "object"
+}

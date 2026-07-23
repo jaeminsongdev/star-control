@@ -1,0 +1,18 @@
+{
+  "change_bundle_ref": "fixture",
+  "compatibility_windows": [],
+  "completion_level_reached": "none",
+  "completion_target": "none",
+  "dependency_order": [],
+  "handoff_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "limitations": [],
+  "multi_project_goal_ref": "fixture",
+  "overall_gate_ref": "fixture",
+  "project_inputs": [],
+  "ready": false,
+  "release_handoff_id": "fixture",
+  "remaining_risks": [],
+  "revision": 0,
+  "schema_id": "star.change-bundle-release-handoff",
+  "schema_version": 2
+}

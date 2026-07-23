@@ -1,0 +1,27 @@
+{
+  "activated_set": {
+    "entries": [
+      {
+        "generation": 0,
+        "header_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "management_store_version": 0,
+        "relative_locator": "fixture",
+        "scope": {
+          "kind": "global"
+        },
+        "store_id": "mst_00000000000000000000000000"
+      }
+    ],
+    "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "schema_id": "fixture",
+    "schema_version": 0
+  },
+  "applied_at": "2026-01-01T00:00:00Z",
+  "approved_plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "backup_set_id": "bks_00000000000000000000000000",
+  "previous_active_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-restore-apply-result",
+  "schema_version": 1
+}

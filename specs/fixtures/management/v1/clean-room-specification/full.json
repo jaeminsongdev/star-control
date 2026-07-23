@@ -1,0 +1,52 @@
+{
+  "architectures": [
+    "fixture"
+  ],
+  "cache_state": "fixture",
+  "dependency_download": "fixture",
+  "forbidden_actions": [
+    "fixture"
+  ],
+  "manifest_refs": [
+    "fixture"
+  ],
+  "package_install": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "required_environment_contracts": [
+    "fixture"
+  ],
+  "required_toolchains": [
+    {
+      "declared_range": "fixture",
+      "discovered_from": "fixture",
+      "evidence_ref": "fixture",
+      "executable_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "observed_version": "fixture",
+      "state": "present",
+      "toolchain_id": "fixture"
+    }
+  ],
+  "schema_id": "star.clean-room-specification",
+  "schema_version": 1,
+  "source_revision": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "specification_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "specification_id": "fixture",
+  "system_mutation": "fixture",
+  "target_os": [
+    "fixture"
+  ],
+  "tasks": [
+    {
+      "expected_result": "fixture",
+      "order": 0,
+      "resource_bound": "fixture",
+      "task_id": "fixture",
+      "timeout_ms": 0
+    }
+  ],
+  "test_network_policy": "fixture",
+  "writable_output_roots": [
+    "fixture"
+  ]
+}

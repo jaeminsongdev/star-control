@@ -1,0 +1,22 @@
+{
+  "blockers": [
+    "fixture"
+  ],
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "dependency_edges": [
+    "fixture"
+  ],
+  "handoff_id": "fixture",
+  "participants": [
+    {
+      "ordering_hint": 0,
+      "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "plan_ref": "fixture",
+      "project_id": "prj_00000000000000000000000000",
+      "state": "fixture"
+    }
+  ],
+  "ready_for_change_bundle": false,
+  "schema_id": "star.cross-project-migration-handoff",
+  "schema_version": 1
+}

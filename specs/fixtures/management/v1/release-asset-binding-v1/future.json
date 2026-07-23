@@ -1,0 +1,15 @@
+{
+  "artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "assets": [],
+  "binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "notes_relative_path": "src/lib.rs",
+  "prerelease": false,
+  "project_id": "prj_00000000000000000000000000",
+  "release_manifest_id": "rel_00000000000000000000000000",
+  "repository": "fixture",
+  "schema_id": "star.release-asset-binding",
+  "schema_version": 2,
+  "tag": "fixture",
+  "target_commitish": "fixture",
+  "title": "fixture"
+}

@@ -1,0 +1,16 @@
+{
+  "baseline_snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "baseline_snapshot_ref": "bas_00000000000000000000000000",
+  "changes": [],
+  "completeness": "complete",
+  "current_snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "current_snapshot_ref": "fixture",
+  "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_ref": "fixture",
+  "outcome": "unchanged",
+  "project_id": "prj_00000000000000000000000000",
+  "report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "report_id": "fixture",
+  "schema_id": "star.compatibility-report",
+  "schema_version": 3
+}

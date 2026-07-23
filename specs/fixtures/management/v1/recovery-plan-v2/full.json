@@ -1,0 +1,34 @@
+{
+  "blockers": [
+    "fixture"
+  ],
+  "exact_subject_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "failure_record_ref": "fixture",
+  "owner": "fixture",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "recovery_kind": "rollback",
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "schema_id": "star.recovery-plan",
+  "schema_version": 2,
+  "state": "planned",
+  "steps": [
+    {
+      "action": "fixture",
+      "destructive_effect": false,
+      "evidence_slots": [
+        "fixture"
+      ],
+      "expected_checkpoint": "fixture",
+      "fallback_step_id": "fixture",
+      "order": 0,
+      "permission_required": false,
+      "prerequisite_step_ids": [
+        "fixture"
+      ],
+      "step_id": "fixture",
+      "stop_condition": "fixture",
+      "validation_check_ref": "fixture"
+    }
+  ]
+}

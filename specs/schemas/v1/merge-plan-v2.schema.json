@@ -1,0 +1,150 @@
+{
+  "$defs": {
+    "MergePlanState": {
+      "enum": [
+        "draft",
+        "ready",
+        "queued",
+        "stale",
+        "integrating",
+        "conflicted",
+        "validating",
+        "completed",
+        "held",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "MergeStrategyV2": {
+      "enum": [
+        "fast_forward_only",
+        "merge_commit",
+        "squash",
+        "apply_patch"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.merge-plan-v2:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "change_bundle_ref": {
+      "type": "string"
+    },
+    "conflict_policy": {
+      "type": "string"
+    },
+    "dependency_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "inputs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "integration_worktree_ref": {
+      "type": "string"
+    },
+    "merge_plan_id": {
+      "type": "string"
+    },
+    "order": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "overlap_analysis_ref": {
+      "type": "string"
+    },
+    "participant_ref": {
+      "type": "string"
+    },
+    "permission_plan_ref": {
+      "type": "string"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "previous_revision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "repository_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rollback_plan_ref": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.merge-plan-v2",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/MergePlanState"
+    },
+    "strategy": {
+      "$ref": "#/$defs/MergeStrategyV2"
+    },
+    "target_base_commit_oid": {
+      "type": "string"
+    },
+    "target_ref": {
+      "type": "string"
+    },
+    "validation_plan_ref": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "merge_plan_id",
+    "revision",
+    "change_bundle_ref",
+    "participant_ref",
+    "project_id",
+    "repository_fingerprint",
+    "integration_worktree_ref",
+    "target_ref",
+    "target_base_commit_oid",
+    "inputs",
+    "strategy",
+    "order",
+    "dependency_refs",
+    "overlap_analysis_ref",
+    "conflict_policy",
+    "validation_plan_ref",
+    "rollback_plan_ref",
+    "permission_plan_ref",
+    "status",
+    "plan_fingerprint"
+  ],
+  "title": "MergePlanV2",
+  "type": "object"
+}

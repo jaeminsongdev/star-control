@@ -1,0 +1,263 @@
+{
+  "$defs": {
+    "DirtyState": {
+      "enum": [
+        "clean",
+        "dirty_complete",
+        "dirty_partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ParticipantRole": {
+      "enum": [
+        "provider",
+        "consumer",
+        "data_owner",
+        "tooling",
+        "validation_only"
+      ],
+      "type": "string"
+    },
+    "ParticipantState": {
+      "enum": [
+        "preparing",
+        "prepared",
+        "awaiting_apply",
+        "applying",
+        "partially_applied",
+        "awaiting_validation",
+        "validating",
+        "merge_ready",
+        "merging",
+        "local_completed",
+        "remote_pending",
+        "rollback_required",
+        "held",
+        "outcome_unknown",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.change-bundle-participant:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actual_subject_binding_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "base_commit_oid": {
+      "type": "string"
+    },
+    "base_project_revision_ref": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "baseline_workspace_snapshot_ref": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "change_bundle_ref": {
+      "type": "string"
+    },
+    "change_plan_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "checkout_id": {
+      "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "compensation_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "dirty_manifest_ref": {
+      "type": "string"
+    },
+    "dirty_state": {
+      "$ref": "#/$defs/DirtyState"
+    },
+    "evidence_bundle_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "gate_decision_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "git_object_format": {
+      "type": "string"
+    },
+    "merge_plan_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "merge_queue_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "migration_plan_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "participant_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "participant_id": {
+      "type": "string"
+    },
+    "patch_set_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "pending_action": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "preexisting_change_set_ref": {
+      "type": "string"
+    },
+    "previous_revision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "project_merge_result_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "recovery_plan_ref": {
+      "type": "string"
+    },
+    "remote_operation_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "remote_snapshot_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "repository_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "required": {
+      "type": "boolean"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "roles": {
+      "items": {
+        "$ref": "#/$defs/ParticipantRole"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.change-bundle-participant",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/ParticipantState"
+    },
+    "step_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "validation_plan_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "worktree_record_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "participant_id",
+    "revision",
+    "change_bundle_ref",
+    "project_id",
+    "required",
+    "roles",
+    "step_ids",
+    "checkout_id",
+    "repository_fingerprint",
+    "git_object_format",
+    "base_project_revision_ref",
+    "base_commit_oid",
+    "baseline_workspace_snapshot_ref",
+    "dirty_manifest_ref",
+    "dirty_state",
+    "preexisting_change_set_ref",
+    "change_plan_refs",
+    "patch_set_refs",
+    "migration_plan_refs",
+    "worktree_record_refs",
+    "validation_plan_refs",
+    "gate_decision_refs",
+    "evidence_bundle_refs",
+    "remote_snapshot_refs",
+    "remote_operation_refs",
+    "recovery_plan_ref",
+    "compensation_refs",
+    "state",
+    "participant_fingerprint"
+  ],
+  "title": "ChangeBundleParticipantV2",
+  "type": "object"
+}

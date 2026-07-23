@@ -1,0 +1,41 @@
+{
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "dependencies": [
+    {
+      "advisory_refs": [
+        "fixture"
+      ],
+      "affected_project_ids": [
+        "fixture"
+      ],
+      "dependency_id": "fixture",
+      "direct": false,
+      "ecosystem": "fixture",
+      "integrity": "fixture",
+      "license_refs": [
+        "fixture"
+      ],
+      "package_identity": "fixture",
+      "purpose": "fixture",
+      "requested_version": "fixture",
+      "resolved_version": "fixture",
+      "source": "fixture"
+    }
+  ],
+  "limitations": [
+    "fixture"
+  ],
+  "lockfile_path": "src/lib.rs",
+  "lockfile_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "manifest_path": "src/lib.rs",
+  "manifest_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "package_manager_id": "fixture",
+  "package_manager_version": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "resolver_mode": "fixture",
+  "schema_id": "star.dependency-snapshot",
+  "schema_version": 1,
+  "snapshot_id": "fixture",
+  "subject_revision": "fixture"
+}

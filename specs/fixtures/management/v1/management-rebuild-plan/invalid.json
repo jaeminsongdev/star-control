@@ -1,0 +1,11 @@
+{
+  "candidate_generation": 0,
+  "created_at": "2026-01-01T00:00:00Z",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "predicted_losses": [],
+  "projects": [],
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "schema_id": "star.management-rebuild-plan",
+  "schema_version": 1,
+  "unexpected": true
+}

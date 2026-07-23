@@ -17,6 +17,7 @@ use crate::{
     },
     index::{IndexFreshnessState, IndexTier, SourceClass},
     management::ProjectPathRef,
+    profile::DevelopmentProfileResolutionV1,
 };
 
 pub const TASK_SPEC_SCHEMA_ID: &str = "star.task-spec";
@@ -47,6 +48,7 @@ string_enum!(SelectorKind {
     Contract,
     ConfigKey,
     Schema,
+    ManagedDeclaration,
     SourceClass
 });
 string_enum!(ScopeAxis {
@@ -285,6 +287,8 @@ pub struct TaskSpec {
     pub success_criteria: Vec<SuccessCriterion>,
     pub constraints: Vec<String>,
     pub forbidden_actions: Vec<String>,
+    #[serde(default)]
+    pub profile_ids: Vec<String>,
     pub baseline_policy: BaselinePolicy,
     pub requested_checks: Vec<String>,
     pub check_overrides: Vec<CheckOverride>,
@@ -562,6 +566,8 @@ pub struct ImpactAnalysis {
 pub struct CheckDescriptor {
     pub check_id: String,
     pub family: String,
+    #[serde(default)]
+    pub project_ids: Vec<ProjectId>,
     pub tool_id: String,
     pub logical_executable: String,
     pub argument_template: Vec<String>,
@@ -609,6 +615,7 @@ pub struct CheckInvocationTemplate {
 pub struct CheckPlanV2 {
     pub plan_item_id: String,
     pub check_id: String,
+    pub descriptor_ref: DocumentRef,
     pub tool_id: String,
     pub family: String,
     pub project_id: ProjectId,
@@ -709,6 +716,8 @@ pub struct FullValidationPlan {
     pub gate_policy: GatePolicyV2,
     pub config_fingerprint: Sha256Hash,
     pub catalog_snapshot_ref: DocumentRef,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_resolution: Option<DevelopmentProfileResolutionV1>,
     pub selection_fingerprint: Sha256Hash,
     pub readiness: ValidationPlanV2Readiness,
 }
@@ -794,6 +803,7 @@ impl TaskSpec {
                 "success_criteria":self.success_criteria,
                 "constraints":self.constraints,
                 "forbidden_actions":self.forbidden_actions,
+                "profile_ids":self.profile_ids,
                 "baseline_policy":self.baseline_policy,
                 "requested_checks":self.requested_checks,
                 "check_overrides":self.check_overrides,
@@ -827,6 +837,7 @@ impl TaskSpec {
         }
         if !sorted_unique(&self.included_scope)
             || !sorted_unique(&self.requested_checks)
+            || !sorted_unique(&self.profile_ids)
             || !non_empty(&self.constraints)
             || !non_empty(&self.forbidden_actions)
             || !non_empty(&self.assumptions)
@@ -1022,6 +1033,7 @@ impl FullValidationPlan {
                 "gate_policy":self.gate_policy,
                 "config_fingerprint":self.config_fingerprint,
                 "catalog_snapshot_ref":self.catalog_snapshot_ref,
+                "profile_resolution":self.profile_resolution,
                 "readiness":self.readiness,
             }),
         )?;
@@ -1029,6 +1041,10 @@ impl FullValidationPlan {
             || self.schema_version != 2
             || self.revision == 0
             || self.scope_revision != self.scope_revision_ref.revision
+            || self
+                .profile_resolution
+                .as_ref()
+                .is_some_and(|resolution| resolution.validate().is_err())
             || (self.readiness == ValidationPlanV2Readiness::Ready
                 && self.required_checks.is_empty())
         {
@@ -1061,11 +1077,47 @@ impl PlanningBundle {
             self.scope_revision.revision,
             &self.scope_revision.scope_hash,
         );
+        let change_set_refs = self
+            .change_sets
+            .iter()
+            .map(|change_set| {
+                document_ref(
+                    CHANGE_SET_SCHEMA_ID,
+                    change_set.change_set_id.as_str(),
+                    1,
+                    &change_set.change_set_fingerprint,
+                )
+            })
+            .collect::<Vec<_>>();
+        let impact_ref = document_ref(
+            IMPACT_ANALYSIS_SCHEMA_ID,
+            self.impact_analysis.impact_analysis_id.as_str(),
+            self.impact_analysis.revision,
+            &self.impact_analysis.calculation_fingerprint,
+        );
         if self.scope_revision.task_spec_ref != task_ref
             || self.impact_analysis.task_spec_ref != task_ref
             || self.impact_analysis.scope_revision_ref != scope_ref
+            || self.impact_analysis.change_set_refs != change_set_refs
             || self.validation_plan.task_spec_ref != task_ref
             || self.validation_plan.scope_revision_ref != scope_ref
+            || self.validation_plan.change_set_refs != change_set_refs
+            || self.validation_plan.impact_analysis_ref != impact_ref
+            || self
+                .validation_plan
+                .profile_resolution
+                .as_ref()
+                .map(|resolution| {
+                    resolution
+                        .selected_profiles
+                        .iter()
+                        .map(|profile| profile.profile_id.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+                != self.task_spec.profile_ids
+            || (self.impact_analysis.status == ImpactStatus::Invalidated)
+                != (self.validation_plan.readiness == ValidationPlanV2Readiness::Invalidated)
             || self.change_sets.iter().any(|change_set| {
                 change_set.task_spec_ref != task_ref || change_set.scope_revision_ref != scope_ref
             })

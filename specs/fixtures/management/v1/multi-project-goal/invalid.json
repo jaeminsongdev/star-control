@@ -1,0 +1,37 @@
+{
+  "compatibility_windows": [],
+  "completion_target": "none",
+  "cross_project_invariants": [],
+  "goal_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "goal_spec_ref": "fixture",
+  "multi_project_goal_id": "fixture",
+  "participants": [],
+  "permission_floor_ref": "fixture",
+  "project_relations": [],
+  "questions": [],
+  "resource_budget": {
+    "artifact_limit_bytes": 0,
+    "cpu_weight_limit": 0,
+    "max_active_worktrees": 0,
+    "max_concurrent_writes": 0,
+    "max_parallel_projects": 0,
+    "max_processes": 0,
+    "memory_limit_bytes": 0,
+    "wall_time_limit_ms": 0,
+    "worktree_disk_limit_bytes": 0
+  },
+  "revision": 0,
+  "schema_id": "star.multi-project-goal",
+  "schema_version": 1,
+  "scope_revision_refs": [],
+  "source_snapshot_refs": [],
+  "step_graph": {
+    "edges": [],
+    "graph_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "steps": [],
+    "topological_order": []
+  },
+  "task_spec_refs": [],
+  "unexpected": true,
+  "unknowns": []
+}

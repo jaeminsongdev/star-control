@@ -2,7 +2,7 @@
 
 ## 1. 상태와 문서 소유권
 
-이 문서는 Star-Control의 16번째 C01 작업 Profile인 `rust_style_auto_fix`와 고정 pipeline `rust_style_v1`의 의미 정본이다. 현재 상태는 **P-0052 bounded 제품 Slice 구현**이다. toolchain/policy/coverage/step 계약과 generated fixture, private fixed cargo rustfmt·Clippy adapter, Controller/application/CLI `inspect|check|prepare|auto-apply`, `rustfmt → allowlisted MachineApplicable Clippy → rustfmt`, isolated immutable PatchSet, full-pipeline second-run zero diff, exact human approval·`personal_auto` single-use permit와 apply·rollback recovery를 구현했다. background apply·live target tool 실행·generated/vendor write는 계속 금지한다. disposable fixture에서 exact apply와 rollback을 검증했지만 사용자 checkout에는 적용하지 않았다. 구현 증거는 [M11 Rust 자동 교정 Slice](../testing/m11-rust-style-evidence-2026-07-20.md)에 고정한다.
+이 문서는 Star-Control의 16번째 C01 작업 Profile인 `rust_style_auto_fix`와 고정 pipeline `rust_style_v1`의 의미 정본이다. P-0052의 fixed adapter/PatchSet core 위에 P-0054가 owned isolated preview, candidate `cargo check`·test no-run, exact durable human/`personal_auto` approval, M2 Profile resolution, M4 PatchSetV2, M3 pre/post Gate·Evidence와 Controller/application/CLI `inspect|check|prepare|auto-apply`를 하나의 persisted 흐름으로 연결했다. `rustfmt → allowlisted MachineApplicable Clippy → rustfmt`, full-pipeline second-run zero diff와 apply·rollback recovery를 disposable fixture에서 검증했다. background apply·generated/vendor write는 계속 금지하며 사용자 checkout에는 적용하지 않았다. 구현 증거는 [M11 Rust 자동 교정 Slice](../testing/m11-rust-style-evidence-2026-07-20.md)와 [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)에 고정한다.
 
 이 Profile은 다음 기존 정본을 조합한다.
 

@@ -1,0 +1,92 @@
+{
+  "$defs": {
+    "RegressionState": {
+      "enum": [
+        "fixed",
+        "recurring",
+        "unverified",
+        "contradicted"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "VerificationState": {
+      "enum": [
+        "verified",
+        "partially_verified",
+        "unverified",
+        "contradicted"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.regression-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "after_subject_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "after_validation_ref": {
+      "type": "string"
+    },
+    "before_failure_ref": {
+      "type": "string"
+    },
+    "evidence_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "family_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "record_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "recurrence_failure_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "regression_record_id": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.regression-record",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/RegressionState"
+    },
+    "verification_state": {
+      "$ref": "#/$defs/VerificationState"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "regression_record_id",
+    "family_fingerprint",
+    "before_failure_ref",
+    "after_validation_ref",
+    "after_subject_fingerprint",
+    "state",
+    "verification_state",
+    "record_fingerprint"
+  ],
+  "title": "RegressionRecord",
+  "type": "object"
+}

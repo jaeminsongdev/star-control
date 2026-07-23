@@ -1,0 +1,307 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "FailureInvocation": {
+      "additionalProperties": false,
+      "properties": {
+        "command_descriptor": {
+          "type": "string"
+        },
+        "executable_identity": {
+          "type": "string"
+        },
+        "logical_cwd": {
+          "type": "string"
+        },
+        "structured_args": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "timeout_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_descriptor",
+        "executable_identity",
+        "structured_args",
+        "logical_cwd",
+        "timeout_ms"
+      ],
+      "type": "object"
+    },
+    "FailureSubjectBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "change_set_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkout_ref": {
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_ref": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "validation_run_ref": {
+          "type": "string"
+        },
+        "workspace_snapshot_ref": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_ref",
+        "workspace_snapshot_ref",
+        "project_revision_ref",
+        "validation_run_ref"
+      ],
+      "type": "object"
+    },
+    "ReproductionArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_ref": {
+          "type": "string"
+        },
+        "artifact_role": {
+          "type": "string"
+        },
+        "redaction_status": {
+          "type": "string"
+        },
+        "retention_class": {
+          "type": "string"
+        },
+        "safe_for_default_report": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "artifact_ref",
+        "artifact_role",
+        "redaction_status",
+        "retention_class",
+        "safe_for_default_report"
+      ],
+      "type": "object"
+    },
+    "ReproductionAttemptV2": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "duration_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "environment_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "family_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "occurrence_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/ReproductionResult"
+        }
+      },
+      "required": [
+        "attempt",
+        "result",
+        "environment_fingerprint",
+        "input_fingerprint",
+        "duration_ms"
+      ],
+      "type": "object"
+    },
+    "ReproductionResult": {
+      "enum": [
+        "reproduced",
+        "different_failure",
+        "not_reproduced",
+        "blocked_external",
+        "incomplete"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.reproduction-pack:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ReproductionArtifactRef"
+      },
+      "type": "array"
+    },
+    "attempts": {
+      "items": {
+        "$ref": "#/$defs/ReproductionAttemptV2"
+      },
+      "type": "array"
+    },
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "dirty_state": {
+      "type": "string"
+    },
+    "environment_compatibility_class": {
+      "type": "string"
+    },
+    "environment_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "expected_result": {
+      "type": "string"
+    },
+    "failure_record_ref": {
+      "type": "string"
+    },
+    "family_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "input_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "invocation": {
+      "$ref": "#/$defs/FailureInvocation"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "observed_result": {
+      "type": "string"
+    },
+    "occurrence_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "pack_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "reproduction_pack_id": {
+      "type": "string"
+    },
+    "result": {
+      "$ref": "#/$defs/ReproductionResult"
+    },
+    "schema_id": {
+      "const": "star.reproduction-pack",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "seed": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "subject_binding": {
+      "$ref": "#/$defs/FailureSubjectBinding"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "reproduction_pack_id",
+    "failure_record_ref",
+    "family_fingerprint",
+    "occurrence_fingerprint",
+    "subject_binding",
+    "dirty_state",
+    "invocation",
+    "environment_compatibility_class",
+    "environment_fingerprint",
+    "expected_result",
+    "observed_result",
+    "attempts",
+    "result",
+    "completeness",
+    "pack_fingerprint"
+  ],
+  "title": "ReproductionPackV2",
+  "type": "object"
+}

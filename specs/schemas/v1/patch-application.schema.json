@@ -1,0 +1,488 @@
+{
+  "$defs": {
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string"
+        },
+        "actor_type": {
+          "$ref": "#/$defs/ActorType"
+        },
+        "auth_source": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_type",
+        "actor_id",
+        "display_name",
+        "auth_source"
+      ],
+      "type": "object"
+    },
+    "ActorType": {
+      "enum": [
+        "user",
+        "codex",
+        "system",
+        "controller",
+        "mcp",
+        "tool"
+      ],
+      "type": "string"
+    },
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "GateDecisionRef": {
+      "additionalProperties": false,
+      "properties": {
+        "gate_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "gate_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "PatchApplicationStateV1": {
+      "enum": [
+        "requested",
+        "preflighted",
+        "applying",
+        "applied",
+        "partially_applied",
+        "outcome_unknown",
+        "awaiting_human_review",
+        "recovery_required",
+        "reverted",
+        "isolated_discarded",
+        "recovery_blocked"
+      ],
+      "type": "string"
+    },
+    "PatchOperationReceiptStateV1": {
+      "enum": [
+        "not_started",
+        "applied_exact",
+        "failed_before_effect",
+        "failed_after_effect",
+        "outcome_unknown",
+        "reverted_exact",
+        "recovery_blocked"
+      ],
+      "type": "string"
+    },
+    "PatchOperationReceiptV1": {
+      "additionalProperties": false,
+      "properties": {
+        "effect_receipt_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_after_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_before_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "operation_id": {
+          "pattern": "^cop_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "receipt_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "recorded_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/PatchOperationReceiptStateV1"
+        }
+      },
+      "required": [
+        "operation_id",
+        "operation_fingerprint",
+        "state",
+        "recorded_at",
+        "receipt_fingerprint"
+      ],
+      "type": "object"
+    },
+    "PatchPermitKindRecordV1": {
+      "enum": [
+        "automatic",
+        "manual_approved"
+      ],
+      "type": "string"
+    },
+    "PatchRecoveryStrategyV1": {
+      "enum": [
+        "reverse_patch",
+        "discard_isolated"
+      ],
+      "type": "string"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.patch-application:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actual_operation_set_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "application_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "checkout_id": {
+      "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "observed_after_change_set_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "operation_receipts": {
+      "items": {
+        "$ref": "#/$defs/PatchOperationReceiptV1"
+      },
+      "type": "array"
+    },
+    "patch_application_id": {
+      "type": "string"
+    },
+    "patch_set_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "permission_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "permit_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PatchPermitKindRecordV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "post_gate_decision_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GateDecisionRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pre_gate_decision_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GateDecisionRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "recovery_strategy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PatchRecoveryStrategyV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requested_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "requested_by": {
+      "$ref": "#/$defs/ActorRef"
+    },
+    "requested_patch_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "reverse_patch_set_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.patch-application",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/PatchApplicationStateV1"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "worktree_decision_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "patch_application_id",
+    "revision",
+    "patch_set_ref",
+    "project_id",
+    "checkout_id",
+    "worktree_decision_ref",
+    "requested_patch_fingerprint",
+    "permission_fingerprint",
+    "operation_receipts",
+    "state",
+    "reason_codes",
+    "requested_by",
+    "requested_at",
+    "updated_at",
+    "application_fingerprint"
+  ],
+  "title": "PatchApplication",
+  "type": "object"
+}

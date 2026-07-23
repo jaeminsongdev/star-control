@@ -1,0 +1,30 @@
+schema_version = 1
+profile_id = "architecture_quality"
+profile_version = "1.0.0"
+display_name = "Architecture 품질"
+summary = "layer, dependency, cycle, 공개 경계와 exception ratchet을 검증한다."
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+triggers = ["architecture_change", "dependency_edge_change", "public_boundary_change"]
+stage_template = ["graph_snapshot", "boundary_rules", "cycle_check", "exception_ratchet", "goal_gate"]
+context_rules = ["current_dependency_graph", "declared_boundaries"]
+route_hints = ["architecture_validation", "project_graph"]
+permission_actions = []
+gate_phases = ["during_stage", "stage_exit", "goal_exit"]
+required_rule_families = ["architecture", "boundary", "dependency_cycle"]
+required_check_families = ["architecture"]
+optional_check_families = ["dependency"]
+always_run_for = ["public_boundary_change"]
+baseline_policy = "ratchet_new_and_worsened"
+suppression_policy = "approved_expiring"
+claim_policy = ["architecture", "change"]
+stability_policy = "human_review_flaky"
+evidence_requirements = ["diagnostic", "gate", "graph_snapshot"]
+corpus_requirements = ["boundary_fixture"]
+approval_checkpoints = []
+default_stop_state = "architecture_gate_decided"
+allowed_effect_classes = ["read", "plan", "validate"]
+permission_floor = "local_read_only"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"

@@ -1,0 +1,7 @@
+{
+  "namespace": "fixture",
+  "registry_id": "fixture",
+  "schema_id": "star.managed-registry-fragment",
+  "schema_version": 1,
+  "unexpected": true
+}

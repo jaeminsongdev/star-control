@@ -1,0 +1,42 @@
+{
+  "budget_snapshot_ref": "fixture",
+  "bundle_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "change_bundle_id": "lsb_00000000000000000000000000",
+  "compatibility_window_refs": [],
+  "completion_level_reached": "none",
+  "completion_target": "none",
+  "gate_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "hold_reasons": [],
+  "input_handoff_refs": [],
+  "merge_policy": "fixture",
+  "multi_project_goal_ref": "fixture",
+  "open_effect_refs": [],
+  "participant_refs": [],
+  "pending_approval_refs": [],
+  "permission_plan_ref": "fixture",
+  "remaining_risks": [],
+  "remote_policy": "disabled",
+  "resource_budget": {
+    "artifact_limit_bytes": 0,
+    "cpu_weight_limit": 0,
+    "max_active_worktrees": 0,
+    "max_concurrent_writes": 0,
+    "max_parallel_projects": 0,
+    "max_processes": 0,
+    "memory_limit_bytes": 0,
+    "wall_time_limit_ms": 0,
+    "worktree_disk_limit_bytes": 0
+  },
+  "revision": 0,
+  "schema_id": "star.cross-repo-change-bundle",
+  "schema_version": 2,
+  "scope_revision_refs": [],
+  "state": "preparing",
+  "step_graph": {
+    "edges": [],
+    "graph_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "steps": [],
+    "topological_order": []
+  },
+  "task_spec_refs": []
+}

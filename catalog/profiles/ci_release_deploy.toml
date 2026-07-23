@@ -1,0 +1,40 @@
+schema_version = 1
+profile_id = "ci_release_deploy"
+profile_version = "1.0.0"
+display_name = "CI Release Deploy"
+summary = "build-once artifact, 설치 lifecycle, release 승인과 평가 catalog를 결합한다."
+parent_profile = { profile_id = "security_supply_chain", profile_version = "1.0.0" }
+triggers = ["ci_change", "deploy_change", "release_candidate", "workflow_change"]
+stage_template = ["local_layers", "release_build", "artifact_verify", "install_lifecycle", "release_ready", "publish_verify"]
+context_rules = ["build_once", "current_release_manifest", "exact_artifact_identity"]
+route_hints = ["release", "evaluation"]
+permission_actions = ["release.publish", "remote_write"]
+gate_phases = ["release_preflight", "release_build", "release_verify", "release_package", "release_install_lifecycle", "release_ready", "release_publish_preflight", "release_publish_verify"]
+required_rule_families = ["artifact_identity", "release_integrity", "supply_chain"]
+required_check_families = ["build", "release", "security", "test"]
+optional_check_families = ["arm64_native"]
+always_run_for = ["publish", "release_candidate"]
+baseline_policy = "clean_only"
+suppression_policy = "approved_expiring"
+claim_policy = ["evaluation", "release"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["artifact_manifest", "evaluation_run", "evidence_bundle", "release_manifest"]
+corpus_requirements = ["install_lifecycle", "release_state_machine"]
+approval_checkpoints = ["remote_write", "release_publish"]
+default_stop_state = "ready"
+allowed_effect_classes = ["read", "plan", "validate", "local_state_write", "network_read", "remote_write", "publish"]
+permission_floor = "exact_durable_approval"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"
+
+[extensions.release]
+validation_layer_refs = ["local_quick", "target", "full", "release"]
+release_policy_ref = "packaging/release.toml@1"
+target_environment_refs = ["windows_arm64_preview", "windows_x64_stable"]
+package_lifecycle_refs = ["install", "package_dry_run", "rollback", "safe_default", "uninstall", "update"]
+supply_chain_applicability_ref = "security_supply_chain@1"
+approval_state_policy_ref = "release_manifest_v2@2"
+evaluation_policy_refs = ["evaluation_catalog@1", "evaluation_run_v2@2", "validator_guard@2"]
+evaluation_contexts = ["cli_only", "codex_integrated"]

@@ -1,0 +1,273 @@
+{
+  "$defs": {
+    "CleanRoomReadiness": {
+      "enum": [
+        "ready",
+        "not_ready",
+        "unknown",
+        "not_required"
+      ],
+      "type": "string"
+    },
+    "ConstraintEvaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "constraint_id": {
+          "type": "string"
+        },
+        "diagnostic_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "observed": {
+          "type": "string"
+        },
+        "required": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/EvaluationState"
+        }
+      },
+      "required": [
+        "constraint_id",
+        "observed",
+        "required",
+        "state"
+      ],
+      "type": "object"
+    },
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "EvaluationState": {
+      "enum": [
+        "pass",
+        "block",
+        "human_review",
+        "unknown",
+        "not_applicable"
+      ],
+      "type": "string"
+    },
+    "ManifestObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "completeness": {
+          "$ref": "#/$defs/CoverageState"
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "ecosystem": {
+          "type": "string"
+        },
+        "logical_path": {
+          "type": "string"
+        },
+        "manifest_kind": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "relation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "ecosystem",
+        "manifest_kind",
+        "logical_path",
+        "content_sha256",
+        "owner",
+        "completeness"
+      ],
+      "type": "object"
+    },
+    "ObservationState": {
+      "enum": [
+        "present",
+        "missing",
+        "version_mismatch",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ToolchainObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "declared_range": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "discovered_from": {
+          "type": "string"
+        },
+        "evidence_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "executable_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/ObservationState"
+        },
+        "toolchain_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "toolchain_id",
+        "discovered_from",
+        "state"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.project-doctor-report:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "clean_room_readiness": {
+      "$ref": "#/$defs/CleanRoomReadiness"
+    },
+    "command_availability": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ConstraintEvaluation"
+      },
+      "type": "array"
+    },
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "constraint_evaluations": {
+      "items": {
+        "$ref": "#/$defs/ConstraintEvaluation"
+      },
+      "type": "array"
+    },
+    "diagnostics": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "environment_snapshot_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "environment_snapshot_ref": {
+      "type": "string"
+    },
+    "forbidden_actions_observed": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_observations": {
+      "items": {
+        "$ref": "#/$defs/ManifestObservation"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "report_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "report_id": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.project-doctor-report",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/EvaluationState"
+    },
+    "subject_revision": {
+      "type": "string"
+    },
+    "toolchain_observations": {
+      "items": {
+        "$ref": "#/$defs/ToolchainObservation"
+      },
+      "type": "array"
+    },
+    "windows_compatibility": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ConstraintEvaluation"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "report_id",
+    "project_id",
+    "subject_revision",
+    "environment_snapshot_ref",
+    "environment_snapshot_fingerprint",
+    "constraint_evaluations",
+    "toolchain_observations",
+    "manifest_observations",
+    "clean_room_readiness",
+    "completeness",
+    "state",
+    "report_fingerprint"
+  ],
+  "title": "ProjectDoctorReport",
+  "type": "object"
+}

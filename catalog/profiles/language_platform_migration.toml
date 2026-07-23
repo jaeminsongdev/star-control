@@ -1,0 +1,41 @@
+schema_version = 1
+profile_id = "language_platform_migration"
+profile_version = "1.0.0"
+display_name = "Language Platform Migration"
+summary = "현재 동작 계약, 단계별 공존, equivalence와 cutover·rollback 증거를 관리한다."
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+triggers = ["language_migration", "platform_migration", "runtime_migration"]
+stage_template = ["behavior_contract", "coexistence_plan", "equivalence", "consumer_order", "cutover", "rollback"]
+context_rules = ["current_behavior", "consumer_inventory", "platform_evidence"]
+route_hints = ["language_migration", "migration"]
+permission_actions = ["language.cutover"]
+gate_phases = ["during_stage", "language_cutover", "goal_exit"]
+required_rule_families = ["behavior_equivalence", "consumer_order", "platform_evidence"]
+required_check_families = ["compatibility", "equivalence", "test"]
+optional_check_families = ["platform_native"]
+always_run_for = ["language_cutover", "writer_change"]
+baseline_policy = "clean_only"
+suppression_policy = "approved_expiring"
+claim_policy = ["equivalence", "migration", "platform"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["equivalence_report", "language_migration_plan", "platform_matrix"]
+corpus_requirements = ["equivalence", "rollback"]
+approval_checkpoints = ["cross_project_effect", "language_cutover", "patch_apply"]
+default_stop_state = "awaiting_cutover_approval"
+allowed_effect_classes = ["read", "plan", "validate", "workspace_mutation"]
+permission_floor = "exact_durable_approval"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"
+
+[extensions.migration]
+target_kinds = ["language", "platform", "runtime"]
+invariant_families = ["behavior_equivalence", "consumer_compatibility", "platform_parity"]
+strategy_floor = "coexist_then_cutover"
+backup_policy = "source_revision_pinned"
+restore_policy = "rollback_writer"
+rehearsal_policy = "required"
+resume_policy = "stage_checkpointed"
+destructive_policy = "exact_prompt"
+default_pending_action = "cutover"

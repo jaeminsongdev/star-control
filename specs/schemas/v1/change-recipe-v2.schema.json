@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "RewriteAssuranceV2": {
+      "enum": [
+        "text_exact",
+        "syntax_aware",
+        "symbol_aware",
+        "codegen_assured"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "TargetSelectorKindV2": {
+      "enum": [
+        "path",
+        "symbol",
+        "finding",
+        "managed_declaration",
+        "contract",
+        "generator_input"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.change-recipe:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allowed_path_patterns": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "definition_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "idempotence_contract": {
+      "type": "string"
+    },
+    "intended_postconditions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "parameter_schema": true,
+    "permission_actions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "recipe_id": {
+      "type": "string"
+    },
+    "recipe_version": {
+      "type": "string"
+    },
+    "rewrite_assurance": {
+      "$ref": "#/$defs/RewriteAssuranceV2"
+    },
+    "rollback_contract": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.change-recipe",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "selector_kinds": {
+      "items": {
+        "$ref": "#/$defs/TargetSelectorKindV2"
+      },
+      "type": "array"
+    },
+    "transformer_ref": {
+      "type": "string"
+    },
+    "validation_families": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "recipe_id",
+    "recipe_version",
+    "display_name",
+    "selector_kinds",
+    "rewrite_assurance",
+    "parameter_schema",
+    "transformer_ref",
+    "allowed_path_patterns",
+    "intended_postconditions",
+    "validation_families",
+    "permission_actions",
+    "idempotence_contract",
+    "rollback_contract",
+    "definition_fingerprint"
+  ],
+  "title": "ChangeRecipeV2",
+  "type": "object"
+}

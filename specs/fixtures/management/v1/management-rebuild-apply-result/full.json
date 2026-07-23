@@ -1,0 +1,47 @@
+{
+  "activated_set": {
+    "entries": [
+      {
+        "generation": 0,
+        "header_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "management_store_version": 0,
+        "relative_locator": "fixture",
+        "scope": {
+          "kind": "global"
+        },
+        "store_id": "mst_00000000000000000000000000"
+      }
+    ],
+    "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "schema_id": "fixture",
+    "schema_version": 0
+  },
+  "applied_at": "2026-01-01T00:00:00Z",
+  "approved_plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "loss_report": [
+    {
+      "count": 0,
+      "kind": "local_suppression",
+      "project_id": "prj_00000000000000000000000000",
+      "reason_code": "fixture",
+      "state": "preserved"
+    }
+  ],
+  "rebuilt_projects": [
+    {
+      "canonical_source_count": 0,
+      "finding_count": 0,
+      "project_id": "prj_00000000000000000000000000",
+      "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "reindexed_artifact_count": 0,
+      "rejected_artifact_count": 0,
+      "scan_run_id": "scn_00000000000000000000000000",
+      "symbol_count": 0,
+      "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "recovery_plan_id": "rcp_00000000000000000000000000",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-rebuild-apply-result",
+  "schema_version": 1
+}

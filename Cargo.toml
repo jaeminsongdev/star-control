@@ -17,6 +17,7 @@ members = [
     "crates/adapters/star-adapter-windows",
     "crates/adapters/star-adapter-codex",
     "crates/adapters/star-adapter-rust-index",
+    "crates/adapters/star-adapter-github",
     "apps/star-mcp",
     "apps/star-cli",
     "apps/star-controller",

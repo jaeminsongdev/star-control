@@ -1,0 +1,19 @@
+{
+  "base_commit_oid": "fixture",
+  "before_manifest_ref": "fixture",
+  "evidence_hold": false,
+  "owner_token_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "participant_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "record_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "repository_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "retention": "fixture",
+  "revision": 0,
+  "role": "participant_apply",
+  "root_binding_id": "rtb_00000000000000000000000000",
+  "schema_id": "star.worktree-record",
+  "schema_version": 1,
+  "state": "planned",
+  "step_id": "fixture",
+  "worktree_id": "fixture"
+}

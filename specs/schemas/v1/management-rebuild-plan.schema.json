@@ -1,0 +1,177 @@
+{
+  "$defs": {
+    "RebuildProjectInput": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_inventory_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "effective_config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "rejected_artifact_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "root_binding_id": {
+          "pattern": "^rtb_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "source_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "verified_artifact_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "root_binding_id",
+        "source_revision_id",
+        "effective_config_fingerprint",
+        "artifact_inventory_fingerprint",
+        "verified_artifact_count",
+        "rejected_artifact_count"
+      ],
+      "type": "object"
+    },
+    "RecoveryLossItem": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/RecoveryLossKind"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/RecoveryLossState"
+        }
+      },
+      "required": [
+        "kind",
+        "state",
+        "reason_code"
+      ],
+      "type": "object"
+    },
+    "RecoveryLossKind": {
+      "enum": [
+        "local_suppression",
+        "local_baseline",
+        "local_disposition",
+        "active_change_plan",
+        "idempotency_history",
+        "actor_history",
+        "event_timestamp",
+        "artifact_reference"
+      ],
+      "type": "string"
+    },
+    "RecoveryLossState": {
+      "enum": [
+        "preserved",
+        "recoverable_from_export",
+        "lost",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-rebuild-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate_generation": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "expected_active_set_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "predicted_losses": {
+      "items": {
+        "$ref": "#/$defs/RecoveryLossItem"
+      },
+      "type": "array"
+    },
+    "projects": {
+      "items": {
+        "$ref": "#/$defs/RebuildProjectInput"
+      },
+      "type": "array"
+    },
+    "recovery_plan_id": {
+      "pattern": "^rcp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.management-rebuild-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "recovery_plan_id",
+    "created_at",
+    "candidate_generation",
+    "projects",
+    "predicted_losses",
+    "plan_fingerprint"
+  ],
+  "title": "RebuildPlan",
+  "type": "object"
+}

@@ -1,0 +1,33 @@
+{
+  "allowed_effect_classes": [],
+  "always_run_for": [],
+  "approval_checkpoints": [],
+  "baseline_policy": "off",
+  "catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "claim_policy": [],
+  "context_rules": [],
+  "corpus_requirements": [],
+  "default_stop_states": [],
+  "definition_refs": [],
+  "evidence_requirements": [],
+  "gate_phases": [],
+  "optional_check_families": [],
+  "parent_closure": [],
+  "permission_actions": [],
+  "permission_floor": "local_read_only",
+  "profile_resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "required_check_families": [],
+  "required_rule_families": [],
+  "review_policy": {
+    "cli_only": "none",
+    "codex_managed": "none"
+  },
+  "route_hints": [],
+  "schema_id": "star.development-profile-resolution",
+  "schema_version": 2,
+  "selected_profiles": [],
+  "stability_policy": "report_flaky",
+  "stage_refs": [],
+  "suppression_policy": "exact",
+  "triggers": []
+}

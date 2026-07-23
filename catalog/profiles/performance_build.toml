@@ -1,0 +1,41 @@
+schema_version = 1
+profile_id = "performance_build"
+profile_version = "1.0.0"
+display_name = "Performance Build"
+summary = "명시적 workload, 반복 측정, comparability와 correctness Gate를 결합한다."
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+triggers = ["build_bottleneck", "performance_claim", "performance_regression"]
+stage_template = ["workload_spec", "baseline_run", "candidate_run", "comparison", "correctness_gate"]
+context_rules = ["comparable_environment", "explicit_workload", "raw_samples_preserved"]
+route_hints = ["performance"]
+permission_actions = []
+gate_phases = ["during_stage", "performance_compare", "goal_exit"]
+required_rule_families = ["comparability", "correctness", "performance_regression"]
+required_check_families = ["build", "performance", "test"]
+optional_check_families = ["profiler"]
+always_run_for = ["performance_claim"]
+baseline_policy = "clean_only"
+suppression_policy = "approved_expiring"
+claim_policy = ["correctness", "performance"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["performance_comparison", "performance_run", "workload_spec"]
+corpus_requirements = ["noise", "outlier", "sample_floor"]
+approval_checkpoints = []
+default_stop_state = "comparison_decided"
+allowed_effect_classes = ["read", "plan", "validate"]
+permission_floor = "local_read_only"
+
+[review_policy]
+cli_only = "human_semantic"
+codex_managed = "independent_human"
+
+[extensions.migration]
+target_kinds = ["build", "runtime_workload"]
+invariant_families = ["correctness", "metric_comparability", "sample_stability"]
+strategy_floor = "explicit_activation"
+backup_policy = "baseline_preserved"
+restore_policy = "not_applicable"
+rehearsal_policy = "repeat_samples"
+resume_policy = "new_comparable_run"
+destructive_policy = "denied"
+default_pending_action = "compare"

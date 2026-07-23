@@ -1,0 +1,282 @@
+{
+  "$defs": {
+    "ActiveSetManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ActiveStoreGeneration"
+          },
+          "type": "array"
+        },
+        "manifest_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "entries",
+        "manifest_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ActiveStoreGeneration": {
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "header_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "management_store_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "relative_locator": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/StoreScope"
+        },
+        "store_id": {
+          "pattern": "^mst_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "store_id",
+        "generation",
+        "management_store_version",
+        "relative_locator",
+        "header_fingerprint"
+      ],
+      "type": "object"
+    },
+    "RebuiltProjectSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_source_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "pattern": "^src_[a-z2-7]{52}$",
+          "type": "integer"
+        },
+        "finding_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "integer"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "reindexed_artifact_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rejected_artifact_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scan_run_id": {
+          "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "symbol_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "scan_run_id",
+        "canonical_source_count",
+        "symbol_count",
+        "finding_count",
+        "reindexed_artifact_count",
+        "rejected_artifact_count"
+      ],
+      "type": "object"
+    },
+    "RecoveryLossItem": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/RecoveryLossKind"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/RecoveryLossState"
+        }
+      },
+      "required": [
+        "kind",
+        "state",
+        "reason_code"
+      ],
+      "type": "object"
+    },
+    "RecoveryLossKind": {
+      "enum": [
+        "local_suppression",
+        "local_baseline",
+        "local_disposition",
+        "active_change_plan",
+        "idempotency_history",
+        "actor_history",
+        "event_timestamp",
+        "artifact_reference"
+      ],
+      "type": "string"
+    },
+    "RecoveryLossState": {
+      "enum": [
+        "preserved",
+        "recoverable_from_export",
+        "lost",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StoreScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "global",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-rebuild-apply-result:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activated_set": {
+      "$ref": "#/$defs/ActiveSetManifest"
+    },
+    "applied_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "approved_plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "loss_report": {
+      "items": {
+        "$ref": "#/$defs/RecoveryLossItem"
+      },
+      "type": "array"
+    },
+    "rebuilt_projects": {
+      "items": {
+        "$ref": "#/$defs/RebuiltProjectSummary"
+      },
+      "type": "array"
+    },
+    "recovery_plan_id": {
+      "pattern": "^rcp_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "result_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.management-rebuild-apply-result",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "recovery_plan_id",
+    "applied_at",
+    "approved_plan_fingerprint",
+    "rebuilt_projects",
+    "loss_report",
+    "activated_set",
+    "result_fingerprint"
+  ],
+  "title": "RebuildApplyResult",
+  "type": "object"
+}

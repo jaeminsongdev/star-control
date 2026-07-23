@@ -1,0 +1,70 @@
+{
+  "change_bundle_ref": "fixture",
+  "compatibility_windows": [
+    {
+      "close_step_ref": "fixture",
+      "contract_ref": "fixture",
+      "current_consumer_state_refs": [
+        "fixture"
+      ],
+      "deadline": "fixture",
+      "evidence_close_condition": "fixture",
+      "new_accepted_version": "fixture",
+      "old_accepted_version": "fixture",
+      "open_step_ref": "fixture",
+      "opened_revision_ref": "fixture",
+      "provider_project_id": "fixture",
+      "required_consumer_project_ids": [
+        "fixture"
+      ],
+      "rollback_trigger": "fixture",
+      "state": "planned",
+      "window_id": "fixture"
+    }
+  ],
+  "completion_level_reached": "none",
+  "completion_target": "none",
+  "dependency_order": [
+    "fixture"
+  ],
+  "handoff_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "limitations": [
+    "fixture"
+  ],
+  "multi_project_goal_ref": "fixture",
+  "overall_gate_ref": "fixture",
+  "project_inputs": [
+    {
+      "artifact_refs": [
+        "art_00000000000000000000000000"
+      ],
+      "artifact_set_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "commit_oid": "fixture",
+      "compatibility_state": "fixture",
+      "evidence_bundle_ref": "fixture",
+      "gate_decision_ref": "gtd_00000000000000000000000000",
+      "git_object_format": "fixture",
+      "local_branch_state_ref": "fixture",
+      "migration_rollback_state": "fixture",
+      "project_id": "prj_00000000000000000000000000",
+      "project_merge_result_ref": "fixture",
+      "project_revision_ref": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "remote_merged_commit_oid": "fixture",
+      "remote_snapshot_ref": "fixture",
+      "roles": [
+        "provider"
+      ],
+      "unresolved_risks": [
+        "fixture"
+      ]
+    }
+  ],
+  "ready": false,
+  "release_handoff_id": "fixture",
+  "remaining_risks": [
+    "fixture"
+  ],
+  "revision": 0,
+  "schema_id": "star.change-bundle-release-handoff",
+  "schema_version": 1
+}

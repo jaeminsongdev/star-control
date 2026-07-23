@@ -1,5 +1,40 @@
 {
   "$defs": {
+    "ActorRef": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string"
+        },
+        "actor_type": {
+          "$ref": "#/$defs/ActorType"
+        },
+        "auth_source": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor_type",
+        "actor_id",
+        "display_name",
+        "auth_source"
+      ],
+      "type": "object"
+    },
+    "ActorType": {
+      "enum": [
+        "user",
+        "codex",
+        "system",
+        "controller",
+        "mcp",
+        "tool"
+      ],
+      "type": "string"
+    },
     "ArtifactKind": {
       "enum": [
         "log",
@@ -140,6 +175,154 @@
       ],
       "type": "string"
     },
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ClaimEvaluationStatusV2": {
+      "enum": [
+        "verified",
+        "contradicted",
+        "unverified",
+        "stale",
+        "not_applicable"
+      ],
+      "type": "string"
+    },
+    "ClaimEvaluationV2": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/ClaimEvidenceRefV2"
+          },
+          "type": "array"
+        },
+        "claim_ref": {
+          "$ref": "#/$defs/CompletionClaimRefV2"
+        },
+        "current_subject_binding": {
+          "$ref": "#/$defs/EvidenceSubjectBinding"
+        },
+        "diagnostic_refs": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticRef"
+          },
+          "type": "array"
+        },
+        "evaluation_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "gate_effect": {
+          "$ref": "#/$defs/ClaimGateEffectV2"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/ClaimEvaluationStatusV2"
+        }
+      },
+      "required": [
+        "claim_ref",
+        "current_subject_binding",
+        "actual_evidence_refs",
+        "status",
+        "diagnostic_refs",
+        "gate_effect",
+        "reason_codes",
+        "evaluation_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ClaimEvidenceRefV2": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "document_ref": {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            "kind": {
+              "const": "document",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "document_ref"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "validation_run",
+              "type": "string"
+            },
+            "validation_run_ref": {
+              "$ref": "#/$defs/ValidationRunRef"
+            }
+          },
+          "required": [
+            "kind",
+            "validation_run_ref"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_ref": {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            "kind": {
+              "const": "artifact",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "artifact_ref"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ClaimGateEffectV2": {
+      "enum": [
+        "none",
+        "human_review",
+        "block"
+      ],
+      "type": "string"
+    },
     "Completeness": {
       "enum": [
         "complete",
@@ -147,6 +330,291 @@
         "unverified"
       ],
       "type": "string"
+    },
+    "CompletionAssertionV2": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "after_sha256": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Sha256Hash"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "change",
+              "type": "string"
+            },
+            "operation": {
+              "$ref": "#/$defs/ObservedChangeKind"
+            }
+          },
+          "required": [
+            "kind",
+            "operation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "pass",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "compatible",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "current",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "assertion_code": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "other",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "assertion_code"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CompletionClaimKindV2": {
+      "enum": [
+        "change",
+        "check_executed",
+        "bug_fixed",
+        "compatibility",
+        "generated_current",
+        "docs_current",
+        "registry_current",
+        "other"
+      ],
+      "type": "string"
+    },
+    "CompletionClaimRefV2": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "claim_id": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "claim_id",
+        "required",
+        "claim_fingerprint"
+      ],
+      "type": "object"
+    },
+    "CompletionClaimSubjectV2": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "path",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "descriptor_ref": {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            "kind": {
+              "const": "check_plan",
+              "type": "string"
+            },
+            "plan_item_id": {
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id",
+            "plan_item_id",
+            "descriptor_ref"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "document_ref": {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            "kind": {
+              "const": "document",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id",
+            "document_ref"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CompletionClaimV2": {
+      "additionalProperties": false,
+      "properties": {
+        "assertion": {
+          "$ref": "#/$defs/CompletionAssertionV2"
+        },
+        "claim_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "claim_id": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CompletionClaimKindV2"
+        },
+        "reported_evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/ClaimEvidenceRefV2"
+          },
+          "type": "array"
+        },
+        "reported_subject_binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceSubjectBinding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "source_actor": {
+          "$ref": "#/$defs/ActorRef"
+        },
+        "subject": {
+          "$ref": "#/$defs/CompletionClaimSubjectV2"
+        }
+      },
+      "required": [
+        "claim_id",
+        "kind",
+        "subject",
+        "assertion",
+        "required",
+        "reported_evidence_refs",
+        "source_actor",
+        "created_at",
+        "claim_fingerprint"
+      ],
+      "type": "object"
     },
     "DiagnosticRef": {
       "additionalProperties": false,
@@ -205,6 +673,200 @@
       ],
       "type": "object"
     },
+    "EvidenceFreshnessV2": {
+      "enum": [
+        "current",
+        "stale_source",
+        "stale_plan",
+        "stale_config",
+        "stale_catalog",
+        "stale_tool",
+        "stale_environment",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "EvidenceSubjectBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "catalog_snapshot_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "change_plan_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "change_set_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "check_descriptor_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "effective_config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "execution_environment_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "freshness": {
+          "$ref": "#/$defs/EvidenceFreshnessV2"
+        },
+        "gate_phase": {
+          "$ref": "#/$defs/GatePhaseV2"
+        },
+        "gate_policy_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "impact_analysis_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "invocation_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "normalizer_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "observed_tool_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "patch_set_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "probed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "profile_resolution_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "rule_refs": {
+          "items": {
+            "$ref": "#/$defs/CatalogRef"
+          },
+          "type": "array"
+        },
+        "scope_revision_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "stale_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_spec_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "tool_descriptor_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool_registry_snapshot_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validation_plan_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "validator_registry_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "workspace_content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "workspace_content_fingerprint",
+        "task_spec_ref",
+        "scope_revision_ref",
+        "impact_analysis_ref",
+        "change_set_refs",
+        "change_plan_refs",
+        "validation_plan_ref",
+        "gate_phase",
+        "profile_resolution_fingerprint",
+        "effective_config_fingerprint",
+        "gate_policy_fingerprint",
+        "catalog_snapshot_ref",
+        "validator_registry_fingerprint",
+        "rule_refs",
+        "execution_environment_fingerprint",
+        "normalizer_fingerprint",
+        "freshness",
+        "stale_reasons",
+        "binding_fingerprint",
+        "probed_at"
+      ],
+      "type": "object"
+    },
     "GateDecisionRef": {
       "additionalProperties": false,
       "properties": {
@@ -226,6 +888,27 @@
         "sha256"
       ],
       "type": "object"
+    },
+    "GatePhaseV2": {
+      "enum": [
+        "during_stage",
+        "goal_exit",
+        "patch_pre_apply",
+        "patch_post_apply"
+      ],
+      "type": "string"
+    },
+    "ObservedChangeKind": {
+      "enum": [
+        "add",
+        "modify",
+        "delete",
+        "rename",
+        "mode",
+        "binary",
+        "submodule"
+      ],
+      "type": "string"
     },
     "ProducerRef": {
       "additionalProperties": false,
@@ -337,8 +1020,20 @@
     "bundle_fingerprint": {
       "$ref": "#/$defs/Sha256Hash"
     },
+    "claim_evaluations": {
+      "items": {
+        "$ref": "#/$defs/ClaimEvaluationV2"
+      },
+      "type": "array"
+    },
     "completeness": {
       "$ref": "#/$defs/Completeness"
+    },
+    "completion_claims": {
+      "items": {
+        "$ref": "#/$defs/CompletionClaimV2"
+      },
+      "type": "array"
     },
     "created_at": {
       "format": "date-time",
@@ -351,6 +1046,7 @@
       "type": "array"
     },
     "evidence_bundle_id": {
+      "pattern": "^lsb_[0-9A-HJKMNP-TV-Z]{26}$",
       "type": "string"
     },
     "gate_decision_ref": {
@@ -387,11 +1083,20 @@
     "scope_revision_ref": {
       "$ref": "#/$defs/DocumentRef"
     },
+    "subject_binding_set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
     "task_spec_ref": {
       "$ref": "#/$defs/DocumentRef"
     },
     "validation_plan_ref": {
       "$ref": "#/$defs/DocumentRef"
+    },
+    "validation_result_refs": {
+      "items": {
+        "$ref": "#/$defs/DocumentRef"
+      },
+      "type": "array"
     },
     "validation_run_refs": {
       "items": {
@@ -409,7 +1114,9 @@
     "scope_revision_ref",
     "impact_analysis_ref",
     "validation_plan_ref",
+    "subject_binding_set_fingerprint",
     "validation_run_refs",
+    "validation_result_refs",
     "diagnostic_refs",
     "gate_decision_ref",
     "authoritative_gate_state",

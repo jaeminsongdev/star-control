@@ -99,6 +99,12 @@
   "optional_checks": [
     {
       "check_id": "fixture",
+      "descriptor_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
       "evidence_kinds": [
         "fixture"
       ],
@@ -134,10 +140,99 @@
   "previous_success_comparisons": [
     "fixture"
   ],
+  "profile_resolution": {
+    "allowed_effect_classes": [
+      "read"
+    ],
+    "always_run_for": [
+      "fixture"
+    ],
+    "approval_checkpoints": [
+      "network"
+    ],
+    "baseline_policy": "off",
+    "catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "claim_policy": [
+      "fixture"
+    ],
+    "context_rules": [
+      "fixture"
+    ],
+    "corpus_requirements": [
+      "fixture"
+    ],
+    "default_stop_states": [
+      "fixture"
+    ],
+    "definition_refs": [
+      {
+        "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "profile_ref": {
+          "profile_id": "fixture",
+          "profile_version": "fixture"
+        }
+      }
+    ],
+    "evidence_requirements": [
+      "fixture"
+    ],
+    "gate_phases": [
+      "during_stage"
+    ],
+    "optional_check_families": [
+      "fixture"
+    ],
+    "parent_closure": [
+      {
+        "profile_id": "fixture",
+        "profile_version": "fixture"
+      }
+    ],
+    "permission_actions": [
+      "fixture"
+    ],
+    "permission_floor": "local_read_only",
+    "profile_resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "required_check_families": [
+      "fixture"
+    ],
+    "required_rule_families": [
+      "fixture"
+    ],
+    "review_policy": {
+      "cli_only": "none",
+      "codex_managed": "none"
+    },
+    "route_hints": [
+      "fixture"
+    ],
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "selected_profiles": [
+      {
+        "profile_id": "fixture",
+        "profile_version": "fixture"
+      }
+    ],
+    "stability_policy": "report_flaky",
+    "stage_refs": [
+      "fixture"
+    ],
+    "suppression_policy": "exact",
+    "triggers": [
+      "fixture"
+    ]
+  },
   "readiness": "draft",
   "required_checks": [
     {
       "check_id": "fixture",
+      "descriptor_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
       "evidence_kinds": [
         "fixture"
       ],

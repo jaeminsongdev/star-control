@@ -6,31 +6,31 @@
     },
     {
       "file": "validation-plan-v2.schema.json",
-      "hash": "sha256:3cc14b32abe9fbda378aac1053b5aecb07b7101dfea8f1d97ced314e60d2a1b4"
+      "hash": "sha256:bdf106eaf9cc712283dd7589ba38a9a0b190fca4599fc6adaa26f0b5d40c145a"
     },
     {
       "file": "task-spec.schema.json",
-      "hash": "sha256:9ea1ca0a460072a11349f06f31f0f051d38a4f50ce5f401ad5d9d2f51711e539"
+      "hash": "sha256:bcfb7d3b42ed932246104a3eab3f192425f63ef834fa7f89663775585b18f58f"
     },
     {
       "file": "scope-revision.schema.json",
-      "hash": "sha256:6a445af6c58248b42cc9802b5001d8a48a452ab86e54a5242223f04bb3496144"
+      "hash": "sha256:d876690fec18b84cdb58fa05fd303646cb868dcd910a2119731adbd66bfcfe5b"
     },
     {
       "file": "change-set.schema.json",
-      "hash": "sha256:36f9bbe8a5fbc5cb5f71584eb908e3636bf8660eabac9e7500e46249ec029cca"
+      "hash": "sha256:4752dbe18f7f85305d25a9f885a59cacf3dbadbd0a3d041396fcd6f0259abfe1"
     },
     {
       "file": "impact-analysis.schema.json",
-      "hash": "sha256:3249bcac2a200b400ebaf9e7a5f12920895f75f57c86fc6ff1da60b4e618b9f3"
+      "hash": "sha256:80fed6204f37b9d04620784bb832e87d8d3024780908bded66315153b7e9e985"
     },
     {
       "file": "risk-path-descriptor.schema.json",
-      "hash": "sha256:f4361a31b7241e7c6533c1f0edb600e42e193cfa23ab9a375828ab82336bec99"
+      "hash": "sha256:aafebeab87dfdc90a4d582686fdde9cc2abef10c0cad369e0182757f692a95e8"
     },
     {
       "file": "planning-bundle.schema.json",
-      "hash": "sha256:bc87e3bb31449145e1bc913f97e55f207454063c8212a50663cc398e56e03573"
+      "hash": "sha256:6a5f7db05ba38f276ca87d386818481fc498afe2fde728f0ee2c0ddebd7993a6"
     },
     {
       "file": "goal-record.schema.json",
@@ -41,8 +41,200 @@
       "hash": "sha256:ea83d38fce89226eaa3da6a1a47accf28237037b2829efdfdcc1cbd3ed4ae2b4"
     },
     {
+      "file": "managed-registry-manifest.schema.json",
+      "hash": "sha256:a6bbe05c649cc6910a967fe5909753334abcb5881bdac765cdeda591ed63c65a"
+    },
+    {
+      "file": "managed-registry-fragment.schema.json",
+      "hash": "sha256:949df72c5d95c0dc3b678b5568fc34293a5b4144e8e62cfb13281e3afffc9669"
+    },
+    {
+      "file": "managed-registry-snapshot-v2.schema.json",
+      "hash": "sha256:5497a2024eaa432c46944a9ecdfaa5f09401a18added1856209b8ba5774c0ac7"
+    },
+    {
+      "file": "registry-consistency-record.schema.json",
+      "hash": "sha256:ac11b5e15e99610b69b98044f73f2f43ad5e42031aa64f966ea0b0f97e900f4e"
+    },
+    {
+      "file": "managed-declaration-change-intent.schema.json",
+      "hash": "sha256:824f3f97890403b008f4fa80c23486213566732c964fd7c3a3ce028469ef11be"
+    },
+    {
       "file": "compatibility-report.schema.json",
       "hash": "sha256:6a5d0460a5e50648f69dfb344f005a4616dd256d078e4e29f556ca0c49bb6873"
+    },
+    {
+      "file": "project-contract-manifest.schema.json",
+      "hash": "sha256:c72673e5a892a10a35a567a9549cea35c9327675c6dbf498ef2fb0daffccbf60"
+    },
+    {
+      "file": "contract-surface-snapshot.schema.json",
+      "hash": "sha256:0cc0714492f07fe7527e954461b3bdc1f5496743ce86448de6e85bbfbd9bd0e2"
+    },
+    {
+      "file": "compatibility-report-v2.schema.json",
+      "hash": "sha256:a1018e1b3dad4ebc04df5c15531342e68a7d5ad191b4dd3236920b57bf240b43"
+    },
+    {
+      "file": "documentation-snapshot.schema.json",
+      "hash": "sha256:1134a3f2ceb57dbadb009d187b9ae4b43e1b7a896f0c99587648d03c5a1aaada"
+    },
+    {
+      "file": "config-key-trace.schema.json",
+      "hash": "sha256:b9d181c71d4fbc166b2868170ad1e66252b2c237a187381dd1ff520237360401"
+    },
+    {
+      "file": "environment-snapshot.schema.json",
+      "hash": "sha256:4e3ded131d00a94d8b43a729d50146ca2ad024a7013c50432491340b2cb18694"
+    },
+    {
+      "file": "project-doctor-report.schema.json",
+      "hash": "sha256:5d05c04b2b9b8e34790c4ab05842447f66c5624fb110536cbbdf96b1bd17b0c0"
+    },
+    {
+      "file": "clean-room-specification.schema.json",
+      "hash": "sha256:1fd48691a8c257a79034bd07b35009559613b28bf0e10642f01054daa5228106"
+    },
+    {
+      "file": "dependency-security-input-manifest.schema.json",
+      "hash": "sha256:09b2c0a3852b723e2e2cae7846079de2d65a7304c3694125093b7620fe6a266d"
+    },
+    {
+      "file": "development-effect-receipt-v1.schema.json",
+      "hash": "sha256:44288ade08d6f61bb87c95e0928d7bf74de9fcec15bca77490883cb946a41bee"
+    },
+    {
+      "file": "failure-record.schema.json",
+      "hash": "sha256:ab21a01e5ecd0cdead56868e76d7446dc40c368843e2b36aeea4c503a354c66b"
+    },
+    {
+      "file": "reproduction-pack-v2.schema.json",
+      "hash": "sha256:5effab8a0b149a570ea20587fd57ea9bb33eccdf043ab97fab15f2ac8b94793f"
+    },
+    {
+      "file": "regression-record.schema.json",
+      "hash": "sha256:52ae20193ad7a52f6361acd439b2929cd6b3b8914349398280f114c95c36b258"
+    },
+    {
+      "file": "recovery-plan-v2.schema.json",
+      "hash": "sha256:02eaffba3a6df1b2f6e4b032360ef73eb00ad1bc80ced1d2fe39cc94dbc3997e"
+    },
+    {
+      "file": "dependency-snapshot.schema.json",
+      "hash": "sha256:19cdca27c5d276f81345484a9ebd25ab4e6c52b9d8e0290f50ef2b8851f170eb"
+    },
+    {
+      "file": "supply-chain-snapshot.schema.json",
+      "hash": "sha256:dff554d59510df8c74f9731203608f52403c9541fc93c0c14418fe13f70939ba"
+    },
+    {
+      "file": "external-data-snapshot.schema.json",
+      "hash": "sha256:0a32655477750c465edb314d334b13da76765f2449e0a3190c2afe588858da40"
+    },
+    {
+      "file": "dependency-update-plan.schema.json",
+      "hash": "sha256:f07dc1f88aa87838133eb636ac55d76b4f25f5fe6f87df928f8d597016fae701"
+    },
+    {
+      "file": "maintenance-radar-snapshot.schema.json",
+      "hash": "sha256:08874c9e4191cd30fc0d69feb6df43873b1e70ac3e13c9f558d9628131db9a75"
+    },
+    {
+      "file": "project-migration-manifest.schema.json",
+      "hash": "sha256:8a62105789b5544b5a2b3961acc84acc505ad5edd2c894448058df09c2d4643a"
+    },
+    {
+      "file": "migration-plan-v2.schema.json",
+      "hash": "sha256:687708e3dc42f0b411b3152a65168b965f3b7c5b0c44fae00251846f3a88b98c"
+    },
+    {
+      "file": "migration-checkpoint-v2.schema.json",
+      "hash": "sha256:ff30e0d4d65a5194be3959a1e1b8403836feb16171b44c25663aba38bb70a0e8"
+    },
+    {
+      "file": "migration-attempt.schema.json",
+      "hash": "sha256:ccb1edabf52f4dba9185a219cb9d5ac4d1661bf341c6ad23a503197a1fe9475f"
+    },
+    {
+      "file": "migration-validation-report.schema.json",
+      "hash": "sha256:28711fc6d5e635072c959312fc34a272eec8a8c6adf1c4526f0275c99084cbe8"
+    },
+    {
+      "file": "restore-verification-record.schema.json",
+      "hash": "sha256:bb35e1c3911e951e9890697e9311445d0bba9cdd77e1e3bb3367492e0db9d002"
+    },
+    {
+      "file": "performance-workload-spec.schema.json",
+      "hash": "sha256:5f4e724dca587bb9ec9e0c983b8840216f6d2182483d8ebc6a1d2a9142fc4e0d"
+    },
+    {
+      "file": "performance-run.schema.json",
+      "hash": "sha256:0159f7f70b933dac4924f96b355b0b900b2d37ff8c6595b856cda024e1ec4e25"
+    },
+    {
+      "file": "performance-comparison-v2.schema.json",
+      "hash": "sha256:43689639cf725dd874fdb1b9ad0d6b6d9133ab417d76c64c206d09a4beaa32e3"
+    },
+    {
+      "file": "language-migration-plan.schema.json",
+      "hash": "sha256:885ec430385e4d7d3ffc02925b2a003e65f761175846ecbdede7ab2074071d32"
+    },
+    {
+      "file": "equivalence-report.schema.json",
+      "hash": "sha256:2016558b37ea5dac03ce914515c05cc3009ac4b9f98ea41d054a77192cf19b54"
+    },
+    {
+      "file": "cross-project-migration-handoff.schema.json",
+      "hash": "sha256:299975d5397e23a720a530b2bcc4975f03e4fd9d0b24a223cd040d172036c84a"
+    },
+    {
+      "file": "multi-project-goal.schema.json",
+      "hash": "sha256:3e046866aff4de17b6bdd70f03da8ee9ed013884b748c1194e4658c41c3257b1"
+    },
+    {
+      "file": "cross-repo-change-bundle.schema.json",
+      "hash": "sha256:1ffcd365f0bc39306bf4e0bd2477811e87b25a594c11a6462b387c46c104563f"
+    },
+    {
+      "file": "change-bundle-participant-v2.schema.json",
+      "hash": "sha256:16ad297ccea14b5501f06b2934b187dc0346660c8d94cab63fe269c06c22e445"
+    },
+    {
+      "file": "worktree-record.schema.json",
+      "hash": "sha256:8df4ced4b9abfab3c91369c9d1286e08fdc44ca7f4ea6d2dcdbce1139671001c"
+    },
+    {
+      "file": "overlap-analysis.schema.json",
+      "hash": "sha256:4cdf8439c5957ad2d1ae49c7eb2da5b0f93645d3ac705bed417f3bdf3ad25f4f"
+    },
+    {
+      "file": "merge-plan-v2.schema.json",
+      "hash": "sha256:afede799583036159efa0ec31591b598bbd45c528021ae5dc242e1397a00f57a"
+    },
+    {
+      "file": "merge-queue-record.schema.json",
+      "hash": "sha256:cb4b6d51cef239ab22c3f6bd345f36080467f6a8b83cdfeedb9ad06f50df41c9"
+    },
+    {
+      "file": "merge-conflict-record.schema.json",
+      "hash": "sha256:8422bf880c05918e78823e8d1c2fc69ca63f0ff307a4af4b11e4cfd1c212a75f"
+    },
+    {
+      "file": "project-merge-result.schema.json",
+      "hash": "sha256:afd0b76fcaaf08910e39fd9d1778e19b78e265840017fdda9b1168d63bdef3cd"
+    },
+    {
+      "file": "remote-state-snapshot-v2.schema.json",
+      "hash": "sha256:b50ce59e3eb979ee37ce6811710fc21bebe0fff2a2caec60981f59f65b5f30d5"
+    },
+    {
+      "file": "remote-operation-record.schema.json",
+      "hash": "sha256:03a85cf5dce60df1c61af91e80c1264daf212f0302c1191fcff3ca7814b36cef"
+    },
+    {
+      "file": "change-bundle-release-handoff.schema.json",
+      "hash": "sha256:b46a750e67f01a032e9e8a1e7fc8712228dd48b2fddd4fb61c2eac3d90c08f72"
     },
     {
       "file": "clean-room-doctor-report.schema.json",
@@ -66,15 +258,19 @@
     },
     {
       "file": "change-bundle.schema.json",
-      "hash": "sha256:7195156fab0159df1cc05e312e911ec5be2171edf47918dab54c58b6f8d8cebb"
+      "hash": "sha256:256a0b8788ee5ae298bd914c54b59f0f32f8cb209105c761fd73b652d9907ff5"
     },
     {
       "file": "change-bundle-handoff.schema.json",
-      "hash": "sha256:03b6e98514c7415ee77fb532f9147d270221978e0efd54cfd12d3ced10a55c82"
+      "hash": "sha256:e29e126812d6c555553c021c3924e72c0d3b9e833836d886751f6193bda1c38f"
     },
     {
       "file": "release-manifest-v2.schema.json",
       "hash": "sha256:78fef69b7e26be0d72908a219d5f47aa0823173c7966c2edc271dc6d93fb1d75"
+    },
+    {
+      "file": "release-asset-binding-v1.schema.json",
+      "hash": "sha256:1ad86694735111b8cc19fd7345723f9fe90f90498fc7f98fac2088630cd7de14"
     },
     {
       "file": "evaluation-run-v2.schema.json",
@@ -101,28 +297,104 @@
       "hash": "sha256:5d0aafd88d39f2c64959de47e2ac3d2d55b22113f3cc02b7198668684ad33038"
     },
     {
+      "file": "rust-style-policy-approval-request.schema.json",
+      "hash": "sha256:be737345b9dd6874f3f1706ff4dc8231f4a78b463d5e849e8e5f124db41cf9e0"
+    },
+    {
+      "file": "rust-style-policy-approval-decision.schema.json",
+      "hash": "sha256:83644fa93d6d055b1b4fada198ff0222ef9387d14e77d75a6564bed16f55df0b"
+    },
+    {
+      "file": "development-profile-descriptor.schema.json",
+      "hash": "sha256:2a2afbee198d03c2179332aa1f0b31a426ccf8063254e7975af9a313c675d6d2"
+    },
+    {
+      "file": "development-profile-catalog-snapshot.schema.json",
+      "hash": "sha256:39e588939558ca2408b95ce9f643bfbe7021d122ed2f3f0aa9c1a3afa20f96eb"
+    },
+    {
+      "file": "development-profile-resolution.schema.json",
+      "hash": "sha256:5c117e5941a4296b130f34bc83509b9d9d39929963a3f264d94d054957eb66c6"
+    },
+    {
       "file": "validation-run.schema.json",
       "hash": "sha256:8f3400299dc7a10ea2038f2057160291b3bd0d13cf4ba6ac26007974eef809a9"
     },
     {
       "file": "task-invocation-v2.schema.json",
-      "hash": "sha256:869452b8f81e7d0d61a860738c7b388946b65492b0bdcdcff3cdab6274e4cffa"
+      "hash": "sha256:459b2e561f3a98f9cd8941905e656ef8df03629178a60228b86bc48837078f44"
     },
     {
       "file": "validation-run-v2.schema.json",
-      "hash": "sha256:a36b565f3ab6b1087e17aa26b1fd60cadb4bc530d9a93688b6165ed5e5f0a657"
+      "hash": "sha256:6b91cbe6683834d15089f56659bf0f2a7e18ab14d32d55d45509ad70c398cfec"
+    },
+    {
+      "file": "validation-result-v2.schema.json",
+      "hash": "sha256:6949fd2f178afe99985a39234e06048f0ba1e7b7cf248a7961e5d29d6e2ec996"
     },
     {
       "file": "gate-decision-v2.schema.json",
-      "hash": "sha256:2f026ab83b7637f8a5d47c661ce3fe30585656620932f5266a54f3f9d2ffd2dc"
+      "hash": "sha256:2c9b2ea17d2cb8eded3724b3038f57f2eb68aeebc15cb5f2e60ea6f5219d10a1"
     },
     {
       "file": "evidence-bundle-v2.schema.json",
-      "hash": "sha256:fc86c9e42697c44f634cbd73d50f196d873c486952154ce84902daf92b93dab2"
+      "hash": "sha256:5072b0cabfffc4733963ba795657f8ee7cdaeacbc32f92e2587712960e62f03d"
     },
     {
       "file": "diagnostic-v2.schema.json",
       "hash": "sha256:e0ae2d9740434340a95b6a925ab45e001f25baf7d4a1c117b2c1d02a3e4658b5"
+    },
+    {
+      "file": "baseline-v2.schema.json",
+      "hash": "sha256:7bb6ea78b61f32bc6b59f5f3ca2015f0ec724486c4e26991a695db915f61e69f"
+    },
+    {
+      "file": "suppression-v2.schema.json",
+      "hash": "sha256:9b54a93322515a7606829c10137b722abc88cc5d5b9b49fdc2b4ba1814afb40e"
+    },
+    {
+      "file": "disposition-v2.schema.json",
+      "hash": "sha256:ffaa7c221b86ef4b9823c2d96690b6587e1100a9a3f3faf6863a041743078426"
+    },
+    {
+      "file": "review-pack.schema.json",
+      "hash": "sha256:f5c4216d85c794e72b4b97bcc098f3ece4fe423aa4b38195785b04d25005bff6"
+    },
+    {
+      "file": "rework-directive.schema.json",
+      "hash": "sha256:48bea9511e7e4885d0c7728bc05a6cbdd9fec3fe71382e4dcccdf5ee28593a46"
+    },
+    {
+      "file": "validator-guard-evidence-v2.schema.json",
+      "hash": "sha256:37c3af461e2e7fa9e85b37f7bce0f76310b23ce895a2d8a89cabba969a956e1f"
+    },
+    {
+      "file": "change-recipe-v2.schema.json",
+      "hash": "sha256:7a780d009ae760d0d2261b1fb04eba7350e4036c8b8cf26c7415a51bd0cfa663"
+    },
+    {
+      "file": "patch-set-v2.schema.json",
+      "hash": "sha256:eef8d58baa18710f21c9aa661c2d497987c18cf4b713fcc9bae41d5eb435ba4b"
+    },
+    {
+      "file": "recipe-execution.schema.json",
+      "hash": "sha256:861dcd2e2ffa4d6ad2279b25ae2bcb47ab3bcc8684dd12ffb7611ca69925a5c8"
+    },
+    {
+      "file": "patch-application.schema.json",
+      "hash": "sha256:96ce20c3cad479aa5efbfd3c113dd1d4d917e15153391cb0e9dd05be2a39bc30"
+    },
+    {
+      "file": "worktree-decision.schema.json",
+      "hash": "sha256:26c4d613eb315a3a42977a83e9b561ce29b39c5e2b063b7dc731957f2b91dd31"
+    },
+    {
+      "file": "patch-v1-to-v2-migration-plan.schema.json",
+      "hash": "sha256:7a51f6aef60d6d16ef55ece72696c35b5d618487e7180a1f3976ae16f4a88ef7"
+    },
+    {
+      "file": "patch-v1-to-v2-migration-result.schema.json",
+      "hash": "sha256:3ab66ff3c9986502a4aeb4021c2a53dc60701a1e78cb33f5b1c4f38c4aa011c4"
     },
     {
       "file": "gate-decision.schema.json",
@@ -186,7 +458,7 @@
     },
     {
       "file": "code-index-snapshot.schema.json",
-      "hash": "sha256:d096543ecd684cdb04a040df465a8881cb7f8ff19e218d34d5ed7f8fc9de4be4"
+      "hash": "sha256:3b3711756e6d7a6f84f1be14cafe70916f53e8c24f66c2bb4b64c7b501dbb2bd"
     },
     {
       "file": "project-v1-to-v2-migration-plan.schema.json",
@@ -263,6 +535,62 @@
     {
       "file": "management-store-status.schema.json",
       "hash": "sha256:d44ddf1d19d20b2c54249aacd9c9e25711a675362fe8f881e2d798120d96e64a"
+    },
+    {
+      "file": "management-active-set.schema.json",
+      "hash": "sha256:c62147bdf67d7bb774feb38a1cb0f5d3abd07316916f42ebc9594b3ca268ebcb"
+    },
+    {
+      "file": "management-backup-plan.schema.json",
+      "hash": "sha256:da2d534714aaa79c18614d5146d0503f74abafdc28777ac42732eb29b8a91c4a"
+    },
+    {
+      "file": "management-backup-set-manifest.schema.json",
+      "hash": "sha256:e1a15b0ae3993784ee6c6b88ef848be3be4f62ee3544ed7a35b30de2e44e6983"
+    },
+    {
+      "file": "management-backup-apply-result.schema.json",
+      "hash": "sha256:aa1e046cde18ac2d28c084780b5cfa9c9ffdd2403fb13e86d2702ebc11acb6a1"
+    },
+    {
+      "file": "management-recovery-status.schema.json",
+      "hash": "sha256:f564acd3328b317c1029fb83af2ab257ba1329bbb81a99ccb73ccc82a64f5563"
+    },
+    {
+      "file": "management-restore-plan.schema.json",
+      "hash": "sha256:724f8ddde39d380a0bff0f7191358879108594ba36b4c03ab7d03b3e56f670c5"
+    },
+    {
+      "file": "management-restore-apply-result.schema.json",
+      "hash": "sha256:e09f775d07798a3eb1a70c06a3888d77985c112e9eb199b7f933f84465016879"
+    },
+    {
+      "file": "management-rebuild-plan.schema.json",
+      "hash": "sha256:394da6874e26d0a8a120a3acac77f01982b0674ac5b40a6effb0d030960494ba"
+    },
+    {
+      "file": "management-rebuild-apply-result.schema.json",
+      "hash": "sha256:f31e95ac25e46a6e6d1bcb83ed101e2c9194883f19fbd1003a7157fd6cfa364f"
+    },
+    {
+      "file": "management-local-state-bundle.schema.json",
+      "hash": "sha256:5c64d2d316314847511da8b2f9bcd423b7abd988d1d3c23c73a56d7ce099fe00"
+    },
+    {
+      "file": "management-local-state-export-plan.schema.json",
+      "hash": "sha256:99af008a965053fb2a141bfa788f23c65676a0936ef436b9afac28845326496a"
+    },
+    {
+      "file": "management-local-state-export-result.schema.json",
+      "hash": "sha256:cfe43991505a4089d9d49050c3d5e04e7129bbd76c702829c5b89d2472e05317"
+    },
+    {
+      "file": "management-local-state-import-plan.schema.json",
+      "hash": "sha256:60c1c5c3383537ddc4321d189f2a29e56643804dde0943e834f74c406d1992c5"
+    },
+    {
+      "file": "management-local-state-import-result.schema.json",
+      "hash": "sha256:b4918acc49ae784bfd1f69400bae703812168a85d00a5a40aa8121b61cba737a"
     },
     {
       "file": "coordinated-operation.schema.json",

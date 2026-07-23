@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SuppressionStatus": {
+      "enum": [
+        "active",
+        "expired",
+        "revoked",
+        "stale"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.suppression:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "diagnostic_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "expires_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "permanent": {
+      "type": "boolean"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rule_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CatalogRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_id": {
+      "const": "star.suppression",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "scope_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "status": {
+      "$ref": "#/$defs/SuppressionStatus"
+    },
+    "subject_binding_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "suppression_id": {
+      "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "suppression_id",
+    "revision",
+    "project_id",
+    "scope_fingerprint",
+    "subject_binding_fingerprint",
+    "reason_code",
+    "reason",
+    "created_at",
+    "permanent",
+    "status",
+    "content_fingerprint"
+  ],
+  "title": "SuppressionV2",
+  "type": "object"
+}

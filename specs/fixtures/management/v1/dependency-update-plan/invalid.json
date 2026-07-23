@@ -1,0 +1,25 @@
+{
+  "candidate": {
+    "candidate_id": "fixture",
+    "dependency_id": "fixture",
+    "direct": false,
+    "package_manager_adapter_ref": "fixture",
+    "proposed_constraint": "fixture",
+    "reason": "fixture",
+    "source_change": false,
+    "source_evidence_ref": "fixture",
+    "source_freshness": "current",
+    "update_kind": "patch",
+    "version_delta": "patch"
+  },
+  "dependency_snapshot_ref": "fixture",
+  "expected_lockfile_paths": [],
+  "expected_manifest_paths": [],
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.dependency-update-plan",
+  "schema_version": 1,
+  "status": "observed",
+  "unexpected": true
+}

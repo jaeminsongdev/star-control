@@ -3,6 +3,7 @@
 pub mod candidate;
 pub mod evaluation;
 pub mod lifecycle;
+pub mod publisher;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ReleaseError {

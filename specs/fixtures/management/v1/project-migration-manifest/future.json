@@ -1,0 +1,11 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "invariant_specs": [],
+  "manifest_id": "fixture",
+  "manifest_version": "fixture",
+  "migration_chains": [],
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.project-migration-manifest",
+  "schema_version": 2,
+  "target_specs": []
+}

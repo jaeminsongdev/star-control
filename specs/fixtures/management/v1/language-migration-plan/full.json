@@ -1,0 +1,66 @@
+{
+  "behavior_contract_refs": [
+    "fixture"
+  ],
+  "boundary_adapter_specs": [
+    "fixture"
+  ],
+  "checkout_id": "cko_00000000000000000000000000",
+  "codegen_refs": [
+    "fixture"
+  ],
+  "coexistence_phases": [
+    {
+      "consumer_state": "fixture",
+      "fallback_available": false,
+      "order": 0,
+      "phase_id": "fixture",
+      "reader_state": "fixture",
+      "source_state": "fixture",
+      "writer_state": "fixture"
+    }
+  ],
+  "comparison_plan_refs": [
+    "fixture"
+  ],
+  "compatibility_window": "fixture",
+  "consumer_transition_order": [
+    "fixture"
+  ],
+  "cutover_plan": "fixture",
+  "impact_analysis_ref": "fixture",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "plan_id": "fixture",
+  "platform_evidence_matrix": [
+    "fixture"
+  ],
+  "project_id": "prj_00000000000000000000000000",
+  "recipe_refs": [
+    "fixture"
+  ],
+  "revision": 0,
+  "rollback_plan_ref": "fixture",
+  "schema_id": "star.language-migration-plan",
+  "schema_version": 1,
+  "source_stack": {
+    "architecture": "fixture",
+    "language": "fixture",
+    "os": "fixture",
+    "runtime": "fixture",
+    "sdk": "fixture",
+    "toolchain_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "state": "fixture",
+  "target_stack": {
+    "architecture": "fixture",
+    "language": "fixture",
+    "os": "fixture",
+    "runtime": "fixture",
+    "sdk": "fixture",
+    "toolchain_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "task_spec_ref": "fixture",
+  "unknown_semantics": [
+    "fixture"
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "artifact_refs": [
+    "art_00000000000000000000000000"
+  ],
+  "attempt_id": "fixture",
+  "cascade_parent_refs": [
+    "fixture"
+  ],
+  "causality_role": "root_candidate",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "diagnostic_refs": [
+    "fixture"
+  ],
+  "environment_compatibility_class": "fixture",
+  "environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "failure_kind": "compile",
+  "failure_record_id": "fixture",
+  "family_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "finding_refs": [
+    "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "input_refs": [
+    "fixture"
+  ],
+  "invocation": {
+    "command_descriptor": "fixture",
+    "executable_identity": "fixture",
+    "logical_cwd": "fixture",
+    "structured_args": [
+      "fixture"
+    ],
+    "timeout_ms": 0
+  },
+  "observed_at": "2026-01-01T00:00:00Z",
+  "occurrence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "occurrence_id": "occ_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "primary_symptom": {
+    "logical_owner": "fixture",
+    "message_template": "fixture",
+    "normalization_version": 0,
+    "producer_code": "fixture",
+    "signature": "fixture"
+  },
+  "root_candidate_refs": [
+    {
+      "confidence": 1,
+      "evidence_refs": [
+        "fixture"
+      ],
+      "failure_record_ref": "fixture",
+      "reason": "fixture"
+    }
+  ],
+  "schema_id": "star.failure-record",
+  "schema_version": 1,
+  "seed": "fixture",
+  "stderr_ref": "fixture",
+  "stdout_ref": "fixture",
+  "subject_binding": {
+    "change_set_ref": "fixture",
+    "checkout_ref": "cko_00000000000000000000000000",
+    "project_id": "prj_00000000000000000000000000",
+    "project_revision_ref": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "validation_run_ref": "val_00000000000000000000000000",
+    "workspace_snapshot_ref": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "verification_state": "verified"
+}

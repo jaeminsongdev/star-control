@@ -1,0 +1,46 @@
+{
+  "compatibility_policy_ref": {
+    "catalog_id": "fixture",
+    "format_version": 0,
+    "item_version": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "declaration_files": [
+    "fixture"
+  ],
+  "extensions": {},
+  "namespace_claims": [
+    {
+      "allowed_kinds": [
+        "error_code"
+      ],
+      "delegated_child_namespaces": [
+        {
+          "allowed_kinds": [
+            "error_code"
+          ],
+          "namespace": "fixture",
+          "owner_project_id": "fixture"
+        }
+      ],
+      "introduced_in_registry_version": "fixture",
+      "namespace": "fixture",
+      "owner_project_id": "fixture",
+      "status": "active",
+      "transfer_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ],
+  "owner_project_id": "fixture",
+  "registry_id": "fixture",
+  "registry_version": "fixture",
+  "required_check_families": [
+    "fixture"
+  ],
+  "schema_id": "star.managed-registry-manifest",
+  "schema_version": 1
+}

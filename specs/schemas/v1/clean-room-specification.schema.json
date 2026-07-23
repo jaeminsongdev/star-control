@@ -1,0 +1,215 @@
+{
+  "$defs": {
+    "CleanRoomTaskSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_result": {
+          "type": "string"
+        },
+        "order": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "resource_bound": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "task_id",
+        "order",
+        "timeout_ms",
+        "resource_bound",
+        "expected_result"
+      ],
+      "type": "object"
+    },
+    "ObservationState": {
+      "enum": [
+        "present",
+        "missing",
+        "version_mismatch",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ToolchainObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "declared_range": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "discovered_from": {
+          "type": "string"
+        },
+        "evidence_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "executable_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/ObservationState"
+        },
+        "toolchain_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "toolchain_id",
+        "discovered_from",
+        "state"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.clean-room-specification:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "architectures": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "cache_state": {
+      "type": "string"
+    },
+    "dependency_download": {
+      "type": "string"
+    },
+    "forbidden_actions": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "package_install": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "required_environment_contracts": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "required_toolchains": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ToolchainObservation"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.clean-room-specification",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_revision": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "source_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "specification_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "specification_id": {
+      "type": "string"
+    },
+    "system_mutation": {
+      "type": "string"
+    },
+    "target_os": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/CleanRoomTaskSpec"
+      },
+      "type": "array"
+    },
+    "test_network_policy": {
+      "type": "string"
+    },
+    "writable_output_roots": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "specification_id",
+    "project_id",
+    "source_revision",
+    "source_sha256",
+    "target_os",
+    "architectures",
+    "tasks",
+    "test_network_policy",
+    "dependency_download",
+    "package_install",
+    "system_mutation",
+    "cache_state",
+    "specification_fingerprint"
+  ],
+  "title": "CleanRoomSpecification",
+  "type": "object"
+}

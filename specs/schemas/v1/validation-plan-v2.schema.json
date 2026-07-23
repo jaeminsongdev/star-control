@@ -178,6 +178,9 @@
         "check_id": {
           "type": "string"
         },
+        "descriptor_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
         "evidence_kinds": {
           "items": {
             "type": "string"
@@ -231,6 +234,7 @@
       "required": [
         "plan_item_id",
         "check_id",
+        "descriptor_ref",
         "tool_id",
         "family",
         "project_id",
@@ -255,6 +259,217 @@
         "user_waived"
       ],
       "type": "string"
+    },
+    "DevelopmentProfileDefinitionRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "profile_ref": {
+          "$ref": "#/$defs/DevelopmentProfileRefV1"
+        }
+      },
+      "required": [
+        "profile_ref",
+        "definition_hash"
+      ],
+      "type": "object"
+    },
+    "DevelopmentProfileRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string"
+        },
+        "profile_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_version"
+      ],
+      "type": "object"
+    },
+    "DevelopmentProfileResolutionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_effect_classes": {
+          "items": {
+            "$ref": "#/$defs/ProfileEffectClassV1"
+          },
+          "type": "array"
+        },
+        "always_run_for": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "approval_checkpoints": {
+          "items": {
+            "$ref": "#/$defs/ProfileApprovalCheckpointV1"
+          },
+          "type": "array"
+        },
+        "baseline_policy": {
+          "$ref": "#/$defs/ProfileBaselinePolicyV1"
+        },
+        "catalog_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "claim_policy": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "context_rules": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "corpus_requirements": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default_stop_states": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "definition_refs": {
+          "items": {
+            "$ref": "#/$defs/DevelopmentProfileDefinitionRefV1"
+          },
+          "type": "array"
+        },
+        "evidence_requirements": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "gate_phases": {
+          "items": {
+            "$ref": "#/$defs/ProfileGatePhaseV1"
+          },
+          "type": "array"
+        },
+        "optional_check_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "parent_closure": {
+          "items": {
+            "$ref": "#/$defs/DevelopmentProfileRefV1"
+          },
+          "type": "array"
+        },
+        "permission_actions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "permission_floor": {
+          "$ref": "#/$defs/ProfilePermissionFloorV1"
+        },
+        "profile_resolution_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "required_check_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required_rule_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "review_policy": {
+          "$ref": "#/$defs/ProfileReviewPolicyV1"
+        },
+        "route_hints": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "selected_profiles": {
+          "items": {
+            "$ref": "#/$defs/DevelopmentProfileRefV1"
+          },
+          "type": "array"
+        },
+        "stability_policy": {
+          "$ref": "#/$defs/ProfileStabilityPolicyV1"
+        },
+        "stage_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "suppression_policy": {
+          "$ref": "#/$defs/ProfileSuppressionPolicyV1"
+        },
+        "triggers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "catalog_fingerprint",
+        "selected_profiles",
+        "parent_closure",
+        "definition_refs",
+        "triggers",
+        "stage_refs",
+        "context_rules",
+        "route_hints",
+        "permission_actions",
+        "gate_phases",
+        "required_rule_families",
+        "required_check_families",
+        "optional_check_families",
+        "always_run_for",
+        "baseline_policy",
+        "suppression_policy",
+        "claim_policy",
+        "stability_policy",
+        "review_policy",
+        "evidence_requirements",
+        "corpus_requirements",
+        "approval_checkpoints",
+        "allowed_effect_classes",
+        "permission_floor",
+        "default_stop_states",
+        "profile_resolution_fingerprint"
+      ],
+      "type": "object"
     },
     "DocumentRef": {
       "additionalProperties": false,
@@ -354,6 +569,121 @@
       ],
       "type": "object"
     },
+    "ProfileApprovalCheckpointV1": {
+      "enum": [
+        "network",
+        "download",
+        "debug_attach",
+        "dependency_change",
+        "patch_apply",
+        "migration_execute",
+        "destructive_migration",
+        "unknown_field_loss",
+        "cross_project_effect",
+        "language_cutover",
+        "remote_write",
+        "release_publish"
+      ],
+      "type": "string"
+    },
+    "ProfileBaselinePolicyV1": {
+      "enum": [
+        "off",
+        "report_only",
+        "ratchet_new",
+        "ratchet_new_and_worsened",
+        "clean_only"
+      ],
+      "type": "string"
+    },
+    "ProfileEffectClassV1": {
+      "enum": [
+        "read",
+        "plan",
+        "validate",
+        "local_state_write",
+        "workspace_mutation",
+        "network_read",
+        "remote_write",
+        "publish"
+      ],
+      "type": "string"
+    },
+    "ProfileGatePhaseV1": {
+      "enum": [
+        "during_stage",
+        "stage_exit",
+        "goal_exit",
+        "patch_pre_apply",
+        "patch_post_apply",
+        "merge",
+        "migration_pre_execute",
+        "migration_post_execute",
+        "migration_post_rollback",
+        "performance_compare",
+        "language_cutover",
+        "release",
+        "release_preflight",
+        "release_build",
+        "release_verify",
+        "release_package",
+        "release_install_lifecycle",
+        "release_ready",
+        "release_publish_preflight",
+        "release_publish_verify"
+      ],
+      "type": "string"
+    },
+    "ProfilePermissionFloorV1": {
+      "enum": [
+        "local_read_only",
+        "exact_prompt",
+        "exact_durable_approval",
+        "deny_external"
+      ],
+      "type": "string"
+    },
+    "ProfileReviewFloorV1": {
+      "enum": [
+        "none",
+        "human_semantic",
+        "independent_human",
+        "block"
+      ],
+      "type": "string"
+    },
+    "ProfileReviewPolicyV1": {
+      "additionalProperties": false,
+      "properties": {
+        "cli_only": {
+          "$ref": "#/$defs/ProfileReviewFloorV1"
+        },
+        "codex_managed": {
+          "$ref": "#/$defs/ProfileReviewFloorV1"
+        }
+      },
+      "required": [
+        "cli_only",
+        "codex_managed"
+      ],
+      "type": "object"
+    },
+    "ProfileStabilityPolicyV1": {
+      "enum": [
+        "report_flaky",
+        "human_review_flaky",
+        "block_required_flaky"
+      ],
+      "type": "string"
+    },
+    "ProfileSuppressionPolicyV1": {
+      "enum": [
+        "exact",
+        "bounded_expiring",
+        "approved_expiring"
+      ],
+      "type": "string"
+    },
     "ReviewKind": {
       "enum": [
         "none",
@@ -398,6 +728,7 @@
         "contract",
         "config_key",
         "schema",
+        "managed_declaration",
         "source_class"
       ],
       "type": "string"
@@ -534,6 +865,16 @@
         "type": "string"
       },
       "type": "array"
+    },
+    "profile_resolution": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DevelopmentProfileResolutionV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "readiness": {
       "$ref": "#/$defs/ValidationPlanV2Readiness"

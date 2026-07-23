@@ -1,0 +1,29 @@
+schema_version = 1
+profile_id = "ai_development_validation"
+profile_version = "1.0.0"
+display_name = "AI 개발 결과 검증"
+summary = "CLI와 Codex가 같은 결정적 Gate와 validator guard를 사용하도록 강제한다."
+triggers = ["codex_generated_change", "codex_modified_change"]
+stage_template = ["task_scope", "affected_validation", "validator_guard", "review_pack", "goal_gate"]
+context_rules = ["current_catalog", "current_index", "exact_change_set", "no_ai_as_pass_evidence"]
+route_hints = ["common_validation", "review_pack"]
+permission_actions = []
+gate_phases = ["during_stage", "stage_exit", "goal_exit"]
+required_rule_families = ["architecture", "hardcoding", "security", "validator_guard"]
+required_check_families = ["architecture", "hardcoding", "security"]
+optional_check_families = ["independent_review"]
+always_run_for = ["claim_completion", "validator_change"]
+baseline_policy = "ratchet_new_and_worsened"
+suppression_policy = "approved_expiring"
+claim_policy = ["change", "check", "completion"]
+stability_policy = "block_required_flaky"
+evidence_requirements = ["change_set", "evidence_bundle", "gate", "review_pack", "validation_run"]
+corpus_requirements = ["validator_guard"]
+approval_checkpoints = []
+default_stop_state = "goal_gate_decided"
+allowed_effect_classes = ["read", "plan", "validate"]
+permission_floor = "local_read_only"
+
+[review_policy]
+cli_only = "none"
+codex_managed = "independent_human"

@@ -211,6 +211,7 @@
         "contract",
         "config_key",
         "schema",
+        "managed_declaration",
         "source_class"
       ],
       "type": "string"
@@ -309,6 +310,13 @@
     "objective": {
       "minLength": 1,
       "type": "string"
+    },
+    "profile_ids": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     },
     "project_targets": {
       "items": {

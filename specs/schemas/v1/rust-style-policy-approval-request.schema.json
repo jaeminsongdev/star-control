@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.rust-style-policy-approval-request:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Exact, immutable `personal_auto` policy decision subject.\n\nThe standing grant is only a ceiling. This request binds a separate policy\ndecision to one prepared PatchSet, its authoritative pre Gate, and every\ntool/policy/coverage identity that produced the candidate.",
+  "properties": {
+    "before_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "candidate_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "changed_paths": {
+      "items": {
+        "minLength": 1,
+        "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "coverage_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "expected_after_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "fixed_adapter_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "patch_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "patch_set_id": {
+      "pattern": "^pat_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "pipeline_ref": {
+      "type": "string"
+    },
+    "policy_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "pre_gate_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "pre_gate_id": {
+      "type": "string"
+    },
+    "pre_gate_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "profile_ref": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "request_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.rust-style-policy-approval-request",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_paths": {
+      "items": {
+        "minLength": 1,
+        "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "standing_grant_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "toolchain_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "contract_version",
+    "project_id",
+    "profile_ref",
+    "pipeline_ref",
+    "patch_set_id",
+    "patch_fingerprint",
+    "candidate_fingerprint",
+    "before_fingerprint",
+    "expected_after_fingerprint",
+    "toolchain_fingerprint",
+    "policy_fingerprint",
+    "coverage_fingerprint",
+    "fixed_adapter_fingerprint",
+    "standing_grant_fingerprint",
+    "pre_gate_id",
+    "pre_gate_revision",
+    "pre_gate_fingerprint",
+    "scope_paths",
+    "changed_paths",
+    "request_fingerprint"
+  ],
+  "title": "RustStylePolicyApprovalRequest",
+  "type": "object"
+}

@@ -395,6 +395,7 @@ fn build(
         policy,
         syntax_adapters: &[],
         semantic_adapters: &[],
+        scan_mode: star_contracts::index::IndexScanMode::Incremental,
         previous,
     })
 }

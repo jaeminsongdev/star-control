@@ -1,0 +1,147 @@
+{
+  "$defs": {
+    "MergeQueueEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dependency_entry_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "entry_id": {
+          "type": "string"
+        },
+        "expected_predecessor_commit_oid": {
+          "type": "string"
+        },
+        "merge_plan_ref": {
+          "type": "string"
+        },
+        "participant_ref": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/MergeQueueEntryState"
+        }
+      },
+      "required": [
+        "entry_id",
+        "merge_plan_ref",
+        "participant_ref",
+        "expected_predecessor_commit_oid",
+        "dependency_entry_refs",
+        "state",
+        "attempt_refs"
+      ],
+      "type": "object"
+    },
+    "MergeQueueEntryState": {
+      "enum": [
+        "queued",
+        "blocked_dependency",
+        "stale",
+        "ready",
+        "integrating",
+        "conflicted",
+        "validating",
+        "completed",
+        "held",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.merge-queue-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active_entry_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "current_base_commit_oid": {
+      "type": "string"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/MergeQueueEntry"
+      },
+      "type": "array"
+    },
+    "integration_target_ref": {
+      "type": "string"
+    },
+    "merge_queue_id": {
+      "type": "string"
+    },
+    "previous_revision_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "queue_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "repository_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "repository_lock_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resource_reservation_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.merge-queue-record",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "merge_queue_id",
+    "revision",
+    "project_id",
+    "repository_fingerprint",
+    "integration_target_ref",
+    "current_base_commit_oid",
+    "entries",
+    "queue_fingerprint"
+  ],
+  "title": "MergeQueueRecord",
+  "type": "object"
+}

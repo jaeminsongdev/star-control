@@ -6,7 +6,7 @@
     "fixture"
   ],
   "bundle_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-  "bundle_id": "fixture",
+  "bundle_id": "lsb_00000000000000000000000000",
   "bundle_revision": 0,
   "handoff_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "participant_commits": [

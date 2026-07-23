@@ -5,7 +5,10 @@
 //! process, or transport dependency.
 
 pub mod canonical;
+pub mod coordination_v2;
 pub mod development;
+pub mod development_effect;
+pub mod development_v2;
 pub mod evidence;
 pub mod evidence_v2;
 pub mod fixed_mcp;
@@ -13,10 +16,16 @@ pub mod ids;
 pub mod index;
 pub mod installation;
 pub mod ipc;
+pub mod maintenance_v2;
+pub mod managed_registry;
 pub mod management;
 pub mod manifest;
+pub mod migration_v2;
 pub mod orchestration;
+pub mod patch_v2;
 pub mod planning;
+pub mod profile;
+pub mod recovery;
 pub mod registry;
 pub mod release_v2;
 pub mod runtime;
@@ -24,13 +33,16 @@ pub mod rust_style;
 pub mod schema;
 pub mod strict_json;
 pub mod trust;
+pub mod validator_guard;
 
 pub use canonical::{Sha256Hash, canonical_sha256, jcs_bytes};
 pub use ids::{
-    ApprovalId, ArtifactId, ChangeSetId, CheckoutId, DiagnosticId, EvaluationRunId,
-    EvidenceBundleId, GateId, GoalId, ImpactAnalysisId, InstallationId, OperationId, ProjectId,
-    ReleaseManifestId, RequestId, RunId, ScopeRevisionId, StageId, TaskInvocationId, TaskSpecId,
-    ToolCacheId, ToolTrustId, ValidationPlanId, ValidationRunId, WaiverId,
+    ApprovalId, ArtifactId, BackupSetId, ChangeSetId, CheckoutId, DiagnosticId, EvaluationRunId,
+    EvidenceBundleId, GateId, GoalId, ImpactAnalysisId, InstallationId, LocalStateBundleId,
+    ManagedRegistrySnapshotId, OperationId, PatchApplicationId, ProjectId, RecipeExecutionId,
+    RecoveryPlanId, RegistryConsistencyRecordId, ReleaseManifestId, RequestId, RunId,
+    ScopeRevisionId, StageId, TaskInvocationId, TaskSpecId, ToolCacheId, ToolTrustId,
+    ValidationPlanId, ValidationRunId, ValidatorGuardEvidenceId, WaiverId, WorktreeDecisionId,
 };
 pub use management::{MANAGEMENT_STORE_VERSION, REDACTION_CONTRACT_VERSION};
 pub use manifest::{ToolPackageManifest, parse_manifest_v1};

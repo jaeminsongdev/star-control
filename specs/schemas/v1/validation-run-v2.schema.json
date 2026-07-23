@@ -183,6 +183,256 @@
         }
       ]
     },
+    "EvidenceFreshnessV2": {
+      "enum": [
+        "current",
+        "stale_source",
+        "stale_plan",
+        "stale_config",
+        "stale_catalog",
+        "stale_tool",
+        "stale_environment",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "EvidenceSubjectBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "catalog_snapshot_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "change_plan_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "change_set_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "check_descriptor_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "effective_config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "execution_environment_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "freshness": {
+          "$ref": "#/$defs/EvidenceFreshnessV2"
+        },
+        "gate_phase": {
+          "$ref": "#/$defs/GatePhaseV2"
+        },
+        "gate_policy_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "impact_analysis_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "invocation_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "normalizer_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "observed_tool_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "patch_set_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "probed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "profile_resolution_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "rule_refs": {
+          "items": {
+            "$ref": "#/$defs/CatalogRef"
+          },
+          "type": "array"
+        },
+        "scope_revision_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "stale_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_spec_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "tool_descriptor_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool_registry_snapshot_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validation_plan_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "validator_registry_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "workspace_content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "workspace_content_fingerprint",
+        "task_spec_ref",
+        "scope_revision_ref",
+        "impact_analysis_ref",
+        "change_set_refs",
+        "change_plan_refs",
+        "validation_plan_ref",
+        "gate_phase",
+        "profile_resolution_fingerprint",
+        "effective_config_fingerprint",
+        "gate_policy_fingerprint",
+        "catalog_snapshot_ref",
+        "validator_registry_fingerprint",
+        "rule_refs",
+        "execution_environment_fingerprint",
+        "normalizer_fingerprint",
+        "freshness",
+        "stale_reasons",
+        "binding_fingerprint",
+        "probed_at"
+      ],
+      "type": "object"
+    },
+    "GatePhaseV2": {
+      "enum": [
+        "during_stage",
+        "goal_exit",
+        "patch_pre_apply",
+        "patch_post_apply"
+      ],
+      "type": "string"
+    },
+    "InvocationWorkingDirectoryV2": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project_root",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project_path",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "NotRunReasonV2": {
+      "enum": [
+        "dependency_unsatisfied",
+        "permission_blocked",
+        "tool_unavailable",
+        "preflight_invalidated",
+        "cancelled_before_start",
+        "launch_error"
+      ],
+      "type": "string"
+    },
     "ObservedTool": {
       "additionalProperties": false,
       "properties": {
@@ -228,6 +478,14 @@
         "artifact_bytes"
       ],
       "type": "object"
+    },
+    "ProcessStartStateV2": {
+      "enum": [
+        "not_started",
+        "started",
+        "unknown"
+      ],
+      "type": "string"
     },
     "ProducerRef": {
       "additionalProperties": false,
@@ -286,9 +544,7 @@
           "type": "array"
         },
         "cwd": {
-          "minLength": 1,
-          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
-          "type": "string"
+          "$ref": "#/$defs/InvocationWorkingDirectoryV2"
         },
         "env_refs": {
           "additionalProperties": {
@@ -415,6 +671,9 @@
       "minimum": 0,
       "type": "integer"
     },
+    "check_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
     "completeness": {
       "$ref": "#/$defs/Completeness"
     },
@@ -441,6 +700,16 @@
     "invocation": {
       "$ref": "#/$defs/TaskInvocationV2"
     },
+    "not_run_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NotRunReasonV2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "observed_tool": {
       "anyOf": [
         {
@@ -459,6 +728,9 @@
     },
     "plan_item_id": {
       "type": "string"
+    },
+    "process_start_state": {
+      "$ref": "#/$defs/ProcessStartStateV2"
     },
     "project_id": {
       "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
@@ -490,6 +762,9 @@
         "null"
       ]
     },
+    "subject_binding": {
+      "$ref": "#/$defs/EvidenceSubjectBinding"
+    },
     "termination_reason": {
       "anyOf": [
         {
@@ -513,11 +788,14 @@
     "validation_run_id",
     "revision",
     "validation_plan_ref",
+    "check_ref",
+    "subject_binding",
     "plan_item_id",
     "project_id",
     "phase",
     "attempt",
     "invocation",
+    "process_start_state",
     "outcome",
     "completeness",
     "stability",

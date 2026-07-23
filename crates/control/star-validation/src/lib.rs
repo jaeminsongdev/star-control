@@ -1,6 +1,9 @@
 //! Rule, Finding, ValidationResult, and GateDecision semantics.
 
+pub mod permit;
 pub mod planning;
+pub mod process_executor;
+pub mod rules;
 pub mod runner;
 pub mod rust_style;
 
@@ -17,6 +20,7 @@ use star_contracts::{
         BaselineId, DispositionId, FindingId, GateId, OccurrenceId, ProjectId, ScanRunId,
         SuppressionId, ValidationResultId,
     },
+    index::{HardcodingAssessment, HardcodingCandidate},
     management::{
         Baseline, BaselineStatus, CanonicalSource, Completeness, Confidence, Disposition,
         DispositionStatus, Finding, FindingLifecycle, Occurrence, PatchSet, ProjectRevision,
@@ -33,6 +37,7 @@ use star_contracts::management::WorkspaceSnapshot;
 
 pub const TRAILING_WHITESPACE_RULE_ID: &str = "star.rule.trailing-whitespace";
 pub const TRAILING_WHITESPACE_RECIPE_ID: &str = "star.recipe.remove-trailing-whitespace";
+pub const HARDCODING_CANDIDATE_RULE_ID: &str = "star.rule.hardcoding-candidate";
 
 #[derive(Debug, Error)]
 pub enum ValidationError {
@@ -76,10 +81,215 @@ pub fn trailing_whitespace_rule() -> Result<Rule, ValidationError> {
     })
 }
 
+pub fn hardcoding_candidate_rule() -> Result<Rule, ValidationError> {
+    let definition_fingerprint = versioned_fingerprint(
+        "star.rule-definition",
+        1,
+        &serde_json::json!({
+            "rule_id":HARDCODING_CANDIDATE_RULE_ID,
+            "rule_version":"1.0.0",
+            "identity_anchor":"canonical_source_and_candidate",
+            "message_code":"HARDCODING_CANDIDATE",
+            "automatic_confirmed_defect":false,
+        }),
+    )
+    .map_err(|_| ValidationError::Fingerprint)?;
+    Ok(Rule {
+        schema_id: "star.rule".to_owned(),
+        schema_version: 1,
+        rule_id: HARDCODING_CANDIDATE_RULE_ID.to_owned(),
+        rule_version: "1.0.0".to_owned(),
+        definition_fingerprint,
+        title: "Hardcoding candidate".to_owned(),
+        category: "maintainability".to_owned(),
+        default_severity: Severity::Info,
+        default_confidence: Confidence::Medium,
+        supported_languages: vec!["text".to_owned()],
+        source_kinds: vec![SourceKind::File],
+        analyzer_ref: "builtin.hardcoding-candidate.v1".to_owned(),
+        parameter_schema_ref: "star.rule.hardcoding-candidate.parameters.v1".to_owned(),
+        identity_contract_version: 1,
+        identity_anchor: "canonical_source_and_candidate".to_owned(),
+        redaction_contract_version: 1,
+        remediation_recipe_refs: Vec::new(),
+        lifecycle: RuleLifecycle::Active,
+    })
+}
+
 pub struct FindingProjection {
     pub findings: Vec<Finding>,
     pub occurrences: Vec<Occurrence>,
     pub rule_set_fingerprint: Sha256Hash,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn analyze_builtin_findings(
+    project_id: &ProjectId,
+    revision: &ProjectRevision,
+    workspace_snapshot_id: &star_contracts::ids::WorkspaceSnapshotId,
+    scan_run_id: &ScanRunId,
+    files: &[FileObservation],
+    sources: &[CanonicalSource],
+    symbols: &[Symbol],
+    hardcoding_candidates: &[HardcodingCandidate],
+) -> Result<FindingProjection, ValidationError> {
+    let mut projection = analyze_trailing_whitespace(
+        project_id,
+        revision,
+        workspace_snapshot_id,
+        scan_run_id,
+        files,
+        sources,
+        symbols,
+    )?;
+    let hardcoding_rule = hardcoding_candidate_rule()?;
+    let trailing_rule = trailing_whitespace_rule()?;
+    let symbol_by_source: BTreeMap<_, _> = symbols
+        .iter()
+        .map(|symbol| (symbol.canonical_source_id.clone(), symbol))
+        .collect();
+    for candidate in hardcoding_candidates {
+        if candidate.rule_id != HARDCODING_CANDIDATE_RULE_ID || candidate.rule_version != "1.0.0" {
+            return Err(ValidationError::InconsistentGraph);
+        }
+        let finding_fingerprint = versioned_fingerprint(
+            "star.identity.finding",
+            1,
+            &serde_json::json!({
+                "project_id":project_id,
+                "rule_id":candidate.rule_id,
+                "identity_contract_version":1,
+                "identity_anchor":candidate.canonical_source_id,
+                "identity_tokens":[candidate.candidate_key.clone()],
+            }),
+        )
+        .map_err(|_| ValidationError::Fingerprint)?;
+        let finding_id = FindingId::from_fingerprint(&finding_fingerprint);
+        let occurrence_fingerprint = versioned_fingerprint(
+            "star.identity.occurrence",
+            1,
+            &serde_json::json!({
+                "finding_id":finding_id,
+                "workspace_snapshot_id":workspace_snapshot_id,
+                "source_content_sha256":candidate.source_content_sha256,
+                "location_range":candidate.source_range,
+                "evidence_key":candidate.candidate_key,
+            }),
+        )
+        .map_err(|_| ValidationError::Fingerprint)?;
+        let occurrence_id = OccurrenceId::from_fingerprint(&occurrence_fingerprint);
+        let mut message_parameters = BTreeMap::from([
+            ("assessment".to_owned(), enum_label(&candidate.assessment)?),
+            ("category".to_owned(), enum_label(&candidate.category)?),
+            ("confidence".to_owned(), candidate.confidence.clone()),
+            ("length_bucket".to_owned(), candidate.length_bucket.clone()),
+            ("literal_shape".to_owned(), candidate.literal_shape.clone()),
+            (
+                "matched_predicate".to_owned(),
+                candidate.matched_predicate.clone(),
+            ),
+        ]);
+        message_parameters.insert(
+            "false_positive_guards".to_owned(),
+            candidate.false_positive_guards.join(","),
+        );
+        projection.occurrences.push(Occurrence {
+            schema_id: "star.occurrence".to_owned(),
+            schema_version: 1,
+            occurrence_id: occurrence_id.clone(),
+            occurrence_fingerprint,
+            finding_id: finding_id.clone(),
+            scan_run_id: scan_run_id.clone(),
+            project_revision_id: revision.project_revision_id.clone(),
+            workspace_snapshot_id: workspace_snapshot_id.clone(),
+            canonical_source_id: candidate.canonical_source_id.clone(),
+            source_content_sha256: candidate.source_content_sha256.clone(),
+            location_path: candidate.source_ref.clone(),
+            location_range: candidate.source_range.clone(),
+            symbol_id: symbol_by_source
+                .get(&candidate.canonical_source_id)
+                .map(|symbol| symbol.symbol_id.clone()),
+            message_parameters,
+            evidence_refs: Vec::new(),
+            observed_at: Utc::now(),
+            redaction_state: RedactionState::Redacted,
+        });
+        let severity = if candidate.assessment == HardcodingAssessment::Warning {
+            Severity::Warning
+        } else {
+            Severity::Info
+        };
+        let confidence = match candidate.confidence.as_str() {
+            "high" => Confidence::High,
+            "low" => Confidence::Low,
+            _ => Confidence::Medium,
+        };
+        let content_fingerprint = versioned_fingerprint(
+            "star.finding-content",
+            1,
+            &serde_json::json!({
+                "finding_fingerprint":finding_fingerprint,
+                "occurrence_ids":[occurrence_id.clone()],
+                "severity":severity,
+                "confidence":confidence,
+                "assessment":candidate.assessment,
+            }),
+        )
+        .map_err(|_| ValidationError::Fingerprint)?;
+        projection.findings.push(Finding {
+            schema_id: "star.finding".to_owned(),
+            schema_version: 1,
+            finding_id,
+            finding_fingerprint,
+            project_id: project_id.clone(),
+            rule_id: HARDCODING_CANDIDATE_RULE_ID.to_owned(),
+            rule_version: "1.0.0".to_owned(),
+            identity_anchor: candidate.canonical_source_id.as_str().to_owned(),
+            identity_tokens: vec![candidate.candidate_key.clone()],
+            title_code: "HARDCODING_CANDIDATE_TITLE".to_owned(),
+            message_code: "HARDCODING_CANDIDATE".to_owned(),
+            severity,
+            confidence,
+            lifecycle: FindingLifecycle::Open,
+            first_observed_scan_id: scan_run_id.clone(),
+            last_observed_scan_id: scan_run_id.clone(),
+            current_occurrence_ids: vec![occurrence_id],
+            active_disposition_id: None,
+            active_suppression_ids: Vec::new(),
+            content_fingerprint,
+        });
+    }
+    projection
+        .findings
+        .sort_by(|left, right| left.finding_id.cmp(&right.finding_id));
+    projection
+        .occurrences
+        .sort_by(|left, right| left.occurrence_id.cmp(&right.occurrence_id));
+    projection.rule_set_fingerprint = versioned_fingerprint(
+        "star.rule-set",
+        1,
+        &serde_json::json!([
+            {
+                "rule_id":trailing_rule.rule_id,
+                "rule_version":trailing_rule.rule_version,
+                "definition_fingerprint":trailing_rule.definition_fingerprint,
+            },
+            {
+                "rule_id":hardcoding_rule.rule_id,
+                "rule_version":hardcoding_rule.rule_version,
+                "definition_fingerprint":hardcoding_rule.definition_fingerprint,
+            }
+        ]),
+    )
+    .map_err(|_| ValidationError::Fingerprint)?;
+    Ok(projection)
+}
+
+fn enum_label(value: &impl serde::Serialize) -> Result<String, ValidationError> {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .ok_or(ValidationError::InconsistentGraph)
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

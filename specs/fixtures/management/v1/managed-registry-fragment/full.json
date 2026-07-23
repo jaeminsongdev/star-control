@@ -1,0 +1,77 @@
+{
+  "declarations": [
+    {
+      "aliases": [
+        {
+          "expires_at": "fixture",
+          "expires_in_registry_version": "fixture",
+          "introduced_in_registry_version": "fixture",
+          "value": "fixture"
+        }
+      ],
+      "binding_specs": [
+        {
+          "binding_id": "fixture",
+          "expected_value": "fixture",
+          "generator_id": "fixture",
+          "kind": "definition",
+          "path": "src/lib.rs",
+          "required": false,
+          "symbol_key": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "consumer_contracts": [
+        {
+          "accepted_values": [
+            "fixture"
+          ],
+          "consumer_surface_id": "fixture",
+          "migration_window_end": "fixture",
+          "minimum_item_version": "fixture",
+          "project_id": "prj_00000000000000000000000000",
+          "requirement": "required"
+        }
+      ],
+      "description": "fixture",
+      "item_version": "fixture",
+      "kind": "error_code",
+      "lifecycle": {
+        "deprecated_in_registry_version": "fixture",
+        "introduced_in_registry_version": "fixture",
+        "migration_record_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "removed_in_registry_version": "fixture",
+        "replacement_id": "fixture"
+      },
+      "managed_declaration_id": "fixture",
+      "namespace": "fixture",
+      "owner": {
+        "approval_policy_ref": {
+          "catalog_id": "fixture",
+          "format_version": 0,
+          "item_version": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "contract_id": "fixture",
+        "display_owner": "fixture",
+        "module_key": "fixture",
+        "project_id": "prj_00000000000000000000000000"
+      },
+      "primary_value": "fixture",
+      "semantic_key": "fixture",
+      "status": "active",
+      "uniqueness_scope": "fixture",
+      "value_role": "stable_identifier",
+      "value_type": "fixture"
+    }
+  ],
+  "namespace": "fixture",
+  "registry_id": "fixture",
+  "schema_id": "star.managed-registry-fragment",
+  "schema_version": 1,
+  "source_description": "fixture"
+}

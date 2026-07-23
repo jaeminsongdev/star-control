@@ -120,6 +120,342 @@
       ],
       "type": "object"
     },
+    "BaselineRelationV2": {
+      "enum": [
+        "new",
+        "existing_unchanged",
+        "worsened",
+        "improved",
+        "not_observed",
+        "incompatible",
+        "unbaselined"
+      ],
+      "type": "string"
+    },
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "CheckRequirementV2": {
+      "enum": [
+        "required",
+        "optional"
+      ],
+      "type": "string"
+    },
+    "ClaimEvaluationStatusV2": {
+      "enum": [
+        "verified",
+        "contradicted",
+        "unverified",
+        "stale",
+        "not_applicable"
+      ],
+      "type": "string"
+    },
+    "ClaimEvaluationV2": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/ClaimEvidenceRefV2"
+          },
+          "type": "array"
+        },
+        "claim_ref": {
+          "$ref": "#/$defs/CompletionClaimRefV2"
+        },
+        "current_subject_binding": {
+          "$ref": "#/$defs/EvidenceSubjectBinding"
+        },
+        "diagnostic_refs": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticRef"
+          },
+          "type": "array"
+        },
+        "evaluation_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "gate_effect": {
+          "$ref": "#/$defs/ClaimGateEffectV2"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/ClaimEvaluationStatusV2"
+        }
+      },
+      "required": [
+        "claim_ref",
+        "current_subject_binding",
+        "actual_evidence_refs",
+        "status",
+        "diagnostic_refs",
+        "gate_effect",
+        "reason_codes",
+        "evaluation_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ClaimEvidenceRefV2": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "document_ref": {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            "kind": {
+              "const": "document",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "document_ref"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "validation_run",
+              "type": "string"
+            },
+            "validation_run_ref": {
+              "$ref": "#/$defs/ValidationRunRef"
+            }
+          },
+          "required": [
+            "kind",
+            "validation_run_ref"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifact_ref": {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            "kind": {
+              "const": "artifact",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "artifact_ref"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ClaimGateEffectV2": {
+      "enum": [
+        "none",
+        "human_review",
+        "block"
+      ],
+      "type": "string"
+    },
+    "CompletionClaimRefV2": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "claim_id": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "claim_id",
+        "required",
+        "claim_fingerprint"
+      ],
+      "type": "object"
+    },
+    "DecisionDocumentRefV2": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "document_id",
+        "revision",
+        "fingerprint"
+      ],
+      "type": "object"
+    },
+    "DiagnosticEvaluationSubjectV2": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "diagnostic_ref": {
+              "$ref": "#/$defs/DiagnosticRef"
+            },
+            "kind": {
+              "const": "current_diagnostic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "diagnostic_ref"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "baseline_id": {
+              "pattern": "^bas_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            },
+            "entry_fingerprint": {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            "kind": {
+              "const": "baseline_entry",
+              "type": "string"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "baseline_id",
+            "revision",
+            "entry_fingerprint"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DiagnosticEvaluationV2": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionDocumentRefV2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseline_relation": {
+          "$ref": "#/$defs/BaselineRelationV2"
+        },
+        "disposition_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionDocumentRefV2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evaluation_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evaluation_subject": {
+          "$ref": "#/$defs/DiagnosticEvaluationSubjectV2"
+        },
+        "gate_effect": {
+          "$ref": "#/$defs/DiagnosticGateEffectV2"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "subject_binding_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "suppression_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionDocumentRefV2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suppression_state": {
+          "$ref": "#/$defs/SuppressionStateV2"
+        }
+      },
+      "required": [
+        "evaluation_subject",
+        "subject_binding_fingerprint",
+        "baseline_relation",
+        "suppression_state",
+        "gate_effect",
+        "reason_codes",
+        "evaluation_fingerprint"
+      ],
+      "type": "object"
+    },
+    "DiagnosticGateEffectV2": {
+      "enum": [
+        "none",
+        "remaining_risk",
+        "requires_review",
+        "blocks"
+      ],
+      "type": "string"
+    },
     "DiagnosticRef": {
       "additionalProperties": false,
       "properties": {
@@ -177,11 +513,214 @@
       ],
       "type": "object"
     },
+    "EvidenceFreshnessV2": {
+      "enum": [
+        "current",
+        "stale_source",
+        "stale_plan",
+        "stale_config",
+        "stale_catalog",
+        "stale_tool",
+        "stale_environment",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "EvidenceSubjectBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "catalog_snapshot_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "change_plan_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "change_set_refs": {
+          "items": {
+            "$ref": "#/$defs/DocumentRef"
+          },
+          "type": "array"
+        },
+        "check_descriptor_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "effective_config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "execution_environment_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "freshness": {
+          "$ref": "#/$defs/EvidenceFreshnessV2"
+        },
+        "gate_phase": {
+          "$ref": "#/$defs/GatePhaseV2"
+        },
+        "gate_policy_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "impact_analysis_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "invocation_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "normalizer_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "observed_tool_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "patch_set_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "probed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "profile_resolution_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "rule_refs": {
+          "items": {
+            "$ref": "#/$defs/CatalogRef"
+          },
+          "type": "array"
+        },
+        "scope_revision_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "stale_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "task_spec_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "tool_descriptor_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool_registry_snapshot_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validation_plan_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "validator_registry_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "workspace_content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "workspace_content_fingerprint",
+        "task_spec_ref",
+        "scope_revision_ref",
+        "impact_analysis_ref",
+        "change_set_refs",
+        "change_plan_refs",
+        "validation_plan_ref",
+        "gate_phase",
+        "profile_resolution_fingerprint",
+        "effective_config_fingerprint",
+        "gate_policy_fingerprint",
+        "catalog_snapshot_ref",
+        "validator_registry_fingerprint",
+        "rule_refs",
+        "execution_environment_fingerprint",
+        "normalizer_fingerprint",
+        "freshness",
+        "stale_reasons",
+        "binding_fingerprint",
+        "probed_at"
+      ],
+      "type": "object"
+    },
     "GateDecisionKind": {
       "enum": [
         "auto_pass",
         "human_review",
         "block"
+      ],
+      "type": "string"
+    },
+    "GatePhaseV2": {
+      "enum": [
+        "during_stage",
+        "goal_exit",
+        "patch_pre_apply",
+        "patch_post_apply"
       ],
       "type": "string"
     },
@@ -368,9 +907,104 @@
       ],
       "type": "object"
     },
+    "RunGateEffectV2": {
+      "enum": [
+        "none",
+        "human_review",
+        "block"
+      ],
+      "type": "string"
+    },
+    "RunSatisfactionStateV2": {
+      "enum": [
+        "clean_pass",
+        "ratchet_satisfied",
+        "unsatisfied",
+        "waived_for_review"
+      ],
+      "type": "string"
+    },
+    "RunSatisfactionV2": {
+      "additionalProperties": false,
+      "properties": {
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "diagnostic_evaluation_fingerprints": {
+          "items": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "type": "array"
+        },
+        "gate_effect": {
+          "$ref": "#/$defs/RunGateEffectV2"
+        },
+        "plan_item_id": {
+          "type": "string"
+        },
+        "policy_reason": {
+          "type": "string"
+        },
+        "raw_outcomes": {
+          "items": {
+            "$ref": "#/$defs/ValidationOutcome"
+          },
+          "type": "array"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "requirement": {
+          "$ref": "#/$defs/CheckRequirementV2"
+        },
+        "satisfaction": {
+          "$ref": "#/$defs/RunSatisfactionStateV2"
+        },
+        "validation_run_refs": {
+          "items": {
+            "$ref": "#/$defs/ValidationRunRef"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "plan_item_id",
+        "requirement",
+        "validation_run_refs",
+        "raw_outcomes",
+        "satisfaction",
+        "gate_effect",
+        "reason_code",
+        "diagnostic_evaluation_fingerprints",
+        "policy_reason",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
     "Sha256Hash": {
       "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
       "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SuppressionStateV2": {
+      "enum": [
+        "none",
+        "active",
+        "expired",
+        "stale",
+        "revoked",
+        "invalid"
+      ],
+      "type": "string"
+    },
+    "ValidationOutcome": {
+      "enum": [
+        "pass",
+        "fail",
+        "not_run",
+        "error",
+        "cancelled"
+      ],
       "type": "string"
     },
     "ValidationRunRef": {
@@ -406,6 +1040,12 @@
       },
       "type": "array"
     },
+    "claim_evaluations": {
+      "items": {
+        "$ref": "#/$defs/ClaimEvaluationV2"
+      },
+      "type": "array"
+    },
     "decided_at": {
       "format": "date-time",
       "type": "string"
@@ -418,6 +1058,12 @@
     },
     "decision_fingerprint": {
       "$ref": "#/$defs/Sha256Hash"
+    },
+    "diagnostic_evaluations": {
+      "items": {
+        "$ref": "#/$defs/DiagnosticEvaluationV2"
+      },
+      "type": "array"
     },
     "gate_id": {
       "type": "string"
@@ -448,6 +1094,12 @@
       "minimum": 0,
       "type": "integer"
     },
+    "run_satisfactions": {
+      "items": {
+        "$ref": "#/$defs/RunSatisfactionV2"
+      },
+      "type": "array"
+    },
     "satisfied_run_refs": {
       "items": {
         "$ref": "#/$defs/ValidationRunRef"
@@ -465,8 +1117,24 @@
     "scope": {
       "$ref": "#/$defs/GateScope"
     },
+    "subject_binding_set_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "valid_until": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "validation_plan_ref": {
       "$ref": "#/$defs/DocumentRef"
+    },
+    "validation_result_refs": {
+      "items": {
+        "$ref": "#/$defs/DocumentRef"
+      },
+      "type": "array"
     }
   },
   "required": [
@@ -475,10 +1143,14 @@
     "gate_id",
     "revision",
     "validation_plan_ref",
+    "subject_binding_set_fingerprint",
     "scope",
     "decision",
+    "validation_result_refs",
     "required_run_refs",
     "satisfied_run_refs",
+    "diagnostic_evaluations",
+    "run_satisfactions",
     "blocking_diagnostic_refs",
     "reason_codes",
     "remaining_risks",

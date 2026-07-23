@@ -1,0 +1,94 @@
+{
+  "budget_snapshot_ref": "fixture",
+  "bundle_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "change_bundle_id": "lsb_00000000000000000000000000",
+  "compatibility_window_refs": [
+    "fixture"
+  ],
+  "completion_level_reached": "none",
+  "completion_target": "none",
+  "gate_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "goal_gate_ref": "fixture",
+  "hold_reasons": [
+    "fixture"
+  ],
+  "input_handoff_refs": [
+    "fixture"
+  ],
+  "merge_policy": "fixture",
+  "multi_project_goal_ref": "fixture",
+  "open_effect_refs": [
+    "fixture"
+  ],
+  "participant_refs": [
+    "fixture"
+  ],
+  "pending_approval_refs": [
+    "fixture"
+  ],
+  "permission_plan_ref": "fixture",
+  "prepare_gate_ref": "fixture",
+  "previous_revision_ref": "fixture",
+  "remaining_risks": [
+    "fixture"
+  ],
+  "remote_policy": "disabled",
+  "resource_budget": {
+    "artifact_limit_bytes": 0,
+    "cpu_weight_limit": 0,
+    "max_active_worktrees": 0,
+    "max_concurrent_writes": 0,
+    "max_parallel_projects": 0,
+    "max_processes": 0,
+    "memory_limit_bytes": 0,
+    "wall_time_limit_ms": 0,
+    "worktree_disk_limit_bytes": 0
+  },
+  "revision": 0,
+  "schema_id": "star.cross-repo-change-bundle",
+  "schema_version": 1,
+  "scope_revision_refs": [
+    "fixture"
+  ],
+  "state": "preparing",
+  "step_graph": {
+    "edges": [
+      {
+        "edge_kind": "requires",
+        "evidence_refs": [
+          "fixture"
+        ],
+        "from_step_id": "fixture",
+        "reason": "fixture",
+        "to_step_id": "fixture"
+      }
+    ],
+    "graph_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "steps": [
+      {
+        "completion_condition": "fixture",
+        "expected_effect": "fixture",
+        "input_refs": [
+          "fixture"
+        ],
+        "output_refs": [
+          "fixture"
+        ],
+        "project_id": "prj_00000000000000000000000000",
+        "required_gate_refs": [
+          "fixture"
+        ],
+        "stage_ref": "fixture",
+        "step_id": "fixture",
+        "step_kind": "provider_compatibility_open"
+      }
+    ],
+    "topological_order": [
+      "fixture"
+    ]
+  },
+  "supersedes_bundle_ref": "fixture",
+  "task_spec_refs": [
+    "fixture"
+  ]
+}

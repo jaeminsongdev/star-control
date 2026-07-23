@@ -1,0 +1,57 @@
+{
+  "architecture": "fixture",
+  "case_behavior": "fixture",
+  "completeness": "complete",
+  "environment_contract_presence": [
+    {
+      "declaration_ref": "fixture",
+      "required": false,
+      "scope": "fixture",
+      "state": "present"
+    }
+  ],
+  "environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "filesystem_kind": "fixture",
+  "limitations": [
+    "fixture"
+  ],
+  "line_ending_policy": "fixture",
+  "long_path_capability": "src/lib.rs",
+  "manifests": [
+    {
+      "completeness": "complete",
+      "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "ecosystem": "fixture",
+      "logical_path": "src/lib.rs",
+      "manifest_kind": "fixture",
+      "owner": "fixture",
+      "relation": "fixture"
+    }
+  ],
+  "os_family": "fixture",
+  "os_release": "fixture",
+  "path_depth": 0,
+  "path_kind": "src/lib.rs",
+  "path_length_bucket": "src/lib.rs",
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.environment-snapshot",
+  "schema_version": 1,
+  "snapshot_id": "fixture",
+  "subject_revision": "fixture",
+  "symlink_capability": "fixture",
+  "task_descriptor_refs": [
+    "fixture"
+  ],
+  "text_encoding_policy": "fixture",
+  "toolchains": [
+    {
+      "declared_range": "fixture",
+      "discovered_from": "fixture",
+      "evidence_ref": "fixture",
+      "executable_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "observed_version": "fixture",
+      "state": "present",
+      "toolchain_id": "fixture"
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 
 이 문서는 Star-Control 사용자 로드맵 **7단계**의 의미 정본이다. 제품 로드맵의 `P7. 원격 저장소 연동`과 번호가 같아 보일 수 있으므로, 이 문서와 관련 Schema·CLI에서는 `M7`을 안정된 단계 식별자로 사용한다.
 
-현재 상태는 **P-0048 첫 bounded 제품 Slice 구현**이다. `ReproductionPack`·`MaintenanceRadar` 공개 계약, 경로·PID·시각을 제거한 failure-family fingerprint, external condition의 `unverified` 보존과 Radar freshness 판정을 구현했다. debugger·trace/scanner/package-manager는 pinned external adapter가 소유하며 Star-Control이 취약점 DB·PKI·compiler를 재구현하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)에 고정한다.
+P-0048의 `ReproductionPack`·`MaintenanceRadar`와 normalized failure family 위에 P-0054가 failure capture/reproduce, local manifest/lockfile dependency·security·license observation, update candidate/plan, append-only persistence와 Controller·CLI를 연결했다. external condition의 missing/stale은 `unverified|partial`로 보존한다. debugger attach, OSV/NVD network refresh와 package-manager mutation은 pinned registered adapter·exact 승인이 없으면 실행하지 않으며 Star-Control이 취약점 DB·PKI·compiler를 재구현하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)와 [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)에 고정한다.
 
 상위 소유권은 다음과 같다.
 
@@ -456,14 +456,16 @@ Radar의 `valid_until`은 입력 suppression expiry, external data valid_until, 
 | `security_supply_chain` | offline/current 입력 분석, registered scanner 결과 정규화 | SupplyChainSnapshot, common Finding, freshness 상태 | stale external data는 refresh 승인 또는 Gate warning/block |
 | `dependency_upgrade` | 후보·영향·검증·rollback 설계와 isolated PatchSet 준비 | DependencyUpdatePlan, PatchSet, ReviewPack | 기본 `awaiting_apply_approval`; 자동 적용 금지 |
 
-목표 CLI surface는 다음 의미만 가진다. command spelling은 구현 단계에서 CLI 계약과 함께 동결한다.
+현재 CLI surface는 Controller application service만 호출한다.
 
 - `star failures inspect|reproduce|compare|recovery-plan`
-- `star security inspect|refresh-plan|release-manifest`
+- `star security inspect <project-id> <snapshot-id> <effect-receipt-id> --input <json-file>`
+- `star security release-manifest <project-id> <snapshot-id> <dependency-snapshot-id> --input <json-file>`
 - `star deps scan|candidates|prepare|status|rollback-plan`
 - `star maintenance radar`
+- `star tools call ...`, `star operations get|cancel ...`, `star development effect record ...`
 
-`refresh-plan`과 `rollback-plan`은 계획을 만들 뿐 실행 승인을 내포하지 않는다. `deps prepare`도 required permission을 모두 받은 isolated preview만 수행하며 live apply하지 않는다.
+외부 refresh·debugger·license scanner·package manager는 registered Tool을 `tool.invoke`로 실행한다. Controller가 보존한 terminal Operation의 exact descriptor·arguments·executable SHA-256·permission·approval·result를 `DevelopmentEffectReceiptV1`로 봉인한 뒤에만 `security inspect`와 dependency status가 그 effect를 소비한다. `rollback-plan`은 계획을 만들 뿐 실행 승인을 내포하지 않는다. `deps prepare`도 required permission을 모두 받은 isolated preview만 수행하며 canonical source apply는 M4 PatchSet 경로에 남는다.
 
 ## Permission과 효과
 
@@ -481,6 +483,8 @@ M7 Profile은 Profile metadata로 권한을 획득하지 못하며 더 엄격하
 | PatchSet live apply | exact PatchSet prompt | dependency Profile은 준비 뒤 중지 |
 
 `personal_auto` 같은 상위 mode도 M7의 network/download/dependency change와 sensitive capture를 자동 승인하지 않는다. 승인에는 action, Project/Checkout, source/provider, package/candidate, PatchSet hash, 예상 file scope, credential·비용 여부와 expiry를 포함한다.
+
+실제 effect 영수증의 상태는 `succeeded|failed|partial|outcome_unknown`이다. `security_refresh|license_scan` 성공 영수증은 입력 source SHA-256을 artifact 또는 result fingerprint로 다시 결합해야 한다. unavailable 입력을 succeeded 영수증으로 덮거나, stale arguments·다른 Project·다른 effect kind의 영수증을 재사용하면 Controller가 거부한다. `dependency_prepare|dependency_apply` 영수증은 status에서 관찰할 수 있지만 source manifest·lockfile의 정본 변경은 package manager가 만든 isolated diff를 M4 PatchSet으로 적용하고 post Gate를 통과해야 완료다.
 
 ## M3 Gate 통합
 

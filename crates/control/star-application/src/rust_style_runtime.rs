@@ -122,6 +122,20 @@ pub struct RustStyleCheckResult {
 pub struct RustStylePreparedRuntime {
     pub inspection: RustStyleInspection,
     pub candidate: RustStyleCandidate,
+    pub candidate_build: Option<RustToolRunSummary>,
+    pub candidate_test_compile: Option<RustToolRunSummary>,
+    pub isolation_ref: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RustStyleGatePhase {
+    PreApply,
+    PostApply,
+}
+
+#[derive(Clone, Debug)]
+pub struct RustStyleGatePreview {
+    pub root: PathBuf,
     pub isolation_ref: String,
 }
 
@@ -141,6 +155,8 @@ pub enum RustStyleRuntimeError {
     Io,
     #[error("Rust style fingerprint failed")]
     Fingerprint,
+    #[error("Rust style isolated candidate build/test validation failed")]
+    CandidateValidationFailed,
     #[error("Rust style adapter failed: {0}")]
     Adapter(#[from] RustStyleAdapterError),
     #[error("Rust style workflow failed: {0}")]
@@ -359,10 +375,54 @@ pub fn prepare_rust_style(
         &mut preview,
         &mut replay,
     )?;
+    let (candidate_build, candidate_test_compile) = if candidate.patch_set.is_some() {
+        let before_checks = preview.snapshot()?;
+        let build = preview.run_cargo_check()?;
+        let test_compile = preview.run_cargo_test_no_run()?;
+        if !build.success
+            || build.exit_code != Some(0)
+            || !test_compile.success
+            || test_compile.exit_code != Some(0)
+            || preview.snapshot()? != before_checks
+        {
+            return Err(RustStyleRuntimeError::CandidateValidationFailed);
+        }
+        (
+            Some(summarize_tool_output(build)),
+            Some(summarize_tool_output(test_compile)),
+        )
+    } else {
+        (None, None)
+    };
     Ok(RustStylePreparedRuntime {
         isolation_ref: opaque_isolation_ref(project_id, &operation_root)?,
         inspection: resolved.inspection,
         candidate,
+        candidate_build,
+        candidate_test_compile,
+    })
+}
+
+pub fn materialize_rust_style_gate_preview(
+    project_id: &ProjectId,
+    project_root: &Path,
+    runtime_root: &Path,
+    phase: RustStyleGatePhase,
+) -> Result<RustStyleGatePreview, RustStyleRuntimeError> {
+    let project_root = project_root
+        .canonicalize()
+        .map_err(|_| RustStyleRuntimeError::Io)?;
+    let runtime_root = validate_runtime_root(&project_root, runtime_root)?;
+    let kind = match phase {
+        RustStyleGatePhase::PreApply => "gate-pre",
+        RustStyleGatePhase::PostApply => "gate-post",
+    };
+    let operation_root = unique_operation_root(&runtime_root, &project_root, project_id, kind)?;
+    let preview_root = operation_root.join("workspace");
+    materialize_owned_preview(&project_root, &preview_root)?;
+    Ok(RustStyleGatePreview {
+        root: preview_root,
+        isolation_ref: opaque_isolation_ref(project_id, &operation_root)?,
     })
 }
 
@@ -1277,6 +1337,8 @@ fn unique_operation_root(
         "inspect" => "i",
         "check" => "c",
         "prepare" => "p",
+        "gate-pre" => "gp",
+        "gate-post" => "go",
         _ => return Err(RustStyleRuntimeError::UnsafeRuntimeRoot),
     };
     let root = runtime_root

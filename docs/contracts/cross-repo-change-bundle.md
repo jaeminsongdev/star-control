@@ -4,7 +4,7 @@
 
 이 문서는 하나의 사용자 목표가 여러 Git repository의 source·contract·data·검사·원격 상태를 함께 바꿀 때 사용하는 9단계 정본이다. 1단계 Project Catalog, 2단계 영향 graph, 3단계 Validation Gate, 4단계 single-project PatchSet, 5단계 managed consumer, 8단계 migration·rollback 결과를 **project별 실행 단위로 유지한 채** 조정한다.
 
-현재 상태는 **P-0050 첫 bounded 제품 Slice 구현**이다. `ChangeBundle`·`ChangeBundleHandoff` 계약과 generated Schema, dependency DAG·owned logical worktree·local merge queue, publish timeout의 무재시도/read-only reconcile, GoalId별 protected Controller projection과 `merge.status`·`handoff.get`을 구현했다. test adapter만 원격 결과를 흉내 냈으며 실제 push·PR·remote merge·publish는 실행하지 않았고 계속 exact action 승인을 요구한다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)에 고정한다.
+P-0050의 `ChangeBundle`·handoff state machine 위에 P-0054가 coordination 계약, dependency DAG, append-only persistence, actual local Git worktree·merge·remote observation/push adapter, exact durable approval와 Controller·CLI를 연결했다. P-0055는 registered provider의 terminal Operation을 exact `remote_recovery` 영수증으로 봉인하고 RecoveryPlan·approval·permission·Gate를 재검증한 뒤에만 recovery apply를 기록하는 경로를 추가했다. PR·remote merge·release publish는 각각 별도 provider action과 durable approval을 유지한다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md), [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md), [P-0055 비서명 외부 봉인](../testing/p0055-nonsigning-external-seal-2026-07-23.md)에 고정한다.
 
 핵심 경계는 다음과 같다.
 
@@ -654,7 +654,9 @@ CLI는 Controller의 typed application service만 호출한다. DB·Git executab
 | `star change-bundle merge run <bundle-id> --project <project-id>` | serial queue lock·base probe·`git_merge` permission |
 | `star change-bundle hold <bundle-id>` / `resume <bundle-id>` | current state·reason·rebind plan |
 | `star change-bundle recovery plan <bundle-id>` | actual partial/unknown probe; effect 없음 |
-| `star change-bundle recovery apply <bundle-id> --strategy <...>` | exact compensation plan·approval·Gate |
+| `star change-bundle recovery apply <project-id> <plan-id> --approve <sha256> --permission <decision-ref> --gate <decision-ref> --receipt <effect-receipt-id>` | exact RecoveryPlan fingerprint와 `remote_recovery` effect receipt·approval·permission·Gate |
+
+recovery provider의 실제 effect는 먼저 registered Tool Operation으로 실행하고 `DevelopmentEffectReceiptV1`로 봉인한다. apply는 receipt의 Project, exact RecoveryPlan fingerprint, executable identity, `git.remote.recovery` Permission Action, approval·Gate, `succeeded`와 `source_effect_started=true`를 모두 재검증한 뒤에만 `applied`를 기록한다. `partial|outcome_unknown`은 applied로 승격하지 않고 read-only remote refresh와 새 recovery plan을 요구한다.
 
 ### remote effect
 

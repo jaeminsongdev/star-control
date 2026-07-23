@@ -24,7 +24,7 @@ pub struct ArtifactBytes {
     pub bytes: Vec<u8>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReleaseCandidateInput {
     pub product_id: String,
     pub version: String,
@@ -46,7 +46,7 @@ pub struct ReleaseCandidateInput {
     pub external_gates: Vec<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct VerificationObservation {
     pub completeness: EvidenceCompleteness,
     pub artifact_set_digest: Option<Sha256Hash>,
@@ -91,10 +91,13 @@ pub enum PublishObservation {
     Failed,
 }
 
-pub trait PublisherAdapter {
+pub trait ReleasePublisherPort {
     fn publish(&mut self, manifest: &ReleaseManifestV2) -> PublishObservation;
     fn reconcile(&mut self, manifest: &ReleaseManifestV2) -> PublishObservation;
 }
+
+/// Backward-compatible name for the original P-0054 contract.
+pub use ReleasePublisherPort as PublisherAdapter;
 
 #[derive(Default)]
 pub struct BuildOnceStore {
@@ -389,10 +392,12 @@ pub fn approve_publish(
     approval: ApprovalId,
     expected_digest: &Sha256Hash,
     destination: &str,
+    before_snapshot_ref: &str,
 ) -> Result<ReleaseManifestV2, ReleaseError> {
     if manifest.status != ReleaseStatus::Ready
         || manifest.artifact_set_digest.as_ref() != Some(expected_digest)
         || destination != "github:jaeminsongdev/star-control:releases"
+        || before_snapshot_ref.trim().is_empty()
     {
         return Err(ReleaseError::Blocked);
     }
@@ -405,7 +410,7 @@ pub fn approve_publish(
         immutable_subject_digest: expected_digest.clone(),
         state: RemoteActionState::Approved,
         approval_request_ref: Some(approval),
-        before_snapshot_ref: Some("github-release-before-snapshot".to_owned()),
+        before_snapshot_ref: Some(before_snapshot_ref.to_owned()),
         after_snapshot_ref: None,
         receipt_ref: None,
     });
@@ -416,7 +421,7 @@ pub fn approve_publish(
 
 pub fn publish_with_reconcile(
     mut manifest: ReleaseManifestV2,
-    publisher: &mut impl PublisherAdapter,
+    publisher: &mut impl ReleasePublisherPort,
 ) -> Result<ReleaseManifestV2, ReleaseError> {
     if manifest.status != ReleaseStatus::Approved || manifest.remote_actions.len() != 1 {
         return Err(ReleaseError::Blocked);
@@ -856,6 +861,7 @@ mod tests {
             ApprovalId::new(),
             &digest,
             "github:jaeminsongdev/star-control:releases",
+            "remote-before",
         )
         .unwrap();
         let mut publisher = FakePublisher {
@@ -887,6 +893,7 @@ mod tests {
                 ApprovalId::new(),
                 &digest,
                 "github:jaeminsongdev/star-control:releases",
+                "remote-before",
             )
             .unwrap();
             let mut publisher = FakePublisher {

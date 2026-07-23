@@ -16,37 +16,63 @@ use rusqlite::{
     Connection, ErrorCode, OpenFlags, OptionalExtension, Transaction, TransactionBehavior,
     backup::Backup, limits::Limit, params,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+pub use star_contracts::recovery::RecoveryInspection;
 use star_contracts::{
-    Sha256Hash, canonical_sha256,
+    BackupSetId, LocalStateBundleId, RecoveryPlanId, Sha256Hash, canonical_sha256,
     evidence::{ArtifactRef, GateDecision, GateScope},
-    evidence_v2::{DiagnosticV2, EvidenceBundleV2, GateDecisionV2, ValidationRunV2},
+    evidence_v2::{
+        BaselineV2, DiagnosticV2, DispositionV2, EvidenceBundleV2, GateDecisionV2, ReviewPackV1,
+        SuppressionV2, ValidationResultV2, ValidationRunV2,
+    },
     ids::{
-        CheckoutId, CodeIndexSnapshotId, CoordinatedOperationId, EventId, EvidenceBundleId,
-        FindingId, ManagementStoreId, PatchSetId, ProjectId, RootBindingId, ScanRunId, TaskSpecId,
+        CheckoutId, CodeIndexSnapshotId, CoordinatedOperationId, DiagnosticId, EventId,
+        EvidenceBundleId, FindingId, GateId, ManagementStoreId, PatchSetId, ProjectId,
+        ReviewPackId, RootBindingId, ScanRunId, TaskSpecId, ValidationResultId, ValidationRunId,
         WorkspaceSnapshotId,
     },
     index::{CodeIndexSnapshot, IndexEdge, IndexEntity, ProjectCatalogSnapshot, SourceEntry},
+    managed_registry::{ManagedRegistrySnapshot, RegistryConsistencyRecord},
     management::{
         Baseline, CanonicalSource, ChangePlan, CheckoutAttachmentState, CheckoutHeadState,
         CheckoutKind, CoordinatedOperation, Disposition, Finding, IntegrityState,
         MANAGEMENT_STORE_VERSION, ManagementStoreStatus, MigrationApplyState, Occurrence,
-        ParticipantReceipt, PatchSet, Project, ProjectCheckout, ProjectRevision, ProjectV1,
-        ProjectV1ToV2MigrationEntry, ProjectV1ToV2MigrationPlan, ProjectV1ToV2MigrationResult,
-        REDACTION_CONTRACT_VERSION, RegistrationState, RepositoryKind, ScanRun, StoreOpenMode,
-        StoreScope, Suppression, Symbol, SymbolReference, ValidationResult, WorkspaceSnapshot,
+        ParticipantReceipt, PatchSet, Project, ProjectCheckout, ProjectRevision, ProjectStorePoint,
+        ProjectV1, ProjectV1ToV2MigrationEntry, ProjectV1ToV2MigrationPlan,
+        ProjectV1ToV2MigrationResult, REDACTION_CONTRACT_VERSION, RegistrationState,
+        RepositoryKind, ScanRun, ScanStatus, StoreOpenMode, StorePoint, StoreScope,
+        StoreVersionVector, Suppression, Symbol, SymbolReference, ValidationResult,
+        WorkspaceSnapshot,
     },
     planning::PlanningBundle,
+    recovery::{
+        ACTIVE_SET_MANIFEST_SCHEMA_ID, ActiveSetManifest, ActiveStoreGeneration,
+        BACKUP_APPLY_RESULT_SCHEMA_ID, BackupApplyResult, BackupPlan, BackupSetManifest,
+        BackupStoreEntry, BackupStoreTarget, ControllerRecoveryMode,
+        LOCAL_STATE_EXPORT_RESULT_SCHEMA_ID, LOCAL_STATE_IMPORT_RESULT_SCHEMA_ID, LocalStateBundle,
+        LocalStateConflict, LocalStateExportPlan, LocalStateExportResult, LocalStateImportPlan,
+        LocalStateImportResult, REBUILD_APPLY_RESULT_SCHEMA_ID, RECOVERY_STATUS_SCHEMA_ID,
+        RESTORE_APPLY_RESULT_SCHEMA_ID, RESTORE_PLAN_SCHEMA_ID, RebuildApplyResult, RebuildPlan,
+        RebuildProjectInput, RebuiltProjectSummary, RecoveryLossItem, RecoveryOperation,
+        RecoveryStatus, RestoreApplyResult, RestorePlan, RestoreStoreTarget, StoreRecoveryStatus,
+    },
 };
 use star_domain::{
-    PersistenceRedactor, validate_baseline, validate_coordination, validate_suppression,
-    versioned_fingerprint,
+    PersistenceRedactor,
+    recovery::{
+        require_exact_approval, restore_plan_fingerprint, seal_active_set, seal_backup_plan,
+        seal_backup_set, seal_local_state_bundle, seal_local_state_export_plan,
+        seal_local_state_import_plan, seal_rebuild_plan, validate_active_set, validate_backup_plan,
+        validate_backup_set, validate_local_state_bundle, validate_local_state_export_plan,
+        validate_local_state_import_plan, validate_rebuild_plan, validate_restore_plan,
+    },
+    validate_baseline, validate_coordination, validate_suppression, versioned_fingerprint,
 };
 use star_ports::{
-    CodeIndexCache, GlobalManagementRepository, ManagementRepositorySet,
-    ProjectManagementRepository, ProjectRootAttachment, ProjectRootBindingStore, RepositoryError,
-    RepositoryErrorCategory, RetentionApplyResult, RetentionCandidate, RetentionPlan, ScanCommit,
-    StoredCodeIndexProjection,
+    CheckGraphEvidenceTransaction, CodeIndexCache, DevelopmentRecord, GlobalManagementRepository,
+    ManagementRecovery, ManagementRepositorySet, ProjectManagementRepository,
+    ProjectRootAttachment, ProjectRootBindingStore, RepositoryError, RepositoryErrorCategory,
+    RetentionApplyResult, RetentionCandidate, RetentionPlan, ScanCommit, StoredCodeIndexProjection,
 };
 use windows::{
     Win32::{
@@ -67,16 +93,9 @@ use windows::{
 };
 
 const STORE_FILENAME: &str = "management.v1.db";
+const ACTIVE_SET_FILENAME: &str = "active-set.json";
+const FIRST_GENERATION_LOCATOR: &str = "generations/00000000000000000001";
 const APPLICATION_ID: i32 = 0x5354_4152;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RecoveryInspection {
-    Healthy,
-    MigrationRequired,
-    FutureVersion,
-    Corrupt,
-}
 
 #[derive(Clone, Debug)]
 pub struct FileCodeIndexCache {
@@ -418,6 +437,9 @@ struct MigrationBackupManifest {
 }
 
 pub fn inspect_store_read_only(path: &Path) -> RecoveryInspection {
+    if !path.is_file() {
+        return RecoveryInspection::Missing;
+    }
     let Ok(connection) = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -443,15 +465,259 @@ pub fn inspect_store_read_only(path: &Path) -> RecoveryInspection {
     if version < MANAGEMENT_STORE_VERSION {
         return RecoveryInspection::MigrationRequired;
     }
-    match connection.query_row("PRAGMA quick_check", [], |row| row.get::<_, String>(0)) {
-        Ok(result) if result == "ok" => RecoveryInspection::Healthy,
-        _ => RecoveryInspection::Corrupt,
+    if verify_connection(&connection).is_err() || status_from_connection(&connection).is_err() {
+        RecoveryInspection::Corrupt
+    } else {
+        RecoveryInspection::Healthy
     }
 }
 
 pub fn inspect_management_root(root: &Path) -> Option<RecoveryInspection> {
-    let global = root.join("global").join("active").join(STORE_FILENAME);
-    global.exists().then(|| inspect_store_read_only(&global))
+    let manifest_path = root.join(ACTIVE_SET_FILENAME);
+    if !manifest_path.is_file() {
+        let legacy = root.join("global").join("active").join(STORE_FILENAME);
+        return legacy.exists().then(|| inspect_store_read_only(&legacy));
+    }
+    let input = match fs::read_to_string(&manifest_path) {
+        Ok(input) => input,
+        Err(_) => return Some(RecoveryInspection::ActiveSetMismatch),
+    };
+    let parsed = match parse_active_set(&input) {
+        Ok(parsed) => parsed,
+        Err(_) => return Some(RecoveryInspection::ActiveSetMismatch),
+    };
+    for entry in &parsed.manifest.entries {
+        let store = active_store_file(root, entry);
+        let inspection = inspect_store_read_only(&store);
+        if inspection != RecoveryInspection::Healthy {
+            return Some(inspection);
+        }
+        let status = match read_store_status_read_only(&store) {
+            Ok(status) => status,
+            Err(_) => return Some(RecoveryInspection::Corrupt),
+        };
+        if status.store_scope != entry.scope
+            || status.store_id != entry.store_id
+            || status.generation != entry.generation
+            || status.management_store_version != entry.management_store_version
+        {
+            return Some(RecoveryInspection::ActiveSetMismatch);
+        }
+    }
+    if validate_active_set_relationships(root, &parsed.manifest).is_err() {
+        return Some(RecoveryInspection::ActiveSetMismatch);
+    }
+    Some(RecoveryInspection::Healthy)
+}
+
+fn parse_active_set(input: &str) -> Result<ParsedActiveSet, RepositoryError> {
+    if let Ok(manifest) = star_contracts::management::decode_current_management_document::<
+        ActiveSetManifest,
+    >(input, ACTIVE_SET_MANIFEST_SCHEMA_ID)
+    {
+        validate_active_set(&manifest).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "active set manifest fingerprint or store set is invalid",
+            )
+        })?;
+        return Ok(ParsedActiveSet {
+            manifest,
+            needs_upgrade: false,
+        });
+    }
+
+    let value = star_contracts::parse_no_duplicate_keys(input).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "active set manifest JSON is invalid",
+        )
+    })?;
+    let legacy: LegacyActiveSetManifest = serde_json::from_value(value).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "active set manifest shape is invalid",
+        )
+    })?;
+    if legacy.schema_version != 1 {
+        return Err(repository_error(
+            RepositoryErrorCategory::IncompatibleVersion,
+            "active set manifest version is unsupported",
+        ));
+    }
+    let manifest = ActiveSetManifest {
+        schema_id: ACTIVE_SET_MANIFEST_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        entries: legacy
+            .entries
+            .into_iter()
+            .map(|entry| ActiveStoreGeneration {
+                scope: entry.scope,
+                store_id: entry.store_id,
+                generation: entry.generation,
+                management_store_version: entry.management_store_version,
+                relative_locator: entry.relative_locator,
+                header_fingerprint: entry.header_fingerprint,
+            })
+            .collect(),
+        manifest_fingerprint: legacy.manifest_fingerprint,
+    };
+    validate_active_set(&manifest).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "legacy active set manifest fingerprint or store set is invalid",
+        )
+    })?;
+    Ok(ParsedActiveSet {
+        manifest,
+        needs_upgrade: true,
+    })
+}
+
+fn read_active_set(root: &Path) -> Result<Option<ParsedActiveSet>, RepositoryError> {
+    let path = root.join(ACTIVE_SET_FILENAME);
+    match fs::read_to_string(path) {
+        Ok(input) => parse_active_set(&input).map(Some),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(map_io(error)),
+    }
+}
+
+fn write_active_set_document(
+    root: &Path,
+    manifest: &ActiveSetManifest,
+) -> Result<(), RepositoryError> {
+    validate_active_set(manifest).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "active set manifest is not sealed",
+        )
+    })?;
+    let bytes = serde_json::to_vec_pretty(manifest).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "active set serialization failed",
+        )
+    })?;
+    write_private_atomic(&root.join(ACTIVE_SET_FILENAME), &bytes)
+}
+
+fn active_store_file(root: &Path, entry: &ActiveStoreGeneration) -> PathBuf {
+    root.join(&entry.relative_locator).join(STORE_FILENAME)
+}
+
+fn read_store_status_read_only(path: &Path) -> Result<ManagementStoreStatus, RepositoryError> {
+    match inspect_store_read_only(path) {
+        RecoveryInspection::Healthy => {}
+        RecoveryInspection::FutureVersion | RecoveryInspection::MigrationRequired => {
+            return Err(repository_error(
+                RepositoryErrorCategory::IncompatibleVersion,
+                "management store version is not supported by this reader",
+            ));
+        }
+        RecoveryInspection::Missing => {
+            return Err(repository_error(
+                RepositoryErrorCategory::NotFound,
+                "management store is missing",
+            ));
+        }
+        RecoveryInspection::Corrupt | RecoveryInspection::ActiveSetMismatch => {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "management store failed read-only inspection",
+            ));
+        }
+    }
+    let connection = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(map_sql)?;
+    connection
+        .execute_batch("PRAGMA query_only=ON;")
+        .map_err(map_sql)?;
+    verify_connection(&connection)?;
+    status_from_connection(&connection)
+}
+
+fn validate_active_set_relationships(
+    root: &Path,
+    manifest: &ActiveSetManifest,
+) -> Result<(), RepositoryError> {
+    let global = manifest
+        .entries
+        .iter()
+        .find(|entry| matches!(entry.scope, StoreScope::Global))
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "active set has no global store",
+            )
+        })?;
+    let connection = Connection::open_with_flags(
+        active_store_file(root, global),
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(map_sql)?;
+    connection
+        .execute_batch("PRAGMA query_only=ON;")
+        .map_err(map_sql)?;
+    let mut statement = connection
+        .prepare("SELECT project_id FROM projects ORDER BY project_id")
+        .map_err(map_sql)?;
+    let projects = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(map_sql)?;
+    let mut expected = BTreeSet::new();
+    for project in projects {
+        expected.insert(ProjectId::parse(project.map_err(map_sql)?).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "global project relationship has an invalid project ID",
+            )
+        })?);
+    }
+    let actual: BTreeSet<_> = manifest
+        .entries
+        .iter()
+        .filter_map(|entry| match &entry.scope {
+            StoreScope::Project { project_id } => Some(project_id.clone()),
+            StoreScope::Global => None,
+        })
+        .collect();
+    if expected != actual {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "active set project relationships do not match the global store",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_active_set_materialization(
+    root: &Path,
+    manifest: &ActiveSetManifest,
+) -> Result<(), RepositoryError> {
+    validate_active_set(manifest).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "active set manifest is invalid",
+        )
+    })?;
+    for entry in &manifest.entries {
+        let status = read_store_status_read_only(&active_store_file(root, entry))?;
+        if status.store_scope != entry.scope
+            || status.store_id != entry.store_id
+            || status.generation != entry.generation
+            || status.management_store_version != entry.management_store_version
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "active set store header does not match the manifest",
+            ));
+        }
+    }
+    validate_active_set_relationships(root, manifest)
 }
 
 pub fn restore_verified_backup_side_by_side(
@@ -602,16 +868,110 @@ impl WriterLease {
     }
 }
 
+pub struct SqliteManagementRecovery {
+    root: PathBuf,
+    product_version: String,
+    _lease: WriterLease,
+}
+
+impl SqliteManagementRecovery {
+    pub fn open(
+        management_root: impl Into<PathBuf>,
+        product_version: impl Into<String>,
+    ) -> Result<Self, RepositoryError> {
+        let root = management_root.into();
+        create_private_dir(&root)?;
+        let lease = WriterLease::acquire(&root.join("writer.lock"))?;
+        let recovery = Self {
+            root,
+            product_version: product_version.into(),
+            _lease: lease,
+        };
+        if let Ok(Some(parsed)) = read_active_set(&recovery.root)
+            && parsed.needs_upgrade
+        {
+            write_active_set_document(&recovery.root, &parsed.manifest)?;
+        }
+        Ok(recovery)
+    }
+
+    pub fn status(&self) -> Result<RecoveryStatus, RepositoryError> {
+        ManagementRecovery::status(self)
+    }
+
+    pub fn plan_restore(&self, backup_root: &Path) -> Result<RestorePlan, RepositoryError> {
+        ManagementRecovery::plan_restore(self, backup_root)
+    }
+
+    pub fn apply_restore(
+        &self,
+        backup_root: &Path,
+        plan: &RestorePlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<RestoreApplyResult, RepositoryError> {
+        ManagementRecovery::apply_restore(self, backup_root, plan, approved_plan_fingerprint)
+    }
+
+    pub fn plan_rebuild(
+        &self,
+        projects: Vec<RebuildProjectInput>,
+        predicted_losses: Vec<RecoveryLossItem>,
+    ) -> Result<RebuildPlan, RepositoryError> {
+        ManagementRecovery::plan_rebuild(self, projects, predicted_losses)
+    }
+
+    pub fn begin_rebuild(
+        &self,
+        plan: &RebuildPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<Arc<dyn ManagementRepositorySet>, RepositoryError> {
+        ManagementRecovery::begin_rebuild(self, plan, approved_plan_fingerprint)
+    }
+
+    pub fn apply_rebuild(
+        &self,
+        plan: &RebuildPlan,
+        approved_plan_fingerprint: &str,
+        rebuilt_projects: Vec<RebuiltProjectSummary>,
+    ) -> Result<RebuildApplyResult, RepositoryError> {
+        ManagementRecovery::apply_rebuild(self, plan, approved_plan_fingerprint, rebuilt_projects)
+    }
+
+    pub fn plan_local_state_export(
+        &self,
+        project_id: &ProjectId,
+        destination: &Path,
+    ) -> Result<LocalStateExportPlan, RepositoryError> {
+        ManagementRecovery::plan_local_state_export(self, project_id, destination)
+    }
+
+    pub fn apply_local_state_export(
+        &self,
+        destination: &Path,
+        plan: &LocalStateExportPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<LocalStateExportResult, RepositoryError> {
+        ManagementRecovery::apply_local_state_export(
+            self,
+            destination,
+            plan,
+            approved_plan_fingerprint,
+        )
+    }
+}
+
 pub struct SqliteManagementRepositorySet {
     root: PathBuf,
     product_version: String,
     _lease: WriterLease,
     global: SqliteGlobalRepository,
+    active_set: Mutex<ActiveSetManifest>,
     projects: Mutex<BTreeMap<ProjectId, Weak<SqliteProjectRepository>>>,
 }
 
-#[derive(Serialize)]
-struct ActiveSetEntry {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyActiveSetEntry {
     scope: StoreScope,
     store_id: ManagementStoreId,
     generation: u64,
@@ -620,11 +980,17 @@ struct ActiveSetEntry {
     header_fingerprint: Sha256Hash,
 }
 
-#[derive(Serialize)]
-struct ActiveSetManifest {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyActiveSetManifest {
     schema_version: u32,
-    entries: Vec<ActiveSetEntry>,
+    entries: Vec<LegacyActiveSetEntry>,
     manifest_fingerprint: Sha256Hash,
+}
+
+struct ParsedActiveSet {
+    manifest: ActiveSetManifest,
+    needs_upgrade: bool,
 }
 
 impl SqliteManagementRepositorySet {
@@ -636,25 +1002,78 @@ impl SqliteManagementRepositorySet {
         create_private_dir(&root)?;
         let lease = WriterLease::acquire(&root.join("writer.lock"))?;
         let product_version = product_version.into();
-        let global_path = root.join("global").join("active").join(STORE_FILENAME);
+        let parsed_active_set = read_active_set(&root)?;
+        if let Some(parsed) = &parsed_active_set {
+            validate_active_set_materialization(&root, &parsed.manifest)?;
+        }
+        let global_locator = parsed_active_set
+            .as_ref()
+            .and_then(|parsed| {
+                parsed.manifest.entries.iter().find_map(|entry| {
+                    matches!(entry.scope, StoreScope::Global)
+                        .then(|| entry.relative_locator.clone())
+                })
+            })
+            .unwrap_or_else(|| initial_global_locator(&root));
+        let global_path = root.join(&global_locator).join(STORE_FILENAME);
         let global = SqliteGlobalRepository::open(&global_path, &product_version)?;
+        let active_set = if let Some(parsed) = &parsed_active_set {
+            parsed.manifest.clone()
+        } else {
+            seal_active_set(vec![active_entry_for_status(
+                &global.status()?,
+                global_locator,
+            )])
+            .map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "initial active set could not be sealed",
+                )
+            })?
+        };
         let repositories = Self {
             root,
             product_version,
             _lease: lease,
             global,
+            active_set: Mutex::new(active_set),
             projects: Mutex::new(BTreeMap::new()),
         };
+        if parsed_active_set
+            .as_ref()
+            .is_some_and(|parsed| parsed.needs_upgrade)
+        {
+            let active_set = repositories.active_set.lock().map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Unavailable,
+                    "active set cache is unavailable",
+                )
+            })?;
+            write_active_set_document(&repositories.root, &active_set)?;
+        }
         repositories.refresh_active_set()?;
         Ok(repositories)
     }
 
-    fn project_path(&self, project_id: &ProjectId) -> PathBuf {
-        self.root
-            .join("projects")
-            .join(project_id.as_str())
-            .join("active")
-            .join(STORE_FILENAME)
+    fn project_path(&self, project_id: &ProjectId) -> Result<PathBuf, RepositoryError> {
+        let active_set = self.active_set.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "active set cache is unavailable",
+            )
+        })?;
+        if let Some(entry) = active_set.entries.iter().find(|entry| {
+            matches!(
+                &entry.scope,
+                StoreScope::Project { project_id: active_project_id }
+                    if active_project_id == project_id
+            )
+        }) {
+            return Ok(active_store_file(&self.root, entry));
+        }
+        drop(active_set);
+        let locator = initial_project_locator(&self.root, project_id);
+        Ok(self.root.join(locator).join(STORE_FILENAME))
     }
 
     fn project_repository(
@@ -671,11 +1090,15 @@ impl SqliteManagementRepositorySet {
             return Ok(repository);
         }
         let repository = Arc::new(SqliteProjectRepository::open(
-            &self.project_path(project_id),
+            &self.project_path(project_id)?,
             project_id,
             &self.product_version,
         )?);
         projects.insert(project_id.clone(), Arc::downgrade(&repository));
+        drop(projects);
+        if self.global.get_project(project_id)?.is_some() {
+            self.refresh_active_set()?;
+        }
         Ok(repository)
     }
 
@@ -689,60 +1112,1091 @@ impl SqliteManagementRepositorySet {
 
     fn write_active_set(&self, statuses: &[ManagementStoreStatus]) -> Result<(), RepositoryError> {
         let mut entries = Vec::new();
-        for status in statuses {
-            let relative_locator = match &status.store_scope {
-                StoreScope::Global => "global/active".to_owned(),
-                StoreScope::Project { project_id } => {
-                    format!("projects/{}/active", project_id.as_str())
-                }
-            };
-            let header_fingerprint = versioned_fingerprint(
-                "star.management-store-generation-header",
-                1,
-                &serde_json::json!({
-                    "scope":status.store_scope,
-                    "store_id":status.store_id,
-                    "generation":status.generation,
-                    "management_store_version":status.management_store_version,
-                    "relative_locator":relative_locator,
-                }),
-            )
-            .map_err(|_| {
-                repository_error(
-                    RepositoryErrorCategory::Invalid,
-                    "active store header fingerprint failed",
-                )
-            })?;
-            entries.push(ActiveSetEntry {
-                scope: status.store_scope.clone(),
-                store_id: status.store_id.clone(),
-                generation: status.generation,
-                management_store_version: status.management_store_version,
-                relative_locator,
-                header_fingerprint,
-            });
-        }
-        entries.sort_by(|left, right| left.relative_locator.cmp(&right.relative_locator));
-        let manifest_fingerprint = versioned_fingerprint("star.management-active-set", 1, &entries)
-            .map_err(|_| {
-                repository_error(
-                    RepositoryErrorCategory::Invalid,
-                    "active set fingerprint failed",
-                )
-            })?;
-        let bytes = serde_json::to_vec_pretty(&ActiveSetManifest {
-            schema_version: 1,
-            entries,
-            manifest_fingerprint,
-        })
-        .map_err(|_| {
+        let current = self.active_set.lock().map_err(|_| {
             repository_error(
-                RepositoryErrorCategory::Invalid,
-                "active set serialization failed",
+                RepositoryErrorCategory::Unavailable,
+                "active set cache is unavailable",
             )
         })?;
-        write_private_atomic(&self.root.join("active-set.json"), &bytes)
+        for status in statuses {
+            let relative_locator = current
+                .entries
+                .iter()
+                .find(|entry| entry.scope == status.store_scope)
+                .map(|entry| entry.relative_locator.clone())
+                .unwrap_or_else(|| match &status.store_scope {
+                    StoreScope::Global => initial_global_locator(&self.root),
+                    StoreScope::Project { project_id } => {
+                        initial_project_locator(&self.root, project_id)
+                    }
+                });
+            entries.push(active_entry_for_status(status, relative_locator));
+        }
+        drop(current);
+        let manifest = seal_active_set(entries).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "active set could not be sealed",
+            )
+        })?;
+        write_active_set_document(&self.root, &manifest)?;
+        let mut current = self.active_set.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "active set cache is unavailable",
+            )
+        })?;
+        *current = manifest;
+        Ok(())
     }
+}
+
+fn initial_global_locator(root: &Path) -> String {
+    if root
+        .join("global")
+        .join("active")
+        .join(STORE_FILENAME)
+        .is_file()
+    {
+        "global/active".to_owned()
+    } else {
+        format!("global/{FIRST_GENERATION_LOCATOR}")
+    }
+}
+
+fn initial_project_locator(root: &Path, project_id: &ProjectId) -> String {
+    let legacy = root
+        .join("projects")
+        .join(project_id.as_str())
+        .join("active")
+        .join(STORE_FILENAME);
+    if legacy.is_file() {
+        format!("projects/{}/active", project_id.as_str())
+    } else {
+        format!(
+            "projects/{}/{}",
+            project_id.as_str(),
+            FIRST_GENERATION_LOCATOR
+        )
+    }
+}
+
+fn active_entry_for_status(
+    status: &ManagementStoreStatus,
+    relative_locator: String,
+) -> ActiveStoreGeneration {
+    ActiveStoreGeneration {
+        scope: status.store_scope.clone(),
+        store_id: status.store_id.clone(),
+        generation: status.generation,
+        management_store_version: status.management_store_version,
+        relative_locator,
+        header_fingerprint: Sha256Hash::digest(b"unsealed-active-store-header"),
+    }
+}
+
+fn backup_destination_fingerprint(
+    management_root: &Path,
+    destination: &Path,
+) -> Result<Sha256Hash, RepositoryError> {
+    if !destination.is_absolute()
+        || destination.as_os_str().is_empty()
+        || destination.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::CurDir | std::path::Component::ParentDir
+            )
+        })
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::Invalid,
+            "backup destination must be an absolute normalized path",
+        ));
+    }
+    let canonical_management_root = management_root.canonicalize().map_err(map_io)?;
+    let parent = destination.parent().ok_or_else(|| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "backup destination has no parent directory",
+        )
+    })?;
+    let canonical_parent = parent.canonicalize().map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "backup destination parent must already exist",
+        )
+    })?;
+    if canonical_parent.starts_with(&canonical_management_root) {
+        return Err(repository_error(
+            RepositoryErrorCategory::Invalid,
+            "backup destination must be outside the management root",
+        ));
+    }
+    let normalized = destination
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_lowercase();
+    versioned_fingerprint("star.management-backup-destination", 1, &normalized).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "backup destination fingerprint failed",
+        )
+    })
+}
+
+fn local_state_path_fingerprint(
+    path: &Path,
+    contract: &str,
+) -> Result<Sha256Hash, RepositoryError> {
+    if !path.is_absolute()
+        || path.as_os_str().is_empty()
+        || path.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::CurDir | std::path::Component::ParentDir
+            )
+        })
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state document path must be absolute and normalized",
+        ));
+    }
+    let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();
+    versioned_fingerprint(contract, 1, &normalized).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state document path fingerprint failed",
+        )
+    })
+}
+
+fn recovery_receipt_path(root: &Path, operation: &str, plan_fingerprint: &Sha256Hash) -> PathBuf {
+    let token = plan_fingerprint.as_str().trim_start_matches("sha256:");
+    root.join("recovery-receipts")
+        .join(format!("{operation}-{}.json", &token[..32]))
+}
+
+fn read_recovery_receipt<T: DeserializeOwned>(
+    root: &Path,
+    operation: &str,
+    plan_fingerprint: &Sha256Hash,
+) -> Result<Option<T>, RepositoryError> {
+    let path = recovery_receipt_path(root, operation, plan_fingerprint);
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(map_io(error)),
+    };
+    if bytes.len() > 16 * 1024 * 1024 {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "recovery receipt exceeds its read limit",
+        ));
+    }
+    let text = std::str::from_utf8(&bytes).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "recovery receipt is not UTF-8",
+        )
+    })?;
+    let value = star_contracts::parse_no_duplicate_keys(text).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "recovery receipt JSON is invalid",
+        )
+    })?;
+    serde_json::from_value(value).map(Some).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "recovery receipt shape is invalid",
+        )
+    })
+}
+
+fn write_recovery_receipt<T>(
+    root: &Path,
+    operation: &str,
+    plan_fingerprint: &Sha256Hash,
+    value: &T,
+) -> Result<(), RepositoryError>
+where
+    T: Serialize + DeserializeOwned + PartialEq,
+{
+    if let Some(existing) = read_recovery_receipt::<T>(root, operation, plan_fingerprint)? {
+        if existing == *value {
+            return Ok(());
+        }
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "recovery receipt conflicts with the completed operation",
+        ));
+    }
+    let bytes = serde_json::to_vec_pretty(value).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "recovery receipt serialization failed",
+        )
+    })?;
+    write_private_atomic(
+        &recovery_receipt_path(root, operation, plan_fingerprint),
+        &bytes,
+    )
+}
+
+fn backup_apply_result(
+    plan: &BackupPlan,
+    manifest: BackupSetManifest,
+    applied_at: DateTime<Utc>,
+) -> Result<BackupApplyResult, RepositoryError> {
+    let result_fingerprint = versioned_fingerprint(
+        "star.management-backup-apply-result",
+        1,
+        &serde_json::json!({
+            "backup_set_id":plan.backup_set_id,
+            "applied_at":applied_at,
+            "approved_plan_fingerprint":plan.plan_fingerprint,
+            "manifest":manifest,
+        }),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "backup result fingerprint failed",
+        )
+    })?;
+    Ok(BackupApplyResult {
+        schema_id: BACKUP_APPLY_RESULT_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        backup_set_id: plan.backup_set_id.clone(),
+        applied_at,
+        approved_plan_fingerprint: plan.plan_fingerprint.clone(),
+        manifest,
+        result_fingerprint,
+    })
+}
+
+fn local_state_export_result(
+    plan: &LocalStateExportPlan,
+    bundle: LocalStateBundle,
+    payload_sha256: Sha256Hash,
+    applied_at: DateTime<Utc>,
+) -> Result<LocalStateExportResult, RepositoryError> {
+    let result_fingerprint = versioned_fingerprint(
+        "star.management-local-state-export-result",
+        1,
+        &serde_json::json!({
+            "recovery_plan_id":plan.recovery_plan_id,
+            "applied_at":applied_at,
+            "approved_plan_fingerprint":plan.plan_fingerprint,
+            "bundle":bundle,
+            "payload_sha256":payload_sha256,
+        }),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state export result fingerprint failed",
+        )
+    })?;
+    Ok(LocalStateExportResult {
+        schema_id: LOCAL_STATE_EXPORT_RESULT_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        recovery_plan_id: plan.recovery_plan_id.clone(),
+        applied_at,
+        approved_plan_fingerprint: plan.plan_fingerprint.clone(),
+        bundle,
+        payload_sha256,
+        result_fingerprint,
+    })
+}
+
+fn local_state_import_result(
+    plan: &LocalStateImportPlan,
+    bundle: &LocalStateBundle,
+    applied_at: DateTime<Utc>,
+) -> Result<LocalStateImportResult, RepositoryError> {
+    let imported_suppressions = u64::try_from(bundle.local_suppressions.len()).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "local state suppression count exceeds its supported range",
+        )
+    })?;
+    let imported_baselines = u64::try_from(bundle.local_baselines.len()).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "local state baseline count exceeds its supported range",
+        )
+    })?;
+    let imported_dispositions = u64::try_from(bundle.local_dispositions.len()).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "local state disposition count exceeds its supported range",
+        )
+    })?;
+    let imported_change_plans = u64::try_from(bundle.active_change_plans.len()).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "local state change plan count exceeds its supported range",
+        )
+    })?;
+    let result_fingerprint = versioned_fingerprint(
+        "star.management-local-state-import-result",
+        1,
+        &serde_json::json!({
+            "recovery_plan_id":plan.recovery_plan_id,
+            "bundle_id":plan.bundle_id,
+            "applied_at":applied_at,
+            "approved_plan_fingerprint":plan.plan_fingerprint,
+            "imported_suppressions":imported_suppressions,
+            "imported_baselines":imported_baselines,
+            "imported_dispositions":imported_dispositions,
+            "imported_change_plans":imported_change_plans,
+        }),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state import result fingerprint failed",
+        )
+    })?;
+    Ok(LocalStateImportResult {
+        schema_id: LOCAL_STATE_IMPORT_RESULT_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        recovery_plan_id: plan.recovery_plan_id.clone(),
+        bundle_id: plan.bundle_id.clone(),
+        applied_at,
+        approved_plan_fingerprint: plan.plan_fingerprint.clone(),
+        imported_suppressions,
+        imported_baselines,
+        imported_dispositions,
+        imported_change_plans,
+        result_fingerprint,
+    })
+}
+
+fn restore_apply_result(
+    plan: &RestorePlan,
+    applied_at: DateTime<Utc>,
+) -> Result<RestoreApplyResult, RepositoryError> {
+    let result_fingerprint = versioned_fingerprint(
+        "star.management-restore-apply-result",
+        1,
+        &serde_json::json!({
+            "recovery_plan_id":plan.recovery_plan_id,
+            "backup_set_id":plan.backup_set_id,
+            "applied_at":applied_at,
+            "approved_plan_fingerprint":plan.plan_fingerprint,
+            "previous_active_set_fingerprint":plan.expected_active_set_fingerprint,
+            "activated_set":plan.candidate_active_set,
+        }),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "restore result fingerprint failed",
+        )
+    })?;
+    Ok(RestoreApplyResult {
+        schema_id: RESTORE_APPLY_RESULT_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        recovery_plan_id: plan.recovery_plan_id.clone(),
+        backup_set_id: plan.backup_set_id.clone(),
+        applied_at,
+        approved_plan_fingerprint: plan.plan_fingerprint.clone(),
+        previous_active_set_fingerprint: plan.expected_active_set_fingerprint.clone(),
+        activated_set: plan.candidate_active_set.clone(),
+        result_fingerprint,
+    })
+}
+
+fn rebuild_apply_result(
+    plan: &RebuildPlan,
+    rebuilt_projects: Vec<RebuiltProjectSummary>,
+    activated_set: ActiveSetManifest,
+    applied_at: DateTime<Utc>,
+) -> Result<RebuildApplyResult, RepositoryError> {
+    let result_fingerprint = versioned_fingerprint(
+        "star.management-rebuild-apply-result",
+        1,
+        &serde_json::json!({
+            "recovery_plan_id":plan.recovery_plan_id,
+            "applied_at":applied_at,
+            "approved_plan_fingerprint":plan.plan_fingerprint,
+            "rebuilt_projects":rebuilt_projects,
+            "loss_report":plan.predicted_losses,
+            "activated_set":activated_set,
+        }),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "source rebuild result fingerprint failed",
+        )
+    })?;
+    Ok(RebuildApplyResult {
+        schema_id: REBUILD_APPLY_RESULT_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        recovery_plan_id: plan.recovery_plan_id.clone(),
+        applied_at,
+        approved_plan_fingerprint: plan.plan_fingerprint.clone(),
+        rebuilt_projects,
+        loss_report: plan.predicted_losses.clone(),
+        activated_set,
+        result_fingerprint,
+    })
+}
+
+fn local_state_snapshot(
+    repository: &dyn ProjectManagementRepository,
+    project_id: &ProjectId,
+    bundle_id: LocalStateBundleId,
+) -> Result<(LocalStateBundle, ManagementStoreStatus), RepositoryError> {
+    let before = repository.status()?;
+    if before.store_scope
+        != (StoreScope::Project {
+            project_id: project_id.clone(),
+        })
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state repository project scope does not match",
+        ));
+    }
+    let scan = repository.latest_scan()?.ok_or_else(|| {
+        repository_error(
+            RepositoryErrorCategory::NotFound,
+            "local state project has no current scan",
+        )
+    })?;
+    let local_suppressions = repository
+        .list_suppressions()?
+        .into_iter()
+        .filter(|value| value.scope_kind == star_contracts::management::SuppressionScope::Local)
+        .collect();
+    let local_baselines = repository
+        .list_baselines()?
+        .into_iter()
+        .filter(|value| value.scope_kind == star_contracts::management::BaselineScope::Local)
+        .collect();
+    let local_dispositions = repository.list_dispositions()?;
+    let active_change_plans = repository
+        .list_change_plans()?
+        .into_iter()
+        .filter(|value| {
+            matches!(
+                value.status,
+                star_contracts::management::ChangePlanStatus::Draft
+                    | star_contracts::management::ChangePlanStatus::Ready
+                    | star_contracts::management::ChangePlanStatus::Blocked
+            )
+        })
+        .collect();
+    let after = repository.status()?;
+    if before.store_revision != after.store_revision {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state changed while the recovery snapshot was read",
+        ));
+    }
+    let bundle = seal_local_state_bundle(
+        bundle_id,
+        project_id.clone(),
+        scan.project_revision_id,
+        scan.effective_config_fingerprint,
+        local_suppressions,
+        local_baselines,
+        local_dispositions,
+        active_change_plans,
+        &PersistenceRedactor::for_current_user(),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state snapshot is not redaction-safe",
+        )
+    })?;
+    Ok((bundle, after))
+}
+
+fn plan_local_state_export_for_repository(
+    repository: &dyn ProjectManagementRepository,
+    project_id: &ProjectId,
+    destination: &Path,
+) -> Result<LocalStateExportPlan, RepositoryError> {
+    if destination.exists() {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state export destination already exists",
+        ));
+    }
+    let destination_fingerprint = local_state_path_fingerprint(
+        destination,
+        "star.management-local-state-export-destination",
+    )?;
+    let bundle_id = LocalStateBundleId::new();
+    let (bundle, status) = local_state_snapshot(repository, project_id, bundle_id.clone())?;
+    seal_local_state_export_plan(
+        RecoveryPlanId::new(),
+        bundle_id,
+        project_id.clone(),
+        bundle.source_revision_id,
+        bundle.effective_config_fingerprint,
+        status.store_revision,
+        destination_fingerprint,
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state export plan could not be sealed",
+        )
+    })
+}
+
+fn apply_local_state_export_for_repository(
+    receipt_root: &Path,
+    repository: &dyn ProjectManagementRepository,
+    destination: &Path,
+    plan: &LocalStateExportPlan,
+    approved_plan_fingerprint: &str,
+) -> Result<LocalStateExportResult, RepositoryError> {
+    require_exact_approval(&plan.plan_fingerprint, approved_plan_fingerprint).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state export approval fingerprint is stale",
+        )
+    })?;
+    validate_local_state_export_plan(plan).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state export plan is invalid",
+        )
+    })?;
+    if local_state_path_fingerprint(
+        destination,
+        "star.management-local-state-export-destination",
+    )? != plan.destination_fingerprint
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state export destination changed after planning",
+        ));
+    }
+    if let Some(completed) = read_recovery_receipt::<LocalStateExportResult>(
+        receipt_root,
+        "local-state-export",
+        &plan.plan_fingerprint,
+    )? {
+        let (bundle, payload_sha256) = read_local_state_bundle(destination)?;
+        let expected = local_state_export_result(
+            plan,
+            completed.bundle.clone(),
+            completed.payload_sha256.clone(),
+            completed.applied_at,
+        )?;
+        if completed != expected
+            || bundle != completed.bundle
+            || payload_sha256 != completed.payload_sha256
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "completed local state export receipt or payload is invalid",
+            ));
+        }
+        return Ok(completed);
+    }
+    if destination.exists() {
+        let (bundle, payload_sha256) = read_local_state_bundle(destination)?;
+        if bundle.bundle_id != plan.bundle_id
+            || bundle.project_id != plan.project_id
+            || bundle.source_revision_id != plan.source_revision_id
+            || bundle.effective_config_fingerprint != plan.effective_config_fingerprint
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "local state export destination belongs to a different plan",
+            ));
+        }
+        let result = local_state_export_result(plan, bundle, payload_sha256, Utc::now())?;
+        write_recovery_receipt(
+            receipt_root,
+            "local-state-export",
+            &plan.plan_fingerprint,
+            &result,
+        )?;
+        return Ok(result);
+    }
+    let (bundle, status) =
+        local_state_snapshot(repository, &plan.project_id, plan.bundle_id.clone())?;
+    if status.store_revision != plan.expected_store_revision
+        || bundle.source_revision_id != plan.source_revision_id
+        || bundle.effective_config_fingerprint != plan.effective_config_fingerprint
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state changed after export planning",
+        ));
+    }
+    let payload = serde_json::to_vec_pretty(&bundle).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state export serialization failed",
+        )
+    })?;
+    write_private_new(destination, &payload, plan.recovery_plan_id.as_str())?;
+    let payload_sha256 = Sha256Hash::digest(&payload);
+    let result = local_state_export_result(plan, bundle, payload_sha256, Utc::now())?;
+    write_recovery_receipt(
+        receipt_root,
+        "local-state-export",
+        &plan.plan_fingerprint,
+        &result,
+    )?;
+    Ok(result)
+}
+
+fn read_local_state_bundle(
+    source: &Path,
+) -> Result<(LocalStateBundle, Sha256Hash), RepositoryError> {
+    let _ = local_state_path_fingerprint(source, "star.management-local-state-import-source")?;
+    let metadata = fs::symlink_metadata(source).map_err(map_io)?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 16 * 1024 * 1024
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state import source must be a regular file no larger than 16 MiB",
+        ));
+    }
+    let bytes = fs::read(source).map_err(map_io)?;
+    let text = std::str::from_utf8(&bytes).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state import source is not UTF-8",
+        )
+    })?;
+    let value = star_contracts::parse_no_duplicate_keys(text).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state import source is invalid or has duplicate keys",
+        )
+    })?;
+    let bundle: LocalStateBundle = serde_json::from_value(value).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state import contract is invalid",
+        )
+    })?;
+    validate_local_state_bundle(&bundle, &PersistenceRedactor::for_current_user()).map_err(
+        |_| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "local state import bundle failed integrity or redaction checks",
+            )
+        },
+    )?;
+    Ok((bundle, Sha256Hash::digest(&bytes)))
+}
+
+fn plan_local_state_import_for_repository(
+    repository: &dyn ProjectManagementRepository,
+    bundle: &LocalStateBundle,
+    payload_sha256: Sha256Hash,
+) -> Result<LocalStateImportPlan, RepositoryError> {
+    let status = repository.status()?;
+    let current = repository.latest_scan()?.ok_or_else(|| {
+        repository_error(
+            RepositoryErrorCategory::NotFound,
+            "local state import target has no current scan",
+        )
+    })?;
+    let mut conflicts = Vec::new();
+    if current.project_revision_id != bundle.source_revision_id {
+        conflicts.push(local_state_conflict(
+            "bundle",
+            bundle.bundle_id.as_str(),
+            "SOURCE_REVISION_MISMATCH",
+        ));
+    }
+    if current.effective_config_fingerprint != bundle.effective_config_fingerprint {
+        conflicts.push(local_state_conflict(
+            "bundle",
+            bundle.bundle_id.as_str(),
+            "CONFIG_FINGERPRINT_MISMATCH",
+        ));
+    }
+    let suppressions = repository
+        .list_suppressions()?
+        .into_iter()
+        .map(|value| value.suppression_id)
+        .collect::<BTreeSet<_>>();
+    for value in &bundle.local_suppressions {
+        if suppressions.contains(&value.suppression_id) {
+            conflicts.push(local_state_conflict(
+                "suppression",
+                value.suppression_id.as_str(),
+                "ENTITY_ALREADY_EXISTS",
+            ));
+        }
+    }
+    let baselines = repository
+        .list_baselines()?
+        .into_iter()
+        .map(|value| value.baseline_id)
+        .collect::<BTreeSet<_>>();
+    for value in &bundle.local_baselines {
+        if baselines.contains(&value.baseline_id) {
+            conflicts.push(local_state_conflict(
+                "baseline",
+                value.baseline_id.as_str(),
+                "ENTITY_ALREADY_EXISTS",
+            ));
+        }
+        if repository
+            .get_workspace_snapshot(&value.workspace_snapshot_id)?
+            .is_none()
+        {
+            conflicts.push(local_state_conflict(
+                "baseline",
+                value.baseline_id.as_str(),
+                "TARGET_SNAPSHOT_NOT_CURRENT",
+            ));
+        }
+    }
+    let dispositions = repository
+        .list_dispositions()?
+        .into_iter()
+        .map(|value| value.disposition_id)
+        .collect::<BTreeSet<_>>();
+    for value in &bundle.local_dispositions {
+        if dispositions.contains(&value.disposition_id) {
+            conflicts.push(local_state_conflict(
+                "disposition",
+                value.disposition_id.as_str(),
+                "ENTITY_ALREADY_EXISTS",
+            ));
+        }
+        if repository.get_finding(&value.finding_id)?.is_none() {
+            conflicts.push(local_state_conflict(
+                "disposition",
+                value.disposition_id.as_str(),
+                "TARGET_FINDING_NOT_CURRENT",
+            ));
+        }
+    }
+    let change_plans = repository
+        .list_change_plans()?
+        .into_iter()
+        .map(|value| value.change_plan_id)
+        .collect::<BTreeSet<_>>();
+    for value in &bundle.active_change_plans {
+        if change_plans.contains(&value.change_plan_id) {
+            conflicts.push(local_state_conflict(
+                "change_plan",
+                value.change_plan_id.as_str(),
+                "ENTITY_ALREADY_EXISTS",
+            ));
+        }
+        let mut target_missing = repository
+            .get_workspace_snapshot(&value.target_workspace_snapshot_id)?
+            .is_none();
+        for finding_id in &value.finding_refs {
+            target_missing |= repository.get_finding(finding_id)?.is_none();
+        }
+        if target_missing {
+            conflicts.push(local_state_conflict(
+                "change_plan",
+                value.change_plan_id.as_str(),
+                "TARGET_STATE_NOT_CURRENT",
+            ));
+        }
+    }
+    seal_local_state_import_plan(
+        RecoveryPlanId::new(),
+        bundle,
+        status.store_revision,
+        payload_sha256,
+        conflicts,
+        &PersistenceRedactor::for_current_user(),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state import plan could not be sealed",
+        )
+    })
+}
+
+fn apply_local_state_import_for_repository(
+    receipt_root: &Path,
+    repository: &dyn ProjectManagementRepository,
+    bundle: &LocalStateBundle,
+    payload_sha256: Sha256Hash,
+    plan: &LocalStateImportPlan,
+    approved_plan_fingerprint: &str,
+) -> Result<LocalStateImportResult, RepositoryError> {
+    require_exact_approval(&plan.plan_fingerprint, approved_plan_fingerprint).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state import approval fingerprint is stale",
+        )
+    })?;
+    validate_local_state_import_plan(plan).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state import plan is invalid",
+        )
+    })?;
+    if !plan.conflicts.is_empty() {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state import plan contains unresolved conflicts",
+        ));
+    }
+    let bound_plan = seal_local_state_import_plan(
+        plan.recovery_plan_id.clone(),
+        bundle,
+        plan.expected_store_revision,
+        payload_sha256.clone(),
+        Vec::new(),
+        &PersistenceRedactor::for_current_user(),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state import source could not be resealed",
+        )
+    })?;
+    if &bound_plan != plan || payload_sha256 != plan.payload_sha256 {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state import source changed after planning",
+        ));
+    }
+    if let Some(completed) = read_recovery_receipt::<LocalStateImportResult>(
+        receipt_root,
+        "local-state-import",
+        &plan.plan_fingerprint,
+    )? {
+        let expected = local_state_import_result(plan, bundle, completed.applied_at)?;
+        if completed != expected {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "completed local state import receipt is invalid",
+            ));
+        }
+        return Ok(completed);
+    }
+    let status = repository.status()?;
+    let current = repository.latest_scan()?.ok_or_else(|| {
+        repository_error(
+            RepositoryErrorCategory::NotFound,
+            "local state import target has no current scan",
+        )
+    })?;
+    if status.store_revision != plan.expected_store_revision
+        || current.project_revision_id != plan.expected_source_revision_id
+        || current.effective_config_fingerprint != plan.expected_config_fingerprint
+    {
+        let suppressions = repository.list_suppressions()?;
+        let baselines = repository.list_baselines()?;
+        let dispositions = repository.list_dispositions()?;
+        let change_plans = repository.list_change_plans()?;
+        let already_applied = status.store_revision > plan.expected_store_revision
+            && current.project_revision_id == plan.expected_source_revision_id
+            && current.effective_config_fingerprint == plan.expected_config_fingerprint
+            && bundle
+                .local_suppressions
+                .iter()
+                .all(|value| suppressions.contains(value))
+            && bundle
+                .local_baselines
+                .iter()
+                .all(|value| baselines.contains(value))
+            && bundle
+                .local_dispositions
+                .iter()
+                .all(|value| dispositions.contains(value))
+            && bundle
+                .active_change_plans
+                .iter()
+                .all(|value| change_plans.contains(value));
+        if already_applied {
+            let result = local_state_import_result(plan, bundle, Utc::now())?;
+            write_recovery_receipt(
+                receipt_root,
+                "local-state-import",
+                &plan.plan_fingerprint,
+                &result,
+            )?;
+            return Ok(result);
+        }
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state import source or target changed after planning",
+        ));
+    }
+    repository.import_local_state(bundle, plan.expected_store_revision)?;
+    let result = local_state_import_result(plan, bundle, Utc::now())?;
+    write_recovery_receipt(
+        receipt_root,
+        "local-state-import",
+        &plan.plan_fingerprint,
+        &result,
+    )?;
+    Ok(result)
+}
+
+fn local_state_conflict(kind: &str, id: &str, reason: &str) -> LocalStateConflict {
+    LocalStateConflict {
+        entity_kind: kind.to_owned(),
+        entity_id: id.to_owned(),
+        reason_code: reason.to_owned(),
+    }
+}
+
+fn backup_targets_from_statuses(statuses: &[ManagementStoreStatus]) -> Vec<BackupStoreTarget> {
+    let mut targets: Vec<_> = statuses
+        .iter()
+        .map(|status| BackupStoreTarget {
+            scope: status.store_scope.clone(),
+            store_id: status.store_id.clone(),
+            generation: status.generation,
+            management_store_version: status.management_store_version,
+            store_revision: status.store_revision,
+        })
+        .collect();
+    targets.sort_by_key(|target| match &target.scope {
+        StoreScope::Global => "0".to_owned(),
+        StoreScope::Project { project_id } => format!("1:{}", project_id.as_str()),
+    });
+    targets
+}
+
+fn store_vector_from_statuses(
+    statuses: &[ManagementStoreStatus],
+) -> Result<StoreVersionVector, RepositoryError> {
+    let global = statuses
+        .iter()
+        .find(|status| matches!(status.store_scope, StoreScope::Global))
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "management store set has no global status",
+            )
+        })?;
+    let mut projects: Vec<_> = statuses
+        .iter()
+        .filter_map(|status| match &status.store_scope {
+            StoreScope::Project { project_id } => Some(ProjectStorePoint {
+                project_id: project_id.clone(),
+                point: StorePoint {
+                    store_id: status.store_id.clone(),
+                    generation: status.generation,
+                    revision: status.store_revision,
+                },
+            }),
+            StoreScope::Global => None,
+        })
+        .collect();
+    projects.sort_by(|left, right| left.project_id.cmp(&right.project_id));
+    Ok(StoreVersionVector {
+        global: StorePoint {
+            store_id: global.store_id.clone(),
+            generation: global.generation,
+            revision: global.store_revision,
+        },
+        projects,
+    })
+}
+
+fn backup_store_locator(scope: &StoreScope) -> String {
+    match scope {
+        StoreScope::Global => "stores/global/store".to_owned(),
+        StoreScope::Project { project_id } => {
+            format!("stores/projects/{}/store", project_id.as_str())
+        }
+    }
+}
+
+fn validate_backup_set_relationships(
+    root: &Path,
+    manifest: &BackupSetManifest,
+) -> Result<(), RepositoryError> {
+    validate_backup_set(manifest).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "backup set manifest is invalid",
+        )
+    })?;
+    for entry in &manifest.entries {
+        let path = root.join(&entry.relative_locator);
+        let metadata = fs::metadata(&path).map_err(map_io)?;
+        let byte_sha256 =
+            Sha256Hash::digest_reader(fs::File::open(&path).map_err(map_io)?).map_err(map_io)?;
+        let status = read_store_status_read_only(&path)?;
+        if !metadata.is_file()
+            || metadata.len() != entry.size_bytes
+            || byte_sha256 != entry.byte_sha256
+            || status.store_scope != entry.scope
+            || status.store_id != entry.store_id
+            || status.generation != entry.generation
+            || status.management_store_version != entry.management_store_version
+            || status.store_revision != entry.store_revision
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "backup store bytes or header do not match the manifest",
+            ));
+        }
+    }
+    let global = manifest
+        .entries
+        .iter()
+        .find(|entry| matches!(entry.scope, StoreScope::Global))
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "backup set has no global store",
+            )
+        })?;
+    let connection = Connection::open_with_flags(
+        root.join(&global.relative_locator),
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(map_sql)?;
+    connection
+        .execute_batch("PRAGMA query_only=ON;")
+        .map_err(map_sql)?;
+    let mut statement = connection
+        .prepare("SELECT project_id FROM projects ORDER BY project_id")
+        .map_err(map_sql)?;
+    let mut expected = BTreeSet::new();
+    for project_id in statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(map_sql)?
+    {
+        expected.insert(ProjectId::parse(project_id.map_err(map_sql)?).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "backup global relationship has an invalid project ID",
+            )
+        })?);
+    }
+    let actual: BTreeSet<_> = manifest
+        .entries
+        .iter()
+        .filter_map(|entry| match &entry.scope {
+            StoreScope::Global => None,
+            StoreScope::Project { project_id } => Some(project_id.clone()),
+        })
+        .collect();
+    if expected != actual {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "backup project relationships do not match the global store",
+        ));
+    }
+    Ok(())
 }
 
 impl ManagementRepositorySet for SqliteManagementRepositorySet {
@@ -759,6 +2213,18 @@ impl ManagementRepositorySet for SqliteManagementRepositorySet {
         Ok(repository)
     }
 
+    fn active_set(&self) -> Result<ActiveSetManifest, RepositoryError> {
+        self.active_set
+            .lock()
+            .map(|manifest| manifest.clone())
+            .map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Unavailable,
+                    "active set cache is unavailable",
+                )
+            })
+    }
+
     fn verify_all(&self) -> Result<Vec<ManagementStoreStatus>, RepositoryError> {
         let mut statuses = vec![self.global.verify_integrity()?];
         for project in self.global.list_projects()? {
@@ -771,68 +2237,235 @@ impl ManagementRepositorySet for SqliteManagementRepositorySet {
         Ok(statuses)
     }
 
-    fn backup_all(
-        &self,
-        destination: &Path,
-    ) -> Result<Vec<ManagementStoreStatus>, RepositoryError> {
-        create_private_dir(destination)?;
-        let mut statuses = Vec::new();
-        let mut entries = Vec::new();
-        let global_destination = destination.join("global.db");
-        self.global.backup(&global_destination)?;
-        let global_status = self.global.status()?;
-        let global_bytes = fs::metadata(&global_destination).map_err(map_io)?.len();
-        let global_hash =
-            Sha256Hash::digest_reader(fs::File::open(&global_destination).map_err(map_io)?)
-                .map_err(map_io)?;
-        entries.push(serde_json::json!({
-            "relative_path":"global.db",
-            "status":global_status,
-            "size_bytes":global_bytes,
-            "byte_sha256":global_hash,
-        }));
-        statuses.push(global_status);
-        let project_destination = destination.join("projects");
-        create_private_dir(&project_destination)?;
-        for project in self.global.list_projects()? {
-            let repository = self.project_repository(&project.project_id)?;
-            let relative_path = format!("projects/{}.db", project.project_id.as_str());
-            let project_backup = destination.join(&relative_path);
-            repository.backup(&project_backup)?;
-            let status = repository.status()?;
-            let size_bytes = fs::metadata(&project_backup).map_err(map_io)?.len();
-            let byte_sha256 =
-                Sha256Hash::digest_reader(fs::File::open(&project_backup).map_err(map_io)?)
-                    .map_err(map_io)?;
-            entries.push(serde_json::json!({
-                "relative_path":relative_path,
-                "status":status,
-                "size_bytes":size_bytes,
-                "byte_sha256":byte_sha256,
-            }));
-            statuses.push(status);
+    fn plan_backup(&self, destination: &Path) -> Result<BackupPlan, RepositoryError> {
+        match fs::symlink_metadata(destination) {
+            Ok(_) => {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "backup destination must not exist when the plan is created",
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(map_io(error)),
         }
-        let set_fingerprint = versioned_fingerprint("star.management-backup-set", 1, &entries)
-            .map_err(|_| {
-                repository_error(
-                    RepositoryErrorCategory::Invalid,
-                    "backup set fingerprint failed",
-                )
-            })?;
-        let manifest = serde_json::to_vec_pretty(&serde_json::json!({
-            "schema_version": 1,
-            "created_at": Utc::now(),
-            "entries": entries,
-            "set_fingerprint":set_fingerprint,
-        }))
+        let destination_fingerprint = backup_destination_fingerprint(&self.root, destination)?;
+        let statuses = self.verify_all()?;
+        let active_set = self.active_set()?;
+        seal_backup_plan(
+            BackupSetId::new(),
+            Utc::now(),
+            &active_set,
+            store_vector_from_statuses(&statuses)?,
+            destination_fingerprint,
+            backup_targets_from_statuses(&statuses),
+        )
         .map_err(|_| {
             repository_error(
-                RepositoryErrorCategory::Unavailable,
-                "backup manifest serialization failed",
+                RepositoryErrorCategory::Invalid,
+                "backup plan could not be sealed",
+            )
+        })
+    }
+
+    fn apply_backup(
+        &self,
+        destination: &Path,
+        plan: &BackupPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<BackupApplyResult, RepositoryError> {
+        require_exact_approval(&plan.plan_fingerprint, approved_plan_fingerprint).map_err(
+            |_| {
+                repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "backup approval fingerprint is stale",
+                )
+            },
+        )?;
+        if backup_destination_fingerprint(&self.root, destination)? != plan.destination_fingerprint
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "backup destination changed after planning",
+            ));
+        }
+        if let Some(completed) = read_recovery_receipt::<BackupApplyResult>(
+            &self.root,
+            "backup",
+            &plan.plan_fingerprint,
+        )? {
+            let expected =
+                backup_apply_result(plan, completed.manifest.clone(), completed.applied_at)?;
+            if completed != expected || read_verified_backup_set(destination)? != completed.manifest
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::IntegrityFailed,
+                    "completed backup receipt or backup set is invalid",
+                ));
+            }
+            return Ok(completed);
+        }
+        if destination.exists() {
+            let manifest = read_verified_backup_set(destination)?;
+            let matches_plan = manifest.backup_set_id == plan.backup_set_id
+                && manifest.source_active_set_fingerprint == plan.source_active_set_fingerprint
+                && manifest.entries.len() == plan.stores.len()
+                && manifest
+                    .entries
+                    .iter()
+                    .zip(&plan.stores)
+                    .all(|(entry, target)| {
+                        entry.scope == target.scope
+                            && entry.store_id == target.store_id
+                            && entry.generation == target.generation
+                            && entry.management_store_version == target.management_store_version
+                            && entry.store_revision == target.store_revision
+                    });
+            if !matches_plan {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "backup destination belongs to a different plan",
+                ));
+            }
+            let result = backup_apply_result(plan, manifest, Utc::now())?;
+            write_recovery_receipt(&self.root, "backup", &plan.plan_fingerprint, &result)?;
+            return Ok(result);
+        }
+        let statuses = self.verify_all()?;
+        let active_set = self.active_set()?;
+        validate_backup_plan(plan, &active_set).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "backup plan no longer matches the active store set",
             )
         })?;
-        write_private_atomic(&destination.join("backup-set.json"), &manifest)?;
-        Ok(statuses)
+        if backup_targets_from_statuses(&statuses) != plan.stores {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "management store revision changed after backup planning",
+            ));
+        }
+
+        create_private_dir(destination)?;
+        let mut entries = Vec::with_capacity(plan.stores.len());
+        for target in &plan.stores {
+            let relative_locator = backup_store_locator(&target.scope);
+            let backup_path = destination.join(&relative_locator);
+            match &target.scope {
+                StoreScope::Global => self.global.backup(&backup_path)?,
+                StoreScope::Project { project_id } => {
+                    self.project_repository(project_id)?.backup(&backup_path)?;
+                }
+            }
+            let status = read_store_status_read_only(&backup_path)?;
+            if status.store_scope != target.scope
+                || status.store_id != target.store_id
+                || status.generation != target.generation
+                || status.management_store_version != target.management_store_version
+                || status.store_revision != target.store_revision
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::IntegrityFailed,
+                    "backup store header does not match the approved plan",
+                ));
+            }
+            let size_bytes = fs::metadata(&backup_path).map_err(map_io)?.len();
+            let byte_sha256 =
+                Sha256Hash::digest_reader(fs::File::open(&backup_path).map_err(map_io)?)
+                    .map_err(map_io)?;
+            entries.push(BackupStoreEntry {
+                scope: target.scope.clone(),
+                store_id: target.store_id.clone(),
+                generation: target.generation,
+                management_store_version: target.management_store_version,
+                store_revision: target.store_revision,
+                relative_locator,
+                size_bytes,
+                byte_sha256,
+            });
+        }
+        let manifest = seal_backup_set(
+            plan.backup_set_id.clone(),
+            plan.created_at,
+            plan.source_active_set_fingerprint.clone(),
+            entries,
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "backup set manifest could not be sealed",
+            )
+        })?;
+        validate_backup_set_relationships(destination, &manifest)?;
+        validate_backup_set(&manifest).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "backup set validation failed",
+            )
+        })?;
+        let manifest_bytes = serde_json::to_vec_pretty(&manifest).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "backup set manifest serialization failed",
+            )
+        })?;
+        write_private_atomic(&destination.join("backup-set.json"), &manifest_bytes)?;
+        let result = backup_apply_result(plan, manifest, Utc::now())?;
+        write_recovery_receipt(&self.root, "backup", &plan.plan_fingerprint, &result)?;
+        Ok(result)
+    }
+
+    fn plan_local_state_export(
+        &self,
+        project_id: &ProjectId,
+        destination: &Path,
+    ) -> Result<LocalStateExportPlan, RepositoryError> {
+        plan_local_state_export_for_repository(
+            self.project_repository(project_id)?.as_ref(),
+            project_id,
+            destination,
+        )
+    }
+
+    fn apply_local_state_export(
+        &self,
+        destination: &Path,
+        plan: &LocalStateExportPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<LocalStateExportResult, RepositoryError> {
+        apply_local_state_export_for_repository(
+            &self.root,
+            self.project_repository(&plan.project_id)?.as_ref(),
+            destination,
+            plan,
+            approved_plan_fingerprint,
+        )
+    }
+
+    fn plan_local_state_import(
+        &self,
+        source: &Path,
+    ) -> Result<LocalStateImportPlan, RepositoryError> {
+        let (bundle, payload_sha256) = read_local_state_bundle(source)?;
+        let repository = self.project_repository(&bundle.project_id)?;
+        plan_local_state_import_for_repository(repository.as_ref(), &bundle, payload_sha256)
+    }
+
+    fn apply_local_state_import(
+        &self,
+        source: &Path,
+        plan: &LocalStateImportPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<LocalStateImportResult, RepositoryError> {
+        let (bundle, payload_sha256) = read_local_state_bundle(source)?;
+        let repository = self.project_repository(&plan.project_id)?;
+        apply_local_state_import_for_repository(
+            &self.root,
+            repository.as_ref(),
+            &bundle,
+            payload_sha256,
+            plan,
+            approved_plan_fingerprint,
+        )
     }
 
     fn plan_retention(&self) -> Result<RetentionPlan, RepositoryError> {
@@ -935,6 +2568,1168 @@ impl ManagementRepositorySet for SqliteManagementRepositorySet {
             plan_fingerprint: plan.plan_fingerprint.clone(),
         })
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RestoreFaultPoint {
+    AfterFirstStore,
+    BeforeActivation,
+    AfterActivation,
+}
+
+impl ManagementRecovery for SqliteManagementRecovery {
+    fn status(&self) -> Result<RecoveryStatus, RepositoryError> {
+        let mut stores = Vec::new();
+        let active_set = match read_active_set(&self.root) {
+            Ok(Some(parsed)) => Some(parsed.manifest),
+            Ok(None) => None,
+            Err(_) => {
+                stores.push(StoreRecoveryStatus {
+                    scope: None,
+                    relative_locator: None,
+                    inspection: RecoveryInspection::ActiveSetMismatch,
+                    diagnostic_code: "RECOVERY_ACTIVE_SET_INVALID".to_owned(),
+                });
+                None
+            }
+        };
+        if let Some(manifest) = &active_set {
+            for entry in &manifest.entries {
+                let inspection = inspect_store_read_only(&active_store_file(&self.root, entry));
+                stores.push(StoreRecoveryStatus {
+                    scope: Some(entry.scope.clone()),
+                    relative_locator: Some(entry.relative_locator.clone()),
+                    inspection,
+                    diagnostic_code: recovery_diagnostic_code(inspection).to_owned(),
+                });
+            }
+            if validate_active_set_materialization(&self.root, manifest).is_err() {
+                stores.push(StoreRecoveryStatus {
+                    scope: None,
+                    relative_locator: None,
+                    inspection: RecoveryInspection::ActiveSetMismatch,
+                    diagnostic_code: "RECOVERY_ACTIVE_SET_MATERIALIZATION_MISMATCH".to_owned(),
+                });
+            }
+        } else if stores.is_empty() {
+            stores.push(StoreRecoveryStatus {
+                scope: None,
+                relative_locator: None,
+                inspection: RecoveryInspection::Missing,
+                diagnostic_code: "RECOVERY_ACTIVE_SET_MISSING".to_owned(),
+            });
+        }
+        let healthy = active_set.is_some()
+            && stores
+                .iter()
+                .all(|store| store.inspection == RecoveryInspection::Healthy);
+        let mode = if healthy {
+            ControllerRecoveryMode::Normal
+        } else {
+            ControllerRecoveryMode::RecoveryOnly
+        };
+        let allowed_operations = vec![
+            RecoveryOperation::Status,
+            RecoveryOperation::RestorePlan,
+            RecoveryOperation::RestoreApply,
+            RecoveryOperation::RebuildPlan,
+            RecoveryOperation::RebuildApply,
+            RecoveryOperation::LocalStateExportPlan,
+            RecoveryOperation::LocalStateExportApply,
+        ];
+        let status_fingerprint = versioned_fingerprint(
+            "star.management-recovery-status",
+            1,
+            &serde_json::json!({
+                "mode":mode,
+                "active_set":active_set,
+                "stores":stores,
+                "allowed_operations":allowed_operations,
+            }),
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "recovery status fingerprint failed",
+            )
+        })?;
+        Ok(RecoveryStatus {
+            schema_id: RECOVERY_STATUS_SCHEMA_ID.to_owned(),
+            schema_version: 1,
+            mode,
+            active_set,
+            stores,
+            allowed_operations,
+            status_fingerprint,
+        })
+    }
+
+    fn plan_restore(&self, backup_root: &Path) -> Result<RestorePlan, RepositoryError> {
+        let backup = read_verified_backup_set(backup_root)?;
+        let current = read_active_set(&self.root)
+            .ok()
+            .flatten()
+            .map(|parsed| parsed.manifest);
+        let recovery_plan_id = RecoveryPlanId::new();
+        let mut stores = Vec::with_capacity(backup.entries.len());
+        let mut candidate_entries = Vec::with_capacity(backup.entries.len());
+        for source in &backup.entries {
+            let current_generation = current
+                .as_ref()
+                .and_then(|manifest| {
+                    manifest
+                        .entries
+                        .iter()
+                        .find(|entry| entry.scope == source.scope)
+                        .map(|entry| entry.generation)
+                })
+                .unwrap_or(0);
+            let candidate_generation = source
+                .generation
+                .max(current_generation)
+                .checked_add(1)
+                .ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "restore generation overflowed",
+                    )
+                })?;
+            let candidate_relative_locator =
+                restore_candidate_locator(&recovery_plan_id, &source.scope);
+            stores.push(RestoreStoreTarget {
+                scope: source.scope.clone(),
+                store_id: source.store_id.clone(),
+                source_generation: source.generation,
+                candidate_generation,
+                management_store_version: source.management_store_version,
+                source_byte_sha256: source.byte_sha256.clone(),
+                candidate_relative_locator: candidate_relative_locator.clone(),
+            });
+            candidate_entries.push(ActiveStoreGeneration {
+                scope: source.scope.clone(),
+                store_id: source.store_id.clone(),
+                generation: candidate_generation,
+                management_store_version: source.management_store_version,
+                relative_locator: candidate_relative_locator,
+                header_fingerprint: Sha256Hash::digest(b"unsealed-restore-candidate"),
+            });
+        }
+        let candidate_active_set = seal_active_set(candidate_entries).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "restore candidate active set could not be sealed",
+            )
+        })?;
+        let created_at = Utc::now();
+        let mut plan = RestorePlan {
+            schema_id: RESTORE_PLAN_SCHEMA_ID.to_owned(),
+            schema_version: 1,
+            recovery_plan_id,
+            backup_set_id: backup.backup_set_id.clone(),
+            created_at,
+            backup_set_fingerprint: backup.set_fingerprint.clone(),
+            expected_active_set_fingerprint: active_set_file_fingerprint(&self.root)?,
+            stores,
+            candidate_active_set,
+            plan_fingerprint: Sha256Hash::digest(b"unsealed-restore-plan"),
+        };
+        plan.plan_fingerprint = restore_plan_fingerprint(&plan).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "restore plan fingerprint failed",
+            )
+        })?;
+        validate_restore_plan(&plan, &backup).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "restore plan is inconsistent with the backup set",
+            )
+        })?;
+        Ok(plan)
+    }
+
+    fn apply_restore(
+        &self,
+        backup_root: &Path,
+        plan: &RestorePlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<RestoreApplyResult, RepositoryError> {
+        require_exact_approval(&plan.plan_fingerprint, approved_plan_fingerprint).map_err(
+            |_| {
+                repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "restore approval fingerprint is stale",
+                )
+            },
+        )?;
+        if let Some(completed) = read_recovery_receipt::<RestoreApplyResult>(
+            &self.root,
+            "restore",
+            &plan.plan_fingerprint,
+        )? {
+            let expected = restore_apply_result(plan, completed.applied_at)?;
+            if completed != expected {
+                return Err(repository_error(
+                    RepositoryErrorCategory::IntegrityFailed,
+                    "completed restore receipt is invalid",
+                ));
+            }
+            return Ok(completed);
+        }
+        if read_active_set(&self.root)
+            .ok()
+            .flatten()
+            .is_some_and(|active| active.manifest == plan.candidate_active_set)
+            && validate_active_set_materialization(&self.root, &plan.candidate_active_set).is_ok()
+        {
+            let result = restore_apply_result(plan, Utc::now())?;
+            write_recovery_receipt(&self.root, "restore", &plan.plan_fingerprint, &result)?;
+            return Ok(result);
+        }
+        let result =
+            self.apply_restore_with_fault(backup_root, plan, approved_plan_fingerprint, None)?;
+        write_recovery_receipt(&self.root, "restore", &plan.plan_fingerprint, &result)?;
+        Ok(result)
+    }
+
+    fn plan_rebuild(
+        &self,
+        projects: Vec<RebuildProjectInput>,
+        predicted_losses: Vec<RecoveryLossItem>,
+    ) -> Result<RebuildPlan, RepositoryError> {
+        seal_rebuild_plan(
+            RecoveryPlanId::new(),
+            Utc::now(),
+            active_set_file_fingerprint(&self.root)?,
+            next_rebuild_generation(&self.root)?,
+            projects,
+            predicted_losses,
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "source rebuild plan could not be sealed",
+            )
+        })
+    }
+
+    fn completed_rebuild(
+        &self,
+        plan: &RebuildPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<Option<RebuildApplyResult>, RepositoryError> {
+        require_exact_approval(&plan.plan_fingerprint, approved_plan_fingerprint).map_err(
+            |_| {
+                repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "source rebuild approval fingerprint is stale",
+                )
+            },
+        )?;
+        validate_rebuild_plan(plan).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "source rebuild plan is invalid",
+            )
+        })?;
+        let Some(completed) = read_recovery_receipt::<RebuildApplyResult>(
+            &self.root,
+            "rebuild",
+            &plan.plan_fingerprint,
+        )?
+        else {
+            if let Some(reconciled) = reconcile_rebuild_completion(&self.root, plan)? {
+                write_recovery_receipt(&self.root, "rebuild", &plan.plan_fingerprint, &reconciled)?;
+                return Ok(Some(reconciled));
+            }
+            return Ok(None);
+        };
+        let expected = rebuild_apply_result(
+            plan,
+            completed.rebuilt_projects.clone(),
+            completed.activated_set.clone(),
+            completed.applied_at,
+        )?;
+        if completed != expected {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "completed source rebuild receipt is invalid",
+            ));
+        }
+        Ok(Some(completed))
+    }
+
+    fn begin_rebuild(
+        &self,
+        plan: &RebuildPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<Arc<dyn ManagementRepositorySet>, RepositoryError> {
+        validate_rebuild_precondition(&self.root, plan, approved_plan_fingerprint)?;
+        for project in &plan.projects {
+            let destination = self.root.join(rebuild_target_locator(
+                plan.candidate_generation,
+                &StoreScope::Project {
+                    project_id: project.project_id.clone(),
+                },
+            ));
+            if destination.exists() {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "source rebuild candidate generation already exists",
+                ));
+            }
+        }
+        if self
+            .root
+            .join(rebuild_target_locator(
+                plan.candidate_generation,
+                &StoreScope::Global,
+            ))
+            .exists()
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "source rebuild candidate generation already exists",
+            ));
+        }
+        let candidate_root = rebuild_candidate_root(&self.root, &plan.recovery_plan_id);
+        if candidate_root.exists() {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "source rebuild staging root already exists",
+            ));
+        }
+        Ok(Arc::new(SqliteManagementRepositorySet::open(
+            candidate_root,
+            &self.product_version,
+        )?))
+    }
+
+    fn apply_rebuild(
+        &self,
+        plan: &RebuildPlan,
+        approved_plan_fingerprint: &str,
+        rebuilt_projects: Vec<RebuiltProjectSummary>,
+    ) -> Result<RebuildApplyResult, RepositoryError> {
+        let result = self.apply_rebuild_inner(plan, approved_plan_fingerprint, rebuilt_projects);
+        if result.is_err() && rebuild_destination_exists(&self.root, plan) {
+            let _ = write_rebuild_quarantine(&self.root, plan, "REBUILD_CANDIDATE_NOT_CONFIRMED");
+        }
+        let result = result?;
+        write_recovery_receipt(&self.root, "rebuild", &plan.plan_fingerprint, &result)?;
+        Ok(result)
+    }
+
+    fn plan_local_state_export(
+        &self,
+        project_id: &ProjectId,
+        destination: &Path,
+    ) -> Result<LocalStateExportPlan, RepositoryError> {
+        let repository = recovery_project_repository(&self.root, project_id)?;
+        plan_local_state_export_for_repository(repository.as_ref(), project_id, destination)
+    }
+
+    fn apply_local_state_export(
+        &self,
+        destination: &Path,
+        plan: &LocalStateExportPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<LocalStateExportResult, RepositoryError> {
+        let repository = recovery_project_repository(&self.root, &plan.project_id)?;
+        apply_local_state_export_for_repository(
+            &self.root,
+            repository.as_ref(),
+            destination,
+            plan,
+            approved_plan_fingerprint,
+        )
+    }
+}
+
+impl SqliteManagementRecovery {
+    fn apply_restore_with_fault(
+        &self,
+        backup_root: &Path,
+        plan: &RestorePlan,
+        approved_plan_fingerprint: &str,
+        fault: Option<RestoreFaultPoint>,
+    ) -> Result<RestoreApplyResult, RepositoryError> {
+        let result = self.apply_restore_inner(backup_root, plan, approved_plan_fingerprint, fault);
+        if result.is_err()
+            && plan.stores.iter().any(|store| {
+                self.root
+                    .join(&store.candidate_relative_locator)
+                    .join(STORE_FILENAME)
+                    .exists()
+            })
+        {
+            let activated = read_active_set(&self.root)
+                .ok()
+                .flatten()
+                .is_some_and(|active| {
+                    active.manifest.manifest_fingerprint
+                        == plan.candidate_active_set.manifest_fingerprint
+                });
+            let reason = if activated {
+                "RESTORE_ACTIVATED_OUTCOME_REQUIRES_RECONCILE"
+            } else {
+                "RESTORE_CANDIDATE_NOT_ACTIVATED"
+            };
+            let _ = write_restore_quarantine(&self.root, plan, reason);
+        }
+        result
+    }
+
+    fn apply_restore_inner(
+        &self,
+        backup_root: &Path,
+        plan: &RestorePlan,
+        approved_plan_fingerprint: &str,
+        fault: Option<RestoreFaultPoint>,
+    ) -> Result<RestoreApplyResult, RepositoryError> {
+        require_exact_approval(&plan.plan_fingerprint, approved_plan_fingerprint).map_err(
+            |_| {
+                repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "restore approval fingerprint is stale",
+                )
+            },
+        )?;
+        let backup = read_verified_backup_set(backup_root)?;
+        validate_restore_plan(plan, &backup).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "restore plan no longer matches the verified backup set",
+            )
+        })?;
+        if active_set_file_fingerprint(&self.root)? != plan.expected_active_set_fingerprint {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "active set changed after restore planning",
+            ));
+        }
+        for target in &plan.stores {
+            let destination = self
+                .root
+                .join(&target.candidate_relative_locator)
+                .join(STORE_FILENAME);
+            if destination.exists() {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "restore candidate generation already exists",
+                ));
+            }
+        }
+
+        for (index, (target, source)) in plan.stores.iter().zip(&backup.entries).enumerate() {
+            let source_path = backup_root.join(&source.relative_locator);
+            let destination = self
+                .root
+                .join(&target.candidate_relative_locator)
+                .join(STORE_FILENAME);
+            copy_restore_candidate(&source_path, &destination, target, &self.product_version)?;
+            if index == 0 && fault == Some(RestoreFaultPoint::AfterFirstStore) {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Unavailable,
+                    "simulated restore interruption after the first store",
+                ));
+            }
+        }
+        validate_active_set_materialization(&self.root, &plan.candidate_active_set)?;
+        if fault == Some(RestoreFaultPoint::BeforeActivation) {
+            return Err(repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "simulated restore interruption before activation",
+            ));
+        }
+        write_active_set_document(&self.root, &plan.candidate_active_set)?;
+        if fault == Some(RestoreFaultPoint::AfterActivation) {
+            return Err(repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "simulated restore interruption after activation",
+            ));
+        }
+        restore_apply_result(plan, Utc::now())
+    }
+
+    fn apply_rebuild_inner(
+        &self,
+        plan: &RebuildPlan,
+        approved_plan_fingerprint: &str,
+        mut rebuilt_projects: Vec<RebuiltProjectSummary>,
+    ) -> Result<RebuildApplyResult, RepositoryError> {
+        validate_rebuild_precondition(&self.root, plan, approved_plan_fingerprint)?;
+        rebuilt_projects.sort_by(|left, right| left.project_id.cmp(&right.project_id));
+        let planned_projects = plan
+            .projects
+            .iter()
+            .map(|project| &project.project_id)
+            .collect::<Vec<_>>();
+        let rebuilt_ids = rebuilt_projects
+            .iter()
+            .map(|project| &project.project_id)
+            .collect::<Vec<_>>();
+        if planned_projects != rebuilt_ids
+            || rebuilt_projects.iter().any(|project| {
+                project.scan_run_id.as_str().is_empty()
+                    || project.workspace_snapshot_id.as_str().is_empty()
+            })
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "source rebuild result does not cover the exact planned project set",
+            ));
+        }
+
+        let candidate_root = rebuild_candidate_root(&self.root, &plan.recovery_plan_id);
+        let candidate = SqliteManagementRepositorySet::open(&candidate_root, &self.product_version)
+            .map_err(|error| {
+                repository_error(
+                    error.category,
+                    "source rebuild staging repository could not be reopened",
+                )
+            })?;
+        let _ = candidate.verify_all().map_err(|error| {
+            repository_error(
+                error.category,
+                "source rebuild staging repository failed verification",
+            )
+        })?;
+        let candidate_active_set = candidate.active_set().map_err(|error| {
+            repository_error(
+                error.category,
+                "source rebuild staging active set is unavailable",
+            )
+        })?;
+        let candidate_projects = candidate_active_set
+            .entries
+            .iter()
+            .filter_map(|entry| match &entry.scope {
+                StoreScope::Global => None,
+                StoreScope::Project { project_id } => Some(project_id),
+            })
+            .collect::<Vec<_>>();
+        if candidate_projects != planned_projects {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "source rebuild staging stores do not match the planned project set",
+            ));
+        }
+        drop(candidate);
+
+        for entry in &candidate_active_set.entries {
+            let destination = self
+                .root
+                .join(rebuild_target_locator(
+                    plan.candidate_generation,
+                    &entry.scope,
+                ))
+                .join(STORE_FILENAME);
+            if destination.exists() {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "source rebuild destination changed after planning",
+                ));
+            }
+        }
+
+        let mut activated_entries = Vec::with_capacity(candidate_active_set.entries.len());
+        for entry in &candidate_active_set.entries {
+            let source = active_store_file(&candidate_root, entry);
+            let relative_locator = rebuild_target_locator(plan.candidate_generation, &entry.scope);
+            let destination = self.root.join(&relative_locator).join(STORE_FILENAME);
+            let status = copy_rebuild_candidate(
+                &source,
+                &destination,
+                &entry.scope,
+                plan.candidate_generation,
+                &self.product_version,
+                &plan.plan_fingerprint,
+            )
+            .map_err(|error| {
+                repository_error(
+                    error.category,
+                    "source rebuild staging store could not be materialized",
+                )
+            })?;
+            activated_entries.push(ActiveStoreGeneration {
+                scope: status.store_scope,
+                store_id: status.store_id,
+                generation: status.generation,
+                management_store_version: status.management_store_version,
+                relative_locator,
+                header_fingerprint: Sha256Hash::digest(b"unsealed"),
+            });
+        }
+        let activated_set = seal_active_set(activated_entries).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "source rebuild active set could not be sealed",
+            )
+        })?;
+        validate_active_set_materialization(&self.root, &activated_set).map_err(|error| {
+            repository_error(
+                error.category,
+                "source rebuild candidate store set failed relationship verification",
+            )
+        })?;
+        write_active_set_document(&self.root, &activated_set).map_err(|error| {
+            repository_error(
+                error.category,
+                "source rebuild active set activation failed",
+            )
+        })?;
+
+        rebuild_apply_result(plan, rebuilt_projects, activated_set, Utc::now())
+    }
+}
+
+fn recovery_project_repository(
+    root: &Path,
+    project_id: &ProjectId,
+) -> Result<Arc<SqliteProjectRepository>, RepositoryError> {
+    let active_set = read_active_set(root)?
+        .map(|parsed| parsed.manifest)
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::NotFound,
+                "recovery-only local state export has no active set",
+            )
+        })?;
+    validate_active_set(&active_set).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "recovery-only local state export active set is invalid",
+        )
+    })?;
+    let entry = active_set
+        .entries
+        .iter()
+        .find(|entry| {
+            matches!(
+                &entry.scope,
+                StoreScope::Project {
+                    project_id: active_project_id
+                } if active_project_id == project_id
+            )
+        })
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::NotFound,
+                "recovery-only local state project store is not active",
+            )
+        })?;
+    let path = active_store_file(root, entry);
+    if inspect_store_read_only(&path) != RecoveryInspection::Healthy {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "recovery-only local state project store is unhealthy",
+        ));
+    }
+    Ok(Arc::new(SqliteProjectRepository::open_read_only(
+        &path, project_id,
+    )?))
+}
+
+fn recovery_diagnostic_code(inspection: RecoveryInspection) -> &'static str {
+    match inspection {
+        RecoveryInspection::Missing => "RECOVERY_STORE_MISSING",
+        RecoveryInspection::Healthy => "RECOVERY_STORE_HEALTHY",
+        RecoveryInspection::MigrationRequired => "RECOVERY_STORE_MIGRATION_REQUIRED",
+        RecoveryInspection::FutureVersion => "RECOVERY_STORE_FUTURE_VERSION",
+        RecoveryInspection::Corrupt => "RECOVERY_STORE_CORRUPT",
+        RecoveryInspection::ActiveSetMismatch => "RECOVERY_ACTIVE_SET_MISMATCH",
+    }
+}
+
+fn read_verified_backup_set(root: &Path) -> Result<BackupSetManifest, RepositoryError> {
+    let input = fs::read_to_string(root.join("backup-set.json")).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            repository_error(
+                RepositoryErrorCategory::NotFound,
+                "backup set manifest is missing",
+            )
+        } else {
+            map_io(error)
+        }
+    })?;
+    let manifest =
+        star_contracts::management::decode_current_management_document::<BackupSetManifest>(
+            &input,
+            star_contracts::recovery::BACKUP_SET_MANIFEST_SCHEMA_ID,
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "backup set manifest is invalid or unsupported",
+            )
+        })?;
+    validate_backup_set_relationships(root, &manifest).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "backup set bytes, headers, or project relationships are invalid",
+        )
+    })?;
+    Ok(manifest)
+}
+
+fn active_set_file_fingerprint(root: &Path) -> Result<Option<Sha256Hash>, RepositoryError> {
+    let path = root.join(ACTIVE_SET_FILENAME);
+    match fs::File::open(path) {
+        Ok(file) => Sha256Hash::digest_reader(file).map(Some).map_err(map_io),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(map_io(error)),
+    }
+}
+
+fn restore_candidate_locator(plan_id: &RecoveryPlanId, scope: &StoreScope) -> String {
+    match scope {
+        StoreScope::Global => format!("global/generations/{}", plan_id.as_str()),
+        StoreScope::Project { project_id } => format!(
+            "projects/{}/generations/{}",
+            project_id.as_str(),
+            plan_id.as_str()
+        ),
+    }
+}
+
+fn rebuild_candidate_root(root: &Path, plan_id: &RecoveryPlanId) -> PathBuf {
+    let token = Sha256Hash::digest(plan_id.as_str().as_bytes());
+    root.join("rc")
+        .join(&token.as_str().trim_start_matches("sha256:")[..20])
+}
+
+fn rebuild_target_locator(generation: u64, scope: &StoreScope) -> String {
+    match scope {
+        StoreScope::Global => format!("global/generations/{generation:020}"),
+        StoreScope::Project { project_id } => format!(
+            "projects/{}/generations/{generation:020}",
+            project_id.as_str()
+        ),
+    }
+}
+
+fn validate_rebuild_precondition(
+    root: &Path,
+    plan: &RebuildPlan,
+    approved_plan_fingerprint: &str,
+) -> Result<(), RepositoryError> {
+    require_exact_approval(&plan.plan_fingerprint, approved_plan_fingerprint).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "source rebuild approval fingerprint is stale",
+        )
+    })?;
+    validate_rebuild_plan(plan).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "source rebuild plan is invalid",
+        )
+    })?;
+    if active_set_file_fingerprint(root)? != plan.expected_active_set_fingerprint {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "active set changed after source rebuild planning",
+        ));
+    }
+    Ok(())
+}
+
+fn next_rebuild_generation(root: &Path) -> Result<u64, RepositoryError> {
+    let mut maximum = read_active_set(root)
+        .ok()
+        .flatten()
+        .and_then(|active| {
+            active
+                .manifest
+                .entries
+                .iter()
+                .map(|entry| entry.generation)
+                .max()
+        })
+        .unwrap_or(1);
+    inspect_generation_directory(&root.join("global").join("generations"), &mut maximum)?;
+    let projects_root = root.join("projects");
+    if projects_root.is_dir() {
+        for entry in fs::read_dir(&projects_root).map_err(map_io)? {
+            let entry = entry.map_err(map_io)?;
+            if entry.file_type().map_err(map_io)?.is_dir() {
+                inspect_generation_directory(&entry.path().join("generations"), &mut maximum)?;
+            }
+        }
+    }
+    maximum.checked_add(1).ok_or_else(|| {
+        repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "source rebuild generation space is exhausted",
+        )
+    })
+}
+
+fn inspect_generation_directory(
+    generations: &Path,
+    maximum: &mut u64,
+) -> Result<(), RepositoryError> {
+    if !generations.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(generations).map_err(map_io)? {
+        let entry = entry.map_err(map_io)?;
+        if !entry.file_type().map_err(map_io)?.is_dir() {
+            continue;
+        }
+        if let Some(value) = entry
+            .file_name()
+            .to_str()
+            .and_then(|value| value.parse().ok())
+        {
+            *maximum = (*maximum).max(value);
+        }
+        let store = entry.path().join(STORE_FILENAME);
+        if store.is_file()
+            && let Ok(status) = read_store_status_read_only(&store)
+        {
+            *maximum = (*maximum).max(status.generation);
+        }
+    }
+    Ok(())
+}
+
+fn rebuild_destination_exists(root: &Path, plan: &RebuildPlan) -> bool {
+    std::iter::once(StoreScope::Global)
+        .chain(plan.projects.iter().map(|project| StoreScope::Project {
+            project_id: project.project_id.clone(),
+        }))
+        .any(|scope| {
+            root.join(rebuild_target_locator(plan.candidate_generation, &scope))
+                .join(STORE_FILENAME)
+                .exists()
+        })
+}
+
+fn reconcile_rebuild_completion(
+    root: &Path,
+    plan: &RebuildPlan,
+) -> Result<Option<RebuildApplyResult>, RepositoryError> {
+    let Some(active_set) = read_active_set(root)
+        .ok()
+        .flatten()
+        .map(|active| active.manifest)
+    else {
+        return Ok(None);
+    };
+    let active_projects = active_set
+        .entries
+        .iter()
+        .filter_map(|entry| match &entry.scope {
+            StoreScope::Global => None,
+            StoreScope::Project { project_id } => Some(project_id),
+        })
+        .collect::<Vec<_>>();
+    let planned_projects = plan
+        .projects
+        .iter()
+        .map(|project| &project.project_id)
+        .collect::<Vec<_>>();
+    if active_set.entries.len() != plan.projects.len() + 1
+        || active_projects != planned_projects
+        || active_set
+            .entries
+            .iter()
+            .any(|entry| entry.generation != plan.candidate_generation)
+    {
+        return Ok(None);
+    }
+    validate_active_set_materialization(root, &active_set)?;
+    for entry in &active_set.entries {
+        let connection = Connection::open_with_flags(
+            active_store_file(root, entry),
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(map_sql)?;
+        connection
+            .execute_batch("PRAGMA query_only=ON;")
+            .map_err(map_sql)?;
+        if get_meta_optional(&connection, "rebuild_plan_fingerprint")
+            .map_err(map_sql)?
+            .as_deref()
+            != Some(plan.plan_fingerprint.as_str())
+        {
+            return Ok(None);
+        }
+    }
+
+    let mut rebuilt_projects = Vec::with_capacity(plan.projects.len());
+    for input in &plan.projects {
+        let repository = recovery_project_repository(root, &input.project_id)?;
+        let scan = repository.latest_scan()?.ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "activated source rebuild store has no completed scan",
+            )
+        })?;
+        if scan.status != ScanStatus::Succeeded
+            || scan.project_revision_id != input.source_revision_id
+            || scan.effective_config_fingerprint != input.effective_config_fingerprint
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "activated source rebuild scan does not match the approved input",
+            ));
+        }
+        let artifact_count =
+            u64::try_from(repository.list_artifact_refs()?.len()).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "activated source rebuild artifact count exceeds its supported range",
+                )
+            })?;
+        if artifact_count < input.verified_artifact_count {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "activated source rebuild is missing verified artifact references",
+            ));
+        }
+        rebuilt_projects.push(RebuiltProjectSummary {
+            project_id: input.project_id.clone(),
+            project_revision_id: scan.project_revision_id,
+            workspace_snapshot_id: scan.workspace_snapshot_id,
+            scan_run_id: scan.scan_run_id,
+            canonical_source_count: scan.counts.get("source").copied().unwrap_or(0),
+            symbol_count: scan.counts.get("symbol").copied().unwrap_or(0),
+            finding_count: u64::try_from(repository.list_findings()?.len()).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "activated source rebuild finding count exceeds its supported range",
+                )
+            })?,
+            reindexed_artifact_count: input.verified_artifact_count,
+            rejected_artifact_count: input.rejected_artifact_count,
+        });
+    }
+    rebuild_apply_result(plan, rebuilt_projects, active_set, Utc::now()).map(Some)
+}
+
+fn copy_rebuild_candidate(
+    source: &Path,
+    destination: &Path,
+    expected_scope: &StoreScope,
+    candidate_generation: u64,
+    product_version: &str,
+    plan_fingerprint: &Sha256Hash,
+) -> Result<ManagementStoreStatus, RepositoryError> {
+    let source_connection = Connection::open_with_flags(
+        source,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(map_sql)?;
+    source_connection
+        .execute_batch("PRAGMA query_only=ON;")
+        .map_err(map_sql)?;
+    verify_connection(&source_connection)?;
+    let before = status_from_connection(&source_connection)?;
+    if &before.store_scope != expected_scope
+        || before.management_store_version != MANAGEMENT_STORE_VERSION
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "source rebuild staging store header is invalid",
+        ));
+    }
+    backup_connection(&source_connection, destination)?;
+    drop(source_connection);
+
+    let mut destination_connection = Connection::open(destination).map_err(map_sql)?;
+    verify_connection(&destination_connection)?;
+    let transaction = destination_connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(map_sql)?;
+    set_meta(
+        &transaction,
+        "generation",
+        &candidate_generation.to_string(),
+    )
+    .map_err(map_sql)?;
+    set_meta(
+        &transaction,
+        "last_opened_by_product_version",
+        product_version,
+    )
+    .map_err(map_sql)?;
+    set_meta(
+        &transaction,
+        "rebuild_plan_fingerprint",
+        plan_fingerprint.as_str(),
+    )
+    .map_err(map_sql)?;
+    set_meta(&transaction, "last_clean_shutdown", "true").map_err(map_sql)?;
+    transaction.commit().map_err(map_sql)?;
+    destination_connection
+        .execute_batch("PRAGMA wal_checkpoint(TRUNCATE); PRAGMA synchronous=FULL;")
+        .map_err(map_sql)?;
+    verify_connection(&destination_connection)?;
+    let after = status_from_connection(&destination_connection)?;
+    if after.store_scope != *expected_scope
+        || after.store_id != before.store_id
+        || after.generation != candidate_generation
+        || after.store_revision != before.store_revision
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "source rebuild candidate store header is invalid",
+        ));
+    }
+    drop(destination_connection);
+    apply_owner_system_dacl(destination)?;
+    if inspect_store_read_only(destination) != RecoveryInspection::Healthy {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "source rebuild candidate failed final read-only inspection",
+        ));
+    }
+    Ok(after)
+}
+
+fn write_rebuild_quarantine(
+    root: &Path,
+    plan: &RebuildPlan,
+    reason_code: &str,
+) -> Result<(), RepositoryError> {
+    let bytes = serde_json::to_vec_pretty(&serde_json::json!({
+        "schema_id":"star.management-rebuild-quarantine",
+        "schema_version":1,
+        "recovery_plan_id":plan.recovery_plan_id,
+        "candidate_generation":plan.candidate_generation,
+        "reason_code":reason_code,
+        "recorded_at":Utc::now(),
+        "plan_fingerprint":plan.plan_fingerprint,
+    }))
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "source rebuild quarantine serialization failed",
+        )
+    })?;
+    write_private_atomic(
+        &root
+            .join("quarantine")
+            .join(format!("{}.json", plan.recovery_plan_id.as_str())),
+        &bytes,
+    )
+}
+
+fn copy_restore_candidate(
+    source: &Path,
+    destination: &Path,
+    target: &RestoreStoreTarget,
+    product_version: &str,
+) -> Result<(), RepositoryError> {
+    let source_sha256 =
+        Sha256Hash::digest_reader(fs::File::open(source).map_err(map_io)?).map_err(map_io)?;
+    if source_sha256 != target.source_byte_sha256
+        || inspect_store_read_only(source) != RecoveryInspection::Healthy
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "restore source bytes do not match the verified backup",
+        ));
+    }
+    if let Some(parent) = destination.parent() {
+        create_private_dir(parent)?;
+    }
+    fs::copy(source, destination).map_err(map_io)?;
+    let copied_sha256 =
+        Sha256Hash::digest_reader(fs::File::open(destination).map_err(map_io)?).map_err(map_io)?;
+    if copied_sha256 != source_sha256 {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "restore candidate copy hash does not match the backup",
+        ));
+    }
+    let mut connection = Connection::open(destination).map_err(map_sql)?;
+    verify_connection(&connection)?;
+    let before = status_from_connection(&connection)?;
+    if before.store_scope != target.scope
+        || before.store_id != target.store_id
+        || before.generation != target.source_generation
+        || before.management_store_version != target.management_store_version
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "restore source store header does not match the plan",
+        ));
+    }
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(map_sql)?;
+    set_meta(
+        &transaction,
+        "generation",
+        &target.candidate_generation.to_string(),
+    )
+    .map_err(map_sql)?;
+    set_meta(
+        &transaction,
+        "last_opened_by_product_version",
+        product_version,
+    )
+    .map_err(map_sql)?;
+    set_meta(&transaction, "last_clean_shutdown", "true").map_err(map_sql)?;
+    transaction.commit().map_err(map_sql)?;
+    connection
+        .execute_batch("PRAGMA wal_checkpoint(TRUNCATE); PRAGMA synchronous=FULL;")
+        .map_err(map_sql)?;
+    verify_connection(&connection)?;
+    let after = status_from_connection(&connection)?;
+    if after.store_scope != target.scope
+        || after.store_id != target.store_id
+        || after.generation != target.candidate_generation
+        || after.management_store_version != target.management_store_version
+        || after.store_revision != before.store_revision
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "restore candidate store header is invalid",
+        ));
+    }
+    drop(connection);
+    apply_owner_system_dacl(destination)?;
+    if inspect_store_read_only(destination) != RecoveryInspection::Healthy {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "restore candidate failed final read-only inspection",
+        ));
+    }
+    Ok(())
+}
+
+fn write_restore_quarantine(
+    root: &Path,
+    plan: &RestorePlan,
+    reason_code: &str,
+) -> Result<(), RepositoryError> {
+    let bytes = serde_json::to_vec_pretty(&serde_json::json!({
+        "schema_id":"star.management-restore-quarantine",
+        "schema_version":1,
+        "recovery_plan_id":plan.recovery_plan_id,
+        "backup_set_id":plan.backup_set_id,
+        "reason_code":reason_code,
+        "recorded_at":Utc::now(),
+        "candidate_locators":plan.stores.iter().map(|store| &store.candidate_relative_locator).collect::<Vec<_>>(),
+        "plan_fingerprint":plan.plan_fingerprint,
+    }))
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "restore quarantine serialization failed",
+        )
+    })?;
+    write_private_atomic(
+        &root
+            .join("quarantine")
+            .join(format!("{}.json", plan.recovery_plan_id.as_str())),
+        &bytes,
+    )
 }
 
 struct SqliteGlobalRepository {
@@ -1289,36 +4084,41 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
                 "planning bundle serialization failed",
             )
         })?;
+        let bundle_revision = bundle
+            .task_spec
+            .revision
+            .max(bundle.scope_revision.revision)
+            .max(bundle.impact_analysis.revision)
+            .max(bundle.validation_plan.revision);
+        let sql_bundle_revision = i64::try_from(bundle_revision).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "planning bundle revision exceeds the SQLite integer range",
+            )
+        })?;
         let mut connection = self.connection.lock().map_err(|_| {
             repository_error(
                 RepositoryErrorCategory::Unavailable,
                 "global store lock is unavailable",
             )
         })?;
-        let existing: Option<(String, String, String, String)> = connection
+        let replay: Option<(String, String, String)> = connection
             .query_row(
-                "SELECT idempotency_key, input_fingerprint, bundle_fingerprint, document_json
-                 FROM planning_bundles
-                 WHERE idempotency_key=?1 OR task_spec_id=?2
-                 ORDER BY CASE WHEN idempotency_key=?1 THEN 0 ELSE 1 END
-                 LIMIT 1",
-                params![idempotency_key, bundle.task_spec.task_spec_id.as_str()],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                "SELECT input_fingerprint, bundle_fingerprint, document_json
+                 FROM planning_bundle_revisions
+                 WHERE idempotency_key=?1",
+                [idempotency_key],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .optional()
             .map_err(map_sql)?;
-        if let Some((stored_key, stored_input, stored_fingerprint, stored_document)) = existing {
+        if let Some((stored_input, stored_fingerprint, stored_document)) = replay {
             if stored_input != input_fingerprint.as_str()
                 || stored_fingerprint != bundle.bundle_fingerprint.as_str()
             {
-                let category = if stored_key == idempotency_key {
-                    RepositoryErrorCategory::IdempotencyConflict
-                } else {
-                    RepositoryErrorCategory::IntegrityFailed
-                };
                 return Err(repository_error(
-                    category,
-                    "planning bundle identity conflicts with stored content",
+                    RepositoryErrorCategory::IdempotencyConflict,
+                    "planning idempotency key conflicts with stored input or result",
                 ));
             }
             return serde_json::from_str(&stored_document).map_err(|_| {
@@ -1328,15 +4128,72 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
                 )
             });
         }
+        let current_revision: Option<i64> = connection
+            .query_row(
+                "SELECT bundle_revision
+                 FROM planning_bundle_revisions
+                 WHERE task_spec_id=?1
+                 ORDER BY bundle_revision DESC
+                 LIMIT 1",
+                [bundle.task_spec.task_spec_id.as_str()],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(map_sql)?;
+        let current_revision = current_revision
+            .map(u64::try_from)
+            .transpose()
+            .map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "stored planning bundle revision is invalid",
+                )
+            })?;
+        match current_revision {
+            None if bundle_revision != 1 => {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "initial planning bundle revision must be one",
+                ));
+            }
+            Some(current) if current.checked_add(1) != Some(bundle_revision) => {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "planning bundle revision is not the next immutable revision",
+                ));
+            }
+            _ => {}
+        }
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(map_sql)?;
+        transaction
+            .execute(
+                "INSERT INTO planning_bundle_revisions(
+                    task_spec_id, bundle_revision, idempotency_key,
+                    input_fingerprint, bundle_fingerprint, document_json
+                 ) VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    bundle.task_spec.task_spec_id.as_str(),
+                    sql_bundle_revision,
+                    idempotency_key,
+                    input_fingerprint.as_str(),
+                    bundle.bundle_fingerprint.as_str(),
+                    document,
+                ],
+            )
             .map_err(map_sql)?;
         transaction
             .execute(
                 "INSERT INTO planning_bundles(
                     task_spec_id, idempotency_key, input_fingerprint,
                     bundle_fingerprint, document_json
-                 ) VALUES(?1, ?2, ?3, ?4, ?5)",
+                 ) VALUES(?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(task_spec_id) DO UPDATE SET
+                    idempotency_key=excluded.idempotency_key,
+                    input_fingerprint=excluded.input_fingerprint,
+                    bundle_fingerprint=excluded.bundle_fingerprint,
+                    document_json=excluded.document_json",
                 params![
                     bundle.task_spec.task_spec_id.as_str(),
                     idempotency_key,
@@ -1348,7 +4205,11 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
             .map_err(map_sql)?;
         append_event(
             &transaction,
-            "planning.bundle.created",
+            if current_revision.is_some() {
+                "planning.bundle.revised"
+            } else {
+                "planning.bundle.created"
+            },
             None,
             &bundle.bundle_fingerprint,
         )?;
@@ -1387,7 +4248,7 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
         let stored: Option<(String, String)> = connection
             .query_row(
                 "SELECT document_json, input_fingerprint
-                 FROM planning_bundles WHERE idempotency_key=?1",
+                 FROM planning_bundle_revisions WHERE idempotency_key=?1",
                 [idempotency_key],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
@@ -1410,6 +4271,41 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
                 Ok((bundle, fingerprint))
             })
             .transpose()
+    }
+
+    fn list_planning_bundle_revisions(
+        &self,
+        task_spec_id: &TaskSpecId,
+    ) -> Result<Vec<PlanningBundle>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "global store lock is unavailable",
+            )
+        })?;
+        let mut statement = connection
+            .prepare(
+                "SELECT document_json
+                 FROM planning_bundle_revisions
+                 WHERE task_spec_id=?1
+                 ORDER BY bundle_revision ASC",
+            )
+            .map_err(map_sql)?;
+        let documents = statement
+            .query_map([task_spec_id.as_str()], |row| row.get::<_, String>(0))
+            .map_err(map_sql)?;
+        let mut bundles = Vec::new();
+        for document in documents {
+            bundles.push(
+                serde_json::from_str(&document.map_err(map_sql)?).map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "stored planning bundle revision is invalid",
+                    )
+                })?,
+            );
+        }
+        Ok(bundles)
     }
 
     fn put_coordination(&self, operation: &CoordinatedOperation) -> Result<(), RepositoryError> {
@@ -1536,6 +4432,159 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
             [],
         )
     }
+
+    fn put_development_record(&self, record: &DevelopmentRecord) -> Result<(), RepositoryError> {
+        validate_development_record(record)?;
+        let revision = i64::try_from(record.revision).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "development record revision exceeds storage range",
+            )
+        })?;
+        let document = serde_json::to_string(record).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "development record serialization failed",
+            )
+        })?;
+        let mut connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "global store lock is unavailable",
+            )
+        })?;
+        let existing: Option<String> = connection
+            .query_row(
+                "SELECT document_json FROM development_records_v1
+                 WHERE record_kind=?1 AND record_id=?2 AND revision=?3",
+                params![record.record_kind, record.record_id, revision],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(map_sql)?;
+        if let Some(existing) = existing {
+            let existing: DevelopmentRecord = serde_json::from_str(&existing).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "stored development record is invalid",
+                )
+            })?;
+            if existing == *record {
+                return Ok(());
+            }
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "development record revision conflicts with immutable stored content",
+            ));
+        }
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(map_sql)?;
+        transaction
+            .execute(
+                "INSERT INTO development_records_v1(
+                    record_kind, record_id, revision, project_id, state, document_json
+                 ) VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    record.record_kind,
+                    record.record_id,
+                    revision,
+                    record.project_id.as_ref().map(ProjectId::as_str),
+                    record.state,
+                    document,
+                ],
+            )
+            .map_err(map_sql)?;
+        append_event(
+            &transaction,
+            "management.development_record_published",
+            record.project_id.as_ref(),
+            &record.document_fingerprint,
+        )?;
+        bump_revision(&transaction)?;
+        transaction.commit().map_err(map_sql)
+    }
+
+    fn get_development_record(
+        &self,
+        record_kind: &str,
+        record_id: &str,
+        revision: Option<u64>,
+    ) -> Result<Option<DevelopmentRecord>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "global store lock is unavailable",
+            )
+        })?;
+        let document: Option<String> = match revision {
+            Some(revision) => {
+                let revision = i64::try_from(revision).map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "development record revision exceeds storage range",
+                    )
+                })?;
+                connection
+                    .query_row(
+                        "SELECT document_json FROM development_records_v1
+                     WHERE record_kind=?1 AND record_id=?2 AND revision=?3",
+                        params![record_kind, record_id, revision],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(map_sql)?
+            }
+            None => connection
+                .query_row(
+                    "SELECT document_json FROM development_records_v1
+                     WHERE record_kind=?1 AND record_id=?2
+                     ORDER BY revision DESC LIMIT 1",
+                    params![record_kind, record_id],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(map_sql)?,
+        };
+        document
+            .map(|document| {
+                serde_json::from_str::<DevelopmentRecord>(&document).map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "stored development record is invalid",
+                    )
+                })
+            })
+            .transpose()
+    }
+
+    fn list_development_records(
+        &self,
+        record_kind: &str,
+        project_id: Option<&ProjectId>,
+    ) -> Result<Vec<DevelopmentRecord>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "global store lock is unavailable",
+            )
+        })?;
+        match project_id {
+            Some(project_id) => query_documents(
+                &connection,
+                "SELECT document_json FROM development_records_v1
+                 WHERE record_kind=?1 AND project_id=?2
+                 ORDER BY record_id, revision",
+                params![record_kind, project_id.as_str()],
+            ),
+            None => query_documents(
+                &connection,
+                "SELECT document_json FROM development_records_v1
+                 WHERE record_kind=?1 ORDER BY record_id, revision",
+                params![record_kind],
+            ),
+        }
+    }
 }
 
 struct SqliteProjectRepository {
@@ -1557,6 +4606,34 @@ impl SqliteProjectRepository {
             product_version,
             PROJECT_SCHEMA,
         )?;
+        Ok(Self {
+            project_id: project_id.clone(),
+            connection: Mutex::new(connection),
+        })
+    }
+
+    fn open_read_only(path: &Path, project_id: &ProjectId) -> Result<Self, RepositoryError> {
+        let connection = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(map_sql)?;
+        connection
+            .execute_batch("PRAGMA query_only=ON;")
+            .map_err(map_sql)?;
+        verify_connection(&connection)?;
+        let status = status_from_connection(&connection)?;
+        if status.store_scope
+            != (StoreScope::Project {
+                project_id: project_id.clone(),
+            })
+            || status.management_store_version != MANAGEMENT_STORE_VERSION
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "recovery-only project store header does not match",
+            ));
+        }
         Ok(Self {
             project_id: project_id.clone(),
             connection: Mutex::new(connection),
@@ -1881,6 +4958,74 @@ impl SqliteProjectRepository {
             [],
         )
     }
+
+    fn list_m3_documents<T: serde::de::DeserializeOwned>(
+        &self,
+        sql: &str,
+    ) -> Result<Vec<T>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_documents(&connection, sql, [])
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn put_m3_decision_document<T: Serialize>(
+        &self,
+        table: &str,
+        entity_id: &str,
+        value: &T,
+        valid: bool,
+        event_type: &str,
+        event_fingerprint: &Sha256Hash,
+    ) -> Result<(), RepositoryError> {
+        let json = serde_json::to_value(value).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "M3 decision serialization failed",
+            )
+        })?;
+        let revision = json
+            .get("revision")
+            .and_then(serde_json::Value::as_u64)
+            .filter(|revision| *revision > 0)
+            .ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "M3 decision revision is invalid",
+                )
+            })?;
+        let project_matches = json.get("project_id").and_then(serde_json::Value::as_str)
+            == Some(self.project_id.as_str());
+        if !valid || !project_matches {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "M3 decision invariant or Project partition failed",
+            ));
+        }
+        let key = format!("{entity_id}:{revision}");
+        let mut connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(map_sql)?;
+        insert_immutable_document(&transaction, table, &key, value)?;
+        append_event(
+            &transaction,
+            event_type,
+            Some(&self.project_id),
+            event_fingerprint,
+        )?;
+        bump_revision(&transaction)?;
+        transaction.commit().map_err(map_sql)
+    }
 }
 
 impl Drop for SqliteProjectRepository {
@@ -1889,6 +5034,47 @@ impl Drop for SqliteProjectRepository {
             let _ = set_meta(&connection, "last_clean_shutdown", "true");
         }
     }
+}
+
+fn validate_development_record(record: &DevelopmentRecord) -> Result<(), RepositoryError> {
+    let valid_key = |value: &str, max: usize| {
+        !value.is_empty()
+            && value.len() <= max
+            && value.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_' | b':')
+            })
+    };
+    let document_schema_id = record
+        .document
+        .get("schema_id")
+        .and_then(serde_json::Value::as_str);
+    let document_schema_version = record
+        .document
+        .get("schema_version")
+        .and_then(serde_json::Value::as_u64);
+    if record.schema_version != 1
+        || !valid_key(&record.record_kind, 128)
+        || !valid_key(&record.record_id, 256)
+        || record.revision == 0
+        || record.state.trim().is_empty()
+        || record.state.len() > 128
+        || !record.document.is_object()
+        || document_schema_id != Some(record.document_schema_id.as_str())
+        || document_schema_version != Some(u64::from(record.document_schema_version))
+        || DateTime::parse_from_rfc3339(&record.created_at).is_err()
+        || canonical_sha256(&record.document).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "development record fingerprint calculation failed",
+            )
+        })? != record.document_fingerprint
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::Invalid,
+            "development record invariant failed",
+        ));
+    }
+    Ok(())
 }
 
 impl ProjectManagementRepository for SqliteProjectRepository {
@@ -2077,6 +5263,33 @@ impl ProjectManagementRepository for SqliteProjectRepository {
     }
 
     fn commit_scan(&self, commit: &ScanCommit) -> Result<ScanRun, RepositoryError> {
+        let mut indexed_artifacts = BTreeMap::new();
+        for artifact in commit
+            .run
+            .artifact_refs
+            .iter()
+            .chain(std::iter::once(&commit.snapshot.entries_manifest_ref))
+            .chain(
+                commit
+                    .code_index
+                    .iter()
+                    .flat_map(|index| index.artifact_refs.iter()),
+            )
+        {
+            artifact.validate().map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "scan artifact reference invariant is invalid",
+                )
+            })?;
+            if artifact.project_id.as_ref() != Some(&self.project_id) {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "scan artifact reference crosses a ProjectId partition",
+                ));
+            }
+            indexed_artifacts.insert(artifact.artifact_id.as_str().to_owned(), artifact.clone());
+        }
         if commit.project.project_id != self.project_id
             || commit.run.project_id != self.project_id
             || commit
@@ -2158,6 +5371,14 @@ impl ProjectManagementRepository for SqliteProjectRepository {
             generation,
             &commit.run,
         )?;
+        for artifact in indexed_artifacts.values() {
+            insert_immutable_document(
+                &transaction,
+                "artifact_refs",
+                artifact.artifact_id.as_str(),
+                artifact,
+            )?;
+        }
         for value in &commit.sources {
             insert_generation_document(
                 &transaction,
@@ -2791,6 +6012,240 @@ impl ProjectManagementRepository for SqliteProjectRepository {
         transaction.commit().map_err(map_sql)
     }
 
+    fn list_change_plans(&self) -> Result<Vec<ChangePlan>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_documents(
+            &connection,
+            "SELECT document_json FROM change_plans ORDER BY entity_id",
+            [],
+        )
+    }
+
+    fn import_local_state(
+        &self,
+        bundle: &LocalStateBundle,
+        expected_store_revision: u64,
+    ) -> Result<(), RepositoryError> {
+        validate_local_state_bundle(bundle, &PersistenceRedactor::for_current_user()).map_err(
+            |_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "local state bundle invariant failed",
+                )
+            },
+        )?;
+        if bundle.project_id != self.project_id {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "local state bundle crosses a ProjectId partition",
+            ));
+        }
+        for value in &bundle.local_suppressions {
+            validate_suppression(value).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "imported Suppression invariant failed",
+                )
+            })?;
+            validate_decision_strings([
+                value.selector.as_str(),
+                value.reason_code.as_str(),
+                value.reason.as_str(),
+                value.provenance.as_str(),
+            ])?;
+        }
+        for value in &bundle.local_baselines {
+            validate_baseline(value).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "imported Baseline invariant failed",
+                )
+            })?;
+            validate_decision_strings([value.reason.as_str()])?;
+        }
+        for value in &bundle.local_dispositions {
+            let duplicate_shape = matches!(
+                value.decision,
+                star_contracts::management::DispositionDecision::Duplicate
+            ) == value.duplicate_of_finding_id.is_some();
+            if value.reason.trim().is_empty() || !duplicate_shape {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "imported Disposition invariant failed",
+                ));
+            }
+            validate_decision_strings([
+                value.reason_code.as_str(),
+                value.reason.as_str(),
+                value.provenance.as_str(),
+            ])?;
+        }
+
+        let mut connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(map_sql)?;
+        let current_revision = get_meta(&transaction, "store_revision")?
+            .parse::<u64>()
+            .map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "project store revision is invalid",
+                )
+            })?;
+        if current_revision != expected_store_revision {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "local state import store revision is stale",
+            ));
+        }
+        let generation = get_meta_optional(&transaction, "current_generation")
+            .map_err(map_sql)?
+            .ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::NotFound,
+                    "local state import target has no current scan",
+                )
+            })?;
+        for (table, entity_id) in bundle
+            .local_suppressions
+            .iter()
+            .map(|value| ("suppressions", value.suppression_id.as_str()))
+            .chain(
+                bundle
+                    .local_baselines
+                    .iter()
+                    .map(|value| ("baselines", value.baseline_id.as_str())),
+            )
+            .chain(
+                bundle
+                    .local_dispositions
+                    .iter()
+                    .map(|value| ("dispositions", value.disposition_id.as_str())),
+            )
+            .chain(
+                bundle
+                    .active_change_plans
+                    .iter()
+                    .map(|value| ("change_plans", value.change_plan_id.as_str())),
+            )
+        {
+            if local_state_entity_exists(&transaction, table, entity_id)? {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "local state import entity already exists",
+                ));
+            }
+        }
+        for disposition in &bundle.local_dispositions {
+            if !generation_entity_exists(
+                &transaction,
+                "findings",
+                &generation,
+                disposition.finding_id.as_str(),
+            )? {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "local Disposition target Finding is not current",
+                ));
+            }
+        }
+        for baseline in &bundle.local_baselines {
+            if !generation_entity_exists(
+                &transaction,
+                "workspace_snapshots",
+                &generation,
+                baseline.workspace_snapshot_id.as_str(),
+            )? {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "local Baseline target snapshot is not current",
+                ));
+            }
+        }
+        for plan in &bundle.active_change_plans {
+            if !generation_entity_exists(
+                &transaction,
+                "workspace_snapshots",
+                &generation,
+                plan.target_workspace_snapshot_id.as_str(),
+            )? {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "active ChangePlan target is not current",
+                ));
+            }
+            for finding_id in &plan.finding_refs {
+                if !generation_entity_exists(
+                    &transaction,
+                    "findings",
+                    &generation,
+                    finding_id.as_str(),
+                )? {
+                    return Err(repository_error(
+                        RepositoryErrorCategory::RevisionConflict,
+                        "active ChangePlan target is not current",
+                    ));
+                }
+            }
+        }
+
+        for value in &bundle.local_suppressions {
+            insert_local_state_revision(
+                &transaction,
+                "suppressions",
+                value.suppression_id.as_str(),
+                value.revision,
+                value,
+            )?;
+        }
+        for value in &bundle.local_baselines {
+            insert_local_state_revision(
+                &transaction,
+                "baselines",
+                value.baseline_id.as_str(),
+                value.revision,
+                value,
+            )?;
+        }
+        for value in &bundle.local_dispositions {
+            insert_local_state_revision(
+                &transaction,
+                "dispositions",
+                value.disposition_id.as_str(),
+                value.revision,
+                value,
+            )?;
+        }
+        for value in &bundle.active_change_plans {
+            insert_document(
+                &transaction,
+                "change_plans",
+                "change_plan_id",
+                value.change_plan_id.as_str(),
+                value,
+            )?;
+        }
+        append_event(
+            &transaction,
+            "local_state.imported",
+            Some(&self.project_id),
+            &bundle.content_fingerprint,
+        )?;
+        bump_revision(&transaction)?;
+        transaction.commit().map_err(map_sql)
+    }
+
     fn get_patch_set(
         &self,
         patch_set_id: &PatchSetId,
@@ -2856,11 +6311,17 @@ impl ProjectManagementRepository for SqliteProjectRepository {
 
     fn save_check_graph_evidence(
         &self,
-        runs: &[ValidationRunV2],
-        diagnostics: &[DiagnosticV2],
-        decision: &GateDecisionV2,
-        bundle: &EvidenceBundleV2,
+        evidence: CheckGraphEvidenceTransaction<'_>,
     ) -> Result<(), RepositoryError> {
+        let CheckGraphEvidenceTransaction {
+            runs,
+            results,
+            diagnostics,
+            decision,
+            bundle,
+            review_pack,
+            rework_directive,
+        } = evidence;
         if runs.is_empty()
             || runs.iter().any(|run| {
                 run.project_id != self.project_id || run.clone().seal().as_ref() != Ok(run)
@@ -2869,8 +6330,19 @@ impl ProjectManagementRepository for SqliteProjectRepository {
                 diagnostic.project_id != self.project_id
                     || diagnostic.clone().seal().as_ref() != Ok(diagnostic)
             })
-            || decision.clone().seal(runs, diagnostics).as_ref() != Ok(decision)
-            || bundle.clone().seal(runs, diagnostics, decision).as_ref() != Ok(bundle)
+            || results.iter().any(|result| {
+                result.project_id != self.project_id
+                    || result.clone().seal(runs).as_ref() != Ok(result)
+            })
+            || decision.clone().seal(runs, diagnostics, results).as_ref() != Ok(decision)
+            || bundle
+                .clone()
+                .seal(runs, results, diagnostics, decision)
+                .as_ref()
+                != Ok(bundle)
+            || review_pack.clone().seal(bundle, decision).as_ref() != Ok(review_pack)
+            || rework_directive
+                .is_some_and(|directive| directive.clone().seal(decision).as_ref() != Ok(directive))
         {
             return Err(repository_error(
                 RepositoryErrorCategory::Invalid,
@@ -2902,6 +6374,14 @@ impl ProjectManagementRepository for SqliteProjectRepository {
                 diagnostic,
             )?;
         }
+        for result in results {
+            insert_immutable_document(
+                &transaction,
+                "validation_results_v2",
+                result.validation_result_id.as_str(),
+                result,
+            )?;
+        }
         insert_immutable_document(
             &transaction,
             "gate_decisions_v2",
@@ -2914,6 +6394,20 @@ impl ProjectManagementRepository for SqliteProjectRepository {
             bundle.evidence_bundle_id.as_str(),
             bundle,
         )?;
+        if let Some(directive) = rework_directive {
+            insert_immutable_document(
+                &transaction,
+                "rework_directives_v1",
+                directive.rework_directive_id.as_str(),
+                directive,
+            )?;
+        }
+        insert_immutable_document(
+            &transaction,
+            "review_packs_v1",
+            review_pack.review_pack_id.as_str(),
+            review_pack,
+        )?;
         append_event(
             &transaction,
             "validation.evidence_bundle.recorded",
@@ -2922,6 +6416,98 @@ impl ProjectManagementRepository for SqliteProjectRepository {
         )?;
         bump_revision(&transaction)?;
         transaction.commit().map_err(map_sql)
+    }
+
+    fn get_validation_run_v2(
+        &self,
+        validation_run_id: &ValidationRunId,
+    ) -> Result<Option<ValidationRunV2>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_document(
+            &connection,
+            "SELECT document_json FROM validation_runs_v2 WHERE entity_id=?1",
+            validation_run_id.as_str(),
+        )
+    }
+
+    fn list_validation_runs_v2(&self) -> Result<Vec<ValidationRunV2>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM validation_runs_v2 ORDER BY json_extract(document_json, '$.started_at') ASC, entity_id ASC",
+        )
+    }
+
+    fn get_validation_result_v2(
+        &self,
+        validation_result_id: &ValidationResultId,
+    ) -> Result<Option<ValidationResultV2>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_document(
+            &connection,
+            "SELECT document_json FROM validation_results_v2 WHERE entity_id=?1",
+            validation_result_id.as_str(),
+        )
+    }
+
+    fn list_validation_results_v2(&self) -> Result<Vec<ValidationResultV2>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM validation_results_v2 ORDER BY json_extract(document_json, '$.created_at') ASC, entity_id ASC",
+        )
+    }
+
+    fn get_diagnostic_v2(
+        &self,
+        diagnostic_id: &DiagnosticId,
+    ) -> Result<Option<DiagnosticV2>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_document(
+            &connection,
+            "SELECT document_json FROM diagnostics_v2 WHERE entity_id=?1",
+            diagnostic_id.as_str(),
+        )
+    }
+
+    fn list_diagnostics_v2(&self) -> Result<Vec<DiagnosticV2>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM diagnostics_v2 ORDER BY json_extract(document_json, '$.sequence') ASC, entity_id ASC",
+        )
+    }
+
+    fn get_gate_decision_v2(
+        &self,
+        gate_id: &GateId,
+    ) -> Result<Option<GateDecisionV2>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_document(
+            &connection,
+            "SELECT document_json FROM gate_decisions_v2 WHERE entity_id=?1",
+            gate_id.as_str(),
+        )
+    }
+
+    fn list_gate_decisions_v2(&self) -> Result<Vec<GateDecisionV2>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM gate_decisions_v2 ORDER BY json_extract(document_json, '$.decided_at') ASC, entity_id ASC",
+        )
     }
 
     fn get_evidence_bundle_v2(
@@ -2941,6 +6527,244 @@ impl ProjectManagementRepository for SqliteProjectRepository {
         )
     }
 
+    fn list_evidence_bundles_v2(&self) -> Result<Vec<EvidenceBundleV2>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM evidence_bundles_v2 ORDER BY json_extract(document_json, '$.created_at') ASC, entity_id ASC",
+        )
+    }
+
+    fn get_review_pack_v1(
+        &self,
+        review_pack_id: &ReviewPackId,
+    ) -> Result<Option<ReviewPackV1>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_document(
+            &connection,
+            "SELECT document_json FROM review_packs_v1 WHERE entity_id=?1",
+            review_pack_id.as_str(),
+        )
+    }
+
+    fn list_review_packs_v1(&self) -> Result<Vec<ReviewPackV1>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM review_packs_v1 ORDER BY json_extract(document_json, '$.created_at') ASC, entity_id ASC",
+        )
+    }
+
+    fn put_baseline_v2(&self, baseline: &BaselineV2) -> Result<(), RepositoryError> {
+        self.put_m3_decision_document(
+            "baselines_v2",
+            baseline.baseline_id.as_str(),
+            baseline,
+            baseline.clone().seal().as_ref() == Ok(baseline),
+            "validation.baseline_v2.recorded",
+            &baseline.set_fingerprint,
+        )
+    }
+
+    fn list_baselines_v2(&self) -> Result<Vec<BaselineV2>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM baselines_v2 ORDER BY json_extract(document_json, '$.created_at') ASC, entity_id ASC",
+        )
+    }
+
+    fn put_suppression_v2(&self, suppression: &SuppressionV2) -> Result<(), RepositoryError> {
+        self.put_m3_decision_document(
+            "suppressions_v2",
+            suppression.suppression_id.as_str(),
+            suppression,
+            suppression.clone().seal().as_ref() == Ok(suppression),
+            "validation.suppression_v2.recorded",
+            &suppression.content_fingerprint,
+        )
+    }
+
+    fn list_suppressions_v2(&self) -> Result<Vec<SuppressionV2>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM suppressions_v2 ORDER BY json_extract(document_json, '$.created_at') ASC, entity_id ASC",
+        )
+    }
+
+    fn put_disposition_v2(&self, disposition: &DispositionV2) -> Result<(), RepositoryError> {
+        self.put_m3_decision_document(
+            "dispositions_v2",
+            disposition.disposition_id.as_str(),
+            disposition,
+            disposition.clone().seal().as_ref() == Ok(disposition),
+            "validation.disposition_v2.recorded",
+            &disposition.content_fingerprint,
+        )
+    }
+
+    fn list_dispositions_v2(&self) -> Result<Vec<DispositionV2>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM dispositions_v2 ORDER BY json_extract(document_json, '$.decided_at') ASC, entity_id ASC",
+        )
+    }
+
+    fn save_managed_registry_resolution(
+        &self,
+        snapshot: &ManagedRegistrySnapshot,
+        consistency_records: &[RegistryConsistencyRecord],
+    ) -> Result<(), RepositoryError> {
+        let sealed_snapshot = snapshot.clone().seal().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "managed registry snapshot invariant failed",
+            )
+        })?;
+        let snapshot_ref = sealed_snapshot.reference().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "managed registry snapshot reference failed",
+            )
+        })?;
+        if sealed_snapshot != *snapshot || snapshot.owner_project_id != self.project_id {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "managed registry snapshot Project partition failed",
+            ));
+        }
+        for record in consistency_records {
+            if record.clone().seal().as_ref() != Ok(record)
+                || record.registry_snapshot_ref != snapshot_ref
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "registry consistency record invariant failed",
+                ));
+            }
+        }
+        let mut canonical_records = consistency_records.to_vec();
+        canonical_records.sort_by(|left, right| {
+            left.registry_consistency_record_id
+                .cmp(&right.registry_consistency_record_id)
+        });
+        if canonical_records != consistency_records
+            || canonical_records.windows(2).any(|pair| {
+                pair[0].registry_consistency_record_id == pair[1].registry_consistency_record_id
+            })
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "registry consistency records are not canonical",
+            ));
+        }
+        if let Some(existing) =
+            self.get_managed_registry_snapshot(&snapshot.managed_registry_snapshot_id)?
+        {
+            if existing != *snapshot {
+                return Err(repository_error(
+                    RepositoryErrorCategory::IntegrityFailed,
+                    "managed registry snapshot identity conflict",
+                ));
+            }
+            let mut existing_records =
+                self.list_registry_consistency_records(&snapshot.managed_registry_snapshot_id)?;
+            existing_records.sort_by(|left, right| {
+                left.registry_consistency_record_id
+                    .cmp(&right.registry_consistency_record_id)
+            });
+            if existing_records == canonical_records {
+                return Ok(());
+            }
+        }
+        let mut connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(map_sql)?;
+        insert_immutable_document(
+            &transaction,
+            "managed_registry_snapshots_v2",
+            snapshot.managed_registry_snapshot_id.as_str(),
+            snapshot,
+        )?;
+        for record in consistency_records {
+            insert_immutable_document(
+                &transaction,
+                "registry_consistency_records_v1",
+                record.registry_consistency_record_id.as_str(),
+                record,
+            )?;
+        }
+        append_event(
+            &transaction,
+            "managed_registry.snapshot.projected",
+            Some(&self.project_id),
+            &snapshot.content_fingerprint,
+        )?;
+        bump_revision(&transaction)?;
+        transaction.commit().map_err(map_sql)
+    }
+
+    fn latest_managed_registry_snapshot(
+        &self,
+    ) -> Result<Option<ManagedRegistrySnapshot>, RepositoryError> {
+        let mut snapshots = self.list_m3_documents(
+            "SELECT document_json FROM managed_registry_snapshots_v2 ORDER BY rowid ASC",
+        )?;
+        Ok(snapshots.pop())
+    }
+
+    fn get_managed_registry_snapshot(
+        &self,
+        snapshot_id: &star_contracts::ManagedRegistrySnapshotId,
+    ) -> Result<Option<ManagedRegistrySnapshot>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_document(
+            &connection,
+            "SELECT document_json FROM managed_registry_snapshots_v2 WHERE entity_id=?1",
+            snapshot_id.as_str(),
+        )
+    }
+
+    fn list_registry_consistency_records(
+        &self,
+        snapshot_id: &star_contracts::ManagedRegistrySnapshotId,
+    ) -> Result<Vec<RegistryConsistencyRecord>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        let mut statement = connection
+            .prepare(
+                "SELECT document_json FROM registry_consistency_records_v1
+                 WHERE json_extract(document_json, '$.registry_snapshot_ref.document_id')=?1
+                 ORDER BY entity_id ASC",
+            )
+            .map_err(map_sql)?;
+        let rows = statement
+            .query_map(params![snapshot_id.as_str()], |row| row.get::<_, String>(0))
+            .map_err(map_sql)?;
+        rows.map(|row| {
+            let document = row.map_err(map_sql)?;
+            serde_json::from_str(&document).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "registry consistency record JSON is corrupt",
+                )
+            })
+        })
+        .collect()
+    }
+
     fn artifact_refs_for_scan(
         &self,
         scan_run_id: &ScanRunId,
@@ -2957,6 +6781,83 @@ impl ProjectManagementRepository for SqliteProjectRepository {
             scan_run_id.as_str(),
         )?;
         Ok(run.map(|run| run.artifact_refs).unwrap_or_default())
+    }
+
+    fn reindex_artifact_refs(&self, artifact_refs: &[ArtifactRef]) -> Result<(), RepositoryError> {
+        let mut ordered = BTreeMap::new();
+        for artifact in artifact_refs {
+            artifact.validate().map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "artifact reference invariant is invalid",
+                )
+            })?;
+            if artifact.project_id.as_ref() != Some(&self.project_id) {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "artifact reference crosses a ProjectId partition",
+                ));
+            }
+            if let Some(existing) =
+                ordered.insert(artifact.artifact_id.as_str().to_owned(), artifact.clone())
+                && existing != *artifact
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "artifact reference identity resolves to conflicting content",
+                ));
+            }
+        }
+        let payload_fingerprint = versioned_fingerprint(
+            "star.artifact-reindex",
+            1,
+            &ordered.values().collect::<Vec<_>>(),
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "artifact reindex fingerprint failed",
+            )
+        })?;
+        let mut connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(map_sql)?;
+        for artifact in ordered.values() {
+            insert_immutable_document(
+                &transaction,
+                "artifact_refs",
+                artifact.artifact_id.as_str(),
+                artifact,
+            )?;
+        }
+        append_event(
+            &transaction,
+            "artifact.index.rebuilt",
+            Some(&self.project_id),
+            &payload_fingerprint,
+        )?;
+        bump_revision(&transaction)?;
+        transaction.commit().map_err(map_sql)
+    }
+
+    fn list_artifact_refs(&self) -> Result<Vec<ArtifactRef>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_documents(
+            &connection,
+            "SELECT document_json FROM artifact_refs ORDER BY entity_id",
+            [],
+        )
     }
 }
 
@@ -3104,7 +7005,43 @@ fn ensure_current_store_shape(
                     input_fingerprint TEXT NOT NULL,
                     bundle_fingerprint TEXT NOT NULL,
                     document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS planning_bundle_revisions(
+                    task_spec_id TEXT NOT NULL,
+                    bundle_revision INTEGER NOT NULL CHECK(bundle_revision > 0),
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    input_fingerprint TEXT NOT NULL,
+                    bundle_fingerprint TEXT NOT NULL,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json)),
+                    PRIMARY KEY(task_spec_id, bundle_revision)
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS development_records_v1(
+                    record_kind TEXT NOT NULL,
+                    record_id TEXT NOT NULL,
+                    revision INTEGER NOT NULL CHECK(revision > 0),
+                    project_id TEXT,
+                    state TEXT NOT NULL,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json)),
+                    PRIMARY KEY(record_kind, record_id, revision)
                  ) STRICT;",
+            )
+            .map_err(map_sql)?;
+        connection
+            .execute_batch(
+                "INSERT OR IGNORE INTO planning_bundle_revisions(
+                    task_spec_id, bundle_revision, idempotency_key,
+                    input_fingerprint, bundle_fingerprint, document_json
+                 )
+                 SELECT task_spec_id,
+                        MAX(
+                            CAST(json_extract(document_json, '$.task_spec.revision') AS INTEGER),
+                            CAST(json_extract(document_json, '$.scope_revision.revision') AS INTEGER),
+                            CAST(json_extract(document_json, '$.impact_analysis.revision') AS INTEGER),
+                            CAST(json_extract(document_json, '$.validation_plan.revision') AS INTEGER)
+                        ),
+                        idempotency_key, input_fingerprint,
+                        bundle_fingerprint, document_json
+                 FROM planning_bundles;",
             )
             .map_err(map_sql)?;
         let has_idempotency_key = connection
@@ -3176,6 +7113,10 @@ fn ensure_current_store_shape(
                     entity_id TEXT PRIMARY KEY,
                     document_json TEXT NOT NULL CHECK(json_valid(document_json))
                  ) STRICT;
+                 CREATE TABLE IF NOT EXISTS validation_results_v2(
+                    entity_id TEXT PRIMARY KEY,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
                  CREATE TABLE IF NOT EXISTS diagnostics_v2(
                     entity_id TEXT PRIMARY KEY,
                     document_json TEXT NOT NULL CHECK(json_valid(document_json))
@@ -3185,6 +7126,34 @@ fn ensure_current_store_shape(
                     document_json TEXT NOT NULL CHECK(json_valid(document_json))
                  ) STRICT;
                  CREATE TABLE IF NOT EXISTS evidence_bundles_v2(
+                    entity_id TEXT PRIMARY KEY,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS review_packs_v1(
+                    entity_id TEXT PRIMARY KEY,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS rework_directives_v1(
+                    entity_id TEXT PRIMARY KEY,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS baselines_v2(
+                    entity_id TEXT PRIMARY KEY,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS suppressions_v2(
+                    entity_id TEXT PRIMARY KEY,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS dispositions_v2(
+                    entity_id TEXT PRIMARY KEY,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS managed_registry_snapshots_v2(
+                    entity_id TEXT PRIMARY KEY,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS registry_consistency_records_v1(
                     entity_id TEXT PRIMARY KEY,
                     document_json TEXT NOT NULL CHECK(json_valid(document_json))
                  ) STRICT;",
@@ -3647,6 +7616,65 @@ fn management_event_hash(
     })
 }
 
+fn local_state_entity_exists(
+    connection: &Connection,
+    table: &str,
+    entity_id: &str,
+) -> Result<bool, RepositoryError> {
+    connection
+        .query_row(
+            &format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE entity_id=?1)"),
+            [entity_id],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(map_sql)
+}
+
+fn generation_entity_exists(
+    connection: &Connection,
+    table: &str,
+    generation: &str,
+    entity_id: &str,
+) -> Result<bool, RepositoryError> {
+    connection
+        .query_row(
+            &format!(
+                "SELECT EXISTS(SELECT 1 FROM {table} WHERE generation_id=?1 AND entity_id=?2)"
+            ),
+            params![generation, entity_id],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(map_sql)
+}
+
+fn insert_local_state_revision<T: Serialize>(
+    transaction: &Transaction<'_>,
+    table: &str,
+    entity_id: &str,
+    revision: u64,
+    value: &T,
+) -> Result<(), RepositoryError> {
+    let revision = i64::try_from(revision).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "local state revision exceeds the storage range",
+        )
+    })?;
+    let document = serde_json::to_string(value).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "local state document serialization failed",
+        )
+    })?;
+    transaction
+        .execute(
+            &format!("INSERT INTO {table}(entity_id, revision, document_json) VALUES(?1, ?2, ?3)"),
+            params![entity_id, revision, document],
+        )
+        .map_err(map_sql)?;
+    Ok(())
+}
+
 fn insert_document<T: Serialize>(
     transaction: &Transaction<'_>,
     table: &str,
@@ -3861,6 +7889,19 @@ fn verify_project_relations(
         return Err(repository_error(
             RepositoryErrorCategory::IntegrityFailed,
             "workspace snapshot partition or revision relation is invalid",
+        ));
+    }
+    let artifact_refs: Vec<ArtifactRef> = query_documents(
+        connection,
+        "SELECT document_json FROM artifact_refs ORDER BY entity_id",
+        [],
+    )?;
+    if artifact_refs.iter().any(|artifact| {
+        artifact.project_id.as_ref() != Some(project_id) || artifact.validate().is_err()
+    }) {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "artifact reference partition or invariant is invalid",
         ));
     }
     let Some(generation) = get_meta_optional(connection, "current_generation").map_err(map_sql)?
@@ -4149,6 +8190,24 @@ CREATE TABLE planning_bundles(
     bundle_fingerprint TEXT NOT NULL,
     document_json TEXT NOT NULL CHECK(json_valid(document_json))
 ) STRICT;
+CREATE TABLE planning_bundle_revisions(
+    task_spec_id TEXT NOT NULL,
+    bundle_revision INTEGER NOT NULL CHECK(bundle_revision > 0),
+    idempotency_key TEXT NOT NULL UNIQUE,
+    input_fingerprint TEXT NOT NULL,
+    bundle_fingerprint TEXT NOT NULL,
+    document_json TEXT NOT NULL CHECK(json_valid(document_json)),
+    PRIMARY KEY(task_spec_id, bundle_revision)
+) STRICT;
+CREATE TABLE development_records_v1(
+    record_kind TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    revision INTEGER NOT NULL CHECK(revision > 0),
+    project_id TEXT,
+    state TEXT NOT NULL,
+    document_json TEXT NOT NULL CHECK(json_valid(document_json)),
+    PRIMARY KEY(record_kind, record_id, revision)
+) STRICT;
 CREATE TABLE coordinated_operations(
     operation_id TEXT PRIMARY KEY,
     idempotency_key TEXT NOT NULL UNIQUE,
@@ -4206,9 +8265,17 @@ CREATE TABLE validation_results(entity_id TEXT PRIMARY KEY, document_json TEXT N
 CREATE TABLE gate_decisions(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
 CREATE TABLE artifact_refs(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
 CREATE TABLE validation_runs_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
+CREATE TABLE validation_results_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
 CREATE TABLE diagnostics_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
 CREATE TABLE gate_decisions_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
 CREATE TABLE evidence_bundles_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
+CREATE TABLE review_packs_v1(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
+CREATE TABLE rework_directives_v1(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
+CREATE TABLE baselines_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
+CREATE TABLE suppressions_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
+CREATE TABLE dispositions_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
+CREATE TABLE managed_registry_snapshots_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
+CREATE TABLE registry_consistency_records_v1(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
 CREATE TABLE participant_receipts(
     operation_id TEXT PRIMARY KEY,
     payload_fingerprint TEXT NOT NULL,
@@ -4956,6 +9023,12 @@ fn migrate_project_partition(
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(map_sql)?;
+    set_meta(
+        &transaction,
+        "last_opened_by_product_version",
+        "project-v1-to-v2-migration",
+    )
+    .map_err(map_sql)?;
     transaction
         .execute(
             "UPDATE project_document SET document_json=?1 WHERE singleton=1 AND project_id=?2",
@@ -5139,6 +9212,12 @@ fn migrate_global_store(
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(map_sql)?;
+    set_meta(
+        &transaction,
+        "last_opened_by_product_version",
+        "project-v1-to-v2-migration",
+    )
+    .map_err(map_sql)?;
     transaction
         .execute_batch(
             "ALTER TABLE projects RENAME TO projects_v1;
@@ -5759,6 +9838,59 @@ fn create_private_dir(path: &Path) -> Result<(), RepositoryError> {
     apply_owner_system_dacl(path)
 }
 
+fn write_private_new(path: &Path, bytes: &[u8], plan_token: &str) -> Result<(), RepositoryError> {
+    let parent = path
+        .parent()
+        .filter(|parent| parent.is_dir())
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "local state export parent directory is unavailable",
+            )
+        })?;
+    if path.exists() {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state export destination already exists",
+        ));
+    }
+    let token = Sha256Hash::digest(plan_token.as_bytes());
+    let temporary = parent.join(format!(
+        ".star-local-state-{}.tmp",
+        &token.as_str().trim_start_matches("sha256:")[..20]
+    ));
+    if temporary.exists() {
+        let metadata = fs::symlink_metadata(&temporary).map_err(map_io)?;
+        if !metadata.is_file()
+            || metadata.file_type().is_symlink()
+            || fs::read(&temporary).map_err(map_io)? != bytes
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "local state export temporary file conflicts with the approved plan",
+            ));
+        }
+    } else {
+        let mut file = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&temporary)
+            .map_err(map_io)?;
+        file.write_all(bytes).map_err(map_io)?;
+        file.sync_all().map_err(map_io)?;
+        drop(file);
+    }
+    apply_owner_system_dacl(&temporary)?;
+    if path.exists() {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "local state export destination appeared during apply",
+        ));
+    }
+    fs::rename(&temporary, path).map_err(map_io)?;
+    apply_owner_system_dacl(path)
+}
+
 fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), RepositoryError> {
     let parent = path.parent().ok_or_else(|| {
         repository_error(
@@ -5847,7 +9979,7 @@ mod tests {
         ids::{GenerationId, ProjectRevisionId, WorkspaceSnapshotId},
         management::{
             CheckoutAttachmentState, CheckoutHeadState, CheckoutKind, IdentityScope,
-            RegistrationState, RepositoryKind, ScanStatus,
+            ProjectPathRef, RegistrationState, RepositoryKind, ScanStatus,
         },
     };
 
@@ -5898,6 +10030,74 @@ mod tests {
         }
     }
 
+    struct RecoveryFixture {
+        root: PathBuf,
+        management_root: PathBuf,
+        backup_root: PathBuf,
+        project_id: ProjectId,
+        old_global_path: PathBuf,
+        backup_manifest: BackupSetManifest,
+    }
+
+    fn recovery_fixture(label: &str) -> RecoveryFixture {
+        let root = std::env::temp_dir().join(format!(
+            "star-recovery-{label}-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        let management_root = root.join("management");
+        let backup_root = root.join("backup");
+        let repositories =
+            SqliteManagementRepositorySet::open(&management_root, "recovery-test").unwrap();
+        let project_id = ProjectId::new();
+        let checkout_id = CheckoutId::new();
+        let binding_id = RootBindingId::new();
+        let project = project(project_id.clone(), checkout_id.clone());
+        let checkout = checkout(project_id.clone(), checkout_id, binding_id);
+        let fingerprint = versioned_fingerprint("star.recovery.fixture", 1, &project).unwrap();
+        repositories
+            .global()
+            .register_project(&project, &checkout, label, &fingerprint)
+            .unwrap();
+        let project_repository = repositories.project(&project_id).unwrap();
+        project_repository
+            .commit_registration_participant(
+                &project,
+                &CoordinatedOperationId::new(),
+                &fingerprint,
+                &fingerprint,
+            )
+            .unwrap();
+        repositories.verify_all().unwrap();
+        let backup_plan = repositories.plan_backup(&backup_root).unwrap();
+        let backup = repositories
+            .apply_backup(
+                &backup_root,
+                &backup_plan,
+                backup_plan.plan_fingerprint.as_str(),
+            )
+            .unwrap();
+        let active_set = repositories.active_set().unwrap();
+        let old_global_path = active_store_file(
+            &management_root,
+            active_set
+                .entries
+                .iter()
+                .find(|entry| matches!(entry.scope, StoreScope::Global))
+                .unwrap(),
+        );
+        drop(project_repository);
+        drop(repositories);
+        RecoveryFixture {
+            root,
+            management_root,
+            backup_root,
+            project_id,
+            old_global_path,
+            backup_manifest: backup.manifest,
+        }
+    }
+
     fn scan_commit(mut project: Project, status: ScanStatus, seed: &str) -> ScanCommit {
         let mut revision: ProjectRevision = serde_json::from_str(include_str!(
             "../../../../specs/fixtures/management/v1/project-revision/minimal.json"
@@ -5913,6 +10113,7 @@ mod tests {
         snapshot.project_id = project.project_id.clone();
         snapshot.project_revision_id = revision.project_revision_id.clone();
         snapshot.workspace_snapshot_id = WorkspaceSnapshotId::new();
+        snapshot.entries_manifest_ref.project_id = Some(project.project_id.clone());
         let mut run: ScanRun = serde_json::from_str(include_str!(
             "../../../../specs/fixtures/management/v1/scan-run/minimal.json"
         ))
@@ -6162,6 +10363,11 @@ CREATE TABLE events(
             inspect_store_read_only(&global_path),
             RecoveryInspection::MigrationRequired
         );
+        read_store_status_read_only(&management_project_path(
+            &fixture.management_root,
+            &fixture.project_id,
+        ))
+        .unwrap();
         assert_eq!(
             inspect_store_read_only(&management_project_path(
                 &fixture.management_root,
@@ -6333,10 +10539,40 @@ CREATE TABLE events(
         );
         assert_eq!(repositories.verify_all().unwrap().len(), 2);
         assert_eq!(
-            repositories.backup_all(&root.join("backup")).unwrap().len(),
-            2
+            repositories
+                .plan_backup(&root.join("management/unsafe-backup"))
+                .unwrap_err()
+                .category,
+            RepositoryErrorCategory::Invalid
         );
-        let global_backup = root.join("backup/global.db");
+        let backup_plan = repositories.plan_backup(&root.join("backup")).unwrap();
+        let backup = repositories
+            .apply_backup(
+                &root.join("backup"),
+                &backup_plan,
+                backup_plan.plan_fingerprint.as_str(),
+            )
+            .unwrap();
+        assert_eq!(
+            repositories
+                .apply_backup(
+                    &root.join("backup"),
+                    &backup_plan,
+                    backup_plan.plan_fingerprint.as_str(),
+                )
+                .unwrap(),
+            backup
+        );
+        assert_eq!(backup.manifest.entries.len(), 2);
+        let global_backup = root.join("backup").join(
+            &backup
+                .manifest
+                .entries
+                .iter()
+                .find(|entry| matches!(entry.scope, StoreScope::Global))
+                .unwrap()
+                .relative_locator,
+        );
         assert_eq!(
             inspect_store_read_only(&global_backup),
             RecoveryInspection::Healthy
@@ -6410,16 +10646,325 @@ CREATE TABLE events(
         assert_eq!(applied.applied_count, 1);
         assert!(repositories.plan_retention().unwrap().candidates.is_empty());
 
-        let database = fs::read(
-            root.join("management")
-                .join("global")
-                .join("active")
-                .join(STORE_FILENAME),
-        )
-        .unwrap();
+        let active_set = read_active_set(&root.join("management"))
+            .unwrap()
+            .unwrap()
+            .manifest;
+        let global = active_set
+            .entries
+            .iter()
+            .find(|entry| matches!(entry.scope, StoreScope::Global))
+            .unwrap();
+        let database = fs::read(active_store_file(&root.join("management"), global)).unwrap();
         assert!(
             !String::from_utf8_lossy(&database).contains(&source.to_string_lossy().to_string())
         );
+    }
+
+    #[test]
+    fn backup_plan_restore_preserves_corrupt_generation_and_rejects_tamper() {
+        let fixture = recovery_fixture("restore");
+        let manifest_json = serde_json::to_string(&fixture.backup_manifest).unwrap();
+        assert!(!manifest_json.contains(fixture.root.to_string_lossy().as_ref()));
+        if let Ok(username) = std::env::var("USERNAME")
+            && username.len() >= 3
+        {
+            assert!(
+                !manifest_json
+                    .to_ascii_lowercase()
+                    .contains(&username.to_ascii_lowercase())
+            );
+        }
+
+        let corrupt_bytes = b"corrupt-active-generation";
+        fs::write(&fixture.old_global_path, corrupt_bytes).unwrap();
+        let open_error = match SqliteManagementRepositorySet::open(
+            &fixture.management_root,
+            "must-enter-recovery",
+        ) {
+            Err(error) => error,
+            Ok(_) => panic!("corrupt active generation must not enter normal mode"),
+        };
+        assert_eq!(
+            open_error.category,
+            RepositoryErrorCategory::IntegrityFailed
+        );
+
+        let recovery =
+            SqliteManagementRecovery::open(&fixture.management_root, "recovery-test").unwrap();
+        assert_eq!(
+            recovery.status().unwrap().mode,
+            ControllerRecoveryMode::RecoveryOnly
+        );
+        let global_backup = fixture
+            .backup_manifest
+            .entries
+            .iter()
+            .find(|entry| matches!(entry.scope, StoreScope::Global))
+            .unwrap();
+        let global_backup_path = fixture.backup_root.join(&global_backup.relative_locator);
+        let original_backup = fs::read(&global_backup_path).unwrap();
+
+        let future_connection = Connection::open(&global_backup_path).unwrap();
+        future_connection
+            .pragma_update(None, "user_version", MANAGEMENT_STORE_VERSION + 1)
+            .unwrap();
+        drop(future_connection);
+        assert_eq!(
+            inspect_store_read_only(&global_backup_path),
+            RecoveryInspection::FutureVersion
+        );
+        assert_eq!(
+            recovery
+                .plan_restore(&fixture.backup_root)
+                .unwrap_err()
+                .category,
+            RepositoryErrorCategory::IntegrityFailed
+        );
+        fs::write(&global_backup_path, &original_backup).unwrap();
+
+        let project_backup = fixture
+            .backup_manifest
+            .entries
+            .iter()
+            .find(|entry| matches!(entry.scope, StoreScope::Project { .. }))
+            .unwrap();
+        let project_backup_path = fixture.backup_root.join(&project_backup.relative_locator);
+        let missing_path = project_backup_path.with_extension("missing-fixture");
+        fs::rename(&project_backup_path, &missing_path).unwrap();
+        assert_eq!(
+            recovery
+                .plan_restore(&fixture.backup_root)
+                .unwrap_err()
+                .category,
+            RepositoryErrorCategory::IntegrityFailed
+        );
+        fs::rename(&missing_path, &project_backup_path).unwrap();
+
+        fs::write(&global_backup_path, b"tampered-backup").unwrap();
+        assert_eq!(
+            recovery
+                .plan_restore(&fixture.backup_root)
+                .unwrap_err()
+                .category,
+            RepositoryErrorCategory::IntegrityFailed
+        );
+        fs::write(&global_backup_path, original_backup).unwrap();
+
+        let plan = recovery.plan_restore(&fixture.backup_root).unwrap();
+        assert_eq!(
+            recovery
+                .apply_restore(
+                    &fixture.backup_root,
+                    &plan,
+                    Sha256Hash::digest(b"wrong approval").as_str(),
+                )
+                .unwrap_err()
+                .category,
+            RepositoryErrorCategory::RevisionConflict
+        );
+        assert!(plan.stores.iter().all(|store| {
+            !fixture
+                .management_root
+                .join(&store.candidate_relative_locator)
+                .join(STORE_FILENAME)
+                .exists()
+        }));
+
+        let restored = recovery
+            .apply_restore(&fixture.backup_root, &plan, plan.plan_fingerprint.as_str())
+            .unwrap();
+        assert_eq!(
+            recovery
+                .apply_restore(&fixture.backup_root, &plan, plan.plan_fingerprint.as_str(),)
+                .unwrap(),
+            restored
+        );
+        assert_eq!(
+            restored.activated_set.manifest_fingerprint,
+            plan.candidate_active_set.manifest_fingerprint
+        );
+        assert_eq!(fs::read(&fixture.old_global_path).unwrap(), corrupt_bytes);
+        assert_eq!(
+            recovery.status().unwrap().mode,
+            ControllerRecoveryMode::Normal
+        );
+        drop(recovery);
+
+        let reopened =
+            SqliteManagementRepositorySet::open(&fixture.management_root, "restored-test").unwrap();
+        assert!(
+            reopened
+                .global()
+                .get_project(&fixture.project_id)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(reopened.verify_all().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn active_set_header_mismatch_enters_recovery_only_even_when_manifest_is_resealed() {
+        let fixture = recovery_fixture("active-header-mismatch");
+        let mut entries = read_active_set(&fixture.management_root)
+            .unwrap()
+            .unwrap()
+            .manifest
+            .entries;
+        entries[0].generation = entries[0].generation.checked_add(1).unwrap();
+        let mismatched = seal_active_set(entries).unwrap();
+        write_active_set_document(&fixture.management_root, &mismatched).unwrap();
+
+        let normal = SqliteManagementRepositorySet::open(&fixture.management_root, "test");
+        assert!(matches!(
+            normal,
+            Err(RepositoryError {
+                category: RepositoryErrorCategory::IntegrityFailed,
+                ..
+            })
+        ));
+        let recovery =
+            SqliteManagementRecovery::open(&fixture.management_root, "recovery-test").unwrap();
+        let status = recovery.status().unwrap();
+        assert_eq!(status.mode, ControllerRecoveryMode::RecoveryOnly);
+        assert!(status.stores.iter().any(|store| {
+            store.inspection == RecoveryInspection::ActiveSetMismatch
+                && store.diagnostic_code == "RECOVERY_ACTIVE_SET_MATERIALIZATION_MISMATCH"
+        }));
+    }
+
+    #[test]
+    fn restore_activation_is_all_old_or_all_new_across_crash_points() {
+        let during_write = recovery_fixture("crash-during-write");
+        fs::write(
+            &during_write.old_global_path,
+            b"corrupt-during-candidate-write",
+        )
+        .unwrap();
+        let recovery =
+            SqliteManagementRecovery::open(&during_write.management_root, "recovery-test").unwrap();
+        let plan = recovery.plan_restore(&during_write.backup_root).unwrap();
+        let old_active_fingerprint =
+            active_set_file_fingerprint(&during_write.management_root).unwrap();
+        assert!(
+            recovery
+                .apply_restore_with_fault(
+                    &during_write.backup_root,
+                    &plan,
+                    plan.plan_fingerprint.as_str(),
+                    Some(RestoreFaultPoint::AfterFirstStore),
+                )
+                .is_err()
+        );
+        assert_eq!(
+            active_set_file_fingerprint(&during_write.management_root).unwrap(),
+            old_active_fingerprint
+        );
+        assert_eq!(
+            inspect_management_root(&during_write.management_root),
+            Some(RecoveryInspection::Corrupt)
+        );
+        assert_eq!(
+            plan.stores
+                .iter()
+                .filter(|store| during_write
+                    .management_root
+                    .join(&store.candidate_relative_locator)
+                    .join(STORE_FILENAME)
+                    .is_file())
+                .count(),
+            1
+        );
+        assert!(
+            during_write
+                .management_root
+                .join("quarantine")
+                .join(format!("{}.json", plan.recovery_plan_id.as_str()))
+                .is_file()
+        );
+        drop(recovery);
+
+        let before = recovery_fixture("crash-before");
+        fs::write(&before.old_global_path, b"corrupt-before-restore").unwrap();
+        let recovery =
+            SqliteManagementRecovery::open(&before.management_root, "recovery-test").unwrap();
+        let plan = recovery.plan_restore(&before.backup_root).unwrap();
+        let old_active_fingerprint = active_set_file_fingerprint(&before.management_root).unwrap();
+        assert!(
+            recovery
+                .apply_restore_with_fault(
+                    &before.backup_root,
+                    &plan,
+                    plan.plan_fingerprint.as_str(),
+                    Some(RestoreFaultPoint::BeforeActivation),
+                )
+                .is_err()
+        );
+        assert_eq!(
+            active_set_file_fingerprint(&before.management_root).unwrap(),
+            old_active_fingerprint
+        );
+        assert_eq!(
+            inspect_management_root(&before.management_root),
+            Some(RecoveryInspection::Corrupt)
+        );
+        assert!(
+            before
+                .management_root
+                .join("quarantine")
+                .join(format!("{}.json", plan.recovery_plan_id.as_str()))
+                .is_file()
+        );
+        drop(recovery);
+
+        let after = recovery_fixture("crash-after");
+        fs::write(&after.old_global_path, b"corrupt-after-restore").unwrap();
+        let recovery =
+            SqliteManagementRecovery::open(&after.management_root, "recovery-test").unwrap();
+        let plan = recovery.plan_restore(&after.backup_root).unwrap();
+        assert!(
+            recovery
+                .apply_restore_with_fault(
+                    &after.backup_root,
+                    &plan,
+                    plan.plan_fingerprint.as_str(),
+                    Some(RestoreFaultPoint::AfterActivation),
+                )
+                .is_err()
+        );
+        let active = read_active_set(&after.management_root)
+            .unwrap()
+            .unwrap()
+            .manifest;
+        assert_eq!(
+            active.manifest_fingerprint,
+            plan.candidate_active_set.manifest_fingerprint
+        );
+        assert_eq!(
+            inspect_management_root(&after.management_root),
+            Some(RecoveryInspection::Healthy)
+        );
+        let quarantine = fs::read_to_string(
+            after
+                .management_root
+                .join("quarantine")
+                .join(format!("{}.json", plan.recovery_plan_id.as_str())),
+        )
+        .unwrap();
+        assert!(quarantine.contains("RESTORE_ACTIVATED_OUTCOME_REQUIRES_RECONCILE"));
+        let reconciled = recovery
+            .apply_restore(&after.backup_root, &plan, plan.plan_fingerprint.as_str())
+            .unwrap();
+        assert_eq!(reconciled.activated_set, plan.candidate_active_set);
+        assert_eq!(
+            recovery
+                .apply_restore(&after.backup_root, &plan, plan.plan_fingerprint.as_str())
+                .unwrap(),
+            reconciled
+        );
+        drop(recovery);
+        SqliteManagementRepositorySet::open(&after.management_root, "restored-after-crash")
+            .unwrap();
     }
 
     #[test]
@@ -6649,5 +11194,193 @@ CREATE TABLE events(
                 .category,
             RepositoryErrorCategory::IntegrityFailed
         );
+    }
+
+    #[test]
+    fn managed_registry_projection_is_immutable_idempotent_and_survives_restart() {
+        let root = std::env::temp_dir().join(format!(
+            "star-managed-registry-state-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        let repositories = SqliteManagementRepositorySet::open(&root, "test").unwrap();
+        let project_id = ProjectId::new();
+        let checkout_id = CheckoutId::new();
+        let registered_project = project(project_id.clone(), checkout_id.clone());
+        let registered_checkout = checkout(
+            project_id.clone(),
+            checkout_id.clone(),
+            RootBindingId::new(),
+        );
+        let registration_fingerprint =
+            versioned_fingerprint("star.test.registry-registration", 1, &registered_project)
+                .unwrap();
+        repositories
+            .global()
+            .register_project(
+                &registered_project,
+                &registered_checkout,
+                "register-managed-registry",
+                &registration_fingerprint,
+            )
+            .unwrap();
+        let repository = repositories.project_repository(&project_id).unwrap();
+
+        let mut snapshot = ManagedRegistrySnapshot {
+            schema_id: star_contracts::managed_registry::MANAGED_REGISTRY_SNAPSHOT_SCHEMA_ID
+                .to_owned(),
+            schema_version: 2,
+            managed_registry_snapshot_id: star_contracts::ManagedRegistrySnapshotId::new(),
+            registry_id: "star-control.registry".to_owned(),
+            registry_version: "1.0.0".to_owned(),
+            owner_project_id: project_id.clone(),
+            checkout_id,
+            project_revision_id: ProjectRevisionId::new(),
+            workspace_snapshot_id: WorkspaceSnapshotId::new(),
+            git_revision: "a".repeat(40),
+            manifest_sha256: Sha256Hash::digest(b"manifest"),
+            manifest_source_refs: vec![star_contracts::managed_registry::RegistrySourceRef {
+                path: ProjectPathRef::parse(".star-control/registry/manifest.toml".to_owned())
+                    .unwrap(),
+                source_sha256: Sha256Hash::digest(b"manifest-source"),
+            }],
+            namespace_claims: Vec::new(),
+            declarations: Vec::new(),
+            binding_observations: Vec::new(),
+            consumers: Vec::new(),
+            candidates: Vec::new(),
+            local_constants: Vec::new(),
+            code_index_snapshot_id: None,
+            tombstones: Vec::new(),
+            tombstone_set_fingerprint: Sha256Hash::digest(b"tombstones"),
+            resolution_state: star_contracts::managed_registry::RegistryResolutionState::Valid,
+            freshness: star_contracts::managed_registry::RegistryFreshness::Current,
+            completeness: star_contracts::managed_registry::EvidenceCompleteness::Complete,
+            limitations: Vec::new(),
+            diagnostic_refs: Vec::new(),
+            content_fingerprint: Sha256Hash::digest(b"unsealed"),
+        };
+        snapshot = snapshot.seal().unwrap();
+
+        let mut record = RegistryConsistencyRecord {
+            schema_id: star_contracts::managed_registry::REGISTRY_CONSISTENCY_RECORD_SCHEMA_ID
+                .to_owned(),
+            schema_version: 1,
+            registry_consistency_record_id: star_contracts::RegistryConsistencyRecordId::new(),
+            registry_snapshot_ref: snapshot.reference().unwrap(),
+            declaration_ref: None,
+            status: star_contracts::managed_registry::RegistryConsistencyStatus::Current,
+            subject: "registry:star-control.registry".to_owned(),
+            expected_value: None,
+            observed_value: None,
+            completeness: star_contracts::managed_registry::EvidenceCompleteness::Complete,
+            evidence_refs: Vec::new(),
+            remediation: "no action required".to_owned(),
+            record_fingerprint: Sha256Hash::digest(b"unsealed"),
+        };
+        record = record.seal().unwrap();
+        let records = vec![record.clone()];
+
+        repository
+            .save_managed_registry_resolution(&snapshot, &records)
+            .unwrap();
+        let revision = repository.status().unwrap().store_revision;
+        repository
+            .save_managed_registry_resolution(&snapshot, &records)
+            .unwrap();
+        assert_eq!(repository.status().unwrap().store_revision, revision);
+        assert_eq!(
+            repository
+                .latest_managed_registry_snapshot()
+                .unwrap()
+                .unwrap(),
+            snapshot
+        );
+        assert_eq!(
+            repository
+                .list_registry_consistency_records(&snapshot.managed_registry_snapshot_id)
+                .unwrap(),
+            records
+        );
+        drop(repository);
+        drop(repositories);
+
+        let reopened = SqliteManagementRepositorySet::open(&root, "test").unwrap();
+        let repository = reopened.project_repository(&project_id).unwrap();
+        assert_eq!(
+            repository
+                .get_managed_registry_snapshot(&snapshot.managed_registry_snapshot_id)
+                .unwrap()
+                .unwrap(),
+            snapshot
+        );
+        assert_eq!(
+            repository
+                .list_registry_consistency_records(&snapshot.managed_registry_snapshot_id)
+                .unwrap(),
+            records
+        );
+        reopened.verify_all().unwrap();
+    }
+
+    #[test]
+    fn development_record_is_immutable_idempotent_and_survives_restart() {
+        let root = std::env::temp_dir().join(format!(
+            "star-development-record-state-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        let repositories = SqliteManagementRepositorySet::open(&root, "test").unwrap();
+        let project_id = ProjectId::new();
+        let document = serde_json::json!({
+            "schema_id": "star.test-development-document",
+            "schema_version": 1,
+            "status": "ready"
+        });
+        let record = DevelopmentRecord {
+            schema_version: 1,
+            record_kind: "compatibility_report".to_owned(),
+            record_id: "compatibility:test".to_owned(),
+            revision: 1,
+            project_id: Some(project_id.clone()),
+            state: "ready".to_owned(),
+            document_schema_id: "star.test-development-document".to_owned(),
+            document_schema_version: 1,
+            document_fingerprint: canonical_sha256(&document).unwrap(),
+            document,
+            created_at: Utc::now().to_rfc3339(),
+        };
+
+        repositories
+            .global()
+            .put_development_record(&record)
+            .unwrap();
+        let revision = repositories.global().status().unwrap().store_revision;
+        repositories
+            .global()
+            .put_development_record(&record)
+            .unwrap();
+        assert_eq!(
+            repositories.global().status().unwrap().store_revision,
+            revision
+        );
+        assert_eq!(
+            repositories
+                .global()
+                .get_development_record("compatibility_report", "compatibility:test", None)
+                .unwrap(),
+            Some(record.clone())
+        );
+        drop(repositories);
+
+        let reopened = SqliteManagementRepositorySet::open(&root, "test").unwrap();
+        assert_eq!(
+            reopened
+                .global()
+                .list_development_records("compatibility_report", Some(&project_id))
+                .unwrap(),
+            vec![record]
+        );
+        reopened.verify_all().unwrap();
     }
 }

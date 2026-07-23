@@ -2,7 +2,7 @@
 
 ## 상태와 목적
 
-이 문서는 Star-Control 10단계인 **CI·Release·배포 준비, 규칙 평가와 최종 제품 완성**의 의미·상태·Gate·구현 순서 정본이다. M10 release/evaluation engine의 현재 상태는 **P-0051 bounded 제품 Slice 구현, P-0053 local release audit 완료**다. `ReleaseManifest` v2, `EvaluationRun` v2, Catalog lifecycle과 build-once candidate engine을 구현했고 fake CI/signer/publisher fault corpus가 partial, digest mismatch, signed-byte 재후보화, rollback과 outcome unknown을 검증한다. P-0053은 x64 build·격리 lifecycle, ARM64 cross-build·PE/file manifest·installer model·fake lifecycle, current core/Codex/Inspector와 signed-stage fail-closed 경계를 검증한다. 실제 Authenticode signing과 GitHub publication은 실행하지 않았으며 외부 승인·인증서 Gate와 분리한다. 구현 증거는 [M10 제품 Slice](../testing/m10-release-evaluation-evidence-2026-07-20.md)와 [P-0053 최종 출시 감사](../testing/p53-final-release-audit-2026-07-20.md)에 고정한다.
+이 문서는 Star-Control 10단계인 **CI·Release·배포 준비, 규칙 평가와 최종 제품 완성**의 의미·상태·Gate·구현 순서 정본이다. P-0051의 `ReleaseManifest` v2·`EvaluationRun` v2·Catalog lifecycle·build-once engine과 P-0053 local release audit 위에 P-0054가 artifact byte 재검증, M3 evidence binding, promote/lifecycle, evaluation/catalog, exact release approval와 Controller·CLI를 연결했다. fake provider corpus는 partial, digest mismatch, signed-byte 재후보화, rollback과 outcome unknown을 검증한다. 실제 Authenticode signing, clean signed install과 GitHub publication은 실행하지 않았으며 publisher adapter가 없으면 apply는 fail-closed다. 구현 증거는 [M10 제품 Slice](../testing/m10-release-evaluation-evidence-2026-07-20.md), [P-0053 최종 출시 감사](../testing/p53-final-release-audit-2026-07-20.md)와 [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)에 고정한다.
 
 10단계는 0~9단계를 다시 구현하거나 별도 release engine으로 복제하지 않는다. 앞 단계가 만든 current source·계획·검사·artifact·호환성·복구·원격 관찰을 같은 신원으로 묶어 다음 두 질문에 답한다.
 
@@ -17,18 +17,18 @@
 
 | 사용자 단계 | 정본 | 10단계가 소비하는 것 | 설계 연결 | 현재 제품 상태 |
 |---:|---|---|---|---|
-| 0 | [공통 개발 관리와 로컬 관리 DB](development-management.md) | stable ID·fingerprint, Controller single writer, source/DB/evidence 분리, backup·rebuild | 연결됨 | P0 첫 수직 Slice만 구현, 전체 lifecycle은 남음 |
-| 1 | [Project Catalog와 Code Index](project-catalog-and-code-index.md) | Project·Checkout·revision, source inventory, toolchain·dependency, freshness | 연결됨 | P-0041~0042 bounded Slice 구현 |
-| 2 | [변경 계획·영향·affected 선택](change-planning-and-impact.md) | TaskSpec·ScopeRevision·ChangePlan·ValidationPlan과 release risk path | 연결됨 | P-0043 bounded Slice 구현 |
-| 3 | [공통 검증·품질 Gate](../features/common-validation-gate.md) | current evidence binding, ratchet, validator guard, GateDecision | 연결됨 | P-0044 bounded Slice 구현 |
-| 4 | [Patch·Refactor·codemod](safe-patch-and-codemod.md) | immutable PatchSet·actual ChangeSet·post Gate·복구 | 연결됨 | P-0045 bounded Slice 구현 |
-| 5 | [Managed Registry](managed-symbol-registry.md) | stable ID·lifecycle·consumer·generated ownership | 연결됨 | P-0046 bounded Slice 구현 |
-| 6 | [계약 호환성·문서·설정·환경](contract-compatibility-and-environment.md) | public compatibility, docs/config metadata, clean-room readiness | 연결됨 | P-0047 bounded Slice 구현 |
-| 7 | [실패·보안·의존성 유지보수](failure-security-and-dependency-maintenance.md) | recovery, supply-chain·license·external-data freshness, Maintenance Radar | 연결됨 | P-0048 bounded Slice 구현 |
-| 8 | [Migration·성능·언어·플랫폼](migration-performance-and-platform.md) | install/state migration, restore, supported platform와 runtime evidence | 연결됨 | P-0049 bounded Slice 구현 |
-| 9 | [CrossRepo ChangeBundle](cross-repo-change-bundle.md) | project별 immutable source revision·artifact·Gate·remote ref를 가진 `ChangeBundleReleaseHandoff` | 연결됨 | P-0050 bounded Slice 구현 |
+| 0 | [공통 개발 관리와 로컬 관리 DB](development-management.md) | stable ID·fingerprint, Controller single writer, source/DB/evidence 분리, backup·rebuild | 연결됨 | P-0054 Recovery public contract·active-set·backup/restore/rebuild·recovery-only CLI 구현 |
+| 1 | [Project Catalog와 Code Index](project-catalog-and-code-index.md) | Project·Checkout·revision, source inventory, toolchain·dependency, freshness | 연결됨 | P-0054 discovery/index/query Controller·CLI 구현 |
+| 2 | [변경 계획·영향·affected 선택](change-planning-and-impact.md) | TaskSpec·ScopeRevision·ChangePlan·ValidationPlan과 release risk path | 연결됨 | P-0054 revision/impact/override/replan·Profile resolution 구현 |
+| 3 | [공통 검증·품질 Gate](../features/common-validation-gate.md) | current evidence binding, ratchet, validator guard, GateDecision | 연결됨 | P-0054 real process·Rule/evidence·pre/post Gate 구현 |
+| 4 | [Patch·Refactor·codemod](safe-patch-and-codemod.md) | immutable PatchSet·actual ChangeSet·post Gate·복구 | 연결됨 | P-0054 PatchSetV2 apply/recovery Controller·CLI 구현 |
+| 5 | [Managed Registry](managed-symbol-registry.md) | stable ID·lifecycle·consumer·generated ownership | 연결됨 | P-0054 inspect/plan/rewrite·M4 apply 구현 |
+| 6 | [계약 호환성·문서·설정·환경](contract-compatibility-and-environment.md) | public compatibility, docs/config metadata, clean-room readiness | 연결됨 | P-0054 persisted analysis/doctor Controller·CLI 구현 |
+| 7 | [실패·보안·의존성 유지보수](failure-security-and-dependency-maintenance.md) | recovery, supply-chain·license·external-data freshness, Maintenance Radar | 연결됨 | P-0054 local observation/Radar·Controller·CLI 구현; network/mutator는 외부 Gate |
+| 8 | [Migration·성능·언어·플랫폼](migration-performance-and-platform.md) | install/state migration, restore, supported platform와 runtime evidence | 연결됨 | P-0054 persisted engine·Controller·CLI 구현; live effect/native evidence는 외부 Gate |
+| 9 | [CrossRepo ChangeBundle](cross-repo-change-bundle.md) | project별 immutable source revision·artifact·Gate·remote ref를 가진 `ChangeBundleReleaseHandoff` | 연결됨 | P-0054 local Git/remote observation·exact approval 구현; authenticated remote는 미실행 |
 
-0~9단계 정본 파일·읽는 순서·로드맵·원장의 **단계 누락은 없다**. 다만 10단계 시작 시점의 gap은 다음과 같으며, 이 문서와 관련 정본 변경이 이를 설계 수준에서 닫는다.
+아래 gap 표는 M10 설계 시작 시점의 역사적 분석이다. current 구현 판정은 위 P-0054 상태와 [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)가 우선하며, 외부 provider·서명·authenticated remote·native hardware evidence는 내부 제품 경로와 분리한다.
 
 | gap | 기존 상태 | 10단계 설계 결론 |
 |---|---|---|

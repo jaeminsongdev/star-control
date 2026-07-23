@@ -1,0 +1,50 @@
+{
+  "completeness": "complete",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "evaluation_time": "fixture",
+  "items": [
+    {
+      "blocking": false,
+      "category": "failure",
+      "completeness": "complete",
+      "dependency_refs": [
+        "fixture"
+      ],
+      "diagnostic_refs": [
+        "fixture"
+      ],
+      "evidence_refs": [
+        "fixture"
+      ],
+      "finding_refs": [
+        "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "freshness": "current",
+      "item_id": "fixture",
+      "priority": {
+        "blocking_rank": 0,
+        "evidence_rank": 0,
+        "freshness_rank": 0,
+        "regression_rank": 0,
+        "risk_rank": 0,
+        "stable_identity": "fixture",
+        "time_rank": "fixture"
+      },
+      "project_id": "prj_00000000000000000000000000",
+      "regression_refs": [
+        "fixture"
+      ],
+      "subject": "fixture",
+      "suppression_refs": [
+        "sup_00000000000000000000000000"
+      ]
+    }
+  ],
+  "limitations": [
+    "fixture"
+  ],
+  "schema_id": "star.maintenance-radar-snapshot",
+  "schema_version": 1,
+  "snapshot_id": "fixture",
+  "valid_until": "fixture"
+}
