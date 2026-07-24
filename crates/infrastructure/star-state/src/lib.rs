@@ -1235,6 +1235,50 @@ fn active_entry_for_status(
     }
 }
 
+fn refresh_migration_active_set(management_root: &Path) -> Result<(), RepositoryError> {
+    let Some(parsed) = read_active_set(management_root)? else {
+        return Ok(());
+    };
+    let mut entries = Vec::with_capacity(parsed.manifest.entries.len());
+    for mut current in parsed.manifest.entries {
+        let connection = Connection::open_with_flags(
+            active_store_file(management_root, &current),
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(map_sql)?;
+        let version = checked_store_version(&connection)?;
+        let store_id =
+            ManagementStoreId::parse(get_meta(&connection, "store_id")?).map_err(|_| {
+                repository_error(RepositoryErrorCategory::Corrupt, "store ID is invalid")
+            })?;
+        let scope: StoreScope = serde_json::from_str(&get_meta(&connection, "store_scope")?)
+            .map_err(|_| {
+                repository_error(RepositoryErrorCategory::Corrupt, "store scope is invalid")
+            })?;
+        let generation: u64 = get_meta(&connection, "generation")?.parse().map_err(|_| {
+            repository_error(RepositoryErrorCategory::Corrupt, "generation is invalid")
+        })?;
+        if current.store_id != store_id
+            || current.scope != scope
+            || current.generation != generation
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "migration store identity changed outside the active set",
+            ));
+        }
+        current.management_store_version = version;
+        entries.push(current);
+    }
+    let refreshed = seal_active_set(entries).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "migration active set could not be sealed",
+        )
+    })?;
+    write_active_set_document(management_root, &refreshed)
+}
+
 fn backup_destination_fingerprint(
     management_root: &Path,
     destination: &Path,
@@ -9318,7 +9362,6 @@ fn validate_migration_plan(plan: &ProjectV1ToV2MigrationPlan) -> Result<(), Repo
         || plan.schema_version != 1
         || plan.source_store_version != 1
         || plan.target_store_version != MANAGEMENT_STORE_VERSION
-        || plan.entries.is_empty()
         || plan
             .entries
             .windows(2)
@@ -9504,12 +9547,6 @@ pub fn plan_project_v1_to_v2(
     }
     drop(statement);
     drop(connection);
-    if entries.is_empty() {
-        return Err(repository_error(
-            RepositoryErrorCategory::Invalid,
-            "v1 migration source contains no projects",
-        ));
-    }
     let mut binding_files = BTreeSet::new();
     if binding_root.is_dir() {
         for entry in fs::read_dir(binding_root).map_err(map_io)? {
@@ -10187,6 +10224,7 @@ fn apply_project_v1_to_v2_with_step_limit(
     }
     migrate_global_store(management_root, plan)?;
     completed_steps += 1;
+    refresh_migration_active_set(management_root)?;
     if inspect_store_read_only(&management_global_path(management_root))
         != RecoveryInspection::Healthy
         || plan.entries.iter().any(|entry| {
@@ -10305,6 +10343,7 @@ pub fn rollback_project_v1_to_v2(
             }
         }
     }
+    refresh_migration_active_set(management_root)?;
     Ok(backup.backup_fingerprint)
 }
 
@@ -10954,36 +10993,7 @@ mod tests {
         }
     }
 
-    struct V1Fixture {
-        root: PathBuf,
-        management_root: PathBuf,
-        binding_root: PathBuf,
-        project_root: PathBuf,
-        project_id: ProjectId,
-        binding_id: RootBindingId,
-    }
-
-    fn seed_v1_metadata(connection: &Connection, scope: &StoreScope) {
-        connection
-            .pragma_update(None, "application_id", APPLICATION_ID)
-            .unwrap();
-        connection.pragma_update(None, "user_version", 1).unwrap();
-        set_meta(connection, "store_id", ManagementStoreId::new().as_str()).unwrap();
-        set_meta(
-            connection,
-            "store_scope",
-            &serde_json::to_string(scope).unwrap(),
-        )
-        .unwrap();
-        set_meta(connection, "store_revision", "0").unwrap();
-        set_meta(connection, "generation", "1").unwrap();
-        set_meta(connection, "created_by_product_version", "v1-test").unwrap();
-        set_meta(connection, "last_verified_at", "").unwrap();
-        set_meta(connection, "last_clean_shutdown", "true").unwrap();
-    }
-
-    fn create_v1_fixture(binding_identity_conflict: bool) -> V1Fixture {
-        const GLOBAL_SCHEMA_V1: &str = r#"
+    const GLOBAL_SCHEMA_V1: &str = r#"
 CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
 CREATE TABLE projects(
     project_id TEXT PRIMARY KEY,
@@ -11018,6 +11028,76 @@ CREATE TABLE events(
     event_hash TEXT NOT NULL UNIQUE
 ) STRICT;
 "#;
+
+    struct V1Fixture {
+        root: PathBuf,
+        management_root: PathBuf,
+        binding_root: PathBuf,
+        project_root: PathBuf,
+        project_id: ProjectId,
+        binding_id: RootBindingId,
+    }
+
+    fn seed_v1_metadata(connection: &Connection, scope: &StoreScope) -> ManagementStoreId {
+        connection
+            .pragma_update(None, "application_id", APPLICATION_ID)
+            .unwrap();
+        connection.pragma_update(None, "user_version", 1).unwrap();
+        let store_id = ManagementStoreId::new();
+        set_meta(connection, "store_id", store_id.as_str()).unwrap();
+        set_meta(
+            connection,
+            "store_scope",
+            &serde_json::to_string(scope).unwrap(),
+        )
+        .unwrap();
+        set_meta(connection, "store_revision", "0").unwrap();
+        set_meta(connection, "generation", "1").unwrap();
+        set_meta(connection, "created_by_product_version", "v1-test").unwrap();
+        set_meta(connection, "last_verified_at", "").unwrap();
+        set_meta(connection, "last_clean_shutdown", "true").unwrap();
+        store_id
+    }
+
+    struct EmptyV1Fixture {
+        root: PathBuf,
+        management_root: PathBuf,
+        binding_root: PathBuf,
+    }
+
+    fn create_empty_v1_fixture() -> EmptyV1Fixture {
+        let root = std::env::temp_dir().join(format!(
+            "star-state-empty-v1-v2-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        let management_root = root.join("management");
+        let binding_root = root.join("bindings");
+        create_private_dir(&binding_root).unwrap();
+        let global_path = management_global_path(&management_root);
+        fs::create_dir_all(global_path.parent().unwrap()).unwrap();
+        let global = Connection::open(global_path).unwrap();
+        global.execute_batch(GLOBAL_SCHEMA_V1).unwrap();
+        let store_id = seed_v1_metadata(&global, &StoreScope::Global);
+        drop(global);
+        let active_set = seal_active_set(vec![ActiveStoreGeneration {
+            scope: StoreScope::Global,
+            store_id,
+            generation: 1,
+            management_store_version: 1,
+            relative_locator: "global/active".to_owned(),
+            header_fingerprint: Sha256Hash::digest(b"unsealed-v1-test-header"),
+        }])
+        .unwrap();
+        write_active_set_document(&management_root, &active_set).unwrap();
+        EmptyV1Fixture {
+            root,
+            management_root,
+            binding_root,
+        }
+    }
+
+    fn create_v1_fixture(binding_identity_conflict: bool) -> V1Fixture {
         let root = std::env::temp_dir().join(format!(
             "star-state-v1-v2-{}-{}",
             std::process::id(),
@@ -11255,6 +11335,87 @@ CREATE TABLE events(
             serde_json::from_slice(&fs::read(binding_path).unwrap()).unwrap();
         assert_eq!(restored.schema_version, 1);
         assert_eq!(restored.project_id, fixture.project_id);
+    }
+
+    #[test]
+    fn empty_project_v1_store_migrates_idempotently_and_rolls_back() {
+        let fixture = create_empty_v1_fixture();
+        let global_path = management_global_path(&fixture.management_root);
+        let plan = plan_project_v1_to_v2(&fixture.management_root, &fixture.binding_root).unwrap();
+        assert!(plan.entries.is_empty());
+
+        let completed = apply_project_v1_to_v2(
+            &fixture.management_root,
+            &fixture.binding_root,
+            &fixture.root.join("backup"),
+            &plan,
+            plan.plan_fingerprint.as_str(),
+        )
+        .unwrap();
+        assert_eq!(completed.state, MigrationApplyState::Completed);
+        assert_eq!(completed.completed_steps, 1);
+        assert_eq!(completed.total_steps, 1);
+        assert_eq!(
+            inspect_management_root(&fixture.management_root),
+            Some(RecoveryInspection::Healthy)
+        );
+        assert_eq!(
+            read_active_set(&fixture.management_root)
+                .unwrap()
+                .unwrap()
+                .manifest
+                .entries[0]
+                .management_store_version,
+            MANAGEMENT_STORE_VERSION
+        );
+        let repositories =
+            SqliteManagementRepositorySet::open(&fixture.management_root, "v2-test").unwrap();
+        assert!(repositories.global().list_projects().unwrap().is_empty());
+        drop(repositories);
+
+        let second = apply_project_v1_to_v2(
+            &fixture.management_root,
+            &fixture.binding_root,
+            &fixture.root.join("backup"),
+            &plan,
+            plan.plan_fingerprint.as_str(),
+        )
+        .unwrap();
+        assert_eq!(second, completed);
+        rollback_project_v1_to_v2(
+            &fixture.management_root,
+            &fixture.binding_root,
+            &fixture.root.join("backup"),
+            &plan,
+            completed.backup_fingerprint.as_str(),
+        )
+        .unwrap();
+        assert_eq!(
+            inspect_management_root(&fixture.management_root),
+            Some(RecoveryInspection::MigrationRequired)
+        );
+        assert_eq!(
+            read_active_set(&fixture.management_root)
+                .unwrap()
+                .unwrap()
+                .manifest
+                .entries[0]
+                .management_store_version,
+            1
+        );
+        let restored = Connection::open_with_flags(
+            &global_path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .unwrap();
+        assert_eq!(checked_store_version(&restored).unwrap(), 1);
+        assert_eq!(
+            restored
+                .query_row("SELECT COUNT(*) FROM projects", [], |row| row
+                    .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
     }
 
     #[test]

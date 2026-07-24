@@ -2162,24 +2162,55 @@ fn paid_action_requires_approval(action: &ActionDescriptor) -> bool {
     matches!(action.paid_action.as_str(), "unknown" | "yes")
 }
 
-fn development_effect_permission_requires_approval(action: &str) -> bool {
-    matches!(
-        action,
-        "process.debug.attach"
-            | "dependency.package_manager.apply"
-            | "installation.update"
-            | "migration.execute"
-            | "migration.language.cutover"
-            | "git.remote.recovery"
-    )
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ActionPermissionDecision {
+    Auto,
+    Prompt,
+    Deny,
 }
 
-fn action_requires_durable_approval(action: &ActionDescriptor) -> bool {
-    paid_action_requires_approval(action)
-        || action
-            .permission_actions
-            .iter()
-            .any(|permission| development_effect_permission_requires_approval(permission))
+fn action_permission_decision(
+    action: &ActionDescriptor,
+    execution_config: &UserExecutionConfig,
+) -> ActionPermissionDecision {
+    let mut decision = if paid_action_requires_approval(action) {
+        ActionPermissionDecision::Prompt
+    } else {
+        ActionPermissionDecision::Auto
+    };
+    for permission in &action.permission_actions {
+        match execution_config
+            .effective
+            .string(&format!("permissions.actions.{permission}"))
+        {
+            Some("auto") => {}
+            Some("prompt") => decision = ActionPermissionDecision::Prompt,
+            Some("deny") | None | Some(_) => return ActionPermissionDecision::Deny,
+        }
+    }
+    decision
+}
+
+fn policy_denied_response(request: IpcRequest, registry_revision: u64) -> IpcResponse {
+    IpcResponse {
+        schema_id: "star.ipc.response".to_owned(),
+        schema_version: 1,
+        request_id: request.request_id,
+        status: IpcStatus::Blocked,
+        data: None,
+        operation_id: None,
+        diagnostics: vec![],
+        error: Some(ErrorEnvelope::new_stable(
+            StableErrorCode::parse("POLICY_DENIED")
+                .expect("POLICY_DENIED is in the stable error catalog"),
+            "The effective permission policy denies this action.",
+            false,
+            request.client_request_id.clone(),
+            "star-controller",
+        )),
+        registry_revision: Some(registry_revision),
+        correlation_id: request.client_request_id,
+    }
 }
 
 fn security_overrides_preserve_effective_policy(
@@ -3609,7 +3640,7 @@ fn durable_approval_required_response(
     let approval_gate = if paid_action_requires_approval(action) {
         "paid_action"
     } else {
-        "development_effect"
+        "permission_policy"
     };
     let arguments_hash = match star_contracts::canonical::canonical_sha256(arguments) {
         Ok(hash) => hash,
@@ -4603,6 +4634,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &registry,
                 &trust,
                 policy_profile,
+                &live_execution_config,
+                DurableApprovalStores {
+                    operations: &operations,
+                    approvals: &approvals,
+                },
                 request,
                 registry.revision,
             )
@@ -4883,6 +4919,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                     let requested_timeout_ms =
                         requested_process_timeout_ms(package, action, &request.payload);
+                    let permission_decision =
+                        action_permission_decision(action, &live_execution_config);
                     if trust_state != "trusted" {
                         invalid_request_response(
                             request,
@@ -4925,7 +4963,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             message,
                             registry.revision,
                         )
-                    } else if action_requires_durable_approval(action) {
+                    } else if permission_decision == ActionPermissionDecision::Deny {
+                        policy_denied_response(request, registry.revision)
+                    } else if permission_decision == ActionPermissionDecision::Prompt {
                         durable_approval_required_response(
                             request,
                             action,
@@ -9004,6 +9044,8 @@ async fn handle_direct_core_command(
     registry: &RegistryRuntime,
     trust: &TrustStore,
     policy_profile: UserPolicyProfile,
+    execution_config: &UserExecutionConfig,
+    approval_stores: DurableApprovalStores<'_>,
     request: IpcRequest,
     registry_revision: u64,
 ) -> IpcResponse {
@@ -9054,6 +9096,23 @@ async fn handle_direct_core_command(
             );
         }
     };
+    match action_permission_decision(action, execution_config) {
+        ActionPermissionDecision::Deny => {
+            return policy_denied_response(request, registry_revision);
+        }
+        ActionPermissionDecision::Prompt => {
+            return durable_approval_required_response(
+                request,
+                action,
+                &RegistryRuntime::descriptor_hash(package, action),
+                &arguments,
+                output_provenance(package, action),
+                approval_stores,
+                registry_revision,
+            );
+        }
+        ActionPermissionDecision::Auto => {}
+    }
     match run_authorized_controller_command(package, action, Some(&arguments), None).await {
         Ok(result) => IpcResponse {
             schema_id: "star.ipc.response".to_owned(),
@@ -21899,6 +21958,21 @@ mod tests {
     #[tokio::test]
     async fn cli_precursor_commands_and_controller_handlers_return_typed_results() {
         let (registry, trust, _root) = release_core_registry_fixture();
+        let execution_config = UserExecutionConfig::default();
+        let operations = Arc::new(Mutex::new(
+            OperationStore::load(std::env::temp_dir().join(format!(
+                "star-direct-core-operation-{}.json",
+                star_ipc::nonce()
+            )))
+            .unwrap(),
+        ));
+        let approvals = Arc::new(Mutex::new(
+            ApprovalStore::load(std::env::temp_dir().join(format!(
+                "star-direct-core-approval-{}.json",
+                star_ipc::nonce()
+            )))
+            .unwrap(),
+        ));
         for (command, payload, expected_schema) in [
             ("doctor.run", serde_json::json!({}), "star.doctor-report"),
             (
@@ -21916,6 +21990,11 @@ mod tests {
                 &registry,
                 &trust,
                 UserPolicyProfile::SafeDefault,
+                &execution_config,
+                DurableApprovalStores {
+                    operations: &operations,
+                    approvals: &approvals,
+                },
                 direct_core_request(command, payload),
                 registry.revision,
             )
@@ -22032,6 +22111,65 @@ mod tests {
                 "The project key is not present in the tracked catalog."
             ))
         );
+    }
+
+    #[tokio::test]
+    // matrix: MCP-S010
+    async fn destructive_direct_core_command_waits_for_durable_permission_approval() {
+        let (registry, trust, _root) = release_core_registry_fixture();
+        let execution_config = UserExecutionConfig::default();
+        let operations = Arc::new(Mutex::new(
+            OperationStore::load(std::env::temp_dir().join(format!(
+                "star-direct-core-permission-operation-{}.json",
+                star_ipc::nonce()
+            )))
+            .unwrap(),
+        ));
+        let approvals = Arc::new(Mutex::new(
+            ApprovalStore::load(std::env::temp_dir().join(format!(
+                "star-direct-core-permission-approval-{}.json",
+                star_ipc::nonce()
+            )))
+            .unwrap(),
+        ));
+        let mut request = direct_core_request(
+            "goal.cancel",
+            serde_json::json!({
+                "goal_id": GoalId::new().as_str(),
+                "expected_revision": 1
+            }),
+        );
+        request.actor = serde_json::json!({
+            "kind":"internal_test",
+            "project_root":std::env::current_dir().unwrap().display().to_string()
+        });
+
+        let response = handle_direct_core_command(
+            &registry,
+            &trust,
+            UserPolicyProfile::SafeDefault,
+            &execution_config,
+            DurableApprovalStores {
+                operations: &operations,
+                approvals: &approvals,
+            },
+            request,
+            registry.revision,
+        )
+        .await;
+
+        assert_eq!(response.status, IpcStatus::ApprovalRequired);
+        let operation_id = response.operation_id.expect("approval owns an Operation");
+        let operation = operations
+            .lock()
+            .unwrap()
+            .get(operation_id.as_str())
+            .unwrap();
+        assert_eq!(operation.status, "approval_wait");
+        assert_eq!(operation.events.last().unwrap().phase, "approval_wait");
+        assert_eq!(operation.events.last().unwrap().detail, "permission_policy");
+        assert!(operation.started_at.is_none());
+        assert!(operation.result.is_none());
     }
 
     fn active_test_package(
@@ -22738,7 +22876,7 @@ mod tests {
     }
 
     #[test]
-    fn risky_development_effect_permission_requires_durable_approval_without_a_paid_flag() {
+    fn effective_permission_policy_prompts_or_denies_before_dispatch() {
         let mut manifest = parse_manifest_v1(
             include_str!("../../../specs/examples/valid/tool-package-manifest-v1.toml"),
             ManifestSource::User,
@@ -22746,13 +22884,39 @@ mod tests {
         .unwrap();
         let action = &mut manifest.actions[0];
         action.paid_action = "no".to_owned();
-        action.permission_actions = vec!["migration.execute".to_owned()];
+        let config = UserExecutionConfig::default();
+
+        action.permission_actions = vec!["local_write".to_owned()];
+        assert_eq!(
+            action_permission_decision(action, &config),
+            ActionPermissionDecision::Auto
+        );
 
         assert!(!paid_action_requires_approval(action));
-        assert!(action_requires_durable_approval(action));
+        action.permission_actions = vec!["local_delete".to_owned()];
+        assert_eq!(
+            action_permission_decision(action, &config),
+            ActionPermissionDecision::Prompt
+        );
+        action.permission_actions = vec!["external_write".to_owned()];
+        assert_eq!(
+            action_permission_decision(action, &config),
+            ActionPermissionDecision::Prompt
+        );
 
-        action.permission_actions = vec!["project.read".to_owned()];
-        assert!(!action_requires_durable_approval(action));
+        action.paid_action = "unknown".to_owned();
+        action.permission_actions = vec!["local_read".to_owned()];
+        assert_eq!(
+            action_permission_decision(action, &config),
+            ActionPermissionDecision::Prompt
+        );
+
+        action.paid_action = "no".to_owned();
+        action.permission_actions = vec!["unrecognized_permission".to_owned()];
+        assert_eq!(
+            action_permission_decision(action, &config),
+            ActionPermissionDecision::Deny
+        );
     }
 
     #[test]

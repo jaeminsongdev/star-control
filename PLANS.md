@@ -22,6 +22,8 @@
 | P-0055 | historical non-signing seal | exact `0d0eca9a` package/lifecycle/GitHub evidence. 현재 source artifact로 재사용하지 않음 |
 | P-0056 internal | `DONE / exact FULL PASS` | 최신 main 재감사, v2 validation/planning·EffectiveConfig·recovery bundle v2, M7/M8 receipt/current evidence, M9 handoff, M10 case/policy·cost/budget·actual finding/suppression/Radar·23/16 audit와 M11 공통 Patch/Gate 경로 구현. generated 202 Schema, workspace test·all-feature Clippy·170/170 matrix와 TARGET effective FULL 10/10 PASS |
 | P-0056 external | `DONE / non-signing unpublished seal` | exact `1bce4724` RELEASE 비서명 범위, x64 격리 lifecycle·rollback, ARM64 cross simulation, installer·SBOM·RustSec·pre-sign provenance, GitHub draft byte 왕복·cleanup과 remote commit/tree readback PASS |
+| P-0057 current-system audit | `DONE / source fixed` | 세 기준선 분리, live lifecycle·17 action E2E, recovery·trust/Registry·13개 repo·비서명 install/supply-chain·ARM64 경계 감사. empty-v1 migration/active-set, watcher root dedupe, destructive action approval 결함은 source에서 수정 |
+| installed P-0057 update | `held / approval_required` | 실행 중 source `b20d234`는 수정 전 byte. 실제 install/system state와 Codex restart는 별도 사용자 승인 전까지 변경하지 않음 |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish 필요 |
 
 ## P-0056 현재 구현 범위
@@ -41,22 +43,29 @@
 
 상세와 항목별 증거는 [P-0056 최신 기능·복구 감사](docs/testing/p0056-current-functional-recovery-audit-2026-07-24.md)가 소유한다.
 
+## P-0057 revision·byte 기준선
+
+| 표면 | exact subject | 현재 증거와 판정 |
+|---|---|---|
+| audit start source | `main`/`origin/main` commit `816be57b4de21c0da937d2500686fc8395293ef6`, tree `c0339f71e6f4d985bcfacb515917c3e899044f53` | pre-change FULL 10/10 `complete/stable/pass`; `target/validation/20260724T224815675Z-9068/report.json`, `sha256:cd64d3773bd732e7a4cb2ff823bbe032a0fe31838ed972d20cc637476106c438` |
+| P-0057 fixed source | 이 bounded snapshot을 포함하는 final local `main` HEAD; exact commit/tree/report hash는 생성 evidence와 최종 handoff가 고정 | current HEAD FULL 10/10 `complete/stable/pass`; RELEASE source-owned 14 PASS·failed 0, external signing/publication 1 `unverified` |
+| P-0056 artifact | commit `1bce4724c34414cef74862dbe9bf9de1f094ad2f`, tree `4e1c3b1d55bfbe35eb7eaf4455c02bde711bcac4` | `dist/release-evidence/p0056-1bce4724`; 비서명 RELEASE·package·lifecycle·공급망·unpublished provider evidence의 historical exact seal이며 live source/설치 Runtime에 상속하지 않음 |
+| installed Runtime | release source `b20d234b38a7dcb347049b6b95aff3407c5dedc9`, active generation `rt_c569d8e23ed61e8e` | root manifest `sha256:d96015a0bdb6f2fc437e0251a87266acecb20b12b79d629af6486df606edbe0c`; Runtime manifest `sha256:634a36495a2fe51937e0ba6369f30287021bcfa036fd7c5e1de8cef566e36ae9`; install/update verify와 doctor PASS, Registry revision 7 |
+
 ## 현재 Context Pack
 
-- repo: `D:\개발\관제\Star-Control`
-- branch: `codex/p0056-current-functional-recovery`
-- base: `origin/main a93de7e68aff3ac02315d3a324aeaa497e1ede38`
-- artifact source: commit `1bce4724c34414cef74862dbe9bf9de1f094ad2f`, tree `4e1c3b1d55bfbe35eb7eaf4455c02bde711bcac4`
-- remote artifact-source readback: origin branch exact `1bce4724` PASS; `origin/main a93de7e` 포함
-- evidence root: `dist/release-evidence/p0056-1bce4724`; pre-sign provenance `sha256:3bde861329cff0cb8f6a8bbae12a1e40391275e7614f3eedbbd67442ff97d226`
-- current Slice: P-0056 최신 main 기능 전수 감사 + 복구 Slice + 서명 제외 external reseal
-- 승인됨: dependency/toolchain, network, disposable lifecycle, GitHub draft/tag/asset cleanup, commit/push/readback
-- 금지: Authenticode signing, unsigned Stable publish, 실제 사용자 data 손상, `legacy/`·`target/` 정리, 불필요한 Desktop restart
+- repo/branch: `D:\개발\관제\Star-Control`, `main`; 시작 HEAD와 `origin/main`은 exact `816be57`, 시작 worktree clean
+- current Slice: P-0057 current-system audit source seal. 상세 증거와 미배포 경계는 `docs/testing/p0057-current-system-audit-2026-07-25.md`
+- 완료: 세 기준선, live install/restart/lease, 17 action E2E, recovery/approval/Registry 수정, M1~M6 negative test, 13개 repo, unsigned x64 lifecycle/installer, RustSec, ARM64 cross-build
+- live held: installed management `recovery_only`, watcher unavailable 중복, destructive core approval 결함은 source fix 전 Runtime에 남음. update/restart 전 해당 mutation을 사용하지 않음
+- final validation: current HEAD FULL 10/10 `complete/stable/pass`; RELEASE 14/15, failed 0, external signing/publication 1 `unverified`. exact report hash는 source에 되먹임하지 않고 최종 handoff에 고정
+- 금지: 실제 사용자 management/project data 변경, `legacy/`·`target/` 정리, Codex runtime DB/cache 직접 수정, 불필요한 Desktop restart, 승인 없는 dependency/system setting/push/publish/signing
 
-## 닫힌 Gate와 남은 외부 Gate
+## 현재 Gate
 
-1. source commit과 remote exact commit/tree readback: **DONE**.
-2. exact source RELEASE, x64/ARM64 package·simulation·격리 lifecycle·SBOM/RustSec/pre-sign provenance: **DONE**.
-3. authenticated GitHub disposable draft digest round-trip과 release/tag cleanup: **DONE / unpublished**.
-4. P-0056 audit/PLANS exact evidence 동기화: **DONE**. 후속 docs-only seal commit은 artifact source와 byte set을 바꾸지 않는다.
-5. Authenticode·trusted timestamp, signed-byte lifecycle·provenance와 public Stable publish/readback: **`blocked_external`**. unsigned Stable로 우회하지 않는다.
+1. live source·P-0056 artifact·installed Runtime exact subject 분리: **DONE**.
+2. installed Runtime 기본 verify/doctor와 current HEAD FULL 10/10: **DONE**.
+3. restart receipt·management recovery·Registry optional root 분류와 core 17 action E2E: **DONE**.
+4. persisted recovery·권한/trust·M1~M6·13개 cross-repo·비서명 설치 lifecycle·ARM64 cross 검증: **DONE**. 실제 13 repo workload는 `not_run`, ARM64 native는 `native_unverified`.
+5. P-0057 source fix를 실행 중 설치본에 update/restart: **`approval_required`**. 승인 전 installed mutation action 사용 금지.
+6. Authenticode·trusted timestamp, signed-byte lifecycle·provenance와 public Stable publish/readback: **`blocked_external`**. 별도 승인과 외부 signer 없이는 실행하지 않고 unsigned Stable로 우회하지 않는다.

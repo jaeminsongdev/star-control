@@ -98,6 +98,7 @@ impl RegistryWatcher {
 
     fn ensure_paths(&mut self, directories: impl IntoIterator<Item = PathBuf>, subtree: bool) {
         for directory in directories {
+            let directory = normalize_watch_path(directory);
             if !safe_registry_root(&directory) {
                 if !self.unavailable_roots.contains(&directory) {
                     self.unavailable_roots.push(directory);
@@ -147,6 +148,41 @@ impl RegistryWatcher {
         poll.watched_roots = self.watched_roots;
         poll
     }
+}
+
+#[cfg(windows)]
+fn normalize_watch_path(path: PathBuf) -> PathBuf {
+    use std::{
+        ffi::OsString,
+        os::windows::ffi::{OsStrExt, OsStringExt},
+    };
+
+    const VERBATIM_PREFIX: &[u16] = &[b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
+    const VERBATIM_UNC_PREFIX: &[u16] = &[
+        b'\\' as u16,
+        b'\\' as u16,
+        b'?' as u16,
+        b'\\' as u16,
+        b'U' as u16,
+        b'N' as u16,
+        b'C' as u16,
+        b'\\' as u16,
+    ];
+    let encoded: Vec<u16> = path.as_os_str().encode_wide().collect();
+    if let Some(remainder) = encoded.strip_prefix(VERBATIM_UNC_PREFIX) {
+        let mut normalized = vec![b'\\' as u16, b'\\' as u16];
+        normalized.extend_from_slice(remainder);
+        return PathBuf::from(OsString::from_wide(&normalized));
+    }
+    if let Some(remainder) = encoded.strip_prefix(VERBATIM_PREFIX) {
+        return PathBuf::from(OsString::from_wide(remainder));
+    }
+    path
+}
+
+#[cfg(not(windows))]
+fn normalize_watch_path(path: PathBuf) -> PathBuf {
+    path
 }
 
 fn spawn_root_watcher(root: PathBuf, sender: Sender<WatchSignal>, subtree: bool) {
@@ -307,5 +343,32 @@ mod tests {
         assert!(poll.changed && poll.overflowed);
         registry.demand_scan(&[root]);
         assert_ne!(before, registry.snapshot_hash());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn missing_root_is_not_double_counted_for_verbatim_and_dos_paths() {
+        use std::{
+            ffi::OsString,
+            os::windows::ffi::{OsStrExt, OsStringExt},
+        };
+
+        let missing =
+            std::env::temp_dir().join(format!("star-registry-missing-{}", star_ipc::nonce()));
+        let mut verbatim = vec![b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
+        verbatim.extend(missing.as_os_str().encode_wide());
+
+        let mut watcher = RegistryWatcher::start(&[]);
+        watcher.ensure_paths(
+            [
+                missing.clone(),
+                PathBuf::from(OsString::from_wide(&verbatim)),
+            ],
+            true,
+        );
+        let poll = watcher.poll();
+
+        assert_eq!(poll.watched_roots, 0);
+        assert_eq!(poll.unavailable_roots, vec![missing]);
     }
 }
