@@ -38,7 +38,7 @@
 
 ### 현재 상태
 
-설계는 [공통 개발 관리와 로컬 관리 DB 계약](../contracts/development-management.md), [ADR-0006](../decisions/ADR-0006-공통-개발-관리와-로컬-관리-DB-경계.md)과 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)에 확정했다. 사용자가 P0 구현과 embedded relational backend dependency 추가를 승인했고 [ADR-0008](../decisions/ADR-0008-P0-embedded-relational-backend.md)에 private 선택을 기록했다. 0A~0E의 첫 수직 Slice와 P-0054/P-0055는 workspace·복구·비서명 외부 Gate를 확장했다. P-0056 current source는 최신 `main`에서 v2 validation/planning·EffectiveConfig·local-state recovery, M7/M8 effect receipt/current evidence, M9 handoff, M10 precommitted evaluation/cost/finding/Radar/final audit와 M11 공통 Patch/Gate 경로를 다시 대조·구현한다. exact 현재 판정은 [P-0056 감사](../testing/p0056-current-functional-recovery-audit-2026-07-24.md)와 `PLANS.md`가 소유한다.
+설계는 [공통 개발 관리와 로컬 관리 DB 계약](../contracts/development-management.md), [ADR-0006](../decisions/ADR-0006-공통-개발-관리와-로컬-관리-DB-경계.md)과 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)에 확정했다. 사용자가 P0 구현과 embedded relational backend dependency 추가를 승인했고 [ADR-0008](../decisions/ADR-0008-P0-embedded-relational-backend.md)에 private 선택을 기록했다. 0A~0E의 첫 수직 Slice와 P-0054/P-0055는 workspace·복구·비서명 외부 Gate를 확장했다. P-0056 exact source는 최신 `main`에서 v2 validation/planning·EffectiveConfig·local-state recovery, M7/M8 effect receipt/current evidence, M9 handoff, M10 precommitted evaluation/cost/finding/Radar/final audit와 M11 공통 Patch/Gate 경로를 다시 대조·구현했고, x64 격리 lifecycle·ARM64 교차 simulation·공급망 자료·unpublished GitHub draft 왕복까지 비서명 외부 Gate를 봉인했다. exact 현재 판정은 [P-0056 감사](../testing/p0056-current-functional-recovery-audit-2026-07-24.md)와 `PLANS.md`가 소유한다.
 
 기존 MCP Gateway·IPC·Registry·외부 EXE Runtime 수직 Slice와 P0 관리 수직 Slice는 서로 별도 범위다. 한쪽 검증 결과를 다른 쪽 완료 근거로 사용하지 않는다.
 
@@ -1326,7 +1326,7 @@ P7은 사용자 9단계의 global/project coordination과 remote 경계를 완�
 
 M11 구현 완료는 모든 case가 current tool/config/source/Catalog fingerprint에서 통과하고 EvidenceBundle v6·ReviewPack이 complete일 때만 표시한다. 문서 완료, process exit 0, partial coverage, x64 native 또는 ARM64 target/cfg simulation 한쪽만의 결과는 구현 완료가 아니다. M11 implementation/conformance가 완료되기 전 P9 release `ready`를 만들지 않는다.
 
-## P9. 공개 배포와 최종 완성 — P-0055 비서명 외부·복구 seal 완료, public blocked_external
+## P9. 공개 배포와 최종 완성 — P-0056 비서명 외부·복구 seal 완료, public blocked_external
 
 ### 현재 상태
 
@@ -1337,6 +1337,7 @@ M11 구현 완료는 모든 case가 current tool/config/source/Catalog fingerpri
 - P-0055 직전 exact candidate `7eedc7b24b6cb912afe588a6aebdab49de720c03`는 replacement installer가 root manifest-owned Runtime Generation을 승격하고 live declared/ready exact set을 검사하도록 보강했으며 clean FULL 10/10, RELEASE 14/15에서 signing/publication만 unverified였다. current host에서 이어진 종료 실패는 apply 전 receipt를 `aborted`로 종결해야 함을 드러냈고, 설치 payload가 이미 verified인 stale selector는 Codex restart 없이 복구하는 `reconcile-installed-runtime` 경계를 추가했다.
 - current installed payload의 bundled `rt_c569d8e23ed61e8e`는 activation revision 5로 reconcile됐고 integration verified, Registry revision 7 declared=ready 17/17을 확인했다. current Codex MCP 17개 action은 모두 search·describe·invoke됐으며 15개 성공, ChangeBundle 없는 disposable goal의 merge/handoff 2개는 설계된 `COORDINATION_NOT_FOUND`였다. `validation.run` Operation `opn_01KY9TWQERDG6FF2WHVR389VE5`는 TARGET 8/8 PASS로 종결됐다.
 - exact package 재생성 중 source revision만으로 generation ID를 만든 탓에 서로 다른 Runtime byte가 같은 ID를 받는 결함을 발견했다. commit `0d0eca9a`는 Controller·CLI Runtime·Catalog·Schema의 canonical file-set digest로 ID를 만들고, reseal payload 변화 시 generation directory를 바꾸며 verifier가 content ID를 재계산한다. 같은 exact source의 FULL 10/10, RELEASE 14/15(signing/publication만 unverified), x64/ARM64 473-file package·SBOM/audit/provenance, x64 격리 lifecycle, current host 무재시작 17/17과 unpublished GitHub draft provider/download digest·cleanup을 다시 봉인했다. P-0055 비서명 seal은 `DONE`이며 certificate·timestamp와 signed external evidence가 없으므로 공개 Stable만 `blocked_external`이다.
+- P-0056 exact source `1bce4724`는 최신 main 재감사에서 발견한 v2 validation/planning·EffectiveConfig·portable recovery와 M7~M11 current-evidence 공백을 닫고 23개 기능·16 Profile final audit을 구현했다. FULL 10/10, RELEASE 14/15(signing/publication만 unverified), x64/ARM64 manifest entry 503개 package, x64 격리 lifecycle·rollback, ARM64 `native_unverified` 교차 simulation, installer·SBOM·RustSec·pre-sign provenance와 unpublished GitHub draft provider/download digest·cleanup을 새 byte로 다시 봉인했다. 현재 P-0056 비서명 seal은 `DONE`이고 공개 signed Stable만 `blocked_external`이다.
 
 ### ReleaseManifest·evidence v6 Slice
 

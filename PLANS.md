@@ -20,8 +20,8 @@
 | P-0039~P-0053 | historical `DONE` | 각 문서의 bounded Slice만 보존 |
 | P-0054 | historical internal seal | `a93de7e` 기준 구현/검증. 현재 source status로 재사용하지 않음 |
 | P-0055 | historical non-signing seal | exact `0d0eca9a` package/lifecycle/GitHub evidence. 현재 source artifact로 재사용하지 않음 |
-| P-0056 internal | `DONE / pre-seal FULL PASS` | 최신 main 재감사, v2 validation/planning·EffectiveConfig·recovery bundle v2, M7/M8 receipt/current evidence, M9 handoff, M10 case/policy·cost/budget·actual finding/suppression/Radar·23/16 audit와 M11 공통 Patch/Gate 경로 구현. generated 202 Schema, workspace test·all-feature Clippy·170/170 matrix와 TARGET effective FULL 10/10 PASS |
-| P-0056 external | `PENDING exact source seal` | source commit 뒤 TARGET/RELEASE, x64 lifecycle, ARM64 cross simulation, supply chain, GitHub draft/cleanup, push/readback 실행 |
+| P-0056 internal | `DONE / exact FULL PASS` | 최신 main 재감사, v2 validation/planning·EffectiveConfig·recovery bundle v2, M7/M8 receipt/current evidence, M9 handoff, M10 case/policy·cost/budget·actual finding/suppression/Radar·23/16 audit와 M11 공통 Patch/Gate 경로 구현. generated 202 Schema, workspace test·all-feature Clippy·170/170 matrix와 TARGET effective FULL 10/10 PASS |
+| P-0056 external | `DONE / non-signing unpublished seal` | exact `1bce4724` RELEASE 비서명 범위, x64 격리 lifecycle·rollback, ARM64 cross simulation, installer·SBOM·RustSec·pre-sign provenance, GitHub draft byte 왕복·cleanup과 remote commit/tree readback PASS |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish 필요 |
 
 ## P-0056 현재 구현 범위
@@ -46,14 +46,17 @@
 - repo: `D:\개발\관제\Star-Control`
 - branch: `codex/p0056-current-functional-recovery`
 - base: `origin/main a93de7e68aff3ac02315d3a324aeaa497e1ede38`
-- current pre-seal HEAD: `e3c7257015bd73dc84952922bdcdeb7750ebf4d6`
+- artifact source: commit `1bce4724c34414cef74862dbe9bf9de1f094ad2f`, tree `4e1c3b1d55bfbe35eb7eaf4455c02bde711bcac4`
+- remote artifact-source readback: origin branch exact `1bce4724` PASS; `origin/main a93de7e` 포함
+- evidence root: `dist/release-evidence/p0056-1bce4724`; pre-sign provenance `sha256:3bde861329cff0cb8f6a8bbae12a1e40391275e7614f3eedbbd67442ff97d226`
 - current Slice: P-0056 최신 main 기능 전수 감사 + 복구 Slice + 서명 제외 external reseal
 - 승인됨: dependency/toolchain, network, disposable lifecycle, GitHub draft/tag/asset cleanup, commit/push/readback
 - 금지: Authenticode signing, unsigned Stable publish, 실제 사용자 data 손상, `legacy/`·`target/` 정리, 불필요한 Desktop restart
 
-## 다음 Gate
+## 닫힌 Gate와 남은 외부 Gate
 
-1. source+정본을 local commit으로 고정한다.
-2. exact commit에서 RELEASE와 x64/ARM64 package·simulation·disposable lifecycle·SBOM/audit/provenance를 생성한다.
-3. authenticated GitHub disposable draft digest round-trip/cleanup과 branch push/remote tree readback을 수행한다.
-4. P-0056 audit/PLANS를 exact evidence로 갱신한다. 서명 층만 `blocked_external`로 남긴다.
+1. source commit과 remote exact commit/tree readback: **DONE**.
+2. exact source RELEASE, x64/ARM64 package·simulation·격리 lifecycle·SBOM/RustSec/pre-sign provenance: **DONE**.
+3. authenticated GitHub disposable draft digest round-trip과 release/tag cleanup: **DONE / unpublished**.
+4. P-0056 audit/PLANS exact evidence 동기화: **DONE**. 후속 docs-only seal commit은 artifact source와 byte set을 바꾸지 않는다.
+5. Authenticode·trusted timestamp, signed-byte lifecycle·provenance와 public Stable publish/readback: **`blocked_external`**. unsigned Stable로 우회하지 않는다.
