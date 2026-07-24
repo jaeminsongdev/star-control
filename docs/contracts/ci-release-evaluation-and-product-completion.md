@@ -77,15 +77,16 @@
 1. **동일 subject**: 모든 계층은 같은 Task ID, project별 source revision, dirty state, config, Catalog, logical Tool ID/version/descriptor와 resolved Profile fingerprint를 사용한다. architecture별 executable hash는 달라도 되지만 declared platform artifact여야 하고 그 외 차이는 새 ValidationPlan·candidate다.
 2. **build once**: 배포 후보 byte는 한 번 생성하고 hash로 봉인한다. 검증·승격·publish는 그 byte를 재사용하며 release용 재build를 하지 않는다.
 3. **source와 artifact 연결**: artifact마다 exact source revision set, build invocation, toolchain·environment와 SHA-256이 있어야 한다.
-4. **상태 분리**: `ready`는 검증 완료, `approved`는 외부 effect 허가, `published`는 실제 원격 결과 확인이다. 어떤 상태도 다른 상태를 암시하지 않는다.
-5. **프로젝트별 사실 보존**: 여러 Project release는 각 source revision·Gate·artifact를 유지한다. 하나의 synthetic revision으로 합치지 않는다.
-6. **Gate 단일화**: release adapter, CI provider, installer와 signer는 결과 observation·receipt만 반환한다. Controller가 M3 Gate를 재사용해 유일한 상태 projection을 쓴다.
-7. **새 악화 우선**: 기존 부채를 한 번에 없애는 것보다 candidate가 새 finding을 만들거나 severity·coverage를 악화시키지 않는 ratchet을 우선한다.
-8. **검증기 보호**: candidate가 더 높은 통과율을 보이더라도 Rule·Check·Profile·Corpus·severity·suppression을 약화해 얻은 결과면 accept할 수 없다.
-9. **측정 정직성**: ground truth, duration, usage와 monetary cost가 없으면 `unknown|unavailable|not_comparable`로 남기며 0으로 만들지 않는다.
-10. **자료 보존**: update·deploy·rollback·uninstall 실패 중에도 user config, management store, `.ai-runs`와 복구 artifact를 삭제하지 않는다.
-11. **CLI-first**: release planning, deterministic Check, evaluation과 상태 조회는 Codex 없이 가능하다. Codex는 선택적인 작업 소비자·검토 context다.
-12. **정본 우선**: source·manifest·Catalog·policy가 canonical이고 DB/index는 derived state다. ReleaseManifest·EvaluationRun 결과를 source 설정으로 자동 역쓰기하지 않는다.
+4. **Runtime content identity**: Runtime generation ID는 source revision 문자열이 아니라 staged Controller·CLI Runtime·Catalog·Schema의 canonical file-set digest에서 파생한다. package stage와 reseal은 payload 변화 시 새 ID를 만들고 verifier는 payload digest에서 ID를 재계산한다. source revision만 같다는 이유로 다른 byte를 같은 generation으로 승격하지 않는다.
+5. **상태 분리**: `ready`는 검증 완료, `approved`는 외부 effect 허가, `published`는 실제 원격 결과 확인이다. 어떤 상태도 다른 상태를 암시하지 않는다.
+6. **프로젝트별 사실 보존**: 여러 Project release는 각 source revision·Gate·artifact를 유지한다. 하나의 synthetic revision으로 합치지 않는다.
+7. **Gate 단일화**: release adapter, CI provider, installer와 signer는 결과 observation·receipt만 반환한다. Controller가 M3 Gate를 재사용해 유일한 상태 projection을 쓴다.
+8. **새 악화 우선**: 기존 부채를 한 번에 없애는 것보다 candidate가 새 finding을 만들거나 severity·coverage를 악화시키지 않는 ratchet을 우선한다.
+9. **검증기 보호**: candidate가 더 높은 통과율을 보이더라도 Rule·Check·Profile·Corpus·severity·suppression을 약화해 얻은 결과면 accept할 수 없다.
+10. **측정 정직성**: ground truth, duration, usage와 monetary cost가 없으면 `unknown|unavailable|not_comparable`로 남기며 0으로 만들지 않는다.
+11. **자료 보존**: update·deploy·rollback·uninstall 실패 중에도 user config, management store, `.ai-runs`와 복구 artifact를 삭제하지 않는다.
+12. **CLI-first**: release planning, deterministic Check, evaluation과 상태 조회는 Codex 없이 가능하다. Codex는 선택적인 작업 소비자·검토 context다.
+13. **정본 우선**: source·manifest·Catalog·policy가 canonical이고 DB/index는 derived state다. ReleaseManifest·EvaluationRun 결과를 source 설정으로 자동 역쓰기하지 않는다.
 
 ## 핵심 용어와 상태 축
 
@@ -969,7 +970,7 @@ P-0055에서 14번의 비서명 부분은 구현·격리 검증했다. GitHub ad
 
 ## P-0055 비서명 감사 이후 남은 외부 gate
 
-P-0055의 original implementation과 exact `b20d234` local/remote candidate는 final FULL 10/10, x64/ARM64 473-file stage·PE architecture·installer model, x64 isolated finalize/Bridge/status, ARM64 fake lifecycle, SPDX SBOM·RustSec audit·pre-sign provenance, official Inspector 17/17과 exact-target authenticated disposable draft byte 왕복을 통과했다. current host 설치에서 root fixed EXE 교체 뒤 activation selector가 6/17 generation에 남는 결함이 확인되어 `7eedc7b`에 manifest-owned replacement reconcile을 구현했고, 이어 interrupted pre-apply receipt `aborted` 종결과 무재시작 installed-runtime reconcile을 보강했다. current installed payload는 activation revision 5 `rt_c569d8e23ed61e8e`, integration verified, Registry revision 7 declared=ready 17/17이며 current Codex 17 action search·describe·invoke와 `validation.run` TARGET Operation을 통과했다. 현재 보강 source의 clean exact artifact·remote reseal은 아직 진행 중이므로 과거 artifact digest를 상속하지 않는다.
+P-0055의 original implementation과 exact `b20d234` local/remote candidate는 final FULL 10/10, x64/ARM64 473-file stage·PE architecture·installer model, x64 isolated finalize/Bridge/status, ARM64 fake lifecycle, SPDX SBOM·RustSec audit·pre-sign provenance, official Inspector 17/17과 exact-target authenticated disposable draft byte 왕복을 통과했다. current host 설치에서 root fixed EXE 교체 뒤 activation selector가 6/17 generation에 남는 결함이 확인되어 `7eedc7b`에 manifest-owned replacement reconcile을 구현했고, 이어 interrupted pre-apply receipt `aborted` 종결과 무재시작 installed-runtime reconcile을 보강했다. current installed payload는 activation revision 5 `rt_c569d8e23ed61e8e`, integration verified, Registry revision 7 declared=ready 17/17이며 current Codex 17 action search·describe·invoke와 `validation.run` TARGET Operation을 통과했다. exact package 재생성 중에는 source revision은 같지만 payload가 다른 stage가 같은 generation ID를 받는 결함을 발견해 ID 산식을 canonical Runtime payload set digest로 바꾸고 stage·reseal·verifier 회귀를 추가했다. 현재 identity 보강 source의 clean exact artifact·remote reseal은 아직 진행 중이므로 과거 artifact digest를 상속하지 않는다.
 
 - approved certificate와 timestamp provider로 x64·ARM64 Runtime EXE를 서명하고, exact pre-sign file inventory를 유지한 채 `seal-signed`를 통과한 새 candidate를 만든다. `seal-signed`의 Windows trust 검증은 approved signer·timestamp receipt 자체를 대체하지 않으며 그 exact evidence는 `signature_refs`에 결합한다.
 - 그 signed Runtime stage에서 installer를 한 번 만들고 installer 자체를 서명한 뒤 digest·manifest·release Gate를 다시 계산한다. unsigned 검증은 signed byte에 상속하지 않는다.

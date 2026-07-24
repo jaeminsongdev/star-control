@@ -22,6 +22,7 @@
 - signed byte는 새 candidate다. publish timeout은 write 재시도 없이 read-only reconcile하고 `publish_outcome_unknown`을 유지한다.
 - local AI, 다른 AI provider, OpenAI API 직접 호출, browser/HTTP control UI, 자체 scheduler·compiler·CI·signer를 추가하지 않는다.
 - 다른 `D:\개발` 저장소, linked worktree, `legacy/`, `target/`, Codex runtime state를 임의 정리하지 않는다.
+- Runtime generation ID는 source revision이 아니라 canonical Runtime payload file-set digest에 결박하며 stage·reseal·verify 모두 같은 산식을 사용한다.
 
 ## 현재 상태
 
@@ -31,7 +32,7 @@
 | P-0053 local | historical `DONE` | source 17/17 MCP readiness, x64 isolated lifecycle, ARM64 simulation, pre-sign supply chain과 signing-negative audit |
 | P-0053 public | `blocked_external` | trusted signing, signed clean install, current Codex 17/17 invoke, final provenance와 remote reconcile 필요 |
 | P-0054 | `DONE / internal product seal` | 최신 `main` 기준 Recovery Slice, M1~M11, 최종 16 Profile의 내부 contract→engine→repository→Controller→CLI를 구현하고 requested TARGET→effective FULL 10/10을 통과. 외부·물리 Gate는 별도 상태 유지 |
-| P-0055 | `RECOVERY_RESEALING` | stale selector를 root manifest-owned generation으로 승격하고 declared/ready exact set을 검증하는 replacement reconcile에 더해, 이미 설치된 payload는 Codex 재시작 없이 복구하는 `reconcile-installed-runtime`을 구현했다. current host는 activation revision 5, `rt_c569d8e23ed61e8e`, integration verified와 MCP 17/17 search·describe·invoke를 확인했다. 새 exact source commit의 FULL/RELEASE·x64/ARM64 package·격리 lifecycle·GitHub draft/remote readback 재봉인이 남았다. Authenticode와 서명 필수 공개 Stable은 계속 별도 `blocked_external`이다. |
+| P-0055 | `IDENTITY_HARDENING` | 무재시작 reconcile은 current host activation revision 5·integration verified·MCP 17/17로 닫혔다. exact package 재생성 중 stale explicit-target binary와 current binary가 같은 source-derived generation ID를 받는 결함을 발견해 payload set digest 기반 stage/reseal/verifier로 수정했다. 새 exact commit의 FULL/RELEASE·x64/ARM64 package·격리 lifecycle·GitHub draft/remote readback 재봉인이 남았다. Authenticode와 서명 필수 공개 Stable은 계속 별도 `blocked_external`이다. |
 
 P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 `b29c178..ac3ca70` commit chain으로 보존한다. P-0054 기준선은 `main` `a93de7e68aff3ac02315d3a324aeaa497e1ede38`이다. 문서의 단계 설명이나 Rust type 존재만으로 완료를 판정하지 않고 Controller 경유 실제 경로, 실어댑터, stable JSON CLI, 저장·복구, negative corpus와 disposable E2E가 함께 닫혀야 완료다.
 
@@ -81,14 +82,15 @@ P-0041~P-0053 implementation·Schema·fixture·문서 snapshot은 `b29c178..ac3c
 7. 첫 current-host restart transaction `upd_OAA1VfYQ8qhQIlz64fKrYPqgt-yddr_PRFHyq38IHq4`은 setup/EXE 교체와 Codex relaunch에는 성공했지만 active selector가 `rt_9fe838922e279501`에 남아 release action이 6/17이었다. implementation commit `7eedc7b`는 manifest-owned replacement reconcile과 partial recovery를 추가했고 clean FULL 10/10, RELEASE 14/15에서 signing/publication만 unverified였다.
 8. 두 번째 restart 시도 `upd_0MMCLNfG-BIK2dSXJJnn9Xs9KGeLMC8E1pxeRaleWXc`은 Codex 종료가 완료되지 않아 apply 전 중단됐지만 구 코드가 receipt를 `draining`에 남기는 결함을 드러냈다. 현재 수정은 close failure를 `aborted`로 종결하고 update lease를 소유한 reconcile만 동일 install root의 중단된 pre-apply receipt를 복구한다. apply 이후·partial 상태는 재분류하지 않는다.
 9. current host의 verified payload에는 bundled `rt_c569d8e23ed61e8e`가 이미 있었으므로 Desktop을 다시 재시작하지 않고 새 source updater로 selector만 reconcile했다. prior Controller exact fallback PID 1개를 기록했고 activation revision 5, integration `verified`, declared=ready 17/17을 확인했다. current Codex MCP는 17개 모두 search·describe·invoke했으며 15개 성공, ChangeBundle 없는 일회성 goal의 merge/handoff 2개는 설계된 `COORDINATION_NOT_FOUND`였다. `validation.run` Operation `opn_01KY9TWQERDG6FF2WHVR389VE5`는 TARGET 8/8 PASS, `target/validation/20260724T103147237Z-4620/report.json`, `sha256:4d443a68…f186`으로 종결됐다.
-10. 남은 비서명 순서는 현재 source를 exact commit으로 봉인한 뒤 FULL/RELEASE, x64/ARM64 stage·installer·SBOM·audit·provenance, x64 격리 lifecycle, exact GitHub draft byte 왕복과 remote branch readback을 다시 생성하는 것이다. current installed fixed EXE를 새 byte로 교체하는 maintenance restart는 runtime 17/17 복구와 구분하며, 불필요한 추가 restart를 완료 조건으로 만들지 않는다.
+10. exact `e248efe` 재봉인 중 explicit x64 target에 남은 이전 binary를 사용한 첫 묶음이 새 CLI를 포함하지 않는 것을 no-op smoke가 적발했다. 재빌드한 r2와 첫 묶음의 Runtime byte가 다른데 generation ID가 같아 source-derived identity 결함을 확인했고, 두 묶음은 삭제하지 않되 최종 증거로 채택하지 않는다.
+11. 현재 수정은 generation ID를 canonical Runtime payload set digest에 결박하고 payload 변화 시 reseal directory를 바꾸며 verifier가 ID를 재계산한다. package test·Clippy 통과 후 exact commit→FULL/RELEASE→x64/ARM64 artifact→격리 lifecycle→GitHub draft/remote 순으로 다시 봉인한다. current installed fixed EXE 교체만을 위한 maintenance restart는 완료 조건이 아니다.
 
 ## 현재 Context Pack
 
 - repo: `D:\개발\관제\Star-Control`
 - branch: `codex/p0055-nonsigning-external-seal`
-- base / 직전 recovery commit: `a93de7e68aff3ac02315d3a324aeaa497e1ede38` / `7eedc7b24b6cb912afe588a6aebdab49de720c03`
-- 현재 Slice: 무재시작 installed-runtime reconcile과 interrupted pre-apply receipt recovery까지 source·current host에서 검증했다. 현재 변경을 exact commit→FULL/RELEASE→x64/ARM64 package→격리 lifecycle→GitHub draft/remote 증거 순으로 다시 봉인한다.
+- base / 직전 recovery commit: `a93de7e68aff3ac02315d3a324aeaa497e1ede38` / `e248efe4c139a9b183d26444aff1c65bd6cdef5b`
+- 현재 Slice: 무재시작 recovery 뒤 exact package 감사에서 발견한 Runtime content identity collision을 수정했다. package test·Clippy를 통과했으며 현재 변경을 exact commit→FULL/RELEASE→x64/ARM64 package→격리 lifecycle→GitHub draft/remote 증거 순으로 다시 봉인한다.
 - 먼저 읽기: `README.md`, `docs/README.md`, `docs/contracts/development-management.md`, `docs/contracts/events-and-state.md`, `docs/contracts/validation-and-evidence.md`, `docs/contracts/versioning-and-migrations.md`, `docs/architecture/state-and-artifacts.md`, `docs/architecture/repository-layout.md`, `docs/roadmap/final-implementation.md`, ADR-0006~0008
 - 승인됨: package/dependency 설치, network·외부 도구, disposable install/update/repair/uninstall, GitHub draft·push·tag·remote readback. 각 effect는 exact target을 재검증하고 증거를 남긴다.
 - 금지: Authenticode signing, unsigned Stable 공개 publish, `legacy/`·`target/` 정리, 실제 사용자 project/data 손상, installer·AI/browser/scheduler 재개방

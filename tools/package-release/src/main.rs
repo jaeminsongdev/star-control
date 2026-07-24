@@ -443,6 +443,14 @@ fn reseal_runtime_generation(
     }
     runtime_files.sort_by(|left, right| left.path.cmp(&right.path));
     let runtime_set_sha256 = canonical_sha256(&serde_json::to_value(&runtime_files)?)?;
+    let generation_id = runtime_generation_id(&runtime_set_sha256);
+    let current_generation_name = directories[0].file_name();
+    let current_generation_id = current_generation_name.to_string_lossy();
+    let destination =
+        (current_generation_id != generation_id).then(|| generations.join(&generation_id));
+    if destination.as_ref().is_some_and(|path| path.exists()) {
+        return Err(format!("Runtime Generation already exists: {generation_id}").into());
+    }
     let runtime_release = ReleaseFileManifest {
         schema_id: RELEASE_FILE_MANIFEST_SCHEMA_ID.to_owned(),
         schema_version: INSTALLATION_SCHEMA_VERSION,
@@ -462,6 +470,7 @@ fn reseal_runtime_generation(
         &runtime_release_bytes,
     )?;
 
+    generation.generation.generation_id = generation_id.clone();
     generation.generation.release_manifest_sha256 = Sha256Hash::digest(&runtime_release_bytes);
     generation.product_version = env!("CARGO_PKG_VERSION").to_owned();
     generation.target_architecture = expected_architecture;
@@ -469,6 +478,9 @@ fn reseal_runtime_generation(
     let mut generation_bytes = serde_json::to_vec_pretty(&generation)?;
     generation_bytes.push(b'\n');
     fs::write(manifest_path, generation_bytes)?;
+    if let Some(destination) = destination {
+        fs::rename(root, destination)?;
+    }
     Ok(())
 }
 
@@ -566,36 +578,32 @@ fn stage_runtime_generation(
     source_revision: &str,
     signing: PackageSigningState,
 ) -> DynResult<()> {
-    let digest = Sha256Hash::digest(
-        format!(
-            "{}:{}:{}",
-            env!("CARGO_PKG_VERSION"),
-            architecture,
-            source_revision
-        )
-        .as_bytes(),
-    );
-    let generation_id = format!("rt_{}", &digest.as_str()[7..23]);
-    let generation = output
-        .join("runtime")
-        .join("generations")
-        .join(&generation_id);
-    fs::create_dir_all(&generation)?;
+    let runtime_root = output.join("runtime");
+    let staging = runtime_root.join("generation-staging");
+    fs::create_dir_all(&staging)?;
     copy_file(
         &binary_dir.join("star-controller.exe"),
-        &generation.join("star-controller.exe"),
+        &staging.join("star-controller.exe"),
     )?;
     copy_file(
         &binary_dir.join("star.exe"),
-        &generation.join("star-cli-runtime.exe"),
+        &staging.join("star-cli-runtime.exe"),
     )?;
-    copy_tree(&workspace.join("catalog"), &generation.join("catalog"))?;
+    copy_tree(&workspace.join("catalog"), &staging.join("catalog"))?;
     copy_tree(
         &workspace.join("specs/schemas/v1"),
-        &generation.join("schemas/v1"),
+        &staging.join("schemas/v1"),
     )?;
-    let runtime_files = collect_release_entries(&generation)?;
+    let runtime_files = collect_release_entries(&staging)?;
     let runtime_set_sha256 = canonical_sha256(&serde_json::to_value(&runtime_files)?)?;
+    let generation_id = runtime_generation_id(&runtime_set_sha256);
+    let generations = runtime_root.join("generations");
+    let generation = generations.join(&generation_id);
+    fs::create_dir_all(&generations)?;
+    if generation.exists() {
+        return Err(format!("Runtime Generation already exists: {generation_id}").into());
+    }
+    fs::rename(&staging, &generation)?;
     let runtime_release = ReleaseFileManifest {
         schema_id: RELEASE_FILE_MANIFEST_SCHEMA_ID.to_owned(),
         schema_version: INSTALLATION_SCHEMA_VERSION,
@@ -641,6 +649,10 @@ fn stage_runtime_generation(
         &runtime_manifest_bytes,
     )?;
     Ok(())
+}
+
+fn runtime_generation_id(runtime_set_sha256: &Sha256Hash) -> String {
+    format!("rt_{}", &runtime_set_sha256.as_str()[7..23])
 }
 
 fn verify_stage(
@@ -808,6 +820,9 @@ fn verify_runtime_generation(
     let set_sha256 = canonical_sha256(&serde_json::to_value(&runtime_release.files)?)?;
     if set_sha256 != runtime_release.set_sha256 {
         return Err("Runtime Generation file set digest mismatch".into());
+    }
+    if generation.generation.generation_id != runtime_generation_id(&set_sha256) {
+        return Err("Runtime Generation ID is not content-addressed".into());
     }
     if Sha256Hash::digest_reader(fs::File::open(root.join("star-controller.exe"))?)?
         != generation.controller_sha256
@@ -1065,6 +1080,101 @@ mod tests {
             other => panic!("unsupported test architecture {other}"),
         };
         verify_pe_architecture(&std::env::current_exe().unwrap(), expected).unwrap();
+    }
+
+    #[test]
+    fn runtime_generation_identity_tracks_stage_and_reseal_payload_bytes() {
+        let root = std::env::temp_dir().join(format!(
+            "star-package-release-runtime-id-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let binary_dir = root.join("bin");
+        fs::create_dir_all(&binary_dir).unwrap();
+        let current = std::env::current_exe().unwrap();
+        fs::copy(&current, binary_dir.join("star.exe")).unwrap();
+        fs::copy(&current, binary_dir.join("star-controller.exe")).unwrap();
+        let architecture = match std::env::consts::ARCH {
+            "x86_64" => TargetArchitecture::X64,
+            "aarch64" => TargetArchitecture::Arm64,
+            other => panic!("unsupported test architecture {other}"),
+        };
+        let source_revision = "0123456789abcdef0123456789abcdef01234567";
+        let first = root.join("first");
+        stage_runtime_generation(
+            &workspace_root(),
+            &binary_dir,
+            &first,
+            architecture,
+            source_revision,
+            PackageSigningState::UnsignedLocal,
+        )
+        .unwrap();
+        let first_generation = fs::read_dir(first.join("runtime/generations"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .file_name();
+
+        fs::OpenOptions::new()
+            .append(true)
+            .open(
+                first
+                    .join("runtime/generations")
+                    .join(&first_generation)
+                    .join("star-cli-runtime.exe"),
+            )
+            .unwrap()
+            .write_all(b"payload-change")
+            .unwrap();
+        reseal_runtime_generation(
+            &first,
+            architecture,
+            source_revision,
+            PackageSigningState::UnsignedLocal,
+        )
+        .unwrap();
+        verify_runtime_generation(
+            &first,
+            architecture,
+            PackageSigningState::UnsignedLocal,
+            source_revision,
+        )
+        .unwrap();
+        let resealed_generation = fs::read_dir(first.join("runtime/generations"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .file_name();
+
+        fs::OpenOptions::new()
+            .append(true)
+            .open(binary_dir.join("star.exe"))
+            .unwrap()
+            .write_all(b"payload-change")
+            .unwrap();
+        let second = root.join("second");
+        stage_runtime_generation(
+            &workspace_root(),
+            &binary_dir,
+            &second,
+            architecture,
+            source_revision,
+            PackageSigningState::UnsignedLocal,
+        )
+        .unwrap();
+        let second_generation = fs::read_dir(second.join("runtime/generations"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .file_name();
+
+        assert_ne!(first_generation, resealed_generation);
+        assert_eq!(resealed_generation, second_generation);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -10,7 +10,7 @@ Bridge v1에서 v2로의 최초 migration은 routine update가 아니다. offlin
 
 ## Runtime Generation
 
-generation root는 `<install-root>\\runtime\\generations\\rt_<digest>\\`이다. generation에는 Controller, generation-local CLI Runtime, release manifest, core catalog와 schema가 함께 있어야 한다. 부분 복사는 후보가 될 수 없고, controller/catalog/schema는 서로 다른 generation에서 섞일 수 없다.
+generation root는 `<install-root>\\runtime\\generations\\rt_<digest>\\`이다. `<digest>`는 source revision 문자열이 아니라 Controller·generation-local CLI Runtime·core catalog·schema의 canonical file-set SHA-256에서 파생한다. 같은 source revision을 주장해도 payload byte가 다르면 다른 generation ID여야 하며, package verifier는 directory/manifest 이름 일치뿐 아니라 payload set digest에서 ID를 다시 계산한다. unsigned 또는 signed reseal로 payload byte가 바뀌면 generation directory도 새 content ID로 바꾼 뒤 top-level manifest를 다시 봉인한다. generation에는 Controller, generation-local CLI Runtime, release manifest, core catalog와 schema가 함께 있어야 한다. 부분 복사는 후보가 될 수 없고, controller/catalog/schema는 서로 다른 generation에서 섞일 수 없다.
 
 `RuntimeGenerationManifest`는 generation reference, target architecture, Controller hash와 Controller/CLI/catalog/schema 경로, bridge contract version을 기록한다. 모든 경로는 install root 아래여야 하며 reparse/path traversal와 release manifest digest 불일치는 거부한다.
 
