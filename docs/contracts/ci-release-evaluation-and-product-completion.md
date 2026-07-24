@@ -818,10 +818,12 @@ Star-Control이 소유하는 것은 이 도구의 **선택 가능한 descriptor,
 
 | 구분 | 현재 상태 |
 |---|---|
-| 구현됨 | P0와 P-0041~P-0055 bounded M1~M11 Slice, required core 17/17 source readiness, P-0026 installer transport, P-0039 4-EXE updater lifecycle, M10 release/evaluation engine, exact GitHub publisher·receipt/readback 경로 |
+| 구현됨 | P0와 P-0041~P-0055 bounded M1~M11 Slice, required core 17/17 source/current readiness, P-0026 installer transport, P-0039 4-EXE updater lifecycle, manifest-owned recovery·무재시작 reconcile, payload-content Runtime identity, M10 release/evaluation engine, exact GitHub publisher·receipt/readback 경로 |
 | 후속 제품 확장 | current bounded Slice의 pass를 임의 provider/language·native ARM64·signed publication에 일반화하지 않음 |
-| 외부/환경 gate | current recovery source의 clean committed reseal, signed Windows x64 lifecycle, Authenticode certificate·timestamp provider와 signed final GitHub publication |
+| 외부/환경 gate | Authenticode certificate·private key·trusted timestamp provider, signed Windows x64 lifecycle, signed provenance와 signed final GitHub publication/readback |
 | 별도 사용자 승인 gate | package/dependency 설치, system setting, paid CI/signing, publish·deploy·withdrawal·remote/account effect |
+
+P-0055 비서명 외부·복구 seal은 exact source `0d0eca9a`, FULL 10/10, RELEASE 14/15에서 signing/publication만 unverified, x64 격리 lifecycle, ARM64 `native_unverified` cross simulation, current host 무재시작 release action 17/17과 unpublished GitHub draft digest/cleanup으로 `DONE`이다. 근거는 [P-0055 봉인 감사](../testing/p0055-nonsigning-external-seal-2026-07-23.md)가 소유한다. 이 판정은 signed/public Stable 완료로 승격하지 않는다.
 
 문서 설계 완료를 product ready나 release ready로 표시하지 않는다. `ready`·`approved`·`published`는 실제 구현과 current evidence가 생긴 뒤에만 runtime 상태로 사용할 수 있다.
 
