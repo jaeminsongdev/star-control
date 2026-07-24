@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "GateDecisionKind": {
+      "enum": [
+        "auto_pass",
+        "human_review",
+        "block"
+      ],
+      "type": "string"
+    },
+    "GuardFixtureKindV2": {
+      "enum": [
+        "positive",
+        "negative",
+        "edge",
+        "regression",
+        "adversarial"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "ValidatorCorpusFixtureV2": {
+      "additionalProperties": false,
+      "description": "Immutable source fixture declaration used by both the trusted and candidate\nvalidator executors. Expected behavior is part of the reviewed source\nmanifest; an executor result can never rewrite it.",
+      "properties": {
+        "expected_behavior_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "expected_diagnostic_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expected_gate_decision": {
+          "$ref": "#/$defs/GateDecisionKind"
+        },
+        "fixture_id": {
+          "type": "string"
+        },
+        "fixture_kind": {
+          "$ref": "#/$defs/GuardFixtureKindV2"
+        },
+        "input_path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "input_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "protected_behavior": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "rule_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fixture_id",
+        "fixture_kind",
+        "input_path",
+        "input_sha256",
+        "rule_id",
+        "rule_version",
+        "expected_diagnostic_codes",
+        "expected_gate_decision",
+        "protected_behavior",
+        "expected_behavior_fingerprint"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:star-control:schema:star.validator-corpus-manifest:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "corpus_id": {
+      "type": "string"
+    },
+    "fixtures": {
+      "items": {
+        "$ref": "#/$defs/ValidatorCorpusFixtureV2"
+      },
+      "type": "array"
+    },
+    "manifest_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "protected_surface_paths": {
+      "items": {
+        "minLength": 1,
+        "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.validator-corpus-manifest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "corpus_id",
+    "revision",
+    "protected_surface_paths",
+    "fixtures",
+    "manifest_fingerprint"
+  ],
+  "title": "ValidatorCorpusManifestV2",
+  "type": "object"
+}

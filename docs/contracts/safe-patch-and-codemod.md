@@ -29,10 +29,10 @@
 
 | 선행조건 | 4단계가 소비하는 값 | 현재 상태 | 미충족 시 처리 |
 |---|---|---|---|
-| 0단계 공통 변경 계약 | `ChangeRecipe`, `ChangePlan`, immutable `PatchSet`, ID·fingerprint, Controller 단일 Writer | P0 첫 수직 Slice만 구현 | M4 target Schema·migration 전에는 historical v1을 자동 apply에 사용하지 않음 |
-| 1단계 Index | current `ProjectCatalogSnapshot`, `CodeIndexSnapshot`, symbol/reference·contract·generated ownership, tier·coverage·limitation | M1 첫 Rust 수직 Slice 구현 | selector resolution·semantic rewrite는 current tier 증거가 없으면 차단 |
-| 2단계 영향 분석 | accepted `ScopeRevision`, `ChangePlan` v2, `ImpactAnalysis`, `readiness=ready` `ValidationPlan` | M2 첫 수직 Slice 구현 | Patch 준비·검사 선택 제품 구현 차단 |
-| 3단계 공통 Gate | current evidence binding, `patch_pre_apply`, `patch_post_apply`, B01·B02·B04와 EvidenceBundle | M3 공통 runner·evidence 첫 Slice 구현 | 미구현 Rule family가 필요한 write permit은 차단 |
+| 0단계 공통 변경 계약 | `ChangeRecipe`, `ChangePlan`, immutable `PatchSet`, ID·fingerprint, Controller 단일 Writer | v1 reader와 current v2·migration·recovery 구현 | historical v1을 current v2 apply에 자동 사용하지 않음 |
+| 1단계 Index | current `ProjectCatalogSnapshot`, `CodeIndexSnapshot`, symbol/reference·contract·generated ownership, tier·coverage·limitation | M1 current scan/index/query 구현 | selector resolution·semantic rewrite는 current tier 증거가 없으면 차단 |
+| 2단계 영향 분석 | accepted `ScopeRevision`, `ChangePlan` v2, `ImpactAnalysis`, `readiness=ready` `ValidationPlan` | M2 current planning v2·migration 구현 | stale·partial 입력이면 Patch 준비·검사 선택 차단 |
+| 3단계 공통 Gate | current evidence binding, `patch_pre_apply`, `patch_post_apply`, B01·B02·B04와 EvidenceBundle | M3 current runner·evidence v2 구현 | 필요한 Rule family evidence가 없으면 write permit 차단 |
 
 선행 계약 하나라도 current·complete하지 않으면 4단계는 최대 `recipe.validate`·`recipe.describe` 같은 정적 조회만 제공할 수 있다. 가짜 index, mock-only Gate 또는 사용자의 완료 설명으로 source write readiness를 합성하지 않는다.
 

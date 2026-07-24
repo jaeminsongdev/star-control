@@ -1,0 +1,10 @@
+{
+  "corpus_id": "fixture",
+  "fixtures": [],
+  "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "protected_surface_paths": [],
+  "revision": 0,
+  "schema_id": "star.validator-corpus-manifest",
+  "schema_version": 2,
+  "unexpected": true
+}

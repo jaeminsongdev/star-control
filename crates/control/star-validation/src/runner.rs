@@ -9,36 +9,42 @@ use star_contracts::{
     evidence::{
         ActorRef, ArtifactManifest, CatalogRef, Completeness, DiagnosticConfidence,
         DiagnosticSeverity, DiagnosticStatus, DocumentRef, GateDecisionKind, GateScope,
-        ObservedTool, OutputLimits, RiskRef, TerminationReason, ValidationOutcome,
+        LocationRef, ObservedTool, OutputLimits, ProducerRef, RiskRef, TerminationReason,
+        ValidationOutcome,
     },
     evidence_v2::{
         BaselineRelationV2, BaselineV2, CheckRequirementV2, ClaimEvaluationStatusV2,
         ClaimEvaluationV2, ClaimEvidenceRefV2, ClaimGateEffectV2, CompletionAssertionV2,
         CompletionClaimKindV2, CompletionClaimSubjectV2, CompletionClaimV2,
-        DIAGNOSTIC_V2_SCHEMA_ID, DecisionDocumentRefV2, DiagnosticEvaluationSubjectV2,
-        DiagnosticEvaluationV2, DiagnosticGateEffectV2, DiagnosticV2, DispositionV2,
-        EVIDENCE_BUNDLE_V2_SCHEMA_ID, EVIDENCE_V2_SCHEMA_VERSION, EvidenceBundleV2,
+        DIAGNOSTIC_V2_SCHEMA_ID, DecisionDocumentRefV2, DecisionSubjectKindV2,
+        DiagnosticEvaluationSubjectV2, DiagnosticEvaluationV2, DiagnosticEvidenceRefV2,
+        DiagnosticGateEffectV2, DiagnosticObservationStatusV2, DiagnosticScopeV2, DiagnosticV2,
+        DispositionV2, EVIDENCE_BUNDLE_V2_SCHEMA_ID, EVIDENCE_V2_SCHEMA_VERSION, EvidenceBundleV2,
         EvidenceFreshnessV2, EvidenceSubjectBinding, EvidenceV2Error, GATE_DECISION_V2_SCHEMA_ID,
-        GateDecisionV2, InvocationWorkingDirectoryV2, ProcessStartStateV2, REVIEW_PACK_SCHEMA_ID,
-        REVIEW_PACK_SCHEMA_VERSION, REVIEW_PACK_SECTION_ORDER, REWORK_DIRECTIVE_SCHEMA_ID,
-        REWORK_DIRECTIVE_SCHEMA_VERSION, ReviewPackItemV1, ReviewPackSectionV1, ReviewPackV1,
-        ReviewQuestionV1, ReworkDirectiveV1, RunGateEffectV2, RunSatisfactionStateV2,
-        RunSatisfactionV2, SuppressionStateV2, SuppressionV2, TASK_INVOCATION_V2_SCHEMA_ID,
-        TaskInvocationV2, VALIDATION_RESULT_V2_SCHEMA_ID, VALIDATION_RUN_V2_SCHEMA_ID,
-        ValidationResultV2, ValidationRunV2, ValidationStabilityV2, empty_fingerprint,
+        GateDecisionV2, GatePhaseV2, InvocationWorkingDirectoryV2, ProcessStartStateV2,
+        REVIEW_PACK_SCHEMA_ID, REVIEW_PACK_SCHEMA_VERSION, REVIEW_PACK_SECTION_ORDER,
+        REWORK_DIRECTIVE_SCHEMA_ID, REWORK_DIRECTIVE_SCHEMA_VERSION, ReviewPackItemV1,
+        ReviewPackSectionV1, ReviewPackV1, ReviewQuestionV1, ReworkDirectiveV1, RuleRefV2,
+        RunGateEffectV2, RunSatisfactionStateV2, RunSatisfactionV2, SuppressionStateV2,
+        SuppressionV2, TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2,
+        VALIDATION_RESULT_V2_SCHEMA_ID, VALIDATION_RUN_V2_SCHEMA_ID, ValidationResultV2,
+        ValidationRunV2, ValidationStabilityV2, diagnostic_scope_fingerprint, empty_fingerprint,
+        rule_set_fingerprint_for_subject_binding,
     },
     ids::{
         DiagnosticId, EvidenceBundleId, GateId, ReviewPackId, ReworkDirectiveId, TaskInvocationId,
         ValidationResultId, ValidationRunId,
     },
-    management::{DispositionDecision, SuppressionStatus},
+    management::{DispositionDecision, DispositionStatus, SuppressionStatus},
     planning::{
         ChangeSet, CheckPlanV2, CollectionState, FullValidationPlan, ValidationPlanV2Readiness,
     },
 };
 use thiserror::Error;
 
-use crate::rules::{RuleDecisionFloorV2, RuleDiagnosticInputV2, RuleFamilyV2};
+use crate::rules::{
+    RuleDecisionFloorV2, RuleDiagnosticInputV2, RuleFamilyV2, builtin_rule_for_diagnostic,
+};
 
 #[derive(Clone, Debug)]
 pub struct ExecutableBinding {
@@ -62,6 +68,9 @@ pub struct RawDiagnostic {
     pub confidence: DiagnosticConfidence,
     pub status: DiagnosticStatus,
     pub blocking: bool,
+    pub package_id: Option<String>,
+    pub workspace_id: Option<String>,
+    pub locations: Vec<LocationRef>,
 }
 
 #[derive(Clone, Debug)]
@@ -262,6 +271,7 @@ fn run_check_graph_inner(
                 check,
                 &run_id,
                 &binding.check_ref,
+                &binding.subject_binding.binding_fingerprint,
                 vec![],
             )?;
             let diagnostic_id = diagnostic.diagnostic_id.clone();
@@ -335,6 +345,9 @@ fn run_check_graph_inner(
             .or_else(|| runs.first())
             .ok_or(CheckGraphRunnerError::Graph)?;
         diagnostic_sequence += 1;
+        let rule_ref = builtin_rule_for_diagnostic(preflight)?
+            .reference()?
+            .catalog_ref();
         diagnostics.push(diagnostic_for(
             diagnostic_sequence,
             &preflight.code,
@@ -346,12 +359,8 @@ fn run_check_graph_inner(
             preflight.decision_floor == RuleDecisionFloorV2::Block,
             check,
             &run.validation_run_id,
-            &CatalogRef {
-                catalog_id: preflight.rule_id.clone(),
-                format_version: 2,
-                item_version: "2.0.0".to_owned(),
-                sha256: Sha256Hash::digest(preflight.rule_id.as_bytes()),
-            },
+            &rule_ref,
+            &run.subject_binding.binding_fingerprint,
             vec![],
         )?);
     }
@@ -640,11 +649,14 @@ fn execute_check_attempt(
                     confidence: DiagnosticConfidence::High,
                     status: DiagnosticStatus::Confirmed,
                     blocking: true,
+                    package_id: None,
+                    workspace_id: None,
+                    locations: vec![],
                 });
             }
             for raw in raw_diagnostics {
                 *diagnostic_sequence += 1;
-                let diagnostic = diagnostic_for(
+                let mut diagnostic = diagnostic_for(
                     *diagnostic_sequence,
                     &raw.code,
                     &raw.title,
@@ -656,8 +668,13 @@ fn execute_check_attempt(
                     check,
                     &run_id,
                     &binding.check_ref,
+                    &binding.subject_binding.binding_fingerprint,
                     observation.artifact_refs.clone(),
                 )?;
+                diagnostic.package_id = raw.package_id;
+                diagnostic.workspace_id = raw.workspace_id;
+                diagnostic.locations = raw.locations;
+                diagnostic = diagnostic.seal()?;
                 diagnostic_ids.push(diagnostic.diagnostic_id.clone());
                 diagnostics.push(diagnostic);
             }
@@ -705,6 +722,7 @@ fn execute_check_attempt(
                 check,
                 &run_id,
                 &binding.check_ref,
+                &binding.subject_binding.binding_fingerprint,
                 vec![],
             )?;
             diagnostic_ids.push(diagnostic.diagnostic_id.clone());
@@ -885,6 +903,7 @@ fn evaluate_completion_claims(
                     item_version: "2.0.0".to_owned(),
                     sha256: Sha256Hash::digest(code.as_bytes()),
                 },
+                &current_run.subject_binding.binding_fingerprint,
                 vec![],
             )?;
             diagnostic_refs.push(diagnostic.reference()?);
@@ -1058,6 +1077,166 @@ fn evaluate_claim_runs<'a>(
     }
 }
 
+fn latest_baseline_heads(values: &[BaselineV2]) -> Result<Vec<&BaselineV2>, CheckGraphRunnerError> {
+    let mut heads = BTreeMap::<String, &BaselineV2>::new();
+    for value in values {
+        let key = value.baseline_id.to_string();
+        if let Some(current) = heads.get(&key).copied() {
+            if value.revision == current.revision && value != current {
+                return Err(CheckGraphRunnerError::Evidence(EvidenceV2Error::Baseline));
+            }
+            if value.revision <= current.revision {
+                continue;
+            }
+        }
+        heads.insert(key, value);
+    }
+    Ok(heads.into_values().collect())
+}
+
+fn latest_suppression_heads(
+    values: &[SuppressionV2],
+) -> Result<Vec<&SuppressionV2>, CheckGraphRunnerError> {
+    let mut heads = BTreeMap::<String, &SuppressionV2>::new();
+    for value in values {
+        let key = value.suppression_id.to_string();
+        if let Some(current) = heads.get(&key).copied() {
+            if value.revision == current.revision && value != current {
+                return Err(CheckGraphRunnerError::Evidence(
+                    EvidenceV2Error::Suppression,
+                ));
+            }
+            if value.revision <= current.revision {
+                continue;
+            }
+        }
+        heads.insert(key, value);
+    }
+    Ok(heads.into_values().collect())
+}
+
+fn latest_disposition_heads(
+    values: &[DispositionV2],
+) -> Result<Vec<&DispositionV2>, CheckGraphRunnerError> {
+    let mut heads = BTreeMap::<String, &DispositionV2>::new();
+    for value in values {
+        let key = value.disposition_id.to_string();
+        if let Some(current) = heads.get(&key).copied() {
+            if value.revision == current.revision && value != current {
+                return Err(CheckGraphRunnerError::Evidence(
+                    EvidenceV2Error::Disposition,
+                ));
+            }
+            if value.revision <= current.revision {
+                continue;
+            }
+        }
+        heads.insert(key, value);
+    }
+    Ok(heads.into_values().collect())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SuppressionScopeMatch {
+    Matches,
+    OutOfScope,
+    Unverified,
+}
+
+fn suppression_scope_match(
+    suppression: &SuppressionV2,
+    diagnostic: &DiagnosticV2,
+    run: &ValidationRunV2,
+) -> SuppressionScopeMatch {
+    if !suppression.scope_constraint.gate_phases.is_empty() {
+        let Some(phase) = gate_phase(&run.phase) else {
+            return SuppressionScopeMatch::Unverified;
+        };
+        if !suppression.scope_constraint.gate_phases.contains(&phase) {
+            return SuppressionScopeMatch::OutOfScope;
+        }
+    }
+    if !suppression.scope_constraint.paths.is_empty()
+        && !diagnostic.locations.iter().any(|location| {
+            location.path.project_id == diagnostic.project_id
+                && suppression
+                    .scope_constraint
+                    .paths
+                    .iter()
+                    .any(|path| path.as_str() == location.path.path)
+        })
+    {
+        return SuppressionScopeMatch::OutOfScope;
+    }
+    if !suppression.scope_constraint.symbol_ids.is_empty()
+        && !diagnostic.locations.iter().any(|location| {
+            location
+                .symbol
+                .as_ref()
+                .is_some_and(|symbol| suppression.scope_constraint.symbol_ids.contains(symbol))
+        })
+    {
+        return SuppressionScopeMatch::OutOfScope;
+    }
+    if let Some(package_id) = suppression.scope_constraint.package_id.as_deref() {
+        match diagnostic.package_id.as_deref() {
+            Some(current) if current == package_id => {}
+            Some(_) => return SuppressionScopeMatch::OutOfScope,
+            None => return SuppressionScopeMatch::Unverified,
+        }
+    }
+    if let Some(workspace_id) = suppression.scope_constraint.workspace_id.as_deref() {
+        match diagnostic.workspace_id.as_deref() {
+            Some(current) if current == workspace_id => {}
+            Some(_) => return SuppressionScopeMatch::OutOfScope,
+            None => return SuppressionScopeMatch::Unverified,
+        }
+    }
+    SuppressionScopeMatch::Matches
+}
+
+fn suppression_state(
+    suppression: &SuppressionV2,
+    scope_match: SuppressionScopeMatch,
+    run: &ValidationRunV2,
+    evaluation_time: DateTime<Utc>,
+) -> SuppressionStateV2 {
+    if suppression.status == SuppressionStatus::Revoked {
+        SuppressionStateV2::Revoked
+    } else if scope_match == SuppressionScopeMatch::Unverified {
+        SuppressionStateV2::Invalid
+    } else if suppression.status == SuppressionStatus::Stale
+        || suppression
+            .subject_binding_constraint
+            .as_ref()
+            .is_some_and(|fingerprint| fingerprint != &run.subject_binding.binding_fingerprint)
+    {
+        SuppressionStateV2::Stale
+    } else if suppression.status == SuppressionStatus::Expired
+        || suppression
+            .expires_at
+            .is_some_and(|expires| expires <= evaluation_time)
+    {
+        SuppressionStateV2::Expired
+    } else if suppression.status == SuppressionStatus::Active
+        && scope_match == SuppressionScopeMatch::Matches
+    {
+        SuppressionStateV2::Active
+    } else {
+        SuppressionStateV2::Invalid
+    }
+}
+
+fn disposition_restrictiveness(decision: DispositionDecision) -> u8 {
+    match decision {
+        DispositionDecision::AcceptedRisk | DispositionDecision::FalsePositive => 0,
+        DispositionDecision::NeedsAction
+        | DispositionDecision::Deferred
+        | DispositionDecision::Duplicate
+        | DispositionDecision::Fixed => 1,
+    }
+}
+
 pub fn evaluate_diagnostics(
     runs: &[ValidationRunV2],
     diagnostics: &[DiagnosticV2],
@@ -1085,6 +1264,9 @@ pub fn evaluate_diagnostics(
             ));
         }
     }
+    let baseline_heads = latest_baseline_heads(baselines)?;
+    let suppression_heads = latest_suppression_heads(suppressions)?;
+    let disposition_heads = latest_disposition_heads(dispositions)?;
     let run_map = runs
         .iter()
         .map(|run| (run.validation_run_id.clone(), run))
@@ -1095,33 +1277,74 @@ pub fn evaluate_diagnostics(
             .get(&diagnostic.validation_run_id)
             .copied()
             .ok_or(CheckGraphRunnerError::Binding)?;
-        let baseline = baselines
+        let current_rule_set_fingerprint =
+            rule_set_fingerprint_for_subject_binding(&run.subject_binding)?;
+        let compatible_baseline = baseline_heads
             .iter()
+            .copied()
             .filter(|baseline| {
-                baseline.active && baseline.reviewed && baseline.project_id == diagnostic.project_id
+                baseline.active
+                    && baseline.reviewed
+                    && baseline.project_id == diagnostic.project_id
+                    && baseline.subject_binding_fingerprint
+                        == run.subject_binding.binding_fingerprint
+                    && baseline.rule_set_fingerprint == current_rule_set_fingerprint
             })
-            .max_by_key(|baseline| baseline.revision);
-        let exact_entry = baseline.and_then(|baseline| {
+            .max_by(|left, right| {
+                (&left.created_at, &left.baseline_id).cmp(&(&right.created_at, &right.baseline_id))
+            });
+        let incompatible_baseline = compatible_baseline
+            .is_none()
+            .then(|| {
+                baseline_heads
+                    .iter()
+                    .copied()
+                    .filter(|baseline| {
+                        baseline.active
+                            && baseline.reviewed
+                            && baseline.project_id == diagnostic.project_id
+                            && (baseline.subject_binding_fingerprint
+                                == run.subject_binding.binding_fingerprint
+                                || baseline.entries.iter().any(|entry| {
+                                    entry.diagnostic_fingerprint == diagnostic.fingerprint
+                                        || entry.rule_ref == diagnostic.rule_ref
+                                }))
+                    })
+                    .max_by(|left, right| {
+                        (&left.created_at, &left.baseline_id)
+                            .cmp(&(&right.created_at, &right.baseline_id))
+                    })
+            })
+            .flatten();
+        let baseline = compatible_baseline.or(incompatible_baseline);
+        let exact_entry = compatible_baseline.and_then(|baseline| {
             baseline
                 .entries
                 .iter()
                 .find(|entry| entry.diagnostic_fingerprint == diagnostic.fingerprint)
         });
-        let related_entry = baseline.and_then(|baseline| {
+        let related_entry = compatible_baseline.and_then(|baseline| {
             baseline
                 .entries
                 .iter()
                 .find(|entry| entry.rule_ref == diagnostic.rule_ref)
         });
-        let baseline_relation = if exact_entry.is_some() {
+        let current_scope_fingerprint = diagnostic_scope_fingerprint(diagnostic)?;
+        let baseline_relation = if incompatible_baseline.is_some() {
+            BaselineRelationV2::Incompatible
+        } else if exact_entry.is_some() {
             BaselineRelationV2::ExistingUnchanged
         } else if let Some(entry) = related_entry {
-            if severity_rank(diagnostic.severity) > severity_rank(entry.severity) {
+            if entry.scope_fingerprint != current_scope_fingerprint
+                || severity_rank(diagnostic.severity) > severity_rank(entry.severity)
+            {
                 BaselineRelationV2::Worsened
-            } else {
+            } else if severity_rank(diagnostic.severity) < severity_rank(entry.severity) {
                 BaselineRelationV2::Improved
+            } else {
+                BaselineRelationV2::Incompatible
             }
-        } else if baseline.is_some() {
+        } else if compatible_baseline.is_some() {
             BaselineRelationV2::New
         } else {
             BaselineRelationV2::Unbaselined
@@ -1131,60 +1354,88 @@ pub fn evaluate_diagnostics(
             revision: baseline.revision,
             fingerprint: baseline.set_fingerprint.clone(),
         });
-        let suppression = suppressions
+        let suppression_candidates = suppression_heads
             .iter()
-            .filter(|suppression| suppression.project_id == diagnostic.project_id)
+            .copied()
+            .filter(|suppression| {
+                suppression.subject_kind == DecisionSubjectKindV2::Diagnostic
+                    && suppression.project_id == diagnostic.project_id
+            })
             .filter(|suppression| {
                 suppression
-                    .diagnostic_fingerprint
+                    .subject_fingerprint
                     .as_ref()
                     .is_some_and(|value| value == &diagnostic.fingerprint)
                     || suppression
-                        .rule_ref
+                        .rule_ref_constraint
                         .as_ref()
                         .is_some_and(|value| value == &diagnostic.rule_ref)
             })
-            .max_by_key(|suppression| suppression.revision);
+            .filter_map(|suppression| {
+                let scope_match = suppression_scope_match(suppression, diagnostic, run);
+                (scope_match != SuppressionScopeMatch::OutOfScope)
+                    .then_some((suppression, scope_match))
+            })
+            .collect::<Vec<_>>();
+        let suppression = suppression_candidates
+            .iter()
+            .copied()
+            .filter(|(suppression, scope_match)| {
+                suppression_state(suppression, *scope_match, run, evaluation_time)
+                    == SuppressionStateV2::Active
+            })
+            .max_by(|(left, _), (right, _)| {
+                (&left.created_at, &left.suppression_id)
+                    .cmp(&(&right.created_at, &right.suppression_id))
+            })
+            .or_else(|| {
+                suppression_candidates
+                    .iter()
+                    .copied()
+                    .max_by(|(left, _), (right, _)| {
+                        (&left.created_at, &left.suppression_id)
+                            .cmp(&(&right.created_at, &right.suppression_id))
+                    })
+            });
         let suppression_state = suppression
-            .map(|suppression| {
-                if suppression.status == SuppressionStatus::Revoked {
-                    SuppressionStateV2::Revoked
-                } else if suppression.status == SuppressionStatus::Stale
-                    || suppression.subject_binding_fingerprint
-                        != run.subject_binding.binding_fingerprint
-                {
-                    SuppressionStateV2::Stale
-                } else if suppression.status == SuppressionStatus::Expired
-                    || suppression
-                        .expires_at
-                        .is_some_and(|expires| expires <= evaluation_time)
-                {
-                    SuppressionStateV2::Expired
-                } else if suppression.status == SuppressionStatus::Active {
-                    SuppressionStateV2::Active
-                } else {
-                    SuppressionStateV2::Invalid
-                }
+            .map(|(suppression, scope_match)| {
+                suppression_state(suppression, scope_match, run, evaluation_time)
             })
             .unwrap_or(SuppressionStateV2::None);
+        let suppression = suppression.map(|(suppression, _)| suppression);
         let suppression_ref = suppression.map(|suppression| DecisionDocumentRefV2 {
             document_id: suppression.suppression_id.to_string(),
             revision: suppression.revision,
             fingerprint: suppression.content_fingerprint.clone(),
         });
-        let disposition = dispositions
-            .iter()
-            .filter(|disposition| {
-                disposition.active
-                    && disposition.project_id == diagnostic.project_id
-                    && disposition.diagnostic_fingerprint == diagnostic.fingerprint
-                    && disposition.subject_binding_fingerprint
-                        == run.subject_binding.binding_fingerprint
-                    && disposition
-                        .expires_at
-                        .is_none_or(|expires| expires > evaluation_time)
-            })
-            .max_by_key(|disposition| disposition.revision);
+        let disposition =
+            disposition_heads
+                .iter()
+                .copied()
+                .filter(|disposition| {
+                    disposition.status == DispositionStatus::Active
+                        && disposition.subject_kind == DecisionSubjectKindV2::Diagnostic
+                        && disposition.project_id == diagnostic.project_id
+                        && disposition.subject_fingerprint == diagnostic.fingerprint
+                        && disposition.subject_binding_constraint.as_ref().is_some_and(
+                            |fingerprint| fingerprint == &run.subject_binding.binding_fingerprint,
+                        )
+                        && disposition
+                            .expires_at
+                            .is_none_or(|expires| expires > evaluation_time)
+                })
+                .max_by(|left, right| {
+                    (
+                        disposition_restrictiveness(left.decision),
+                        &left.decided_at,
+                        &left.disposition_id,
+                    )
+                        .cmp(&(
+                            disposition_restrictiveness(right.decision),
+                            &right.decided_at,
+                            &right.disposition_id,
+                        ))
+                });
         let disposition_ref = disposition.map(|disposition| DecisionDocumentRefV2 {
             document_id: disposition.disposition_id.to_string(),
             revision: disposition.revision,
@@ -1220,6 +1471,9 @@ pub fn evaluate_diagnostics(
                             "NEW_BLOCKING_DIAGNOSTIC"
                         }
                         BaselineRelationV2::Worsened => "WORSENED_BLOCKING_DIAGNOSTIC",
+                        BaselineRelationV2::Incompatible => {
+                            "INCOMPATIBLE_BASELINE_BLOCKING_DIAGNOSTIC"
+                        }
                         _ => "UNSUPPRESSED_BLOCKING_DIAGNOSTIC",
                     }
                     .to_owned(),
@@ -1242,9 +1496,15 @@ pub fn evaluate_diagnostics(
         }
         if matches!(
             suppression_state,
-            SuppressionStateV2::Expired | SuppressionStateV2::Stale | SuppressionStateV2::Revoked
+            SuppressionStateV2::Expired
+                | SuppressionStateV2::Stale
+                | SuppressionStateV2::Revoked
+                | SuppressionStateV2::Invalid
         ) {
             reason_codes.push("SUPPRESSION_NOT_CURRENT".to_owned());
+        }
+        if baseline_relation == BaselineRelationV2::Incompatible {
+            reason_codes.push("BASELINE_SUBJECT_OR_RULE_SET_INCOMPATIBLE".to_owned());
         }
         evaluations.push(
             DiagnosticEvaluationV2 {
@@ -1264,28 +1524,56 @@ pub fn evaluate_diagnostics(
             .seal()?,
         );
     }
-    let observed = diagnostics
+    for baseline in baseline_heads
         .iter()
-        .map(|diagnostic| diagnostic.fingerprint.clone())
-        .collect::<BTreeSet<_>>();
-    for baseline in baselines
-        .iter()
+        .copied()
         .filter(|baseline| baseline.active && baseline.reviewed)
     {
-        let Some(run) = runs
+        if baseline_heads.iter().copied().any(|candidate| {
+            candidate.active
+                && candidate.reviewed
+                && candidate.project_id == baseline.project_id
+                && candidate.subject_binding_fingerprint == baseline.subject_binding_fingerprint
+                && candidate.rule_set_fingerprint == baseline.rule_set_fingerprint
+                && (&candidate.created_at, &candidate.baseline_id)
+                    > (&baseline.created_at, &baseline.baseline_id)
+        }) {
+            continue;
+        }
+        let mut compatible_runs = Vec::new();
+        for run in runs.iter().filter(|run| {
+            run.project_id == baseline.project_id
+                && run.subject_binding.binding_fingerprint == baseline.subject_binding_fingerprint
+        }) {
+            if rule_set_fingerprint_for_subject_binding(&run.subject_binding)?
+                == baseline.rule_set_fingerprint
+            {
+                compatible_runs.push(run);
+            }
+        }
+        let Some(run) = compatible_runs
             .iter()
-            .find(|run| run.project_id == baseline.project_id)
+            .copied()
+            .max_by_key(|run| run.attempt)
         else {
             continue;
         };
         if run.subject_binding.freshness != EvidenceFreshnessV2::Current
-            || runs.iter().any(|candidate| {
-                candidate.project_id == baseline.project_id
-                    && candidate.completeness != Completeness::Complete
-            })
+            || compatible_runs
+                .iter()
+                .any(|candidate| candidate.completeness != Completeness::Complete)
         {
             continue;
         }
+        let observed = diagnostics
+            .iter()
+            .filter(|diagnostic| {
+                diagnostic.project_id == baseline.project_id
+                    && diagnostic.subject_binding_fingerprint.as_ref()
+                        == Some(&baseline.subject_binding_fingerprint)
+            })
+            .map(|diagnostic| diagnostic.fingerprint.clone())
+            .collect::<BTreeSet<_>>();
         for entry in baseline
             .entries
             .iter()
@@ -1971,6 +2259,16 @@ const fn severity_rank(severity: DiagnosticSeverity) -> u8 {
     }
 }
 
+fn gate_phase(value: &str) -> Option<GatePhaseV2> {
+    match value {
+        "during_stage" => Some(GatePhaseV2::DuringStage),
+        "goal_exit" => Some(GatePhaseV2::GoalExit),
+        "patch_pre_apply" => Some(GatePhaseV2::PatchPreApply),
+        "patch_post_apply" => Some(GatePhaseV2::PatchPostApply),
+        _ => None,
+    }
+}
+
 fn domain_hash<T: Serialize>(
     domain: &str,
     version: u32,
@@ -2126,27 +2424,55 @@ fn diagnostic_for(
     check: &CheckPlanV2,
     validation_run_id: &ValidationRunId,
     rule_ref: &CatalogRef,
+    subject_binding_fingerprint: &Sha256Hash,
     evidence_refs: Vec<star_contracts::evidence::ArtifactRef>,
 ) -> Result<DiagnosticV2, CheckGraphRunnerError> {
+    let observed_at = Utc::now();
     Ok(DiagnosticV2 {
         schema_id: DIAGNOSTIC_V2_SCHEMA_ID.to_owned(),
         schema_version: 2,
         diagnostic_id: DiagnosticId::new(),
         sequence,
         code: code.to_owned(),
-        rule_ref: rule_ref.clone(),
+        rule_ref: RuleRefV2::from_catalog_ref(rule_ref)?,
+        producer: ProducerRef {
+            component: "star-validation".to_owned(),
+            product_version: env!("CARGO_PKG_VERSION").to_owned(),
+            build_id: rule_ref.sha256.to_string(),
+            platform: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+        },
         title: title.to_owned(),
         message: message.to_owned(),
         severity,
         confidence,
         status,
+        observation_status: match status {
+            DiagnosticStatus::Confirmed => DiagnosticObservationStatusV2::Confirmed,
+            DiagnosticStatus::Suspected => DiagnosticObservationStatusV2::Suspected,
+            DiagnosticStatus::Unverified
+            | DiagnosticStatus::Suppressed
+            | DiagnosticStatus::Resolved => DiagnosticObservationStatusV2::Unverified,
+        },
         blocking,
         project_id: check.project_id.clone(),
+        package_id: None,
+        workspace_id: None,
         plan_item_id: check.plan_item_id.clone(),
         validation_run_id: validation_run_id.clone(),
-        evidence_refs,
-        first_seen_at: Utc::now(),
-        last_seen_at: Utc::now(),
+        scope: DiagnosticScopeV2::ValidationRun {
+            validation_run_id: validation_run_id.clone(),
+            revision: 1,
+        },
+        locations: Vec::new(),
+        evidence_refs: evidence_refs
+            .into_iter()
+            .map(|artifact| DiagnosticEvidenceRefV2::Artifact { artifact })
+            .collect(),
+        subject_binding_fingerprint: Some(subject_binding_fingerprint.clone()),
+        remediation: None,
+        observed_at,
+        first_seen_at: observed_at,
+        last_seen_at: observed_at,
         fingerprint: empty_fingerprint(),
     }
     .seal()?)
@@ -2182,8 +2508,8 @@ mod tests {
             RetentionClass,
         },
         ids::{
-            ArtifactId, ChangeSetId, CheckoutId, GoalId, ProjectCatalogSnapshotId, ProjectId,
-            ProjectRevisionId, RunId, ValidationPlanId, WorkspaceSnapshotId,
+            ArtifactId, BaselineId, ChangeSetId, CheckoutId, GoalId, ProjectCatalogSnapshotId,
+            ProjectId, ProjectRevisionId, RunId, ValidationPlanId, WorkspaceSnapshotId,
         },
         management::ProjectPathRef,
         planning::{
@@ -2873,8 +3199,430 @@ mod tests {
         let result = run_check_graph(&plan, &binding_set(&plan), context, &mut executor).unwrap();
         assert_eq!(result.gate_decision.decision, GateDecisionKind::Block);
         assert!(result.diagnostics.iter().any(|diagnostic| {
-            diagnostic.rule_ref.catalog_id == "star.validation.change.out-of-scope"
+            diagnostic.rule_ref.rule_id == "star.validation.change.out-of-scope"
                 && diagnostic.blocking
         }));
+    }
+
+    #[test]
+    fn baseline_v2_requires_exact_subject_and_rule_set_binding() {
+        let plan = plan(false);
+        let mut run_context = context();
+        run_context.preflight_diagnostics = vec![RuleDiagnosticInputV2 {
+            family: RuleFamilyV2::B01ChangeScopeClaim,
+            rule_id: "star.validation.change.out-of-scope".to_owned(),
+            code: "ACTUAL_CHANGE_OUT_OF_SCOPE".to_owned(),
+            title: "Out of scope".to_owned(),
+            message: "A redacted project path is outside the accepted scope.".to_owned(),
+            severity: DiagnosticSeverity::Error,
+            confidence: DiagnosticConfidence::High,
+            status: DiagnosticStatus::Confirmed,
+            decision_floor: RuleDecisionFloorV2::Block,
+        }];
+        let mut executor = FakeExecutor {
+            observations: passing_observations(),
+            calls: 0,
+        };
+        let result =
+            run_check_graph(&plan, &binding_set(&plan), run_context, &mut executor).unwrap();
+        let diagnostic = result
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == "ACTUAL_CHANGE_OUT_OF_SCOPE")
+            .unwrap();
+        let run = result
+            .validation_runs
+            .iter()
+            .find(|run| run.validation_run_id == diagnostic.validation_run_id)
+            .unwrap();
+        let baseline = BaselineV2 {
+            schema_id: star_contracts::evidence_v2::BASELINE_V2_SCHEMA_ID.to_owned(),
+            schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+            baseline_id: BaselineId::new(),
+            revision: 1,
+            project_id: diagnostic.project_id.clone(),
+            subject_binding_fingerprint: run.subject_binding.binding_fingerprint.clone(),
+            rule_set_fingerprint: rule_set_fingerprint_for_subject_binding(&run.subject_binding)
+                .unwrap(),
+            entries: vec![star_contracts::evidence_v2::BaselineEntryV2 {
+                diagnostic_fingerprint: diagnostic.fingerprint.clone(),
+                rule_ref: diagnostic.rule_ref.clone(),
+                severity: diagnostic.severity,
+                scope_fingerprint: diagnostic_scope_fingerprint(diagnostic).unwrap(),
+                entry_fingerprint: empty_fingerprint(),
+            }],
+            created_at: Utc::now(),
+            reason: "reviewed current diagnostic".to_owned(),
+            reviewed: true,
+            active: true,
+            set_fingerprint: empty_fingerprint(),
+        }
+        .seal()
+        .unwrap();
+
+        let exact = evaluate_diagnostics(
+            &result.validation_runs,
+            &result.diagnostics,
+            std::slice::from_ref(&baseline),
+            &[],
+            &[],
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(
+            exact[0].baseline_relation,
+            BaselineRelationV2::ExistingUnchanged
+        );
+
+        let mut inactive_head = baseline.clone();
+        inactive_head.revision = 2;
+        inactive_head.active = false;
+        inactive_head = inactive_head.seal().unwrap();
+        let superseded = evaluate_diagnostics(
+            &result.validation_runs,
+            &result.diagnostics,
+            &[baseline.clone(), inactive_head],
+            &[],
+            &[],
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(
+            superseded[0].baseline_relation,
+            BaselineRelationV2::Unbaselined
+        );
+
+        let mut stale = baseline;
+        stale.subject_binding_fingerprint = Sha256Hash::digest(b"stale-subject-binding");
+        stale = stale.seal().unwrap();
+        let incompatible = evaluate_diagnostics(
+            &result.validation_runs,
+            &result.diagnostics,
+            &[stale],
+            &[],
+            &[],
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(
+            incompatible[0].baseline_relation,
+            BaselineRelationV2::Incompatible
+        );
+        assert!(
+            incompatible[0]
+                .reason_codes
+                .contains(&"BASELINE_SUBJECT_OR_RULE_SET_INCOMPATIBLE".to_owned())
+        );
+    }
+
+    #[test]
+    fn decision_v2_uses_latest_revision_and_enforces_the_complete_scope() {
+        let plan = plan(false);
+        let bindings = binding_set(&plan);
+        let mut executor = FakeExecutor {
+            observations: passing_observations(),
+            calls: 0,
+        };
+        let result = run_check_graph(&plan, &bindings, context(), &mut executor).unwrap();
+        let check = &plan.required_checks[0];
+        let run = result
+            .validation_runs
+            .iter()
+            .find(|run| run.plan_item_id == check.plan_item_id)
+            .unwrap();
+        let diagnostic = diagnostic_for(
+            1,
+            "FIXTURE_BLOCKING_DIAGNOSTIC",
+            "Fixture blocking diagnostic",
+            "A bounded fixture diagnostic.",
+            DiagnosticSeverity::Error,
+            DiagnosticConfidence::High,
+            DiagnosticStatus::Confirmed,
+            true,
+            check,
+            &run.validation_run_id,
+            &catalog("fixture.rule"),
+            &run.subject_binding.binding_fingerprint,
+            vec![],
+        )
+        .unwrap();
+        let evidence = DiagnosticEvidenceRefV2::Diagnostic {
+            diagnostic_ref: diagnostic.reference().unwrap(),
+        };
+        let actor = ActorRef {
+            actor_type: star_contracts::evidence::ActorType::User,
+            actor_id: "fixture-reviewer".to_owned(),
+            display_name: "Fixture Reviewer".to_owned(),
+            auth_source: "fixture".to_owned(),
+        };
+        let active = SuppressionV2 {
+            schema_id: star_contracts::evidence_v2::SUPPRESSION_V2_SCHEMA_ID.to_owned(),
+            schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+            suppression_id: star_contracts::ids::SuppressionId::new(),
+            revision: 1,
+            project_id: diagnostic.project_id.clone(),
+            subject_kind: DecisionSubjectKindV2::Diagnostic,
+            selector: format!("diagnostic:{}", diagnostic.fingerprint),
+            subject_fingerprint: Some(diagnostic.fingerprint.clone()),
+            rule_ref_constraint: None,
+            scope_constraint: star_contracts::evidence_v2::DecisionScopeConstraintV2 {
+                project_id: diagnostic.project_id.clone(),
+                package_id: None,
+                workspace_id: None,
+                paths: vec![],
+                symbol_ids: vec![],
+                gate_phases: vec![],
+            },
+            subject_binding_constraint: Some(run.subject_binding.binding_fingerprint.clone()),
+            reason_code: "FIXTURE_REVIEW".to_owned(),
+            reason: "bounded active fixture suppression".to_owned(),
+            created_at: Utc::now(),
+            expires_at: Some(Utc::now() + chrono::Duration::days(1)),
+            permanent: false,
+            justification: None,
+            approved_by: actor.clone(),
+            review_evidence_refs: vec![evidence.clone()],
+            status: SuppressionStatus::Active,
+            provenance: "fixture:decision-v2".to_owned(),
+            content_fingerprint: empty_fingerprint(),
+        }
+        .seal()
+        .unwrap();
+        let active_evaluation = evaluate_diagnostics(
+            &result.validation_runs,
+            std::slice::from_ref(&diagnostic),
+            &[],
+            std::slice::from_ref(&active),
+            &[],
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(
+            active_evaluation[0].suppression_state,
+            SuppressionStateV2::Active
+        );
+
+        let selection_time = Utc::now();
+        let mut older_high_revision = active.clone();
+        older_high_revision.suppression_id = star_contracts::ids::SuppressionId::new();
+        older_high_revision.revision = 99;
+        older_high_revision.created_at = selection_time - chrono::Duration::days(2);
+        older_high_revision.expires_at = Some(selection_time + chrono::Duration::days(1));
+        older_high_revision = older_high_revision.seal().unwrap();
+        let mut newer_low_revision = active.clone();
+        newer_low_revision.suppression_id = star_contracts::ids::SuppressionId::new();
+        newer_low_revision.revision = 1;
+        newer_low_revision.created_at = selection_time - chrono::Duration::days(1);
+        newer_low_revision.expires_at = Some(selection_time + chrono::Duration::days(1));
+        newer_low_revision = newer_low_revision.seal().unwrap();
+        let selected_by_time = evaluate_diagnostics(
+            &result.validation_runs,
+            std::slice::from_ref(&diagnostic),
+            &[],
+            &[older_high_revision, newer_low_revision.clone()],
+            &[],
+            selection_time,
+        )
+        .unwrap();
+        assert_eq!(
+            selected_by_time[0]
+                .suppression_ref
+                .as_ref()
+                .map(|reference| reference.document_id.as_str()),
+            Some(newer_low_revision.suppression_id.as_str())
+        );
+
+        let mut revoked = active.clone();
+        revoked.revision = 2;
+        revoked.status = SuppressionStatus::Revoked;
+        revoked = revoked.seal().unwrap();
+        let revoked_evaluation = evaluate_diagnostics(
+            &result.validation_runs,
+            std::slice::from_ref(&diagnostic),
+            &[],
+            &[active.clone(), revoked],
+            &[],
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(
+            revoked_evaluation[0].suppression_state,
+            SuppressionStateV2::Revoked
+        );
+        assert_eq!(
+            revoked_evaluation[0].gate_effect,
+            DiagnosticGateEffectV2::Blocks
+        );
+
+        let mut path_scoped = active.clone();
+        path_scoped.suppression_id = star_contracts::ids::SuppressionId::new();
+        path_scoped.scope_constraint.paths =
+            vec![ProjectPathRef::parse("src/only-this-path.rs").unwrap()];
+        path_scoped = path_scoped.seal().unwrap();
+        let out_of_scope = evaluate_diagnostics(
+            &result.validation_runs,
+            std::slice::from_ref(&diagnostic),
+            &[],
+            std::slice::from_ref(&path_scoped),
+            &[],
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(out_of_scope[0].suppression_state, SuppressionStateV2::None);
+
+        let mut located_diagnostic = diagnostic.clone();
+        located_diagnostic.locations = vec![LocationRef {
+            path: star_contracts::evidence::ProjectPathRef {
+                project_id: diagnostic.project_id.clone(),
+                path: "src/only-this-path.rs".to_owned(),
+                path_kind: star_contracts::evidence::ProjectPathKind::File,
+            },
+            start: star_contracts::evidence::TextPosition { line: 1, column: 1 },
+            end: None,
+            symbol: Some("fixture::symbol".to_owned()),
+        }];
+        located_diagnostic = located_diagnostic.seal().unwrap();
+        let mut matching_path = path_scoped;
+        matching_path.suppression_id = star_contracts::ids::SuppressionId::new();
+        matching_path.subject_fingerprint = Some(located_diagnostic.fingerprint.clone());
+        matching_path.selector = format!("diagnostic:{}", located_diagnostic.fingerprint);
+        matching_path = matching_path.seal().unwrap();
+        let matching_path_evaluation = evaluate_diagnostics(
+            &result.validation_runs,
+            std::slice::from_ref(&located_diagnostic),
+            &[],
+            &[matching_path],
+            &[],
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(
+            matching_path_evaluation[0].suppression_state,
+            SuppressionStateV2::Active
+        );
+
+        let mut unverified_package = active.clone();
+        unverified_package.suppression_id = star_contracts::ids::SuppressionId::new();
+        unverified_package.scope_constraint.package_id = Some("package-a".to_owned());
+        unverified_package = unverified_package.seal().unwrap();
+        let unverified_scope = evaluate_diagnostics(
+            &result.validation_runs,
+            std::slice::from_ref(&diagnostic),
+            &[],
+            &[unverified_package],
+            &[],
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(
+            unverified_scope[0].suppression_state,
+            SuppressionStateV2::Invalid
+        );
+
+        let mut packaged_diagnostic = diagnostic.clone();
+        packaged_diagnostic.package_id = Some("package-a".to_owned());
+        packaged_diagnostic = packaged_diagnostic.seal().unwrap();
+        let mut matching_package = active;
+        matching_package.suppression_id = star_contracts::ids::SuppressionId::new();
+        matching_package.scope_constraint.package_id = Some("package-a".to_owned());
+        matching_package.subject_fingerprint = Some(packaged_diagnostic.fingerprint.clone());
+        matching_package.selector = format!("diagnostic:{}", packaged_diagnostic.fingerprint);
+        matching_package = matching_package.seal().unwrap();
+        let matching_package_evaluation = evaluate_diagnostics(
+            &result.validation_runs,
+            std::slice::from_ref(&packaged_diagnostic),
+            &[],
+            &[matching_package],
+            &[],
+            Utc::now(),
+        )
+        .unwrap();
+        assert_eq!(
+            matching_package_evaluation[0].suppression_state,
+            SuppressionStateV2::Active
+        );
+
+        let disposition = DispositionV2 {
+            schema_id: star_contracts::evidence_v2::DISPOSITION_V2_SCHEMA_ID.to_owned(),
+            schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+            disposition_id: star_contracts::ids::DispositionId::new(),
+            revision: 1,
+            project_id: diagnostic.project_id.clone(),
+            subject_kind: DecisionSubjectKindV2::Diagnostic,
+            finding_id: None,
+            subject_fingerprint: diagnostic.fingerprint.clone(),
+            rule_ref: Some(diagnostic.rule_ref.clone()),
+            subject_binding_constraint: Some(run.subject_binding.binding_fingerprint.clone()),
+            decision: DispositionDecision::AcceptedRisk,
+            reason_code: "FIXTURE_ACCEPTED_RISK".to_owned(),
+            reason: "fixture disposition requiring current review".to_owned(),
+            expires_at: Some(Utc::now() + chrono::Duration::days(1)),
+            duplicate_of_finding_id: None,
+            decided_by: actor,
+            review_evidence_refs: vec![evidence],
+            decided_at: Utc::now(),
+            provenance: "fixture:decision-v2".to_owned(),
+            status: DispositionStatus::Active,
+            content_fingerprint: empty_fingerprint(),
+        }
+        .seal()
+        .unwrap();
+        let mut revoked_disposition = disposition.clone();
+        revoked_disposition.revision = 2;
+        revoked_disposition.status = DispositionStatus::Revoked;
+        revoked_disposition = revoked_disposition.seal().unwrap();
+        let disposition_selection_time = Utc::now();
+        let mut older_high_revision_waiver = disposition.clone();
+        older_high_revision_waiver.disposition_id = star_contracts::ids::DispositionId::new();
+        older_high_revision_waiver.revision = 99;
+        older_high_revision_waiver.decided_at =
+            disposition_selection_time - chrono::Duration::days(2);
+        older_high_revision_waiver.expires_at =
+            Some(disposition_selection_time + chrono::Duration::days(1));
+        older_high_revision_waiver = older_high_revision_waiver.seal().unwrap();
+        let mut newer_needs_action = disposition.clone();
+        newer_needs_action.disposition_id = star_contracts::ids::DispositionId::new();
+        newer_needs_action.revision = 1;
+        newer_needs_action.decision = DispositionDecision::NeedsAction;
+        newer_needs_action.reason_code = "FIXTURE_NEEDS_ACTION".to_owned();
+        newer_needs_action.reason = "fixture requires action and must not be waived".to_owned();
+        newer_needs_action.decided_at = disposition_selection_time - chrono::Duration::days(1);
+        newer_needs_action.expires_at =
+            Some(disposition_selection_time + chrono::Duration::days(1));
+        newer_needs_action = newer_needs_action.seal().unwrap();
+        let restrictive_disposition = evaluate_diagnostics(
+            &result.validation_runs,
+            std::slice::from_ref(&diagnostic),
+            &[],
+            &[],
+            &[older_high_revision_waiver, newer_needs_action.clone()],
+            disposition_selection_time,
+        )
+        .unwrap();
+        assert_eq!(
+            restrictive_disposition[0]
+                .disposition_ref
+                .as_ref()
+                .map(|reference| reference.document_id.as_str()),
+            Some(newer_needs_action.disposition_id.as_str())
+        );
+        assert_eq!(
+            restrictive_disposition[0].gate_effect,
+            DiagnosticGateEffectV2::Blocks
+        );
+        let disposition_evaluation = evaluate_diagnostics(
+            &result.validation_runs,
+            &[diagnostic],
+            &[],
+            &[],
+            &[disposition, revoked_disposition],
+            Utc::now(),
+        )
+        .unwrap();
+        assert!(disposition_evaluation[0].disposition_ref.is_none());
+        assert_eq!(
+            disposition_evaluation[0].gate_effect,
+            DiagnosticGateEffectV2::Blocks
+        );
     }
 }

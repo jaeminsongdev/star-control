@@ -19,6 +19,7 @@
 - 사람이 편집하는 설정은 UTF-8 TOML이다. UTF-8 BOM은 읽을 수 있지만 다시 쓸 때는 BOM 없이 정규화한다.
 - 파일에는 최상위 `schema_version`과 `policy_profile`을 둔다. 최종 16개 개발 작업 유형은 별도 `default_work_profile` 또는 StageSpec에서 선택한다.
 - 중복 key, 잘못된 type, 범위를 벗어난 값과 알 수 없는 활성 key는 오류다.
+- 사용자·project config는 1 MiB 이하 fixed-local non-reparse regular file만 읽는다. 하위 directory에서 CLI/MCP를 시작하면 nearest `.star-control/project.toml` 또는 `.git` project boundary까지만 상향 탐색해 그 project의 `config.toml`을 찾고 nested repository 경계를 넘어 바깥 설정을 상속하지 않는다.
 - `${NAME}` 같은 일반 문자열 치환은 하지 않는다. secret은 뒤에서 정의한 SecretRef만 사용한다.
 - 상대 경로는 값이 선언된 source를 기준으로 해석하고 EffectiveConfig에 해석 기준을 남긴다.
 - 설정 파일에는 상태, 실행 결과와 자동으로 측정한 capability를 다시 쓰지 않는다.
@@ -191,7 +192,7 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 
 ### `[validation]`
 
-아래 기존 key는 P1/P0 compatibility를 유지한다. `baseline_mode`부터 `max_parallel_checks`까지는 3단계 M3 **목표 설정 계약**이며 현재 StarConfig parser·Schema·제품 code에 구현됐다는 뜻이 아니다. 구현 시 config Schema version, unknown/invalid fixture와 EffectiveConfig fingerprint golden을 함께 추가한다.
+아래 기존 key는 P1/P0 compatibility를 유지한다. P-0056 현재 source는 `baseline_mode`부터 `max_parallel_checks`까지 strict TOML parser, `EffectiveConfigV1` Schema·fixture·fingerprint와 M3 실행 정책에 materialize한다. Project·Goal·Command layer는 user floor를 약화할 수 없고 accepted-but-unmaterialized key는 시작 전에 거부한다.
 
 | key | type | 기본값 | 병합 |
 |---|---|---|---|
@@ -228,7 +229,7 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 
 ### `[contract_management]`, `[docs_validation]`, `[doctor]`
 
-아래 key는 6단계 **목표 설정 계약**이며 현재 parser·Schema·제품 code에 구현됐다는 뜻이 아니다. project의 비교 대상·baseline ref·docs target·environment constraint 자체는 [6단계 정본](contract-compatibility-and-environment.md)의 `.star-control/contracts.toml`이 소유한다. StarConfig는 이를 약화할 수 없는 실행 정책만 계산한다.
+아래 key는 P-0056 현재 strict parser와 `EffectiveConfigV1`에 materialize되어 M6 Controller 경로가 소비한다. project의 비교 대상·baseline ref·docs target·environment constraint 자체는 [6단계 정본](contract-compatibility-and-environment.md)의 `.star-control/contracts.toml`이 소유한다. StarConfig는 이를 약화할 수 없는 실행 정책만 계산한다.
 
 | section.key | type | 기본값 | 병합·불변식 |
 |---|---|---|---|
@@ -256,7 +257,7 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 
 ### `[failure_reproduction]`, `[security_supply_chain]`, `[dependency_maintenance]`, `[maintenance_radar]`
 
-아래 key는 [7단계 실패 재현·보안·의존성 유지보수](failure-security-and-dependency-maintenance.md)의 **목표 설정 계약**이며 현재 parser·Schema·제품 code에 구현됐다는 뜻이 아니다. Project별 package identity, 외부 source, package manager와 failure tool의 선언은 Catalog가 소유하고 StarConfig는 실행·보안 floor만 소유한다.
+아래 key는 P-0056 현재 strict parser와 `EffectiveConfigV1`에 materialize되어 M7 resource·freshness·retention·approval floor에 적용된다. Project별 package identity, 외부 source, package manager와 failure tool의 선언은 Catalog가 소유하고 StarConfig는 실행·보안 floor만 소유한다.
 
 | section.key | type | 기본값 | 병합·불변식 |
 |---|---|---|---|
@@ -291,7 +292,7 @@ Money는 `amount`, ISO currency와 검증된 `price_source`를 함께 가져야 
 
 ### `[migration]`, `[performance_build]`, `[language_platform_migration]`
 
-아래 key는 [8단계 Migration·성능·언어·플랫폼 계약](migration-performance-and-platform.md)의 **목표 설정 계약**이며 현재 parser·Schema·제품 code에 구현됐다는 뜻이 아니다. Project별 target/version/chain/invariant, workload와 behavior/consumer 선언은 Project Git manifest가 소유하고 StarConfig는 실행 안전 floor와 bounded default만 소유한다.
+아래 key는 P-0056 현재 strict parser와 `EffectiveConfigV1`에 materialize되어 M8 실행 한도·evidence freshness·platform floor에 적용된다. Project별 target/version/chain/invariant, workload와 behavior/consumer 선언은 Project Git manifest가 소유하고 StarConfig는 실행 안전 floor와 bounded default만 소유한다.
 
 | section.key | type | 기본값 | 병합·불변식 |
 |---|---|---|---|
@@ -336,7 +337,7 @@ workload가 warmup/measurement run 수를 명시하면 StarConfig default와 병
 
 ### `[release]`, `[evaluation]`
 
-아래 key는 [10단계 CI·Release·평가·최종 제품 완성 계약](ci-release-evaluation-and-product-completion.md)의 **목표 설정 계약**이며 현재 parser·Schema·제품 code에 구현됐다는 뜻이 아니다. package file list, supported Windows baseline, channel, version/changelog/license source, supply-chain applicability와 release Gate는 Git의 `packaging/release.toml`과 built-in Catalog가 소유한다. 평가 corpus·case·threshold·recommendation policy는 `evals/`의 versioned source가 소유한다. StarConfig는 이를 다시 선언하지 않고 실행 한도와 더 강한 사용자 제한만 표현한다.
+아래 key는 P-0056 현재 strict parser와 `EffectiveConfigV1`에 materialize되어 M10 candidate·evaluation 한도와 freshness floor에 적용된다. package file list, supported Windows baseline, channel, version/changelog/license source, supply-chain applicability와 release Gate는 Git의 `packaging/release.toml`과 built-in Catalog가 소유한다. 평가 corpus·case·threshold·recommendation policy는 `evals/`의 versioned source가 소유한다. StarConfig는 이를 다시 선언하지 않고 실행 한도와 더 강한 사용자 제한만 표현한다.
 
 | section.key | type | 기본값 | 병합·불변식 |
 |---|---|---|---|
@@ -363,7 +364,7 @@ workload가 warmup/measurement run 수를 명시하면 StarConfig default와 병
 
 ### `[rust_style]`
 
-아래는 [11단계 Rust 코드 스타일 자동 교정](../features/rust-code-style-auto-fix.md)의 **목표 설정 계약**이며 현재 parser·Schema·Catalog TOML·제품 code에 구현됐다는 뜻이 아니다. StarConfig는 Rust formatting/lint 값을 저장하는 곳이 아니다.
+아래 key는 P-0056 현재 strict parser와 `EffectiveConfigV1`에 materialize되어 M11 policy·approval floor에 적용된다. 실제 Rust formatting/lint 값은 여전히 pinned toolchain과 Git/Catalog source가 소유하며 StarConfig에 복제하지 않는다.
 
 | source | 소유하는 값 | 소유하지 않는 값 |
 |---|---|---|
@@ -391,7 +392,7 @@ resolved `RustStylePolicySnapshot`은 위 Catalog/Profile metadata와 actual Git
 
 ### `[vcs]`, `[remote]`, `[state]`
 
-`vcs.max_parallel_projects`부터 `vcs.worktree_disk_limit_bytes`와 `remote.max_parallel_writes`까지의 ChangeBundle resource key는 9단계 목표 설정 계약이다. 현재 parser·Schema·제품 code에 구현됐다는 뜻이 아니며, 구현 전에는 unknown key로 거부하고 version·invalid/future fixture와 EffectiveConfig golden을 함께 추가한다.
+`vcs.max_parallel_projects`부터 `vcs.worktree_disk_limit_bytes`와 `remote.max_parallel_writes`까지의 ChangeBundle resource key는 P-0056 현재 strict parser·`EffectiveConfigV1`·M9 Controller 경로에 materialize되어 있다. lower layer는 병렬도·disk·remote write scope를 넓힐 수 없고 version·invalid/future fixture와 fingerprint golden이 이를 고정한다.
 
 | section.key | type | 기본값 | 설명 |
 |---|---|---|---|
@@ -430,7 +431,7 @@ ChangeBundle `resource_budget`은 위 VCS/remote limit, `planning.max_parallel_c
 
 0단계의 정확한 type·fingerprint·repository 경계는 [공통 개발 관리와 로컬 관리 DB 계약](development-management.md), 1단계의 Project discovery·source 분류·index tier·freshness 의미는 [Project Catalog·Code Index 계약](project-catalog-and-code-index.md)이 소유한다. 설정은 backend나 특정 parser/indexer가 아니라 동작, 분석 범위와 resource 한도만 표현한다.
 
-`project_discovery.*`, `index.*`, `index_cache.*`와 아래 확장된 `scan.*` key는 1단계 **목표 설정 계약**이다. 현재 제품에서 이미 parse·적용된다고 해석하지 않으며 구현 시 Schema version·invalid/unknown fixture와 EffectiveConfig golden을 함께 추가한다.
+P-0056 현재 runtime override가 실제 동작에 materialize되는 M1 key는 `scan.*`, `index.*`, `index_cache.*`다. `management.keep_latest_successful_scans|incomplete_staging_retention_days|scan_detail_retention_days`도 retention plan에 materialize된다. `project_discovery.*`와 나머지 `management.*`는 current explicit-root·recovery invariant를 감사 가능한 EffectiveConfig에 기록하지만, 대체 동작이 아직 없는 값은 shipped value와 정확히 같을 때만 받아들이고 Project·Goal·Command override 대상에서 제외한다. 따라서 설정이 fingerprint만 바꾸고 실행은 그대로인 accepted-but-unmaterialized 상태가 없다. invalid/unknown key, unsafe widening과 stale fingerprint는 실행 전에 거부한다.
 
 | section.key | type | 기본값 | 병합 | 의미 |
 |---|---|---|---|---|
@@ -553,11 +554,11 @@ fingerprint는 다음처럼 분리한다.
 
 모든 값은 JCS로 hash한다. ScanRun에는 전체 `EffectiveConfig.fingerprint`, scan·index·classification fingerprint를, ProjectCatalogSnapshot에는 discovery fingerprint를 기록한다. persisted fingerprint payload에는 raw root path를 넣지 않는다. cache key는 snapshot과 index fingerprint를 사용하지만 cache budget·retention 변화만으로 semantic snapshot을 stale로 만들지 않는다.
 
-`management.*`와 scan resource·scope key는 사용자·project 설정에서 더 제한할 수 있다. Goal·CLI·MCP override가 scope나 resource를 넓히려면 일반 override가 아니라 새 Permission scope와 expected config fingerprint를 요구한다.
+위 세 retention key와 scan resource·scope key는 사용자·project 설정에서 허용된 merge 방향으로만 더 제한하거나 보존 floor를 높일 수 있다. Goal·CLI·MCP override가 scope나 resource를 넓히려면 일반 override가 아니라 새 Permission scope와 expected config fingerprint를 요구한다. fixed/reserved management·discovery key는 같은 값의 명시만 허용하며 lower layer에서 바꿀 수 없다.
 
 ### `[change_planning]`
 
-이 section은 2단계 [변경 계획·영향 분석](change-planning-and-impact.md)의 **목표 설정 계약**이다. 현재 StarConfig parser·Schema·제품 code에 구현됐다는 뜻이 아니다. 구현 전에는 unknown key로 거부하고, 구현 시 version·invalid/unknown fixture와 EffectiveConfig golden을 함께 추가한다.
+이 section은 P-0056 현재 strict parser·`EffectiveConfigV1`과 M2 planning policy에 materialize되어 있다. unknown key는 거부하고 Project→Goal→Command는 user floor보다 graph·candidate·reuse 범위를 넓힐 수 없다. version·invalid/unknown fixture와 fingerprint golden이 merge 결과를 고정한다.
 
 | key | type | 기본값 | 병합 | 의미 |
 |---|---|---|---|---|

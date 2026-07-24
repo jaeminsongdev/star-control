@@ -1,0 +1,390 @@
+{
+  "$defs": {
+    "Confidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "type": "string"
+    },
+    "DiagnosticConfidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "type": "string"
+    },
+    "DiagnosticGateEffectV2": {
+      "enum": [
+        "none",
+        "remaining_risk",
+        "requires_review",
+        "blocks"
+      ],
+      "type": "string"
+    },
+    "DiagnosticSeverity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "RuleDomainV2": {
+      "enum": [
+        "scan_finding",
+        "validation_diagnostic",
+        "both"
+      ],
+      "type": "string"
+    },
+    "RuleEvidenceContractV2": {
+      "additionalProperties": false,
+      "properties": {
+        "raw_output_requires_artifact_ref": {
+          "type": "boolean"
+        },
+        "required_evidence_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "required_evidence_kinds",
+        "raw_output_requires_artifact_ref"
+      ],
+      "type": "object"
+    },
+    "RuleGateFloorV2": {
+      "additionalProperties": false,
+      "properties": {
+        "default_confidence": {
+          "$ref": "#/$defs/DiagnosticConfidence"
+        },
+        "default_severity": {
+          "$ref": "#/$defs/DiagnosticSeverity"
+        },
+        "protected_gate_effect": {
+          "$ref": "#/$defs/DiagnosticGateEffectV2"
+        },
+        "ratchet_eligible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "default_severity",
+        "default_confidence",
+        "protected_gate_effect",
+        "ratchet_eligible"
+      ],
+      "type": "object"
+    },
+    "RuleLifecycle": {
+      "enum": [
+        "active",
+        "deprecated",
+        "disabled"
+      ],
+      "type": "string"
+    },
+    "RuleLocationContractV2": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_location_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_relative_paths_only": {
+          "type": "boolean"
+        },
+        "symbol_binding_allowed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "allowed_location_kinds",
+        "project_relative_paths_only",
+        "symbol_binding_allowed"
+      ],
+      "type": "object"
+    },
+    "RuleProducerKindV2": {
+      "enum": [
+        "built_in_analyzer",
+        "external_check_mapping",
+        "normalizer",
+        "gate_evaluator"
+      ],
+      "type": "string"
+    },
+    "RuleRemediationContractV2": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_action_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "allowed_target_selector_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required_recheck_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "allowed_action_kinds",
+        "allowed_target_selector_kinds",
+        "required_recheck_families"
+      ],
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "SourceKind": {
+      "enum": [
+        "file",
+        "generated_unit",
+        "virtual"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.rule:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analyzer_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "applies_to_check_families": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "category": {
+      "type": "string"
+    },
+    "default_confidence": {
+      "$ref": "#/$defs/Confidence"
+    },
+    "default_severity": {
+      "$ref": "#/$defs/Severity"
+    },
+    "definition_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "evidence_contract": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RuleEvidenceContractV2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fingerprint_contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "fixture_manifest_refs": {
+      "items": {
+        "$ref": "#/$defs/DocumentRef"
+      },
+      "type": "array"
+    },
+    "gate_floor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RuleGateFloorV2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "identity_anchor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "identity_contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/RuleLifecycle"
+    },
+    "location_contract": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RuleLocationContractV2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "parameter_schema_ref": {
+      "type": "string"
+    },
+    "producer_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RuleProducerKindV2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "producer_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "redaction_contract_version": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "remediation_contract": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RuleRemediationContractV2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "remediation_recipe_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "rule_domain": {
+      "$ref": "#/$defs/RuleDomainV2"
+    },
+    "rule_id": {
+      "type": "string"
+    },
+    "rule_version": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.rule",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "source_kinds": {
+      "items": {
+        "$ref": "#/$defs/SourceKind"
+      },
+      "type": "array"
+    },
+    "supported_languages": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "rule_id",
+    "rule_version",
+    "definition_fingerprint",
+    "title",
+    "category",
+    "default_severity",
+    "default_confidence",
+    "lifecycle",
+    "rule_domain",
+    "supported_languages",
+    "source_kinds",
+    "parameter_schema_ref",
+    "redaction_contract_version",
+    "remediation_recipe_refs",
+    "applies_to_check_families",
+    "fixture_manifest_refs"
+  ],
+  "title": "RuleV2",
+  "type": "object"
+}

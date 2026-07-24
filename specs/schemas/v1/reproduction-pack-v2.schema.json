@@ -119,6 +119,14 @@
           "minimum": 0,
           "type": "integer"
         },
+        "effect_receipt_ref": {
+          "default": null,
+          "description": "Receipt for the terminal registered ToolInvocation that produced this\nsemantic observation. Complete outcomes require this reference.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "environment_fingerprint": {
           "$ref": "#/$defs/Sha256Hash"
         },

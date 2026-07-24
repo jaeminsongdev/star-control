@@ -20,16 +20,17 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 pub use star_contracts::recovery::RecoveryInspection;
 use star_contracts::{
     BackupSetId, LocalStateBundleId, RecoveryPlanId, Sha256Hash, canonical_sha256,
-    evidence::{ArtifactRef, GateDecision, GateScope},
+    evidence::{ArtifactRef, Completeness, GateDecision, GateScope},
     evidence_v2::{
-        BaselineV2, DiagnosticV2, DispositionV2, EvidenceBundleV2, GateDecisionV2, ReviewPackV1,
-        SuppressionV2, ValidationResultV2, ValidationRunV2,
+        BaselineV2, DecisionSubjectKindV2, DiagnosticEvidenceRefV2, DiagnosticV2, DispositionV2,
+        EvidenceBundleV2, EvidenceFreshnessV2, GateDecisionV2, ReviewPackV1, SuppressionV2,
+        ValidationResultV2, ValidationRunV2, rule_set_fingerprint_for_subject_binding,
     },
     ids::{
         CheckoutId, CodeIndexSnapshotId, CoordinatedOperationId, DiagnosticId, EventId,
         EvidenceBundleId, FindingId, GateId, ManagementStoreId, PatchSetId, ProjectId,
-        ReviewPackId, RootBindingId, ScanRunId, TaskSpecId, ValidationResultId, ValidationRunId,
-        WorkspaceSnapshotId,
+        ProjectRevisionId, ReviewPackId, RootBindingId, ScanRunId, TaskSpecId, ValidationResultId,
+        ValidationRunId, WorkspaceSnapshotId,
     },
     index::{CodeIndexSnapshot, IndexEdge, IndexEntity, ProjectCatalogSnapshot, SourceEntry},
     managed_registry::{ManagedRegistrySnapshot, RegistryConsistencyRecord},
@@ -72,7 +73,8 @@ use star_ports::{
     CheckGraphEvidenceTransaction, CodeIndexCache, DevelopmentRecord, GlobalManagementRepository,
     ManagementRecovery, ManagementRepositorySet, ProjectManagementRepository,
     ProjectRootAttachment, ProjectRootBindingStore, RepositoryError, RepositoryErrorCategory,
-    RetentionApplyResult, RetentionCandidate, RetentionPlan, ScanCommit, StoredCodeIndexProjection,
+    RetentionApplyResult, RetentionCandidate, RetentionPlan, RetentionPolicy, ScanCommit,
+    StoredCodeIndexProjection,
 };
 use windows::{
     Win32::{
@@ -103,6 +105,7 @@ pub struct FileCodeIndexCache {
     max_entries_per_project: usize,
     max_entry_bytes: u64,
     max_project_bytes: u64,
+    max_age_days: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -135,9 +138,26 @@ impl FileCodeIndexCache {
         max_entry_bytes: u64,
         max_project_bytes: u64,
     ) -> Result<Self, RepositoryError> {
+        Self::open_with_policy(
+            root,
+            max_entries_per_project,
+            max_entry_bytes,
+            max_project_bytes,
+            30,
+        )
+    }
+
+    pub fn open_with_policy(
+        root: impl Into<PathBuf>,
+        max_entries_per_project: usize,
+        max_entry_bytes: u64,
+        max_project_bytes: u64,
+        max_age_days: u64,
+    ) -> Result<Self, RepositoryError> {
         if max_entries_per_project == 0
             || max_entry_bytes == 0
             || max_project_bytes < max_entry_bytes
+            || max_age_days == 0
         {
             return Err(repository_error(
                 RepositoryErrorCategory::Invalid,
@@ -151,6 +171,7 @@ impl FileCodeIndexCache {
             max_entries_per_project,
             max_entry_bytes,
             max_project_bytes,
+            max_age_days,
         })
     }
 
@@ -202,6 +223,11 @@ impl FileCodeIndexCache {
     fn evict(&self, project_id: &ProjectId) -> Result<(), RepositoryError> {
         let project_root = self.project_root(project_id);
         let mut entries = Vec::new();
+        let oldest_allowed = std::time::SystemTime::now()
+            .checked_sub(std::time::Duration::from_secs(
+                self.max_age_days.saturating_mul(86_400),
+            ))
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
         for entry in fs::read_dir(&project_root).map_err(map_io)? {
             let entry = entry.map_err(map_io)?;
             let path = entry.path();
@@ -209,6 +235,14 @@ impl FileCodeIndexCache {
                 continue;
             }
             let metadata = entry.metadata().map_err(map_io)?;
+            if metadata
+                .modified()
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                < oldest_allowed
+            {
+                fs::remove_file(&path).map_err(map_io)?;
+                continue;
+            }
             entries.push((
                 metadata
                     .modified()
@@ -319,6 +353,12 @@ impl CodeIndexCache for FileCodeIndexCache {
                 RepositoryErrorCategory::IntegrityFailed,
                 "code index cache entry identity is invalid",
             ));
+        }
+        if envelope.stored_at
+            < Utc::now() - chrono::Duration::days(self.max_age_days.min(i64::MAX as u64) as i64)
+        {
+            fs::remove_file(&path).map_err(map_io)?;
+            return Ok(None);
         }
         Ok(Some(envelope.projection))
     }
@@ -1416,19 +1456,55 @@ fn local_state_import_result(
     bundle: &LocalStateBundle,
     applied_at: DateTime<Utc>,
 ) -> Result<LocalStateImportResult, RepositoryError> {
-    let imported_suppressions = u64::try_from(bundle.local_suppressions.len()).map_err(|_| {
+    let imported_suppressions = u64::try_from(
+        bundle
+            .local_suppressions
+            .len()
+            .checked_add(bundle.local_suppressions_v2.len())
+            .ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "local state suppression count exceeds its supported range",
+                )
+            })?,
+    )
+    .map_err(|_| {
         repository_error(
             RepositoryErrorCategory::QuotaExceeded,
             "local state suppression count exceeds its supported range",
         )
     })?;
-    let imported_baselines = u64::try_from(bundle.local_baselines.len()).map_err(|_| {
+    let imported_baselines = u64::try_from(
+        bundle
+            .local_baselines
+            .len()
+            .checked_add(bundle.local_baselines_v2.len())
+            .ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "local state baseline count exceeds its supported range",
+                )
+            })?,
+    )
+    .map_err(|_| {
         repository_error(
             RepositoryErrorCategory::QuotaExceeded,
             "local state baseline count exceeds its supported range",
         )
     })?;
-    let imported_dispositions = u64::try_from(bundle.local_dispositions.len()).map_err(|_| {
+    let imported_dispositions = u64::try_from(
+        bundle
+            .local_dispositions
+            .len()
+            .checked_add(bundle.local_dispositions_v2.len())
+            .ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "local state disposition count exceeds its supported range",
+                )
+            })?,
+    )
+    .map_err(|_| {
         repository_error(
             RepositoryErrorCategory::QuotaExceeded,
             "local state disposition count exceeds its supported range",
@@ -1580,6 +1656,9 @@ fn local_state_snapshot(
         .filter(|value| value.scope_kind == star_contracts::management::BaselineScope::Local)
         .collect();
     let local_dispositions = repository.list_dispositions()?;
+    let local_suppressions_v2 = repository.list_suppressions_v2()?;
+    let local_baselines_v2 = repository.list_baselines_v2()?;
+    let local_dispositions_v2 = repository.list_dispositions_v2()?;
     let active_change_plans = repository
         .list_change_plans()?
         .into_iter()
@@ -1608,6 +1687,9 @@ fn local_state_snapshot(
         local_baselines,
         local_dispositions,
         active_change_plans,
+        local_suppressions_v2,
+        local_baselines_v2,
+        local_dispositions_v2,
         &PersistenceRedactor::for_current_user(),
     )
     .map_err(|_| {
@@ -1797,6 +1879,259 @@ fn read_local_state_bundle(
     Ok((bundle, Sha256Hash::digest(&bytes)))
 }
 
+fn diagnostic_evidence_ref_is_current(
+    repository: &dyn ProjectManagementRepository,
+    reference: &DiagnosticEvidenceRefV2,
+    project_id: &ProjectId,
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> Result<bool, RepositoryError> {
+    match reference {
+        DiagnosticEvidenceRefV2::Finding {
+            finding_id,
+            finding_fingerprint,
+        } => Ok(repository
+            .get_finding(finding_id)?
+            .is_some_and(|finding| finding.finding_fingerprint == *finding_fingerprint)),
+        DiagnosticEvidenceRefV2::Diagnostic { diagnostic_ref } => {
+            let Some(diagnostic) = repository.get_diagnostic_v2(&diagnostic_ref.diagnostic_id)?
+            else {
+                return Ok(false);
+            };
+            Ok(diagnostic.reference().as_ref() == Ok(diagnostic_ref)
+                && current_diagnostic_matches(
+                    &diagnostic,
+                    &repository.list_validation_runs_v2()?,
+                    project_id,
+                    source_revision_id,
+                    effective_config_fingerprint,
+                ))
+        }
+        DiagnosticEvidenceRefV2::Artifact { .. } | DiagnosticEvidenceRefV2::Document { .. } => {
+            Ok(true)
+        }
+    }
+}
+
+fn baseline_v2_subject_is_current(
+    repository: &dyn ProjectManagementRepository,
+    baseline: &BaselineV2,
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> Result<bool, RepositoryError> {
+    if baseline.entries.is_empty() {
+        return Ok(true);
+    }
+    Ok(baseline_v2_subject_matches(
+        baseline,
+        &repository.list_validation_runs_v2()?,
+        source_revision_id,
+        effective_config_fingerprint,
+    ))
+}
+
+fn current_validation_run_matches(
+    run: &ValidationRunV2,
+    project_id: &ProjectId,
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> bool {
+    run.project_id == *project_id
+        && run.completeness == Completeness::Complete
+        && run.subject_binding.freshness == EvidenceFreshnessV2::Current
+        && run.subject_binding.project_revision_id == *source_revision_id
+        && run.subject_binding.effective_config_fingerprint == *effective_config_fingerprint
+}
+
+fn current_diagnostic_matches(
+    diagnostic: &DiagnosticV2,
+    runs: &[ValidationRunV2],
+    project_id: &ProjectId,
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> bool {
+    diagnostic.project_id == *project_id
+        && diagnostic
+            .subject_binding_fingerprint
+            .as_ref()
+            .is_some_and(|binding| {
+                runs.iter().any(|run| {
+                    run.validation_run_id == diagnostic.validation_run_id
+                        && run.subject_binding.binding_fingerprint == *binding
+                        && current_validation_run_matches(
+                            run,
+                            project_id,
+                            source_revision_id,
+                            effective_config_fingerprint,
+                        )
+                })
+            })
+}
+
+fn baseline_v2_subject_matches(
+    baseline: &BaselineV2,
+    runs: &[ValidationRunV2],
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> bool {
+    baseline.entries.is_empty()
+        || runs.iter().any(|run| {
+            current_validation_run_matches(
+                run,
+                &baseline.project_id,
+                source_revision_id,
+                effective_config_fingerprint,
+            ) && run.subject_binding.binding_fingerprint == baseline.subject_binding_fingerprint
+                && rule_set_fingerprint_for_subject_binding(&run.subject_binding)
+                    .is_ok_and(|fingerprint| fingerprint == baseline.rule_set_fingerprint)
+        })
+}
+
+fn suppression_v2_subject_is_current(
+    repository: &dyn ProjectManagementRepository,
+    suppression: &SuppressionV2,
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> Result<bool, RepositoryError> {
+    Ok(suppression_v2_subject_matches(
+        suppression,
+        &repository.list_findings()?,
+        &repository.list_diagnostics_v2()?,
+        &repository.list_validation_runs_v2()?,
+        source_revision_id,
+        effective_config_fingerprint,
+    ))
+}
+
+fn disposition_v2_subject_is_current(
+    repository: &dyn ProjectManagementRepository,
+    disposition: &DispositionV2,
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> Result<bool, RepositoryError> {
+    Ok(disposition_v2_subject_matches(
+        disposition,
+        &repository.list_findings()?,
+        &repository.list_diagnostics_v2()?,
+        &repository.list_validation_runs_v2()?,
+        source_revision_id,
+        effective_config_fingerprint,
+    ))
+}
+
+fn diagnostic_evidence_ref_matches(
+    reference: &DiagnosticEvidenceRefV2,
+    findings: &[Finding],
+    diagnostics: &[DiagnosticV2],
+    runs: &[ValidationRunV2],
+    project_id: &ProjectId,
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> bool {
+    match reference {
+        DiagnosticEvidenceRefV2::Finding {
+            finding_id,
+            finding_fingerprint,
+        } => findings.iter().any(|finding| {
+            finding.finding_id == *finding_id && finding.finding_fingerprint == *finding_fingerprint
+        }),
+        DiagnosticEvidenceRefV2::Diagnostic { diagnostic_ref } => diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.diagnostic_id == diagnostic_ref.diagnostic_id)
+            .is_some_and(|diagnostic| {
+                diagnostic.reference().as_ref() == Ok(diagnostic_ref)
+                    && current_diagnostic_matches(
+                        diagnostic,
+                        runs,
+                        project_id,
+                        source_revision_id,
+                        effective_config_fingerprint,
+                    )
+            }),
+        DiagnosticEvidenceRefV2::Artifact { .. } | DiagnosticEvidenceRefV2::Document { .. } => true,
+    }
+}
+
+fn suppression_v2_subject_matches(
+    suppression: &SuppressionV2,
+    findings: &[Finding],
+    diagnostics: &[DiagnosticV2],
+    runs: &[ValidationRunV2],
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> bool {
+    match suppression.subject_kind {
+        DecisionSubjectKindV2::Finding => findings.iter().any(|finding| {
+            suppression
+                .subject_fingerprint
+                .as_ref()
+                .is_some_and(|fingerprint| fingerprint == &finding.finding_fingerprint)
+        }),
+        DecisionSubjectKindV2::Diagnostic => diagnostics.iter().any(|diagnostic| {
+            let subject_matches = suppression
+                .subject_fingerprint
+                .as_ref()
+                .is_some_and(|fingerprint| fingerprint == &diagnostic.fingerprint)
+                || suppression
+                    .rule_ref_constraint
+                    .as_ref()
+                    .is_some_and(|rule| rule == &diagnostic.rule_ref);
+            let binding_matches =
+                suppression
+                    .subject_binding_constraint
+                    .as_ref()
+                    .is_some_and(|binding| {
+                        diagnostic.subject_binding_fingerprint.as_ref() == Some(binding)
+                    });
+            subject_matches
+                && binding_matches
+                && current_diagnostic_matches(
+                    diagnostic,
+                    runs,
+                    &suppression.project_id,
+                    source_revision_id,
+                    effective_config_fingerprint,
+                )
+        }),
+    }
+}
+
+fn disposition_v2_subject_matches(
+    disposition: &DispositionV2,
+    findings: &[Finding],
+    diagnostics: &[DiagnosticV2],
+    runs: &[ValidationRunV2],
+    source_revision_id: &ProjectRevisionId,
+    effective_config_fingerprint: &Sha256Hash,
+) -> bool {
+    match disposition.subject_kind {
+        DecisionSubjectKindV2::Finding => {
+            disposition.finding_id.as_ref().is_some_and(|finding_id| {
+                findings.iter().any(|finding| {
+                    finding.finding_id == *finding_id
+                        && finding.finding_fingerprint == disposition.subject_fingerprint
+                })
+            })
+        }
+        DecisionSubjectKindV2::Diagnostic => diagnostics.iter().any(|diagnostic| {
+            diagnostic.fingerprint == disposition.subject_fingerprint
+                && disposition
+                    .subject_binding_constraint
+                    .as_ref()
+                    .is_some_and(|binding| {
+                        diagnostic.subject_binding_fingerprint.as_ref() == Some(binding)
+                    })
+                && current_diagnostic_matches(
+                    diagnostic,
+                    runs,
+                    &disposition.project_id,
+                    source_revision_id,
+                    effective_config_fingerprint,
+                )
+        }),
+    }
+}
+
 fn plan_local_state_import_for_repository(
     repository: &dyn ProjectManagementRepository,
     bundle: &LocalStateBundle,
@@ -1824,11 +2159,17 @@ fn plan_local_state_import_for_repository(
             "CONFIG_FINGERPRINT_MISMATCH",
         ));
     }
-    let suppressions = repository
+    let mut suppressions = repository
         .list_suppressions()?
         .into_iter()
         .map(|value| value.suppression_id)
         .collect::<BTreeSet<_>>();
+    suppressions.extend(
+        repository
+            .list_suppressions_v2()?
+            .into_iter()
+            .map(|value| value.suppression_id),
+    );
     for value in &bundle.local_suppressions {
         if suppressions.contains(&value.suppression_id) {
             conflicts.push(local_state_conflict(
@@ -1838,11 +2179,48 @@ fn plan_local_state_import_for_repository(
             ));
         }
     }
-    let baselines = repository
+    for value in &bundle.local_suppressions_v2 {
+        if suppressions.contains(&value.suppression_id) {
+            conflicts.push(local_state_conflict(
+                "suppression_v2",
+                value.suppression_id.as_str(),
+                "ENTITY_ALREADY_EXISTS",
+            ));
+        }
+        let mut target_missing = !suppression_v2_subject_is_current(
+            repository,
+            value,
+            &bundle.source_revision_id,
+            &bundle.effective_config_fingerprint,
+        )?;
+        for reference in &value.review_evidence_refs {
+            target_missing |= !diagnostic_evidence_ref_is_current(
+                repository,
+                reference,
+                &bundle.project_id,
+                &bundle.source_revision_id,
+                &bundle.effective_config_fingerprint,
+            )?;
+        }
+        if target_missing {
+            conflicts.push(local_state_conflict(
+                "suppression_v2",
+                value.suppression_id.as_str(),
+                "TARGET_SUBJECT_OR_EVIDENCE_NOT_CURRENT",
+            ));
+        }
+    }
+    let mut baselines = repository
         .list_baselines()?
         .into_iter()
         .map(|value| value.baseline_id)
         .collect::<BTreeSet<_>>();
+    baselines.extend(
+        repository
+            .list_baselines_v2()?
+            .into_iter()
+            .map(|value| value.baseline_id),
+    );
     for value in &bundle.local_baselines {
         if baselines.contains(&value.baseline_id) {
             conflicts.push(local_state_conflict(
@@ -1862,11 +2240,38 @@ fn plan_local_state_import_for_repository(
             ));
         }
     }
-    let dispositions = repository
+    for value in &bundle.local_baselines_v2 {
+        if baselines.contains(&value.baseline_id) {
+            conflicts.push(local_state_conflict(
+                "baseline_v2",
+                value.baseline_id.as_str(),
+                "ENTITY_ALREADY_EXISTS",
+            ));
+        }
+        if !baseline_v2_subject_is_current(
+            repository,
+            value,
+            &bundle.source_revision_id,
+            &bundle.effective_config_fingerprint,
+        )? {
+            conflicts.push(local_state_conflict(
+                "baseline_v2",
+                value.baseline_id.as_str(),
+                "TARGET_SUBJECT_OR_RULE_SET_NOT_CURRENT",
+            ));
+        }
+    }
+    let mut dispositions = repository
         .list_dispositions()?
         .into_iter()
         .map(|value| value.disposition_id)
         .collect::<BTreeSet<_>>();
+    dispositions.extend(
+        repository
+            .list_dispositions_v2()?
+            .into_iter()
+            .map(|value| value.disposition_id),
+    );
     for value in &bundle.local_dispositions {
         if dispositions.contains(&value.disposition_id) {
             conflicts.push(local_state_conflict(
@@ -1880,6 +2285,49 @@ fn plan_local_state_import_for_repository(
                 "disposition",
                 value.disposition_id.as_str(),
                 "TARGET_FINDING_NOT_CURRENT",
+            ));
+        }
+        if let Some(duplicate_id) = value.duplicate_of_finding_id.as_ref()
+            && repository.get_finding(duplicate_id)?.is_none()
+        {
+            conflicts.push(local_state_conflict(
+                "disposition",
+                value.disposition_id.as_str(),
+                "DUPLICATE_TARGET_FINDING_NOT_CURRENT",
+            ));
+        }
+    }
+    for value in &bundle.local_dispositions_v2 {
+        if dispositions.contains(&value.disposition_id) {
+            conflicts.push(local_state_conflict(
+                "disposition_v2",
+                value.disposition_id.as_str(),
+                "ENTITY_ALREADY_EXISTS",
+            ));
+        }
+        let mut target_missing = !disposition_v2_subject_is_current(
+            repository,
+            value,
+            &bundle.source_revision_id,
+            &bundle.effective_config_fingerprint,
+        )?;
+        if let Some(duplicate_id) = value.duplicate_of_finding_id.as_ref() {
+            target_missing |= repository.get_finding(duplicate_id)?.is_none();
+        }
+        for reference in &value.review_evidence_refs {
+            target_missing |= !diagnostic_evidence_ref_is_current(
+                repository,
+                reference,
+                &bundle.project_id,
+                &bundle.source_revision_id,
+                &bundle.effective_config_fingerprint,
+            )?;
+        }
+        if target_missing {
+            conflicts.push(local_state_conflict(
+                "disposition_v2",
+                value.disposition_id.as_str(),
+                "TARGET_SUBJECT_OR_EVIDENCE_NOT_CURRENT",
             ));
         }
     }
@@ -2001,6 +2449,9 @@ fn apply_local_state_import_for_repository(
         let baselines = repository.list_baselines()?;
         let dispositions = repository.list_dispositions()?;
         let change_plans = repository.list_change_plans()?;
+        let suppressions_v2 = repository.list_suppressions_v2()?;
+        let baselines_v2 = repository.list_baselines_v2()?;
+        let dispositions_v2 = repository.list_dispositions_v2()?;
         let already_applied = status.store_revision > plan.expected_store_revision
             && current.project_revision_id == plan.expected_source_revision_id
             && current.effective_config_fingerprint == plan.expected_config_fingerprint
@@ -2019,7 +2470,19 @@ fn apply_local_state_import_for_repository(
             && bundle
                 .active_change_plans
                 .iter()
-                .all(|value| change_plans.contains(value));
+                .all(|value| change_plans.contains(value))
+            && bundle
+                .local_suppressions_v2
+                .iter()
+                .all(|value| suppressions_v2.contains(value))
+            && bundle
+                .local_baselines_v2
+                .iter()
+                .all(|value| baselines_v2.contains(value))
+            && bundle
+                .local_dispositions_v2
+                .iter()
+                .all(|value| dispositions_v2.contains(value));
         if already_applied {
             let result = local_state_import_result(plan, bundle, Utc::now())?;
             write_recovery_receipt(
@@ -2469,8 +2932,31 @@ impl ManagementRepositorySet for SqliteManagementRepositorySet {
     }
 
     fn plan_retention(&self) -> Result<RetentionPlan, RepositoryError> {
+        self.plan_retention_with_policy(&RetentionPolicy::default())
+    }
+
+    fn plan_retention_with_policy(
+        &self,
+        policy: &RetentionPolicy,
+    ) -> Result<RetentionPlan, RepositoryError> {
+        if policy.keep_latest_successful_scans == 0
+            || policy.incomplete_staging_retention_days == 0
+            || policy.scan_detail_retention_days == 0
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "retention policy is invalid",
+            ));
+        }
         let created_at = Utc::now();
-        let cutoff = created_at - chrono::Duration::days(7);
+        let cutoff = created_at
+            - chrono::Duration::days(
+                policy
+                    .incomplete_staging_retention_days
+                    .min(i64::MAX as u64) as i64,
+            );
+        let scan_detail_cutoff = created_at
+            - chrono::Duration::days(policy.scan_detail_retention_days.min(i64::MAX as u64) as i64);
         let global = self.global.status()?;
         let mut expected_store_revisions =
             BTreeMap::from([("global".to_owned(), global.store_revision)]);
@@ -2482,9 +2968,11 @@ impl ManagementRepositorySet for SqliteManagementRepositorySet {
                 project.project_id.as_str().to_owned(),
                 status.store_revision,
             );
-            candidates.extend(
-                repository.retention_candidates(cutoff, created_at - chrono::Duration::days(90))?,
-            );
+            candidates.extend(repository.retention_candidates(
+                cutoff,
+                scan_detail_cutoff,
+                policy.keep_latest_successful_scans,
+            )?);
         }
         candidates.sort_by(|left, right| {
             left.project_id
@@ -4090,6 +4578,12 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
             .max(bundle.scope_revision.revision)
             .max(bundle.impact_analysis.revision)
             .max(bundle.validation_plan.revision);
+        let bundle_revision = bundle
+            .change_plans
+            .iter()
+            .fold(bundle_revision, |revision, plan| {
+                revision.max(plan.revision)
+            });
         let sql_bundle_revision = i64::try_from(bundle_revision).map_err(|_| {
             repository_error(
                 RepositoryErrorCategory::Invalid,
@@ -4121,10 +4615,16 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
                     "planning idempotency key conflicts with stored input or result",
                 ));
             }
-            return serde_json::from_str(&stored_document).map_err(|_| {
+            let stored: PlanningBundle = serde_json::from_str(&stored_document).map_err(|_| {
                 repository_error(
                     RepositoryErrorCategory::Corrupt,
                     "stored planning bundle is invalid",
+                )
+            })?;
+            return stored.migrate_v1_to_v2().map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "stored planning bundle migration failed",
                 )
             });
         }
@@ -4228,11 +4728,20 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
                 "global store lock is unavailable",
             )
         })?;
-        query_document(
+        let stored: Option<PlanningBundle> = query_document(
             &connection,
             "SELECT document_json FROM planning_bundles WHERE task_spec_id=?1",
             task_spec_id.as_str(),
-        )
+        )?;
+        stored
+            .map(PlanningBundle::migrate_v1_to_v2)
+            .transpose()
+            .map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "stored planning bundle migration failed",
+                )
+            })
     }
 
     fn get_planning_bundle_by_idempotency_key(
@@ -4256,10 +4765,16 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
             .map_err(map_sql)?;
         stored
             .map(|(document, fingerprint)| {
-                let bundle = serde_json::from_str(&document).map_err(|_| {
+                let bundle: PlanningBundle = serde_json::from_str(&document).map_err(|_| {
                     repository_error(
                         RepositoryErrorCategory::Corrupt,
                         "stored planning bundle is invalid",
+                    )
+                })?;
+                let bundle = bundle.migrate_v1_to_v2().map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "stored planning bundle migration failed",
                     )
                 })?;
                 let fingerprint = Sha256Hash::from_str(&fingerprint).map_err(|_| {
@@ -4296,14 +4811,19 @@ impl GlobalManagementRepository for SqliteGlobalRepository {
             .map_err(map_sql)?;
         let mut bundles = Vec::new();
         for document in documents {
-            bundles.push(
-                serde_json::from_str(&document.map_err(map_sql)?).map_err(|_| {
+            let bundle: PlanningBundle = serde_json::from_str(&document.map_err(map_sql)?)
+                .map_err(|_| {
                     repository_error(
                         RepositoryErrorCategory::Corrupt,
                         "stored planning bundle revision is invalid",
                     )
-                })?,
-            );
+                })?;
+            bundles.push(bundle.migrate_v1_to_v2().map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "stored planning bundle revision migration failed",
+                )
+            })?);
         }
         Ok(bundles)
     }
@@ -4684,7 +5204,14 @@ impl SqliteProjectRepository {
         &self,
         incomplete_cutoff: DateTime<Utc>,
         scan_detail_cutoff: DateTime<Utc>,
+        keep_latest_successful_scans: usize,
     ) -> Result<Vec<RetentionCandidate>, RepositoryError> {
+        if keep_latest_successful_scans == 0 {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "successful scan retention floor is invalid",
+            ));
+        }
         let connection = self.connection.lock().map_err(|_| {
             repository_error(
                 RepositoryErrorCategory::Unavailable,
@@ -4731,7 +5258,7 @@ impl SqliteProjectRepository {
         }
         successful.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| right.1.cmp(&left.1)));
         for (index, (finished, generation_id, run)) in successful.into_iter().enumerate() {
-            if index >= 2
+            if index >= keep_latest_successful_scans
                 && generation_id != current
                 && finished < scan_detail_cutoff
                 && !protected_snapshots.contains(run.workspace_snapshot_id.as_str())
@@ -4972,6 +5499,36 @@ impl SqliteProjectRepository {
         query_documents(&connection, sql, [])
     }
 
+    fn list_latest_m3_decision_documents<T: serde::de::DeserializeOwned>(
+        &self,
+        table: &str,
+        logical_id_path: &str,
+    ) -> Result<Vec<T>, RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        query_documents(
+            &connection,
+            &format!(
+                "SELECT current.document_json
+                 FROM {table} AS current
+                 JOIN (
+                    SELECT json_extract(document_json, '{logical_id_path}') AS logical_id,
+                           MAX(CAST(json_extract(document_json, '$.revision') AS INTEGER)) AS revision
+                    FROM {table}
+                    GROUP BY json_extract(document_json, '{logical_id_path}')
+                 ) AS latest
+                   ON json_extract(current.document_json, '{logical_id_path}')=latest.logical_id
+                  AND CAST(json_extract(current.document_json, '$.revision') AS INTEGER)=latest.revision
+                 ORDER BY latest.logical_id"
+            ),
+            [],
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn put_m3_decision_document<T: Serialize>(
         &self,
@@ -5016,6 +5573,47 @@ impl SqliteProjectRepository {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(map_sql)?;
+        let existing: Option<String> = transaction
+            .query_row(
+                &format!("SELECT document_json FROM {table} WHERE entity_id=?1"),
+                [&key],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(map_sql)?;
+        if let Some(existing) = existing {
+            if existing
+                == serde_json::to_string(value).map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "M3 decision serialization failed",
+                    )
+                })?
+            {
+                return Ok(());
+            }
+            return Err(repository_error(
+                RepositoryErrorCategory::IdempotencyConflict,
+                "M3 decision identity and revision already contain another document",
+            ));
+        }
+        let current_revision: i64 = transaction
+            .query_row(
+                &format!(
+                    "SELECT COALESCE(MAX(CAST(json_extract(document_json, '$.revision') AS INTEGER)), 0)
+                     FROM {table}
+                     WHERE substr(entity_id, 1, length(?1) + 1)=?1 || ':'"
+                ),
+                [entity_id],
+                |row| row.get(0),
+            )
+            .map_err(map_sql)?;
+        if current_revision < 0 || current_revision as u64 != revision.saturating_sub(1) {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "M3 decision revision is stale or non-contiguous",
+            ));
+        }
         insert_immutable_document(&transaction, table, &key, value)?;
         append_event(
             &transaction,
@@ -6085,6 +6683,30 @@ impl ProjectManagementRepository for SqliteProjectRepository {
                 value.provenance.as_str(),
             ])?;
         }
+        for value in &bundle.local_suppressions_v2 {
+            if value.project_id != self.project_id || value.clone().seal().as_ref() != Ok(value) {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "imported SuppressionV2 invariant failed",
+                ));
+            }
+        }
+        for value in &bundle.local_baselines_v2 {
+            if value.project_id != self.project_id || value.clone().seal().as_ref() != Ok(value) {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "imported BaselineV2 invariant failed",
+                ));
+            }
+        }
+        for value in &bundle.local_dispositions_v2 {
+            if value.project_id != self.project_id || value.clone().seal().as_ref() != Ok(value) {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "imported DispositionV2 invariant failed",
+                ));
+            }
+        }
 
         let mut connection = self.connection.lock().map_err(|_| {
             repository_error(
@@ -6117,6 +6739,21 @@ impl ProjectManagementRepository for SqliteProjectRepository {
                     "local state import target has no current scan",
                 )
             })?;
+        let current_findings: Vec<Finding> = query_documents(
+            &transaction,
+            "SELECT document_json FROM findings WHERE generation_id=?1 ORDER BY entity_id",
+            [generation.as_str()],
+        )?;
+        let current_diagnostics: Vec<DiagnosticV2> = query_documents(
+            &transaction,
+            "SELECT document_json FROM diagnostics_v2 ORDER BY entity_id",
+            [],
+        )?;
+        let current_validation_runs: Vec<ValidationRunV2> = query_documents(
+            &transaction,
+            "SELECT document_json FROM validation_runs_v2 ORDER BY entity_id",
+            [],
+        )?;
         for (table, entity_id) in bundle
             .local_suppressions
             .iter()
@@ -6147,6 +6784,38 @@ impl ProjectManagementRepository for SqliteProjectRepository {
                 ));
             }
         }
+        for (table, entity_id, revision) in bundle
+            .local_suppressions_v2
+            .iter()
+            .map(|value| {
+                (
+                    "suppressions_v2",
+                    value.suppression_id.as_str(),
+                    value.revision,
+                )
+            })
+            .chain(
+                bundle
+                    .local_baselines_v2
+                    .iter()
+                    .map(|value| ("baselines_v2", value.baseline_id.as_str(), value.revision)),
+            )
+            .chain(bundle.local_dispositions_v2.iter().map(|value| {
+                (
+                    "dispositions_v2",
+                    value.disposition_id.as_str(),
+                    value.revision,
+                )
+            }))
+        {
+            let storage_key = format!("{entity_id}:{revision}");
+            if local_state_entity_exists(&transaction, table, &storage_key)? {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "local state import M3 entity already exists",
+                ));
+            }
+        }
         for disposition in &bundle.local_dispositions {
             if !generation_entity_exists(
                 &transaction,
@@ -6158,6 +6827,101 @@ impl ProjectManagementRepository for SqliteProjectRepository {
                     RepositoryErrorCategory::RevisionConflict,
                     "local Disposition target Finding is not current",
                 ));
+            }
+            if let Some(duplicate_id) = disposition.duplicate_of_finding_id.as_ref()
+                && !generation_entity_exists(
+                    &transaction,
+                    "findings",
+                    &generation,
+                    duplicate_id.as_str(),
+                )?
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "local Disposition duplicate target Finding is not current",
+                ));
+            }
+        }
+        for suppression in &bundle.local_suppressions_v2 {
+            if !suppression_v2_subject_matches(
+                suppression,
+                &current_findings,
+                &current_diagnostics,
+                &current_validation_runs,
+                &bundle.source_revision_id,
+                &bundle.effective_config_fingerprint,
+            ) || suppression.review_evidence_refs.iter().any(|reference| {
+                !diagnostic_evidence_ref_matches(
+                    reference,
+                    &current_findings,
+                    &current_diagnostics,
+                    &current_validation_runs,
+                    &bundle.project_id,
+                    &bundle.source_revision_id,
+                    &bundle.effective_config_fingerprint,
+                )
+            }) {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "local SuppressionV2 subject or evidence is not current",
+                ));
+            }
+        }
+        for baseline in &bundle.local_baselines_v2 {
+            if !baseline_v2_subject_matches(
+                baseline,
+                &current_validation_runs,
+                &bundle.source_revision_id,
+                &bundle.effective_config_fingerprint,
+            ) {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "local BaselineV2 subject or rule set is not current",
+                ));
+            }
+        }
+        for disposition in &bundle.local_dispositions_v2 {
+            if !disposition_v2_subject_matches(
+                disposition,
+                &current_findings,
+                &current_diagnostics,
+                &current_validation_runs,
+                &bundle.source_revision_id,
+                &bundle.effective_config_fingerprint,
+            ) {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "local DispositionV2 target subject is not current",
+                ));
+            }
+            if let Some(duplicate_id) = disposition.duplicate_of_finding_id.as_ref()
+                && !generation_entity_exists(
+                    &transaction,
+                    "findings",
+                    &generation,
+                    duplicate_id.as_str(),
+                )?
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "local DispositionV2 duplicate target Finding is not current",
+                ));
+            }
+            for reference in &disposition.review_evidence_refs {
+                if !diagnostic_evidence_ref_matches(
+                    reference,
+                    &current_findings,
+                    &current_diagnostics,
+                    &current_validation_runs,
+                    &bundle.project_id,
+                    &bundle.source_revision_id,
+                    &bundle.effective_config_fingerprint,
+                ) {
+                    return Err(repository_error(
+                        RepositoryErrorCategory::RevisionConflict,
+                        "local DispositionV2 evidence target is not current",
+                    ));
+                }
             }
         }
         for baseline in &bundle.local_baselines {
@@ -6224,6 +6988,30 @@ impl ProjectManagementRepository for SqliteProjectRepository {
                 "dispositions",
                 value.disposition_id.as_str(),
                 value.revision,
+                value,
+            )?;
+        }
+        for value in &bundle.local_suppressions_v2 {
+            insert_immutable_document(
+                &transaction,
+                "suppressions_v2",
+                &format!("{}:{}", value.suppression_id.as_str(), value.revision),
+                value,
+            )?;
+        }
+        for value in &bundle.local_baselines_v2 {
+            insert_immutable_document(
+                &transaction,
+                "baselines_v2",
+                &format!("{}:{}", value.baseline_id.as_str(), value.revision),
+                value,
+            )?;
+        }
+        for value in &bundle.local_dispositions_v2 {
+            insert_immutable_document(
+                &transaction,
+                "dispositions_v2",
+                &format!("{}:{}", value.disposition_id.as_str(), value.revision),
                 value,
             )?;
         }
@@ -6568,9 +7356,7 @@ impl ProjectManagementRepository for SqliteProjectRepository {
     }
 
     fn list_baselines_v2(&self) -> Result<Vec<BaselineV2>, RepositoryError> {
-        self.list_m3_documents(
-            "SELECT document_json FROM baselines_v2 ORDER BY json_extract(document_json, '$.created_at') ASC, entity_id ASC",
-        )
+        self.list_latest_m3_decision_documents("baselines_v2", "$.baseline_id")
     }
 
     fn put_suppression_v2(&self, suppression: &SuppressionV2) -> Result<(), RepositoryError> {
@@ -6584,10 +7370,33 @@ impl ProjectManagementRepository for SqliteProjectRepository {
         )
     }
 
-    fn list_suppressions_v2(&self) -> Result<Vec<SuppressionV2>, RepositoryError> {
-        self.list_m3_documents(
-            "SELECT document_json FROM suppressions_v2 ORDER BY json_extract(document_json, '$.created_at') ASC, entity_id ASC",
+    fn get_suppression_v2(
+        &self,
+        suppression_id: &star_contracts::ids::SuppressionId,
+        revision: u64,
+    ) -> Result<Option<SuppressionV2>, RepositoryError> {
+        if revision == 0 {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "suppression revision must be positive",
+            ));
+        }
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        let key = format!("{}:{revision}", suppression_id.as_str());
+        query_document(
+            &connection,
+            "SELECT document_json FROM suppressions_v2 WHERE entity_id=?1",
+            key.as_str(),
         )
+    }
+
+    fn list_suppressions_v2(&self) -> Result<Vec<SuppressionV2>, RepositoryError> {
+        self.list_latest_m3_decision_documents("suppressions_v2", "$.suppression_id")
     }
 
     fn put_disposition_v2(&self, disposition: &DispositionV2) -> Result<(), RepositoryError> {
@@ -6602,9 +7411,7 @@ impl ProjectManagementRepository for SqliteProjectRepository {
     }
 
     fn list_dispositions_v2(&self) -> Result<Vec<DispositionV2>, RepositoryError> {
-        self.list_m3_documents(
-            "SELECT document_json FROM dispositions_v2 ORDER BY json_extract(document_json, '$.decided_at') ASC, entity_id ASC",
-        )
+        self.list_latest_m3_decision_documents("dispositions_v2", "$.disposition_id")
     }
 
     fn save_managed_registry_resolution(

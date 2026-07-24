@@ -12,5 +12,6 @@
   "replacement_ref": "fixture",
   "schema_id": "star.evaluation-catalog-item",
   "schema_version": 1,
-  "tombstone_ref": "fixture"
+  "tombstone_ref": "fixture",
+  "trial_candidate": false
 }

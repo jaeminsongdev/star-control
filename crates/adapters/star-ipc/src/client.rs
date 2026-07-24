@@ -141,7 +141,7 @@ impl ControllerClient {
     pub async fn call_with_mcp_tool(
         &self,
         command: &str,
-        payload: serde_json::Value,
+        mut payload: serde_json::Value,
         correlation_id: RequestId,
         mcp_tool: Option<&str>,
     ) -> Result<IpcResponse, ControllerClientError> {
@@ -226,6 +226,13 @@ impl ControllerClient {
         }
 
         let request_id = RequestId::new();
+        let config_overrides = payload
+            .as_object_mut()
+            .and_then(|object| object.remove("config_overrides"))
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|_| ControllerClientError::MalformedResponse)?
+            .unwrap_or_default();
         let response_timeout = response_read_timeout(command, &payload);
         let idempotency_key = payload
             .get("idempotency_key")
@@ -235,6 +242,16 @@ impl ControllerClient {
             .ok()
             .and_then(|path| path.to_str().map(str::to_owned))
             .ok_or(ControllerClientError::Unavailable)?;
+        let mut actor = serde_json::json!({
+            "kind": self.config.client_kind,
+            "mcp_tool": mcp_tool,
+            "project_root": project_root
+        });
+        if let Some(goal_id) = payload.get("goal_id").and_then(serde_json::Value::as_str)
+            && let Some(actor) = actor.as_object_mut()
+        {
+            actor.insert("goal_id".to_owned(), goal_id.into());
+        }
         let request = IpcRequest {
             schema_id: "star.ipc.request".to_owned(),
             schema_version: 1,
@@ -244,11 +261,8 @@ impl ControllerClient {
             client_request_id: correlation_id.to_string(),
             idempotency_key,
             deadline: None,
-            actor: serde_json::json!({
-                "kind": self.config.client_kind,
-                "mcp_tool": mcp_tool,
-                "project_root": project_root
-            }),
+            actor,
+            config_overrides,
             trace_context: None,
         };
         write_typed(&mut pipe, &request).await?;

@@ -529,6 +529,6 @@
     "active_change_plans",
     "content_fingerprint"
   ],
-  "title": "LocalStateBundle",
+  "title": "LocalStateBundleSchemaV1",
   "type": "object"
 }

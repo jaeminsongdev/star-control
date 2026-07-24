@@ -1,0 +1,191 @@
+{
+  "backup_required": false,
+  "dry_run": false,
+  "entries": [
+    {
+      "legacy_change_plan_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "limitations": [
+        "fixture"
+      ],
+      "projected_change_plan": {
+        "change_graph": [
+          {
+            "atomic_group_id": "fixture",
+            "from_unit_id": "fixture",
+            "relation": "requires",
+            "to_unit_id": "fixture"
+          }
+        ],
+        "change_origin": "user_planned",
+        "change_plan_id": "cpl_00000000000000000000000000",
+        "change_set_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "completion_criteria_mapping": [
+          {
+            "check_plan_item_ids": [
+              "fixture"
+            ],
+            "criterion_id": "fixture",
+            "explicit_user_decision_omission": "fixture",
+            "manual_observation_refs": [
+              "fixture"
+            ],
+            "unit_ids": [
+              "fixture"
+            ]
+          }
+        ],
+        "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "created_at": "2026-01-01T00:00:00Z",
+        "deterministic_unit_order": [
+          "fixture"
+        ],
+        "expected_impact_refs": [
+          {
+            "accepted_impact_edge_ids": [
+              "fixture"
+            ],
+            "unit_id": "fixture",
+            "unresolved_frontier_refs": [
+              "fixture"
+            ]
+          }
+        ],
+        "expected_paths": [
+          "src/lib.rs"
+        ],
+        "finding_refs": [
+          {
+            "finding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "finding_id": "fnd_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "impact_analysis_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "parameters": {
+          "fixture": "fixture"
+        },
+        "permission_plan_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "permission_requirements": [
+          "fixture"
+        ],
+        "planned_change_units": [
+          {
+            "change_kind": "add",
+            "completion_criterion_refs": [
+              "fixture"
+            ],
+            "expected_paths": [
+              "src/lib.rs"
+            ],
+            "impact_edge_refs": [
+              "fixture"
+            ],
+            "intended_postcondition": "fixture",
+            "permission_requirements": [
+              "fixture"
+            ],
+            "precondition_fingerprints": [
+              "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            ],
+            "reason": "fixture",
+            "risk_path_refs": [
+              "src/lib.rs"
+            ],
+            "source": "user",
+            "target_selector": {
+              "kind": "path",
+              "value": "fixture"
+            },
+            "unit_id": "fixture",
+            "unresolved_target": "fixture"
+          }
+        ],
+        "preconditions": [
+          "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "project_id": "prj_00000000000000000000000000",
+        "readiness": "draft",
+        "recipe_refs": [
+          {
+            "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            "recipe_id": "fixture",
+            "recipe_version": "fixture"
+          }
+        ],
+        "related_project_impacts": [
+          {
+            "impact_analysis_ref": {
+              "document_id": "fixture",
+              "revision": 0,
+              "schema_id": "fixture",
+              "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "project_id": "prj_00000000000000000000000000"
+          }
+        ],
+        "revision": 1,
+        "risk_path_refs": [
+          "src/lib.rs"
+        ],
+        "schema_id": "fixture",
+        "schema_version": 0,
+        "scope_revision_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "status": "draft",
+        "target_checkout_id": "cko_00000000000000000000000000",
+        "target_project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "target_workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "task_spec_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "unresolved_impacts": [
+          "fixture"
+        ],
+        "updated_at": "2026-01-01T00:00:00Z",
+        "validation_plan_ref": {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    }
+  ],
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "rollback_supported": false,
+  "schema_id": "star.change-plan-v1-to-v2-migration-plan",
+  "schema_version": 1,
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

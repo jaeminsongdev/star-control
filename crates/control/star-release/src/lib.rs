@@ -1,5 +1,6 @@
 //! Build-once release and EvaluationRun v2 engines.
 
+pub mod audit;
 pub mod candidate;
 pub mod evaluation;
 pub mod lifecycle;

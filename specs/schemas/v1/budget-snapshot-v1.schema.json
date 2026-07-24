@@ -1,0 +1,166 @@
+{
+  "$defs": {
+    "BudgetDecisionV1": {
+      "enum": [
+        "within_budget",
+        "approval_required",
+        "exhausted",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "BudgetQuantityV1": {
+      "additionalProperties": false,
+      "properties": {
+        "quantity": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit",
+        "quantity"
+      ],
+      "type": "object"
+    },
+    "CostRecordRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "cost_record_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cost_record_id",
+        "revision",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.budget-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "cost_record_refs": {
+      "items": {
+        "$ref": "#/$defs/CostRecordRefV1"
+      },
+      "type": "array"
+    },
+    "decision": {
+      "$ref": "#/$defs/BudgetDecisionV1"
+    },
+    "evaluated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "limits": {
+      "items": {
+        "$ref": "#/$defs/BudgetQuantityV1"
+      },
+      "type": "array"
+    },
+    "observed": {
+      "items": {
+        "$ref": "#/$defs/BudgetQuantityV1"
+      },
+      "type": "array"
+    },
+    "paid_action_pending": {
+      "type": "boolean"
+    },
+    "permission_approval_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "remaining": {
+      "items": {
+        "$ref": "#/$defs/BudgetQuantityV1"
+      },
+      "type": "array"
+    },
+    "reserved": {
+      "items": {
+        "$ref": "#/$defs/BudgetQuantityV1"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.budget-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_ref": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "unknown_measurements": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "snapshot_id",
+    "revision",
+    "project_id",
+    "scope_ref",
+    "limits",
+    "observed",
+    "reserved",
+    "remaining",
+    "decision",
+    "cost_record_refs",
+    "paid_action_pending",
+    "config_fingerprint",
+    "evaluated_at",
+    "content_fingerprint"
+  ],
+  "title": "BudgetSnapshotV1",
+  "type": "object"
+}

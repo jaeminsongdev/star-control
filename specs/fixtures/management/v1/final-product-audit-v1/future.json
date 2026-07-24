@@ -1,0 +1,16 @@
+{
+  "artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "audit_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "feature_statuses": [],
+  "internal_conformance": false,
+  "lifecycle_statuses": [],
+  "m11_profile_conformant": false,
+  "profile_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "profile_statuses": [],
+  "release_manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "release_manifest_id": "rel_00000000000000000000000000",
+  "release_status": "draft",
+  "schema_id": "star.final-product-audit",
+  "schema_version": 2,
+  "status": "conformant"
+}

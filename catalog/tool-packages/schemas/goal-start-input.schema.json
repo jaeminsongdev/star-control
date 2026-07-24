@@ -8,6 +8,55 @@
     "objective": { "type": "string", "minLength": 1, "maxLength": 4096 },
     "project_key": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$" },
     "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "config_overrides": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "value"],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[a-z0-9_]+(?:\\.[a-z0-9_]+)*$", "maxLength": 160 },
+          "value": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "value"],
+                "properties": { "kind": { "const": "boolean" }, "value": { "type": "boolean" } }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "value"],
+                "properties": { "kind": { "const": "integer" }, "value": { "type": "integer", "minimum": 0 } }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "value"],
+                "properties": { "kind": { "const": "string" }, "value": { "type": "string", "maxLength": 256 } }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "value"],
+                "properties": {
+                  "kind": { "const": "string_set" },
+                  "value": { "type": "array", "maxItems": 256, "uniqueItems": true, "items": { "type": "string", "maxLength": 256 } }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "value"],
+                "properties": { "kind": { "const": "json" }, "value": true }
+              }
+            ]
+          }
+        }
+      }
+    },
     "question": {
       "type": "object",
       "additionalProperties": false,

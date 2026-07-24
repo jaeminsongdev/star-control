@@ -14,16 +14,20 @@ use crate::{
     Sha256Hash, canonical_sha256,
     evidence::{
         ActorRef, ArtifactManifest, ArtifactRef, AuthoritativeGateState, CatalogRef, Completeness,
-        DiagnosticConfidence, DiagnosticRef, DiagnosticSeverity, DiagnosticStatus, DocumentRef,
-        EnvironmentValueRef, GateDecisionKind, GateDecisionRef, GateScope, ObservedTool,
-        OutputLimits, RiskRef, TerminationReason, ValidationOutcome, ValidationRunRef,
+        Diagnostic, DiagnosticConfidence, DiagnosticRef, DiagnosticScope, DiagnosticSeverity,
+        DiagnosticStatus, DocumentRef, EnvironmentValueRef, GateDecisionKind, GateDecisionRef,
+        GateScope, LocationRef, ObservedTool, OutputLimits, ProducerRef, Remediation, RiskRef,
+        TerminationReason, ValidationOutcome, ValidationRunRef,
     },
     ids::{
-        BaselineId, CheckoutId, DiagnosticId, DispositionId, EvidenceBundleId, GateId, ProjectId,
-        ProjectRevisionId, ReviewPackId, ReworkDirectiveId, SuppressionId, TaskInvocationId,
-        ValidationResultId, ValidationRunId, WorkspaceSnapshotId,
+        BaselineId, CheckoutId, DiagnosticId, DispositionId, EvidenceBundleId, FindingId, GateId,
+        GoalId, ProjectId, ProjectRevisionId, ReviewPackId, ReworkDirectiveId, RunId, StageId,
+        SuppressionId, TaskInvocationId, ValidationResultId, ValidationRunId, WorkspaceSnapshotId,
     },
-    management::{DispositionDecision, ProjectPathRef, SuppressionStatus},
+    management::{
+        Baseline, BaselineStatus, Confidence, Disposition, DispositionDecision, DispositionStatus,
+        ProjectPathRef, Rule, RuleLifecycle, Severity, SourceKind, Suppression, SuppressionStatus,
+    },
     planning::{ObservedChangeKind, ValidationPlanV2Readiness},
 };
 
@@ -36,6 +40,7 @@ pub const VALIDATION_RESULT_V2_SCHEMA_ID: &str = "star.validation-result";
 pub const BASELINE_V2_SCHEMA_ID: &str = "star.baseline";
 pub const SUPPRESSION_V2_SCHEMA_ID: &str = "star.suppression";
 pub const DISPOSITION_V2_SCHEMA_ID: &str = "star.disposition";
+pub const RULE_V2_SCHEMA_ID: &str = "star.rule";
 pub const REVIEW_PACK_SCHEMA_ID: &str = "star.review-pack";
 pub const REWORK_DIRECTIVE_SCHEMA_ID: &str = "star.rework-directive";
 pub const EVIDENCE_V2_SCHEMA_VERSION: u32 = 2;
@@ -66,6 +71,293 @@ pub enum GatePhaseV2 {
     GoalExit,
     PatchPreApply,
     PatchPostApply,
+}
+
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleDomainV2 {
+    ScanFinding,
+    ValidationDiagnostic,
+    Both,
+}
+
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleProducerKindV2 {
+    BuiltInAnalyzer,
+    ExternalCheckMapping,
+    Normalizer,
+    GateEvaluator,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RuleRefV2 {
+    pub rule_id: String,
+    pub rule_version: String,
+    pub definition_fingerprint: Sha256Hash,
+    #[schemars(range(min = 1))]
+    pub fingerprint_contract_version: u32,
+}
+
+impl RuleRefV2 {
+    pub fn from_catalog_ref(value: &CatalogRef) -> Result<Self, EvidenceV2Error> {
+        if value.catalog_id.trim().is_empty()
+            || value.item_version.trim().is_empty()
+            || value.format_version == 0
+        {
+            return Err(EvidenceV2Error::Rule);
+        }
+        Ok(Self {
+            rule_id: value.catalog_id.clone(),
+            rule_version: value.item_version.clone(),
+            definition_fingerprint: value.sha256.clone(),
+            fingerprint_contract_version: value.format_version,
+        })
+    }
+
+    pub fn catalog_ref(&self) -> CatalogRef {
+        CatalogRef {
+            catalog_id: self.rule_id.clone(),
+            item_version: self.rule_version.clone(),
+            sha256: self.definition_fingerprint.clone(),
+            format_version: self.fingerprint_contract_version,
+        }
+    }
+
+    fn validate(&self) -> Result<(), EvidenceV2Error> {
+        if self.rule_id.trim().is_empty()
+            || self.rule_version.trim().is_empty()
+            || self.fingerprint_contract_version == 0
+        {
+            return Err(EvidenceV2Error::Rule);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RuleLocationContractV2 {
+    pub allowed_location_kinds: Vec<String>,
+    pub project_relative_paths_only: bool,
+    pub symbol_binding_allowed: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RuleEvidenceContractV2 {
+    pub required_evidence_kinds: Vec<String>,
+    pub raw_output_requires_artifact_ref: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RuleRemediationContractV2 {
+    pub allowed_action_kinds: Vec<String>,
+    pub allowed_target_selector_kinds: Vec<String>,
+    pub required_recheck_families: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RuleGateFloorV2 {
+    pub default_severity: DiagnosticSeverity,
+    pub default_confidence: DiagnosticConfidence,
+    pub protected_gate_effect: DiagnosticGateEffectV2,
+    pub ratchet_eligible: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RuleV2 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub rule_id: String,
+    pub rule_version: String,
+    pub definition_fingerprint: Sha256Hash,
+    pub title: String,
+    pub category: String,
+    pub default_severity: Severity,
+    pub default_confidence: Confidence,
+    pub lifecycle: RuleLifecycle,
+    pub rule_domain: RuleDomainV2,
+    pub supported_languages: Vec<String>,
+    pub source_kinds: Vec<SourceKind>,
+    pub analyzer_ref: Option<String>,
+    pub parameter_schema_ref: String,
+    pub identity_contract_version: Option<u32>,
+    pub identity_anchor: Option<String>,
+    pub redaction_contract_version: u32,
+    pub remediation_recipe_refs: Vec<String>,
+    pub producer_kind: Option<RuleProducerKindV2>,
+    pub producer_ref: Option<String>,
+    pub applies_to_check_families: Vec<String>,
+    pub fingerprint_contract_version: Option<u32>,
+    pub location_contract: Option<RuleLocationContractV2>,
+    pub evidence_contract: Option<RuleEvidenceContractV2>,
+    pub remediation_contract: Option<RuleRemediationContractV2>,
+    pub gate_floor: Option<RuleGateFloorV2>,
+    pub fixture_manifest_refs: Vec<DocumentRef>,
+}
+
+impl RuleV2 {
+    pub fn seal(mut self) -> Result<Self, EvidenceV2Error> {
+        sort_dedup_nonempty(&mut self.supported_languages)?;
+        self.source_kinds
+            .sort_by_key(|source_kind| format!("{source_kind:?}"));
+        self.source_kinds.dedup();
+        sort_dedup_nonempty(&mut self.remediation_recipe_refs)?;
+        sort_dedup_nonempty(&mut self.applies_to_check_families)?;
+        self.fixture_manifest_refs.sort_by(|left, right| {
+            (&left.schema_id, &left.document_id, left.revision).cmp(&(
+                &right.schema_id,
+                &right.document_id,
+                right.revision,
+            ))
+        });
+        self.fixture_manifest_refs.dedup();
+        if self.schema_id != RULE_V2_SCHEMA_ID
+            || self.schema_version != EVIDENCE_V2_SCHEMA_VERSION
+            || self.rule_id.trim().is_empty()
+            || self.rule_version.trim().is_empty()
+            || self.title.trim().is_empty()
+            || self.category.trim().is_empty()
+            || self.parameter_schema_ref.trim().is_empty()
+            || self.redaction_contract_version == 0
+            || self.fixture_manifest_refs.iter().any(|reference| {
+                reference.schema_id.trim().is_empty()
+                    || reference.document_id.trim().is_empty()
+                    || reference.revision == 0
+            })
+        {
+            return Err(EvidenceV2Error::Rule);
+        }
+        let scans = matches!(
+            self.rule_domain,
+            RuleDomainV2::ScanFinding | RuleDomainV2::Both
+        );
+        let validates = matches!(
+            self.rule_domain,
+            RuleDomainV2::ValidationDiagnostic | RuleDomainV2::Both
+        );
+        if scans
+            && (self.supported_languages.is_empty()
+                || self.source_kinds.is_empty()
+                || self.analyzer_ref.as_deref().is_none_or(str::is_empty)
+                || self
+                    .identity_contract_version
+                    .is_none_or(|value| value == 0)
+                || self.identity_anchor.as_deref().is_none_or(str::is_empty))
+        {
+            return Err(EvidenceV2Error::Rule);
+        }
+        if validates
+            && (self.producer_kind.is_none()
+                || self.producer_ref.as_deref().is_none_or(str::is_empty)
+                || self.applies_to_check_families.is_empty()
+                || self
+                    .fingerprint_contract_version
+                    .is_none_or(|value| value == 0)
+                || self.location_contract.is_none()
+                || self.evidence_contract.is_none()
+                || self.remediation_contract.is_none()
+                || self.gate_floor.is_none()
+                || self.fixture_manifest_refs.is_empty())
+        {
+            return Err(EvidenceV2Error::Rule);
+        }
+        if !scans
+            && (self.analyzer_ref.is_some()
+                || self.identity_contract_version.is_some()
+                || self.identity_anchor.is_some())
+        {
+            return Err(EvidenceV2Error::Rule);
+        }
+        self.definition_fingerprint = fingerprint(
+            "star.rule-definition",
+            EVIDENCE_V2_SCHEMA_VERSION,
+            &serde_json::json!({
+                "rule_id":self.rule_id,
+                "rule_version":self.rule_version,
+                "title":self.title,
+                "category":self.category,
+                "default_severity":self.default_severity,
+                "default_confidence":self.default_confidence,
+                "lifecycle":self.lifecycle,
+                "rule_domain":self.rule_domain,
+                "supported_languages":self.supported_languages,
+                "source_kinds":self.source_kinds,
+                "analyzer_ref":self.analyzer_ref,
+                "parameter_schema_ref":self.parameter_schema_ref,
+                "identity_contract_version":self.identity_contract_version,
+                "identity_anchor":self.identity_anchor,
+                "redaction_contract_version":self.redaction_contract_version,
+                "remediation_recipe_refs":self.remediation_recipe_refs,
+                "producer_kind":self.producer_kind,
+                "producer_ref":self.producer_ref,
+                "applies_to_check_families":self.applies_to_check_families,
+                "fingerprint_contract_version":self.fingerprint_contract_version,
+                "location_contract":self.location_contract,
+                "evidence_contract":self.evidence_contract,
+                "remediation_contract":self.remediation_contract,
+                "gate_floor":self.gate_floor,
+                "fixture_manifest_refs":self.fixture_manifest_refs,
+            }),
+        )?;
+        Ok(self)
+    }
+
+    pub fn reference(&self) -> Result<RuleRefV2, EvidenceV2Error> {
+        self.clone().seal()?;
+        Ok(RuleRefV2 {
+            rule_id: self.rule_id.clone(),
+            rule_version: self.rule_version.clone(),
+            definition_fingerprint: self.definition_fingerprint.clone(),
+            fingerprint_contract_version: self
+                .fingerprint_contract_version
+                .or(self.identity_contract_version)
+                .ok_or(EvidenceV2Error::Rule)?,
+        })
+    }
+}
+
+pub fn migrate_rule_v1_to_v2(value: &Rule) -> Result<RuleV2, EvidenceV2Error> {
+    RuleV2 {
+        schema_id: RULE_V2_SCHEMA_ID.to_owned(),
+        schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+        rule_id: value.rule_id.clone(),
+        rule_version: value.rule_version.clone(),
+        definition_fingerprint: value.definition_fingerprint.clone(),
+        title: value.title.clone(),
+        category: value.category.clone(),
+        default_severity: value.default_severity,
+        default_confidence: value.default_confidence,
+        lifecycle: value.lifecycle,
+        rule_domain: RuleDomainV2::ScanFinding,
+        supported_languages: value.supported_languages.clone(),
+        source_kinds: value.source_kinds.clone(),
+        analyzer_ref: Some(value.analyzer_ref.clone()),
+        parameter_schema_ref: value.parameter_schema_ref.clone(),
+        identity_contract_version: Some(value.identity_contract_version),
+        identity_anchor: Some(value.identity_anchor.clone()),
+        redaction_contract_version: value.redaction_contract_version,
+        remediation_recipe_refs: value.remediation_recipe_refs.clone(),
+        producer_kind: None,
+        producer_ref: None,
+        applies_to_check_families: Vec::new(),
+        fingerprint_contract_version: None,
+        location_contract: None,
+        evidence_contract: None,
+        remediation_contract: None,
+        gate_floor: None,
+        fixture_manifest_refs: Vec::new(),
+    }
+    .seal()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -466,7 +758,7 @@ impl ClaimEvaluationV2 {
 #[serde(deny_unknown_fields)]
 pub struct BaselineEntryV2 {
     pub diagnostic_fingerprint: Sha256Hash,
-    pub rule_ref: CatalogRef,
+    pub rule_ref: RuleRefV2,
     pub severity: DiagnosticSeverity,
     pub scope_fingerprint: Sha256Hash,
     pub entry_fingerprint: Sha256Hash,
@@ -474,6 +766,7 @@ pub struct BaselineEntryV2 {
 
 impl BaselineEntryV2 {
     pub fn seal(mut self) -> Result<Self, EvidenceV2Error> {
+        self.rule_ref.validate()?;
         self.entry_fingerprint = fingerprint(
             "star.baseline-entry",
             EVIDENCE_V2_SCHEMA_VERSION,
@@ -550,37 +843,219 @@ impl BaselineV2 {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct BaselineMigrationEntryV2 {
+    pub finding_fingerprint: Sha256Hash,
+    pub rule_ref: RuleRefV2,
+    pub severity: DiagnosticSeverity,
+    pub scope_fingerprint: Sha256Hash,
+}
+
+pub fn migrate_baseline_v1_to_v2(
+    value: &Baseline,
+    subject_binding_fingerprint: Sha256Hash,
+    entries: Vec<BaselineMigrationEntryV2>,
+) -> Result<BaselineV2, EvidenceV2Error> {
+    let indexed = entries
+        .into_iter()
+        .map(|entry| (entry.finding_fingerprint.clone(), entry))
+        .collect::<BTreeMap<_, _>>();
+    if indexed.len() != value.finding_fingerprints.len()
+        || value
+            .finding_fingerprints
+            .iter()
+            .any(|fingerprint| !indexed.contains_key(fingerprint))
+    {
+        return Err(EvidenceV2Error::Baseline);
+    }
+    BaselineV2 {
+        schema_id: BASELINE_V2_SCHEMA_ID.to_owned(),
+        schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+        baseline_id: value.baseline_id.clone(),
+        revision: value.revision,
+        project_id: value.project_id.clone(),
+        subject_binding_fingerprint,
+        rule_set_fingerprint: value.rule_set_fingerprint.clone(),
+        entries: value
+            .finding_fingerprints
+            .iter()
+            .map(|fingerprint| {
+                let entry = indexed.get(fingerprint).ok_or(EvidenceV2Error::Baseline)?;
+                Ok(BaselineEntryV2 {
+                    diagnostic_fingerprint: fingerprint.clone(),
+                    rule_ref: entry.rule_ref.clone(),
+                    severity: entry.severity,
+                    scope_fingerprint: entry.scope_fingerprint.clone(),
+                    entry_fingerprint: Sha256Hash::digest(b"unsealed"),
+                })
+            })
+            .collect::<Result<Vec<_>, EvidenceV2Error>>()?,
+        created_at: value.created_at,
+        reason: value.reason.clone(),
+        reviewed: value.reviewed,
+        active: value.status == BaselineStatus::Active,
+        set_fingerprint: Sha256Hash::digest(b"unsealed"),
+    }
+    .seal()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionScopeConstraintV2 {
+    pub project_id: ProjectId,
+    pub package_id: Option<String>,
+    pub workspace_id: Option<String>,
+    pub paths: Vec<ProjectPathRef>,
+    pub symbol_ids: Vec<String>,
+    pub gate_phases: Vec<GatePhaseV2>,
+}
+
+impl DecisionScopeConstraintV2 {
+    fn seal(mut self) -> Result<Self, EvidenceV2Error> {
+        self.paths.sort();
+        self.paths.dedup();
+        sort_dedup_nonempty(&mut self.symbol_ids)?;
+        self.gate_phases.sort();
+        self.gate_phases.dedup();
+        if self.package_id.as_deref().is_some_and(str::is_empty)
+            || self.workspace_id.as_deref().is_some_and(str::is_empty)
+        {
+            return Err(EvidenceV2Error::Suppression);
+        }
+        Ok(self)
+    }
+
+    fn is_bounded_beyond_project(&self) -> bool {
+        self.package_id.is_some()
+            || self.workspace_id.is_some()
+            || !self.paths.is_empty()
+            || !self.symbol_ids.is_empty()
+            || !self.gate_phases.is_empty()
+    }
+}
+
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DecisionSubjectKindV2 {
+    Finding,
+    Diagnostic,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DiagnosticEvidenceRefV2 {
+    Artifact {
+        artifact: ArtifactRef,
+    },
+    Document {
+        document: DocumentRef,
+    },
+    Finding {
+        finding_id: FindingId,
+        finding_fingerprint: Sha256Hash,
+    },
+    Diagnostic {
+        diagnostic_ref: DiagnosticRef,
+    },
+}
+
+impl DiagnosticEvidenceRefV2 {
+    pub fn artifact(&self) -> Option<&ArtifactRef> {
+        match self {
+            Self::Artifact { artifact } => Some(artifact),
+            _ => None,
+        }
+    }
+
+    fn validate(&self) -> Result<(), EvidenceV2Error> {
+        match self {
+            Self::Artifact { artifact } if artifact.validate().is_err() => {
+                Err(EvidenceV2Error::Diagnostic)
+            }
+            Self::Document { document }
+                if document.schema_id.trim().is_empty()
+                    || document.document_id.trim().is_empty()
+                    || document.revision == 0 =>
+            {
+                Err(EvidenceV2Error::Diagnostic)
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SuppressionV2 {
     pub schema_id: String,
     pub schema_version: u32,
     pub suppression_id: SuppressionId,
     pub revision: u64,
     pub project_id: ProjectId,
-    pub diagnostic_fingerprint: Option<Sha256Hash>,
-    pub rule_ref: Option<CatalogRef>,
-    pub scope_fingerprint: Sha256Hash,
-    pub subject_binding_fingerprint: Sha256Hash,
+    pub subject_kind: DecisionSubjectKindV2,
+    pub selector: String,
+    pub subject_fingerprint: Option<Sha256Hash>,
+    pub rule_ref_constraint: Option<RuleRefV2>,
+    pub scope_constraint: DecisionScopeConstraintV2,
+    pub subject_binding_constraint: Option<Sha256Hash>,
     pub reason_code: String,
     pub reason: String,
     pub created_at: DateTime<Utc>,
     pub expires_at: Option<DateTime<Utc>>,
     pub permanent: bool,
+    pub justification: Option<String>,
+    pub approved_by: ActorRef,
+    pub review_evidence_refs: Vec<DiagnosticEvidenceRefV2>,
     pub status: SuppressionStatus,
+    pub provenance: String,
     pub content_fingerprint: Sha256Hash,
 }
 
 impl SuppressionV2 {
     pub fn seal(mut self) -> Result<Self, EvidenceV2Error> {
+        self.scope_constraint = self.scope_constraint.seal()?;
+        self.review_evidence_refs
+            .sort_by_key(|reference| serde_json::to_string(reference).unwrap_or_default());
         if self.schema_id != SUPPRESSION_V2_SCHEMA_ID
             || self.schema_version != EVIDENCE_V2_SCHEMA_VERSION
             || self.revision == 0
-            || (self.diagnostic_fingerprint.is_none() && self.rule_ref.is_none())
+            || self.project_id != self.scope_constraint.project_id
+            || self.selector.trim().is_empty()
+            || (self.subject_fingerprint.is_none() && self.rule_ref_constraint.is_none())
             || self.reason_code.trim().is_empty()
             || self.reason.trim().is_empty()
             || (self.permanent && self.expires_at.is_some())
+            || (self.permanent
+                && self
+                    .justification
+                    .as_deref()
+                    .is_none_or(|value| value.trim().is_empty()))
+            || self.approved_by.actor_id.trim().is_empty()
+            || self.review_evidence_refs.is_empty()
+            || self
+                .review_evidence_refs
+                .iter()
+                .any(|reference| reference.validate().is_err())
+            || self.provenance.trim().is_empty()
             || self
                 .expires_at
                 .is_some_and(|expires| expires <= self.created_at)
+        {
+            return Err(EvidenceV2Error::Suppression);
+        }
+        if self.subject_kind == DecisionSubjectKindV2::Diagnostic
+            && (self.subject_binding_constraint.is_none()
+                || self
+                    .rule_ref_constraint
+                    .as_ref()
+                    .is_some_and(|reference| reference.validate().is_err()))
+        {
+            return Err(EvidenceV2Error::Suppression);
+        }
+        if self.subject_fingerprint.is_none()
+            && self.rule_ref_constraint.is_some()
+            && !self.scope_constraint.is_bounded_beyond_project()
         {
             return Err(EvidenceV2Error::Suppression);
         }
@@ -591,16 +1066,22 @@ impl SuppressionV2 {
                 "suppression_id":self.suppression_id,
                 "revision":self.revision,
                 "project_id":self.project_id,
-                "diagnostic_fingerprint":self.diagnostic_fingerprint,
-                "rule_ref":self.rule_ref,
-                "scope_fingerprint":self.scope_fingerprint,
-                "subject_binding_fingerprint":self.subject_binding_fingerprint,
+                "subject_kind":self.subject_kind,
+                "selector":self.selector,
+                "subject_fingerprint":self.subject_fingerprint,
+                "rule_ref_constraint":self.rule_ref_constraint,
+                "scope_constraint":self.scope_constraint,
+                "subject_binding_constraint":self.subject_binding_constraint,
                 "reason_code":self.reason_code,
                 "reason":self.reason,
                 "created_at":self.created_at,
                 "expires_at":self.expires_at,
                 "permanent":self.permanent,
+                "justification":self.justification,
+                "approved_by":self.approved_by,
+                "review_evidence_refs":self.review_evidence_refs,
                 "status":self.status,
+                "provenance":self.provenance,
             }),
         )?;
         Ok(self)
@@ -615,24 +1096,48 @@ pub struct DispositionV2 {
     pub disposition_id: DispositionId,
     pub revision: u64,
     pub project_id: ProjectId,
-    pub diagnostic_fingerprint: Sha256Hash,
-    pub subject_binding_fingerprint: Sha256Hash,
+    pub subject_kind: DecisionSubjectKindV2,
+    pub finding_id: Option<FindingId>,
+    pub subject_fingerprint: Sha256Hash,
+    pub rule_ref: Option<RuleRefV2>,
+    pub subject_binding_constraint: Option<Sha256Hash>,
     pub decision: DispositionDecision,
     pub reason_code: String,
     pub reason: String,
     pub expires_at: Option<DateTime<Utc>>,
-    pub active: bool,
+    pub duplicate_of_finding_id: Option<FindingId>,
+    pub decided_by: ActorRef,
+    pub review_evidence_refs: Vec<DiagnosticEvidenceRefV2>,
     pub decided_at: DateTime<Utc>,
+    pub provenance: String,
+    pub status: DispositionStatus,
     pub content_fingerprint: Sha256Hash,
 }
 
 impl DispositionV2 {
     pub fn seal(mut self) -> Result<Self, EvidenceV2Error> {
+        self.review_evidence_refs
+            .sort_by_key(|reference| serde_json::to_string(reference).unwrap_or_default());
         if self.schema_id != DISPOSITION_V2_SCHEMA_ID
             || self.schema_version != EVIDENCE_V2_SCHEMA_VERSION
             || self.revision == 0
+            || (self.subject_kind == DecisionSubjectKindV2::Finding && self.finding_id.is_none())
+            || (self.subject_kind == DecisionSubjectKindV2::Diagnostic && self.finding_id.is_some())
+            || (self.subject_kind == DecisionSubjectKindV2::Diagnostic
+                && self.subject_binding_constraint.is_none())
+            || (self.subject_kind == DecisionSubjectKindV2::Diagnostic
+                && self.decision == DispositionDecision::Fixed)
+            || (self.decision == DispositionDecision::Duplicate
+                && self.duplicate_of_finding_id.is_none())
             || self.reason_code.trim().is_empty()
             || self.reason.trim().is_empty()
+            || self.decided_by.actor_id.trim().is_empty()
+            || self.review_evidence_refs.is_empty()
+            || self
+                .review_evidence_refs
+                .iter()
+                .any(|reference| reference.validate().is_err())
+            || self.provenance.trim().is_empty()
             || self
                 .expires_at
                 .is_some_and(|expires| expires <= self.decided_at)
@@ -646,18 +1151,132 @@ impl DispositionV2 {
                 "disposition_id":self.disposition_id,
                 "revision":self.revision,
                 "project_id":self.project_id,
-                "diagnostic_fingerprint":self.diagnostic_fingerprint,
-                "subject_binding_fingerprint":self.subject_binding_fingerprint,
+                "subject_kind":self.subject_kind,
+                "finding_id":self.finding_id,
+                "subject_fingerprint":self.subject_fingerprint,
+                "rule_ref":self.rule_ref,
+                "subject_binding_constraint":self.subject_binding_constraint,
                 "decision":self.decision,
                 "reason_code":self.reason_code,
                 "reason":self.reason,
                 "expires_at":self.expires_at,
-                "active":self.active,
+                "duplicate_of_finding_id":self.duplicate_of_finding_id,
+                "decided_by":self.decided_by,
+                "review_evidence_refs":self.review_evidence_refs,
                 "decided_at":self.decided_at,
+                "provenance":self.provenance,
+                "status":self.status,
             }),
         )?;
         Ok(self)
     }
+}
+
+pub fn migrate_suppression_v1_to_v2(
+    value: &Suppression,
+    approved_by: ActorRef,
+    review_evidence_refs: Vec<DiagnosticEvidenceRefV2>,
+) -> Result<SuppressionV2, EvidenceV2Error> {
+    let exact_fingerprint = value
+        .selector
+        .strip_prefix("finding:")
+        .and_then(|fingerprint| fingerprint.parse::<Sha256Hash>().ok());
+    let exact = exact_fingerprint.is_some();
+    let binding = value.config_fingerprint_constraint.clone().or_else(|| {
+        value
+            .source_revision_constraint
+            .as_ref()
+            .map(|revision| Sha256Hash::digest(revision.as_str().as_bytes()))
+    });
+    let status = if value.status == SuppressionStatus::Active
+        && exact
+        && binding.is_some()
+        && !review_evidence_refs.is_empty()
+    {
+        SuppressionStatus::Active
+    } else if value.status == SuppressionStatus::Revoked {
+        SuppressionStatus::Revoked
+    } else if value.status == SuppressionStatus::Expired {
+        SuppressionStatus::Expired
+    } else {
+        SuppressionStatus::Stale
+    };
+    SuppressionV2 {
+        schema_id: SUPPRESSION_V2_SCHEMA_ID.to_owned(),
+        schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+        suppression_id: value.suppression_id.clone(),
+        revision: value.revision,
+        project_id: value.project_id.clone(),
+        subject_kind: DecisionSubjectKindV2::Finding,
+        selector: value.selector.clone(),
+        subject_fingerprint: exact_fingerprint,
+        rule_ref_constraint: None,
+        scope_constraint: DecisionScopeConstraintV2 {
+            project_id: value.project_id.clone(),
+            package_id: None,
+            workspace_id: None,
+            paths: Vec::new(),
+            symbol_ids: Vec::new(),
+            gate_phases: Vec::new(),
+        },
+        subject_binding_constraint: binding,
+        reason_code: value.reason_code.clone(),
+        reason: value.reason.clone(),
+        created_at: value.created_at,
+        expires_at: value.expires_at,
+        permanent: value.permanent,
+        justification: value.justification.clone(),
+        approved_by,
+        review_evidence_refs,
+        status,
+        provenance: value.provenance.clone(),
+        content_fingerprint: Sha256Hash::digest(b"unsealed"),
+    }
+    .seal()
+}
+
+pub fn migrate_disposition_v1_to_v2(
+    value: &Disposition,
+    project_id: ProjectId,
+    rule_ref: Option<RuleRefV2>,
+    subject_binding_constraint: Option<Sha256Hash>,
+    decided_by: ActorRef,
+    review_evidence_refs: Vec<DiagnosticEvidenceRefV2>,
+) -> Result<DispositionV2, EvidenceV2Error> {
+    let can_remain_active = value.status == DispositionStatus::Active
+        && rule_ref.is_some()
+        && subject_binding_constraint.is_some()
+        && !review_evidence_refs.is_empty();
+    DispositionV2 {
+        schema_id: DISPOSITION_V2_SCHEMA_ID.to_owned(),
+        schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+        disposition_id: value.disposition_id.clone(),
+        revision: value.revision,
+        project_id,
+        subject_kind: DecisionSubjectKindV2::Finding,
+        finding_id: Some(value.finding_id.clone()),
+        subject_fingerprint: value.finding_fingerprint.clone(),
+        rule_ref,
+        subject_binding_constraint,
+        decision: value.decision,
+        reason_code: value.reason_code.clone(),
+        reason: value.reason.clone(),
+        expires_at: value.expires_at,
+        duplicate_of_finding_id: value.duplicate_of_finding_id.clone(),
+        decided_by,
+        review_evidence_refs,
+        decided_at: value.decided_at,
+        provenance: value.provenance.clone(),
+        status: if can_remain_active {
+            DispositionStatus::Active
+        } else if value.status == DispositionStatus::Revoked {
+            DispositionStatus::Revoked
+        } else {
+            DispositionStatus::Stale
+        },
+        content_fingerprint: Sha256Hash::digest(b"unsealed"),
+    }
+    .seal()
 }
 
 #[derive(
@@ -1227,6 +1846,73 @@ impl ValidationResultV2 {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DiagnosticObservationStatusV2 {
+    Confirmed,
+    Suspected,
+    Unverified,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DiagnosticScopeV2 {
+    Goal {
+        goal_id: GoalId,
+        revision: u64,
+    },
+    Run {
+        goal_id: GoalId,
+        run_id: RunId,
+        revision: u64,
+    },
+    Stage {
+        goal_id: GoalId,
+        run_id: RunId,
+        stage_id: StageId,
+        revision: u64,
+    },
+    ValidationRun {
+        validation_run_id: ValidationRunId,
+        revision: u64,
+    },
+}
+
+impl DiagnosticScopeV2 {
+    fn from_v1(value: &DiagnosticScope) -> Self {
+        match value {
+            DiagnosticScope::Goal { goal_id, revision } => Self::Goal {
+                goal_id: goal_id.clone(),
+                revision: *revision,
+            },
+            DiagnosticScope::Run {
+                goal_id,
+                run_id,
+                revision,
+            } => Self::Run {
+                goal_id: goal_id.clone(),
+                run_id: run_id.clone(),
+                revision: *revision,
+            },
+            DiagnosticScope::Stage {
+                goal_id,
+                run_id,
+                stage_id,
+                revision,
+            } => Self::Stage {
+                goal_id: goal_id.clone(),
+                run_id: run_id.clone(),
+                stage_id: stage_id.clone(),
+                revision: *revision,
+            },
+            DiagnosticScope::ValidationRun { validation_run_ref } => Self::ValidationRun {
+                validation_run_id: validation_run_ref.validation_run_id.clone(),
+                revision: validation_run_ref.revision,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DiagnosticV2 {
     pub schema_id: String,
@@ -1234,17 +1920,28 @@ pub struct DiagnosticV2 {
     pub diagnostic_id: DiagnosticId,
     pub sequence: u64,
     pub code: String,
-    pub rule_ref: CatalogRef,
+    pub rule_ref: RuleRefV2,
+    pub producer: ProducerRef,
     pub title: String,
     pub message: String,
     pub severity: DiagnosticSeverity,
     pub confidence: DiagnosticConfidence,
     pub status: DiagnosticStatus,
+    pub observation_status: DiagnosticObservationStatusV2,
     pub blocking: bool,
     pub project_id: ProjectId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
     pub plan_item_id: String,
     pub validation_run_id: ValidationRunId,
-    pub evidence_refs: Vec<ArtifactRef>,
+    pub scope: DiagnosticScopeV2,
+    pub locations: Vec<LocationRef>,
+    pub evidence_refs: Vec<DiagnosticEvidenceRefV2>,
+    pub subject_binding_fingerprint: Option<Sha256Hash>,
+    pub remediation: Option<Remediation>,
+    pub observed_at: DateTime<Utc>,
     pub first_seen_at: DateTime<Utc>,
     pub last_seen_at: DateTime<Utc>,
     pub fingerprint: Sha256Hash,
@@ -1252,20 +1949,40 @@ pub struct DiagnosticV2 {
 
 impl DiagnosticV2 {
     pub fn seal(mut self) -> Result<Self, EvidenceV2Error> {
+        self.rule_ref.validate()?;
+        self.locations
+            .sort_by_key(|location| serde_json::to_string(location).unwrap_or_default());
         self.evidence_refs
-            .sort_by(|left, right| left.artifact_id.cmp(&right.artifact_id));
+            .sort_by_key(|reference| serde_json::to_string(reference).unwrap_or_default());
         if self.schema_id != DIAGNOSTIC_V2_SCHEMA_ID
             || self.schema_version != EVIDENCE_V2_SCHEMA_VERSION
             || self.sequence == 0
             || self.code.trim().is_empty()
+            || self.producer.component.trim().is_empty()
+            || self.producer.product_version.trim().is_empty()
+            || self.producer.build_id.trim().is_empty()
+            || self.producer.platform.trim().is_empty()
             || self.title.trim().is_empty()
             || self.message.trim().is_empty()
             || self.plan_item_id.trim().is_empty()
+            || self
+                .package_id
+                .as_deref()
+                .is_some_and(|value| value.trim().is_empty() || value.len() > 128)
+            || self
+                .workspace_id
+                .as_deref()
+                .is_some_and(|value| value.trim().is_empty() || value.len() > 128)
+            || self.observed_at < self.first_seen_at
+            || self.observed_at > self.last_seen_at
             || self.last_seen_at < self.first_seen_at
+            || self.locations.iter().any(|location| {
+                location.validate().is_err() || location.path.project_id != self.project_id
+            })
             || self
                 .evidence_refs
                 .iter()
-                .any(|artifact| artifact.validate().is_err())
+                .any(|reference| reference.validate().is_err())
             || (self.blocking
                 && matches!(
                     self.status,
@@ -1274,16 +1991,35 @@ impl DiagnosticV2 {
         {
             return Err(EvidenceV2Error::Diagnostic);
         }
+        let mut identity = serde_json::json!({
+            "code":self.code,
+            "rule_ref":self.rule_ref,
+            "producer":self.producer,
+            "severity":self.severity,
+            "project_id":self.project_id,
+            "plan_item_id":self.plan_item_id,
+            "scope":self.scope,
+            "locations":self.locations,
+        });
+        let identity = identity
+            .as_object_mut()
+            .ok_or(EvidenceV2Error::Diagnostic)?;
+        if let Some(package_id) = &self.package_id {
+            identity.insert(
+                "package_id".to_owned(),
+                serde_json::Value::String(package_id.clone()),
+            );
+        }
+        if let Some(workspace_id) = &self.workspace_id {
+            identity.insert(
+                "workspace_id".to_owned(),
+                serde_json::Value::String(workspace_id.clone()),
+            );
+        }
         self.fingerprint = fingerprint(
             "star.diagnostic",
             EVIDENCE_V2_SCHEMA_VERSION,
-            &serde_json::json!({
-                "code":self.code,
-                "rule_ref":self.rule_ref,
-                "severity":self.severity,
-                "project_id":self.project_id,
-                "plan_item_id":self.plan_item_id,
-            }),
+            &serde_json::Value::Object(identity.clone()),
         )?;
         Ok(self)
     }
@@ -1295,6 +2031,120 @@ impl DiagnosticV2 {
             sha256: document_hash(self)?,
         })
     }
+}
+
+/// Reconstructs the M1/M3 rule-set identity carried by a sealed subject binding.
+///
+/// Baseline v2 stores this value separately so a caller cannot make an older
+/// baseline current merely by copying a subject-binding fingerprint.
+pub fn rule_set_fingerprint_for_subject_binding(
+    binding: &EvidenceSubjectBinding,
+) -> Result<Sha256Hash, EvidenceV2Error> {
+    if binding.clone().seal().as_ref() != Ok(binding) {
+        return Err(EvidenceV2Error::SubjectBinding);
+    }
+    let rules = binding
+        .rule_refs
+        .iter()
+        .map(|reference| {
+            serde_json::json!({
+                "rule_id": reference.catalog_id,
+                "rule_version": reference.item_version,
+                "definition_fingerprint": reference.sha256,
+            })
+        })
+        .collect::<Vec<_>>();
+    canonical_sha256(&serde_json::json!({
+        "algorithm": "star.rule-set",
+        "contract_version": 1,
+        "payload": rules,
+    }))
+    .map_err(|_| EvidenceV2Error::Fingerprint)
+}
+
+/// Produces the normalized scope identity used by BaselineEntryV2.
+pub fn diagnostic_scope_fingerprint(
+    diagnostic: &DiagnosticV2,
+) -> Result<Sha256Hash, EvidenceV2Error> {
+    if diagnostic.clone().seal().as_ref() != Ok(diagnostic) {
+        return Err(EvidenceV2Error::Diagnostic);
+    }
+    let mut scope = serde_json::json!({
+        "project_id": diagnostic.project_id,
+        "plan_item_id": diagnostic.plan_item_id,
+        "scope": diagnostic.scope,
+        "locations": diagnostic.locations,
+    });
+    let scope_object = scope.as_object_mut().ok_or(EvidenceV2Error::Diagnostic)?;
+    if let Some(package_id) = &diagnostic.package_id {
+        scope_object.insert(
+            "package_id".to_owned(),
+            serde_json::Value::String(package_id.clone()),
+        );
+    }
+    if let Some(workspace_id) = &diagnostic.workspace_id {
+        scope_object.insert(
+            "workspace_id".to_owned(),
+            serde_json::Value::String(workspace_id.clone()),
+        );
+    }
+    fingerprint(
+        "star.diagnostic-scope",
+        EVIDENCE_V2_SCHEMA_VERSION,
+        &serde_json::Value::Object(scope_object.clone()),
+    )
+}
+
+pub fn migrate_diagnostic_v1_to_v2(
+    value: &Diagnostic,
+    project_id: ProjectId,
+    plan_item_id: String,
+    validation_run_id: ValidationRunId,
+    subject_binding_fingerprint: Option<Sha256Hash>,
+) -> Result<DiagnosticV2, EvidenceV2Error> {
+    let observation_status = match value.status {
+        DiagnosticStatus::Confirmed => DiagnosticObservationStatusV2::Confirmed,
+        DiagnosticStatus::Suspected => DiagnosticObservationStatusV2::Suspected,
+        DiagnosticStatus::Unverified
+        | DiagnosticStatus::Suppressed
+        | DiagnosticStatus::Resolved => DiagnosticObservationStatusV2::Unverified,
+    };
+    DiagnosticV2 {
+        schema_id: DIAGNOSTIC_V2_SCHEMA_ID.to_owned(),
+        schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+        diagnostic_id: value.diagnostic_id.clone(),
+        sequence: value.sequence.max(1),
+        code: value.rule_id.catalog_id.clone(),
+        rule_ref: RuleRefV2::from_catalog_ref(&value.rule_id)?,
+        producer: value.producer.clone(),
+        title: value.title.clone(),
+        message: value.message.clone(),
+        severity: value.severity,
+        confidence: value.confidence,
+        status: value.status,
+        observation_status,
+        blocking: false,
+        project_id,
+        package_id: None,
+        workspace_id: None,
+        plan_item_id,
+        validation_run_id,
+        scope: DiagnosticScopeV2::from_v1(&value.scope),
+        locations: value.locations.clone(),
+        evidence_refs: value
+            .evidence_refs
+            .iter()
+            .cloned()
+            .map(|artifact| DiagnosticEvidenceRefV2::Artifact { artifact })
+            .collect(),
+        subject_binding_fingerprint,
+        remediation: value.remediation.clone(),
+        observed_at: value.last_seen_at,
+        first_seen_at: value.first_seen_at,
+        last_seen_at: value.last_seen_at,
+        fingerprint: Sha256Hash::digest(b"unsealed"),
+    }
+    .seal()
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1711,7 +2561,8 @@ impl EvidenceBundleV2 {
         let referenced_artifacts = runs.iter().flat_map(|run| run.artifact_refs.iter()).chain(
             diagnostics
                 .iter()
-                .flat_map(|diagnostic| diagnostic.evidence_refs.iter()),
+                .flat_map(|diagnostic| diagnostic.evidence_refs.iter())
+                .filter_map(DiagnosticEvidenceRefV2::artifact),
         );
         for artifact in referenced_artifacts {
             if !self.artifact_manifest.artifacts.iter().any(|entry| {
@@ -1968,6 +2819,8 @@ impl ReworkDirectiveV1 {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EvidenceV2Error {
+    #[error("rule v2 is invalid")]
+    Rule,
     #[error("evidence subject binding is invalid")]
     SubjectBinding,
     #[error("completion claim is invalid")]
@@ -2084,6 +2937,15 @@ fn fingerprint<T: Serialize>(
 fn document_hash<T: Serialize>(value: &T) -> Result<Sha256Hash, EvidenceV2Error> {
     let value = serde_json::to_value(value).map_err(|_| EvidenceV2Error::Fingerprint)?;
     canonical_sha256(&value).map_err(|_| EvidenceV2Error::Fingerprint)
+}
+
+fn sort_dedup_nonempty(values: &mut Vec<String>) -> Result<(), EvidenceV2Error> {
+    if values.iter().any(|value| value.trim().is_empty()) {
+        return Err(EvidenceV2Error::Rule);
+    }
+    values.sort();
+    values.dedup();
+    Ok(())
 }
 
 pub fn plan_is_executable(readiness: ValidationPlanV2Readiness) -> bool {

@@ -66,7 +66,7 @@
 
 이 단계의 `read_only`는 **대상 project source에 effect가 없음**을 뜻한다. Controller는 Project Catalog·Code Index projection과 scan evidence를 local management store와 `.ai-runs`에 기록할 수 있다. 그 쓰기는 0단계의 단일 Writer·transaction·redaction 경계를 그대로 사용한다.
 
-## 0단계 선행조건과 호환성 gap
+## 0단계 선행조건과 완료된 호환성 migration
 
 0단계는 다음 선행조건을 충족한다.
 
@@ -76,7 +76,7 @@
 - raw root path는 DB에 저장하지 않고 `root_binding_id`로 분리한다.
 - Controller만 repository Writer이며 CLI는 application service를 통한다.
 
-다만 P0 `star.project` v1의 단일 `root_binding_id`는 같은 Project의 main worktree, linked worktree와 별도 clone을 동시에 표현할 수 없다. 1단계 구현 전에 다음 versioned relation migration을 먼저 수행해야 한다.
+P0 `star.project` v1의 단일 `root_binding_id`는 같은 Project의 main worktree, linked worktree와 별도 clone을 동시에 표현할 수 없었다. P-0041은 1단계 구현의 선행조건으로 다음 versioned relation migration을 수행했다.
 
 1. Project stable identity와 local attachment를 분리한 `ProjectCheckout` v1을 추가한다.
 2. `star.project` v2는 `root_binding_id`를 소유하지 않고 `attached_checkout_ids`와 derived `registration_state`를 가진다.

@@ -22,21 +22,75 @@
   "case_results": [
     {
       "adjudication": "confirmed_defect",
+      "adjudication_evidence_refs": [
+        "fixture"
+      ],
+      "baseline_cost_refs": [
+        {
+          "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "cost_record_id": "fixture",
+          "revision": 0
+        }
+      ],
       "baseline_detected": false,
       "baseline_duration_ms": 0,
+      "baseline_existing_debt_count": 0,
+      "baseline_finding_count": 0,
+      "baseline_new_or_worsened_count": 0,
       "baseline_outcome": "success",
       "baseline_rework_count": 0,
       "baseline_run_refs": [
         "bas_00000000000000000000000000"
       ],
+      "baseline_suppressions": {
+        "active": 0,
+        "expired": 0,
+        "invalid": 0,
+        "revoked": 0,
+        "stale": 0
+      },
+      "baseline_usage_and_cost": [
+        {
+          "quantity": 0,
+          "unit": "fixture"
+        }
+      ],
+      "candidate_cost_refs": [
+        {
+          "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "cost_record_id": "fixture",
+          "revision": 0
+        }
+      ],
       "candidate_detected": false,
       "candidate_duration_ms": 0,
+      "candidate_existing_debt_count": 0,
+      "candidate_finding_count": 0,
       "candidate_flaky": false,
+      "candidate_new_or_worsened_count": 0,
       "candidate_outcome": "success",
       "candidate_rework_count": 0,
       "candidate_run_refs": [
         "fixture"
       ],
+      "candidate_suppressions": {
+        "active": 0,
+        "expired": 0,
+        "invalid": 0,
+        "revoked": 0,
+        "stale": 0
+      },
+      "candidate_usage_and_cost": [
+        {
+          "quantity": 0,
+          "unit": "fixture"
+        }
+      ],
+      "case_definition_ref": {
+        "case_id": "fixture",
+        "case_version": "fixture",
+        "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
       "case_id": "fixture",
       "case_version": "fixture",
       "corpus_ref": "fixture",
@@ -44,6 +98,9 @@
       "limitations": [
         "fixture"
       ],
+      "suppression_broadened_count": 0,
+      "suppression_newly_added_count": 0,
+      "suppression_removed_count": 0,
       "task_source_binding": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
     }
   ],
@@ -61,50 +118,126 @@
   "corpus_ref": "fixture",
   "decision_ref": "fixture",
   "efficiency_metrics": {
+    "baseline_existing_debt_count": 0,
+    "baseline_finding_count": 0,
+    "baseline_new_or_worsened_count": 0,
     "baseline_rework_count": 0,
+    "baseline_suppressions": {
+      "active": 0,
+      "expired": 0,
+      "invalid": 0,
+      "revoked": 0,
+      "stale": 0
+    },
     "baseline_total_duration_ms": 0,
+    "candidate_existing_debt_count": 0,
     "candidate_false_negatives": 0,
     "candidate_false_positives": 0,
+    "candidate_finding_count": 0,
     "candidate_flaky": 0,
+    "candidate_new_or_worsened_count": 0,
     "candidate_rework_count": 0,
     "candidate_rollbacks": 0,
+    "candidate_suppressions": {
+      "active": 0,
+      "expired": 0,
+      "invalid": 0,
+      "revoked": 0,
+      "stale": 0
+    },
     "candidate_total_duration_ms": 0,
     "confirmed_defects": 0,
     "sample_count": 0,
+    "suppression_broadened_count": 0,
+    "suppression_newly_added_count": 0,
+    "suppression_removed_count": 0,
     "unresolved": 0
   },
   "evaluation_context": "cli_only",
+  "evaluation_policy_ref": {
+    "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "policy_id": "fixture",
+    "policy_version": "fixture",
+    "revision": 0
+  },
   "evaluation_run_id": "evr_00000000000000000000000000",
   "finding_metrics": {
+    "baseline_existing_debt_count": 0,
+    "baseline_finding_count": 0,
+    "baseline_new_or_worsened_count": 0,
     "baseline_rework_count": 0,
+    "baseline_suppressions": {
+      "active": 0,
+      "expired": 0,
+      "invalid": 0,
+      "revoked": 0,
+      "stale": 0
+    },
     "baseline_total_duration_ms": 0,
+    "candidate_existing_debt_count": 0,
     "candidate_false_negatives": 0,
     "candidate_false_positives": 0,
+    "candidate_finding_count": 0,
     "candidate_flaky": 0,
+    "candidate_new_or_worsened_count": 0,
     "candidate_rework_count": 0,
     "candidate_rollbacks": 0,
+    "candidate_suppressions": {
+      "active": 0,
+      "expired": 0,
+      "invalid": 0,
+      "revoked": 0,
+      "stale": 0
+    },
     "candidate_total_duration_ms": 0,
     "confirmed_defects": 0,
     "sample_count": 0,
+    "suppression_broadened_count": 0,
+    "suppression_newly_added_count": 0,
+    "suppression_removed_count": 0,
     "unresolved": 0
   },
   "ground_truth_summary": {
+    "baseline_existing_debt_count": 0,
+    "baseline_finding_count": 0,
+    "baseline_new_or_worsened_count": 0,
     "baseline_rework_count": 0,
+    "baseline_suppressions": {
+      "active": 0,
+      "expired": 0,
+      "invalid": 0,
+      "revoked": 0,
+      "stale": 0
+    },
     "baseline_total_duration_ms": 0,
+    "candidate_existing_debt_count": 0,
     "candidate_false_negatives": 0,
     "candidate_false_positives": 0,
+    "candidate_finding_count": 0,
     "candidate_flaky": 0,
+    "candidate_new_or_worsened_count": 0,
     "candidate_rework_count": 0,
     "candidate_rollbacks": 0,
+    "candidate_suppressions": {
+      "active": 0,
+      "expired": 0,
+      "invalid": 0,
+      "revoked": 0,
+      "stale": 0
+    },
     "candidate_total_duration_ms": 0,
     "confirmed_defects": 0,
     "sample_count": 0,
+    "suppression_broadened_count": 0,
+    "suppression_newly_added_count": 0,
+    "suppression_removed_count": 0,
     "unresolved": 0
   },
   "limitations": [
     "fixture"
   ],
   "measurement_protocol_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "minimum_sample_count": 0,
   "mode": "offline",
   "protected_metric_results": [
     {
@@ -127,7 +260,18 @@
     "version": "fixture"
   },
   "subject_kind": "route_policy",
+  "usage_and_cost_metrics": [
+    {
+      "baseline_quantity": 0,
+      "candidate_quantity": 0,
+      "unit": "fixture"
+    }
+  ],
   "usage_and_cost_refs": [
-    "fixture"
+    {
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "cost_record_id": "fixture",
+      "revision": 0
+    }
   ]
 }

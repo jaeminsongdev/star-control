@@ -2,6 +2,7 @@ use schemars::JsonSchema;
 use serde_json::{Map, Value};
 
 use crate::{
+    config_v1::{EFFECTIVE_CONFIG_V1_SCHEMA_ID, EffectiveConfigV1},
     coordination_v2::{
         CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID, CHANGE_BUNDLE_RELEASE_HANDOFF_SCHEMA_ID,
         CROSS_REPO_CHANGE_BUNDLE_SCHEMA_ID, ChangeBundleParticipantV2, ChangeBundleReleaseHandoff,
@@ -30,6 +31,10 @@ use crate::{
         EnvironmentSnapshot, PROJECT_CONTRACT_MANIFEST_SCHEMA_ID, PROJECT_DOCTOR_REPORT_SCHEMA_ID,
         ProjectContractManifest, ProjectDoctorReport,
     },
+    error_codes::{
+        STABLE_ERROR_CODE_CATALOG_SCHEMA_ID, STABLE_ERROR_CODE_CATALOG_SCHEMA_VERSION,
+        StableErrorCodeCatalog,
+    },
     evidence::{
         ArtifactRef, DIAGNOSTIC_SCHEMA_ID, Diagnostic, EVIDENCE_BUNDLE_SCHEMA_ID, EvidenceBundle,
         GATE_DECISION_SCHEMA_ID, GateDecision, VALIDATION_PLAN_SCHEMA_ID, VALIDATION_RUN_SCHEMA_ID,
@@ -40,9 +45,10 @@ use crate::{
         DiagnosticV2, DispositionV2, EVIDENCE_BUNDLE_V2_SCHEMA_ID, EvidenceBundleV2,
         GATE_DECISION_V2_SCHEMA_ID, GateDecisionV2, REVIEW_PACK_SCHEMA_ID,
         REVIEW_PACK_SCHEMA_VERSION, REWORK_DIRECTIVE_SCHEMA_ID, REWORK_DIRECTIVE_SCHEMA_VERSION,
-        ReviewPackV1, ReworkDirectiveV1, SUPPRESSION_V2_SCHEMA_ID, SuppressionV2,
-        TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2, VALIDATION_RESULT_V2_SCHEMA_ID,
-        VALIDATION_RUN_V2_SCHEMA_ID, ValidationResultV2, ValidationRunV2,
+        RULE_V2_SCHEMA_ID, ReviewPackV1, ReworkDirectiveV1, RuleV2, SUPPRESSION_V2_SCHEMA_ID,
+        SuppressionV2, TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2,
+        VALIDATION_RESULT_V2_SCHEMA_ID, VALIDATION_RUN_V2_SCHEMA_ID, ValidationResultV2,
+        ValidationRunV2,
     },
     fixed_mcp::{CallInput, McpToolResult, fixed_input_schema, fixed_result_schema},
     index::{CodeIndexSnapshot, ProjectCatalogSnapshot},
@@ -60,7 +66,8 @@ use crate::{
         DependencyUpdatePlan, EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID, ExternalDataSnapshot,
         FAILURE_RECORD_SCHEMA_ID, FailureRecord, MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
         MaintenanceRadarSnapshot, RECOVERY_PLAN_V2_SCHEMA_ID, REGRESSION_RECORD_SCHEMA_ID,
-        REPRODUCTION_PACK_V2_SCHEMA_ID, RecoveryPlanV2, RegressionRecord, ReproductionPackV2,
+        REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID, REPRODUCTION_PACK_V2_SCHEMA_ID,
+        RecoveryPlanV2, RegressionRecord, ReproductionAttemptObservationV1, ReproductionPackV2,
         SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID, SupplyChainSnapshot,
     },
     managed_registry::{
@@ -99,7 +106,10 @@ use crate::{
         WORKTREE_DECISION_SCHEMA_ID, WorktreeDecision,
     },
     planning::{
-        CHANGE_SET_SCHEMA_ID, ChangeSet, FULL_VALIDATION_PLAN_SCHEMA_ID, FullValidationPlan,
+        CHANGE_PLAN_V1_TO_V2_MIGRATION_PLAN_SCHEMA_ID,
+        CHANGE_PLAN_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID, CHANGE_PLAN_V2_SCHEMA_ID,
+        CHANGE_SET_SCHEMA_ID, ChangePlanV1ToV2MigrationPlan, ChangePlanV1ToV2MigrationResult,
+        ChangePlanV2, ChangeSet, FULL_VALIDATION_PLAN_SCHEMA_ID, FullValidationPlan,
         IMPACT_ANALYSIS_SCHEMA_ID, ImpactAnalysis, PlanningBundle, RISK_PATH_DESCRIPTOR_SCHEMA_ID,
         RiskPathDescriptor, SCOPE_REVISION_SCHEMA_ID, ScopeRevision, TASK_SPEC_SCHEMA_ID, TaskSpec,
     },
@@ -121,9 +131,12 @@ use crate::{
     },
     registry::{RegistrySnapshot, ToolRegistryCache},
     release_v2::{
-        EVALUATION_CATALOG_ITEM_SCHEMA_ID, EVALUATION_RUN_V2_SCHEMA_ID, EvaluationCatalogItem,
-        EvaluationRunV2, RELEASE_ASSET_BINDING_V1_SCHEMA_ID, RELEASE_MANIFEST_V2_SCHEMA_ID,
-        ReleaseAssetBindingV1, ReleaseManifestV2,
+        BUDGET_SNAPSHOT_V1_SCHEMA_ID, BudgetSnapshotV1, COST_RECORD_V1_SCHEMA_ID, CostRecordV1,
+        EVALUATION_CASE_DEFINITION_V1_SCHEMA_ID, EVALUATION_CATALOG_ITEM_SCHEMA_ID,
+        EVALUATION_POLICY_V1_SCHEMA_ID, EVALUATION_RUN_V2_SCHEMA_ID, EvaluationCaseDefinitionV1,
+        EvaluationCatalogItem, EvaluationPolicyV1, EvaluationRunV2,
+        FINAL_PRODUCT_AUDIT_V1_SCHEMA_ID, FinalProductAuditV1, RELEASE_ASSET_BINDING_V1_SCHEMA_ID,
+        RELEASE_MANIFEST_V2_SCHEMA_ID, ReleaseAssetBindingV1, ReleaseManifestV2,
     },
     runtime::{
         ExecutableIdentity, ExternalToolCancel, ExternalToolCancelAck, ExternalToolProbeRequest,
@@ -138,8 +151,9 @@ use crate::{
     },
     trust::ToolTrustRecord,
     validator_guard::{
+        VALIDATOR_CORPUS_MANIFEST_SCHEMA_ID, VALIDATOR_CORPUS_MANIFEST_SCHEMA_VERSION,
         VALIDATOR_GUARD_EVIDENCE_SCHEMA_ID, VALIDATOR_GUARD_EVIDENCE_SCHEMA_VERSION,
-        ValidatorGuardEvidenceV2,
+        ValidatorCorpusManifestV2, ValidatorGuardEvidenceV2,
     },
 };
 
@@ -156,6 +170,24 @@ pub fn schema_document<T: JsonSchema>(schema_id: &str) -> Value {
         Value::String(format!("urn:star-control:schema:{schema_id}:v1")),
     );
     value
+}
+
+#[derive(JsonSchema, serde::Serialize)]
+#[allow(dead_code)]
+#[serde(deny_unknown_fields)]
+struct LocalStateBundleSchemaV1 {
+    schema_id: String,
+    schema_version: u32,
+    bundle_id: crate::ids::LocalStateBundleId,
+    project_id: crate::ids::ProjectId,
+    source_revision_id: crate::ids::ProjectRevisionId,
+    effective_config_fingerprint: crate::Sha256Hash,
+    redaction_contract_version: u32,
+    local_suppressions: Vec<Suppression>,
+    local_baselines: Vec<Baseline>,
+    local_dispositions: Vec<Disposition>,
+    active_change_plans: Vec<ChangePlan>,
+    content_fingerprint: crate::Sha256Hash,
 }
 
 fn management_schema_document<T: JsonSchema>(schema_id: &str) -> Value {
@@ -346,6 +378,10 @@ fn management_id_prefix(name: &str) -> Option<&'static str> {
 pub fn generated_documents() -> Vec<(&'static str, Value)> {
     let mut documents = vec![
         (
+            "effective-config-v1.schema.json",
+            management_schema_document::<EffectiveConfigV1>(EFFECTIVE_CONFIG_V1_SCHEMA_ID),
+        ),
+        (
             "validation-plan.schema.json",
             schema_document::<ValidationPlan>(VALIDATION_PLAN_SCHEMA_ID),
         ),
@@ -378,7 +414,23 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         ),
         (
             "planning-bundle.schema.json",
-            management_schema_document::<PlanningBundle>("star.planning-bundle"),
+            management_schema_document_version::<PlanningBundle>("star.planning-bundle", 2),
+        ),
+        (
+            "change-plan-v2.schema.json",
+            management_schema_document_version::<ChangePlanV2>(CHANGE_PLAN_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "change-plan-v1-to-v2-migration-plan.schema.json",
+            management_schema_document::<ChangePlanV1ToV2MigrationPlan>(
+                CHANGE_PLAN_V1_TO_V2_MIGRATION_PLAN_SCHEMA_ID,
+            ),
+        ),
+        (
+            "change-plan-v1-to-v2-migration-result.schema.json",
+            management_schema_document::<ChangePlanV1ToV2MigrationResult>(
+                CHANGE_PLAN_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID,
+            ),
         ),
         (
             "goal-record.schema.json",
@@ -481,6 +533,12 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "failure-record.schema.json",
             management_schema_document::<FailureRecord>(FAILURE_RECORD_SCHEMA_ID),
+        ),
+        (
+            "reproduction-attempt-observation-v1.schema.json",
+            management_schema_document::<ReproductionAttemptObservationV1>(
+                REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID,
+            ),
         ),
         (
             "reproduction-pack-v2.schema.json",
@@ -687,6 +745,28 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             management_schema_document::<EvaluationCatalogItem>(EVALUATION_CATALOG_ITEM_SCHEMA_ID),
         ),
         (
+            "evaluation-case-definition-v1.schema.json",
+            management_schema_document::<EvaluationCaseDefinitionV1>(
+                EVALUATION_CASE_DEFINITION_V1_SCHEMA_ID,
+            ),
+        ),
+        (
+            "evaluation-policy-v1.schema.json",
+            management_schema_document::<EvaluationPolicyV1>(EVALUATION_POLICY_V1_SCHEMA_ID),
+        ),
+        (
+            "cost-record-v1.schema.json",
+            management_schema_document::<CostRecordV1>(COST_RECORD_V1_SCHEMA_ID),
+        ),
+        (
+            "budget-snapshot-v1.schema.json",
+            management_schema_document::<BudgetSnapshotV1>(BUDGET_SNAPSHOT_V1_SCHEMA_ID),
+        ),
+        (
+            "final-product-audit-v1.schema.json",
+            management_schema_document::<FinalProductAuditV1>(FINAL_PRODUCT_AUDIT_V1_SCHEMA_ID),
+        ),
+        (
             "rust-toolchain-binding.schema.json",
             management_schema_document::<RustToolchainBinding>(RUST_TOOLCHAIN_BINDING_SCHEMA_ID),
         ),
@@ -770,6 +850,17 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             management_schema_document_version::<DiagnosticV2>(DIAGNOSTIC_V2_SCHEMA_ID, 2),
         ),
         (
+            "rule-v2.schema.json",
+            management_schema_document_version::<RuleV2>(RULE_V2_SCHEMA_ID, 2),
+        ),
+        (
+            "stable-error-code-catalog.schema.json",
+            management_schema_document_version::<StableErrorCodeCatalog>(
+                STABLE_ERROR_CODE_CATALOG_SCHEMA_ID,
+                STABLE_ERROR_CODE_CATALOG_SCHEMA_VERSION,
+            ),
+        ),
+        (
             "baseline-v2.schema.json",
             management_schema_document_version::<BaselineV2>(BASELINE_V2_SCHEMA_ID, 2),
         ),
@@ -800,6 +891,13 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             management_schema_document_version::<ValidatorGuardEvidenceV2>(
                 VALIDATOR_GUARD_EVIDENCE_SCHEMA_ID,
                 VALIDATOR_GUARD_EVIDENCE_SCHEMA_VERSION,
+            ),
+        ),
+        (
+            "validator-corpus-manifest-v2.schema.json",
+            management_schema_document_version::<ValidatorCorpusManifestV2>(
+                VALIDATOR_CORPUS_MANIFEST_SCHEMA_ID,
+                VALIDATOR_CORPUS_MANIFEST_SCHEMA_VERSION,
             ),
         ),
         (
@@ -1033,7 +1131,11 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         ),
         (
             "management-local-state-bundle.schema.json",
-            management_schema_document::<LocalStateBundle>(LOCAL_STATE_BUNDLE_SCHEMA_ID),
+            management_schema_document::<LocalStateBundleSchemaV1>(LOCAL_STATE_BUNDLE_SCHEMA_ID),
+        ),
+        (
+            "management-local-state-bundle-v2.schema.json",
+            management_schema_document_version::<LocalStateBundle>(LOCAL_STATE_BUNDLE_SCHEMA_ID, 2),
         ),
         (
             "management-local-state-export-plan.schema.json",

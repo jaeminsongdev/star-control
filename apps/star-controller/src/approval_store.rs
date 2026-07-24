@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, fs, io, path::PathBuf};
 
-use chrono::{SecondsFormat, Utc};
+use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use star_contracts::{
     ApprovalId, OperationId, Sha256Hash, canonical::canonical_sha256, fixed_mcp::ApprovalDecision,
     parse_no_duplicate_keys,
@@ -32,6 +32,10 @@ pub struct ApprovalRecord {
     pub actor: serde_json::Value,
     #[serde(default)]
     pub runtime_scope: serde_json::Value,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub expires_at: Option<String>,
     pub decision: Option<ApprovalDecision>,
     pub resolved_at: Option<String>,
     #[serde(default)]
@@ -81,6 +85,7 @@ pub enum ApprovalStoreError {
 pub struct ApprovalStore {
     path: PathBuf,
     file: ApprovalFile,
+    approval_ttl_ms: u64,
 }
 
 fn approval_scope_hash(
@@ -98,6 +103,14 @@ fn approval_scope_hash(
         "expected_revision": scope.expected_revision,
     }))
     .map_err(|_| ApprovalStoreError::Corrupt)
+}
+
+fn approval_request_is_current(record: &ApprovalRecord, now: DateTime<Utc>) -> bool {
+    record
+        .expires_at
+        .as_deref()
+        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+        .is_some_and(|expires_at| expires_at > now)
 }
 
 impl ApprovalStore {
@@ -142,15 +155,40 @@ impl ApprovalStore {
             let mut normalized_permissions = record.permission_actions.clone();
             normalized_permissions.sort();
             normalized_permissions.dedup();
+            let timestamps_valid = match (&record.created_at, &record.expires_at) {
+                (Some(created_at), Some(expires_at)) => {
+                    let created_at = DateTime::parse_from_rfc3339(created_at);
+                    let expires_at = DateTime::parse_from_rfc3339(expires_at);
+                    matches!((created_at, expires_at), (Ok(created_at), Ok(expires_at)) if expires_at > created_at)
+                }
+                // Records written before request expiry was introduced remain
+                // readable, but an unresolved legacy request is never eligible
+                // for reuse or resolution.
+                (None, None) => true,
+                _ => false,
+            };
             if key != record.approval_id.as_str()
                 || normalized_permissions != record.permission_actions
                 || approval_scope_hash(&record.approval_id, &scope)? != record.scope_hash
                 || record.decision.is_some() != record.resolved_at.is_some()
+                || !timestamps_valid
             {
                 return Err(ApprovalStoreError::Corrupt);
             }
         }
-        Ok(Self { path, file })
+        Ok(Self {
+            path,
+            file,
+            approval_ttl_ms: 1_800_000,
+        })
+    }
+
+    pub fn set_approval_ttl_ms(&mut self, approval_ttl_ms: u64) -> Result<(), ApprovalStoreError> {
+        if approval_ttl_ms == 0 || approval_ttl_ms > 1_800_000 {
+            return Err(ApprovalStoreError::Corrupt);
+        }
+        self.approval_ttl_ms = approval_ttl_ms;
+        Ok(())
     }
 
     pub fn create(
@@ -161,6 +199,12 @@ impl ApprovalStore {
         scope.permission_actions.dedup();
         let approval_id = ApprovalId::new();
         let scope_hash = approval_scope_hash(&approval_id, &scope)?;
+        let created_at = Utc::now();
+        let expires_at = created_at
+            .checked_add_signed(Duration::milliseconds(
+                i64::try_from(self.approval_ttl_ms).map_err(|_| ApprovalStoreError::Corrupt)?,
+            ))
+            .ok_or(ApprovalStoreError::Corrupt)?;
         let record = ApprovalRecord {
             approval_id: approval_id.clone(),
             scope_hash,
@@ -175,6 +219,8 @@ impl ApprovalStore {
             arguments: scope.arguments,
             actor: scope.actor,
             runtime_scope: scope.runtime_scope,
+            created_at: Some(created_at.to_rfc3339_opts(SecondsFormat::Millis, true)),
+            expires_at: Some(expires_at.to_rfc3339_opts(SecondsFormat::Millis, true)),
             decision: None,
             resolved_at: None,
             decision_reason: None,
@@ -211,6 +257,7 @@ impl ApprovalStore {
                     && &record.arguments_hash == arguments_hash
                     && record.expected_revision == expected_revision
                     && record.decision.is_none()
+                    && approval_request_is_current(record, Utc::now())
             })
             .cloned()
     }
@@ -229,6 +276,9 @@ impl ApprovalStore {
             .records
             .get_mut(approval_id.as_str())
             .ok_or(ApprovalStoreError::Stale)?;
+        if record.decision.is_none() && !approval_request_is_current(record, Utc::now()) {
+            return Err(ApprovalStoreError::Stale);
+        }
         if &record.scope_hash != scope_hash
             || record
                 .decision
@@ -386,5 +436,86 @@ mod tests {
             serde_json::json!({"kind":"project_root","path_hash":Sha256Hash::digest(b"other")}),
         ];
         assert_ne!(approval_scope_hash(&approval_id, &scope).unwrap(), expected);
+    }
+
+    #[test]
+    fn unresolved_approval_requests_expire_and_legacy_requests_fail_closed() {
+        let path =
+            std::env::temp_dir().join(format!("star-approval-expiry-{}.json", star_ipc::nonce()));
+        let mut store = ApprovalStore::load(path).unwrap();
+        store.set_approval_ttl_ms(1_000).unwrap();
+        let record = store
+            .create(ApprovalScope {
+                operation_id: OperationId::new(),
+                tool_id: "user.fake.expiring.run".to_owned(),
+                descriptor_hash: Sha256Hash::digest(b"descriptor"),
+                arguments_hash: Sha256Hash::digest(b"arguments"),
+                permission_actions: vec!["paid_action".to_owned()],
+                paid_limit: serde_json::Value::Null,
+                target_refs: vec![],
+                expected_revision: Some(9),
+                arguments: serde_json::json!({}),
+                actor: serde_json::Value::Null,
+                runtime_scope: serde_json::json!({}),
+            })
+            .unwrap();
+        assert!(
+            store
+                .find_unresolved_exact(
+                    &record.tool_id,
+                    &record.arguments_hash,
+                    record.expected_revision,
+                )
+                .is_some()
+        );
+
+        let expired = store
+            .file
+            .records
+            .get_mut(record.approval_id.as_str())
+            .unwrap();
+        expired.created_at =
+            Some((Utc::now() - Duration::seconds(2)).to_rfc3339_opts(SecondsFormat::Millis, true));
+        expired.expires_at =
+            Some((Utc::now() - Duration::seconds(1)).to_rfc3339_opts(SecondsFormat::Millis, true));
+        assert!(
+            store
+                .find_unresolved_exact(
+                    &record.tool_id,
+                    &record.arguments_hash,
+                    record.expected_revision,
+                )
+                .is_none()
+        );
+        assert!(matches!(
+            store.resolve(
+                &record.approval_id,
+                &record.scope_hash,
+                ApprovalDecision::Approve,
+                None,
+                None,
+                serde_json::Value::Null,
+            ),
+            Err(ApprovalStoreError::Stale)
+        ));
+
+        let expired = store
+            .file
+            .records
+            .get_mut(record.approval_id.as_str())
+            .unwrap();
+        expired.created_at = None;
+        expired.expires_at = None;
+        assert!(matches!(
+            store.resolve(
+                &record.approval_id,
+                &record.scope_hash,
+                ApprovalDecision::Approve,
+                None,
+                None,
+                serde_json::Value::Null,
+            ),
+            Err(ApprovalStoreError::Stale)
+        ));
     }
 }

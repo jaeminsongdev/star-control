@@ -177,7 +177,7 @@ dry-run과 apply 결과는 migrated/attached/detached/blocked Project count, all
 
 ### 2단계 ChangePlan v1→v2 planning migration target
 
-`migrate.star.change-plan.v1-to-v2`는 [공통 개발 관리 계약](development-management.md#2단계-changeplan-v2-target)의 일반 사용자 계획·ScopeRevision·ImpactAnalysis 연결을 위한 **목표 migration 계약**이다. 현재 code·Schema·DB migration이 구현됐다는 뜻이 아니다.
+`migrate.star.change-plan.v1-to-v2`는 [공통 개발 관리 계약](development-management.md#2단계-changeplan-v2-target)의 일반 사용자 계획·ScopeRevision·ImpactAnalysis 연결을 위한 migration이다. P-0056 current source는 typed plan/result, generated Schema·fixture, deterministic pure conversion, application plan/apply/rollback과 Controller/CLI를 구현한다. 적용 결과는 immutable artifact로 남고 legacy v1 record를 in-place 재해석하지 않는다.
 
 새 TaskSpec·ScopeRevision·ImpactAnalysis는 신규 document이므로 과거 row를 만들 필요가 없다. 그러나 active ChangePlan v1의 의미를 바꾸므로 다음처럼 처리한다.
 
@@ -192,7 +192,7 @@ dry-run은 row별 convertible/blocked/terminal count, active PatchSet relation, 
 
 ### 3단계 Rule·Baseline·Suppression·Disposition v1→v2 migration target
 
-`migrate.star.rule.v1-to-v2`, `migrate.star.baseline.v1-to-v2`, `migrate.star.suppression.v1-to-v2`와 `migrate.star.disposition.v1-to-v2`는 [공통 개발 관리 계약](development-management.md)의 M3 목표를 위한 **목표 migration 계약**이다. 현재 migration code·Schema·DB migration이 구현됐다는 뜻이 아니다. 네 migration은 같은 release에서 제공하더라도 별도 candidate와 migration ID를 가지며, 참조 graph가 함께 검증되기 전에는 일부만 active publish하지 않는다.
+`migrate.star.rule.v1-to-v2`, `migrate.star.baseline.v1-to-v2`, `migrate.star.suppression.v1-to-v2`와 `migrate.star.disposition.v1-to-v2`는 [공통 개발 관리 계약](development-management.md)의 M3 migration이다. P-0056 current source는 deterministic pure migration, v1/v2 repository reader, v2 Schema·fixture와 portable bundle v2 round-trip을 구현한다. 과거 row를 in-place로 바꾸지 않고 새 M3 write는 v2 table에만 기록한다. provenance가 부족한 active decision은 `stale|invalid`로 보존하고, current ValidationRun 재평가 전에는 active Gate에 publish하지 않는다.
 
 Rule migration은 기존 source Rule을 `rule_domain=scan_finding`으로 명시하고 v1 analyzer·identity·redaction 의미를 보존한다. 같은 Rule ID에 v2 descriptor byte가 달라지므로 manifest가 지정한 호환 SemVer로 올리고 새 definition fingerprint를 만든다. identity contract가 같다는 old→new RuleRef compatibility mapping을 함께 생성한다. producer, severity/confidence, applicability, identity input 또는 redaction 의미가 하나라도 달라지면 compatible mapping을 만들지 않고 관련 Baseline·Suppression을 `incompatible|stale`로 둔다. `validation_diagnostic` Rule은 기존 source Rule에서 합성하지 않고 검토된 built-in Registry source와 fixture를 통해 신규 추가한다.
 
@@ -236,7 +236,7 @@ GateDecision v2, EvidenceBundle v2와 ReviewPack v1은 migration output이 아�
 
 ### 4단계 ChangeRecipe·PatchSet v1→v2 migration target
 
-`migrate.star.change-recipe.v1-to-v2`와 `migrate.star.patch-set.v1-to-v2-history`는 [안전한 Patch·Refactor·codemod 엔진 계약](safe-patch-and-codemod.md)의 **목표 migration 계약**이다. 현재 migration code·Schema·DB migration이 구현됐다는 뜻이 아니다. 새 `RecipeExecution` v1과 `PatchApplication` v1은 과거 row에서 합성하지 않고 4단계 current command가 신규 생성한다.
+`migrate.star.change-recipe.v1-to-v2`와 `migrate.star.patch-set.v1-to-v2-history`는 [안전한 Patch·Refactor·codemod 엔진 계약](safe-patch-and-codemod.md)의 migration이다. current source는 typed plan/result, Schema·fixture와 application/Controller/CLI plan/apply/rollback을 구현한다. 새 `RecipeExecution` v1과 `PatchApplication` v1은 과거 row에서 합성하지 않고 4단계 current command가 신규 생성한다.
 
 ChangeRecipe v1은 stable Recipe ID·version·origin·definition byte를 보존하되 다음 v2 필드를 과거 설명이나 command text에서 추측하지 않는다.
 

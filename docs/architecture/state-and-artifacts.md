@@ -81,7 +81,7 @@ P-0054 복구 Slice는 아래 generation layout, active-set manifest와 plan fin
 
 global DB에는 Project directory·ProjectCheckout·ProjectCatalogSnapshot·cross-project coordination, TaskSpec·ScopeRevision·ImpactAnalysis summary, ValidationPlan과 multi-project Gate summary를, ProjectId별 DB에는 source-derived CodeIndexSnapshot partition, project별 ChangeSet·ImpactEdge·ChangePlan, ValidationRun·ValidationResult·DiagnosticEvaluation participant, event·projection, local decision과 application 상태를 둔다. EvidenceSubjectBinding·GateDecision은 global summary와 project detail을 content fingerprinted ref로 연결하며 다른 Project의 source 위치·Diagnostic detail을 복제하지 않는다. TaskSpec·ScopeRevision에는 사용자가 선언한 ProjectPathRef·stable selector를 보존할 수 있지만 observed source range·literal·private symbol detail은 project store의 fingerprinted ref로만 연결한다. 이 planning/validation document는 local operational state이며 source scan만으로 복구됐다고 주장하지 않는다. raw project root는 어느 DB에도 저장하지 않고 `root_binding_id`만 둔다. 실제 root locator는 별도 adapter가 Windows current-user protection으로 암호화한 opaque locator를 해석하며 plaintext는 process memory 밖으로 노출하지 않는다. root binding은 management backup·export에 포함하지 않는다.
 
-0단계 현재 `Project` schema v1은 Project 하나에 `root_binding_id` 하나를 둔다. 1단계 구현은 [Project Catalog·Code Index 계약의 선행 gap](../contracts/project-catalog-and-code-index.md#0단계-선행조건과-호환성-gap)에 따라 binding을 `ProjectCheckout`으로 이동하는 schema migration을 먼저 거친다. migration 전 row를 복수 checkout으로 추정 복제하지 않으며, migration이 끝나기 전에는 단일 attached checkout만 current로 취급한다. 이 문서 반영은 schema·DB 구현 완료를 뜻하지 않는다.
+0단계 `Project` schema v1은 Project 하나에 `root_binding_id` 하나를 둔다. current source는 [Project Catalog·Code Index 계약의 선행 gap](../contracts/project-catalog-and-code-index.md#0단계-선행조건과-호환성-gap)에 따라 binding을 `ProjectCheckout`으로 옮기는 v1→v2 dry-run·verified backup·resume·rollback migration을 구현한다. migration 전 row를 복수 checkout으로 추정 복제하지 않으며, migration이 끝나기 전에는 단일 attached checkout만 current로 취급한다.
 
 cache는 store generation과 별도다. 삭제·miss·손상 시 같은 source와 fingerprint로 재생성해야 하며 `active-set.json`, backup-set, integrity 성공과 current 판정의 필수 자료가 아니다. cache key는 ProjectId·WorkspaceSnapshotId·partition·adapter fingerprint·index config fingerprint로 만들고 directory 이름에 project명·path·사용자명을 넣지 않는다. source 전체 byte, secret, 개인 절대 경로와 민감 literal은 cache에 저장하지 않는다.
 
@@ -174,7 +174,7 @@ Goal Run 밖의 CLI-only scan·change evidence는 별도 scope를 사용한다.
 
 ## M3 evidence·baseline·suppression·Corpus 경계
 
-3단계 [공통 검증·품질 Gate](../features/common-validation-gate.md)의 source와 runtime 자료를 다음처럼 분리한다. 이 layout은 목표 설계이며 M3 DB·Corpus가 현재 구현됐다는 뜻이 아니다.
+3단계 [공통 검증·품질 Gate](../features/common-validation-gate.md)의 source와 runtime 자료를 다음처럼 분리한다. P-0056 current source는 이 M3 v2 DB projection, revisioned local decision, sealed negative Corpus와 artifact 경계를 구현한다.
 
 | 자료 | 정본·저장 위치 | Writer | 불변식 |
 |---|---|---|---|
@@ -371,7 +371,7 @@ M8 migration backup/candidate와 evidence retention도 분리한다. plan·attem
 - 손상 store를 덮어쓰거나 삭제하지 않고 verified backup restore 또는 source rebuild를 side-by-side candidate에 수행한다.
 - Git 선언·source와 같은 scan 입력이 있으면 current ProjectCatalogSnapshot, ProjectRevision, WorkspaceSnapshot, CodeIndexSnapshot, ManagedRegistrySnapshot, Symbol, Reference와 Finding projection을 재구축할 수 있다.
 - `.ai-runs` artifact byte와 strict sidecar의 ProjectId·path·size·hash·redaction이 맞으면 ArtifactRef relation만 reindex한다. artifact를 ValidationResult·GateDecision 같은 semantic document로 자동 승격하지 않는다.
-- local-only Baseline·Suppression·Disposition과 active ChangePlan은 exact source/config binding의 redacted bundle로 export/import할 수 있다. backup·export가 없으면 진행 상태, 과거 actor·timestamp와 idempotency를 복구할 수 없다고 구조화해 보고한다.
+- local-only Baseline·Suppression·Disposition v1/v2와 v1 active ChangePlan은 exact source/config binding의 redacted `LocalStateBundle` v2로 export/import할 수 있다. normal generation backup은 global PlanningBundle v2까지 보존하지만 portable project bundle은 cross-store 원자성이 없어 이를 제외한다. backup이 없으면 global planning 진행 상태, 과거 actor·timestamp와 idempotency를 복구할 수 없다고 구조화해 보고한다.
 - 새 generation set 전체를 검증한 뒤에만 `active-set.json`을 flush·atomic replace하고 이전·손상 generation은 승인 전 삭제하지 않는다. activation crash는 all-old 또는 all-new set만 허용한다.
 - backup·restore·rebuild·export·import apply는 plan fingerprint별 durable receipt를 남기며 effect 뒤 응답 전 crash 재시도도 같은 typed result로 수렴한다.
 

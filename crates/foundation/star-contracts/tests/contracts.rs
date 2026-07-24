@@ -789,6 +789,28 @@ fn fixed_mcp_query_and_action_argument_bounds_match_the_advertised_surface() {
             "arguments":inner
         }),
     ));
+    let typed_override = serde_json::json!({
+        "key":"scan.max_files",
+        "value":{"kind":"integer","value":1000}
+    });
+    assert!(fixed_input_valid(
+        "star_tool_call_read_closed",
+        serde_json::json!({
+            "tool_id":"user.boundary.read",
+            "descriptor_hash":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "arguments":{},
+            "config_overrides":[typed_override.clone()]
+        }),
+    ));
+    assert!(!fixed_input_valid(
+        "star_tool_call_read_closed",
+        serde_json::json!({
+            "tool_id":"user.boundary.read",
+            "descriptor_hash":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "arguments":{},
+            "config_overrides":[typed_override.clone(),typed_override]
+        }),
+    ));
 }
 
 #[test]

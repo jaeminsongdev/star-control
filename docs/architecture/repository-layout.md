@@ -8,7 +8,7 @@
 
 P-0031은 `.star-control/project.toml`, `star-contracts::evidence::ValidationPlan` v1, `star-validation::planning` pure policy와 Controller `validation_planning` adapter를 먼저 제공한 역사적 Slice다. P-0043~P-0045가 이를 current TaskSpec·ImpactAnalysis·CheckGraph runner·authoritative Gate/evidence와 Patch 경로로 확장했다. 아래 tree의 미래 확장 항목은 current bounded Slice와 구분한다.
 
-[7단계 의미 정본](../contracts/failure-security-and-dependency-maintenance.md)은 이 문서의 M7 module·Schema·Catalog·evidence 위치가 구현해야 할 failure/security/dependency/Radar 계약을 소유한다.
+[7단계 의미 정본](../contracts/failure-security-and-dependency-maintenance.md)은 현재 구현된 M7 module·Schema·Catalog·evidence 위치의 failure/security/dependency/Radar 의미와 후속 provider 확장 경계를 소유한다.
 
 [9단계 의미 정본](../contracts/cross-repo-change-bundle.md)은 `MultiProjectGoal`, project-local worktree/merge, 비원자적 participant coordination, remote snapshot/approval과 10단계 release handoff 계약을 소유한다.
 
@@ -824,7 +824,7 @@ specs/
 └─ generated/README.md              # 생성 명령과 직접 편집 금지 안내
 ```
 
-위 tree는 현재 checked-in v1 생성물의 대표 구조다. M1 구현은 `project-checkout`, `project-catalog-snapshot`, `code-index-snapshot`을 추가한다. M2 구현은 `task-spec`, `scope-revision`, `impact-analysis`, `risk-path-descriptor` Schema, ChangePlan·ChangeSet·ValidationPlan의 versioned target과 nested ResolvedProfileRef·PhaseSubjectExpectation을 추가해야 한다. M3 구현은 Rule·ValidationRun·GateDecision·EvidenceBundle·Diagnostic의 v2, ReviewPack v1, nested EvidenceSubjectBinding·SubjectBindingRecord·CompletionClaim·ClaimEvaluation·DiagnosticEvaluation·RunSatisfaction·EvidenceRefSet과 Baseline·Suppression·Disposition v2를 추가한다. M5 구현은 `managed-registry-manifest`, `managed-registry-fragment`, `managed-registry-snapshot` Schema와 nested ManagedDeclaration·AliasRecord·BindingSpec·ConsumerContract·RegistryConsistencyRecord를 추가한다. M6 구현은 `project-contract-manifest`, `contract-surface-snapshot`, `compatibility-report`, `documentation-snapshot`, `environment-snapshot`, `project-doctor-report`, `clean-room-specification`, `dependency-security-input-manifest` Schema와 nested change·consumer·config trace·assumption type을 추가한다. M7 구현은 `failure-record`, `reproduction-pack`, `regression-record`, `recovery-plan`, `dependency-snapshot`, `supply-chain-snapshot`, `external-data-snapshot`, `dependency-update-plan`, `maintenance-radar-snapshot`과 `external-data-source-descriptor`, `package-manager-adapter-descriptor` Schema를 추가한다. 문서 설계 단계에서는 해당 `.schema.json`, Registry/contract/maintenance manifest를 빈 placeholder로 만들지 않으며 typed contract·migration 구현과 같은 change에서 생성한다.
+위 tree는 현재 checked-in 생성물의 대표 구조다. `specs/schemas/manifest.json`에는 M1의 ProjectCheckout·Catalog·Index, M2 planning v2, M3 Rule·Diagnostic·Gate·evidence v2, M5 Registry, M6 contract/docs/environment, M7 failure/security/dependency/Radar와 이후 단계의 typed Schema가 생성 목록과 digest로 등록돼 있다. P-0056은 `EffectiveConfigV1`, ChangePlan v1→v2 migration, local-state bundle v2와 Validator Guard·stable error catalog Schema를 같은 typed contract 변경에서 추가했다. 이는 아직 연결하지 않은 provider adapter나 public release까지 존재한다는 뜻이 아니다. 새 version·nested type은 contract와 migration을 먼저 구현한 뒤 generator로 만들며 빈 `.schema.json`이나 manifest placeholder를 만들지 않는다.
 
 정본과 생성물은 다음처럼 한 방향으로만 흐른다.
 

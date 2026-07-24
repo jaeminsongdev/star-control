@@ -15,12 +15,16 @@ type DynResult<T> = Result<T, Box<dyn std::error::Error>>;
 type GeneratedFile = (PathBuf, Vec<u8>);
 
 const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
+    "effective-config-v1.schema.json",
     "task-invocation-v2.schema.json",
     "validation-run-v2.schema.json",
     "validation-result-v2.schema.json",
     "gate-decision-v2.schema.json",
     "evidence-bundle-v2.schema.json",
     "diagnostic-v2.schema.json",
+    "rule-v2.schema.json",
+    "stable-error-code-catalog.schema.json",
+    "validator-corpus-manifest-v2.schema.json",
     "baseline-v2.schema.json",
     "suppression-v2.schema.json",
     "disposition-v2.schema.json",
@@ -33,6 +37,9 @@ const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "impact-analysis.schema.json",
     "risk-path-descriptor.schema.json",
     "planning-bundle.schema.json",
+    "change-plan-v2.schema.json",
+    "change-plan-v1-to-v2-migration-plan.schema.json",
+    "change-plan-v1-to-v2-migration-result.schema.json",
     "goal-record.schema.json",
     "managed-registry-snapshot.schema.json",
     "managed-registry-manifest.schema.json",
@@ -95,6 +102,11 @@ const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "development-effect-receipt-v1.schema.json",
     "evaluation-run-v2.schema.json",
     "evaluation-catalog-item.schema.json",
+    "evaluation-case-definition-v1.schema.json",
+    "evaluation-policy-v1.schema.json",
+    "cost-record-v1.schema.json",
+    "budget-snapshot-v1.schema.json",
+    "final-product-audit-v1.schema.json",
     "rust-toolchain-binding.schema.json",
     "rust-style-policy-snapshot.schema.json",
     "rust-style-coverage-matrix.schema.json",
@@ -140,6 +152,7 @@ const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "management-rebuild-plan.schema.json",
     "management-rebuild-apply-result.schema.json",
     "management-local-state-bundle.schema.json",
+    "management-local-state-bundle-v2.schema.json",
     "management-local-state-export-plan.schema.json",
     "management-local-state-export-result.schema.json",
     "management-local-state-import-plan.schema.json",
@@ -258,13 +271,24 @@ fn validate_fixture_set(
 ) -> DynResult<()> {
     let validator = jsonschema::draft202012::options().build(schema)?;
     if let Some(error) = validator.iter_errors(minimal).next() {
-        return Err(format!("{name} minimal fixture is invalid: {error}").into());
+        return Err(format!(
+            "{name} minimal fixture is invalid at {}: {error}",
+            error.instance_path()
+        )
+        .into());
     }
     if let Some(error) = validator.iter_errors(full).next() {
-        return Err(format!("{name} full fixture is invalid: {error}").into());
+        return Err(format!(
+            "{name} full fixture is invalid at {}: {error}",
+            error.instance_path()
+        )
+        .into());
     }
-    if validator.is_valid(invalid) || validator.is_valid(future) {
-        return Err("generated invalid or future management fixture was accepted".into());
+    if validator.is_valid(invalid) {
+        return Err(format!("{name} generated invalid fixture was accepted").into());
+    }
+    if validator.is_valid(future) {
+        return Err(format!("{name} generated future fixture was accepted").into());
     }
     Ok(())
 }

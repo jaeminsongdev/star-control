@@ -16,17 +16,92 @@
       ],
       "type": "string"
     },
+    "CostRecordRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "cost_record_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cost_record_id",
+        "revision",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "EvaluationCaseDefinitionRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "type": "string"
+        },
+        "case_version": {
+          "type": "string"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "case_id",
+        "case_version",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
     "EvaluationCaseResult": {
       "additionalProperties": false,
       "properties": {
         "adjudication": {
           "$ref": "#/$defs/CaseAdjudication"
         },
+        "adjudication_evidence_refs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline_cost_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CostRecordRefV1"
+          },
+          "type": "array"
+        },
         "baseline_detected": {
           "type": "boolean"
         },
         "baseline_duration_ms": {
           "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "baseline_existing_debt_count": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "baseline_finding_count": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "integer"
+        },
+        "baseline_new_or_worsened_count": {
+          "default": 0,
+          "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
@@ -44,6 +119,30 @@
           },
           "type": "array"
         },
+        "baseline_suppressions": {
+          "$ref": "#/$defs/EvaluationSuppressionSummary",
+          "default": {
+            "active": 0,
+            "expired": 0,
+            "invalid": 0,
+            "revoked": 0,
+            "stale": 0
+          }
+        },
+        "baseline_usage_and_cost": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvaluationQuantityV1"
+          },
+          "type": "array"
+        },
+        "candidate_cost_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CostRecordRefV1"
+          },
+          "type": "array"
+        },
         "candidate_detected": {
           "type": "boolean"
         },
@@ -52,8 +151,27 @@
           "minimum": 0,
           "type": "integer"
         },
+        "candidate_existing_debt_count": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_finding_count": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "integer"
+        },
         "candidate_flaky": {
           "type": "boolean"
+        },
+        "candidate_new_or_worsened_count": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         },
         "candidate_outcome": {
           "$ref": "#/$defs/EvaluationOutcome"
@@ -68,6 +186,26 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "candidate_suppressions": {
+          "$ref": "#/$defs/EvaluationSuppressionSummary",
+          "default": {
+            "active": 0,
+            "expired": 0,
+            "invalid": 0,
+            "revoked": 0,
+            "stale": 0
+          }
+        },
+        "candidate_usage_and_cost": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvaluationQuantityV1"
+          },
+          "type": "array"
+        },
+        "case_definition_ref": {
+          "$ref": "#/$defs/EvaluationCaseDefinitionRefV1"
         },
         "case_id": {
           "type": "string"
@@ -87,6 +225,24 @@
           },
           "type": "array"
         },
+        "suppression_broadened_count": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "suppression_newly_added_count": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "suppression_removed_count": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
         "task_source_binding": {
           "$ref": "#/$defs/Sha256Hash"
         }
@@ -96,6 +252,7 @@
         "case_version",
         "corpus_ref",
         "evaluation_context",
+        "case_definition_ref",
         "task_source_binding",
         "baseline_run_refs",
         "candidate_run_refs",
@@ -163,13 +320,37 @@
     "EvaluationMetricSummary": {
       "additionalProperties": false,
       "properties": {
+        "baseline_existing_debt_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "baseline_finding_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "integer"
+        },
+        "baseline_new_or_worsened_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
         "baseline_rework_count": {
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
+        "baseline_suppressions": {
+          "$ref": "#/$defs/EvaluationSuppressionSummary"
+        },
         "baseline_total_duration_ms": {
           "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_existing_debt_count": {
+          "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
@@ -183,7 +364,18 @@
           "minimum": 0,
           "type": "integer"
         },
+        "candidate_finding_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "integer"
+        },
         "candidate_flaky": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_new_or_worsened_count": {
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -198,6 +390,9 @@
           "minimum": 0,
           "type": "integer"
         },
+        "candidate_suppressions": {
+          "$ref": "#/$defs/EvaluationSuppressionSummary"
+        },
         "candidate_total_duration_ms": {
           "format": "uint64",
           "minimum": 0,
@@ -209,6 +404,21 @@
           "type": "integer"
         },
         "sample_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "suppression_broadened_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "suppression_newly_added_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "suppression_removed_count": {
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -230,7 +440,18 @@
         "candidate_total_duration_ms",
         "baseline_rework_count",
         "candidate_rework_count",
-        "candidate_rollbacks"
+        "candidate_rollbacks",
+        "baseline_finding_count",
+        "candidate_finding_count",
+        "baseline_new_or_worsened_count",
+        "candidate_new_or_worsened_count",
+        "baseline_existing_debt_count",
+        "candidate_existing_debt_count",
+        "baseline_suppressions",
+        "candidate_suppressions",
+        "suppression_newly_added_count",
+        "suppression_broadened_count",
+        "suppression_removed_count"
       ],
       "type": "object"
     },
@@ -253,6 +474,74 @@
         "unknown"
       ],
       "type": "string"
+    },
+    "EvaluationPolicyRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "policy_id": {
+          "type": "string"
+        },
+        "policy_version": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "policy_id",
+        "policy_version",
+        "revision",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "EvaluationQuantityComparisonV1": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_quantity": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_quantity": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit",
+        "baseline_quantity",
+        "candidate_quantity"
+      ],
+      "type": "object"
+    },
+    "EvaluationQuantityV1": {
+      "additionalProperties": false,
+      "properties": {
+        "quantity": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit",
+        "quantity"
+      ],
+      "type": "object"
     },
     "EvaluationRecommendation": {
       "enum": [
@@ -297,6 +586,44 @@
         "recipe"
       ],
       "type": "string"
+    },
+    "EvaluationSuppressionSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expired": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "invalid": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revoked": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stale": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "active",
+        "expired",
+        "stale",
+        "revoked",
+        "invalid"
+      ],
+      "type": "object"
     },
     "ProtectedMetricResult": {
       "additionalProperties": false,
@@ -370,6 +697,9 @@
     "evaluation_context": {
       "$ref": "#/$defs/EvaluationContext"
     },
+    "evaluation_policy_ref": {
+      "$ref": "#/$defs/EvaluationPolicyRefV1"
+    },
     "evaluation_run_id": {
       "pattern": "^evr_[0-9A-HJKMNP-TV-Z]{26}$",
       "type": "string"
@@ -389,6 +719,11 @@
     },
     "measurement_protocol_fingerprint": {
       "$ref": "#/$defs/Sha256Hash"
+    },
+    "minimum_sample_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
     },
     "mode": {
       "$ref": "#/$defs/EvaluationMode"
@@ -425,9 +760,15 @@
     "subject_kind": {
       "$ref": "#/$defs/EvaluationSubjectKind"
     },
+    "usage_and_cost_metrics": {
+      "items": {
+        "$ref": "#/$defs/EvaluationQuantityComparisonV1"
+      },
+      "type": "array"
+    },
     "usage_and_cost_refs": {
       "items": {
-        "type": "string"
+        "$ref": "#/$defs/CostRecordRefV1"
       },
       "type": "array"
     }
@@ -439,17 +780,20 @@
     "subject_kind",
     "subject",
     "evaluation_context",
+    "evaluation_policy_ref",
     "baseline",
     "candidate",
     "mode",
     "corpus_ref",
     "case_selection_fingerprint",
     "measurement_protocol_fingerprint",
+    "minimum_sample_count",
     "case_results",
     "ground_truth_summary",
     "finding_metrics",
     "efficiency_metrics",
     "usage_and_cost_refs",
+    "usage_and_cost_metrics",
     "comparability",
     "protected_metric_results",
     "limitations",

@@ -1,0 +1,81 @@
+{
+  "schema_id": "star.validator-corpus-manifest",
+  "schema_version": 2,
+  "corpus_id": "star.validation.guard.common-v2",
+  "revision": 1,
+  "protected_surface_paths": [
+    "crates/control/star-validation/src/rules.rs",
+    "crates/foundation/star-contracts/src/validator_guard.rs",
+    "docs/contracts/validation-and-evidence.md",
+    "specs/corpus/validator-guard/manifest.json"
+  ],
+  "fixtures": [
+    {
+      "fixture_id": "edge-missing-regression-and-distinct-snapshot",
+      "fixture_kind": "edge",
+      "input_path": "specs/corpus/validator-guard/edge.json",
+      "input_sha256": "sha256:b78a7c6d37662e90a460e0b731201f3dd0b82bd96f7c14278356aca6cb1398f1",
+      "rule_id": "star.validation.guard.snapshot-missing",
+      "rule_version": "2.0.0",
+      "expected_diagnostic_codes": [
+        "VALIDATOR_FIXTURE_COVERAGE_MISSING",
+        "VALIDATOR_TWO_SNAPSHOT_MISSING"
+      ],
+      "expected_gate_decision": "block",
+      "protected_behavior": [
+        "distinct trusted and candidate snapshots are mandatory",
+        "positive negative edge and regression fixtures are mandatory"
+      ],
+      "expected_behavior_fingerprint": "sha256:ba6dee470c1232793f0a7ba7918962e487d9e6a74bf6de7e3da36e34e2c38402"
+    },
+    {
+      "fixture_id": "negative-validator-weakening-and-self-approval",
+      "fixture_kind": "negative",
+      "input_path": "specs/corpus/validator-guard/negative.json",
+      "input_sha256": "sha256:eeda88cba220f2a58a0bdb02245c53fc9f989cd2ca1cb8a95b78cb9c0a93be17",
+      "rule_id": "star.validation.guard.normalization-weakened",
+      "rule_version": "2.0.0",
+      "expected_diagnostic_codes": [
+        "VALIDATOR_BEHAVIOR_WEAKENED",
+        "VALIDATOR_SELF_APPROVAL_ONLY"
+      ],
+      "expected_gate_decision": "block",
+      "protected_behavior": [
+        "candidate validator cannot be its only approval executor",
+        "candidate validator cannot weaken a protected decision"
+      ],
+      "expected_behavior_fingerprint": "sha256:4088da0bc090ed1f262cdab1e9fc51bf688a720d08e8fe1d682247aba7feaff5"
+    },
+    {
+      "fixture_id": "positive-unmodified-protected-surface",
+      "fixture_kind": "positive",
+      "input_path": "specs/corpus/validator-guard/positive.json",
+      "input_sha256": "sha256:636768c062d6ffa2d03affc73e6bea82e0f162dc6665847e6468ce996499364c",
+      "rule_id": "star.validation.guard.protected-surface-changed",
+      "rule_version": "2.0.0",
+      "expected_diagnostic_codes": [],
+      "expected_gate_decision": "auto_pass",
+      "protected_behavior": [
+        "an unchanged protected surface does not manufacture guard findings"
+      ],
+      "expected_behavior_fingerprint": "sha256:80a816642f590146ac519d1e91a82e3a1ea96cdd6f312d2f6c22e8ed36678cab"
+    },
+    {
+      "fixture_id": "regression-one-snapshot-fixture-failure",
+      "fixture_kind": "regression",
+      "input_path": "specs/corpus/validator-guard/regression.json",
+      "input_sha256": "sha256:b68d635fab46f25b2a0688910d5c7b089942b3fdfbb71d58ac6639fc0cc8702c",
+      "rule_id": "star.validation.guard.fixture-missing",
+      "rule_version": "2.0.0",
+      "expected_diagnostic_codes": [
+        "VALIDATOR_FIXTURE_COVERAGE_MISSING"
+      ],
+      "expected_gate_decision": "block",
+      "protected_behavior": [
+        "a fixture must pass on both trusted and candidate snapshots"
+      ],
+      "expected_behavior_fingerprint": "sha256:bf647e90d24af1ed1880b15048aefa0755486511b1f4fdc4bb49cf64a76b2365"
+    }
+  ],
+  "manifest_fingerprint": "sha256:9111e78c16703e71be50d6e84aea84893485d57aad1295dd188d88e183b709b4"
+}

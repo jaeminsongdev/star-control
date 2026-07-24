@@ -1,0 +1,90 @@
+{
+  "$defs": {
+    "CaseAdjudication": {
+      "enum": [
+        "confirmed_defect",
+        "false_positive",
+        "unresolved",
+        "not_applicable"
+      ],
+      "type": "string"
+    },
+    "EvaluationContext": {
+      "enum": [
+        "cli_only",
+        "codex_integrated"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.evaluation-case-definition:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adjudication": {
+      "$ref": "#/$defs/CaseAdjudication"
+    },
+    "case_id": {
+      "type": "string"
+    },
+    "case_version": {
+      "type": "string"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "corpus_ref": {
+      "type": "string"
+    },
+    "evaluation_context": {
+      "$ref": "#/$defs/EvaluationContext"
+    },
+    "ground_truth_evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.evaluation-case-definition",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_ref": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "revision",
+    "project_id",
+    "case_id",
+    "case_version",
+    "corpus_ref",
+    "evaluation_context",
+    "adjudication",
+    "ground_truth_evidence_refs",
+    "source_ref",
+    "content_fingerprint"
+  ],
+  "title": "EvaluationCaseDefinitionV1",
+  "type": "object"
+}

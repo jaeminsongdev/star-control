@@ -91,7 +91,7 @@ local 상태와 remote 상태는 별도 축이다. local commit/branch update를
 | 부류 | 예 | 변경 근거 | 재구축 |
 |---|---|---|---|
 | source-derived projection | ProjectRevision, WorkspaceSnapshot, Symbol, Finding, ManagedRegistrySnapshot | Git·Catalog·source·Managed Registry manifest와 ScanRun | 동일 입력으로 재scan |
-| local operational state | local Suppression·Disposition, TaskSpec·ScopeRevision·ImpactAnalysis·ChangePlan·ValidationPlan, idempotency | application command event | backup·export가 없으면 재구축 불가 |
+| local operational state | local Suppression·Baseline·Disposition v1/v2, TaskSpec·ScopeRevision·ImpactAnalysis·ChangePlan·ValidationPlan, idempotency | application command event | 정상 generation backup은 모두 보존. portable bundle v2는 project decision과 v1 active ChangePlan만 보존하며 global PlanningBundle v2·idempotency는 제외하므로 backup 없는 rebuild에서 loss 보고 |
 | evidence index | ValidationRun·raw Diagnostic·ValidationResult·GateDecision·EvidenceBundle·ReviewPack·ArtifactRef relation | committed event와 `.ai-runs` manifest | artifact가 남아 있으면 provenance·completeness와 함께 제한적으로 reindex |
 
 이 세 부류 중 project-scoped source·edge·decision detail은 ProjectId별 project store에 둔다. global store는 Project directory, cross-project relation·`CoordinatedOperation`과 Goal/run 또는 독립 planning coordinator의 TaskSpec·ScopeRevision·ImpactAnalysis summary·ValidationPlan을 소유한다. global document가 project detail을 inline 복제하지 않고 fingerprinted participant ref로 연결한다. store마다 독립적인 event sequence·hash chain·revision이 있으며 전체 하이브리드 저장소에 하나의 global revision이 있다고 가정하지 않는다.

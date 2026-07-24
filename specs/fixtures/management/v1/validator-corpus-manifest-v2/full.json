@@ -1,0 +1,28 @@
+{
+  "corpus_id": "fixture",
+  "fixtures": [
+    {
+      "expected_behavior_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "expected_diagnostic_codes": [
+        "fixture"
+      ],
+      "expected_gate_decision": "auto_pass",
+      "fixture_id": "fixture",
+      "fixture_kind": "positive",
+      "input_path": "src/lib.rs",
+      "input_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "protected_behavior": [
+        "fixture"
+      ],
+      "rule_id": "fixture",
+      "rule_version": "fixture"
+    }
+  ],
+  "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "protected_surface_paths": [
+    "src/lib.rs"
+  ],
+  "revision": 0,
+  "schema_id": "star.validator-corpus-manifest",
+  "schema_version": 2
+}

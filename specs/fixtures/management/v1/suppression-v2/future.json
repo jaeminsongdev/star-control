@@ -1,15 +1,29 @@
 {
+  "approved_by": {
+    "actor_id": "fixture",
+    "actor_type": "user",
+    "auth_source": "fixture",
+    "display_name": "fixture"
+  },
   "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "created_at": "2026-01-01T00:00:00Z",
   "permanent": false,
   "project_id": "prj_00000000000000000000000000",
+  "provenance": "fixture",
   "reason": "fixture",
   "reason_code": "fixture",
+  "review_evidence_refs": [],
   "revision": 0,
   "schema_id": "star.suppression",
   "schema_version": 3,
-  "scope_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "scope_constraint": {
+    "gate_phases": [],
+    "paths": [],
+    "project_id": "prj_00000000000000000000000000",
+    "symbol_ids": []
+  },
+  "selector": "fixture",
   "status": "active",
-  "subject_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_kind": "finding",
   "suppression_id": "sup_00000000000000000000000000"
 }

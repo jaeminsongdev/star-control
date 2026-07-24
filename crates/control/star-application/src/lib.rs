@@ -11,6 +11,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use star_contracts::{
     Sha256Hash, canonical_sha256,
+    config_v1::EffectiveConfigV1,
     evidence::{
         ActorRef, ActorType, ArtifactKind, ArtifactManifest, ArtifactManifestEntry, ArtifactRef,
         AuthoritativeGateState, CatalogRef, DocumentRef, GateDecision, GateDecisionKind, GateScope,
@@ -26,7 +27,8 @@ use star_contracts::{
     ids::{
         CheckoutId, CodeIndexSnapshotId, CoordinatedOperationId, DiagnosticId, EvidenceBundleId,
         FindingId, GateId, GenerationId, PatchApplicationId, PatchSetId, ProjectId,
-        RecipeExecutionId, RequestId, ReviewPackId, ScanRunId, TaskSpecId, WorktreeDecisionId,
+        RecipeExecutionId, RequestId, ReviewPackId, ScanRunId, SuppressionId, TaskSpecId,
+        WorktreeDecisionId,
     },
     index::{
         CodeIndexSnapshot, HardcodingCandidate, IndexEdge, IndexEntity, IndexFreshnessState,
@@ -37,10 +39,10 @@ use star_contracts::{
         ManagedDeclarationChangeIntent, ManagedRegistrySnapshot, RegistryConsistencyRecord,
     },
     management::{
-        Baseline, CoordinatedOperation, CoordinationParticipant, CoordinationState, Disposition,
-        Finding, ManagementStoreStatus, ParticipantState, PatchSet, PatchSetStatus, Project,
-        ProjectCheckout, ProjectPathRef, ProjectStorePoint, ScanRun, ScanStatus, StorePoint,
-        StoreVersionVector, Suppression, SymbolReference, ValidationResult,
+        Baseline, ChangePlan, CheckoutKind, CoordinatedOperation, CoordinationParticipant,
+        CoordinationState, Disposition, Finding, ManagementStoreStatus, ParticipantState, PatchSet,
+        PatchSetStatus, Project, ProjectCheckout, ProjectPathRef, ProjectStorePoint, ScanRun,
+        ScanStatus, StorePoint, StoreVersionVector, Suppression, SymbolReference, ValidationResult,
     },
     parse_no_duplicate_keys,
     patch_v2::{
@@ -52,12 +54,14 @@ use star_contracts::{
         WorktreeDecision, WorktreeDecisionStateV1, WorktreeStrategyV1,
     },
     planning::{
-        BaselinePolicy, BaselinePolicyKind, CheckCandidate, CheckDescriptor, CheckOverride,
+        BaselinePolicy, BaselinePolicyKind, ChangePlanMigrationOutcomeV1,
+        ChangePlanV1ToV2MigrationEntry, ChangePlanV1ToV2MigrationPlan,
+        ChangePlanV1ToV2MigrationResult, CheckCandidate, CheckDescriptor, CheckOverride,
         CheckPlanV2, CollectionState, FallbackDecision, ImpactAnalysis, ImpactStatus,
         IntendedChange, IntendedChangeKind, ObservedChangeKind, PlanningBundle, PlanningSelector,
         ProjectTarget, ProjectTargetRole, ScopeReasonCode, ScopeRelation, ScopeSourceSnapshotRef,
         ScopeUserDecision, SelectorKind, SuccessCriterion, UnresolvedCheck,
-        ValidationPlanV2Readiness,
+        ValidationPlanV2Readiness, migrate_change_plan_v1_to_v2,
     },
     recovery::{
         BackupApplyResult, BackupPlan, LocalStateExportPlan, LocalStateExportResult,
@@ -95,10 +99,11 @@ use star_planning::{
 use star_ports::{
     ArtifactDiscovery, ArtifactStore, ArtifactWritePolicy, ArtifactWriteRequest,
     CheckGraphEvidenceTransaction, CodeIndexCache, GlobalManagementRepository, ManagementRecovery,
-    ManagementRepositorySet, PatchPortError, ProjectRootBindingStore, RepositoryError,
-    RepositoryErrorCategory, RetentionApplyResult, RetentionPlan, RewriteTransformRequest,
-    RewriteTransformerPort, ScanCommit, SourceMutationPort, SourceMutationRequest,
-    SourceMutationState, StoredCodeIndexProjection, WorktreeMaterialization, WorktreePort,
+    ManagementRepositorySet, PatchPortError, ProjectRootAttachment, ProjectRootBindingStore,
+    RepositoryError, RepositoryErrorCategory, RetentionApplyResult, RetentionPlan, RetentionPolicy,
+    RewriteTransformRequest, RewriteTransformerPort, ScanCommit, SourceMutationPort,
+    SourceMutationRequest, SourceMutationState, StoredCodeIndexProjection, WorktreeMaterialization,
+    WorktreePort,
 };
 pub use star_ports::{
     DevelopmentRecord, ManagedRegistryConsumerProjectInput, ManagedRegistryResolveRequest,
@@ -412,7 +417,8 @@ impl ArtifactManifestFinalizer for ValidationArtifactManifestFinalizer {
         for artifact in runs.iter().flat_map(|run| run.artifact_refs.iter()).chain(
             diagnostics
                 .iter()
-                .flat_map(|diagnostic| diagnostic.evidence_refs.iter()),
+                .flat_map(|diagnostic| diagnostic.evidence_refs.iter())
+                .filter_map(star_contracts::evidence_v2::DiagnosticEvidenceRefV2::artifact),
         ) {
             if artifacts
                 .insert(artifact.artifact_id.clone(), artifact.clone())
@@ -715,7 +721,10 @@ pub struct ManagementApplicationService {
     root_bindings: Arc<dyn ProjectRootBindingStore>,
     artifacts: Arc<dyn ArtifactStore>,
     scan_policy: ScanPolicy,
+    scan_incremental: bool,
     index_policy: IndexPolicy,
+    planning_policy: PlanningPolicy,
+    effective_config: Option<EffectiveConfigV1>,
     index_cache: Option<Arc<dyn CodeIndexCache>>,
     syntax_adapters: Vec<Arc<dyn SyntaxAdapter>>,
     semantic_adapters: Vec<Arc<dyn SemanticAdapter>>,
@@ -732,11 +741,28 @@ pub struct ManagementRecoveryApplicationService<'a> {
     root_bindings: Arc<dyn ProjectRootBindingStore>,
     artifacts: Arc<dyn ArtifactStore>,
     scan_policy: ScanPolicy,
+    scan_incremental: bool,
     index_policy: IndexPolicy,
+    planning_policy: PlanningPolicy,
+    effective_config: Option<EffectiveConfigV1>,
+    execution_config_resolver: Option<Arc<dyn RecoveryExecutionConfigResolver>>,
     index_cache: Option<Arc<dyn CodeIndexCache>>,
     syntax_adapters: Vec<Arc<dyn SyntaxAdapter>>,
     semantic_adapters: Vec<Arc<dyn SemanticAdapter>>,
     command_lock: Mutex<()>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RecoveryExecutionConfig {
+    pub scan_incremental: bool,
+    pub scan_policy: ScanPolicy,
+    pub index_policy: IndexPolicy,
+    pub planning_policy: PlanningPolicy,
+    pub effective_config: Option<EffectiveConfigV1>,
+}
+
+pub trait RecoveryExecutionConfigResolver: Send + Sync {
+    fn resolve(&self, project_root: &Path) -> Result<RecoveryExecutionConfig, ApplicationError>;
 }
 
 struct ManagedRustSourceMutationPortV2<'a> {
@@ -786,6 +812,54 @@ impl rust_style::RustSourceMutationPort for ManagedRustSourceMutationPortV2<'_> 
     }
 }
 
+fn validation_output_limits(policy: &PlanningPolicy) -> OutputLimits {
+    OutputLimits {
+        stdout_bytes: (4 * 1024 * 1024_u64).min(policy.max_log_bytes),
+        stderr_bytes: (4 * 1024 * 1024_u64).min(policy.max_log_bytes),
+        artifact_bytes: (16 * 1024 * 1024_u64).min(policy.max_artifact_bytes),
+    }
+}
+
+fn current_effective_config_fingerprint(
+    policy: &PlanningPolicy,
+    config: Option<&EffectiveConfigV1>,
+) -> Result<Sha256Hash, ApplicationError> {
+    let fingerprint = config
+        .map(|config| config.config_fingerprint.clone())
+        .unwrap_or_else(|| policy.effective_config_fingerprint.clone());
+    if policy.effective_config_fingerprint != fingerprint {
+        return Err(ApplicationError::Apply(
+            "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+        ));
+    }
+    Ok(fingerprint)
+}
+
+fn select_rebuild_attachment(
+    candidates: Vec<(ProjectRootAttachment, CheckoutKind)>,
+) -> Result<ProjectRootAttachment, ApplicationError> {
+    if candidates.len() == 1 {
+        return Ok(candidates
+            .into_iter()
+            .next()
+            .expect("one candidate exists")
+            .0);
+    }
+    let mut main_worktrees = candidates
+        .iter()
+        .filter(|(_, kind)| *kind == CheckoutKind::MainWorktree)
+        .map(|(attachment, _)| attachment.clone());
+    if let Some(selected) = main_worktrees.next()
+        && main_worktrees.next().is_none()
+    {
+        return Ok(selected);
+    }
+    Err(ApplicationError::Repository(RepositoryError::new(
+        RepositoryErrorCategory::RevisionConflict,
+        "source rebuild requires one checkout or a unique main worktree per Project",
+    )))
+}
+
 impl ManagementApplicationService {
     pub fn new(
         repositories: Arc<dyn ManagementRepositorySet>,
@@ -797,7 +871,10 @@ impl ManagementApplicationService {
             root_bindings,
             artifacts,
             scan_policy: ScanPolicy::default(),
+            scan_incremental: true,
             index_policy: IndexPolicy::default(),
+            planning_policy: PlanningPolicy::default(),
+            effective_config: None,
             index_cache: None,
             syntax_adapters: Vec::new(),
             semantic_adapters: Vec::new(),
@@ -813,6 +890,62 @@ impl ManagementApplicationService {
     pub fn with_index_cache(mut self, cache: Arc<dyn CodeIndexCache>) -> Self {
         self.index_cache = Some(cache);
         self
+    }
+
+    pub fn with_planning_policy(mut self, policy: PlanningPolicy) -> Self {
+        self.planning_policy = policy;
+        self
+    }
+
+    pub fn set_planning_policy(&mut self, policy: PlanningPolicy) {
+        self.planning_policy = policy;
+    }
+
+    pub fn with_effective_config(mut self, config: EffectiveConfigV1) -> Self {
+        self.effective_config = Some(config);
+        self
+    }
+
+    pub fn set_effective_config(&mut self, config: EffectiveConfigV1) {
+        self.effective_config = Some(config);
+    }
+
+    pub fn effective_config(&self) -> Result<&EffectiveConfigV1, ApplicationError> {
+        self.effective_config
+            .as_ref()
+            .ok_or(ApplicationError::Invalid)
+    }
+
+    fn require_current_planning_config(
+        &self,
+        expected: &Sha256Hash,
+    ) -> Result<(), ApplicationError> {
+        if current_effective_config_fingerprint(
+            &self.planning_policy,
+            self.effective_config.as_ref(),
+        )? != *expected
+        {
+            return Err(ApplicationError::Apply(
+                "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn set_scan_policy(&mut self, policy: ScanPolicy) {
+        self.scan_policy = policy;
+    }
+
+    pub fn set_scan_incremental(&mut self, enabled: bool) {
+        self.scan_incremental = enabled;
+    }
+
+    pub fn set_index_policy(&mut self, policy: IndexPolicy) {
+        self.index_policy = policy;
+    }
+
+    pub fn set_index_cache(&mut self, cache: Option<Arc<dyn CodeIndexCache>>) {
+        self.index_cache = cache;
     }
 
     pub fn with_rust_style_runtime(
@@ -1605,7 +1738,15 @@ impl ManagementApplicationService {
         project_id: &ProjectId,
         idempotency_key: &str,
     ) -> Result<ScanProjectResult, ApplicationError> {
-        self.scan_project_inner_with_mode(project_id, idempotency_key, IndexScanMode::Incremental)
+        self.scan_project_inner_with_mode(
+            project_id,
+            idempotency_key,
+            if self.scan_incremental {
+                IndexScanMode::Incremental
+            } else {
+                IndexScanMode::Full
+            },
+        )
     }
 
     fn scan_project_inner_with_mode(
@@ -1808,6 +1949,10 @@ impl ManagementApplicationService {
         let baselines = repository.list_baselines()?;
         let suppressions = repository.list_suppressions()?;
         let dispositions = repository.list_dispositions()?;
+        let effective_config_fingerprint = current_effective_config_fingerprint(
+            &self.planning_policy,
+            self.effective_config.as_ref(),
+        )?;
         let decisions = evaluate_decisions(
             project_id,
             &observation.revision.project_revision_id,
@@ -1832,17 +1977,6 @@ impl ManagementApplicationService {
             }),
         )
         .map_err(|_| ApplicationError::Invalid)?;
-        let effective_config_fingerprint = versioned_fingerprint(
-            "star.effective-config",
-            1,
-            &serde_json::json!({
-                "scan_config_fingerprint":observation.scan_config_fingerprint,
-                "require_complete_for_gate":true,
-                "suppression_default_expiry_days":90,
-                "decision_set_fingerprint":decision_set_fingerprint,
-            }),
-        )
-        .map_err(|_| ApplicationError::Invalid)?;
         scan_limitations.sort();
         scan_limitations.dedup();
         let input_fingerprint = versioned_fingerprint(
@@ -1850,6 +1984,7 @@ impl ManagementApplicationService {
             1,
             &serde_json::json!({
                 "workspace_snapshot_id":workspace_snapshot_id,
+                "effective_config_fingerprint":effective_config_fingerprint,
                 "scan_config_fingerprint":observation.scan_config_fingerprint,
                 "rule_set_fingerprint":projection.rule_set_fingerprint,
                 "decision_set_fingerprint":decision_set_fingerprint,
@@ -3208,7 +3343,7 @@ impl ManagementApplicationService {
                 "task":task,
                 "actor":actor,
                 "check_descriptors":check_descriptors,
-                "policy":PlanningPolicy::default(),
+                "policy":&self.planning_policy,
                 "validation_phase":validation_phase,
                 "observed_change_override":observed_change_override,
                 "profile_resolution":profile_resolution,
@@ -3251,7 +3386,7 @@ impl ManagementApplicationService {
                 check_descriptors,
                 previous_success_evidence: vec![],
                 profile_resolution,
-                policy: PlanningPolicy::default(),
+                policy: self.planning_policy.clone(),
             },
             validation_phase,
         )?;
@@ -3303,7 +3438,7 @@ impl ManagementApplicationService {
                 "reason_code":reason_code,
                 "reason":reason,
                 "user_decisions":user_decisions,
-                "policy":PlanningPolicy::default(),
+                "policy":&self.planning_policy,
             }),
         )
         .map_err(|_| ApplicationError::Invalid)?;
@@ -3332,7 +3467,7 @@ impl ManagementApplicationService {
                 check_descriptors,
                 previous_success_evidence,
                 profile_resolution,
-                policy: PlanningPolicy::default(),
+                policy: self.planning_policy.clone(),
             },
             reason_code,
             reason: reason.to_owned(),
@@ -3366,7 +3501,7 @@ impl ManagementApplicationService {
                 "actor":actor,
                 "check_descriptors":check_descriptors,
                 "reason":reason,
-                "policy":PlanningPolicy::default(),
+                "policy":&self.planning_policy,
             }),
         )
         .map_err(|_| ApplicationError::Invalid)?;
@@ -3396,7 +3531,7 @@ impl ManagementApplicationService {
                 check_descriptors,
                 previous_success_evidence,
                 profile_resolution,
-                policy: PlanningPolicy::default(),
+                policy: self.planning_policy.clone(),
             },
             reason_code: ScopeReasonCode::SourceChanged,
             reason: reason.to_owned(),
@@ -3433,7 +3568,7 @@ impl ManagementApplicationService {
                 "check_override":check_override,
                 "actor":actor,
                 "check_descriptors":check_descriptors,
-                "policy":PlanningPolicy::default(),
+                "policy":&self.planning_policy,
             }),
         )
         .map_err(|_| ApplicationError::Invalid)?;
@@ -3466,7 +3601,7 @@ impl ManagementApplicationService {
                 check_descriptors,
                 previous_success_evidence,
                 profile_resolution,
-                policy: PlanningPolicy::default(),
+                policy: self.planning_policy.clone(),
             },
             reason_code: ScopeReasonCode::UserEdit,
             reason: format!(
@@ -3832,6 +3967,7 @@ impl ManagementApplicationService {
         {
             return Err(ApplicationError::Invalid);
         }
+        self.require_current_planning_config(&bundle.validation_plan.config_fingerprint)?;
         let project_ids = bundle
             .validation_plan
             .required_checks
@@ -4048,11 +4184,7 @@ impl ManagementApplicationService {
                 executable_binding_fingerprint: resolved.executable_binding_fingerprint.clone(),
                 cwd: InvocationWorkingDirectoryV2::ProjectRoot,
                 permission_action: "local_validation".to_owned(),
-                output_limits: OutputLimits {
-                    stdout_bytes: 4 * 1024 * 1024,
-                    stderr_bytes: 4 * 1024 * 1024,
-                    artifact_bytes: 16 * 1024 * 1024,
-                },
+                output_limits: validation_output_limits(&self.planning_policy),
                 subject_binding: subject_binding.clone(),
             });
             items.push(ValidationExecutionPreflightItem {
@@ -4223,6 +4355,7 @@ impl ManagementApplicationService {
             .global()
             .get_planning_bundle(task_spec_id)?
             .ok_or(ApplicationError::NotFound)?;
+        self.require_current_planning_config(&bundle.validation_plan.config_fingerprint)?;
         let project_ids = bundle
             .validation_plan
             .required_checks
@@ -4319,6 +4452,17 @@ impl ManagementApplicationService {
             .list_validation_runs_v2()?)
     }
 
+    pub fn get_validation_result_v2(
+        &self,
+        project_id: &ProjectId,
+        validation_result_id: &star_contracts::ids::ValidationResultId,
+    ) -> Result<ValidationResultV2, ApplicationError> {
+        self.repositories
+            .project(project_id)?
+            .get_validation_result_v2(validation_result_id)?
+            .ok_or(ApplicationError::NotFound)
+    }
+
     pub fn list_validation_diagnostics_v2(
         &self,
         project_id: &ProjectId,
@@ -4384,6 +4528,28 @@ impl ManagementApplicationService {
             suppressions: repository.list_suppressions_v2()?,
             dispositions: repository.list_dispositions_v2()?,
         })
+    }
+
+    pub fn get_validation_suppression_v2(
+        &self,
+        project_id: &ProjectId,
+        suppression_id: &SuppressionId,
+        revision: u64,
+    ) -> Result<SuppressionV2, ApplicationError> {
+        self.repositories
+            .project(project_id)?
+            .get_suppression_v2(suppression_id, revision)?
+            .ok_or(ApplicationError::NotFound)
+    }
+
+    pub fn list_gate_decisions_v2(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<Vec<GateDecisionV2>, ApplicationError> {
+        Ok(self
+            .repositories
+            .project(project_id)?
+            .list_gate_decisions_v2()?)
     }
 
     pub fn put_validation_baseline_v2(
@@ -8118,6 +8284,324 @@ impl ManagementApplicationService {
         Ok(result)
     }
 
+    pub fn plan_change_plan_v1_to_v2_migration(
+        &self,
+        project_id: &ProjectId,
+        task_spec_id: &TaskSpecId,
+    ) -> Result<ChangePlanV1ToV2MigrationPlan, ApplicationError> {
+        let _guard = self.command_guard()?;
+        self.plan_change_plan_v1_to_v2_migration_inner(project_id, task_spec_id)
+    }
+
+    fn plan_change_plan_v1_to_v2_migration_inner(
+        &self,
+        project_id: &ProjectId,
+        task_spec_id: &TaskSpecId,
+    ) -> Result<ChangePlanV1ToV2MigrationPlan, ApplicationError> {
+        let bundle = self
+            .repositories
+            .global()
+            .get_planning_bundle(task_spec_id)?
+            .ok_or(ApplicationError::NotFound)?;
+        let task_spec_ref = star_contracts::planning::document_ref(
+            star_contracts::planning::TASK_SPEC_SCHEMA_ID,
+            bundle.task_spec.task_spec_id.as_str(),
+            bundle.task_spec.revision,
+            &bundle.task_spec.content_fingerprint,
+        );
+        let relevant_snapshots = bundle
+            .change_sets
+            .iter()
+            .filter(|change_set| change_set.project_id == *project_id)
+            .map(|change_set| change_set.observed_workspace_snapshot_id.clone())
+            .collect::<BTreeSet<_>>();
+        let legacy_plans = self.repositories.project(project_id)?.list_change_plans()?;
+        let mut entries = Vec::new();
+        for legacy in legacy_plans.into_iter().filter(|legacy| {
+            legacy.project_id == *project_id
+                && relevant_snapshots.contains(&legacy.target_workspace_snapshot_id)
+        }) {
+            let projected_change_plan =
+                migrate_change_plan_v1_to_v2(&legacy, &bundle).map_err(|_| {
+                    ApplicationError::Apply("CHANGE_PLAN_MIGRATION_INCOMPATIBLE".to_owned())
+                })?;
+            let legacy_change_plan_ref = DocumentRef {
+                schema_id: "star.change-plan".to_owned(),
+                document_id: legacy.change_plan_id.to_string(),
+                revision: legacy.revision,
+                sha256: application_document_hash(&legacy)?,
+            };
+            let limitations = projected_change_plan.unresolved_impacts.clone();
+            entries.push(ChangePlanV1ToV2MigrationEntry {
+                legacy_change_plan_ref,
+                projected_change_plan,
+                limitations,
+            });
+        }
+        if entries.is_empty() {
+            return Err(ApplicationError::NotFound);
+        }
+        ChangePlanV1ToV2MigrationPlan {
+            schema_id: star_contracts::planning::CHANGE_PLAN_V1_TO_V2_MIGRATION_PLAN_SCHEMA_ID
+                .to_owned(),
+            schema_version: 1,
+            project_id: project_id.clone(),
+            task_spec_ref,
+            entries,
+            dry_run: true,
+            backup_required: true,
+            rollback_supported: true,
+            plan_fingerprint: Sha256Hash::digest(b"unsealed"),
+        }
+        .seal()
+        .map_err(|_| ApplicationError::Invalid)
+    }
+
+    pub fn apply_change_plan_v1_to_v2_migration(
+        &self,
+        plan: ChangePlanV1ToV2MigrationPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<ChangePlanV1ToV2MigrationResult, ApplicationError> {
+        let _guard = self.command_guard()?;
+        let sealed = plan.clone().seal().map_err(|_| ApplicationError::Invalid)?;
+        if sealed != plan || plan.plan_fingerprint.as_str() != approved_plan_fingerprint {
+            return Err(ApplicationError::Invalid);
+        }
+        let task_spec_id = TaskSpecId::parse(plan.task_spec_ref.document_id.clone())
+            .map_err(|_| ApplicationError::Invalid)?;
+        let current =
+            self.plan_change_plan_v1_to_v2_migration_inner(&plan.project_id, &task_spec_id)?;
+        if current.plan_fingerprint != plan.plan_fingerprint {
+            return Err(ApplicationError::Apply(
+                "CHANGE_PLAN_MIGRATION_PLAN_STALE".to_owned(),
+            ));
+        }
+        let project = self
+            .repositories
+            .global()
+            .get_project(&plan.project_id)?
+            .ok_or(ApplicationError::NotFound)?;
+        let root = self.primary_project_root(&project)?;
+        let fingerprint_key = plan.plan_fingerprint.as_str().trim_start_matches("sha256:");
+        let result_path =
+            format!("management/migrations/change-plan-v1-v2/{fingerprint_key}/applied.json");
+        match self.read_patch_document::<ChangePlanV1ToV2MigrationResult>(
+            &plan.project_id,
+            &root,
+            &result_path,
+        ) {
+            Ok(result)
+                if result.plan_fingerprint == plan.plan_fingerprint
+                    && result.outcome == ChangePlanMigrationOutcomeV1::Applied =>
+            {
+                return Ok(result);
+            }
+            Ok(_) => return Err(ApplicationError::Invalid),
+            Err(ApplicationError::NotFound) => {}
+            Err(error) => return Err(error),
+        }
+        let repository = self.repositories.project(&plan.project_id)?;
+        let current_legacy = repository.list_change_plans()?;
+        let mut legacy_snapshots = Vec::new();
+        for entry in &plan.entries {
+            let legacy = current_legacy
+                .iter()
+                .find(|legacy| {
+                    legacy.change_plan_id.as_str() == entry.legacy_change_plan_ref.document_id
+                })
+                .ok_or(ApplicationError::NotFound)?;
+            if legacy.revision != entry.legacy_change_plan_ref.revision
+                || application_document_hash(legacy)? != entry.legacy_change_plan_ref.sha256
+            {
+                return Err(ApplicationError::Apply(
+                    "CHANGE_PLAN_MIGRATION_PLAN_STALE".to_owned(),
+                ));
+            }
+            legacy_snapshots.push(legacy.clone());
+        }
+        let backup_manifest_ref = self.artifacts.put_json_with_policy(ArtifactWriteRequest {
+            project_id: &plan.project_id,
+            project_root: &root,
+            relative_path: &format!(
+                "management/migrations/change-plan-v1-v2/{fingerprint_key}/backup.json"
+            ),
+            subject_kind: "change_plan_v1_to_v2_backup",
+            subject_id: fingerprint_key,
+            policy: ArtifactWritePolicy {
+                kind: ArtifactKind::Checkpoint,
+                redaction_status: RedactionStatus::NotNeeded,
+                retention_class: RetentionClass::Hold,
+            },
+            value: &serde_json::json!({
+                "schema_id":"star.change-plan-v1-to-v2-backup",
+                "schema_version":1,
+                "plan_fingerprint":plan.plan_fingerprint,
+                "task_spec_ref":plan.task_spec_ref,
+                "legacy_change_plans":legacy_snapshots,
+                "created_at":Utc::now(),
+            }),
+        })?;
+        let mut migrated_change_plan_refs = Vec::new();
+        for entry in &plan.entries {
+            let projected_ref = entry
+                .projected_change_plan
+                .reference()
+                .map_err(|_| ApplicationError::Invalid)?;
+            self.persist_patch_document(
+                &plan.project_id,
+                &root,
+                &format!(
+                    "management/change-plans-v2/{}/change-plan-r{}.json",
+                    entry.projected_change_plan.change_plan_id.as_str(),
+                    entry.projected_change_plan.revision
+                ),
+                "change_plan_v2",
+                entry.projected_change_plan.change_plan_id.as_str(),
+                &entry.projected_change_plan,
+            )?;
+            migrated_change_plan_refs.push(projected_ref);
+        }
+        self.persist_patch_document(
+            &plan.project_id,
+            &root,
+            &format!("management/migrations/change-plan-v1-v2/{fingerprint_key}/activation.json"),
+            "change_plan_v2_projection_activation",
+            fingerprint_key,
+            &serde_json::json!({
+                "schema_id":"star.change-plan-v2-projection-activation",
+                "schema_version":1,
+                "plan_fingerprint":plan.plan_fingerprint,
+                "task_spec_ref":plan.task_spec_ref,
+                "projected_change_plan_refs":migrated_change_plan_refs,
+                "activation_state":"active_blocked_replan_required",
+                "activated_at":Utc::now(),
+            }),
+        )?;
+        let result = ChangePlanV1ToV2MigrationResult {
+            schema_id: star_contracts::planning::CHANGE_PLAN_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID
+                .to_owned(),
+            schema_version: 1,
+            project_id: plan.project_id.clone(),
+            task_spec_ref: plan.task_spec_ref.clone(),
+            plan_fingerprint: plan.plan_fingerprint.clone(),
+            backup_manifest_ref: Some(backup_manifest_ref),
+            migrated_change_plan_refs,
+            outcome: ChangePlanMigrationOutcomeV1::Applied,
+            reason_codes: Vec::new(),
+            completed_at: Utc::now(),
+            result_fingerprint: Sha256Hash::digest(b"unsealed"),
+        }
+        .seal()
+        .map_err(|_| ApplicationError::Invalid)?;
+        self.persist_patch_document(
+            &plan.project_id,
+            &root,
+            &result_path,
+            "change_plan_v1_to_v2_migration_result",
+            fingerprint_key,
+            &result,
+        )?;
+        Ok(result)
+    }
+
+    pub fn rollback_change_plan_v1_to_v2_migration(
+        &self,
+        plan: ChangePlanV1ToV2MigrationPlan,
+        approved_plan_fingerprint: &str,
+    ) -> Result<ChangePlanV1ToV2MigrationResult, ApplicationError> {
+        let _guard = self.command_guard()?;
+        let sealed = plan.clone().seal().map_err(|_| ApplicationError::Invalid)?;
+        if sealed != plan || plan.plan_fingerprint.as_str() != approved_plan_fingerprint {
+            return Err(ApplicationError::Invalid);
+        }
+        let project = self
+            .repositories
+            .global()
+            .get_project(&plan.project_id)?
+            .ok_or(ApplicationError::NotFound)?;
+        let root = self.primary_project_root(&project)?;
+        let fingerprint_key = plan.plan_fingerprint.as_str().trim_start_matches("sha256:");
+        let applied: ChangePlanV1ToV2MigrationResult = self.read_patch_document(
+            &plan.project_id,
+            &root,
+            &format!("management/migrations/change-plan-v1-v2/{fingerprint_key}/applied.json"),
+        )?;
+        if applied.plan_fingerprint != plan.plan_fingerprint
+            || applied.outcome != ChangePlanMigrationOutcomeV1::Applied
+        {
+            return Err(ApplicationError::Invalid);
+        }
+        let backup_ref = applied
+            .backup_manifest_ref
+            .clone()
+            .ok_or(ApplicationError::Invalid)?;
+        self.artifacts.verify(&root, &backup_ref)?;
+        let backup = self.artifacts.read_json(&root, &backup_ref)?;
+        if backup
+            .get("plan_fingerprint")
+            .and_then(serde_json::Value::as_str)
+            != Some(plan.plan_fingerprint.as_str())
+        {
+            return Err(ApplicationError::Invalid);
+        }
+        let legacy_change_plans = serde_json::from_value::<Vec<ChangePlan>>(
+            backup
+                .get("legacy_change_plans")
+                .cloned()
+                .ok_or(ApplicationError::Invalid)?,
+        )
+        .map_err(|_| ApplicationError::Invalid)?;
+        let repository = self.repositories.project(&plan.project_id)?;
+        for legacy in &legacy_change_plans {
+            repository.save_change_plan(legacy)?;
+        }
+        self.persist_patch_document(
+            &plan.project_id,
+            &root,
+            &format!(
+                "management/migrations/change-plan-v1-v2/{fingerprint_key}/rollback-activation.json"
+            ),
+            "change_plan_v1_projection_activation",
+            fingerprint_key,
+            &serde_json::json!({
+                "schema_id":"star.change-plan-v1-projection-activation",
+                "schema_version":1,
+                "plan_fingerprint":plan.plan_fingerprint,
+                "task_spec_ref":plan.task_spec_ref,
+                "restored_change_plan_ids":legacy_change_plans.iter()
+                    .map(|legacy| legacy.change_plan_id.as_str())
+                    .collect::<Vec<_>>(),
+                "activation_state":"legacy_restored",
+                "activated_at":Utc::now(),
+            }),
+        )?;
+        let result = ChangePlanV1ToV2MigrationResult {
+            schema_id: star_contracts::planning::CHANGE_PLAN_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID
+                .to_owned(),
+            schema_version: 1,
+            project_id: plan.project_id.clone(),
+            task_spec_ref: plan.task_spec_ref.clone(),
+            plan_fingerprint: plan.plan_fingerprint.clone(),
+            backup_manifest_ref: Some(backup_ref),
+            migrated_change_plan_refs: Vec::new(),
+            outcome: ChangePlanMigrationOutcomeV1::RolledBack,
+            reason_codes: vec!["CHANGE_PLAN_V1_PROJECTION_RESTORED".to_owned()],
+            completed_at: Utc::now(),
+            result_fingerprint: Sha256Hash::digest(b"unsealed"),
+        }
+        .seal()
+        .map_err(|_| ApplicationError::Invalid)?;
+        self.persist_patch_document(
+            &plan.project_id,
+            &root,
+            &format!("management/migrations/change-plan-v1-v2/{fingerprint_key}/rollback.json"),
+            "change_plan_v1_to_v2_migration_result",
+            fingerprint_key,
+            &result,
+        )?;
+        Ok(result)
+    }
+
     fn read_patch_bytes(
         &self,
         project_root: &Path,
@@ -8447,7 +8931,23 @@ impl ManagementApplicationService {
     }
 
     pub fn plan_retention(&self) -> Result<RetentionPlan, ApplicationError> {
-        Ok(self.repositories.plan_retention()?)
+        let policy = if let Some(config) = self.effective_config.as_ref() {
+            RetentionPolicy {
+                keep_latest_successful_scans: config
+                    .integer("management.keep_latest_successful_scans")
+                    .and_then(|value| usize::try_from(value).ok())
+                    .ok_or(ApplicationError::Invalid)?,
+                incomplete_staging_retention_days: config
+                    .integer("management.incomplete_staging_retention_days")
+                    .ok_or(ApplicationError::Invalid)?,
+                scan_detail_retention_days: config
+                    .integer("management.scan_detail_retention_days")
+                    .ok_or(ApplicationError::Invalid)?,
+            }
+        } else {
+            RetentionPolicy::default()
+        };
+        Ok(self.repositories.plan_retention_with_policy(&policy)?)
     }
 
     pub fn apply_retention(
@@ -8587,7 +9087,11 @@ impl<'a> ManagementRecoveryApplicationService<'a> {
             root_bindings,
             artifacts,
             scan_policy: ScanPolicy::default(),
+            scan_incremental: true,
             index_policy: IndexPolicy::default(),
+            planning_policy: PlanningPolicy::default(),
+            effective_config: None,
+            execution_config_resolver: None,
             index_cache: None,
             syntax_adapters: Vec::new(),
             semantic_adapters: Vec::new(),
@@ -8598,6 +9102,50 @@ impl<'a> ManagementRecoveryApplicationService<'a> {
     pub fn with_index_cache(mut self, cache: Arc<dyn CodeIndexCache>) -> Self {
         self.index_cache = Some(cache);
         self
+    }
+
+    pub fn with_execution_config(
+        mut self,
+        scan_incremental: bool,
+        scan_policy: ScanPolicy,
+        index_policy: IndexPolicy,
+        planning_policy: PlanningPolicy,
+        effective_config: EffectiveConfigV1,
+    ) -> Self {
+        self.scan_incremental = scan_incremental;
+        self.scan_policy = scan_policy;
+        self.index_policy = index_policy;
+        self.planning_policy = planning_policy;
+        self.effective_config = Some(effective_config);
+        self
+    }
+
+    pub fn with_execution_config_resolver(
+        mut self,
+        resolver: Arc<dyn RecoveryExecutionConfigResolver>,
+    ) -> Self {
+        self.execution_config_resolver = Some(resolver);
+        self
+    }
+
+    fn execution_config_for(
+        &self,
+        project_root: &Path,
+    ) -> Result<RecoveryExecutionConfig, ApplicationError> {
+        if let Some(resolver) = self.execution_config_resolver.as_ref() {
+            return resolver.resolve(project_root);
+        }
+        current_effective_config_fingerprint(
+            &self.planning_policy,
+            self.effective_config.as_ref(),
+        )?;
+        Ok(RecoveryExecutionConfig {
+            scan_incremental: self.scan_incremental,
+            scan_policy: self.scan_policy.clone(),
+            index_policy: self.index_policy.clone(),
+            planning_policy: self.planning_policy.clone(),
+            effective_config: self.effective_config.clone(),
+        })
     }
 
     pub fn with_syntax_adapter(mut self, adapter: Arc<dyn SyntaxAdapter>) -> Self {
@@ -8660,7 +9208,10 @@ impl<'a> ManagementRecoveryApplicationService<'a> {
             Arc::clone(&self.artifacts),
         );
         candidate.scan_policy = self.scan_policy.clone();
+        candidate.scan_incremental = self.scan_incremental;
         candidate.index_policy = self.index_policy.clone();
+        candidate.planning_policy = self.planning_policy.clone();
+        candidate.effective_config = self.effective_config.clone();
         candidate.index_cache = self.index_cache.clone();
         candidate.syntax_adapters.clone_from(&self.syntax_adapters);
         candidate
@@ -8671,9 +9222,9 @@ impl<'a> ManagementRecoveryApplicationService<'a> {
         for input in &plan.projects {
             let attachment = self
                 .root_bindings
-                .find_by_project(&input.project_id)?
+                .find_by_checkout(&input.checkout_id)?
                 .ok_or(ApplicationError::NotFound)?;
-            if attachment.checkout_id != input.checkout_id
+            if attachment.project_id != input.project_id
                 || attachment.root_binding_id != input.root_binding_id
             {
                 return Err(ApplicationError::Repository(RepositoryError::new(
@@ -8682,6 +9233,16 @@ impl<'a> ManagementRecoveryApplicationService<'a> {
                 )));
             }
             let root = self.root_bindings.resolve(&input.root_binding_id)?;
+            let execution_config = self.execution_config_for(&root)?;
+            current_effective_config_fingerprint(
+                &execution_config.planning_policy,
+                execution_config.effective_config.as_ref(),
+            )?;
+            candidate.scan_incremental = execution_config.scan_incremental;
+            candidate.scan_policy = execution_config.scan_policy;
+            candidate.index_policy = execution_config.index_policy;
+            candidate.planning_policy = execution_config.planning_policy;
+            candidate.effective_config = execution_config.effective_config;
             let artifact_inventory = self.artifacts.discover_verified(&input.project_id, &root)?;
             let verified_artifact_count = u64::try_from(artifact_inventory.verified.len())
                 .map_err(|_| {
@@ -8762,11 +9323,10 @@ impl<'a> ManagementRecoveryApplicationService<'a> {
             .apply_rebuild(plan, approved_plan_fingerprint, rebuilt_projects)?)
     }
 
-    fn rebuild_inputs(&self) -> Result<Vec<RebuildProjectInput>, ApplicationError> {
-        let mut attachments = self.root_bindings.list_attachments()?;
-        attachments.sort_by(|left, right| left.project_id.cmp(&right.project_id));
-        let mut projects = Vec::with_capacity(attachments.len());
-        for attachment in attachments {
+    fn rebuild_attachments(&self) -> Result<Vec<ProjectRootAttachment>, ApplicationError> {
+        let mut by_project =
+            BTreeMap::<ProjectId, Vec<(ProjectRootAttachment, CheckoutKind)>>::new();
+        for attachment in self.root_bindings.list_attachments()? {
             let root = self.root_bindings.resolve(&attachment.root_binding_id)?;
             let seed = ProjectSeed::discover_with_local_project_id(
                 &root,
@@ -8782,8 +9342,44 @@ impl<'a> ManagementRecoveryApplicationService<'a> {
             {
                 return Err(ApplicationError::Invalid);
             }
-            let observation = observe_project(&attached.project, &root, &self.scan_policy)?;
-            let shared_decisions = load_shared_decisions(&attached.project, &root)?;
+            by_project
+                .entry(attachment.project_id.clone())
+                .or_default()
+                .push((attachment, attached.checkout.checkout_kind));
+        }
+        by_project
+            .into_values()
+            .map(select_rebuild_attachment)
+            .collect()
+    }
+
+    fn rebuild_inputs(&self) -> Result<Vec<RebuildProjectInput>, ApplicationError> {
+        let attachments = self.rebuild_attachments()?;
+        let mut projects = Vec::with_capacity(attachments.len());
+        for attachment in attachments {
+            let root = self.root_bindings.resolve(&attachment.root_binding_id)?;
+            let execution_config = self.execution_config_for(&root)?;
+            let effective_config_fingerprint = current_effective_config_fingerprint(
+                &execution_config.planning_policy,
+                execution_config.effective_config.as_ref(),
+            )?;
+            let seed = ProjectSeed::discover_with_local_project_id(
+                &root,
+                Some(attachment.project_id.clone()),
+            )?;
+            let attached = seed.attach(
+                attachment.checkout_id.clone(),
+                attachment.root_binding_id.clone(),
+                &root,
+            )?;
+            if attached.project.project_id != attachment.project_id
+                || attached.checkout.checkout_id != attachment.checkout_id
+            {
+                return Err(ApplicationError::Invalid);
+            }
+            let observation =
+                observe_project(&attached.project, &root, &execution_config.scan_policy)?;
+            load_shared_decisions(&attached.project, &root)?;
             let artifact_inventory = self
                 .artifacts
                 .discover_verified(&attachment.project_id, &root)?;
@@ -8792,10 +9388,7 @@ impl<'a> ManagementRecoveryApplicationService<'a> {
                 checkout_id: attachment.checkout_id,
                 root_binding_id: attachment.root_binding_id,
                 source_revision_id: observation.revision.project_revision_id.clone(),
-                effective_config_fingerprint: rebuild_effective_config_fingerprint(
-                    &observation,
-                    &shared_decisions,
-                )?,
+                effective_config_fingerprint,
                 artifact_inventory_fingerprint: recovery_artifact_inventory_fingerprint(
                     &artifact_inventory,
                 )?,
@@ -8821,34 +9414,6 @@ fn recovery_application_stage(error: ApplicationError, message: &'static str) ->
         }
         error => error,
     }
-}
-
-fn rebuild_effective_config_fingerprint(
-    observation: &star_project::ProjectObservation,
-    shared_decisions: &SharedDecisionDeclarations,
-) -> Result<Sha256Hash, ApplicationError> {
-    let decision_set_fingerprint = versioned_fingerprint(
-        "star.scan-decision-inputs",
-        1,
-        &serde_json::json!({
-            "baselines":shared_decisions.baselines,
-            "suppressions":shared_decisions.suppressions,
-            "dispositions":Vec::<Disposition>::new(),
-            "shared_source_fingerprint":shared_decisions.source_fingerprint,
-        }),
-    )
-    .map_err(|_| ApplicationError::Invalid)?;
-    versioned_fingerprint(
-        "star.effective-config",
-        1,
-        &serde_json::json!({
-            "scan_config_fingerprint":observation.scan_config_fingerprint,
-            "require_complete_for_gate":true,
-            "suppression_default_expiry_days":90,
-            "decision_set_fingerprint":decision_set_fingerprint,
-        }),
-    )
-    .map_err(|_| ApplicationError::Invalid)
 }
 
 fn recovery_artifact_inventory_fingerprint(
@@ -9969,15 +10534,20 @@ mod tests {
     use chrono::Duration;
     use star_contracts::{
         evidence::{
-            ActorType, ArtifactKind, ArtifactManifest, ArtifactRef, GateScope, ObservedTool,
-            OutputLimits, ProducerRef, RedactionStatus, RetentionClass,
+            ActorRef, ActorType, ArtifactKind, ArtifactManifest, ArtifactRef, DiagnosticSeverity,
+            DocumentRef, GateScope, ObservedTool, OutputLimits, ProducerRef, RedactionStatus,
+            RetentionClass,
         },
         evidence_v2::{
-            TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2, ValidationStabilityV2,
+            BASELINE_V2_SCHEMA_ID, BaselineEntryV2, BaselineV2, DISPOSITION_V2_SCHEMA_ID,
+            DecisionScopeConstraintV2, DecisionSubjectKindV2, DiagnosticEvidenceRefV2,
+            DispositionV2, EVIDENCE_V2_SCHEMA_VERSION, RuleRefV2, SUPPRESSION_V2_SCHEMA_ID,
+            SuppressionV2, TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2, ValidationStabilityV2,
             empty_fingerprint,
         },
         ids::{
-            ArtifactId, BaselineId, DispositionId, GoalId, RunId, SuppressionId, TaskInvocationId,
+            ArtifactId, BaselineId, DispositionId, GoalId, RootBindingId, RunId, SuppressionId,
+            TaskInvocationId,
         },
         management::{
             BaselineScope, BaselineStatus, DispositionDecision, DispositionStatus, PatchSetStatus,
@@ -10085,6 +10655,66 @@ mod tests {
         assert!(index_identity_conflicts(&previous, &current));
         current.analysis_input_fingerprint = Sha256Hash::digest(b"different-input");
         assert!(!index_identity_conflicts(&previous, &current));
+    }
+
+    #[test]
+    fn effective_validation_output_limits_cap_logs_and_artifacts() {
+        let policy = PlanningPolicy {
+            max_log_bytes: 1_024,
+            max_artifact_bytes: 2_048,
+            ..PlanningPolicy::default()
+        };
+        assert_eq!(
+            validation_output_limits(&policy),
+            OutputLimits {
+                stdout_bytes: 1_024,
+                stderr_bytes: 1_024,
+                artifact_bytes: 2_048,
+            }
+        );
+    }
+
+    #[test]
+    fn recovery_rebuild_selects_unique_main_worktree_and_rejects_ambiguous_clones() {
+        let project_id = ProjectId::new();
+        let main = ProjectRootAttachment {
+            project_id: project_id.clone(),
+            checkout_id: CheckoutId::new(),
+            root_binding_id: RootBindingId::new(),
+        };
+        let linked = ProjectRootAttachment {
+            project_id: project_id.clone(),
+            checkout_id: CheckoutId::new(),
+            root_binding_id: RootBindingId::new(),
+        };
+        assert_eq!(
+            select_rebuild_attachment(vec![
+                (linked.clone(), CheckoutKind::LinkedWorktree),
+                (main.clone(), CheckoutKind::MainWorktree),
+            ])
+            .unwrap(),
+            main
+        );
+
+        let ambiguous = select_rebuild_attachment(vec![
+            (linked, CheckoutKind::Clone),
+            (
+                ProjectRootAttachment {
+                    project_id,
+                    checkout_id: CheckoutId::new(),
+                    root_binding_id: RootBindingId::new(),
+                },
+                CheckoutKind::Clone,
+            ),
+        ])
+        .unwrap_err();
+        assert!(matches!(
+            ambiguous,
+            ApplicationError::Repository(RepositoryError {
+                category: RepositoryErrorCategory::RevisionConflict,
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -10218,15 +10848,15 @@ mod tests {
                 linked.to_str().unwrap(),
             ],
         );
+        let management_root = root.join("management");
         let repositories = Arc::new(
-            SqliteManagementRepositorySet::open(root.join("management"), "multi-root-test")
-                .unwrap(),
+            SqliteManagementRepositorySet::open(&management_root, "multi-root-test").unwrap(),
         );
         let bindings =
             Arc::new(WindowsProjectRootBindingStore::open(root.join("root-bindings")).unwrap());
         let service = ManagementApplicationService::new(
-            repositories,
-            bindings,
+            repositories.clone(),
+            bindings.clone(),
             Arc::new(LocalArtifactStore::default()),
         );
         let result = service
@@ -10264,6 +10894,45 @@ mod tests {
                 .unwrap(),
             checkouts[0]
         );
+        let main_checkout_id = result
+            .registrations
+            .iter()
+            .find(|registration| registration.checkout.checkout_kind == CheckoutKind::MainWorktree)
+            .unwrap()
+            .checkout
+            .checkout_id
+            .clone();
+        let active_set = repositories.active_set().unwrap();
+        let global_locator = active_set
+            .entries
+            .iter()
+            .find(|entry| matches!(entry.scope, star_contracts::management::StoreScope::Global))
+            .unwrap()
+            .relative_locator
+            .clone();
+        let global_store = management_root
+            .join(global_locator)
+            .join("management.v1.db");
+        drop(service);
+        drop(repositories);
+        std::fs::write(&global_store, b"simulated-corrupt-multi-root-store").unwrap();
+
+        let recovery =
+            SqliteManagementRecovery::open(&management_root, "multi-root-recovery").unwrap();
+        let rebuilt = ManagementRecoveryApplicationService::new(
+            &recovery,
+            bindings,
+            Arc::new(LocalArtifactStore::default()),
+        );
+        let plan = rebuilt.plan_source_rebuild().unwrap();
+        assert_eq!(plan.projects.len(), 1);
+        assert_eq!(plan.projects[0].project_id, project_id);
+        assert_eq!(plan.projects[0].checkout_id, main_checkout_id);
+        let applied = rebuilt
+            .apply_source_rebuild(&plan, plan.plan_fingerprint.as_str())
+            .unwrap();
+        assert_eq!(applied.rebuilt_projects.len(), 1);
+        assert_eq!(applied.rebuilt_projects[0].project_id, project_id);
     }
 
     #[test]
@@ -10369,6 +11038,10 @@ mod tests {
         ));
         let scan = service.scan_project(&project_id, "scan-test").unwrap();
         assert_eq!(scan.scan_run.status, ScanStatus::Succeeded);
+        assert_eq!(
+            scan.scan_run.effective_config_fingerprint,
+            service.planning_policy.effective_config_fingerprint
+        );
         let replayed_scan = service.scan_project(&project_id, "scan-test").unwrap();
         assert_eq!(
             replayed_scan.scan_run.scan_run_id,
@@ -11054,6 +11727,41 @@ mod tests {
             std::fs::read(source.join("src/lib.rs")).unwrap(),
             b"pub fn fixture() {}  \n"
         );
+        let change_plan_migration_plan = service
+            .plan_change_plan_v1_to_v2_migration(
+                &project_id,
+                &prepared_v2.planning_bundle.task_spec.task_spec_id,
+            )
+            .unwrap();
+        assert!(change_plan_migration_plan.entries.iter().all(|entry| {
+            entry.projected_change_plan.readiness
+                == star_contracts::planning::ChangePlanReadinessV2::Blocked
+                && entry
+                    .limitations
+                    .contains(&"LEGACY_CHANGE_PLAN_REQUIRES_REPLAN".to_owned())
+        }));
+        let change_plan_migration = service
+            .apply_change_plan_v1_to_v2_migration(
+                change_plan_migration_plan.clone(),
+                change_plan_migration_plan.plan_fingerprint.as_str(),
+            )
+            .unwrap();
+        assert_eq!(
+            change_plan_migration.outcome,
+            ChangePlanMigrationOutcomeV1::Applied
+        );
+        assert!(change_plan_migration.backup_manifest_ref.is_some());
+        assert!(!change_plan_migration.migrated_change_plan_refs.is_empty());
+        let change_plan_rollback = service
+            .rollback_change_plan_v1_to_v2_migration(
+                change_plan_migration_plan.clone(),
+                change_plan_migration_plan.plan_fingerprint.as_str(),
+            )
+            .unwrap();
+        assert_eq!(
+            change_plan_rollback.outcome,
+            ChangePlanMigrationOutcomeV1::RolledBack
+        );
         let migration_plan = service.plan_patch_v1_to_v2_migration(&project_id).unwrap();
         assert!(
             migration_plan
@@ -11397,7 +12105,7 @@ mod tests {
         service
             .register_project(&source.canonicalize().unwrap(), "local-state-register")
             .unwrap();
-        service
+        let source_scan = service
             .scan_project(&project_id, "local-state-scan")
             .unwrap();
         let finding = service.list_findings(&project_id).unwrap().remove(0);
@@ -11406,8 +12114,8 @@ mod tests {
             schema_version: 1,
             disposition_id: DispositionId::new(),
             revision: 1,
-            finding_id: finding.finding_id,
-            finding_fingerprint: finding.finding_fingerprint,
+            finding_id: finding.finding_id.clone(),
+            finding_fingerprint: finding.finding_fingerprint.clone(),
             decision: DispositionDecision::NeedsAction,
             reason_code: "LOCAL_REVIEW".to_owned(),
             reason: "confirmed-local-state".to_owned(),
@@ -11420,6 +12128,137 @@ mod tests {
         };
         service
             .put_disposition(&project_id, &disposition, 0)
+            .unwrap();
+
+        let decision_evidence = DiagnosticEvidenceRefV2::Document {
+            document: DocumentRef {
+                schema_id: "star.local-review-note".to_owned(),
+                document_id: "local-state-recovery-review".to_owned(),
+                revision: 1,
+                sha256: Sha256Hash::digest(b"local-state-recovery-review"),
+            },
+        };
+        let baseline_v2 = BaselineV2 {
+            schema_id: BASELINE_V2_SCHEMA_ID.to_owned(),
+            schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+            baseline_id: BaselineId::new(),
+            revision: 1,
+            project_id: project_id.clone(),
+            subject_binding_fingerprint: Sha256Hash::digest(b"local-state-subject-binding"),
+            rule_set_fingerprint: Sha256Hash::digest(b"local-state-rule-set"),
+            entries: vec![],
+            created_at: Utc::now(),
+            reason: "reviewed portable v2 baseline".to_owned(),
+            reviewed: true,
+            active: true,
+            set_fingerprint: empty_fingerprint(),
+        }
+        .seal()
+        .unwrap();
+        let suppression_v2_revision_1 = SuppressionV2 {
+            schema_id: SUPPRESSION_V2_SCHEMA_ID.to_owned(),
+            schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+            suppression_id: SuppressionId::new(),
+            revision: 1,
+            project_id: project_id.clone(),
+            subject_kind: DecisionSubjectKindV2::Finding,
+            selector: format!("finding:{}", finding.finding_fingerprint),
+            subject_fingerprint: Some(finding.finding_fingerprint.clone()),
+            rule_ref_constraint: None,
+            scope_constraint: DecisionScopeConstraintV2 {
+                project_id: project_id.clone(),
+                package_id: None,
+                workspace_id: None,
+                paths: vec![],
+                symbol_ids: vec![],
+                gate_phases: vec![],
+            },
+            subject_binding_constraint: Some(Sha256Hash::digest(b"local-state-subject-binding")),
+            reason_code: "LOCAL_REVIEW".to_owned(),
+            reason: "portable v2 decision revision one".to_owned(),
+            created_at: Utc::now(),
+            expires_at: Some(Utc::now() + Duration::days(30)),
+            permanent: false,
+            justification: None,
+            approved_by: ActorRef {
+                actor_type: ActorType::User,
+                actor_id: "local-reviewer".to_owned(),
+                display_name: "Local Reviewer".to_owned(),
+                auth_source: "test".to_owned(),
+            },
+            review_evidence_refs: vec![decision_evidence.clone()],
+            status: SuppressionStatus::Active,
+            provenance: "local:recovery-test".to_owned(),
+            content_fingerprint: empty_fingerprint(),
+        }
+        .seal()
+        .unwrap();
+        let suppression_v2 = SuppressionV2 {
+            revision: 2,
+            reason: "portable v2 decision revoked".to_owned(),
+            status: SuppressionStatus::Revoked,
+            content_fingerprint: empty_fingerprint(),
+            ..suppression_v2_revision_1.clone()
+        }
+        .seal()
+        .unwrap();
+        let disposition_v2 = DispositionV2 {
+            schema_id: DISPOSITION_V2_SCHEMA_ID.to_owned(),
+            schema_version: EVIDENCE_V2_SCHEMA_VERSION,
+            disposition_id: DispositionId::new(),
+            revision: 1,
+            project_id: project_id.clone(),
+            subject_kind: DecisionSubjectKindV2::Finding,
+            finding_id: Some(finding.finding_id.clone()),
+            subject_fingerprint: finding.finding_fingerprint.clone(),
+            rule_ref: None,
+            subject_binding_constraint: Some(Sha256Hash::digest(b"local-state-subject-binding")),
+            decision: DispositionDecision::NeedsAction,
+            reason_code: "LOCAL_REVIEW_V2".to_owned(),
+            reason: "portable v2 disposition".to_owned(),
+            expires_at: None,
+            duplicate_of_finding_id: None,
+            decided_by: ActorRef {
+                actor_type: ActorType::User,
+                actor_id: "local-reviewer".to_owned(),
+                display_name: "Local Reviewer".to_owned(),
+                auth_source: "test".to_owned(),
+            },
+            review_evidence_refs: vec![decision_evidence],
+            decided_at: Utc::now(),
+            provenance: "local:recovery-test".to_owned(),
+            status: DispositionStatus::Active,
+            content_fingerprint: empty_fingerprint(),
+        }
+        .seal()
+        .unwrap();
+        service.put_validation_baseline_v2(&baseline_v2).unwrap();
+        service
+            .put_validation_suppression_v2(&suppression_v2_revision_1)
+            .unwrap();
+        service
+            .put_validation_suppression_v2(&suppression_v2)
+            .unwrap();
+        service
+            .put_validation_suppression_v2(&suppression_v2_revision_1)
+            .unwrap();
+        let skipped_suppression_revision = SuppressionV2 {
+            revision: 4,
+            reason: "non-contiguous portable v2 decision".to_owned(),
+            content_fingerprint: empty_fingerprint(),
+            ..suppression_v2.clone()
+        }
+        .seal()
+        .unwrap();
+        assert!(matches!(
+            service.put_validation_suppression_v2(&skipped_suppression_revision),
+            Err(ApplicationError::Repository(RepositoryError {
+                category: RepositoryErrorCategory::RevisionConflict,
+                ..
+            }))
+        ));
+        service
+            .put_validation_disposition_v2(&disposition_v2)
             .unwrap();
 
         let export_path = root.join("local-state.json");
@@ -11444,7 +12283,21 @@ mod tests {
             export
         );
         assert_eq!(export.bundle.local_dispositions, vec![disposition.clone()]);
+        assert_eq!(
+            export.bundle.effective_config_fingerprint,
+            source_scan.scan_run.effective_config_fingerprint
+        );
         assert!(export.bundle.local_suppressions.is_empty());
+        assert_eq!(export.bundle.schema_version, 2);
+        assert_eq!(export.bundle.local_baselines_v2, vec![baseline_v2.clone()]);
+        assert_eq!(
+            export.bundle.local_suppressions_v2,
+            vec![suppression_v2.clone()]
+        );
+        assert_eq!(
+            export.bundle.local_dispositions_v2,
+            vec![disposition_v2.clone()]
+        );
         let exported_text = std::fs::read_to_string(&export_path).unwrap();
         assert!(!exported_text.contains(&source.to_string_lossy().to_string()));
         assert!(!exported_text.to_ascii_lowercase().contains("root_binding"));
@@ -11493,6 +12346,18 @@ mod tests {
             export.bundle.local_dispositions
         );
         assert_eq!(
+            recovery_export.bundle.local_baselines_v2,
+            export.bundle.local_baselines_v2
+        );
+        assert_eq!(
+            recovery_export.bundle.local_suppressions_v2,
+            export.bundle.local_suppressions_v2
+        );
+        assert_eq!(
+            recovery_export.bundle.local_dispositions_v2,
+            export.bundle.local_dispositions_v2
+        );
+        assert_eq!(
             recovery_export.bundle.source_revision_id,
             export.bundle.source_revision_id
         );
@@ -11510,6 +12375,60 @@ mod tests {
             .register_project(&source.canonicalize().unwrap(), "target-register")
             .unwrap();
         target.scan_project(&project_id, "target-scan").unwrap();
+        let mut stale_bundle = recovery_export.bundle.clone();
+        stale_bundle.local_suppressions_v2[0].subject_fingerprint =
+            Some(Sha256Hash::digest(b"stale-recovery-subject"));
+        stale_bundle.local_suppressions_v2[0].content_fingerprint = empty_fingerprint();
+        stale_bundle.local_suppressions_v2[0] = stale_bundle.local_suppressions_v2[0]
+            .clone()
+            .seal()
+            .unwrap();
+        stale_bundle.content_fingerprint =
+            star_domain::recovery::local_state_bundle_fingerprint(&stale_bundle).unwrap();
+        let stale_export_path = root.join("stale-local-state.json");
+        std::fs::write(
+            &stale_export_path,
+            serde_json::to_vec_pretty(&stale_bundle).unwrap(),
+        )
+        .unwrap();
+        let stale_plan = target.plan_local_state_import(&stale_export_path).unwrap();
+        assert!(stale_plan.conflicts.iter().any(|conflict| {
+            conflict.entity_kind == "suppression_v2"
+                && conflict.reason_code == "TARGET_SUBJECT_OR_EVIDENCE_NOT_CURRENT"
+        }));
+        let mut stale_baseline_bundle = recovery_export.bundle.clone();
+        stale_baseline_bundle.local_baselines_v2[0].entries = vec![BaselineEntryV2 {
+            diagnostic_fingerprint: Sha256Hash::digest(b"stale-baseline-diagnostic"),
+            rule_ref: RuleRefV2 {
+                rule_id: "star.fixture.stale-baseline".to_owned(),
+                rule_version: "1.0.0".to_owned(),
+                definition_fingerprint: Sha256Hash::digest(b"stale-baseline-rule"),
+                fingerprint_contract_version: 1,
+            },
+            severity: DiagnosticSeverity::Error,
+            scope_fingerprint: Sha256Hash::digest(b"stale-baseline-scope"),
+            entry_fingerprint: empty_fingerprint(),
+        }];
+        stale_baseline_bundle.local_baselines_v2[0].set_fingerprint = empty_fingerprint();
+        stale_baseline_bundle.local_baselines_v2[0] = stale_baseline_bundle.local_baselines_v2[0]
+            .clone()
+            .seal()
+            .unwrap();
+        stale_baseline_bundle.content_fingerprint =
+            star_domain::recovery::local_state_bundle_fingerprint(&stale_baseline_bundle).unwrap();
+        let stale_baseline_export_path = root.join("stale-baseline-local-state.json");
+        std::fs::write(
+            &stale_baseline_export_path,
+            serde_json::to_vec_pretty(&stale_baseline_bundle).unwrap(),
+        )
+        .unwrap();
+        let stale_baseline_plan = target
+            .plan_local_state_import(&stale_baseline_export_path)
+            .unwrap();
+        assert!(stale_baseline_plan.conflicts.iter().any(|conflict| {
+            conflict.entity_kind == "baseline_v2"
+                && conflict.reason_code == "TARGET_SUBJECT_OR_RULE_SET_NOT_CURRENT"
+        }));
         let import_plan = target
             .plan_local_state_import(&recovery_export_path)
             .unwrap();
@@ -11531,7 +12450,9 @@ mod tests {
                 .unwrap(),
             imported
         );
-        assert_eq!(imported.imported_dispositions, 1);
+        assert_eq!(imported.imported_baselines, 1);
+        assert_eq!(imported.imported_suppressions, 1);
+        assert_eq!(imported.imported_dispositions, 2);
         assert_eq!(
             target_repositories
                 .project(&project_id)
@@ -11539,6 +12460,19 @@ mod tests {
                 .list_dispositions()
                 .unwrap(),
             vec![disposition]
+        );
+        let target_repository = target_repositories.project(&project_id).unwrap();
+        assert_eq!(
+            target_repository.list_baselines_v2().unwrap(),
+            vec![baseline_v2]
+        );
+        assert_eq!(
+            target_repository.list_suppressions_v2().unwrap(),
+            vec![suppression_v2]
+        );
+        assert_eq!(
+            target_repository.list_dispositions_v2().unwrap(),
+            vec![disposition_v2]
         );
         let duplicate_plan = target
             .plan_local_state_import(&recovery_export_path)

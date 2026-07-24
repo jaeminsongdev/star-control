@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     BackupSetId, LocalStateBundleId, ProjectId, RecoveryPlanId, Sha256Hash,
+    evidence_v2::{BaselineV2, DispositionV2, SuppressionV2},
     ids::{
         BaselineId, ChangePlanId, CheckoutId, DispositionId, ManagementStoreId, ProjectRevisionId,
         RootBindingId, ScanRunId, SuppressionId, WorkspaceSnapshotId,
@@ -306,6 +307,12 @@ pub struct LocalStateBundle {
     pub local_baselines: Vec<Baseline>,
     pub local_dispositions: Vec<Disposition>,
     pub active_change_plans: Vec<ChangePlan>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_suppressions_v2: Vec<SuppressionV2>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_baselines_v2: Vec<BaselineV2>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_dispositions_v2: Vec<DispositionV2>,
     pub content_fingerprint: Sha256Hash,
 }
 
@@ -388,24 +395,35 @@ mod tests {
     use serde::de::DeserializeOwned;
 
     use super::*;
-    use crate::management::decode_current_management_document;
-
-    fn assert_fixture_set<T: DeserializeOwned + Debug>(stem: &str, schema_id: &str) {
+    fn assert_fixture_set_version<T: DeserializeOwned + Debug>(
+        stem: &str,
+        schema_id: &str,
+        schema_version: u32,
+    ) {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../../specs/fixtures/management/v1")
             .join(stem);
         for name in ["minimal.json", "full.json"] {
             let input = fs::read_to_string(root.join(name)).expect("generated recovery fixture");
-            decode_current_management_document::<T>(&input, schema_id)
+            crate::management::decode_management_document::<T>(&input, schema_id, schema_version)
                 .unwrap_or_else(|error| panic!("{stem}/{name} must decode: {error}"));
         }
         for name in ["invalid.json", "future.json"] {
             let input = fs::read_to_string(root.join(name)).expect("generated recovery fixture");
             assert!(
-                decode_current_management_document::<T>(&input, schema_id).is_err(),
+                crate::management::decode_management_document::<T>(
+                    &input,
+                    schema_id,
+                    schema_version,
+                )
+                .is_err(),
                 "{stem}/{name} must be rejected"
             );
         }
+    }
+
+    fn assert_fixture_set<T: DeserializeOwned + Debug>(stem: &str, schema_id: &str) {
+        assert_fixture_set_version::<T>(stem, schema_id, 1);
     }
 
     #[test]
@@ -440,6 +458,11 @@ mod tests {
         assert_fixture_set::<LocalStateBundle>(
             "management-local-state-bundle",
             LOCAL_STATE_BUNDLE_SCHEMA_ID,
+        );
+        assert_fixture_set_version::<LocalStateBundle>(
+            "management-local-state-bundle-v2",
+            LOCAL_STATE_BUNDLE_SCHEMA_ID,
+            2,
         );
         assert_fixture_set::<LocalStateExportPlan>(
             "management-local-state-export-plan",

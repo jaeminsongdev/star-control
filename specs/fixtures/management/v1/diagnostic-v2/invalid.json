@@ -7,17 +7,31 @@
   "fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "first_seen_at": "2026-01-01T00:00:00Z",
   "last_seen_at": "2026-01-01T00:00:00Z",
+  "locations": [],
   "message": "fixture",
+  "observation_status": "confirmed",
+  "observed_at": "2026-01-01T00:00:00Z",
   "plan_item_id": "fixture",
+  "producer": {
+    "build_id": "fixture",
+    "component": "fixture",
+    "platform": "fixture",
+    "product_version": "fixture"
+  },
   "project_id": "prj_00000000000000000000000000",
   "rule_ref": {
-    "catalog_id": "fixture",
-    "format_version": 0,
-    "item_version": "fixture",
-    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "fingerprint_contract_version": 1,
+    "rule_id": "fixture",
+    "rule_version": "fixture"
   },
   "schema_id": "star.diagnostic",
   "schema_version": 2,
+  "scope": {
+    "goal_id": "gol_00000000000000000000000000",
+    "kind": "goal",
+    "revision": 0
+  },
   "sequence": 0,
   "severity": "info",
   "status": "confirmed",

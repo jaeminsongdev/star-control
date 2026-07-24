@@ -9,14 +9,14 @@ use thiserror::Error;
 
 use crate::{
     Sha256Hash, canonical_sha256,
-    evidence::{ActorRef, DocumentRef},
+    evidence::{ActorRef, ArtifactRef, DocumentRef},
     ids::{
-        ChangeSetId, CheckoutId, CodeIndexSnapshotId, ImpactAnalysisId, ProjectCatalogSnapshotId,
-        ProjectId, ProjectRevisionId, ScopeRevisionId, TaskSpecId, ValidationPlanId,
-        WorkspaceSnapshotId,
+        ChangePlanId, ChangeSetId, CheckoutId, CodeIndexSnapshotId, FindingId, ImpactAnalysisId,
+        ProjectCatalogSnapshotId, ProjectId, ProjectRevisionId, ScopeRevisionId, TaskSpecId,
+        ValidationPlanId, WorkspaceSnapshotId,
     },
     index::{IndexFreshnessState, IndexTier, SourceClass},
-    management::ProjectPathRef,
+    management::{ChangePlan, ChangeRecipeRef, ProjectPathRef},
     profile::DevelopmentProfileResolutionV1,
 };
 
@@ -26,6 +26,12 @@ pub const CHANGE_SET_SCHEMA_ID: &str = "star.change-set";
 pub const IMPACT_ANALYSIS_SCHEMA_ID: &str = "star.impact-analysis";
 pub const RISK_PATH_DESCRIPTOR_SCHEMA_ID: &str = "star.risk-path-descriptor";
 pub const FULL_VALIDATION_PLAN_SCHEMA_ID: &str = "star.validation-plan";
+pub const CHANGE_PLAN_V2_SCHEMA_ID: &str = "star.change-plan";
+pub const PLANNING_BUNDLE_V2_SCHEMA_ID: &str = "star.planning-bundle";
+pub const CHANGE_PLAN_V1_TO_V2_MIGRATION_PLAN_SCHEMA_ID: &str =
+    "star.change-plan-v1-to-v2-migration-plan";
+pub const CHANGE_PLAN_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID: &str =
+    "star.change-plan-v1-to-v2-migration-result";
 
 macro_rules! string_enum {
     ($name:ident { $($variant:ident),+ $(,)? }) => {
@@ -722,6 +728,629 @@ pub struct FullValidationPlan {
     pub readiness: ValidationPlanV2Readiness,
 }
 
+string_enum!(ChangePlanOriginV2 {
+    UserPlanned,
+    FindingRecipe,
+    Mixed
+});
+string_enum!(ChangePlanReadinessV2 {
+    Draft,
+    Ready,
+    Blocked,
+    Invalidated
+});
+string_enum!(ChangePlanStatusV2 {
+    Draft,
+    Ready,
+    Applied,
+    Validated,
+    Blocked,
+    Abandoned,
+    Superseded
+});
+string_enum!(ChangeUnitSourceV2 {
+    User,
+    AcceptedScopeRevision
+});
+string_enum!(ChangeGraphRelationV2 {
+    Requires,
+    MustPrecede,
+    SameAtomicGroup
+});
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FindingRefV2 {
+    pub finding_id: FindingId,
+    pub finding_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PlannedChangeUnitV2 {
+    pub unit_id: String,
+    pub target_selector: PlanningSelector,
+    pub change_kind: IntendedChangeKind,
+    pub intended_postcondition: String,
+    pub source: ChangeUnitSourceV2,
+    pub reason: String,
+    pub expected_paths: Vec<ProjectPathRef>,
+    pub unresolved_target: Option<String>,
+    pub precondition_fingerprints: Vec<Sha256Hash>,
+    pub permission_requirements: Vec<String>,
+    pub risk_path_refs: Vec<String>,
+    pub impact_edge_refs: Vec<String>,
+    pub completion_criterion_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ChangeGraphEdgeV2 {
+    pub from_unit_id: String,
+    pub to_unit_id: String,
+    pub relation: ChangeGraphRelationV2,
+    pub atomic_group_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RelatedProjectImpactV2 {
+    pub project_id: ProjectId,
+    pub impact_analysis_ref: DocumentRef,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExpectedImpactRefV2 {
+    pub unit_id: String,
+    pub accepted_impact_edge_ids: Vec<String>,
+    pub unresolved_frontier_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CompletionCriterionMappingV2 {
+    pub criterion_id: String,
+    pub unit_ids: Vec<String>,
+    pub check_plan_item_ids: Vec<String>,
+    pub manual_observation_refs: Vec<String>,
+    pub explicit_user_decision_omission: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ChangePlanV2 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub change_plan_id: ChangePlanId,
+    #[schemars(range(min = 1))]
+    pub revision: u64,
+    pub task_spec_ref: DocumentRef,
+    pub scope_revision_ref: DocumentRef,
+    pub impact_analysis_ref: DocumentRef,
+    pub change_origin: ChangePlanOriginV2,
+    pub project_id: ProjectId,
+    pub target_checkout_id: CheckoutId,
+    pub target_project_revision_id: ProjectRevisionId,
+    pub target_workspace_snapshot_id: WorkspaceSnapshotId,
+    pub change_set_ref: DocumentRef,
+    pub related_project_impacts: Vec<RelatedProjectImpactV2>,
+    pub planned_change_units: Vec<PlannedChangeUnitV2>,
+    pub change_graph: Vec<ChangeGraphEdgeV2>,
+    pub deterministic_unit_order: Vec<String>,
+    pub expected_impact_refs: Vec<ExpectedImpactRefV2>,
+    pub completion_criteria_mapping: Vec<CompletionCriterionMappingV2>,
+    pub expected_paths: Vec<ProjectPathRef>,
+    pub finding_refs: Vec<FindingRefV2>,
+    pub recipe_refs: Vec<ChangeRecipeRef>,
+    pub parameters: BTreeMap<String, String>,
+    pub risk_path_refs: Vec<String>,
+    pub preconditions: Vec<Sha256Hash>,
+    pub unresolved_impacts: Vec<String>,
+    pub permission_requirements: Vec<String>,
+    pub permission_plan_ref: Option<DocumentRef>,
+    pub validation_plan_ref: DocumentRef,
+    pub readiness: ChangePlanReadinessV2,
+    pub status: ChangePlanStatusV2,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub content_fingerprint: Sha256Hash,
+}
+
+impl ChangePlanV2 {
+    pub fn seal(mut self) -> Result<Self, PlanningContractError> {
+        self.planned_change_units
+            .sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
+        for unit in &mut self.planned_change_units {
+            normalize_nonempty_strings(&mut unit.permission_requirements)?;
+            normalize_nonempty_strings(&mut unit.risk_path_refs)?;
+            normalize_nonempty_strings(&mut unit.impact_edge_refs)?;
+            normalize_nonempty_strings(&mut unit.completion_criterion_refs)?;
+            unit.expected_paths.sort();
+            unit.expected_paths.dedup();
+            unit.precondition_fingerprints.sort();
+            unit.precondition_fingerprints.dedup();
+            if unit.unit_id.trim().is_empty()
+                || unit.target_selector.value.trim().is_empty()
+                || unit.intended_postcondition.trim().is_empty()
+                || unit.reason.trim().is_empty()
+                || unit
+                    .unresolved_target
+                    .as_deref()
+                    .is_some_and(|value| value.trim().is_empty())
+            {
+                return Err(PlanningContractError::Empty);
+            }
+        }
+        if self
+            .planned_change_units
+            .windows(2)
+            .any(|pair| pair[0].unit_id == pair[1].unit_id)
+        {
+            return Err(PlanningContractError::Ordering);
+        }
+        self.change_graph.sort_by(|left, right| {
+            (&left.from_unit_id, &left.to_unit_id, left.relation).cmp(&(
+                &right.from_unit_id,
+                &right.to_unit_id,
+                right.relation,
+            ))
+        });
+        self.related_project_impacts
+            .sort_by(|left, right| left.project_id.cmp(&right.project_id));
+        self.expected_impact_refs
+            .sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
+        self.completion_criteria_mapping
+            .sort_by(|left, right| left.criterion_id.cmp(&right.criterion_id));
+        self.expected_paths.sort();
+        self.expected_paths.dedup();
+        self.finding_refs
+            .sort_by(|left, right| left.finding_id.cmp(&right.finding_id));
+        self.recipe_refs.sort_by(|left, right| {
+            (
+                &left.recipe_id,
+                &left.recipe_version,
+                &left.definition_fingerprint,
+            )
+                .cmp(&(
+                    &right.recipe_id,
+                    &right.recipe_version,
+                    &right.definition_fingerprint,
+                ))
+        });
+        normalize_nonempty_strings(&mut self.risk_path_refs)?;
+        normalize_nonempty_strings(&mut self.unresolved_impacts)?;
+        normalize_nonempty_strings(&mut self.permission_requirements)?;
+        self.preconditions.sort();
+        self.preconditions.dedup();
+        let unit_ids = self
+            .planned_change_units
+            .iter()
+            .map(|unit| unit.unit_id.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        if self.schema_id != CHANGE_PLAN_V2_SCHEMA_ID
+            || self.schema_version != 2
+            || self.revision == 0
+            || self.updated_at < self.created_at
+            || self.planned_change_units.is_empty()
+            || self.preconditions.is_empty()
+            || self.permission_requirements.is_empty()
+            || self.change_graph.iter().any(|edge| {
+                !unit_ids.contains(&edge.from_unit_id)
+                    || !unit_ids.contains(&edge.to_unit_id)
+                    || edge.from_unit_id == edge.to_unit_id
+                    || (edge.relation == ChangeGraphRelationV2::SameAtomicGroup)
+                        != edge.atomic_group_id.is_some()
+            })
+            || self
+                .deterministic_unit_order
+                .iter()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>()
+                != unit_ids
+            || !acyclic_change_graph(&unit_ids, &self.change_graph)
+            || self.expected_impact_refs.iter().any(|reference| {
+                !unit_ids.contains(&reference.unit_id)
+                    || reference
+                        .accepted_impact_edge_ids
+                        .iter()
+                        .any(|value| value.trim().is_empty())
+            })
+            || self.completion_criteria_mapping.iter().any(|mapping| {
+                mapping.criterion_id.trim().is_empty()
+                    || mapping.unit_ids.iter().any(|unit| !unit_ids.contains(unit))
+                    || (mapping.unit_ids.is_empty()
+                        && mapping.check_plan_item_ids.is_empty()
+                        && mapping.manual_observation_refs.is_empty()
+                        && mapping.explicit_user_decision_omission.is_none())
+            })
+            || (self.change_origin == ChangePlanOriginV2::FindingRecipe
+                && self.finding_refs.is_empty())
+            || (self.change_origin == ChangePlanOriginV2::UserPlanned
+                && !self.finding_refs.is_empty())
+        {
+            return Err(PlanningContractError::Identity);
+        }
+        if self.readiness == ChangePlanReadinessV2::Ready
+            && (self.status != ChangePlanStatusV2::Ready
+                || !self.unresolved_impacts.is_empty()
+                || self.permission_plan_ref.is_some())
+        {
+            return Err(PlanningContractError::Readiness);
+        }
+        self.content_fingerprint = fingerprint(
+            CHANGE_PLAN_V2_SCHEMA_ID,
+            2,
+            &serde_json::json!({
+                "change_plan_id":self.change_plan_id,
+                "revision":self.revision,
+                "task_spec_ref":self.task_spec_ref,
+                "scope_revision_ref":self.scope_revision_ref,
+                "impact_analysis_ref":self.impact_analysis_ref,
+                "change_origin":self.change_origin,
+                "project_id":self.project_id,
+                "target_checkout_id":self.target_checkout_id,
+                "target_project_revision_id":self.target_project_revision_id,
+                "target_workspace_snapshot_id":self.target_workspace_snapshot_id,
+                "change_set_ref":self.change_set_ref,
+                "related_project_impacts":self.related_project_impacts,
+                "planned_change_units":self.planned_change_units,
+                "change_graph":self.change_graph,
+                "deterministic_unit_order":self.deterministic_unit_order,
+                "expected_impact_refs":self.expected_impact_refs,
+                "completion_criteria_mapping":self.completion_criteria_mapping,
+                "expected_paths":self.expected_paths,
+                "finding_refs":self.finding_refs,
+                "recipe_refs":self.recipe_refs,
+                "parameters":self.parameters,
+                "risk_path_refs":self.risk_path_refs,
+                "preconditions":self.preconditions,
+                "unresolved_impacts":self.unresolved_impacts,
+                "permission_requirements":self.permission_requirements,
+                "permission_plan_ref":self.permission_plan_ref,
+                "validation_plan_ref":self.validation_plan_ref,
+                "readiness":self.readiness,
+                "status":self.status,
+                "created_at":self.created_at,
+                "updated_at":self.updated_at,
+            }),
+        )?;
+        Ok(self)
+    }
+
+    pub fn reference(&self) -> Result<DocumentRef, PlanningContractError> {
+        Ok(DocumentRef {
+            schema_id: CHANGE_PLAN_V2_SCHEMA_ID.to_owned(),
+            document_id: self.change_plan_id.to_string(),
+            revision: self.revision,
+            sha256: document_hash(self)?,
+        })
+    }
+}
+
+/// Projects a persisted v1 ChangePlan into the v2 planning contract without
+/// inventing readiness. Fields that v1 never recorded are represented as
+/// explicit unresolved inputs, so a migrated document always requires M2
+/// replanning before it can become executable.
+pub fn migrate_change_plan_v1_to_v2(
+    value: &ChangePlan,
+    bundle: &PlanningBundle,
+) -> Result<ChangePlanV2, PlanningContractError> {
+    let candidates = bundle
+        .change_sets
+        .iter()
+        .filter(|change_set| {
+            change_set.project_id == value.project_id
+                && change_set.observed_workspace_snapshot_id == value.target_workspace_snapshot_id
+        })
+        .collect::<Vec<_>>();
+    let [change_set] = candidates.as_slice() else {
+        return Err(PlanningContractError::Migration);
+    };
+    let task_spec_ref = document_ref(
+        TASK_SPEC_SCHEMA_ID,
+        bundle.task_spec.task_spec_id.as_str(),
+        bundle.task_spec.revision,
+        &bundle.task_spec.content_fingerprint,
+    );
+    let scope_revision_ref = document_ref(
+        SCOPE_REVISION_SCHEMA_ID,
+        bundle.scope_revision.scope_revision_id.as_str(),
+        bundle.scope_revision.revision,
+        &bundle.scope_revision.scope_hash,
+    );
+    let impact_analysis_ref = document_ref(
+        IMPACT_ANALYSIS_SCHEMA_ID,
+        bundle.impact_analysis.impact_analysis_id.as_str(),
+        bundle.impact_analysis.revision,
+        &bundle.impact_analysis.calculation_fingerprint,
+    );
+    let change_set_ref = document_ref(
+        CHANGE_SET_SCHEMA_ID,
+        change_set.change_set_id.as_str(),
+        1,
+        &change_set.change_set_fingerprint,
+    );
+    let validation_plan_ref = document_ref(
+        FULL_VALIDATION_PLAN_SCHEMA_ID,
+        bundle.validation_plan.validation_plan_id.as_str(),
+        bundle.validation_plan.revision,
+        &bundle.validation_plan.selection_fingerprint,
+    );
+    let fallback_precondition = document_hash(value)?;
+    let preconditions = if value.preconditions.is_empty() {
+        vec![fallback_precondition]
+    } else {
+        value.preconditions.clone()
+    };
+    let mut expected_paths = value.expected_paths.clone();
+    expected_paths.sort();
+    expected_paths.dedup();
+    let mut planned_change_units = Vec::new();
+    for (index, path) in expected_paths.iter().enumerate() {
+        let intended = bundle.task_spec.intended_changes.iter().find(|change| {
+            change.selector.kind == SelectorKind::Path && change.selector.value == path.as_str()
+        });
+        let observed = change_set.entries.iter().find(|entry| entry.path == *path);
+        let change_kind = intended
+            .map(|change| change.change_kind)
+            .unwrap_or_else(|| {
+                observed
+                    .map(|entry| match entry.change_kind {
+                        ObservedChangeKind::Add => IntendedChangeKind::Add,
+                        ObservedChangeKind::Modify => IntendedChangeKind::Modify,
+                        ObservedChangeKind::Delete => IntendedChangeKind::Delete,
+                        ObservedChangeKind::Rename => IntendedChangeKind::Rename,
+                        ObservedChangeKind::Mode
+                        | ObservedChangeKind::Binary
+                        | ObservedChangeKind::Submodule => IntendedChangeKind::Modify,
+                    })
+                    .unwrap_or(IntendedChangeKind::Modify)
+            });
+        planned_change_units.push(PlannedChangeUnitV2 {
+            unit_id: format!("legacy-unit-{index:04}"),
+            target_selector: PlanningSelector {
+                kind: SelectorKind::Path,
+                value: path.as_str().to_owned(),
+            },
+            change_kind,
+            intended_postcondition: intended
+                .map(|change| change.intended_postcondition.clone())
+                .unwrap_or_else(|| "legacy intent requires explicit M2 replan".to_owned()),
+            source: ChangeUnitSourceV2::AcceptedScopeRevision,
+            reason: "migrated from persisted ChangePlan v1".to_owned(),
+            expected_paths: vec![path.clone()],
+            unresolved_target: Some("LEGACY_CHANGE_PLAN_REQUIRES_REPLAN".to_owned()),
+            precondition_fingerprints: preconditions.clone(),
+            permission_requirements: vec!["local_write".to_owned()],
+            risk_path_refs: vec![format!("legacy-risk:{}", value.risk)],
+            impact_edge_refs: Vec::new(),
+            completion_criterion_refs: bundle
+                .task_spec
+                .success_criteria
+                .iter()
+                .map(|criterion| criterion.criterion_id.clone())
+                .collect(),
+        });
+    }
+    if planned_change_units.is_empty() {
+        return Err(PlanningContractError::Migration);
+    }
+    let unit_ids = planned_change_units
+        .iter()
+        .map(|unit| unit.unit_id.clone())
+        .collect::<Vec<_>>();
+    let finding_refs = value
+        .finding_refs
+        .iter()
+        .map(|finding_id| FindingRefV2 {
+            finding_id: finding_id.clone(),
+            finding_fingerprint: Sha256Hash::digest(
+                format!("legacy-unverified-finding:{}", finding_id.as_str()).as_bytes(),
+            ),
+        })
+        .collect::<Vec<_>>();
+    ChangePlanV2 {
+        schema_id: CHANGE_PLAN_V2_SCHEMA_ID.to_owned(),
+        schema_version: 2,
+        change_plan_id: value.change_plan_id.clone(),
+        revision: value.revision.max(1),
+        task_spec_ref,
+        scope_revision_ref,
+        impact_analysis_ref,
+        change_origin: if finding_refs.is_empty() {
+            ChangePlanOriginV2::UserPlanned
+        } else {
+            ChangePlanOriginV2::FindingRecipe
+        },
+        project_id: value.project_id.clone(),
+        target_checkout_id: change_set.checkout_id.clone(),
+        target_project_revision_id: change_set.base_revision_id.clone(),
+        target_workspace_snapshot_id: value.target_workspace_snapshot_id.clone(),
+        change_set_ref,
+        related_project_impacts: Vec::new(),
+        planned_change_units,
+        change_graph: Vec::new(),
+        deterministic_unit_order: unit_ids.clone(),
+        expected_impact_refs: unit_ids
+            .iter()
+            .map(|unit_id| ExpectedImpactRefV2 {
+                unit_id: unit_id.clone(),
+                accepted_impact_edge_ids: Vec::new(),
+                unresolved_frontier_refs: vec!["LEGACY_IMPACT_REQUIRES_REPLAN".to_owned()],
+            })
+            .collect(),
+        completion_criteria_mapping: bundle
+            .task_spec
+            .success_criteria
+            .iter()
+            .map(|criterion| CompletionCriterionMappingV2 {
+                criterion_id: criterion.criterion_id.clone(),
+                unit_ids: unit_ids.clone(),
+                check_plan_item_ids: bundle
+                    .validation_plan
+                    .required_checks
+                    .iter()
+                    .map(|check| check.plan_item_id.clone())
+                    .collect(),
+                manual_observation_refs: Vec::new(),
+                explicit_user_decision_omission: None,
+            })
+            .collect(),
+        expected_paths,
+        finding_refs,
+        recipe_refs: value.recipe_refs.clone(),
+        parameters: value.parameters.clone(),
+        risk_path_refs: vec![format!("legacy-risk:{}", value.risk)],
+        preconditions,
+        unresolved_impacts: vec![
+            "LEGACY_CHANGE_PLAN_REQUIRES_REPLAN".to_owned(),
+            "LEGACY_FINDING_FINGERPRINT_UNVERIFIED".to_owned(),
+            "LEGACY_PERMISSION_DOCUMENT_UNAVAILABLE".to_owned(),
+        ],
+        permission_requirements: vec!["local_write".to_owned(), value.permission_plan_ref.clone()],
+        permission_plan_ref: None,
+        validation_plan_ref,
+        readiness: ChangePlanReadinessV2::Blocked,
+        status: ChangePlanStatusV2::Blocked,
+        created_at: value.created_at,
+        updated_at: value.updated_at,
+        content_fingerprint: Sha256Hash::digest(b"unsealed"),
+    }
+    .seal()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ChangePlanV1ToV2MigrationEntry {
+    pub legacy_change_plan_ref: DocumentRef,
+    pub projected_change_plan: ChangePlanV2,
+    pub limitations: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ChangePlanV1ToV2MigrationPlan {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub project_id: ProjectId,
+    pub task_spec_ref: DocumentRef,
+    pub entries: Vec<ChangePlanV1ToV2MigrationEntry>,
+    pub dry_run: bool,
+    pub backup_required: bool,
+    pub rollback_supported: bool,
+    pub plan_fingerprint: Sha256Hash,
+}
+
+impl ChangePlanV1ToV2MigrationPlan {
+    pub fn seal(mut self) -> Result<Self, PlanningContractError> {
+        self.entries.sort_by(|left, right| {
+            left.legacy_change_plan_ref
+                .document_id
+                .cmp(&right.legacy_change_plan_ref.document_id)
+        });
+        for entry in &mut self.entries {
+            entry.projected_change_plan = entry.projected_change_plan.clone().seal()?;
+            normalize_nonempty_strings(&mut entry.limitations)?;
+        }
+        if self.schema_id != CHANGE_PLAN_V1_TO_V2_MIGRATION_PLAN_SCHEMA_ID
+            || self.schema_version != 1
+            || self.entries.is_empty()
+            || !self.dry_run
+            || !self.backup_required
+            || !self.rollback_supported
+            || self.task_spec_ref.revision == 0
+            || self.entries.iter().any(|entry| {
+                entry.projected_change_plan.project_id != self.project_id
+                    || entry.legacy_change_plan_ref.document_id
+                        != entry.projected_change_plan.change_plan_id.as_str()
+            })
+            || self.entries.windows(2).any(|pair| {
+                pair[0].legacy_change_plan_ref.document_id
+                    == pair[1].legacy_change_plan_ref.document_id
+            })
+        {
+            return Err(PlanningContractError::Migration);
+        }
+        self.plan_fingerprint = fingerprint(
+            CHANGE_PLAN_V1_TO_V2_MIGRATION_PLAN_SCHEMA_ID,
+            1,
+            &serde_json::json!({
+                "project_id":self.project_id,
+                "task_spec_ref":self.task_spec_ref,
+                "entries":self.entries,
+                "dry_run":self.dry_run,
+                "backup_required":self.backup_required,
+                "rollback_supported":self.rollback_supported,
+            }),
+        )?;
+        Ok(self)
+    }
+}
+
+string_enum!(ChangePlanMigrationOutcomeV1 {
+    Applied,
+    RolledBack,
+    Incompatible
+});
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ChangePlanV1ToV2MigrationResult {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub project_id: ProjectId,
+    pub task_spec_ref: DocumentRef,
+    pub plan_fingerprint: Sha256Hash,
+    pub backup_manifest_ref: Option<ArtifactRef>,
+    pub migrated_change_plan_refs: Vec<DocumentRef>,
+    pub outcome: ChangePlanMigrationOutcomeV1,
+    pub reason_codes: Vec<String>,
+    pub completed_at: DateTime<Utc>,
+    pub result_fingerprint: Sha256Hash,
+}
+
+impl ChangePlanV1ToV2MigrationResult {
+    pub fn seal(mut self) -> Result<Self, PlanningContractError> {
+        self.migrated_change_plan_refs.sort_by(|left, right| {
+            (&left.document_id, left.revision).cmp(&(&right.document_id, right.revision))
+        });
+        self.migrated_change_plan_refs.dedup();
+        normalize_nonempty_strings(&mut self.reason_codes)?;
+        if self.schema_id != CHANGE_PLAN_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID
+            || self.schema_version != 1
+            || self.task_spec_ref.revision == 0
+            || self
+                .backup_manifest_ref
+                .as_ref()
+                .is_some_and(|reference| reference.validate().is_err())
+            || (self.outcome == ChangePlanMigrationOutcomeV1::Applied
+                && (self.backup_manifest_ref.is_none()
+                    || self.migrated_change_plan_refs.is_empty()
+                    || !self.reason_codes.is_empty()))
+            || (self.outcome != ChangePlanMigrationOutcomeV1::Applied
+                && self.reason_codes.is_empty())
+        {
+            return Err(PlanningContractError::Migration);
+        }
+        self.result_fingerprint = fingerprint(
+            CHANGE_PLAN_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID,
+            1,
+            &serde_json::json!({
+                "project_id":self.project_id,
+                "task_spec_ref":self.task_spec_ref,
+                "plan_fingerprint":self.plan_fingerprint,
+                "backup_manifest_ref":self.backup_manifest_ref,
+                "migrated_change_plan_refs":self.migrated_change_plan_refs,
+                "outcome":self.outcome,
+                "reason_codes":self.reason_codes,
+                "completed_at":self.completed_at,
+            }),
+        )?;
+        Ok(self)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PlanningBundle {
@@ -731,6 +1360,8 @@ pub struct PlanningBundle {
     pub scope_revision: ScopeRevision,
     pub change_sets: Vec<ChangeSet>,
     pub impact_analysis: ImpactAnalysis,
+    #[serde(default)]
+    pub change_plans: Vec<ChangePlanV2>,
     pub validation_plan: FullValidationPlan,
     pub bundle_fingerprint: Sha256Hash,
 }
@@ -749,6 +1380,8 @@ pub enum PlanningContractError {
     Readiness,
     #[error("planning fingerprint could not be calculated")]
     Fingerprint,
+    #[error("legacy planning document cannot be migrated safely")]
+    Migration,
 }
 
 pub fn document_ref(
@@ -784,6 +1417,68 @@ fn sorted_unique<T: Ord>(values: &[T]) -> bool {
 
 fn non_empty(values: &[String]) -> bool {
     values.iter().all(|value| !value.trim().is_empty())
+}
+
+fn normalize_nonempty_strings(values: &mut Vec<String>) -> Result<(), PlanningContractError> {
+    if values.iter().any(|value| value.trim().is_empty()) {
+        return Err(PlanningContractError::Empty);
+    }
+    values.sort();
+    values.dedup();
+    Ok(())
+}
+
+fn document_hash<T: Serialize>(value: &T) -> Result<Sha256Hash, PlanningContractError> {
+    let value = serde_json::to_value(value).map_err(|_| PlanningContractError::Fingerprint)?;
+    canonical_sha256(&value).map_err(|_| PlanningContractError::Fingerprint)
+}
+
+fn acyclic_change_graph(
+    unit_ids: &std::collections::BTreeSet<String>,
+    edges: &[ChangeGraphEdgeV2],
+) -> bool {
+    let mut indegree = unit_ids
+        .iter()
+        .cloned()
+        .map(|unit| (unit, 0_usize))
+        .collect::<BTreeMap<_, _>>();
+    let mut outgoing = unit_ids
+        .iter()
+        .cloned()
+        .map(|unit| (unit, Vec::<String>::new()))
+        .collect::<BTreeMap<_, _>>();
+    for edge in edges
+        .iter()
+        .filter(|edge| edge.relation != ChangeGraphRelationV2::SameAtomicGroup)
+    {
+        let Some(degree) = indegree.get_mut(&edge.to_unit_id) else {
+            return false;
+        };
+        *degree += 1;
+        let Some(next) = outgoing.get_mut(&edge.from_unit_id) else {
+            return false;
+        };
+        next.push(edge.to_unit_id.clone());
+    }
+    let mut ready = indegree
+        .iter()
+        .filter(|(_, degree)| **degree == 0)
+        .map(|(unit, _)| unit.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut visited = 0_usize;
+    while let Some(unit) = ready.pop_first() {
+        visited += 1;
+        for next in outgoing.get(&unit).into_iter().flatten() {
+            let Some(degree) = indegree.get_mut(next) else {
+                return false;
+            };
+            *degree -= 1;
+            if *degree == 0 {
+                ready.insert(next.clone());
+            }
+        }
+    }
+    visited == unit_ids.len()
 }
 
 impl TaskSpec {
@@ -1064,6 +1759,189 @@ impl FullValidationPlan {
 }
 
 impl PlanningBundle {
+    pub fn migrate_v1_to_v2(mut self) -> Result<Self, PlanningContractError> {
+        if self.schema_version == 2 {
+            return self.seal();
+        }
+        if self.schema_id != PLANNING_BUNDLE_V2_SCHEMA_ID
+            || self.schema_version != 1
+            || !self.change_plans.is_empty()
+        {
+            return Err(PlanningContractError::Schema);
+        }
+        let task_ref = document_ref(
+            TASK_SPEC_SCHEMA_ID,
+            self.task_spec.task_spec_id.as_str(),
+            self.task_spec.revision,
+            &self.task_spec.content_fingerprint,
+        );
+        let scope_ref = document_ref(
+            SCOPE_REVISION_SCHEMA_ID,
+            self.scope_revision.scope_revision_id.as_str(),
+            self.scope_revision.revision,
+            &self.scope_revision.scope_hash,
+        );
+        let impact_ref = document_ref(
+            IMPACT_ANALYSIS_SCHEMA_ID,
+            self.impact_analysis.impact_analysis_id.as_str(),
+            self.impact_analysis.revision,
+            &self.impact_analysis.calculation_fingerprint,
+        );
+        let validation_ref = document_ref(
+            FULL_VALIDATION_PLAN_SCHEMA_ID,
+            self.validation_plan.validation_plan_id.as_str(),
+            self.validation_plan.revision,
+            &self.validation_plan.selection_fingerprint,
+        );
+        let unit_ids = self
+            .task_spec
+            .intended_changes
+            .iter()
+            .map(|change| change.change_id.clone())
+            .collect::<Vec<_>>();
+        let check_ids = self
+            .validation_plan
+            .required_checks
+            .iter()
+            .map(|check| check.plan_item_id.clone())
+            .collect::<Vec<_>>();
+        for change_set in &self.change_sets {
+            let expected_paths = change_set
+                .entries
+                .iter()
+                .map(|entry| entry.path.clone())
+                .collect::<Vec<_>>();
+            let target_edges = self
+                .impact_analysis
+                .impact_edges
+                .iter()
+                .filter(|edge| edge.project_id == change_set.project_id)
+                .map(|edge| edge.edge_id.clone())
+                .collect::<Vec<_>>();
+            let target_risks = self
+                .impact_analysis
+                .risk_paths
+                .iter()
+                .filter(|risk| risk.project_id == change_set.project_id)
+                .map(|risk| format!("{}@{}", risk.risk_id, risk.risk_version))
+                .collect::<Vec<_>>();
+            let preconditions = vec![
+                self.task_spec.content_fingerprint.clone(),
+                self.scope_revision.scope_hash.clone(),
+                change_set.change_set_fingerprint.clone(),
+                self.impact_analysis.calculation_fingerprint.clone(),
+                self.validation_plan.selection_fingerprint.clone(),
+            ];
+            self.change_plans.push(
+                ChangePlanV2 {
+                    schema_id: CHANGE_PLAN_V2_SCHEMA_ID.to_owned(),
+                    schema_version: 2,
+                    change_plan_id: ChangePlanId::from_stable_bytes(
+                        format!(
+                            "planning-bundle-v1:{}:{}",
+                            self.task_spec.task_spec_id, change_set.project_id
+                        )
+                        .as_bytes(),
+                    ),
+                    revision: 1,
+                    task_spec_ref: task_ref.clone(),
+                    scope_revision_ref: scope_ref.clone(),
+                    impact_analysis_ref: impact_ref.clone(),
+                    change_origin: ChangePlanOriginV2::UserPlanned,
+                    project_id: change_set.project_id.clone(),
+                    target_checkout_id: change_set.checkout_id.clone(),
+                    target_project_revision_id: change_set.base_revision_id.clone(),
+                    target_workspace_snapshot_id: change_set.observed_workspace_snapshot_id.clone(),
+                    change_set_ref: document_ref(
+                        CHANGE_SET_SCHEMA_ID,
+                        change_set.change_set_id.as_str(),
+                        1,
+                        &change_set.change_set_fingerprint,
+                    ),
+                    related_project_impacts: self
+                        .impact_analysis
+                        .affected_projects
+                        .iter()
+                        .filter(|project| project.project_id != change_set.project_id)
+                        .map(|project| RelatedProjectImpactV2 {
+                            project_id: project.project_id.clone(),
+                            impact_analysis_ref: impact_ref.clone(),
+                        })
+                        .collect(),
+                    planned_change_units: self
+                        .task_spec
+                        .intended_changes
+                        .iter()
+                        .map(|change| PlannedChangeUnitV2 {
+                            unit_id: change.change_id.clone(),
+                            target_selector: change.selector.clone(),
+                            change_kind: change.change_kind,
+                            intended_postcondition: change.intended_postcondition.clone(),
+                            source: ChangeUnitSourceV2::User,
+                            reason: "migrated_planning_bundle_v1".to_owned(),
+                            expected_paths: Vec::new(),
+                            unresolved_target: Some(
+                                "legacy_plan_requires_current_target_recheck".to_owned(),
+                            ),
+                            precondition_fingerprints: preconditions.clone(),
+                            permission_requirements: vec!["source.write".to_owned()],
+                            risk_path_refs: target_risks.clone(),
+                            impact_edge_refs: target_edges.clone(),
+                            completion_criterion_refs: self
+                                .task_spec
+                                .success_criteria
+                                .iter()
+                                .map(|criterion| criterion.criterion_id.clone())
+                                .collect(),
+                        })
+                        .collect(),
+                    change_graph: Vec::new(),
+                    deterministic_unit_order: unit_ids.clone(),
+                    expected_impact_refs: unit_ids
+                        .iter()
+                        .map(|unit_id| ExpectedImpactRefV2 {
+                            unit_id: unit_id.clone(),
+                            accepted_impact_edge_ids: target_edges.clone(),
+                            unresolved_frontier_refs: vec![
+                                "LEGACY_PLANNING_BUNDLE_REQUIRES_REPLAN".to_owned(),
+                            ],
+                        })
+                        .collect(),
+                    completion_criteria_mapping: self
+                        .task_spec
+                        .success_criteria
+                        .iter()
+                        .map(|criterion| CompletionCriterionMappingV2 {
+                            criterion_id: criterion.criterion_id.clone(),
+                            unit_ids: unit_ids.clone(),
+                            check_plan_item_ids: check_ids.clone(),
+                            manual_observation_refs: Vec::new(),
+                            explicit_user_decision_omission: None,
+                        })
+                        .collect(),
+                    expected_paths,
+                    finding_refs: Vec::new(),
+                    recipe_refs: Vec::new(),
+                    parameters: BTreeMap::new(),
+                    risk_path_refs: target_risks,
+                    preconditions,
+                    unresolved_impacts: vec!["LEGACY_PLANNING_BUNDLE_REQUIRES_REPLAN".to_owned()],
+                    permission_requirements: vec!["source.write".to_owned()],
+                    permission_plan_ref: None,
+                    validation_plan_ref: validation_ref.clone(),
+                    readiness: ChangePlanReadinessV2::Blocked,
+                    status: ChangePlanStatusV2::Blocked,
+                    created_at: self.task_spec.created_at,
+                    updated_at: Utc::now(),
+                    content_fingerprint: empty_fingerprint(),
+                }
+                .seal()?,
+            );
+        }
+        self.schema_version = 2;
+        self.seal()
+    }
+
     pub fn seal(mut self) -> Result<Self, PlanningContractError> {
         let task_ref = document_ref(
             TASK_SPEC_SCHEMA_ID,
@@ -1095,6 +1973,44 @@ impl PlanningBundle {
             self.impact_analysis.revision,
             &self.impact_analysis.calculation_fingerprint,
         );
+        let validation_plan_ref = document_ref(
+            FULL_VALIDATION_PLAN_SCHEMA_ID,
+            self.validation_plan.validation_plan_id.as_str(),
+            self.validation_plan.revision,
+            &self.validation_plan.selection_fingerprint,
+        );
+        self.change_plans = self
+            .change_plans
+            .into_iter()
+            .map(ChangePlanV2::seal)
+            .collect::<Result<Vec<_>, _>>()?;
+        self.change_plans
+            .sort_by(|left, right| left.project_id.cmp(&right.project_id));
+        let change_plan_identity_invalid = self.change_plans.len() != self.change_sets.len()
+            || self.change_plans.iter().any(|plan| {
+                let Some(change_set) = self
+                    .change_sets
+                    .iter()
+                    .find(|change_set| change_set.project_id == plan.project_id)
+                else {
+                    return true;
+                };
+                plan.task_spec_ref != task_ref
+                    || plan.scope_revision_ref != scope_ref
+                    || plan.impact_analysis_ref != impact_ref
+                    || plan.validation_plan_ref != validation_plan_ref
+                    || plan.change_set_ref
+                        != document_ref(
+                            CHANGE_SET_SCHEMA_ID,
+                            change_set.change_set_id.as_str(),
+                            1,
+                            &change_set.change_set_fingerprint,
+                        )
+                    || plan.target_checkout_id != change_set.checkout_id
+                    || plan.target_project_revision_id != change_set.base_revision_id
+                    || plan.target_workspace_snapshot_id
+                        != change_set.observed_workspace_snapshot_id
+            });
         if self.scope_revision.task_spec_ref != task_ref
             || self.impact_analysis.task_spec_ref != task_ref
             || self.impact_analysis.scope_revision_ref != scope_ref
@@ -1121,21 +2037,23 @@ impl PlanningBundle {
             || self.change_sets.iter().any(|change_set| {
                 change_set.task_spec_ref != task_ref || change_set.scope_revision_ref != scope_ref
             })
+            || change_plan_identity_invalid
         {
             return Err(PlanningContractError::Identity);
         }
         self.bundle_fingerprint = fingerprint(
             "star.planning-bundle",
-            1,
+            2,
             &serde_json::json!({
                 "task_spec":self.task_spec,
                 "scope_revision":self.scope_revision,
                 "change_sets":self.change_sets,
                 "impact_analysis":self.impact_analysis,
+                "change_plans":self.change_plans,
                 "validation_plan":self.validation_plan,
             }),
         )?;
-        if self.schema_id != "star.planning-bundle" || self.schema_version != 1 {
+        if self.schema_id != PLANNING_BUNDLE_V2_SCHEMA_ID || self.schema_version != 2 {
             return Err(PlanningContractError::Schema);
         }
         Ok(self)

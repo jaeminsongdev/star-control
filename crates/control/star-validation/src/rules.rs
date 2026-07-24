@@ -7,7 +7,13 @@ use serde::{Deserialize, Serialize};
 use star_contracts::{
     Sha256Hash,
     evidence::{DiagnosticConfidence, DiagnosticSeverity, DiagnosticStatus},
-    management::ProjectPathRef,
+    evidence_v2::{
+        DiagnosticGateEffectV2, EvidenceV2Error, RULE_V2_SCHEMA_ID, RuleDomainV2,
+        RuleEvidenceContractV2, RuleGateFloorV2, RuleLocationContractV2, RuleProducerKindV2,
+        RuleRemediationContractV2, RuleV2,
+    },
+    management::{Confidence, ProjectPathRef, RuleLifecycle, Severity},
+    validator_guard::ValidatorCorpusManifestV2,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -375,7 +381,7 @@ fn map_fact(fact: &RuleFactV2) -> RuleDiagnosticInputV2 {
         ),
         ManagedRegistryValidationMissing { family } => diagnostic(
             RuleFamilyV2::B04ArchitectureContractDrift,
-            &format!("star.validation.managed-registry.{family}.missing"),
+            "star.validation.managed-registry.check-missing",
             "MANAGED_REGISTRY_CHECK_MISSING",
             "A required managed registry validation family is missing",
             &format!("The accepted ValidationPlan does not contain required family {family}."),
@@ -484,6 +490,182 @@ fn map_fact(fact: &RuleFactV2) -> RuleDiagnosticInputV2 {
     }
 }
 
+pub fn builtin_validator_corpus() -> Result<ValidatorCorpusManifestV2, EvidenceV2Error> {
+    serde_json::from_slice::<ValidatorCorpusManifestV2>(include_bytes!(
+        "../../../../specs/corpus/validator-guard/manifest.json"
+    ))
+    .map_err(|_| EvidenceV2Error::Rule)?
+    .seal()
+    .map_err(|_| EvidenceV2Error::Rule)
+}
+
+pub fn builtin_rule_for_diagnostic(
+    diagnostic: &RuleDiagnosticInputV2,
+) -> Result<RuleV2, EvidenceV2Error> {
+    let corpus_ref = builtin_validator_corpus()?
+        .reference()
+        .map_err(|_| EvidenceV2Error::Rule)?;
+    RuleV2 {
+        schema_id: RULE_V2_SCHEMA_ID.to_owned(),
+        schema_version: 2,
+        rule_id: diagnostic.rule_id.clone(),
+        rule_version: "2.0.0".to_owned(),
+        definition_fingerprint: Sha256Hash::digest(b"unsealed"),
+        title: diagnostic.title.clone(),
+        category: diagnostic.family.code().to_owned(),
+        default_severity: severity_contract(diagnostic.severity),
+        default_confidence: confidence_contract(diagnostic.confidence),
+        lifecycle: RuleLifecycle::Active,
+        rule_domain: RuleDomainV2::ValidationDiagnostic,
+        supported_languages: Vec::new(),
+        source_kinds: Vec::new(),
+        analyzer_ref: None,
+        parameter_schema_ref: "urn:star-control:schema:rule-parameters:empty:v1".to_owned(),
+        identity_contract_version: None,
+        identity_anchor: None,
+        redaction_contract_version: 1,
+        remediation_recipe_refs: Vec::new(),
+        producer_kind: Some(RuleProducerKindV2::BuiltInAnalyzer),
+        producer_ref: Some(format!(
+            "star-validation::{}",
+            diagnostic.family.code().to_ascii_lowercase()
+        )),
+        applies_to_check_families: vec![diagnostic.family.code().to_ascii_lowercase()],
+        fingerprint_contract_version: Some(2),
+        location_contract: Some(RuleLocationContractV2 {
+            allowed_location_kinds: vec![
+                "contract".to_owned(),
+                "path".to_owned(),
+                "symbol".to_owned(),
+            ],
+            project_relative_paths_only: true,
+            symbol_binding_allowed: true,
+        }),
+        evidence_contract: Some(RuleEvidenceContractV2 {
+            required_evidence_kinds: vec![
+                "subject_binding".to_owned(),
+                "validation_run".to_owned(),
+            ],
+            raw_output_requires_artifact_ref: true,
+        }),
+        remediation_contract: Some(RuleRemediationContractV2 {
+            allowed_action_kinds: vec!["manual_review".to_owned(), "recheck".to_owned()],
+            allowed_target_selector_kinds: vec!["path".to_owned(), "symbol".to_owned()],
+            required_recheck_families: vec![diagnostic.family.code().to_ascii_lowercase()],
+        }),
+        gate_floor: Some(RuleGateFloorV2 {
+            default_severity: diagnostic.severity,
+            default_confidence: diagnostic.confidence,
+            protected_gate_effect: match diagnostic.decision_floor {
+                RuleDecisionFloorV2::None => DiagnosticGateEffectV2::None,
+                RuleDecisionFloorV2::HumanReview => DiagnosticGateEffectV2::RequiresReview,
+                RuleDecisionFloorV2::Block => DiagnosticGateEffectV2::Blocks,
+            },
+            ratchet_eligible: !matches!(
+                diagnostic.family,
+                RuleFamilyV2::B03ValidatorSelfProtection
+                    | RuleFamilyV2::B05SecuritySupplyChain
+                    | RuleFamilyV2::B06Regression
+            ),
+        }),
+        fixture_manifest_refs: vec![corpus_ref],
+    }
+    .seal()
+}
+
+pub fn builtin_validation_rules() -> Result<Vec<RuleV2>, EvidenceV2Error> {
+    let placeholder_path =
+        ProjectPathRef::parse("src/lib.rs").map_err(|_| EvidenceV2Error::Rule)?;
+    let facts = vec![
+        RuleFactV2::ActualChangeCollectionIncomplete,
+        RuleFactV2::ActualChangeUnrelated {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::ActualChangeScopeUnknown {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::CompletionClaimMismatch {
+            claim_id: "claim".to_owned(),
+        },
+        RuleFactV2::RequiredTestDeleted {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::AssertionCountDecreased {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::TestExecutionBypassAdded {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::FocusedTestOnlyAdded {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::RetryOrTimeoutIncreased {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::RelatedTestCheckMissing,
+        RuleFactV2::ProtectedValidationSurfaceChanged,
+        RuleFactV2::ValidatorSnapshotMissing,
+        RuleFactV2::ValidatorFixtureCoverageMissing {
+            missing: vec!["regression".to_owned()],
+        },
+        RuleFactV2::ValidatorBehaviorWeakened,
+        RuleFactV2::ValidatorSelfApprovalOnly,
+        RuleFactV2::ArchitectureCheckMissing,
+        RuleFactV2::ContractCheckMissing,
+        RuleFactV2::ManagedRegistrySnapshotMissing,
+        RuleFactV2::ManagedRegistrySnapshotStale,
+        RuleFactV2::ManagedRegistryConsistencyDrift {
+            subject: "fixture".to_owned(),
+        },
+        RuleFactV2::ManagedRegistryValidationMissing {
+            family: "contract".to_owned(),
+        },
+        RuleFactV2::GeneratedOutputDrift {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::HardcodingCheckMissing,
+        RuleFactV2::SecretCandidate {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::DangerousCommandCandidate {
+            path: placeholder_path.clone(),
+        },
+        RuleFactV2::DependencyEvidenceMissing {
+            path: placeholder_path,
+        },
+        RuleFactV2::RegressionEvidenceMissing,
+        RuleFactV2::RegressionCheckMissing,
+        RuleFactV2::DocsCheckMissing,
+        RuleFactV2::ConfigCheckMissing,
+        RuleFactV2::DocumentationDrift,
+        RuleFactV2::EnvironmentEvidenceMissing,
+    ];
+    let mut rules = evaluate_rule_facts(&facts)
+        .iter()
+        .map(builtin_rule_for_diagnostic)
+        .collect::<Result<Vec<_>, _>>()?;
+    rules.sort_by(|left, right| left.rule_id.cmp(&right.rule_id));
+    rules.dedup_by(|left, right| left.rule_id == right.rule_id);
+    Ok(rules)
+}
+
+fn severity_contract(value: DiagnosticSeverity) -> Severity {
+    match value {
+        DiagnosticSeverity::Info => Severity::Info,
+        DiagnosticSeverity::Warning => Severity::Warning,
+        DiagnosticSeverity::Error => Severity::Error,
+        DiagnosticSeverity::Critical => Severity::Critical,
+    }
+}
+
+fn confidence_contract(value: DiagnosticConfidence) -> Confidence {
+    match value {
+        DiagnosticConfidence::Low => Confidence::Low,
+        DiagnosticConfidence::Medium => Confidence::Medium,
+        DiagnosticConfidence::High => Confidence::High,
+    }
+}
+
 fn missing_check(family: RuleFamilyV2, check: &str, code: &str) -> RuleDiagnosticInputV2 {
     diagnostic(
         family,
@@ -554,6 +736,7 @@ fn diagnostic(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use star_contracts::evidence::GateDecisionKind;
 
     #[test]
     fn two_snapshot_guard_requires_both_snapshots_and_all_fixture_classes() {
@@ -616,5 +799,71 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.code == "MANAGED_REGISTRY_CHECK_MISSING")
         );
+    }
+
+    #[test]
+    fn checked_in_validator_corpus_is_hash_bound_and_enforces_expected_behavior() {
+        let corpus = builtin_validator_corpus().unwrap();
+        let repository_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+        for fixture in &corpus.fixtures {
+            let bytes = std::fs::read(repository_root.join(fixture.input_path.as_str())).unwrap();
+            assert_eq!(Sha256Hash::digest(&bytes), fixture.input_sha256);
+            let input: TwoSnapshotGuardInputV2 = serde_json::from_slice(&bytes).unwrap();
+            let mut codes = evaluate_rule_facts(&evaluate_two_snapshot_guard(&input))
+                .into_iter()
+                .map(|diagnostic| diagnostic.code)
+                .collect::<Vec<_>>();
+            codes.sort();
+            codes.dedup();
+            assert_eq!(
+                codes, fixture.expected_diagnostic_codes,
+                "{}",
+                fixture.fixture_id
+            );
+            let diagnostics = evaluate_rule_facts(&evaluate_two_snapshot_guard(&input));
+            let decision = if diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.decision_floor == RuleDecisionFloorV2::Block)
+            {
+                GateDecisionKind::Block
+            } else if diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.decision_floor == RuleDecisionFloorV2::HumanReview)
+            {
+                GateDecisionKind::HumanReview
+            } else {
+                GateDecisionKind::AutoPass
+            };
+            assert_eq!(
+                decision, fixture.expected_gate_decision,
+                "{}",
+                fixture.fixture_id
+            );
+        }
+    }
+
+    #[test]
+    fn builtin_validator_registry_has_sealed_v2_rules_for_every_emitted_rule_id() {
+        let rules = builtin_validation_rules().unwrap();
+        assert!(rules.len() >= 30);
+        assert!(
+            rules
+                .windows(2)
+                .all(|pair| pair[0].rule_id < pair[1].rule_id)
+        );
+        for rule in rules {
+            let reference = rule.reference().unwrap();
+            assert_eq!(
+                reference.definition_fingerprint,
+                rule.definition_fingerprint
+            );
+            assert_ne!(
+                reference.definition_fingerprint,
+                Sha256Hash::digest(rule.rule_id.as_bytes()),
+                "{} must be bound to the complete v2 definition",
+                rule.rule_id
+            );
+            assert_eq!(rule.fixture_manifest_refs.len(), 1);
+        }
     }
 }

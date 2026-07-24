@@ -1,0 +1,50 @@
+{
+  "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "cost_record_refs": [
+    {
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "cost_record_id": "fixture",
+      "revision": 0
+    }
+  ],
+  "decision": "within_budget",
+  "evaluated_at": "2026-01-01T00:00:00Z",
+  "limits": [
+    {
+      "quantity": 0,
+      "unit": "fixture"
+    }
+  ],
+  "observed": [
+    {
+      "quantity": 0,
+      "unit": "fixture"
+    }
+  ],
+  "paid_action_pending": false,
+  "permission_approval_refs": [
+    "fixture"
+  ],
+  "project_id": "prj_00000000000000000000000000",
+  "remaining": [
+    {
+      "quantity": 0,
+      "unit": "fixture"
+    }
+  ],
+  "reserved": [
+    {
+      "quantity": 0,
+      "unit": "fixture"
+    }
+  ],
+  "revision": 0,
+  "schema_id": "star.budget-snapshot",
+  "schema_version": 1,
+  "scope_ref": "fixture",
+  "snapshot_id": "fixture",
+  "unknown_measurements": [
+    "fixture"
+  ]
+}

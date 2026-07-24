@@ -1,0 +1,13 @@
+{
+  "protected_surface_changed": true,
+  "previous_snapshot_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "current_snapshot_fingerprint": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "behavior_weakened": false,
+  "independent_previous_executor": true,
+  "fixtures": [
+    { "fixture_kind": "positive", "previous_snapshot_passed": true, "current_snapshot_passed": true, "result_fingerprint": "sha256:5100000000000000000000000000000000000000000000000000000000000001" },
+    { "fixture_kind": "negative", "previous_snapshot_passed": true, "current_snapshot_passed": true, "result_fingerprint": "sha256:5200000000000000000000000000000000000000000000000000000000000002" },
+    { "fixture_kind": "edge", "previous_snapshot_passed": true, "current_snapshot_passed": true, "result_fingerprint": "sha256:5300000000000000000000000000000000000000000000000000000000000003" },
+    { "fixture_kind": "regression", "previous_snapshot_passed": true, "current_snapshot_passed": false, "result_fingerprint": "sha256:5400000000000000000000000000000000000000000000000000000000000004" }
+  ]
+}

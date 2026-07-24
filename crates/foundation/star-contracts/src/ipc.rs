@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     MCP_CONTRACT_VERSION,
+    config_v1::ConfigOverrideV1,
+    error_codes::StableErrorCode,
     ids::{OperationId, RequestId},
 };
 
@@ -112,6 +114,9 @@ pub struct IpcRequest {
     pub idempotency_key: Option<String>,
     pub deadline: Option<String>,
     pub actor: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(length(max = 128))]
+    pub config_overrides: Vec<ConfigOverrideV1>,
     pub trace_context: Option<serde_json::Value>,
 }
 
@@ -155,12 +160,25 @@ pub struct ErrorEnvelope {
 pub enum ErrorCategory {
     Config,
     Contract,
+    Environment,
     State,
     Policy,
     Route,
+    Planning,
+    Impact,
+    Affected,
+    Registry,
     Tool,
     Codex,
     Validation,
+    Reproduction,
+    Security,
+    Dependency,
+    Maintenance,
+    Migration,
+    Performance,
+    Equivalence,
+    Patch,
     Vcs,
     Ipc,
     Release,
@@ -200,6 +218,20 @@ impl ErrorEnvelope {
             component: component.into(),
         }
     }
+
+    pub fn new_stable(
+        code: StableErrorCode,
+        message: impl Into<String>,
+        retryable: bool,
+        correlation_id: impl Into<String>,
+        component: impl Into<String>,
+    ) -> Self {
+        Self::new(code.as_str(), message, retryable, correlation_id, component)
+    }
+
+    pub fn stable_code(&self) -> Option<StableErrorCode> {
+        StableErrorCode::parse(self.code.clone()).ok()
+    }
 }
 
 impl ErrorCategory {
@@ -207,12 +239,25 @@ impl ErrorCategory {
         match code.split_once('_').map(|(prefix, _)| prefix) {
             Some("CONFIG") => Self::Config,
             Some("CONTRACT") => Self::Contract,
+            Some("DOCTOR") | Some("CLEAN") => Self::Environment,
             Some("STATE") => Self::State,
             Some("POLICY") => Self::Policy,
             Some("ROUTE") => Self::Route,
+            Some("PLANNING") | Some("CHANGE") => Self::Planning,
+            Some("IMPACT") => Self::Impact,
+            Some("AFFECTED") => Self::Affected,
+            Some("REGISTRY") | Some("CATALOG") => Self::Registry,
             Some("TOOL") => Self::Tool,
             Some("CODEX") => Self::Codex,
             Some("VALIDATION") => Self::Validation,
+            Some("REPRODUCTION") | Some("RECOVERY") => Self::Reproduction,
+            Some("SECURITY") => Self::Security,
+            Some("DEPENDENCY") => Self::Dependency,
+            Some("MAINTENANCE") | Some("RETENTION") => Self::Maintenance,
+            Some("MIGRATION") => Self::Migration,
+            Some("PERFORMANCE") => Self::Performance,
+            Some("LANGUAGE") | Some("PLATFORM") => Self::Equivalence,
+            Some("PATCH") | Some("RECIPE") => Self::Patch,
             Some("VCS") => Self::Vcs,
             Some("IPC") => Self::Ipc,
             Some("RELEASE") => Self::Release,

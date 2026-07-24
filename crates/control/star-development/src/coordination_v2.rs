@@ -270,9 +270,29 @@ pub fn seal_cross_repo_bundle(
     }
     bundle.state = aggregate_bundle_state(&sealed);
     bundle.completion_level_reached = completion_level(&sealed, bundle.remote_policy);
-    if bundle.state == BundleAggregateState::Completed
-        && bundle.completion_level_reached < bundle.completion_target
+    let required_completion_is_current = bundle.completion_level_reached
+        >= bundle.completion_target
+        && bundle.open_effect_refs.is_empty()
+        && bundle.pending_approval_refs.is_empty()
+        && bundle.remaining_risks.is_empty()
+        && bundle.hold_reasons.is_empty();
+    if required_completion_is_current
+        && !matches!(
+            bundle.state,
+            BundleAggregateState::OutcomeUnknown
+                | BundleAggregateState::RollbackRequired
+                | BundleAggregateState::Held
+                | BundleAggregateState::PartiallyApplied
+                | BundleAggregateState::Applying
+                | BundleAggregateState::Validating
+                | BundleAggregateState::AwaitingValidation
+                | BundleAggregateState::AwaitingApply
+                | BundleAggregateState::Failed
+                | BundleAggregateState::Cancelled
+        )
     {
+        bundle.state = BundleAggregateState::Completed;
+    } else if bundle.state == BundleAggregateState::Completed {
         bundle.state = BundleAggregateState::PartiallyApplied;
         bundle
             .remaining_risks
@@ -1203,12 +1223,24 @@ fn aggregate_bundle_state(participants: &[ChangeBundleParticipantV2]) -> BundleA
 
 fn completion_level(
     participants: &[ChangeBundleParticipantV2],
-    _remote_policy: star_contracts::coordination_v2::RemotePolicy,
+    remote_policy: star_contracts::coordination_v2::RemotePolicy,
 ) -> CompletionLevel {
     let required = participants
         .iter()
         .filter(|item| item.required)
         .collect::<Vec<_>>();
+    if required.is_empty() {
+        return CompletionLevel::None;
+    }
+    if remote_policy != star_contracts::coordination_v2::RemotePolicy::Disabled
+        && required.iter().all(|item| {
+            item.state == ParticipantState::Completed
+                && item.project_merge_result_ref.is_some()
+                && !item.remote_operation_refs.is_empty()
+        })
+    {
+        return CompletionLevel::RemoteMerged;
+    }
     if required.iter().all(|item| {
         matches!(
             item.state,
@@ -1418,7 +1450,7 @@ mod tests {
         CheckoutId,
         coordination_v2::{
             BundleEdgeKind, BundleStep, BundleStepKind, GoalParticipant, ParticipantRole,
-            ProjectRelation, ProjectRelationKind, RelationCertainty, ResourceBudget,
+            ProjectRelation, ProjectRelationKind, RelationCertainty, RemotePolicy, ResourceBudget,
         },
     };
 
@@ -1434,6 +1466,79 @@ mod tests {
             artifact_limit_bytes: 1024,
             wall_time_limit_ms: 1_000,
         }
+    }
+
+    fn completion_participant(state: ParticipantState) -> ChangeBundleParticipantV2 {
+        seal_participant(ChangeBundleParticipantV2 {
+            schema_id: CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID.to_owned(),
+            schema_version: 2,
+            participant_id: "participant-completion".to_owned(),
+            revision: 1,
+            previous_revision_ref: None,
+            change_bundle_ref: "bundle-completion".to_owned(),
+            project_id: ProjectId::new(),
+            required: true,
+            roles: vec![ParticipantRole::Provider],
+            step_ids: vec!["step-one".to_owned()],
+            checkout_id: CheckoutId::new(),
+            repository_fingerprint: Sha256Hash::digest(b"repository"),
+            git_object_format: "sha1".to_owned(),
+            base_project_revision_ref: "project-revision-one".to_owned(),
+            base_commit_oid: "0123456789012345678901234567890123456789".to_owned(),
+            baseline_workspace_snapshot_ref: "workspace-one".to_owned(),
+            dirty_manifest_ref: "dirty-one".to_owned(),
+            dirty_state: DirtyState::Clean,
+            preexisting_change_set_ref: "change-set-one".to_owned(),
+            change_plan_refs: vec!["change-plan-one".to_owned()],
+            patch_set_refs: vec!["patch-one".to_owned()],
+            migration_plan_refs: vec![],
+            worktree_record_refs: vec!["worktree-one".to_owned()],
+            merge_plan_ref: Some("merge-plan-one".to_owned()),
+            merge_queue_ref: Some("merge-queue-one".to_owned()),
+            validation_plan_refs: vec!["validation-plan-one".to_owned()],
+            gate_decision_refs: vec!["gate-one".to_owned()],
+            evidence_bundle_refs: vec!["evidence-one".to_owned()],
+            project_merge_result_ref: Some("merge-result-one".to_owned()),
+            remote_snapshot_refs: vec![],
+            remote_operation_refs: vec![],
+            recovery_plan_ref: "recovery-one".to_owned(),
+            compensation_refs: vec![],
+            state,
+            pending_action: None,
+            actual_subject_binding_ref: Some("subject-one".to_owned()),
+            participant_fingerprint: placeholder(),
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn completion_level_requires_receipt_backed_participant_states() {
+        assert_eq!(
+            completion_level(&[], RemotePolicy::ApprovedActionsOnly),
+            CompletionLevel::None
+        );
+        let local = completion_participant(ParticipantState::LocalCompleted);
+        assert_eq!(
+            completion_level(
+                std::slice::from_ref(&local),
+                RemotePolicy::ApprovedActionsOnly
+            ),
+            CompletionLevel::LocalIntegrated
+        );
+        let mut remote = completion_participant(ParticipantState::Completed);
+        remote.remote_operation_refs = vec!["remote-operation-one".to_owned()];
+        remote = seal_participant(remote).unwrap();
+        assert_eq!(
+            completion_level(
+                std::slice::from_ref(&remote),
+                RemotePolicy::ApprovedActionsOnly
+            ),
+            CompletionLevel::RemoteMerged
+        );
+        assert_eq!(
+            completion_level(std::slice::from_ref(&remote), RemotePolicy::Disabled),
+            CompletionLevel::LocalIntegrated
+        );
     }
 
     #[test]

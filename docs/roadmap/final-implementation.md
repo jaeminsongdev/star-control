@@ -38,7 +38,7 @@
 
 ### 현재 상태
 
-설계는 [공통 개발 관리와 로컬 관리 DB 계약](../contracts/development-management.md), [ADR-0006](../decisions/ADR-0006-공통-개발-관리와-로컬-관리-DB-경계.md)과 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)에 확정했다. 사용자가 P0 구현과 embedded relational backend dependency 추가를 승인했고 [ADR-0008](../decisions/ADR-0008-P0-embedded-relational-backend.md)에 private 선택을 기록했다. 0A~0E의 첫 수직 Slice는 workspace test·clippy·Schema·x64/ARM64 release cross-build까지 로컬 검증을 통과했다. P-0054는 최신 `main`에서 실사용 전 복구 Slice의 public 계약, private persistence, recovery-only Controller·CLI와 disposable 손상 복구 Corpus를 구현했다. 아래 전체 계약 중 M1~M11 제품 경로와 외부 gate는 계속 `PLANS.md`에서 구분한다.
+설계는 [공통 개발 관리와 로컬 관리 DB 계약](../contracts/development-management.md), [ADR-0006](../decisions/ADR-0006-공통-개발-관리와-로컬-관리-DB-경계.md)과 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)에 확정했다. 사용자가 P0 구현과 embedded relational backend dependency 추가를 승인했고 [ADR-0008](../decisions/ADR-0008-P0-embedded-relational-backend.md)에 private 선택을 기록했다. 0A~0E의 첫 수직 Slice와 P-0054/P-0055는 workspace·복구·비서명 외부 Gate를 확장했다. P-0056 current source는 최신 `main`에서 v2 validation/planning·EffectiveConfig·local-state recovery, M7/M8 effect receipt/current evidence, M9 handoff, M10 precommitted evaluation/cost/finding/Radar/final audit와 M11 공통 Patch/Gate 경로를 다시 대조·구현한다. exact 현재 판정은 [P-0056 감사](../testing/p0056-current-functional-recovery-audit-2026-07-24.md)와 `PLANS.md`가 소유한다.
 
 기존 MCP Gateway·IPC·Registry·외부 EXE Runtime 수직 Slice와 P0 관리 수직 Slice는 서로 별도 범위다. 한쪽 검증 결과를 다른 쪽 완료 근거로 사용하지 않는다.
 
@@ -115,6 +115,8 @@ local management repository
 - startup/manual retention plan과 hold·permission
 
 P-0054 구현은 startup에서 검증된 active-set만 선택하고, online backup의 manifest를 마지막에 쓰며, restore/rebuild candidate 전체를 검사한 뒤 top-level manifest를 atomic replace한다. recovery-only에서는 status·restore·rebuild·local-state export만 허용한다. 모든 apply는 exact plan fingerprint와 private typed receipt를 사용하고 손상·이전 generation을 삭제하지 않는다. DB v2 migration, installer와 MCP required core 확장은 이 Slice에 포함하지 않는다.
+
+P-0056은 physical management store version을 불필요하게 올리지 않고 additive v2 document tables/readers를 사용한다. 새 M3 write는 v2만 기록하고 v1 history는 보존한다. normal generation backup/restore는 global PlanningBundle v2와 project v1/v2 decision을 함께 복원하며, portable `LocalStateBundle` v2는 project v1/v2 decision만 포함한다. cross-store 원자성이 없는 portable import에서 global PlanningBundle을 합성하지 않고 backup 없는 rebuild loss로 보고한다.
 
 ### 0D. project scan과 Finding vertical slice
 
@@ -392,6 +394,8 @@ P3는 M2의 change impact·affected selector를 다시 구현하지 않는다. M
 사용자가 지정한 3단계 `M3 공통 검증·품질 Gate`는 [상세 설계](../features/common-validation-gate.md), [검사·증거 계약](../contracts/validation-and-evidence.md), [오류·Diagnostic](../contracts/errors-and-diagnostics.md)과 [설정·Validator Registry](../contracts/config-and-catalog.md)에 목표 계약을 확정했다. P-0044는 ready M2 plan을 재선택 없이 소비하는 deterministic CheckGraph runner, v2 TaskInvocation·ValidationRun·Diagnostic·GateDecision·EvidenceBundle, Project별 원자 persistence와 Goal/Plan/Run core action을 구현했다. P-0054는 trusted typed process executor, Rule/Baseline/Suppression/Disposition·ReviewPack, exact subject/profile binding, single-use permit와 patch pre/post Gate를 Controller·CLI까지 연결했다. cycle·dependency failure·timeout·partial·flaky·human review와 source snapshot TOCTOU fixture가 수직 Slice를 검증한다.
 
 P0의 Finding·ValidationResult와 P-0035 native validator precursor는 history·compatibility 경로로 유지한다. M7~M11 전용 descriptor와 Profile-required Check는 P-0054의 동일 M2→M3 경로를 사용하며, 등록되지 않은 외부 provider의 실행 결과는 합성하지 않는다.
+
+P-0056 current source는 Rule·Diagnostic·Baseline·Suppression·Disposition v2, stable error catalog, validator two-snapshot guard와 sealed negative corpus를 구현한다. v1→v2 변환은 deterministic candidate를 만들고 management generation backup/restore가 rollback 경계를 제공하되, provenance가 부족한 history를 current Gate에 자동 승격하지 않는다.
 
 ### 선행 gate
 
@@ -726,16 +730,16 @@ M1 current Project/Dependency Index
 
 scanner·debugger·package manager는 registered adapter이고, completion은 M3 core Gate만 소유한다. 외부 vulnerability/license/version 자료는 source와 freshness를 가진 input evidence이며 Star-Control DB가 원본 DB가 되지 않는다.
 
-### 선행 gate
+### 현재 충족해야 하는 선행 gate
 
-M7 제품 구현은 다음을 먼저 요구한다.
+M7 제품 경로는 P-0056 현재도 다음 invariant를 함께 요구한다.
 
-1. M1이 Project·workspace·package와 direct/transitive/internal dependency relation, manifest·lockfile·package manager를 current coverage로 관찰해야 한다.
-2. M3가 common Diagnostic·Finding·EvidenceSubjectBinding, redaction, freshness/time boundary, GateDecision과 ReviewPack을 구현해야 한다.
-3. M6가 exact revision·manifest/lockfile·toolchain/package manager·environment의 `DependencySecurityInputManifest`를 제공해야 한다.
-4. update PatchSet 준비에는 M2 actual impact/replan과 M4 isolated preview·immutable PatchSet·rollback이 구현돼야 한다.
-5. Tool Registry가 scanner·debugger·package manager의 structured args, executable identity, output Schema, network/cache/process/write effect를 표현해야 한다.
-6. network read/download, dependency change, process attach·민감 dump와 PatchSet apply를 `personal_auto`에서도 prompt로 강화할 수 있어야 한다.
+1. M1의 Project·workspace·package와 direct/transitive/internal dependency relation, manifest·lockfile·package manager current coverage
+2. M3의 common Diagnostic·Finding·EvidenceSubjectBinding, redaction, freshness/time boundary, GateDecision과 ReviewPack
+3. M6의 exact revision·manifest/lockfile·toolchain/package manager·environment `DependencySecurityInputManifest`
+4. M2 actual impact/replan과 M4 isolated preview·immutable PatchSet·rollback을 거치는 update PatchSet 준비
+5. scanner·debugger·package manager의 structured args, executable identity, output Schema, network/cache/process/write effect를 표현하는 Tool Registry
+6. network read/download, dependency change, process attach·민감 dump와 PatchSet apply를 `personal_auto`에서도 prompt로 강화하는 permission floor
 
 선행 자료가 stale·partial·unverified이면 tool별 DB나 새 진단 type으로 우회하지 않는다. read-only inspection은 unknown/limitation을 반환하고, change·security clean claim은 `BLOCK|HUMAN_REVIEW`다.
 
@@ -878,7 +882,7 @@ language_platform_migration
 
 0단계 Star-Control 자체 management DB migration은 `star-state` private lifecycle에 남는다. M8의 범용 Project migration은 이를 재사용 가능한 DB product로 노출하지 않고 target project의 registered migration framework를 adapter로 조정한다.
 
-### 선행 gate
+### 현재 충족해야 하는 선행 gate
 
 M8 제품 구현은 다음을 먼저 요구한다.
 
@@ -1006,11 +1010,11 @@ P6는 한 repository 안의 local integration을 완성한다. 여러 Project co
 
 ### 선행 gate
 
-1. M1이 ProjectId와 CheckoutId를 분리하고 Git top-level·git-dir·common-dir·object format, exact revision과 complete dirty manifest를 제공해야 한다.
-2. M2가 actual ChangeSet, file/symbol/contract/generated/dependency impact와 project-local ChangePlan을 제공해야 한다.
-3. M3가 `patch_pre_apply|patch_post_apply|merge` Gate와 project EvidenceBundle을 구현해야 한다.
-4. M4가 한 Project·Checkout의 immutable PatchSet·PatchApplication·reverse/discard recovery와 isolated worktree port conformance를 통과해야 한다.
-5. Controller·state repository가 Worktree/Merge event·idempotency·crash reconciliation을 project partition에 기록해야 한다.
+1. M1의 분리된 ProjectId·CheckoutId, Git top-level·git-dir·common-dir·object format, exact revision과 complete dirty manifest
+2. M2의 actual ChangeSet, file/symbol/contract/generated/dependency impact와 project-local ChangePlan
+3. M3의 `patch_pre_apply|patch_post_apply|merge` Gate와 project EvidenceBundle
+4. M4의 Project·Checkout 단위 immutable PatchSet·PatchApplication·reverse/discard recovery와 isolated worktree port conformance
+5. Controller·state repository의 Worktree/Merge event·idempotency·crash reconciliation project partition 기록
 
 선행 evidence가 stale·partial·unverified이면 worktree를 만들거나 queue에 넣지 않는다. 사용자 checkout을 clean으로 만들기 위한 stash/reset/clean을 선행 조치로 제안하지 않는다.
 
@@ -1182,7 +1186,7 @@ P7은 사용자 9단계의 global/project coordination과 remote 경계를 완�
 ### 현재 상태와 선행 gap
 
 - 0~9단계 전용 정본·읽는 순서·roadmap·PLANS 연결은 모두 존재한다. stage별 제품 상태와 10단계가 소비하는 input은 [10단계 gap matrix](../contracts/ci-release-evaluation-and-product-completion.md#09단계-선행-정본-gap-matrix)가 소유한다.
-- P-0041~P-0050은 M1~M9의 첫 bounded 제품 Slice와 required core source surface를 구현했다. P-0051은 M10 `ReleaseManifest` v2·`EvaluationRun` v2·Catalog lifecycle·build-once engine을, P-0053은 P-0026 technical manifest/installer와 local release lifecycle 경계를 구현·감사했다. P-0054는 Controller·CLI에서 build-once candidate, artifact byte 재검증, M3 evidence binding, promote/lifecycle, EvaluationRun·Catalog와 exact release approval을 연결했다. signer·clean signed installer lifecycle·GitHub publisher와 authenticated remote effect는 외부 Gate이며 publisher adapter가 없으면 apply는 fail-closed다.
+- P-0041~P-0050은 M1~M9의 첫 bounded 제품 Slice와 required core source surface를 구현했다. P-0051은 M10 `ReleaseManifest` v2·`EvaluationRun` v2·Catalog lifecycle·build-once engine을, P-0053은 P-0026 technical manifest/installer와 local release lifecycle 경계를 구현·감사했다. P-0054는 Controller·CLI에서 build-once candidate, artifact byte 재검증, M3 evidence binding, promote/lifecycle, EvaluationRun·Catalog와 exact release approval을 연결했다. P-0056은 precommitted case/policy, verified CostRecord/BudgetSnapshot, current Gate·DiagnosticEvaluation 기반 Finding/Suppression metric, Radar ref와 current handler/Profile/lifecycle `release audit`을 구현했다. signer·clean signed installer lifecycle·public GitHub effect는 외부 Gate이며 unsigned Stable apply는 fail-closed다.
 - 10단계는 0~9단계 handoff를 가짜 fixture success로 대체하지 않는다. M1~M9 제품 Gate와 required core owner가 실제로 완료되기 전에는 release `ready`를 만들 수 없다.
 - 10단계는 기존 제품 roadmap의 P8 evaluation과 P9 release를 한 최종 설계 단계로 묶는다. M11 Rust style Profile은 P8 뒤·P9 공개 배포 Gate 앞에 추가하며 같은 Task·source·Profile·Gate·evidence를 재사용하고 별도 Package를 만들지 않는다.
 
@@ -1212,8 +1216,11 @@ P7은 사용자 9단계의 global/project coordination과 remote 경계를 완�
 
 ### 현재 상태
 
-- `CostRecord`, `BudgetSnapshot`, `EvaluationRun` v1 개념과 `evals/` 목표 위치는 있으나 Rule·Check·Profile·Recipe별 adjudication·comparability·lifecycle 구현은 없다.
-- 10단계 target은 `EvaluationRun` v2다. 상세 field·metric·recommendation은 [10단계 평가 정본](../contracts/ci-release-evaluation-and-product-completion.md#evaluationrun-v2-평가-단위)을 따른다.
+- P-0056 current source는 `EvaluationCaseDefinitionV1`, `EvaluationPolicyV1`, `CostRecordV1`, `BudgetSnapshotV1`, `EvaluationRunV2`, Catalog lifecycle과 `MaintenanceRadarSnapshot.evaluation_run_refs`를 type·Schema·fixture·pure engine·repository·Controller·CLI로 연결했다.
+- case/policy는 Project Git의 `evals/` source를 publish·run·show·compare·recommend·Radar·Catalog transition 때 다시 읽는다. exact case set·sample/attempt·ground truth·provider cost를 result payload가 바꿀 수 없다.
+- actual Finding/Suppression metric은 current ValidationRun→GateDecision→DiagnosticEvaluation과 historical Suppression revision에서 파생하며 new/worsened·new/broadened suppression·missing cost/current evidence는 자동 accept를 차단한다.
+- `star release audit`은 23개 feature handler, exact 16 Profile, M11 closure와 exact lifecycle를 봉인하고 internal conformance와 external signing/provider Gate를 분리한다.
+- 상세 field·metric·recommendation은 [10단계 평가 정본](../contracts/ci-release-evaluation-and-product-completion.md#evaluationrun-v2-평가-단위)을 따른다.
 - M8 `performance_build`는 대상 Project의 declared workload 성능이고, P8은 Star-Control 자신의 routing·planning·validation·release 자동화 효용을 평가한다. 두 결과를 같은 metric으로 합치지 않는다.
 
 ### 계약·Schema Slice

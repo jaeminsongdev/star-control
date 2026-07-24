@@ -18,6 +18,7 @@ pub const DEVELOPMENT_EFFECT_RECEIPT_V1_SCHEMA_ID: &str = "star.development-effe
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DevelopmentEffectKind {
+    FailureReproduction,
     SecurityRefresh,
     DebuggerCapture,
     LicenseScan,
@@ -28,11 +29,13 @@ pub enum DevelopmentEffectKind {
     PerformanceRun,
     LanguageCutover,
     RemoteRecovery,
+    ReleaseLifecycle,
 }
 
 impl DevelopmentEffectKind {
     pub const fn permission_action(self) -> &'static str {
         match self {
+            Self::FailureReproduction => "process.failure.reproduce",
             Self::SecurityRefresh => "external.security.read",
             Self::DebuggerCapture => "process.debug.attach",
             Self::LicenseScan => "external.license.read",
@@ -43,6 +46,7 @@ impl DevelopmentEffectKind {
             Self::PerformanceRun => "performance.execute",
             Self::LanguageCutover => "migration.language.cutover",
             Self::RemoteRecovery => "git.remote.recovery",
+            Self::ReleaseLifecycle => "release.lifecycle.test",
         }
     }
 
@@ -55,6 +59,7 @@ impl DevelopmentEffectKind {
                 | Self::MigrationExecute
                 | Self::LanguageCutover
                 | Self::RemoteRecovery
+                | Self::ReleaseLifecycle
         )
     }
 }

@@ -4,9 +4,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::development_v2::CoverageState;
-use crate::{ProjectId, Sha256Hash};
+use crate::{EvaluationRunId, ProjectId, Sha256Hash};
 
 pub const FAILURE_RECORD_SCHEMA_ID: &str = "star.failure-record";
+pub const REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID: &str =
+    "star.reproduction-attempt-observation";
 pub const REPRODUCTION_PACK_V2_SCHEMA_ID: &str = "star.reproduction-pack";
 pub const REGRESSION_RECORD_SCHEMA_ID: &str = "star.regression-record";
 pub const RECOVERY_PLAN_V2_SCHEMA_ID: &str = "star.recovery-plan";
@@ -132,6 +134,29 @@ pub enum ReproductionResult {
     Incomplete,
 }
 
+/// Normalized semantic result emitted by a registered reproduction adapter.
+///
+/// The Controller seals the canonical fingerprint of this value into a
+/// `DevelopmentEffectReceiptV1`; a caller cannot promote an unexecuted attempt
+/// to a complete reproduction outcome by merely constructing a pack payload.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReproductionAttemptObservationV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub attempt: u32,
+    pub result: ReproductionResult,
+    pub family_fingerprint: Option<Sha256Hash>,
+    pub occurrence_fingerprint: Option<Sha256Hash>,
+    pub environment_fingerprint: Sha256Hash,
+    pub input_fingerprint: Sha256Hash,
+    pub duration_ms: u64,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
+    #[serde(default)]
+    pub limitations: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReproductionAttemptV2 {
@@ -146,6 +171,10 @@ pub struct ReproductionAttemptV2 {
     pub evidence_refs: Vec<String>,
     #[serde(default)]
     pub limitations: Vec<String>,
+    /// Receipt for the terminal registered ToolInvocation that produced this
+    /// semantic observation. Complete outcomes require this reference.
+    #[serde(default)]
+    pub effect_receipt_ref: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -511,6 +540,13 @@ pub struct RadarPriority {
     pub stable_identity: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluationRunEvidenceRef {
+    pub evaluation_run_id: EvaluationRunId,
+    pub run_fingerprint: Sha256Hash,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MaintenanceRadarItem {
@@ -531,6 +567,8 @@ pub struct MaintenanceRadarItem {
     pub suppression_refs: Vec<String>,
     #[serde(default)]
     pub evidence_refs: Vec<String>,
+    #[serde(default)]
+    pub evaluation_run_refs: Vec<EvaluationRunEvidenceRef>,
     pub blocking: bool,
     pub freshness: ExternalFreshness,
     pub completeness: CoverageState,

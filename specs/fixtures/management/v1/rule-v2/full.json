@@ -1,0 +1,71 @@
+{
+  "analyzer_ref": "fixture",
+  "applies_to_check_families": [
+    "fixture"
+  ],
+  "category": "fixture",
+  "default_confidence": "low",
+  "default_severity": "info",
+  "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "evidence_contract": {
+    "raw_output_requires_artifact_ref": false,
+    "required_evidence_kinds": [
+      "fixture"
+    ]
+  },
+  "fingerprint_contract_version": 0,
+  "fixture_manifest_refs": [
+    {
+      "document_id": "fixture",
+      "revision": 0,
+      "schema_id": "fixture",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "gate_floor": {
+    "default_confidence": "low",
+    "default_severity": "info",
+    "protected_gate_effect": "none",
+    "ratchet_eligible": false
+  },
+  "identity_anchor": "fixture",
+  "identity_contract_version": 0,
+  "lifecycle": "active",
+  "location_contract": {
+    "allowed_location_kinds": [
+      "fixture"
+    ],
+    "project_relative_paths_only": false,
+    "symbol_binding_allowed": false
+  },
+  "parameter_schema_ref": "fixture",
+  "producer_kind": "built_in_analyzer",
+  "producer_ref": "fixture",
+  "redaction_contract_version": 0,
+  "remediation_contract": {
+    "allowed_action_kinds": [
+      "fixture"
+    ],
+    "allowed_target_selector_kinds": [
+      "fixture"
+    ],
+    "required_recheck_families": [
+      "fixture"
+    ]
+  },
+  "remediation_recipe_refs": [
+    "fixture"
+  ],
+  "rule_domain": "scan_finding",
+  "rule_id": "fixture",
+  "rule_version": "fixture",
+  "schema_id": "star.rule",
+  "schema_version": 2,
+  "source_kinds": [
+    "file"
+  ],
+  "supported_languages": [
+    "fixture"
+  ],
+  "title": "fixture"
+}

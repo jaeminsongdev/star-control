@@ -8,6 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use star_contracts::{
     GoalId, RunId, Sha256Hash, canonical_sha256,
+    config_v1::{ConfigLayerV1, ConfigOverrideV1, ConfigSourceKindV1, ConfigSourceRefV1},
     orchestration::{
         GOAL_RECORD_SCHEMA_ID, GOAL_RECORD_SCHEMA_VERSION, GoalPlanItem, GoalPlanItemStatus,
         GoalQuestion, GoalRecord, GoalRunState, GoalRunStatus, GoalStatus, goal_timestamp_now,
@@ -31,6 +32,8 @@ struct GoalStoreFile {
     generation: u64,
     goals: BTreeMap<String, GoalRecord>,
     idempotency: BTreeMap<String, GoalStartReplay>,
+    #[serde(default)]
+    goal_configs: BTreeMap<String, GoalConfigRecord>,
 }
 
 impl Default for GoalStoreFile {
@@ -41,6 +44,7 @@ impl Default for GoalStoreFile {
             generation: 0,
             goals: BTreeMap::new(),
             idempotency: BTreeMap::new(),
+            goal_configs: BTreeMap::new(),
         }
     }
 }
@@ -52,12 +56,74 @@ struct GoalStartReplay {
     input_fingerprint: Sha256Hash,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GoalConfigRecord {
+    goal_id: GoalId,
+    overrides: Vec<ConfigOverrideV1>,
+    config_fingerprint: Sha256Hash,
+}
+
+impl GoalConfigRecord {
+    fn seal(goal_id: GoalId, mut overrides: Vec<ConfigOverrideV1>) -> Result<Self, GoalStoreError> {
+        overrides.sort_by(|left, right| left.key.cmp(&right.key));
+        if overrides.is_empty()
+            || overrides.len() > 128
+            || overrides.windows(2).any(|pair| pair[0].key == pair[1].key)
+            || serde_json::to_value(&overrides)
+                .ok()
+                .and_then(|value| star_contracts::canonical::jcs_bytes(&value).ok())
+                .map(|bytes| bytes.len() > 64 * 1024)
+                .unwrap_or(true)
+        {
+            return Err(GoalStoreError::Invalid);
+        }
+        let mut record = Self {
+            goal_id,
+            overrides,
+            config_fingerprint: Sha256Hash::digest(b"star.goal-config.pending"),
+        };
+        record.config_fingerprint = record.expected_fingerprint()?;
+        Ok(record)
+    }
+
+    fn validate(&self) -> Result<(), GoalStoreError> {
+        if self.overrides.is_empty()
+            || self.overrides.len() > 128
+            || self
+                .overrides
+                .windows(2)
+                .any(|pair| pair[0].key >= pair[1].key)
+            || serde_json::to_value(&self.overrides)
+                .ok()
+                .and_then(|value| star_contracts::canonical::jcs_bytes(&value).ok())
+                .map(|bytes| bytes.len() > 64 * 1024)
+                .unwrap_or(true)
+            || self.expected_fingerprint()? != self.config_fingerprint
+        {
+            return Err(GoalStoreError::Corrupt);
+        }
+        Ok(())
+    }
+
+    fn expected_fingerprint(&self) -> Result<Sha256Hash, GoalStoreError> {
+        canonical_sha256(&serde_json::json!({
+            "domain":"star.goal-config",
+            "version":1,
+            "goal_id":self.goal_id,
+            "overrides":self.overrides,
+        }))
+        .map_err(|_| GoalStoreError::Invalid)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GoalStartRequest {
     pub objective: String,
     pub project_key: Option<String>,
     pub question: Option<(String, String)>,
     pub idempotency_key: String,
+    pub config_overrides: Vec<ConfigOverrideV1>,
 }
 
 #[derive(Debug, Error)]
@@ -116,6 +182,11 @@ impl GoalStore {
                 .idempotency
                 .values()
                 .any(|replay| !file.goals.contains_key(replay.goal_id.as_str()))
+            || file.goal_configs.iter().any(|(key, config)| {
+                key != config.goal_id.as_str()
+                    || !file.goals.contains_key(key)
+                    || config.validate().is_err()
+            })
         {
             return Err(GoalStoreError::Corrupt);
         }
@@ -140,12 +211,24 @@ impl GoalStore {
             prompt: prompt.trim().to_owned(),
             answer: None,
         });
-        let input_fingerprint = canonical_sha256(&serde_json::json!({
-            "objective": objective,
-            "project_key": project_key,
-            "question": question,
-        }))
-        .map_err(|_| GoalStoreError::Invalid)?;
+        let input_fingerprint_payload = if request.config_overrides.is_empty() {
+            serde_json::json!({
+                "objective": objective,
+                "project_key": project_key,
+                "question": question,
+            })
+        } else {
+            serde_json::json!({
+                "domain":"star.goal-start-input",
+                "version":2,
+                "objective": objective,
+                "project_key": project_key,
+                "question": question,
+                "config_overrides": request.config_overrides,
+            })
+        };
+        let input_fingerprint =
+            canonical_sha256(&input_fingerprint_payload).map_err(|_| GoalStoreError::Invalid)?;
         if let Some(replay) = self.file.idempotency.get(&request.idempotency_key) {
             if replay.input_fingerprint != input_fingerprint {
                 return Err(GoalStoreError::IdempotencyConflict);
@@ -182,6 +265,10 @@ impl GoalStore {
         .seal()
         .map_err(|_| GoalStoreError::Invalid)?;
         self.file.goals.insert(goal_id.to_string(), goal.clone());
+        if !request.config_overrides.is_empty() {
+            let config = GoalConfigRecord::seal(goal_id.clone(), request.config_overrides)?;
+            self.file.goal_configs.insert(goal_id.to_string(), config);
+        }
         self.file.idempotency.insert(
             request.idempotency_key,
             GoalStartReplay {
@@ -199,6 +286,26 @@ impl GoalStore {
             .get(goal_id)
             .cloned()
             .ok_or(GoalStoreError::NotFound)
+    }
+
+    pub fn config_layer(&self, goal_id: &str) -> Result<Option<ConfigLayerV1>, GoalStoreError> {
+        let goal = self
+            .file
+            .goals
+            .get(goal_id)
+            .ok_or(GoalStoreError::NotFound)?;
+        Ok(self
+            .file
+            .goal_configs
+            .get(goal_id)
+            .map(|record| ConfigLayerV1 {
+                source: ConfigSourceRefV1 {
+                    source_kind: ConfigSourceKindV1::Goal,
+                    source_id: format!("goal:{}", goal.goal_id),
+                    source_fingerprint: record.config_fingerprint.clone(),
+                },
+                overrides: record.overrides.clone(),
+            }))
     }
 
     pub fn answer(
@@ -465,6 +572,7 @@ mod tests {
                 project_key: Some("star-control".to_owned()),
                 question: None,
                 idempotency_key: key.to_owned(),
+                config_overrides: Vec::new(),
             })
             .unwrap()
     }
@@ -481,9 +589,56 @@ mod tests {
                 project_key: None,
                 question: None,
                 idempotency_key: "idem-1".to_owned(),
+                config_overrides: Vec::new(),
             })
             .unwrap_err();
         assert!(matches!(error, GoalStoreError::IdempotencyConflict));
+    }
+
+    #[test]
+    fn goal_config_is_fingerprinted_persistent_and_idempotency_bound() {
+        let mut store = store("config");
+        let path = store.path.clone();
+        let config_overrides = vec![ConfigOverrideV1 {
+            key: "scan.max_files".to_owned(),
+            value: star_contracts::config_v1::ConfigValueV1::Integer(250),
+        }];
+        let goal = store
+            .start(GoalStartRequest {
+                objective: "bounded scan".to_owned(),
+                project_key: Some("star-control".to_owned()),
+                question: None,
+                idempotency_key: "goal-config".to_owned(),
+                config_overrides: config_overrides.clone(),
+            })
+            .unwrap();
+        let layer = store.config_layer(goal.goal_id.as_str()).unwrap().unwrap();
+        assert_eq!(layer.source.source_kind, ConfigSourceKindV1::Goal);
+        assert_eq!(layer.overrides, config_overrides);
+        drop(store);
+
+        let mut reopened = GoalStore::load(path).unwrap();
+        assert_eq!(
+            reopened
+                .config_layer(goal.goal_id.as_str())
+                .unwrap()
+                .unwrap()
+                .overrides,
+            config_overrides
+        );
+        let conflict = reopened
+            .start(GoalStartRequest {
+                objective: "bounded scan".to_owned(),
+                project_key: Some("star-control".to_owned()),
+                question: None,
+                idempotency_key: "goal-config".to_owned(),
+                config_overrides: vec![ConfigOverrideV1 {
+                    key: "scan.max_files".to_owned(),
+                    value: star_contracts::config_v1::ConfigValueV1::Integer(125),
+                }],
+            })
+            .unwrap_err();
+        assert!(matches!(conflict, GoalStoreError::IdempotencyConflict));
     }
 
     #[test]
@@ -495,6 +650,7 @@ mod tests {
                 project_key: None,
                 question: Some(("q1".to_owned(), "Proceed?".to_owned())),
                 idempotency_key: "idem-q".to_owned(),
+                config_overrides: Vec::new(),
             })
             .unwrap();
         assert_eq!(goal.status, GoalStatus::WaitingQuestion);

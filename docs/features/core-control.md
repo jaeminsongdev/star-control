@@ -54,7 +54,7 @@ CLI-only change planning은 `executor_kind=deterministic_local`이므로 RouteDe
 
 Project Catalog와 Code Index는 Git source를 대체하지 않는 derived projection이다. 최초 scan은 CLI에서 수동 실행하고 이후 Git revision·file hash 기반 incremental scan을 사용한다. semantic adapter가 없으면 syntax·text로 fallback하고 그 한계를 숨기지 않는다. 이 기능은 project source를 수정하거나 자체 scheduler·AI 호출을 요구하지 않는다.
 
-현재 A03의 이 확장은 **1단계 목표 설계**이며 scanner·parser·DB·watcher와 CLI 제품 구현 완료를 뜻하지 않는다.
+현재 A03의 scanner, text/Rust syntax·optional semantic adapter, DB/index cache와 full/incremental CLI는 제품 경로에 구현돼 있다. Project watcher는 정확성 전제가 아니며 source를 바꾸지 않는 외부 주기 실행은 같은 `scan run --mode incremental` command를 호출한다. Star-Control 자체 scheduler를 추가하지 않는다.
 
 ## A04. 변경 영향·위험 분석
 

@@ -464,9 +464,9 @@ doctor는 `core.autocrlf`, code page, long-path policy를 관찰만 하며 바�
 
 `CleanRoomReadiness`는 `ready`, `not_ready`, `unknown`, `not_required`다. required 필드 누락, unregistered command, mutable source, lockfile 불일치, 필요한 tool 부재는 `not_ready`; 의미 판단이나 probe 부재는 `unknown`/`HUMAN_REVIEW`다.
 
-## CLI-only 목표 surface
+## CLI-only 현재 surface
 
-다음은 구현 시 Catalog에 등록해야 할 목표 command다. 현재 실행 가능한 명령 예시로 해석하지 않는다.
+다음 command ID는 P-0054/P-0056 현재 Controller application과 `star.exe` CLI에 연결돼 있다. CLI spelling은 각각 `star contract snapshot`, `star contract compare`, `star docs check`, `star config trace`, `star project doctor`, `star environment fingerprint`, `star clean-room readiness`이며 stable JSON 결과는 같은 command ID를 사용한다.
 
 | command ID | 목적 | source/system effect |
 |---|---|---|

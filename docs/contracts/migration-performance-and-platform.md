@@ -781,6 +781,7 @@ registered ToolDescriptor + exact descriptor hash + bounded arguments
 - `DevelopmentEffectReceiptV1`은 Project, effect kind, exact subject ref/fingerprint, OperationId, tool/descriptor/arguments/executable SHA-256, approval·permission·Gate ref, 시작·종료 시각, source-effect 여부, artifact·result fingerprint와 limitation을 canonical fingerprint에 포함한다.
 - effect state는 `succeeded|failed|partial|outcome_unknown`을 보존한다. process exit 0만으로 succeeded를 합성하거나 partial/unknown을 재실행하지 않는다.
 - `migration_execute`, `performance_run`, `language_cutover`는 각각 전용 Permission Action을 요구하고 destructive lane은 durable approval·permission·Gate가 모두 없으면 영수증을 만들 수 없다.
+- `migration dry-run|backup|rehearse|execute|resume|rollback`은 모두 terminal effect receipt를 요구한다. `migration validate`만 source effect가 아니라 current M3 ValidationResult·Gate를 소비하는 단계라 별도 effect receipt 없이 validation report 결속으로 판정한다.
 - migration attempt의 tool observation·receipt, performance run의 evidence ref, language cutover의 effect receipt가 exact plan/workload fingerprint와 다르면 stale input으로 거부한다.
 - source mutation을 만드는 codegen/codemod는 이 영수증만으로 canonical source가 되지 않는다. M4 immutable PatchSet과 pre/post Gate를 계속 사용한다.
 
@@ -803,6 +804,13 @@ M8 adapter는 GateDecision을 만들지 않는다. M2가 Profile rule/check/evid
 - required behavior dimension이 partial/not_run/unverified이면 language equivalence는 pass가 아니다.
 - complete evidence 뒤 남은 의미 판단은 CLI-only `HUMAN_REVIEW`다.
 - evidence missing/stale, destructive approval 누락, outcome unknown, live partial, rollback 실패는 `BLOCK`이다.
+
+현재 Controller는 caller가 보낸 상태 문자열을 그대로 신뢰하지 않는다.
+
+- `MigrationValidationReport.state=pass`는 같은 plan의 실제 succeeded attempt, current `ValidationResultV2`, plan이 지정한 ValidationPlan의 current `AUTO_PASS` Gate, after subject와 receipt/validation/Gate에 연결된 invariant evidence를 모두 요구한다.
+- `RestoreVerificationRecord.state=verified`는 실제 backup phase receipt의 output artifact/result fingerprint가 `backup_fingerprint`와 일치하고, restored subject에 대한 current complete stable behavior validation이 있어야 한다.
+- `EquivalenceReport.equivalence_state=equivalent`는 candidate subject에 결속된 current compile/test/consumer ValidationResult, declared comparison ValidationPlan의 `AUTO_PASS` Gate, 실제 pass PerformanceComparison, required platform/dimension evidence를 다시 읽는다.
+- 위 참조가 없거나 다른 Project·checkout·effective config·subject이면 각각 `MIGRATION_INVARIANT_FAILED`, `MIGRATION_BACKUP_UNVERIFIED`, `LANGUAGE_EQUIVALENCE_INCOMPLETE`로 publish/cutover를 거부한다.
 
 ## 현재 CLI surface
 

@@ -1,0 +1,20 @@
+{
+  "case_refs": [],
+  "comparability_dimensions": [],
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "corpus_ref": "fixture",
+  "evaluation_context": "cli_only",
+  "max_attempts_per_case": 0,
+  "minimum_sample_count": 0,
+  "mode": "offline",
+  "policy_id": "fixture",
+  "policy_version": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "protected_metric_ids": [],
+  "require_provider_cost": false,
+  "revision": 0,
+  "schema_id": "star.evaluation-policy",
+  "schema_version": 1,
+  "source_ref": "fixture",
+  "subject_kind": "route_policy"
+}

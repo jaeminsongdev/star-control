@@ -2,7 +2,7 @@
 
 ## 상태와 목적
 
-이 문서는 Star-Control 10단계인 **CI·Release·배포 준비, 규칙 평가와 최종 제품 완성**의 의미·상태·Gate·구현 순서 정본이다. P-0051의 `ReleaseManifest` v2·`EvaluationRun` v2·Catalog lifecycle·build-once engine과 P-0053 local release audit 위에 P-0054가 artifact byte 재검증, M3 evidence binding, promote/lifecycle, evaluation/catalog, exact release approval와 Controller·CLI를 연결했다. P-0055는 exact `ReleaseAssetBindingV1`과 `star-adapter-github`를 Controller publisher lifecycle에 연결해 draft-first/no-clobber/publish/read-only reconcile/remote byte download를 구현했다. fake provider corpus는 partial, digest mismatch, signed-byte 재후보화, rollback과 outcome unknown을 검증하고, authenticated disposable draft는 upload·provider digest·download digest·cleanup을 검증했다. Authenticode signing과 public Stable publication은 실행하지 않았으며 unsigned Stable은 apply 전에 fail-closed다. 구현 증거는 [M10 제품 Slice](../testing/m10-release-evaluation-evidence-2026-07-20.md), [P-0053 최종 출시 감사](../testing/p53-final-release-audit-2026-07-20.md), [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)와 [P-0055 비서명 외부 봉인](../testing/p0055-nonsigning-external-seal-2026-07-23.md)에 고정한다.
+이 문서는 Star-Control 10단계인 **CI·Release·배포 준비, 규칙 평가와 최종 제품 완성**의 의미·상태·Gate·구현 순서 정본이다. P-0051의 `ReleaseManifest` v2·`EvaluationRun` v2·Catalog lifecycle·build-once engine과 P-0053 local release audit 위에 P-0054가 artifact byte 재검증, M3 evidence binding, promote/lifecycle, evaluation/catalog, exact release approval와 Controller·CLI를 연결했다. P-0055는 exact `ReleaseAssetBindingV1`과 `star-adapter-github`를 Controller publisher lifecycle에 연결했다. P-0056은 precommitted `EvaluationCaseDefinitionV1`·`EvaluationPolicyV1`, provider-verified `CostRecordV1`·derived `BudgetSnapshotV1`, actual Finding/Suppression metric, Radar 역참조와 `FinalProductAuditV1`을 추가하고 저장된 ReleaseManifest·EvaluationRun의 exact fingerprint를 read path에서 다시 검증한다. Authenticode signing과 public Stable publication은 실행하지 않았으며 unsigned Stable은 apply 전에 fail-closed다. 구현 증거는 [M10 제품 Slice](../testing/m10-release-evaluation-evidence-2026-07-20.md), [P-0053 최종 출시 감사](../testing/p53-final-release-audit-2026-07-20.md), [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md), [P-0055 비서명 외부 봉인](../testing/p0055-nonsigning-external-seal-2026-07-23.md)과 [P-0056 최신 감사](../testing/p0056-current-functional-recovery-audit-2026-07-24.md)에 고정한다.
 
 10단계는 0~9단계를 다시 구현하거나 별도 release engine으로 복제하지 않는다. 앞 단계가 만든 current source·계획·검사·artifact·호환성·복구·원격 관찰을 같은 신원으로 묶어 다음 두 질문에 답한다.
 
@@ -534,6 +534,13 @@ case result는 최소 다음 identity를 갖는다.
 | `cost_refs` | provider가 검증한 CostRecord만 |
 | `limitations` | missing ground truth·sample·environment·provider data |
 
+`EvaluationCaseDefinitionV1`과 `EvaluationPolicyV1`은 결과를 보기 전에 Project Git의 safe project-relative `evals/` JSON source로 고정한다. Controller의 `evaluation case|policy publish`는 duplicate key·absolute/escape/reparse path를 거부하고 source byte를 seal한 derived management record만 저장한다. `evaluation run|show|compare|recommend|radar|catalog transition`은 exact source를 다시 읽어 stored projection과 비교하며 drift면 `EVALUATION_POLICY_CHANGED`다.
+
+- case definition은 `project_id`, case ID/version, corpus/context, ground-truth adjudication·evidence와 `source_ref`를 fingerprint로 묶는다.
+- policy는 subject/context/mode/corpus, exact case ref set, minimum sample, max attempts, seven comparability dimension, protected metric과 `require_provider_cost=true`를 묶는다.
+- run input의 adjudication·sample·attempt 값은 authoritative source가 아니다. Controller가 exact policy/case source 값으로 materialize하며 case 누락·추가를 거부한다.
+- positive ground-truth case에 candidate Diagnostic이 0개면 unresolved로 숨기지 않고 false negative로 계산한다. Disposition이 ground truth와 충돌하면 자동 accept가 아니라 unresolved다.
+
 ## 평가 metric
 
 Rule·Check·Profile·Recipe별로 raw case result에서 다음 metric을 계산한다.
@@ -556,6 +563,10 @@ Rule·Check·Profile·Recipe별로 raw case result에서 다음 metric을 계산
 | monetary cost | provider가 검증 가능한 금액과 price source를 제공했을 때만 |
 
 precision·recall·rate를 계산할 때 denominator와 unadjudicated case 수를 함께 표시한다. denominator 0은 100%가 아니라 `not_computable`이다. suppression된 finding도 raw finding·Gate·평가에서 사라지지 않는다.
+
+`CostRecordV1`은 exact Project/scope, current ValidationRun ref, provider usage evidence, optional ISO currency microunit와 price/provider statement를 봉인한다. estimated value는 거부하고 unavailable은 0으로 만들지 않는다. `BudgetSnapshotV1`은 exact CostRecord set에서 observed/reserved/remaining과 `within_budget|approval_required|exhausted|unknown`을 파생한다. `cost record|show`, `budget snapshot|show`는 같은 Controller-owned repository 경로를 사용한다.
+
+finding/suppression metric은 caller count를 신뢰하지 않는다. Controller가 case별 current ValidationRun→GateDecision→DiagnosticEvaluation을 다시 읽고 raw Finding, baseline relation과 exact historical Suppression revision을 집계한다. 새 suppression, selector/expiry/permanent 완화로 broadened된 suppression, new/worsened finding 또는 relevant run을 덮지 못한 Gate는 자동 accept를 차단한다.
 
 ## baseline·candidate 비교
 
@@ -636,6 +647,8 @@ Maintenance Radar item은 오래된 Rule·Check·Profile·Recipe에 대해 다�
 - active Catalog/Profile/Recipe/Rule/Check reference와 historical evidence count
 - deprecation deadline·owner·next review trigger
 
+평가에서 생성한 Radar는 `MaintenanceRadarItem.evaluation_run_refs`가 exact EvaluationRun ID/fingerprint를 소유한다. EvaluationRun input의 `radar_item_refs`는 Controller가 비우므로 caller가 downstream success ref를 선입력할 수 없다. source Catalog lifecycle은 자동 역쓰기하지 않고, reviewed transition은 exact current EvaluationRun과 trial/replacement 조건을 다시 검증한다.
+
 Catalog item lifecycle은 다음처럼 고정한다.
 
 | 상태 | 새 plan 선택 | historical evidence | 요구사항 |
@@ -667,45 +680,44 @@ Catalog item lifecycle은 다음처럼 고정한다.
 
 ## CLI application 계약
 
-아래는 목표 command surface이며 현재 구현을 뜻하지 않는다.
+아래는 현재 구현된 `star.exe` command surface다. CLI는 DB·artifact·provider를 직접 수정하지 않고 Controller application command만 보낸다.
 
 ### read-only·local effect 없음
 
 ```text
-star release plan
-star release status
-star release verify --layer local_quick|target|full|release
-star release package dry-run
-star release manifest show
-star eval plan
-star eval run --mode offline|replay|shadow
-star eval compare
-star eval status
-star catalog lifecycle show
+star release show|status|audit <release-manifest-id>
+star cost show <project-id> <cost-record-id>
+star budget show <project-id> <snapshot-id>
+star evaluation case|policy show ...
+star evaluation show|compare|recommend <evaluation-run-id>
 ```
 
-`verify`가 실제 Check process를 실행하면 project source에는 effect가 없지만 process·artifact write·optional network/cost permission은 ValidationPlan에 표시한다. `plan|status|show`는 external effect가 없다.
+`show|status|audit|compare|recommend`는 external effect가 없다. `audit`은 stored ReleaseManifest fingerprint·artifact-set, 현재 handler registry, 설치 우선 Profile Catalog와 receipt-bound lifecycle evidence를 다시 읽으며 caller가 제출한 완료 boolean을 받지 않는다.
 
-### local install lifecycle effect
+### local Controller mutation·lifecycle evidence
 
 ```text
-star release install-test
-star release update-test
-star release rollback-test
-star release uninstall-test
+star release candidate create <project-id> <candidate-json>
+star release artifacts verify <project-id> <release-manifest-id> <artifacts-json>
+star release verification record <project-id> <release-manifest-id> <verification-json>
+star release promote <release-manifest-id>
+star release lifecycle publish <project-id> <lifecycle-id> <release-manifest-id> <effect-receipt-id> <evidence-json>
+star cost record <project-id> <cost-record-json>
+star budget snapshot <project-id> <budget-input-json>
+star evaluation case|policy publish <project-id> <source-ref>
+star evaluation run <project-id> <input-json>
+star evaluation radar <project-id> <evaluation-run-id> <snapshot-id> --input <json-file>
+star evaluation catalog publish|transition ...
 ```
 
-이 명령은 Star-Control-owned disposable environment에서만 실행하며 실제 사용자 설치를 암묵 변경하지 않는다. target root·artifact digest·state fixture·cleanup ownership을 permit에 결합한다.
+`release.lifecycle.publish`는 installer를 대신 실행하거나 caller 성공 상태를 그대로 저장하지 않는다. registered lifecycle effect의 terminal `DevelopmentEffectReceiptV1`, exact artifact-set digest, architecture/runtime state와 semantic result fingerprint가 일치하는 complete evidence만 받는다. actual install/update/rollback/repair/uninstall은 Star-Control-owned disposable environment에서 실행하고 target root·artifact digest·user-data preservation·cleanup ownership을 permit과 receipt에 결합한다.
 
 ### remote effect
 
 ```text
-star release approve
-star release publish
-star release publish verify
-star release withdraw
-star release deploy
-star release deploy rollback
+star release publish prepare <release-manifest-id> <before-snapshot-id>
+star release publish authorize <release-manifest-id> <approval-id>
+star release publish apply <release-manifest-id>
 ```
 
 `approve`는 effect를 실행하지 않고 exact ApprovalRequest decision을 기록한다. `publish|withdraw|deploy|rollback`은 각각 별도 approval과 before/after snapshot을 요구한다. `--yes`, `personal_auto`, standing remote scope와 이전 승인으로 이 경계를 우회하지 않는다.
@@ -767,6 +779,8 @@ star-application/evaluation
 
 23개 기능 모두 기본 의미 정본과 물리 owner가 있다. 상세 Package 표의 단일 정본은 [Repository·Package 구조](../architecture/repository-layout.md#23개-구현-기능의-소유-package)다.
 
+`star release audit <release-manifest-id>`는 위 표를 문서상 완료로 반복하지 않는다. 현재 binary의 direct/management handler registry에서 각 A01~D03 대표 command surface를 확인하고, 실제 설치 우선 Profile Catalog가 exact 16 built-in set으로 resolve되는지, `rust_style_auto_fix`가 `refactor_codemod -> ai_development_validation` parent closure·format/lint/build/test·pre/post Gate·network denied policy를 유지하는지 계산한다. exact ReleaseManifest/artifact-set, x64/ARM64 lifecycle record와 Profile fingerprint를 `FinalProductAuditV1`로 봉인한다. 내부 23/16 conformance와 signing/provider 같은 외부 Gate는 별도 축이며 ARM64 Preview simulation은 `native_unverified` limitation이지 Stable native 성공이 아니다.
+
 ## 공통 개발 관리 자산 소유권 감사
 
 | 자산 | canonical/source | derived/runtime | 변경 writer·경계 |
@@ -818,7 +832,7 @@ Star-Control이 소유하는 것은 이 도구의 **선택 가능한 descriptor,
 
 | 구분 | 현재 상태 |
 |---|---|
-| 구현됨 | P0와 P-0041~P-0055 bounded M1~M11 Slice, required core 17/17 source/current readiness, P-0026 installer transport, P-0039 4-EXE updater lifecycle, manifest-owned recovery·무재시작 reconcile, payload-content Runtime identity, M10 release/evaluation engine, exact GitHub publisher·receipt/readback 경로 |
+| 구현됨 | P0와 P-0041~P-0056 bounded M1~M11 Slice, required core 17/17 source/current readiness, P-0026 installer transport, P-0039 4-EXE updater lifecycle, manifest-owned recovery·무재시작 reconcile, payload-content Runtime identity, receipt-bound ReleaseManifest/lifecycle, precommitted evaluation case/policy, actual finding/suppression/cost/budget/Radar와 23/16 final audit, exact GitHub publisher·receipt/readback 경로 |
 | 후속 제품 확장 | current bounded Slice의 pass를 임의 provider/language·native ARM64·signed publication에 일반화하지 않음 |
 | 외부/환경 gate | Authenticode certificate·private key·trusted timestamp provider, signed Windows x64 lifecycle, signed provenance와 signed final GitHub publication/readback |
 | 별도 사용자 승인 gate | package/dependency 설치, system setting, paid CI/signing, publish·deploy·withdrawal·remote/account effect |
@@ -841,6 +855,7 @@ P-0055 비서명 외부·복구 seal은 exact source `0d0eca9a`, FULL 10/10, REL
 - `RELEASE_METADATA_INCOMPLETE`
 - `RELEASE_PLATFORM_EVIDENCE_MISSING`
 - `RELEASE_INSTALL_LIFECYCLE_FAILED`
+- `RELEASE_LIFECYCLE_EVIDENCE_MISMATCH`
 - `RELEASE_APPROVAL_REQUIRED`
 - `RELEASE_APPROVAL_STALE`
 - `RELEASE_REMOTE_RESULT_UNVERIFIED`
@@ -849,6 +864,8 @@ P-0055 비서명 외부·복구 seal은 exact source `0d0eca9a`, FULL 10/10, REL
 - `EVALUATION_GROUND_TRUTH_INCOMPLETE`
 - `EVALUATION_VALIDATOR_WEAKENING`
 - `EVALUATION_POLICY_CHANGED`
+- `EVALUATION_RUN_EVIDENCE_MISSING`
+- `EVALUATION_CATALOG_EVIDENCE_MISMATCH`
 - `CATALOG_LIFECYCLE_MIGRATION_REQUIRED`
 
 최소 event 순서는 다음이다.

@@ -1,15 +1,23 @@
 {
-  "active": false,
   "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "decided_at": "2026-01-01T00:00:00Z",
+  "decided_by": {
+    "actor_id": "fixture",
+    "actor_type": "user",
+    "auth_source": "fixture",
+    "display_name": "fixture"
+  },
   "decision": "needs_action",
-  "diagnostic_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "disposition_id": "dsp_00000000000000000000000000",
   "project_id": "prj_00000000000000000000000000",
+  "provenance": "fixture",
   "reason": "fixture",
   "reason_code": "fixture",
+  "review_evidence_refs": [],
   "revision": 0,
   "schema_id": "star.disposition",
   "schema_version": 2,
-  "subject_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  "status": "active",
+  "subject_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_kind": "finding"
 }

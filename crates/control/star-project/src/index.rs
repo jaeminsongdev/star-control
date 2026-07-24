@@ -35,6 +35,17 @@ use crate::{FileObservation, ProjectError, ProjectObservation};
 pub struct IndexPolicy {
     pub required_tier: IndexTier,
     pub max_tier: IndexTier,
+    pub fallback_to_lower_tier: bool,
+    pub max_symbols: usize,
+    pub max_references: usize,
+    pub max_graph_edges: usize,
+    pub cross_project_edges: bool,
+    pub hardcoding_rules_enabled: bool,
+    pub hardcoding_include_tests: bool,
+    pub hardcoding_include_fixtures: bool,
+    pub hardcoding_include_docs_examples: bool,
+    pub hardcoding_include_generated: bool,
+    pub hardcoding_include_vendor: bool,
     pub max_text_tokens_per_file: usize,
     pub classification_contract_version: u32,
     pub text_adapter_version: u32,
@@ -45,6 +56,17 @@ impl Default for IndexPolicy {
         Self {
             required_tier: IndexTier::Text,
             max_tier: IndexTier::Semantic,
+            fallback_to_lower_tier: true,
+            max_symbols: 5_000_000,
+            max_references: 20_000_000,
+            max_graph_edges: 25_000_000,
+            cross_project_edges: true,
+            hardcoding_rules_enabled: true,
+            hardcoding_include_tests: false,
+            hardcoding_include_fixtures: false,
+            hardcoding_include_docs_examples: false,
+            hardcoding_include_generated: false,
+            hardcoding_include_vendor: false,
             max_text_tokens_per_file: 250_000,
             classification_contract_version: 1,
             text_adapter_version: 1,
@@ -303,6 +325,12 @@ pub fn build_code_index(
     projection
         .references
         .dedup_by(|left, right| left.symbol_reference_id == right.symbol_reference_id);
+    if projection.symbols.len() > request.policy.max_symbols
+        || projection.references.len() > request.policy.max_references
+        || projection.edges.len() > request.policy.max_graph_edges
+    {
+        return Err(ProjectError::ResourceLimit);
+    }
     projection
         .partitions
         .sort_by(|left, right| left.partition_key.cmp(&right.partition_key));
@@ -362,8 +390,11 @@ pub fn build_code_index(
         .partitions
         .sort_by(|left, right| left.partition_key.cmp(&right.partition_key));
 
-    let hardcoding_candidates =
-        detect_hardcoding_candidates(request, &projection.source_entries, &projection.entities)?;
+    let hardcoding_candidates = if request.policy.hardcoding_rules_enabled {
+        detect_hardcoding_candidates(request, &projection.source_entries, &projection.entities)?
+    } else {
+        Vec::new()
+    };
     let finding_input = versioned_fingerprint(
         "star.index-partition-input.hardcoding",
         1,
@@ -395,7 +426,7 @@ pub fn build_code_index(
         excluded_count: projection
             .source_entries
             .iter()
-            .filter(|source| !hardcoding_source_eligible(source))
+            .filter(|source| !hardcoding_source_eligible(source, request.policy))
             .count() as u64,
         cache_hit: false,
         limitations: Vec::new(),
@@ -1101,7 +1132,7 @@ fn detect_hardcoding_candidates(
         let Some(source) = source_by_path.get(file.path.as_str()).copied() else {
             return Err(ProjectError::InvalidManifest);
         };
-        if !hardcoding_source_eligible(source) {
+        if !hardcoding_source_eligible(source, request.policy) {
             continue;
         }
         let Some(text) = file.text.as_deref() else {
@@ -1255,14 +1286,21 @@ fn detect_hardcoding_candidates(
         .collect()
 }
 
-fn hardcoding_source_eligible(source: &SourceEntry) -> bool {
-    matches!(
+fn hardcoding_source_eligible(source: &SourceEntry, policy: &IndexPolicy) -> bool {
+    let primary_class_allowed = matches!(
         source.source_class,
         SourceClass::Source | SourceClass::Migration
-    ) && !source
-        .facets
-        .iter()
-        .any(|facet| matches!(facet.as_str(), "fixture" | "docs_example" | "generated"))
+    ) || (policy.hardcoding_include_tests
+        && source.source_class == SourceClass::Test)
+        || (policy.hardcoding_include_generated && source.source_class == SourceClass::Generated)
+        || (policy.hardcoding_include_vendor && source.source_class == SourceClass::Vendor);
+    primary_class_allowed
+        && (policy.hardcoding_include_fixtures
+            || !source.facets.iter().any(|facet| facet == "fixture"))
+        && (policy.hardcoding_include_docs_examples
+            || !source.facets.iter().any(|facet| facet == "docs_example"))
+        && (policy.hardcoding_include_generated
+            || !source.facets.iter().any(|facet| facet == "generated"))
 }
 
 fn hardcoding_candidate(

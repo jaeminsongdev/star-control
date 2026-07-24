@@ -4,7 +4,7 @@
 
 이 문서는 Star-Control 사용자 로드맵 **7단계**의 의미 정본이다. 제품 로드맵의 `P7. 원격 저장소 연동`과 번호가 같아 보일 수 있으므로, 이 문서와 관련 Schema·CLI에서는 `M7`을 안정된 단계 식별자로 사용한다.
 
-P-0048의 `ReproductionPack`·`MaintenanceRadar`와 normalized failure family 위에 P-0054가 failure capture/reproduce, local manifest/lockfile dependency·security·license observation, update candidate/plan, append-only persistence와 Controller·CLI를 연결했다. external condition의 missing/stale은 `unverified|partial`로 보존한다. debugger attach, OSV/NVD network refresh와 package-manager mutation은 pinned registered adapter·exact 승인이 없으면 실행하지 않으며 Star-Control이 취약점 DB·PKI·compiler를 재구현하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md)와 [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)에 고정한다.
+P-0048의 `ReproductionPack`·`MaintenanceRadar`와 normalized failure family 위에 P-0054가 failure capture/reproduce, local manifest/lockfile dependency·security·license observation, update candidate/plan, append-only persistence와 Controller·CLI를 연결했다. P-0056은 complete reproduction attempt를 실제 terminal registered `ToolInvocation`의 `DevelopmentEffectReceiptV1`과 semantic result fingerprint에 결속하고, `verified_fixed`를 current M3 validation·호환 가능한 `not_reproduced` pack·verified recurrence에 결속했다. external condition의 missing/stale은 `unverified|partial`로 보존한다. debugger attach, OSV/NVD network refresh와 package-manager mutation은 pinned registered adapter·exact 승인이 없으면 실행하지 않으며 Star-Control이 취약점 DB·PKI·compiler를 재구현하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md), [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md), [P-0056 감사](../testing/p0056-current-functional-recovery-audit-2026-07-24.md)에 고정한다.
 
 상위 소유권은 다음과 같다.
 
@@ -162,7 +162,7 @@ preflight는 source·manifest·lockfile을 쓰지 않으며 network에 접근하
 | environment | compatibility class, exact redacted fingerprint, relevant toolchain/runtime/package manager, manifest·lockfile refs |
 | input | input ArtifactRef 또는 deterministic generator descriptor, content fingerprint, seed |
 | expectation | expected result·exit class·assertion과 observed result |
-| attempts | rerun attempt, result, duration, fingerprint, variance와 raw evidence refs |
+| attempts | rerun attempt, result, duration, environment/input/failure fingerprint, raw evidence refs와 `effect_receipt_ref` |
 | artifacts | stdout·stderr·dump·trace·core·screenshot·generated result의 role, redaction, retention |
 | external conditions | service/version/state, clock/network/device 같은 조건과 검증 여부 |
 | minimization | reducer identity, original/reduced input fingerprints, semantic preservation evidence |
@@ -178,6 +178,8 @@ preflight는 source·manifest·lockfile을 쓰지 않으며 network에 접근하
 
 `not_reproduced`는 성공이나 해결을 의미하지 않는다. 외부 조건을 local evidence로 확인할 수 없으면 반드시 `blocked_external` 또는 `unverified`이며 Gate는 이를 pass 근거로 쓰지 않는다.
 
+`reproduced|different_failure|not_reproduced`는 complete outcome이다. 각 attempt는 `process.failure.reproduce` permission을 가진 terminal `tool.invoke`의 `DevelopmentEffectReceiptV1`을 참조해야 한다. Controller는 receipt의 Project, `failure_record:<id>` subject, failure occurrence fingerprint, executable·descriptor·arguments hash, process-start evidence와 `ReproductionAttemptObservationV1` canonical result fingerprint를 다시 확인한다. receipt가 없거나 다른 attempt에 재사용됐거나 adapter output과 caller payload가 다르면 pack을 publish하지 않는다. `blocked_external|incomplete`는 receipt 없이 보존할 수 있지만 partial evidence일 뿐 pass/fixed 근거가 아니다.
+
 ### 재현 절차
 
 M7 orchestration은 다음 순서를 사용한다.
@@ -190,7 +192,7 @@ M7 orchestration은 다음 순서를 사용한다.
 6. debugger·trace adapter는 사용자가 승인한 registered tool로만 연결하며 output을 ArtifactRef로 정규화한다.
 7. 수정 전 실패와 수정 후 성공은 `RegressionRecord`로 연결한다.
 
-rerun·reducer·bisect·debugger·trace의 각 실행은 독립 `ToolInvocation`과 PermissionDecision을 가진다. adapter가 “fixed”나 “passed”를 반환해도 core Gate가 required evidence를 다시 판정한다.
+rerun·reducer·bisect·debugger·trace의 각 실행은 독립 `ToolInvocation`과 PermissionDecision을 가진다. complete rerun은 추가로 effect receipt와 typed semantic observation을 가진다. adapter가 “fixed”나 “passed”를 반환해도 core Gate가 required evidence를 다시 판정한다.
 
 ## RegressionRecord와 재발
 
@@ -207,6 +209,16 @@ rerun·reducer·bisect·debugger·trace의 각 실행은 독립 `ToolInvocation`
 | `regression_state` | `candidate\|verified_fixed\|regressed\|resolved\|unverified` |
 
 `verified_fixed`는 before failure와 after success가 모두 current evidence이고 호환 가능할 때만 설정한다. 이후 같은 `family_fingerprint`가 호환 가능한 scope에서 verified되면 `regressed`다. fingerprint만 같지만 input·environment 호환성이 불명확하면 `candidate` 또는 `unverified`로 유지한다.
+
+현재 Controller는 `verified_fixed` publish 전에 다음을 모두 다시 읽는다.
+
+- before `FailureRecord`가 `verified`이고 Project·family가 일치한다.
+- `after_validation_ref`가 실제 저장된 M3 `ValidationResultV2`이며 `pass + complete + current + stable`이고 exact subject/effective-config fingerprint가 일치한다.
+- result가 참조한 실제 `ValidationRunV2` 중 하나가 failure의 check descriptor, executable, structured args, logical cwd와 environment fingerprint에 일치한다.
+- `evidence_refs`의 `ReproductionPackV2`가 같은 failure occurrence·input refs·seed에 결속되고, receipt가 있는 `not_reproduced` attempt의 input/environment fingerprint가 after run과 일치한다.
+- recurrence ref는 모두 같은 Project·family의 실제 `verified` FailureRecord다.
+
+하나라도 없거나 stale이면 `REGRESSION_EVIDENCE_MISMATCH`로 거부하며 caller가 보낸 `verification_state=verified`만으로 `fixed`를 만들지 않는다.
 
 flaky는 별도 성공 상태가 아니다. 동일 subject·input·seed에서 attempt 결과가 갈리면 `stability_state=flaky`이고 required evidence라면 최소 `HUMAN_REVIEW`, protected correctness path면 `BLOCK`이다.
 
@@ -465,7 +477,7 @@ Radar의 `valid_until`은 입력 suppression expiry, external data valid_until, 
 - `star maintenance radar`
 - `star tools call ...`, `star operations get|cancel ...`, `star development effect record ...`
 
-외부 refresh·debugger·license scanner·package manager는 registered Tool을 `tool.invoke`로 실행한다. Controller가 보존한 terminal Operation의 exact descriptor·arguments·executable SHA-256·permission·approval·result를 `DevelopmentEffectReceiptV1`로 봉인한 뒤에만 `security inspect`와 dependency status가 그 effect를 소비한다. `rollback-plan`은 계획을 만들 뿐 실행 승인을 내포하지 않는다. `deps prepare`도 required permission을 모두 받은 isolated preview만 수행하며 canonical source apply는 M4 PatchSet 경로에 남는다.
+bounded failure rerun과 외부 refresh·debugger·license scanner·package manager는 registered Tool을 `tool.invoke`로 실행한다. Controller가 보존한 terminal Operation의 exact descriptor·arguments·executable SHA-256·permission·approval·result를 `DevelopmentEffectReceiptV1`로 봉인한 뒤에만 `failures reproduce`, `security inspect`와 dependency status가 해당 effect를 소비한다. `rollback-plan`은 계획을 만들 뿐 실행 승인을 내포하지 않는다. `deps prepare`도 required permission을 모두 받은 isolated preview만 수행하며 canonical source apply는 M4 PatchSet 경로에 남는다.
 
 ## Permission과 효과
 
@@ -475,6 +487,7 @@ M7 Profile은 Profile metadata로 권한을 획득하지 못하며 더 엄격하
 |---|---|---|
 | source·manifest·lockfile read | allow | scope 안 read-only scan |
 | local derived document/evidence write | allow | redacted 공통 상태 저장 |
+| bounded registered failure rerun | descriptor policy | `process.failure.reproduce`, exact failure occurrence와 typed output |
 | `network_read` | prompt | advisory/version/license refresh |
 | `network_download` | prompt | package·tool·large external artifact download |
 | `dependency_change` | prompt | add/remove/update/lockfile change |
@@ -484,7 +497,7 @@ M7 Profile은 Profile metadata로 권한을 획득하지 못하며 더 엄격하
 
 `personal_auto` 같은 상위 mode도 M7의 network/download/dependency change와 sensitive capture를 자동 승인하지 않는다. 승인에는 action, Project/Checkout, source/provider, package/candidate, PatchSet hash, 예상 file scope, credential·비용 여부와 expiry를 포함한다.
 
-실제 effect 영수증의 상태는 `succeeded|failed|partial|outcome_unknown`이다. `security_refresh|license_scan` 성공 영수증은 입력 source SHA-256을 artifact 또는 result fingerprint로 다시 결합해야 한다. unavailable 입력을 succeeded 영수증으로 덮거나, stale arguments·다른 Project·다른 effect kind의 영수증을 재사용하면 Controller가 거부한다. `dependency_prepare|dependency_apply` 영수증은 status에서 관찰할 수 있지만 source manifest·lockfile의 정본 변경은 package manager가 만든 isolated diff를 M4 PatchSet으로 적용하고 post Gate를 통과해야 완료다.
+실제 effect 영수증의 상태는 `succeeded|failed|partial|outcome_unknown`이다. `failure_reproduction` 성공 영수증은 normalized `ReproductionAttemptObservationV1` fingerprint를, `security_refresh|license_scan` 성공 영수증은 입력 source SHA-256을 artifact 또는 result fingerprint로 다시 결합해야 한다. unavailable 입력을 succeeded 영수증으로 덮거나, stale arguments·다른 Project·다른 effect kind의 영수증을 재사용하면 Controller가 거부한다. `dependency_prepare|dependency_apply` 영수증은 status에서 관찰할 수 있지만 source manifest·lockfile의 정본 변경은 package manager가 만든 isolated diff를 M4 PatchSet으로 적용하고 post Gate를 통과해야 완료다.
 
 ## M3 Gate 통합
 
@@ -563,9 +576,9 @@ adapter는 Diagnostic·ArtifactRef만 생산하고 M3 core가 다음을 판정�
 
 같은 tool의 결과라도 별도 tool DB를 만들지 않고 producer metadata로 구분한다. 원본 artifact가 retention으로 사라져도 해당 evidence는 `expired|missing`이 되어 더 이상 current completion proof로 사용되지 않는다.
 
-## 구현 순서
+## 구현 상태와 provider 경계
 
-문서 확정 뒤 제품 구현은 다음 순서를 지킨다.
+현재 제품 구현은 다음 순서의 core·Controller·CLI·generic registered-process 경로를 갖는다.
 
 1. M7 contract type·Schema·minimal/full/invalid/future fixture와 fingerprint golden
 2. failure normalization·family/occurrence fingerprint와 causality DAG pure function
@@ -574,11 +587,11 @@ adapter는 Diagnostic·ArtifactRef만 생산하고 M3 core가 다음을 판정�
 5. SupplyChainSnapshot normalization과 common Diagnostic mapping
 6. deterministic Maintenance Radar projection·time boundary test
 7. read-only CLI inspect/status surface
-8. registered runner/scanner/debugger/package manager adapter integration
+8. registered runner/scanner/debugger/package manager가 사용할 manifest·`tool.invoke`·terminal effect receipt integration
 9. approval-gated isolated dependency PatchSet preparation
 10. M3 Gate·ReviewPack·rollback E2E와 Windows path/security corpus
 
-1~6은 fake adapter와 fixture로 먼저 검증한다. 7 이전에는 network·process attach·package change adapter를 만들지 않고, 9 이전에는 dependency source write 경로를 만들지 않는다.
+1~8의 contract·pure engine·generic registered adapter 경로와 receipt binding은 현재 구현이다. 특정 OSV/NVD, debugger, license scanner, package-manager provider가 Catalog에 설치·신뢰·ready 상태가 아니면 해당 effect는 unavailable로 남는다. 9의 dependency source write는 isolated preview와 M4 PatchSet·exact 승인 없이는 열리지 않는다.
 
 ## 8단계 인계
 

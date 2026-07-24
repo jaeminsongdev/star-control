@@ -77,6 +77,9 @@
         "string",
         "null"
       ]
+    },
+    "trial_candidate": {
+      "type": "boolean"
     }
   },
   "required": [
@@ -85,6 +88,7 @@
     "item_id",
     "item_version",
     "definition_fingerprint",
+    "trial_candidate",
     "lifecycle",
     "owner",
     "corpus_ref",

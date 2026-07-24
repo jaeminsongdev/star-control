@@ -21,7 +21,8 @@ use star_contracts::{
     ids::{
         CheckoutId, CodeIndexSnapshotId, CoordinatedOperationId, DiagnosticId, EvidenceBundleId,
         FindingId, GateId, PatchSetId, ProjectId, ProjectRevisionId, ReviewPackId, RootBindingId,
-        ScanRunId, TaskSpecId, ValidationResultId, ValidationRunId, WorkspaceSnapshotId,
+        ScanRunId, SuppressionId, TaskSpecId, ValidationResultId, ValidationRunId,
+        WorkspaceSnapshotId,
     },
     index::{CodeIndexSnapshot, IndexEdge, IndexEntity, ProjectCatalogSnapshot, SourceEntry},
     managed_registry::{
@@ -210,6 +211,23 @@ pub struct RetentionCandidate {
     pub scan_run_id: ScanRunId,
     pub retention_class: String,
     pub reason_code: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RetentionPolicy {
+    pub keep_latest_successful_scans: usize,
+    pub incomplete_staging_retention_days: u64,
+    pub scan_detail_retention_days: u64,
+}
+
+impl Default for RetentionPolicy {
+    fn default() -> Self {
+        Self {
+            keep_latest_successful_scans: 2,
+            incomplete_staging_retention_days: 7,
+            scan_detail_retention_days: 90,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -431,6 +449,11 @@ pub trait ProjectManagementRepository: Send + Sync {
     fn put_baseline_v2(&self, baseline: &BaselineV2) -> Result<(), RepositoryError>;
     fn list_baselines_v2(&self) -> Result<Vec<BaselineV2>, RepositoryError>;
     fn put_suppression_v2(&self, suppression: &SuppressionV2) -> Result<(), RepositoryError>;
+    fn get_suppression_v2(
+        &self,
+        suppression_id: &SuppressionId,
+        revision: u64,
+    ) -> Result<Option<SuppressionV2>, RepositoryError>;
     fn list_suppressions_v2(&self) -> Result<Vec<SuppressionV2>, RepositoryError>;
     fn put_disposition_v2(&self, disposition: &DispositionV2) -> Result<(), RepositoryError>;
     fn list_dispositions_v2(&self) -> Result<Vec<DispositionV2>, RepositoryError>;
@@ -495,6 +518,12 @@ pub trait ManagementRepositorySet: Send + Sync {
         approved_plan_fingerprint: &str,
     ) -> Result<LocalStateImportResult, RepositoryError>;
     fn plan_retention(&self) -> Result<RetentionPlan, RepositoryError>;
+    fn plan_retention_with_policy(
+        &self,
+        _policy: &RetentionPolicy,
+    ) -> Result<RetentionPlan, RepositoryError> {
+        self.plan_retention()
+    }
     fn apply_retention(
         &self,
         plan: &RetentionPlan,

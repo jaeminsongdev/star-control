@@ -8,7 +8,8 @@ use star_contracts::{
     Sha256Hash,
     evidence::{ActorRef, DocumentRef},
     ids::{
-        ChangeSetId, ImpactAnalysisId, ProjectId, ScopeRevisionId, TaskSpecId, ValidationPlanId,
+        ChangePlanId, ChangeSetId, ImpactAnalysisId, ProjectId, ScopeRevisionId, TaskSpecId,
+        ValidationPlanId,
     },
     index::{
         CodeIndexSnapshot, IndexEdge, IndexEntity, IndexEntityKind, IndexFreshnessState,
@@ -19,18 +20,21 @@ use star_contracts::{
     },
     management::{ProjectPathRef, SymbolResolution},
     planning::{
-        AffectedProject, AffectedScope, BaselinePolicy, CHANGE_SET_SCHEMA_ID, ChangeEntry,
-        ChangeOrigin, ChangeSet, ChangeSetKind, CheckApplicability, CheckCandidate,
-        CheckDescriptor, CheckGraphV2, CheckInvocationTemplate, CheckOverride, CheckOverrideKind,
-        CheckPlanV2, CheckResolutionOutcome, CollectionState, ExcludedScope,
+        AffectedProject, AffectedScope, BaselinePolicy, CHANGE_PLAN_V2_SCHEMA_ID,
+        CHANGE_SET_SCHEMA_ID, ChangeEntry, ChangeOrigin, ChangePlanOriginV2, ChangePlanReadinessV2,
+        ChangePlanStatusV2, ChangePlanV2, ChangeSet, ChangeSetKind, ChangeUnitSourceV2,
+        CheckApplicability, CheckCandidate, CheckDescriptor, CheckGraphV2, CheckInvocationTemplate,
+        CheckOverride, CheckOverrideKind, CheckPlanV2, CheckResolutionOutcome, CollectionState,
+        CompletionCriterionMappingV2, ExcludedScope, ExpectedImpactRefV2,
         FULL_VALIDATION_PLAN_SCHEMA_ID, FallbackDecision, FullValidationPlan, GatePolicyV2,
         IMPACT_ANALYSIS_SCHEMA_ID, ImpactAnalysis, ImpactCertainty, ImpactConfidence,
         ImpactConfidenceSummary, ImpactEdge, ImpactKind, ImpactProjectInput, ImpactResolution,
         ImpactSeed, ImpactStatus, ImpactedNode, IntendedChange, NoResult, NoResultReason,
-        ObservedChangeKind, PlanningBundle, PlanningContractError, PlanningSelector, ProjectTarget,
-        ProjectTargetRole, ReviewKind, ReviewRequirementV2, RiskPathDescriptor, RiskPathFinding,
-        RiskSeverityFloor, SCOPE_REVISION_SCHEMA_ID, ScopeApprovalState, ScopeAxis,
-        ScopeItemSource, ScopeReasonCode, ScopeRelation, ScopeRevision, ScopeSet,
+        ObservedChangeKind, PLANNING_BUNDLE_V2_SCHEMA_ID, PlannedChangeUnitV2, PlanningBundle,
+        PlanningContractError, PlanningSelector, ProjectTarget, ProjectTargetRole,
+        RelatedProjectImpactV2, ReviewKind, ReviewRequirementV2, RiskPathDescriptor,
+        RiskPathFinding, RiskSeverityFloor, SCOPE_REVISION_SCHEMA_ID, ScopeApprovalState,
+        ScopeAxis, ScopeItemSource, ScopeReasonCode, ScopeRelation, ScopeRevision, ScopeSet,
         ScopeSourceSnapshotRef, ScopeUserDecision, ScopedSelector, SeedResolution, SelectorKind,
         SuccessCriterion, TASK_SPEC_SCHEMA_ID, TaskSpec, ValidationPlanV2Readiness,
         ValidationRiskLevel, ValidationScopeLevel, document_ref, empty_fingerprint,
@@ -95,21 +99,37 @@ pub struct ObservedWorkspaceChange {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct PlanningPolicy {
+    pub effective_config_fingerprint: Sha256Hash,
     pub max_depth: u32,
     pub max_nodes: usize,
     pub max_edges: usize,
+    pub max_downstream_projects: usize,
     pub max_check_candidates: usize,
     pub max_parallel_checks: u32,
+    pub command_timeout_ms: u64,
+    pub max_log_bytes: u64,
+    pub max_artifact_bytes: u64,
+    pub allow_cross_project_read: bool,
+    pub allow_previous_success_reuse: bool,
 }
 
 impl Default for PlanningPolicy {
     fn default() -> Self {
         Self {
-            max_depth: 16,
-            max_nodes: 50_000,
-            max_edges: 200_000,
-            max_check_candidates: 2_000,
+            effective_config_fingerprint: Sha256Hash::digest(
+                b"star.effective-config.unbound-test-default",
+            ),
+            max_depth: 8,
+            max_nodes: 100_000,
+            max_edges: 500_000,
+            max_downstream_projects: 64,
+            max_check_candidates: 2_048,
             max_parallel_checks: 4,
+            command_timeout_ms: 600_000,
+            max_log_bytes: 10_485_760,
+            max_artifact_bytes: 1_073_741_824,
+            allow_cross_project_read: true,
+            allow_previous_success_reuse: true,
         }
     }
 }
@@ -176,6 +196,16 @@ pub fn build_planning_bundle_for_phase(
     validate_policy(&request.policy)?;
     let profile_resolution = request.profile_resolution.clone();
     let task_spec = build_task_spec(request.task, request.actor.clone())?;
+    let downstream_projects = task_spec
+        .project_targets
+        .iter()
+        .filter(|target| target.role == ProjectTargetRole::ReadOnlyImpact)
+        .count();
+    if downstream_projects > request.policy.max_downstream_projects
+        || (!request.policy.allow_cross_project_read && downstream_projects > 0)
+    {
+        return Err(PlanningError::ResourceLimit);
+    }
     if profile_resolution.as_ref().is_some_and(|resolution| {
         resolution
             .selected_profiles
@@ -234,18 +264,30 @@ pub fn build_planning_bundle_for_phase(
         &change_sets,
         &impact_analysis,
         &request.check_descriptors,
-        &request.previous_success_evidence,
+        if request.policy.allow_previous_success_reuse {
+            &request.previous_success_evidence
+        } else {
+            &[]
+        },
         profile_resolution.as_ref(),
         &request.policy,
         validation_phase,
     )?;
+    let change_plans = build_change_plans(
+        &task_spec,
+        &scope_revision,
+        &change_sets,
+        &impact_analysis,
+        &validation_plan,
+    )?;
     PlanningBundle {
-        schema_id: "star.planning-bundle".to_owned(),
-        schema_version: 1,
+        schema_id: PLANNING_BUNDLE_V2_SCHEMA_ID.to_owned(),
+        schema_version: 2,
         task_spec,
         scope_revision,
         change_sets,
         impact_analysis,
+        change_plans,
         validation_plan,
         bundle_fingerprint: empty_fingerprint(),
     }
@@ -253,13 +295,210 @@ pub fn build_planning_bundle_for_phase(
     .map_err(PlanningError::from)
 }
 
+fn build_change_plans(
+    task: &TaskSpec,
+    scope: &ScopeRevision,
+    change_sets: &[ChangeSet],
+    impact: &ImpactAnalysis,
+    validation: &FullValidationPlan,
+) -> Result<Vec<ChangePlanV2>, PlanningError> {
+    let task_ref = task_ref(task);
+    let scope_ref = scope_ref(scope);
+    let impact_ref = impact_ref(impact);
+    let validation_ref = document_ref(
+        FULL_VALIDATION_PLAN_SCHEMA_ID,
+        validation.validation_plan_id.as_str(),
+        validation.revision,
+        &validation.selection_fingerprint,
+    );
+    let multi_project_write = change_sets.len() > 1;
+    let all_unit_ids = task
+        .intended_changes
+        .iter()
+        .map(|change| change.change_id.clone())
+        .collect::<Vec<_>>();
+    let required_check_ids = validation
+        .required_checks
+        .iter()
+        .map(|check| check.plan_item_id.clone())
+        .collect::<Vec<_>>();
+    let mut plans = Vec::with_capacity(change_sets.len());
+    for change_set in change_sets {
+        let target_edges = impact
+            .impact_edges
+            .iter()
+            .filter(|edge| edge.project_id == change_set.project_id)
+            .map(|edge| edge.edge_id.clone())
+            .collect::<Vec<_>>();
+        let target_risks = impact
+            .risk_paths
+            .iter()
+            .filter(|risk| risk.project_id == change_set.project_id)
+            .map(|risk| format!("{}@{}", risk.risk_id, risk.risk_version))
+            .collect::<Vec<_>>();
+        let mut expected_paths = change_set
+            .entries
+            .iter()
+            .map(|entry| entry.path.clone())
+            .collect::<Vec<_>>();
+        expected_paths.extend(task.intended_changes.iter().filter_map(|change| {
+            (change.selector.kind == star_contracts::planning::SelectorKind::Path)
+                .then(|| ProjectPathRef::parse(change.selector.value.clone()).ok())
+                .flatten()
+        }));
+        expected_paths.sort();
+        expected_paths.dedup();
+        let preconditions = vec![
+            task.content_fingerprint.clone(),
+            scope.scope_hash.clone(),
+            change_set.change_set_fingerprint.clone(),
+            impact.calculation_fingerprint.clone(),
+            validation.selection_fingerprint.clone(),
+            validation.config_fingerprint.clone(),
+        ];
+        let units = task
+            .intended_changes
+            .iter()
+            .map(|change| PlannedChangeUnitV2 {
+                unit_id: change.change_id.clone(),
+                target_selector: change.selector.clone(),
+                change_kind: change.change_kind,
+                intended_postcondition: change.intended_postcondition.clone(),
+                source: ChangeUnitSourceV2::User,
+                reason: format!("task:{}", task.task_spec_id),
+                expected_paths: (change.selector.kind
+                    == star_contracts::planning::SelectorKind::Path)
+                    .then(|| ProjectPathRef::parse(change.selector.value.clone()).ok())
+                    .flatten()
+                    .into_iter()
+                    .collect(),
+                unresolved_target: (change.selector.kind
+                    != star_contracts::planning::SelectorKind::Path)
+                    .then(|| format!("selector:{}", change.selector.value)),
+                precondition_fingerprints: preconditions.clone(),
+                permission_requirements: vec!["source.write".to_owned()],
+                risk_path_refs: target_risks.clone(),
+                impact_edge_refs: target_edges.clone(),
+                completion_criterion_refs: task
+                    .success_criteria
+                    .iter()
+                    .map(|criterion| criterion.criterion_id.clone())
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+        let mut unresolved_impacts = impact
+            .no_results
+            .iter()
+            .filter(|result| result.reason != NoResultReason::ConfirmedEmpty)
+            .map(|result| format!("{}:{:?}", result.query_kind, result.reason))
+            .chain(impact.limitations.iter().cloned())
+            .collect::<Vec<_>>();
+        if multi_project_write {
+            unresolved_impacts
+                .push("MULTI_PROJECT_CHANGE_SCOPE_REQUIRES_EXPLICIT_UNIT_BINDING".to_owned());
+        }
+        unresolved_impacts.sort();
+        unresolved_impacts.dedup();
+        let ready = scope.approval_state == ScopeApprovalState::Accepted
+            && impact.status == ImpactStatus::Complete
+            && validation.readiness == ValidationPlanV2Readiness::Ready
+            && unresolved_impacts.is_empty();
+        let now = Utc::now();
+        plans.push(
+            ChangePlanV2 {
+                schema_id: CHANGE_PLAN_V2_SCHEMA_ID.to_owned(),
+                schema_version: 2,
+                change_plan_id: ChangePlanId::new(),
+                revision: 1,
+                task_spec_ref: task_ref.clone(),
+                scope_revision_ref: scope_ref.clone(),
+                impact_analysis_ref: impact_ref.clone(),
+                change_origin: ChangePlanOriginV2::UserPlanned,
+                project_id: change_set.project_id.clone(),
+                target_checkout_id: change_set.checkout_id.clone(),
+                target_project_revision_id: change_set.base_revision_id.clone(),
+                target_workspace_snapshot_id: change_set.observed_workspace_snapshot_id.clone(),
+                change_set_ref: document_ref(
+                    CHANGE_SET_SCHEMA_ID,
+                    change_set.change_set_id.as_str(),
+                    1,
+                    &change_set.change_set_fingerprint,
+                ),
+                related_project_impacts: impact
+                    .affected_projects
+                    .iter()
+                    .filter(|project| project.project_id != change_set.project_id)
+                    .map(|project| RelatedProjectImpactV2 {
+                        project_id: project.project_id.clone(),
+                        impact_analysis_ref: impact_ref.clone(),
+                    })
+                    .collect(),
+                planned_change_units: units,
+                change_graph: Vec::new(),
+                deterministic_unit_order: all_unit_ids.clone(),
+                expected_impact_refs: all_unit_ids
+                    .iter()
+                    .map(|unit_id| ExpectedImpactRefV2 {
+                        unit_id: unit_id.clone(),
+                        accepted_impact_edge_ids: target_edges.clone(),
+                        unresolved_frontier_refs: unresolved_impacts.clone(),
+                    })
+                    .collect(),
+                completion_criteria_mapping: task
+                    .success_criteria
+                    .iter()
+                    .map(|criterion| CompletionCriterionMappingV2 {
+                        criterion_id: criterion.criterion_id.clone(),
+                        unit_ids: all_unit_ids.clone(),
+                        check_plan_item_ids: required_check_ids.clone(),
+                        manual_observation_refs: Vec::new(),
+                        explicit_user_decision_omission: None,
+                    })
+                    .collect(),
+                expected_paths,
+                finding_refs: Vec::new(),
+                recipe_refs: Vec::new(),
+                parameters: BTreeMap::new(),
+                risk_path_refs: target_risks,
+                preconditions,
+                unresolved_impacts,
+                permission_requirements: vec!["source.write".to_owned()],
+                permission_plan_ref: None,
+                validation_plan_ref: validation_ref.clone(),
+                readiness: if ready {
+                    ChangePlanReadinessV2::Ready
+                } else {
+                    ChangePlanReadinessV2::Blocked
+                },
+                status: if ready {
+                    ChangePlanStatusV2::Ready
+                } else {
+                    ChangePlanStatusV2::Blocked
+                },
+                created_at: now,
+                updated_at: now,
+                content_fingerprint: empty_fingerprint(),
+            }
+            .seal()?,
+        );
+    }
+    plans.sort_by(|left, right| left.project_id.cmp(&right.project_id));
+    Ok(plans)
+}
+
 pub fn planning_bundle_revision(bundle: &PlanningBundle) -> u64 {
-    bundle
+    let document_revision = bundle
         .task_spec
         .revision
         .max(bundle.scope_revision.revision)
         .max(bundle.impact_analysis.revision)
-        .max(bundle.validation_plan.revision)
+        .max(bundle.validation_plan.revision);
+    bundle
+        .change_plans
+        .iter()
+        .fold(document_revision, |revision, plan| {
+            revision.max(plan.revision)
+        })
 }
 
 pub fn task_spec_to_draft(task: &TaskSpec) -> TaskSpecDraft {
@@ -346,6 +585,29 @@ pub fn revise_planning_bundle(
     next.validation_plan.change_set_refs = change_set_refs;
     next.validation_plan.impact_analysis_ref = impact_ref(&next.impact_analysis);
     next.validation_plan = next.validation_plan.seal()?;
+    next.change_plans = build_change_plans(
+        &next.task_spec,
+        &next.scope_revision,
+        &next.change_sets,
+        &next.impact_analysis,
+        &next.validation_plan,
+    )?;
+    for plan in &mut next.change_plans {
+        if let Some(previous_plan) = previous
+            .change_plans
+            .iter()
+            .find(|candidate| candidate.project_id == plan.project_id)
+        {
+            plan.change_plan_id = previous_plan.change_plan_id.clone();
+            plan.revision = previous_plan
+                .revision
+                .checked_add(1)
+                .ok_or(PlanningError::ResourceLimit)?;
+            plan.created_at = previous_plan.created_at;
+            plan.updated_at = Utc::now();
+            *plan = plan.clone().seal()?;
+        }
+    }
     next.seal().map_err(PlanningError::from)
 }
 
@@ -383,6 +645,27 @@ pub fn invalidate_planning_bundle(
         .push(format!("PLAN_INVALIDATED:{reason}"));
     normalize_strings(&mut bundle.validation_plan.manual_observations);
     bundle.validation_plan = bundle.validation_plan.seal()?;
+    let impact_ref = impact_ref(&bundle.impact_analysis);
+    let validation_ref = document_ref(
+        FULL_VALIDATION_PLAN_SCHEMA_ID,
+        bundle.validation_plan.validation_plan_id.as_str(),
+        bundle.validation_plan.revision,
+        &bundle.validation_plan.selection_fingerprint,
+    );
+    for plan in &mut bundle.change_plans {
+        plan.revision = plan
+            .revision
+            .checked_add(1)
+            .ok_or(PlanningError::ResourceLimit)?;
+        plan.impact_analysis_ref = impact_ref.clone();
+        plan.validation_plan_ref = validation_ref.clone();
+        plan.readiness = ChangePlanReadinessV2::Invalidated;
+        plan.status = ChangePlanStatusV2::Superseded;
+        plan.unresolved_impacts
+            .push(format!("PLAN_INVALIDATED:{reason}"));
+        plan.updated_at = Utc::now();
+        *plan = plan.clone().seal()?;
+    }
     bundle.seal().map_err(PlanningError::from)
 }
 
@@ -454,6 +737,7 @@ fn validate_policy(policy: &PlanningPolicy) -> Result<(), PlanningError> {
     if policy.max_depth == 0
         || policy.max_nodes == 0
         || policy.max_edges == 0
+        || policy.max_downstream_projects == 0
         || policy.max_check_candidates == 0
         || policy.max_parallel_checks == 0
     {
@@ -937,8 +1221,7 @@ fn analyze_impact(
             }
         })
         .collect();
-    let config_fingerprint = versioned_fingerprint("star.planning-policy", 1, policy)
-        .map_err(|_| PlanningError::Fingerprint)?;
+    let config_fingerprint = policy.effective_config_fingerprint.clone();
     let change_set_refs = change_sets
         .iter()
         .map(|changes| {
@@ -1864,7 +2147,7 @@ fn select_validation_plan(
                 invocation: CheckInvocationTemplate {
                     logical_executable: descriptor.logical_executable.clone(),
                     args: bind_scope_arguments(&descriptor.argument_template, bound_level),
-                    timeout_ms: 3_600_000,
+                    timeout_ms: policy.command_timeout_ms,
                     expected_exit_codes: vec![0],
                 },
                 fallback_floor: selected_level,
@@ -1899,8 +2182,7 @@ fn select_validation_plan(
         .max()
         .map(risk_level)
         .unwrap_or(ValidationRiskLevel::Low);
-    let config_fingerprint = versioned_fingerprint("star.planning-policy", 1, policy)
-        .map_err(|_| PlanningError::Fingerprint)?;
+    let config_fingerprint = policy.effective_config_fingerprint.clone();
     let impact_ref = document_ref(
         IMPACT_ANALYSIS_SCHEMA_ID,
         impact.impact_analysis_id.as_str(),
@@ -2723,6 +3005,12 @@ mod tests {
     #[test]
     fn task_to_impact_to_ready_validation_plan_is_deterministic_and_typed() {
         let (catalog, index, task) = fixture();
+        let expected_config = Sha256Hash::digest(b"fixture-effective-config");
+        let policy = PlanningPolicy {
+            effective_config_fingerprint: expected_config.clone(),
+            command_timeout_ms: 42_000,
+            ..PlanningPolicy::default()
+        };
         let descriptors = [
             "format",
             "lint",
@@ -2757,12 +3045,24 @@ mod tests {
             check_descriptors: descriptors,
             previous_success_evidence: vec![],
             profile_resolution: None,
-            policy: PlanningPolicy::default(),
+            policy,
         })
         .unwrap();
         assert_eq!(
             bundle.validation_plan.readiness,
             ValidationPlanV2Readiness::Ready
+        );
+        assert_eq!(
+            bundle.impact_analysis.effective_config_fingerprint,
+            expected_config
+        );
+        assert_eq!(bundle.validation_plan.config_fingerprint, expected_config);
+        assert!(
+            bundle
+                .validation_plan
+                .required_checks
+                .iter()
+                .all(|check| check.invocation.timeout_ms == 42_000)
         );
         assert!(
             bundle

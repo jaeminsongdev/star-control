@@ -170,6 +170,9 @@ impl ExternalDiagnosticNormalizer for SafeExitDiagnosticNormalizer {
                 confidence: DiagnosticConfidence::High,
                 status: DiagnosticStatus::Confirmed,
                 blocking: true,
+                package_id: None,
+                workspace_id: None,
+                locations: vec![],
             });
         }
         if input.output_read_failed {
@@ -183,6 +186,9 @@ impl ExternalDiagnosticNormalizer for SafeExitDiagnosticNormalizer {
                 confidence: DiagnosticConfidence::High,
                 status: DiagnosticStatus::Confirmed,
                 blocking: true,
+                package_id: None,
+                workspace_id: None,
+                locations: vec![],
             });
         }
         match input.termination_reason {
@@ -194,6 +200,9 @@ impl ExternalDiagnosticNormalizer for SafeExitDiagnosticNormalizer {
                 confidence: DiagnosticConfidence::High,
                 status: DiagnosticStatus::Confirmed,
                 blocking: true,
+                package_id: None,
+                workspace_id: None,
+                locations: vec![],
             }),
             TerminationReason::Cancelled => diagnostics.push(RawDiagnostic {
                 code: "CHECK_CANCELLED".to_owned(),
@@ -204,6 +213,9 @@ impl ExternalDiagnosticNormalizer for SafeExitDiagnosticNormalizer {
                 confidence: DiagnosticConfidence::High,
                 status: DiagnosticStatus::Confirmed,
                 blocking: true,
+                package_id: None,
+                workspace_id: None,
+                locations: vec![],
             }),
             TerminationReason::OutcomeUnknown => diagnostics.push(RawDiagnostic {
                 code: "CHECK_OUTCOME_UNKNOWN".to_owned(),
@@ -214,6 +226,9 @@ impl ExternalDiagnosticNormalizer for SafeExitDiagnosticNormalizer {
                 confidence: DiagnosticConfidence::High,
                 status: DiagnosticStatus::Confirmed,
                 blocking: true,
+                package_id: None,
+                workspace_id: None,
+                locations: vec![],
             }),
             TerminationReason::Exited if !input.expected_exit => {
                 diagnostics.push(RawDiagnostic {
@@ -225,6 +240,9 @@ impl ExternalDiagnosticNormalizer for SafeExitDiagnosticNormalizer {
                     confidence: DiagnosticConfidence::High,
                     status: DiagnosticStatus::Confirmed,
                     blocking: true,
+                    package_id: None,
+                    workspace_id: None,
+                    locations: vec![],
                 });
             }
             TerminationReason::Exited | TerminationReason::LaunchError => {}
@@ -428,6 +446,9 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
                 confidence: DiagnosticConfidence::High,
                 status: DiagnosticStatus::Confirmed,
                 blocking: true,
+                package_id: None,
+                workspace_id: None,
+                locations: vec![],
             });
         }
         Ok(CheckExecutionObservation {

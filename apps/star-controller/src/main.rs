@@ -15,23 +15,31 @@ use star_application::{
     ManagedRegistryResolverError, ManagedRegistryResolverPort, ManagedRegistryRewritePort,
     ManagedRegistryRewriteRequest, ManagedRegistryRewriteResult, ManagementApplicationService,
     ManagementRecoveryApplicationService, MaterializedRewrite, PublishedManagedRegistryResolution,
+    RecoveryExecutionConfig, RecoveryExecutionConfigResolver,
 };
 use star_contracts::evidence::{
     ActorRef, ActorType, AuthoritativeGateState, Completeness, GateDecisionKind, GateScope,
-    ValidationProfile,
+    TerminationReason, ValidationOutcome, ValidationProfile,
 };
 use star_contracts::{
     Sha256Hash,
+    canonical::canonical_sha256,
+    config_v1::{
+        ConfigLayerV1, ConfigOverrideV1, ConfigSourceKindV1, ConfigSourceRefV1, ConfigValueV1,
+        EffectiveConfigV1,
+    },
     coordination_v2::{
         CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID, CHANGE_BUNDLE_RELEASE_HANDOFF_SCHEMA_ID,
         CROSS_REPO_CHANGE_BUNDLE_SCHEMA_ID, ChangeBundleParticipantV2, ChangeBundleReleaseHandoff,
-        CrossRepoChangeBundle, MERGE_CONFLICT_RECORD_SCHEMA_ID, MERGE_PLAN_V2_SCHEMA_ID,
-        MERGE_QUEUE_RECORD_SCHEMA_ID, MULTI_PROJECT_GOAL_SCHEMA_ID, MergeConflictRecord,
-        MergePlanV2, MergeQueueRecord, MultiProjectGoal, OVERLAP_ANALYSIS_SCHEMA_ID,
-        OverlapAnalysis, OverlapSubject, PROJECT_MERGE_RESULT_SCHEMA_ID, ProjectMergeResult,
-        REMOTE_OPERATION_RECORD_SCHEMA_ID, REMOTE_STATE_SNAPSHOT_V2_SCHEMA_ID, RemoteAction,
-        RemoteOperationRecord, RemoteOperationState, RemoteStateSnapshotV2,
-        WORKTREE_RECORD_SCHEMA_ID, WorktreeRecord, WorktreeState,
+        CompletionLevel, CrossRepoChangeBundle, MERGE_CONFLICT_RECORD_SCHEMA_ID,
+        MERGE_PLAN_V2_SCHEMA_ID, MERGE_QUEUE_RECORD_SCHEMA_ID, MULTI_PROJECT_GOAL_SCHEMA_ID,
+        MergeConflictRecord, MergePlanV2, MergeQueueEntryState, MergeQueueRecord, MultiProjectGoal,
+        OVERLAP_ANALYSIS_SCHEMA_ID, OverlapAnalysis, OverlapSubject,
+        PROJECT_MERGE_RESULT_SCHEMA_ID, ParticipantState, ProjectMergeResult,
+        ProjectMergeResultState, REMOTE_OPERATION_RECORD_SCHEMA_ID,
+        REMOTE_STATE_SNAPSHOT_V2_SCHEMA_ID, RemoteAction, RemoteOperationRecord,
+        RemoteOperationState, RemoteStateSnapshotV2, WORKTREE_RECORD_SCHEMA_ID, WorktreeRecord,
+        WorktreeState,
     },
     development_effect::{
         DEVELOPMENT_EFFECT_RECEIPT_V1_SCHEMA_ID, DevelopmentEffectKind, DevelopmentEffectReceiptV1,
@@ -46,12 +54,18 @@ use star_contracts::{
         ObservationState, PROJECT_DOCTOR_REPORT_SCHEMA_ID, SurfaceSnapshotRole,
         ToolchainObservation,
     },
-    evidence_v2::CompletionClaimV2,
+    error_codes::StableErrorCode,
+    evidence_v2::{
+        BaselineRelationV2, CompletionClaimV2, DecisionDocumentRefV2, DecisionSubjectKindV2,
+        DiagnosticEvaluationSubjectV2, DiagnosticV2, EvidenceFreshnessV2, GateDecisionV2,
+        InvocationWorkingDirectoryV2, ProcessStartStateV2, SuppressionStateV2, SuppressionV2,
+        ValidationResultV2, ValidationRunV2, ValidationStabilityV2,
+    },
     fixed_mcp::ApprovalDecision,
     ids::{
         ApprovalId, CheckoutId, DiagnosticId, EvidenceBundleId, FindingId, GateId, GoalId,
         OperationId, PatchApplicationId, PatchSetId, ProjectId, RequestId, ReviewPackId, RunId,
-        SymbolId, TaskSpecId,
+        SuppressionId, SymbolId, TaskSpecId, ValidationResultId,
     },
     index::{IndexScanMode, IndexTier, SourceClass},
     ipc::{
@@ -60,17 +74,21 @@ use star_contracts::{
     },
     maintenance_v2::{
         DEPENDENCY_SNAPSHOT_SCHEMA_ID, DEPENDENCY_UPDATE_PLAN_SCHEMA_ID, DependencySnapshot,
-        DependencyUpdatePlan, EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID, ExternalDataSnapshot,
-        FAILURE_RECORD_SCHEMA_ID, FailureRecord, MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
-        MaintenanceRadarItem, RECOVERY_PLAN_V2_SCHEMA_ID, REGRESSION_RECORD_SCHEMA_ID,
-        REPRODUCTION_PACK_V2_SCHEMA_ID, RecoveryPlanV2, RegressionRecord,
-        SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID, SupplyChainObservation, UpdateCandidate,
+        DependencyUpdatePlan, EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID, EvaluationRunEvidenceRef,
+        ExternalDataSnapshot, ExternalFreshness, FAILURE_RECORD_SCHEMA_ID, FailureRecord,
+        MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID, MaintenanceRadarItem, RECOVERY_PLAN_V2_SCHEMA_ID,
+        REGRESSION_RECORD_SCHEMA_ID, REPRODUCTION_PACK_V2_SCHEMA_ID, RadarCategory, RadarPriority,
+        RecoveryPlanV2, RegressionRecord, ReproductionAttemptObservationV1, ReproductionAttemptV2,
+        ReproductionPackV2, ReproductionResult, SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID,
+        SupplyChainObservation, UpdateCandidate, VerificationState,
     },
     managed_registry::{
         ManagedDeclarationChangeKind, ManagedDeclarationClassification, ManagedDeclarationId,
         ManagedDesiredFields,
     },
-    management::{ProjectPathRef, ProjectV1ToV2MigrationPlan},
+    management::{
+        DispositionDecision, DispositionStatus, ProjectPathRef, ProjectV1ToV2MigrationPlan,
+    },
     manifest::{
         ActionDescriptor, BackendKind, ExecutableDescriptor, ExitCodes, IntegrityFile,
         ManifestProtocol, ManifestSource, UpdatePolicy, parameter_pattern_matches, risk_lane,
@@ -83,8 +101,9 @@ use star_contracts::{
         MIGRATION_PLAN_V2_SCHEMA_ID, MIGRATION_VALIDATION_REPORT_SCHEMA_ID, MigrationAttempt,
         MigrationCheckpointV2, MigrationPlanV2, MigrationValidationReport,
         PERFORMANCE_COMPARISON_V2_SCHEMA_ID, PERFORMANCE_RUN_SCHEMA_ID,
-        PERFORMANCE_WORKLOAD_SPEC_SCHEMA_ID, PerformanceRun, PerformanceWorkloadSpec,
-        ProjectMigrationManifest, RESTORE_VERIFICATION_RECORD_SCHEMA_ID, RestoreVerificationRecord,
+        PERFORMANCE_WORKLOAD_SPEC_SCHEMA_ID, PerformanceComparisonV2, PerformanceRun,
+        PerformanceWorkloadSpec, ProjectMigrationManifest, RESTORE_VERIFICATION_RECORD_SCHEMA_ID,
+        RestoreVerificationRecord,
     },
     orchestration::{GoalPlanItem, GoalRecord},
     parse_no_duplicate_keys,
@@ -92,13 +111,24 @@ use star_contracts::{
         ChangeRecipeV2, PatchApplicationStateV1, PatchRecoveryStrategyV1, PatchV1ToV2MigrationPlan,
         RewriteAssuranceV2, TargetSelector, WorktreeStrategyV1,
     },
-    planning::{CheckOverride, CheckOverrideKind, ScopeReasonCode, ValidationScopeLevel},
+    planning::{
+        ChangePlanV1ToV2MigrationPlan, CheckOverride, CheckOverrideKind, ScopeReasonCode,
+        ValidationScopeLevel,
+    },
     recovery::{BackupPlan, LocalStateExportPlan, LocalStateImportPlan, RebuildPlan, RestorePlan},
     release_v2::{
-        EVALUATION_CATALOG_ITEM_SCHEMA_ID, EVALUATION_RUN_V2_SCHEMA_ID, EvaluationCatalogItem,
-        EvaluationCatalogLifecycle, EvaluationRunV2, RELEASE_ASSET_BINDING_V1_SCHEMA_ID,
-        RELEASE_MANIFEST_V2_SCHEMA_ID, ReleaseArchitecture, ReleaseAssetBindingV1,
-        ReleaseAssetSourceV1, ReleaseManifestV2, ReleaseStatus, VerificationLayerKind,
+        BUDGET_SNAPSHOT_V1_SCHEMA_ID, BudgetDecisionV1, BudgetSnapshotV1, COST_RECORD_V1_SCHEMA_ID,
+        CaseAdjudication, ComparabilityState, CostRecordRefV1, CostRecordV1,
+        EVALUATION_CASE_DEFINITION_V1_SCHEMA_ID, EVALUATION_CATALOG_ITEM_SCHEMA_ID,
+        EVALUATION_POLICY_V1_SCHEMA_ID, EVALUATION_RUN_V2_SCHEMA_ID, EvaluationCaseDefinitionRefV1,
+        EvaluationCaseDefinitionV1, EvaluationCaseResult, EvaluationCatalogItem,
+        EvaluationCatalogLifecycle, EvaluationDefinition, EvaluationOutcome, EvaluationPolicyV1,
+        EvaluationQuantityV1, EvaluationRecommendation, EvaluationRunV2, EvaluationSubjectKind,
+        EvaluationSuppressionSummary, ProductFeatureOwnershipStatusV1,
+        ProductLifecycleEvidenceStatusV1, ProductProfileConformanceStatusV1, ProtectedMetricResult,
+        RELEASE_ASSET_BINDING_V1_SCHEMA_ID, RELEASE_MANIFEST_V2_SCHEMA_ID, ReleaseArchitecture,
+        ReleaseAssetBindingV1, ReleaseAssetSourceV1, ReleaseManifestV2, ReleaseStatus,
+        VerificationLayerKind,
     },
     runtime::ExternalToolProgress,
     rust_style::{
@@ -118,13 +148,15 @@ use star_development::coordination_v2::{
     GitCoordinationAdapter, LocalEffectPermit, analyze_overlap, parse_git_push_target,
     seal_cross_repo_bundle, seal_merge_conflict, seal_merge_plan, seal_merge_queue,
     seal_multi_project_goal, seal_participant, seal_project_merge_result, seal_release_handoff,
-    seal_remote_operation, seal_worktree_record,
+    seal_remote_operation, seal_remote_snapshot, seal_worktree_record,
 };
 use star_development::maintenance_v2::{
     ExternalDataSnapshotInput, FailureRecordInput, ReproductionPackInput,
     build_dependency_update_plan, build_external_data_snapshot, build_failure_record,
     build_maintenance_radar_snapshot, build_reproduction_pack_v2, build_supply_chain_snapshot,
+    reproduction_attempt_observation, reproduction_attempt_observation_fingerprint,
     scan_dependency_snapshot, seal_recovery_plan, seal_regression_record,
+    seal_reproduction_attempt_observation, verify_reproduction_pack_v2,
 };
 use star_development::managed_registry_v2::{
     ConsumerProjectInput, RegistryResolutionInput, build_change_intent,
@@ -147,6 +179,7 @@ use star_ipc::{
     windows_pipe::{PipeAcceptPool, read_json, write_json},
 };
 use star_planning::{TaskSpecDraft, process_descriptor};
+use star_ports::RepositoryErrorCategory;
 use star_project::catalog::{
     CatalogAvailability, CatalogIdentityStatus, CatalogProjectRole, ProjectCatalogManifest,
     ProjectCatalogView, inspect_project_catalog, inspect_project_catalog_entry,
@@ -154,12 +187,18 @@ use star_project::catalog::{
 };
 use star_release::{
     ReleaseError,
+    audit::build_final_product_audit,
     candidate::{
         ArtifactBytes, CiAdapter, ReleaseCandidateInput, VerificationObservation, approve_publish,
         promote_ready, publish_with_reconcile, run_ci_layers, seal_candidate,
-        verify_artifact_bytes,
+        verify_artifact_bytes, verify_release_manifest,
     },
-    evaluation::{EvaluationInput, evaluate, seal_catalog_item, transition_catalog_item},
+    evaluation::{
+        BudgetSnapshotInput, EvaluationInput, build_budget_snapshot, evaluate, seal_catalog_item,
+        seal_cost_record, seal_evaluation_case_definition, seal_evaluation_policy,
+        transition_catalog_item, verify_budget_snapshot, verify_cost_record,
+        verify_evaluation_case_definition, verify_evaluation_policy, verify_evaluation_run,
+    },
     lifecycle::{RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID, ReleaseLifecycleEvidence},
     publisher::{seal_release_asset_binding, verify_release_asset_binding},
 };
@@ -198,7 +237,7 @@ use star_controller::operation_store::{
     OperationCreate, OperationSnapshot, OperationStore, OperationStoreError,
 };
 use star_controller::policy_profile::{
-    UserPolicyProfile, UserToolRegistryConfig, safe_user_config_path,
+    UserExecutionConfig, UserPolicyProfile, UserToolRegistryConfig, safe_user_config_path,
 };
 use star_controller::trust_store::TrustStore;
 use star_controller::{
@@ -304,6 +343,57 @@ fn request_project_directory(
     request: &IpcRequest,
 ) -> Result<std::path::PathBuf, (&'static str, &'static str)> {
     verified_project_directory(&request.actor)
+}
+
+fn request_config_layers(
+    request: &IpcRequest,
+) -> Result<Vec<ConfigLayerV1>, (&'static str, String)> {
+    let mut layers = Vec::new();
+    if let Some(goal_id) = request
+        .actor
+        .get("goal_id")
+        .and_then(serde_json::Value::as_str)
+    {
+        GoalId::parse(goal_id.to_owned()).map_err(|_| {
+            (
+                "CONFIG_CONSTRAINT_CONFLICT",
+                "The request Goal binding is not a valid durable GoalId.".to_owned(),
+            )
+        })?;
+        let layer =
+            with_default_goal_store(|store| store.config_layer(goal_id)).map_err(|error| {
+                (
+                    "CONFIG_CONSTRAINT_CONFLICT",
+                    format!("The Goal configuration could not be loaded: {error}"),
+                )
+            })?;
+        if let Some(layer) = layer {
+            layers.push(layer);
+        }
+    }
+    if !request.config_overrides.is_empty() {
+        let source_fingerprint = canonical_sha256(&serde_json::json!({
+            "domain":"star.command-config",
+            "version":1,
+            "request_id":request.request_id,
+            "overrides":request.config_overrides,
+        }))
+        .map_err(|_| {
+            (
+                "CONFIG_CONSTRAINT_CONFLICT",
+                "The command configuration could not be fingerprinted.".to_owned(),
+            )
+        })?;
+        layers.push(ConfigLayerV1 {
+            source: ConfigSourceRefV1 {
+                source_kind: ConfigSourceKindV1::Command,
+                source_id: format!("command:{}", request.request_id),
+                source_fingerprint,
+            },
+            overrides: request.config_overrides.clone(),
+        });
+    }
+    Ok(layers)
 }
 
 fn project_directory_hash(path: &std::path::Path) -> Sha256Hash {
@@ -709,6 +799,176 @@ struct ControllerCommandRegistration {
     handler: ControllerCommandHandler,
 }
 
+struct ProductFeatureRuntimeSpec {
+    feature_id: &'static str,
+    semantic_owner_ref: &'static str,
+    physical_owner: &'static str,
+    command_surfaces: &'static [&'static str],
+}
+
+const PRODUCT_FEATURE_RUNTIME_SPECS: &[ProductFeatureRuntimeSpec] = &[
+    ProductFeatureRuntimeSpec {
+        feature_id: "A01",
+        semantic_owner_ref: "docs/contracts/goal-and-stage.md",
+        physical_owner: "star-planning/task_contract",
+        command_surfaces: &["goal.start", "planning.create"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "A02",
+        semantic_owner_ref: "docs/contracts/goal-and-stage.md",
+        physical_owner: "star-planning/stage_graph,replan",
+        command_surfaces: &["plan.update", "planning.replan"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "A03",
+        semantic_owner_ref: "docs/contracts/project-catalog-and-code-index.md",
+        physical_owner: "star-project",
+        command_surfaces: &["project.discover", "scan.run", "index.status"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "A04",
+        semantic_owner_ref: "docs/contracts/change-planning-and-impact.md",
+        physical_owner: "star-planning/impact,star-validation/selector",
+        command_surfaces: &["planning.impact.inspect", "planning.affected-checks.show"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "A05",
+        semantic_owner_ref: "docs/contracts/routing.md",
+        physical_owner: "star-routing",
+        command_surfaces: &["goal.start"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "A06",
+        semantic_owner_ref: "docs/features/core-control.md",
+        physical_owner: "star-application,star-execution",
+        command_surfaces: &["run.continue", "goal.pause", "goal.resume"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "A07",
+        semantic_owner_ref: "docs/contracts/events-and-state.md",
+        physical_owner: "star-state,star-execution/recovery",
+        command_surfaces: &[
+            "management.status",
+            "management.backup.plan",
+            "management.restore.plan",
+            "management.rebuild.plan",
+        ],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "A08",
+        semantic_owner_ref: "docs/architecture/security-and-permissions.md",
+        physical_owner: "star-policy",
+        command_surfaces: &["approval.resolve", "development.effect.record"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "A09",
+        semantic_owner_ref: "docs/contracts/cross-repo-change-bundle.md",
+        physical_owner: "star-vcs,star-execution/change_bundle",
+        command_surfaces: &["change-bundle.worktree.plan", "change-bundle.merge.plan"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "A10",
+        semantic_owner_ref: "docs/contracts/config-and-catalog.md",
+        physical_owner: "star-config/registry,star-project/managed_registry",
+        command_surfaces: &["registry.list", "profile.resolve"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "B01",
+        semantic_owner_ref: "docs/contracts/validation-and-evidence.md",
+        physical_owner: "star-validation,star-checks/change_scope",
+        command_surfaces: &[
+            "validation.run-plan",
+            "evidence.bundle.export",
+            "review-pack.export",
+        ],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "B02",
+        semantic_owner_ref: "docs/features/validation.md",
+        physical_owner: "star-checks/test_trust",
+        command_surfaces: &["validation.run-plan"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "B03",
+        semantic_owner_ref: "docs/features/common-validation-gate.md",
+        physical_owner: "star-checks/validator_guard,star-evaluation",
+        command_surfaces: &["validation.run-plan"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "B04",
+        semantic_owner_ref: "docs/contracts/contract-compatibility-and-environment.md",
+        physical_owner: "star-checks/contract_architecture",
+        command_surfaces: &["contract.compare", "migration.validate"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "B05",
+        semantic_owner_ref: "docs/contracts/failure-security-and-dependency-maintenance.md",
+        physical_owner: "star-checks/security_supply_chain",
+        command_surfaces: &["security.inspect", "deps.scan"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "B06",
+        semantic_owner_ref: "docs/contracts/failure-security-and-dependency-maintenance.md",
+        physical_owner: "star-checks/failure_recovery",
+        command_surfaces: &["failures.reproduce", "failures.recovery-plan"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "B07",
+        semantic_owner_ref: "docs/contracts/contract-compatibility-and-environment.md",
+        physical_owner: "star-checks/docs_environment",
+        command_surfaces: &["docs.check", "project.doctor"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "B08",
+        semantic_owner_ref: "docs/contracts/migration-performance-and-platform.md",
+        physical_owner: "star-checks/performance_build",
+        command_surfaces: &["performance.run", "performance.compare"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "B09",
+        semantic_owner_ref: "docs/contracts/ci-release-evaluation-and-product-completion.md",
+        physical_owner: "star-checks/release_deploy,star-validation/release_gate",
+        command_surfaces: &["release.verification.record", "release.promote"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "C01",
+        semantic_owner_ref: "docs/features/profiles.md",
+        physical_owner: "catalog/profiles,star-config",
+        command_surfaces: &["profile.resolve"],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "D01",
+        semantic_owner_ref: "docs/contracts/cross-repo-change-bundle.md",
+        physical_owner: "star-vcs/multi_repo,remote_operation",
+        command_surfaces: &[
+            "change-bundle.remote.snapshot",
+            "change-bundle.remote.operation.prepare",
+        ],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "D02",
+        semantic_owner_ref: "docs/contracts/ci-release-evaluation-and-product-completion.md",
+        physical_owner: "star-evaluation,evals",
+        command_surfaces: &[
+            "evaluation.run",
+            "evaluation.compare",
+            "cost.record",
+            "budget.snapshot",
+        ],
+    },
+    ProductFeatureRuntimeSpec {
+        feature_id: "D03",
+        semantic_owner_ref: "docs/contracts/ci-release-evaluation-and-product-completion.md",
+        physical_owner: "packaging/windows,star-application/release",
+        command_surfaces: &[
+            "release.lifecycle.publish",
+            "release.publish.prepare",
+            "release.status",
+            "release.audit",
+        ],
+    },
+];
+
 // Readiness requires all three surfaces to agree: this list, the concrete
 // handler registry below, and both resolved action Schemas. Tests fail if any
 // surface drifts. Project registration is intentionally outside the required
@@ -1044,6 +1304,47 @@ fn run_goal_start_command(
             Ok::<_, RuntimeFailure>((question_id.to_owned(), prompt.to_owned()))
         })
         .transpose()?;
+    let config_overrides = arguments
+        .get("config_overrides")
+        .map(|value| {
+            serde_json::from_value::<Vec<ConfigOverrideV1>>(value.clone()).map_err(|_| {
+                (
+                    "TOOL_ARGUMENT_INVALID",
+                    "config_overrides must be a bounded typed EffectiveConfig override array.",
+                )
+            })
+        })
+        .transpose()?
+        .unwrap_or_default();
+    if !config_overrides.is_empty() {
+        let source_fingerprint = canonical_sha256(&serde_json::json!({
+            "domain":"star.goal-config-draft",
+            "version":1,
+            "overrides":config_overrides,
+        }))
+        .map_err(|_| {
+            (
+                "TOOL_ARGUMENT_INVALID",
+                "config_overrides could not be fingerprinted.",
+            )
+        })?;
+        UserExecutionConfig::default()
+            .effective
+            .validate_layer_shape(&ConfigLayerV1 {
+                source: ConfigSourceRefV1 {
+                    source_kind: ConfigSourceKindV1::Goal,
+                    source_id: "goal-start".to_owned(),
+                    source_fingerprint,
+                },
+                overrides: config_overrides.clone(),
+            })
+            .map_err(|_| {
+                (
+                    "TOOL_ARGUMENT_INVALID",
+                    "config_overrides contains an unknown, incompatible, or forbidden key.",
+                )
+            })?;
+    }
     let goal = with_default_goal_store(|store| {
         store.start(GoalStartRequest {
             objective: objective.to_owned(),
@@ -1053,6 +1354,7 @@ fn run_goal_start_command(
                 .map(str::to_owned),
             question,
             idempotency_key: idempotency_key.to_owned(),
+            config_overrides,
         })
     })
     .map_err(map_goal_store_error)?;
@@ -3626,6 +3928,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .filter(|path| path.is_file())
             .ok_or("Rust style release policy is unavailable")?
     };
+    let (
+        initial_policy_profile,
+        initial_tool_registry_config,
+        initial_execution_config,
+        policy_diagnostic,
+    ) = match (
+        UserPolicyProfile::load(&appdata),
+        UserToolRegistryConfig::load(&appdata),
+        UserExecutionConfig::load(&appdata),
+    ) {
+        (Ok(profile), Ok(tool_config), Ok(execution_config)) => {
+            (profile, tool_config, execution_config, None)
+        }
+        (profile, tool_config, execution_config) => (
+            UserPolicyProfile::SafeDefault,
+            UserToolRegistryConfig::default(),
+            UserExecutionConfig::default(),
+            Some(
+                profile
+                    .err()
+                    .or_else(|| tool_config.err())
+                    .or_else(|| execution_config.err())
+                    .expect("one config result failed")
+                    .to_string(),
+            ),
+        ),
+    };
+    approvals
+        .lock()
+        .expect("approval mutex is not poisoned")
+        .set_approval_ttl_ms(
+            initial_execution_config
+                .effective
+                .integer("permissions.approval_ttl_ms")
+                .ok_or("approval TTL is missing from EffectiveConfig")?,
+        )?;
     let management_inspection = inspect_management_root(&management_root);
     let repositories = if management_inspection
         .is_some_and(|inspection| inspection != RecoveryInspection::Healthy)
@@ -3634,8 +3972,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         SqliteManagementRepositorySet::open(&management_root, env!("CARGO_PKG_VERSION")).ok()
     };
-    let management_service = if let Some(repositories) = repositories {
-        let service = ManagementApplicationService::new(
+    let mut management_service = if let Some(repositories) = repositories {
+        let mut service = ManagementApplicationService::new(
             Arc::new(repositories),
             Arc::new(WindowsProjectRootBindingStore::open(&root_binding_root)?),
             Arc::new(LocalArtifactStore::default()),
@@ -3645,9 +3983,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_managed_registry_rewriter(Arc::new(DevelopmentManagedRegistryResolver))
         .with_profile_catalog_root(profile_catalog_root)
         .with_rust_style_runtime(rust_style_runtime_root, rust_style_policy_path)
-        .with_index_cache(Arc::new(FileCodeIndexCache::open(
-            local_appdata.join("Star-Control/cache/project-index"),
-        )?));
+        .with_planning_policy(initial_execution_config.planning_policy.clone())
+        .with_effective_config(initial_execution_config.effective.clone());
+        service.set_scan_incremental(initial_execution_config.scan_incremental);
+        service.set_scan_policy(initial_execution_config.scan_policy.clone());
+        service.set_index_policy(initial_execution_config.index_policy.clone());
+        if initial_execution_config.index_cache_enabled {
+            service = service.with_index_cache(Arc::new(FileCodeIndexCache::open_with_policy(
+                local_appdata.join("Star-Control/cache/project-index"),
+                8,
+                initial_execution_config
+                    .index_cache_max_total_bytes
+                    .min(256 * 1024 * 1024),
+                initial_execution_config.index_cache_max_total_bytes,
+                initial_execution_config.index_cache_retention_days,
+            )?));
+        }
         let service = match RustAnalyzerSemanticAdapter::discover_pinned() {
             Ok(adapter) => service.with_semantic_adapter(Arc::new(adapter)),
             Err(_) => service,
@@ -3669,23 +4020,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?)
     } else {
         None
-    };
-    let (initial_policy_profile, initial_tool_registry_config, policy_diagnostic) = match (
-        UserPolicyProfile::load(&appdata),
-        UserToolRegistryConfig::load(&appdata),
-    ) {
-        (Ok(profile), Ok(config)) => (profile, config, None),
-        (profile, config) => (
-            UserPolicyProfile::SafeDefault,
-            UserToolRegistryConfig::default(),
-            Some(
-                profile
-                    .err()
-                    .or_else(|| config.err())
-                    .expect("one config result failed")
-                    .to_string(),
-            ),
-        ),
     };
     let mut roots = registry_source_roots(
         &install_directory,
@@ -3938,9 +4272,110 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
             continue;
         }
+        let config_layers = match request_config_layers(&request) {
+            Ok(layers) => layers,
+            Err((code, message)) => {
+                let response = invalid_request_response(request, code, &message, registry.revision);
+                let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                continue;
+            }
+        };
         if is_management_command(&request.command) {
+            let execution_config = match (
+                UserToolRegistryConfig::load(&appdata),
+                UserExecutionConfig::load_for_project_and_layers(
+                    &appdata,
+                    &project_directory,
+                    config_layers.clone(),
+                ),
+            ) {
+                (Ok(_), Ok(execution_config)) => execution_config,
+                (tool_config, execution_config) => {
+                    let message = format!(
+                        "The effective user/project/Goal/command configuration is invalid: {}",
+                        tool_config
+                            .err()
+                            .or_else(|| execution_config.err())
+                            .expect("one config result failed")
+                    );
+                    let response = invalid_request_response(
+                        request,
+                        "CONFIG_CONSTRAINT_CONFLICT",
+                        &message,
+                        registry.revision,
+                    );
+                    let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                    continue;
+                }
+            };
             let management_policy_profile =
-                UserPolicyProfile::load(&appdata).unwrap_or(UserPolicyProfile::SafeDefault);
+                match UserPolicyProfile::from_effective(&execution_config.effective) {
+                    Ok(profile) => profile,
+                    Err(error) => {
+                        let message = format!("The effective policy profile is invalid: {error}");
+                        let response = invalid_request_response(
+                            request,
+                            "CONFIG_CONSTRAINT_CONFLICT",
+                            &message,
+                            registry.revision,
+                        );
+                        let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                        continue;
+                    }
+                };
+            if approvals
+                .lock()
+                .expect("approval mutex is not poisoned")
+                .set_approval_ttl_ms(
+                    execution_config
+                        .effective
+                        .integer("permissions.approval_ttl_ms")
+                        .ok_or(ApplicationError::Invalid)?,
+                )
+                .is_err()
+            {
+                let response = invalid_request_response(
+                    request,
+                    "CONFIG_CONSTRAINT_CONFLICT",
+                    "The configured approval TTL cannot be applied safely.",
+                    registry.revision,
+                );
+                let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                continue;
+            }
+            if let Some(service) = management_service.as_mut() {
+                service.set_scan_incremental(execution_config.scan_incremental);
+                service.set_scan_policy(execution_config.scan_policy.clone());
+                service.set_index_policy(execution_config.index_policy.clone());
+                service.set_planning_policy(execution_config.planning_policy.clone());
+                service.set_effective_config(execution_config.effective.clone());
+                let cache = if execution_config.index_cache_enabled {
+                    match FileCodeIndexCache::open_with_policy(
+                        local_appdata.join("Star-Control/cache/project-index"),
+                        8,
+                        execution_config
+                            .index_cache_max_total_bytes
+                            .min(256 * 1024 * 1024),
+                        execution_config.index_cache_max_total_bytes,
+                        execution_config.index_cache_retention_days,
+                    ) {
+                        Ok(cache) => Some(Arc::new(cache) as Arc<dyn star_ports::CodeIndexCache>),
+                        Err(_) => {
+                            let response = invalid_request_response(
+                                request,
+                                "CONFIG_CONSTRAINT_CONFLICT",
+                                "The configured index cache limits cannot be materialized safely.",
+                                registry.revision,
+                            );
+                            let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                            continue;
+                        }
+                    }
+                } else {
+                    None
+                };
+                service.set_index_cache(cache);
+            }
             let response = handle_management_command(
                 ManagementCommandContext {
                     service: management_service.as_ref(),
@@ -3952,6 +4387,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     binding_root: &root_binding_root,
                     project_directory: &project_directory,
                     policy_profile: management_policy_profile,
+                    execution_config: execution_config.clone(),
+                    appdata: &appdata,
+                    config_layers: config_layers.clone(),
                     registry_revision: registry.revision,
                 },
                 request,
@@ -3959,23 +4397,75 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
             continue;
         }
-        let (policy_profile, live_tool_registry_config, live_config_diagnostic) = match (
-            UserPolicyProfile::load(&appdata),
+        let (
+            policy_profile,
+            live_tool_registry_config,
+            live_execution_config,
+            live_config_diagnostic,
+        ) = match (
             UserToolRegistryConfig::load(&appdata),
+            UserExecutionConfig::load_for_project_and_layers(
+                &appdata,
+                &project_directory,
+                config_layers,
+            ),
         ) {
-            (Ok(profile), Ok(config)) => (profile, config, None),
-            (profile, config) => (
+            (Ok(config), Ok(execution_config)) => {
+                match UserPolicyProfile::from_effective(&execution_config.effective) {
+                    Ok(profile) => (profile, config, execution_config, None),
+                    Err(error) => (
+                        UserPolicyProfile::SafeDefault,
+                        UserToolRegistryConfig::default(),
+                        UserExecutionConfig::default(),
+                        Some(format!("CONFIG_CONSTRAINT_CONFLICT: {error}")),
+                    ),
+                }
+            }
+            (config, execution_config) => (
                 UserPolicyProfile::SafeDefault,
                 UserToolRegistryConfig::default(),
+                UserExecutionConfig::default(),
                 Some(format!(
-                    "CONFIG_USER_INVALID: {}",
-                    profile
+                    "CONFIG_CONSTRAINT_CONFLICT: {}",
+                    config
                         .err()
-                        .or_else(|| config.err())
+                        .or_else(|| execution_config.err())
                         .expect("one config result failed")
                 )),
             ),
         };
+        if let Some(diagnostic) = live_config_diagnostic.as_ref()
+            && !invalid_config_diagnostic_command_allowed(&request.command)
+        {
+            let response = invalid_request_response(
+                request,
+                "CONFIG_CONSTRAINT_CONFLICT",
+                diagnostic,
+                registry.revision,
+            );
+            let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+            continue;
+        }
+        if approvals
+            .lock()
+            .expect("approval mutex is not poisoned")
+            .set_approval_ttl_ms(
+                live_execution_config
+                    .effective
+                    .integer("permissions.approval_ttl_ms")
+                    .ok_or("approval TTL is missing from EffectiveConfig")?,
+            )
+            .is_err()
+        {
+            let response = invalid_request_response(
+                request,
+                "CONFIG_CONSTRAINT_CONFLICT",
+                "The configured approval TTL cannot be applied safely.",
+                registry.revision,
+            );
+            let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+            continue;
+        }
         roots = registry_source_roots(
             &install_directory,
             &appdata,
@@ -8361,6 +8851,22 @@ fn lifecycle_identifier_valid(value: &str) -> bool {
     !value.is_empty() && value.len() <= 256 && !value.contains('\0')
 }
 
+fn invalid_config_diagnostic_command_allowed(command: &str) -> bool {
+    matches!(
+        command,
+        "tool.search"
+            | "tool.describe"
+            | "tool.registry.status"
+            | "operation.get"
+            | "operation.cancel"
+            | "request.cancel"
+            | "controller.start"
+            | "controller.shutdown"
+            | "controller.autostart.status"
+            | "controller.autostart.disable"
+    )
+}
+
 fn update_restart_pending_command_allowed(command: &str) -> bool {
     matches!(
         command,
@@ -8389,7 +8895,9 @@ fn update_restart_pending_command_allowed(command: &str) -> bool {
             | "change-bundle.conflicts"
             | "release.show"
             | "release.status"
+            | "release.audit"
             | "evaluation.show"
+            | "config.effective"
             | "profile.list"
             | "profile.show"
             | "profile.resolve"
@@ -8436,6 +8944,25 @@ fn invalid_request_response(
     message: &str,
     registry_revision: u64,
 ) -> IpcResponse {
+    let error = StableErrorCode::parse(code)
+        .map(|code| {
+            ErrorEnvelope::new_stable(
+                code,
+                message,
+                false,
+                request.client_request_id.clone(),
+                "star-controller",
+            )
+        })
+        .unwrap_or_else(|_| {
+            ErrorEnvelope::new(
+                code,
+                message,
+                false,
+                request.client_request_id.clone(),
+                "star-controller",
+            )
+        });
     IpcResponse {
         schema_id: "star.ipc.response".to_owned(),
         schema_version: 1,
@@ -8444,13 +8971,7 @@ fn invalid_request_response(
         data: None,
         operation_id: None,
         diagnostics: vec![],
-        error: Some(ErrorEnvelope::new(
-            code,
-            message,
-            false,
-            request.client_request_id.clone(),
-            "star-controller",
-        )),
+        error: Some(error),
         registry_revision: Some(registry_revision),
         correlation_id: request.client_request_id,
     }
@@ -8600,6 +9121,7 @@ fn is_management_command(command: &str) -> bool {
             | "contract.snapshot"
             | "contract.compare"
             | "docs.check"
+            | "config.effective"
             | "config.trace"
             | "environment.fingerprint"
             | "project.doctor"
@@ -8673,14 +9195,26 @@ fn is_management_command(command: &str) -> bool {
             | "release.promote"
             | "release.show"
             | "release.status"
+            | "release.audit"
             | "release.lifecycle.publish"
             | "release.publish.prepare"
             | "release.publish.authorize"
             | "release.publish.apply"
             | "evaluation.run"
             | "evaluation.show"
+            | "evaluation.case.publish"
+            | "evaluation.case.show"
+            | "evaluation.policy.publish"
+            | "evaluation.policy.show"
+            | "evaluation.compare"
+            | "evaluation.recommend"
+            | "evaluation.radar"
             | "evaluation.catalog.publish"
             | "evaluation.catalog.transition"
+            | "cost.record"
+            | "cost.show"
+            | "budget.snapshot"
+            | "budget.show"
             | "profile.list"
             | "profile.show"
             | "profile.resolve"
@@ -8719,7 +9253,18 @@ fn is_management_command(command: &str) -> bool {
             | "management.migrate.patch-v1-v2.plan"
             | "management.migrate.patch-v1-v2.apply"
             | "management.migrate.patch-v1-v2.rollback"
+            | "management.migrate.change-plan-v1-v2.plan"
+            | "management.migrate.change-plan-v1-v2.apply"
+            | "management.migrate.change-plan-v1-v2.rollback"
     )
+}
+
+fn product_command_handler_current(command: &str) -> bool {
+    if is_direct_core_command(command) {
+        controller_command_registration(command).is_some()
+    } else {
+        is_management_command(command) || command == "approval.resolve"
+    }
 }
 
 struct ManagementCommandContext<'a> {
@@ -8732,6 +9277,9 @@ struct ManagementCommandContext<'a> {
     binding_root: &'a std::path::Path,
     project_directory: &'a std::path::Path,
     policy_profile: UserPolicyProfile,
+    execution_config: UserExecutionConfig,
+    appdata: &'a std::path::Path,
+    config_layers: Vec<ConfigLayerV1>,
     registry_revision: u64,
 }
 
@@ -8826,6 +9374,7 @@ fn managed_registry_resolver_error(
     error: star_development::DevelopmentError,
 ) -> ManagedRegistryResolverError {
     match error {
+        star_development::DevelopmentError::Coded(_) => ManagedRegistryResolverError::Blocked,
         star_development::DevelopmentError::Invalid => ManagedRegistryResolverError::Invalid,
         star_development::DevelopmentError::Unverified => ManagedRegistryResolverError::Unverified,
         star_development::DevelopmentError::Conflict => ManagedRegistryResolverError::Conflict,
@@ -8838,7 +9387,11 @@ fn managed_registry_resolver_error(
 }
 
 fn managed_registry_error(error: star_development::DevelopmentError) -> ApplicationError {
+    if let star_development::DevelopmentError::Coded(code) = error {
+        return ApplicationError::Apply(code.to_string());
+    }
     let code = match error {
+        star_development::DevelopmentError::Coded(_) => unreachable!("handled above"),
         star_development::DevelopmentError::Invalid => "MANAGED_REGISTRY_INVALID",
         star_development::DevelopmentError::Unverified => "MANAGED_REGISTRY_UNVERIFIED",
         star_development::DevelopmentError::Conflict => "MANAGED_REGISTRY_CONFLICT",
@@ -8847,6 +9400,217 @@ fn managed_registry_error(error: star_development::DevelopmentError) -> Applicat
         star_development::DevelopmentError::Fingerprint => "MANAGED_REGISTRY_FINGERPRINT_FAILED",
     };
     ApplicationError::Apply(code.to_owned())
+}
+
+fn enforce_effective_command_policy(
+    service: &ManagementApplicationService,
+    command: &str,
+) -> Result<(), ApplicationError> {
+    let config = service.effective_config()?;
+    let denied = match command {
+        "migration.execute" | "migration.resume" => {
+            config.string("migration.live_execute_action") == Some("deny")
+        }
+        "migration.rollback" => config.string("migration.rollback_action") == Some("deny"),
+        "language-migration.cutover" => {
+            config.string("language_platform_migration.cutover_action") == Some("deny")
+        }
+        "release.publish.prepare" | "release.publish.authorize" | "release.publish.apply" => {
+            config.string("release.publish_action") == Some("deny")
+        }
+        "change-bundle.worktree.create" => config.boolean("vcs.use_worktree") == Some(false),
+        "change-bundle.merge.enqueue" | "change-bundle.merge.run" => {
+            config.string("vcs.merge_strategy") == Some("never")
+        }
+        _ => false,
+    };
+    if denied {
+        return Err(ApplicationError::Apply(
+            "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn enforce_change_bundle_budget(
+    service: &ManagementApplicationService,
+    budget: &star_contracts::coordination_v2::ResourceBudget,
+) -> Result<(), ApplicationError> {
+    let config = service.effective_config()?;
+    let within = u64::from(budget.max_parallel_projects)
+        <= config
+            .integer("vcs.max_parallel_projects")
+            .ok_or(ApplicationError::Invalid)?
+        && u64::from(budget.max_active_worktrees)
+            <= config
+                .integer("vcs.max_active_worktrees")
+                .ok_or(ApplicationError::Invalid)?
+        && u64::from(budget.max_concurrent_writes)
+            <= config
+                .integer("remote.max_parallel_writes")
+                .ok_or(ApplicationError::Invalid)?
+        && u64::from(budget.max_concurrent_writes)
+            <= config
+                .integer("vcs.max_parallel_mutations_per_repository")
+                .ok_or(ApplicationError::Invalid)?
+        && budget.artifact_limit_bytes
+            <= config
+                .integer("budgets.max_artifact_bytes")
+                .ok_or(ApplicationError::Invalid)?;
+    let disk_within = match config.get("vcs.worktree_disk_limit_bytes") {
+        Some(star_contracts::config_v1::ConfigValueV1::Json(serde_json::Value::Number(limit))) => {
+            limit
+                .as_u64()
+                .is_some_and(|limit| budget.worktree_disk_limit_bytes <= limit)
+        }
+        Some(star_contracts::config_v1::ConfigValueV1::Json(serde_json::Value::Null)) => true,
+        _ => false,
+    };
+    let configured_wall_limits = ["budgets.goal_wall_time_ms", "budgets.stage_wall_time_ms"]
+        .into_iter()
+        .map(|key| match config.get(key) {
+            Some(star_contracts::config_v1::ConfigValueV1::Json(serde_json::Value::Number(
+                limit,
+            ))) => limit.as_u64().ok_or(ApplicationError::Invalid),
+            Some(star_contracts::config_v1::ConfigValueV1::Json(serde_json::Value::Null)) => {
+                Ok(u64::MAX)
+            }
+            _ => Err(ApplicationError::Invalid),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let wall_within = configured_wall_limits
+        .into_iter()
+        .all(|limit| budget.wall_time_limit_ms <= limit);
+    if !within || !disk_within || !wall_within {
+        return Err(ApplicationError::Apply(
+            "CHANGE_BUNDLE_RESOURCE_LIMIT".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn enforce_worktree_capacity(
+    service: &ManagementApplicationService,
+) -> Result<(), ApplicationError> {
+    let limit = service
+        .effective_config()?
+        .integer("vcs.max_active_worktrees")
+        .ok_or(ApplicationError::Invalid)? as usize;
+    let active = service
+        .list_development_records("worktree_record", None)?
+        .into_iter()
+        .filter_map(|record| serde_json::from_value::<WorktreeRecord>(record.document).ok())
+        .filter(|record| {
+            !matches!(
+                record.state,
+                WorktreeState::Planned | WorktreeState::Discarded
+            )
+        })
+        .count();
+    if active >= limit {
+        return Err(ApplicationError::Apply(
+            "CHANGE_BUNDLE_RESOURCE_LIMIT".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn enforce_merge_queue_capacity(
+    service: &ManagementApplicationService,
+    queue: &MergeQueueRecord,
+) -> Result<(), ApplicationError> {
+    let config = service.effective_config()?;
+    let max_entries = config
+        .integer("vcs.max_merge_queue_entries")
+        .ok_or(ApplicationError::Invalid)? as usize;
+    let max_parallel = config
+        .integer("vcs.max_parallel_local_merges")
+        .ok_or(ApplicationError::Invalid)? as usize;
+    let active_entries = queue
+        .entries
+        .iter()
+        .filter(|entry| {
+            matches!(
+                entry.state,
+                MergeQueueEntryState::Integrating | MergeQueueEntryState::Validating
+            )
+        })
+        .count();
+    if queue.entries.len() > max_entries || active_entries > max_parallel {
+        return Err(ApplicationError::Apply(
+            "CHANGE_BUNDLE_RESOURCE_LIMIT".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn enforce_local_merge_capacity(
+    service: &ManagementApplicationService,
+) -> Result<(), ApplicationError> {
+    let max_parallel = service
+        .effective_config()?
+        .integer("vcs.max_parallel_local_merges")
+        .ok_or(ApplicationError::Invalid)? as usize;
+    let active = service
+        .list_development_records("merge_queue_record", None)?
+        .into_iter()
+        .filter_map(|record| serde_json::from_value::<MergeQueueRecord>(record.document).ok())
+        .flat_map(|queue| queue.entries.into_iter())
+        .filter(|entry| {
+            matches!(
+                entry.state,
+                MergeQueueEntryState::Integrating | MergeQueueEntryState::Validating
+            )
+        })
+        .count();
+    if active >= max_parallel {
+        return Err(ApplicationError::Apply(
+            "CHANGE_BUNDLE_RESOURCE_LIMIT".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn normalized_remote_host(identity: &str) -> Option<String> {
+    let value = identity.trim();
+    let host = if let Some((_, rest)) = value.split_once("://") {
+        rest.split('/').next()?.rsplit('@').next()?
+    } else if let Some((_, rest)) = value.split_once('@') {
+        rest.split(':').next()?
+    } else {
+        value.split('/').next()?.split(':').next()?
+    };
+    let host = host.split(':').next()?.trim().trim_end_matches('.');
+    (!host.is_empty()
+        && host.len() <= 253
+        && host
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-')))
+    .then(|| host.to_ascii_lowercase())
+}
+
+fn enforce_remote_host_policy(
+    service: &ManagementApplicationService,
+    remote_identity: &str,
+) -> Result<(), ApplicationError> {
+    let allowed = service
+        .effective_config()?
+        .string_set("remote.allowed_hosts")
+        .ok_or(ApplicationError::Invalid)?;
+    if allowed.is_empty() {
+        return Ok(());
+    }
+    let host = normalized_remote_host(remote_identity)
+        .ok_or_else(|| ApplicationError::Apply("CONFIG_CONSTRAINT_CONFLICT".to_owned()))?;
+    if !allowed
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(&host))
+    {
+        return Err(ApplicationError::Apply(
+            "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 fn resolve_managed_registry(
@@ -8888,6 +9652,9 @@ fn handle_management_command(
         binding_root,
         project_directory,
         policy_profile,
+        execution_config,
+        appdata,
+        config_layers,
         registry_revision,
     } = context;
     if request
@@ -9025,9 +9792,15 @@ fn handle_management_command(
                 })
             }
             "management.rebuild.plan" if payload_has_exact_keys(&request.payload, &[]) => {
-                management_recovery_application(recovery, binding_root)
-                    .and_then(|service| service.plan_source_rebuild())
-                    .and_then(serialize_management_result)
+                management_recovery_application(
+                    recovery,
+                    binding_root,
+                    &execution_config,
+                    appdata,
+                    &config_layers,
+                )
+                .and_then(|service| service.plan_source_rebuild())
+                .and_then(serialize_management_result)
             }
             "management.rebuild.apply"
                 if payload_has_exact_keys(
@@ -9038,14 +9811,20 @@ fn handle_management_command(
                 management_rebuild_plan(&request.payload).and_then(|plan| {
                     let approval =
                         management_approval(&request.payload, "approved_plan_fingerprint")?;
-                    management_recovery_application(recovery, binding_root)?
-                        .apply_source_rebuild(&plan, approval.as_str())
-                        .and_then(|rebuild| {
-                            serialize_management_result(serde_json::json!({
-                                "rebuild":rebuild,
-                                "controller_restart_required":true,
-                            }))
-                        })
+                    management_recovery_application(
+                        recovery,
+                        binding_root,
+                        &execution_config,
+                        appdata,
+                        &config_layers,
+                    )?
+                    .apply_source_rebuild(&plan, approval.as_str())
+                    .and_then(|rebuild| {
+                        serialize_management_result(serde_json::json!({
+                            "rebuild":rebuild,
+                            "controller_restart_required":true,
+                        }))
+                    })
                 })
             }
             "management.local-state.export.plan"
@@ -9089,6 +9868,9 @@ fn handle_management_command(
         };
         return management_command_response(request, result, registry_revision);
     };
+    if let Err(error) = enforce_effective_command_policy(service, &request.command) {
+        return management_command_response(request, Err(error), registry_revision);
+    }
     let result = match request.command.as_str() {
         "development.effect.record" => operations
             .ok_or_else(|| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))
@@ -9118,6 +9900,9 @@ fn handle_management_command(
             &request.payload,
             &request.actor,
         ),
+        "config.effective" if payload_has_exact_keys(&request.payload, &[]) => service
+            .effective_config()
+            .and_then(serialize_management_result),
         "profile.list" if payload_has_exact_keys(&request.payload, &[]) => service
             .development_profile_catalog()
             .and_then(serialize_management_result),
@@ -9249,7 +10034,18 @@ fn handle_management_command(
                 })
                 .ok_or(ApplicationError::Invalid);
             idempotency_key.and_then(|key| {
-                read_planning_task(&request.payload, project_directory).and_then(|task| {
+                read_planning_task(&request.payload, project_directory).and_then(|mut task| {
+                    if task.profile_ids.is_empty() {
+                        let defaults = service
+                            .effective_config()?
+                            .string_set("default_work_profile")
+                            .ok_or(ApplicationError::Invalid)?;
+                        if let [profile_id] = defaults {
+                            task.profile_ids.push(profile_id.clone());
+                        } else if !defaults.is_empty() {
+                            return Err(ApplicationError::Invalid);
+                        }
+                    }
                     planning_check_descriptors(project_directory).and_then(|descriptors| {
                         service
                             .create_planning_bundle(
@@ -10446,6 +11242,36 @@ fn handle_management_command(
                     .and_then(serialize_management_result)
             })
         }
+        "management.migrate.change-plan-v1-v2.plan"
+            if payload_has_exact_keys(&request.payload, &["project_id", "task_spec_id"]) =>
+        {
+            management_project_id(&request.payload).and_then(|project_id| {
+                let task_spec_id = management_task_spec_id(&request.payload)?;
+                service
+                    .plan_change_plan_v1_to_v2_migration(&project_id, &task_spec_id)
+                    .and_then(serialize_management_result)
+            })
+        }
+        "management.migrate.change-plan-v1-v2.apply"
+            if payload_has_exact_keys(&request.payload, &["plan", "approved_plan_fingerprint"]) =>
+        {
+            management_change_plan_migration_plan(&request.payload).and_then(|plan| {
+                let approval = management_approval(&request.payload, "approved_plan_fingerprint")?;
+                service
+                    .apply_change_plan_v1_to_v2_migration(plan, approval.as_str())
+                    .and_then(serialize_management_result)
+            })
+        }
+        "management.migrate.change-plan-v1-v2.rollback"
+            if payload_has_exact_keys(&request.payload, &["plan", "approved_plan_fingerprint"]) =>
+        {
+            management_change_plan_migration_plan(&request.payload).and_then(|plan| {
+                let approval = management_approval(&request.payload, "approved_plan_fingerprint")?;
+                service
+                    .rollback_change_plan_v1_to_v2_migration(plan, approval.as_str())
+                    .and_then(serialize_management_result)
+            })
+        }
         "management.rebuild.plan" | "management.rebuild.apply" => Err(ApplicationError::Invalid),
         _ => Err(ApplicationError::Invalid),
     };
@@ -10549,12 +11375,8 @@ fn handle_development_effect_record(
     let descriptor_hash =
         Sha256Hash::from_str(&operation.descriptor_hash).map_err(|_| ApplicationError::Invalid)?;
     let executable_sha256 = development_effect_executable_sha256(&operation)?;
-    let result_fingerprint = operation
-        .result
-        .as_ref()
-        .map(star_contracts::canonical::canonical_sha256)
-        .transpose()
-        .map_err(|_| ApplicationError::Invalid)?;
+    let result_fingerprint =
+        development_effect_result_fingerprint(effect_kind, state, operation.result.as_ref())?;
     let approval_ref = m6_optional_string(payload, "approval_ref", 512)?;
     let permission_decision_ref = m6_optional_string(payload, "permission_decision_ref", 512)?;
     let gate_decision_ref = m6_optional_string(payload, "gate_decision_ref", 512)?;
@@ -10702,6 +11524,54 @@ fn development_effect_artifact_refs(result: Option<&serde_json::Value>) -> Vec<S
     refs
 }
 
+fn development_effect_result_fingerprint(
+    effect_kind: DevelopmentEffectKind,
+    state: DevelopmentEffectState,
+    result: Option<&serde_json::Value>,
+) -> Result<Option<Sha256Hash>, ApplicationError> {
+    if effect_kind == DevelopmentEffectKind::FailureReproduction
+        && state == DevelopmentEffectState::Succeeded
+    {
+        let observation: ReproductionAttemptObservationV1 = serde_json::from_value(
+            result
+                .and_then(|value| value.get("data"))
+                .cloned()
+                .ok_or_else(|| {
+                    ApplicationError::Apply("REPRODUCTION_INPUT_INCOMPLETE".to_owned())
+                })?,
+        )
+        .map_err(|_| ApplicationError::Apply("REPRODUCTION_INPUT_INCOMPLETE".to_owned()))?;
+        let observation = seal_reproduction_attempt_observation(observation)
+            .map_err(|_| ApplicationError::Apply("REPRODUCTION_INPUT_INCOMPLETE".to_owned()))?;
+        return reproduction_attempt_observation_fingerprint(observation)
+            .map(Some)
+            .map_err(m6_development_error);
+    }
+    if effect_kind == DevelopmentEffectKind::ReleaseLifecycle
+        && state == DevelopmentEffectState::Succeeded
+    {
+        let evidence: ReleaseLifecycleEvidence = serde_json::from_value(
+            result
+                .and_then(|value| value.get("data"))
+                .cloned()
+                .ok_or_else(|| {
+                    ApplicationError::Apply("RELEASE_LIFECYCLE_EVIDENCE_MISMATCH".to_owned())
+                })?,
+        )
+        .map_err(|_| ApplicationError::Apply("RELEASE_LIFECYCLE_EVIDENCE_MISMATCH".to_owned()))?;
+        evidence.validate_complete().map_err(m10_release_error)?;
+        return canonical_sha256(
+            &serde_json::to_value(evidence).map_err(|_| ApplicationError::Invalid)?,
+        )
+        .map(Some)
+        .map_err(|_| ApplicationError::Invalid);
+    }
+    result
+        .map(star_contracts::canonical::canonical_sha256)
+        .transpose()
+        .map_err(|_| ApplicationError::Invalid)
+}
+
 fn is_m6_development_command(command: &str) -> bool {
     matches!(
         command,
@@ -10804,14 +11674,26 @@ fn is_m10_development_command(command: &str) -> bool {
             | "release.promote"
             | "release.show"
             | "release.status"
+            | "release.audit"
             | "release.lifecycle.publish"
             | "release.publish.prepare"
             | "release.publish.authorize"
             | "release.publish.apply"
             | "evaluation.run"
             | "evaluation.show"
+            | "evaluation.case.publish"
+            | "evaluation.case.show"
+            | "evaluation.policy.publish"
+            | "evaluation.policy.show"
+            | "evaluation.compare"
+            | "evaluation.recommend"
+            | "evaluation.radar"
             | "evaluation.catalog.publish"
             | "evaluation.catalog.transition"
+            | "cost.record"
+            | "cost.show"
+            | "budget.snapshot"
+            | "budget.show"
     )
 }
 
@@ -11320,6 +12202,21 @@ fn handle_m7_development_command(
             )
             .map_err(|_| ApplicationError::Invalid)?;
             input.reproduction_pack_id = pack_id.clone();
+            let max_attempts = service
+                .effective_config()?
+                .integer("failure_reproduction.max_rerun_attempts")
+                .ok_or(ApplicationError::Invalid)? as usize;
+            if input.attempts.is_empty() || input.attempts.len() > max_attempts {
+                return Err(ApplicationError::Apply(
+                    "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+                ));
+            }
+            m7_validate_reproduction_effect_receipts(
+                service,
+                &project_id,
+                &failure,
+                &input.attempts,
+            )?;
             let pack = build_reproduction_pack_v2(&failure, input).map_err(m6_development_error)?;
             let state = m7_reproduction_state(pack.result);
             service
@@ -11353,6 +12250,7 @@ fn handle_m7_development_command(
             {
                 return Err(ApplicationError::Invalid);
             }
+            m7_validate_regression_evidence(service, &project_id, &failure, &record)?;
             let record = seal_regression_record(record).map_err(m6_development_error)?;
             let state = match record.state {
                 star_contracts::maintenance_v2::RegressionState::Fixed => "fixed",
@@ -11468,6 +12366,16 @@ fn handle_m7_development_command(
                     .ok_or(ApplicationError::Invalid)?,
             )
             .map_err(|_| ApplicationError::Invalid)?;
+            let configured_max_age_seconds = service
+                .effective_config()?
+                .integer("security_supply_chain.default_max_age_hours")
+                .and_then(|hours| hours.checked_mul(3_600))
+                .ok_or(ApplicationError::Invalid)?;
+            if input.source.maximum_age_seconds > configured_max_age_seconds {
+                return Err(ApplicationError::Apply(
+                    "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+                ));
+            }
             let receipt_id = m6_required_string(payload, "effect_receipt_id", 192)?;
             let receipt: DevelopmentEffectReceiptV1 =
                 m6_record_document(service, "development_effect_receipt", &receipt_id)?;
@@ -11675,6 +12583,18 @@ fn handle_m7_development_command(
                     .ok_or(ApplicationError::Invalid)?,
             )
             .map_err(|_| ApplicationError::Invalid)?;
+            for item in &items {
+                m10_validate_radar_evaluation_refs(service, item)?;
+            }
+            let projects = items
+                .iter()
+                .map(|item| item.project_id.clone())
+                .collect::<BTreeSet<_>>();
+            let project_partition = if projects.len() == 1 {
+                projects.into_iter().next()
+            } else {
+                None
+            };
             let snapshot = build_maintenance_radar_snapshot(
                 snapshot_id.clone(),
                 evaluation_time,
@@ -11688,7 +12608,7 @@ fn handle_m7_development_command(
                     "maintenance_radar_snapshot",
                     &snapshot_id,
                     m6_revision(payload)?,
-                    None,
+                    project_partition,
                     state,
                     MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
                     1,
@@ -11698,6 +12618,25 @@ fn handle_m7_development_command(
         }
         _ => Err(ApplicationError::Invalid),
     }
+}
+
+fn materialize_document_config_default(
+    config: &EffectiveConfigV1,
+    document: &mut serde_json::Value,
+    config_key: &str,
+    field: &str,
+) -> Result<(), ApplicationError> {
+    let object = document.as_object_mut().ok_or(ApplicationError::Invalid)?;
+    if object.contains_key(field) {
+        return Ok(());
+    }
+    let value = match config.get(config_key) {
+        Some(ConfigValueV1::String(value)) => serde_json::Value::String(value.clone()),
+        Some(ConfigValueV1::Integer(value)) => serde_json::Value::Number((*value).into()),
+        _ => return Err(ApplicationError::Invalid),
+    };
+    object.insert(field.to_owned(), value);
+    Ok(())
 }
 
 fn handle_m8_development_command(
@@ -11745,13 +12684,19 @@ fn handle_m8_development_command(
             if manifest.project_id != project_id {
                 return Err(ApplicationError::Invalid);
             }
-            let input: MigrationPlanInput = serde_json::from_value(
-                payload
-                    .get("input")
-                    .cloned()
-                    .ok_or(ApplicationError::Invalid)?,
-            )
-            .map_err(|_| ApplicationError::Invalid)?;
+            let config = service.effective_config()?;
+            let mut input_document = payload
+                .get("input")
+                .cloned()
+                .ok_or(ApplicationError::Invalid)?;
+            materialize_document_config_default(
+                config,
+                &mut input_document,
+                "migration.default_strategy",
+                "strategy",
+            )?;
+            let input: MigrationPlanInput =
+                serde_json::from_value(input_document).map_err(|_| ApplicationError::Invalid)?;
             let plan = build_migration_plan(&manifest, input).map_err(m6_development_error)?;
             let state = m8_migration_support_state(plan.support_decision);
             service
@@ -11848,6 +12793,26 @@ fn handle_m8_development_command(
                 })
                 .filter(|item| item.plan_ref == plan_id)
                 .collect::<Vec<_>>();
+            let config = service.effective_config()?;
+            let phase_count = previous
+                .iter()
+                .filter(|item| item.phase == attempt.phase)
+                .count() as u64;
+            if attempt.phase == star_contracts::migration_v2::MigrationPhase::Resume
+                && phase_count
+                    >= config
+                        .integer("migration.max_resume_attempts")
+                        .ok_or(ApplicationError::Invalid)?
+                || attempt.phase == star_contracts::migration_v2::MigrationPhase::MigrationRehearsal
+                    && phase_count
+                        > config
+                            .integer("migration.max_additional_rehearsals")
+                            .ok_or(ApplicationError::Invalid)?
+            {
+                return Err(ApplicationError::Apply(
+                    "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+                ));
+            }
             let attempt =
                 seal_migration_attempt(&plan, &previous, attempt).map_err(m6_development_error)?;
             m8_validate_migration_effect_receipt(service, command, &project_id, &plan, &attempt)?;
@@ -11882,6 +12847,7 @@ fn handle_m8_development_command(
                 return Err(ApplicationError::Invalid);
             }
             let record = seal_restore_verification(record).map_err(m6_development_error)?;
+            m8_validate_restore_verification(service, &project_id, &plan, &record)?;
             let state = record.state.clone();
             service
                 .publish_development_document(
@@ -11950,6 +12916,7 @@ fn handle_m8_development_command(
                 return Err(ApplicationError::Invalid);
             }
             let report = seal_migration_validation_report(report).map_err(m6_development_error)?;
+            m8_validate_migration_validation_report(service, &project_id, &plan, &report)?;
             let state = report.state.clone();
             service
                 .publish_development_document(
@@ -11974,6 +12941,7 @@ fn handle_m8_development_command(
             .map_err(|_| ApplicationError::Invalid)?;
             let handoff =
                 seal_cross_project_migration_handoff(handoff).map_err(m6_development_error)?;
+            m8_validate_cross_project_migration_handoff(service, &handoff)?;
             let state = if handoff.ready_for_change_bundle {
                 "ready"
             } else {
@@ -11999,15 +12967,41 @@ fn handle_m8_development_command(
             ) =>
         {
             let project_id = management_project_id(payload)?;
-            let specification: PerformanceWorkloadSpec = serde_json::from_value(
-                payload
-                    .get("specification")
-                    .cloned()
-                    .ok_or(ApplicationError::Invalid)?,
-            )
-            .map_err(|_| ApplicationError::Invalid)?;
+            let config = service.effective_config()?;
+            let mut specification_document = payload
+                .get("specification")
+                .cloned()
+                .ok_or(ApplicationError::Invalid)?;
+            materialize_document_config_default(
+                config,
+                &mut specification_document,
+                "performance_build.default_warmup_runs",
+                "warmup_count",
+            )?;
+            materialize_document_config_default(
+                config,
+                &mut specification_document,
+                "performance_build.default_measurement_runs",
+                "measured_count",
+            )?;
+            let specification: PerformanceWorkloadSpec =
+                serde_json::from_value(specification_document)
+                    .map_err(|_| ApplicationError::Invalid)?;
             if specification.project_id != project_id {
                 return Err(ApplicationError::Invalid);
+            }
+            if u64::from(specification.measured_count)
+                < config
+                    .integer("performance_build.minimum_measurement_runs")
+                    .ok_or(ApplicationError::Invalid)?
+                || specification.outlier_policy
+                    != config
+                        .string("performance_build.outlier_policy")
+                        .ok_or(ApplicationError::Invalid)?
+            {
+                return Err(ApplicationError::Apply(
+                    "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+                ));
             }
             let specification =
                 seal_performance_workload(specification).map_err(m6_development_error)?;
@@ -12044,6 +13038,30 @@ fn handle_m8_development_command(
                     .ok_or(ApplicationError::Invalid)?,
             )
             .map_err(|_| ApplicationError::Invalid)?;
+            let previous_runs = service
+                .list_development_records("performance_run", Some(&project_id))?
+                .into_iter()
+                .filter_map(|record| serde_json::from_value::<PerformanceRun>(record.document).ok())
+                .filter(|previous| {
+                    previous.workload_ref == workload_id
+                        && previous.cohort == run.cohort
+                        && previous.warmup == run.warmup
+                })
+                .count() as u64;
+            let allowed_runs = if run.warmup {
+                u64::from(workload.warmup_count)
+            } else {
+                u64::from(workload.measured_count)
+                    + service
+                        .effective_config()?
+                        .integer("performance_build.max_additional_runs")
+                        .ok_or(ApplicationError::Invalid)?
+            };
+            if previous_runs >= allowed_runs {
+                return Err(ApplicationError::Apply(
+                    "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+                ));
+            }
             let run = seal_performance_run(&workload, run).map_err(m6_development_error)?;
             m8_validate_performance_effect_receipt(service, &project_id, &run)?;
             let state = if run.correctness_passed {
@@ -12162,6 +13180,7 @@ fn handle_m8_development_command(
             )
             .map_err(|_| ApplicationError::Invalid)?;
             let report = seal_equivalence_report(&plan, report).map_err(m6_development_error)?;
+            m8_validate_equivalence_evidence(service, &project_id, &plan, &report)?;
             let state = m8_equivalence_state(report.equivalence_state);
             service
                 .publish_development_document(
@@ -12195,6 +13214,7 @@ fn handle_m8_development_command(
                 m6_record_document(service, "language_migration_plan", &plan_id)?;
             let report: EquivalenceReport =
                 m6_record_document(service, "equivalence_report", &report_id)?;
+            m8_validate_equivalence_evidence(service, &project_id, &plan, &report)?;
             let receipt_id = m6_required_string(payload, "effect_receipt_id", 192)?;
             let receipt = m8_effect_receipt(
                 service,
@@ -12297,6 +13317,7 @@ fn handle_m9_development_command(
             if payload_has_exact_keys(payload, &["goal", "record_revision"]) =>
         {
             let goal: MultiProjectGoal = m9_document(payload, "goal")?;
+            enforce_change_bundle_budget(service, &goal.resource_budget)?;
             let goal = seal_multi_project_goal(goal).map_err(m6_development_error)?;
             if goal.revision != m8_record_revision(payload)? {
                 return Err(ApplicationError::Invalid);
@@ -12327,6 +13348,7 @@ fn handle_m9_development_command(
             if participant.revision != m8_record_revision(payload)? {
                 return Err(ApplicationError::Invalid);
             }
+            m9_validate_participant_publication(service, &participant)?;
             let state = m9_participant_state(participant.state);
             service
                 .publish_development_document(
@@ -12362,6 +13384,7 @@ fn handle_m9_development_command(
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             let bundle: CrossRepoChangeBundle = m9_document(payload, "bundle")?;
+            enforce_change_bundle_budget(service, &bundle.resource_budget)?;
             let bundle = seal_cross_repo_bundle(&goal, &participants, bundle)
                 .map_err(m6_development_error)?;
             if bundle.revision != m8_record_revision(payload)?
@@ -12542,6 +13565,7 @@ fn handle_m9_development_command(
         {
             let project_id = management_project_id(payload)?;
             let project_root = service.development_project_root(&project_id)?;
+            enforce_worktree_capacity(service)?;
             let worktree_id = m6_required_string(payload, "worktree_id", 192)?;
             let mut record: WorktreeRecord =
                 m6_record_document(service, "worktree_record", &worktree_id)?;
@@ -12672,6 +13696,7 @@ fn handle_m9_development_command(
             if queue.project_id != project_id || queue.revision != m8_record_revision(payload)? {
                 return Err(ApplicationError::Invalid);
             }
+            enforce_merge_queue_capacity(service, &queue)?;
             service
                 .publish_development_document(
                     "merge_queue_record",
@@ -12700,6 +13725,7 @@ fn handle_m9_development_command(
                 ],
             ) =>
         {
+            enforce_local_merge_capacity(service)?;
             m9_run_local_merge(service, payload)
         }
         "change-bundle.merge.result"
@@ -12710,6 +13736,16 @@ fn handle_m9_development_command(
             let result = seal_project_merge_result(result).map_err(m6_development_error)?;
             if result.project_id != project_id || result.revision != m8_record_revision(payload)? {
                 return Err(ApplicationError::Invalid);
+            }
+            if !matches!(
+                result.result,
+                ProjectMergeResultState::Conflicted
+                    | ProjectMergeResultState::Failed
+                    | ProjectMergeResultState::OutcomeUnknown
+            ) {
+                return Err(ApplicationError::Apply(
+                    "CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE".to_owned(),
+                ));
             }
             let state = m9_merge_result_state(result.result);
             service
@@ -12775,6 +13811,7 @@ fn handle_m9_development_command(
                 m6_required_string(payload, "valid_until", 128)?,
             )
             .map_err(m6_development_error)?;
+            enforce_remote_host_policy(service, &snapshot.remote_identity)?;
             service
                 .publish_development_document(
                     "remote_state_snapshot_v2",
@@ -12800,6 +13837,16 @@ fn handle_m9_development_command(
             let operation = seal_remote_operation(operation).map_err(m6_development_error)?;
             if operation.revision != m8_record_revision(payload)? {
                 return Err(ApplicationError::Invalid);
+            }
+            if matches!(
+                operation.state,
+                RemoteOperationState::Executing
+                    | RemoteOperationState::Succeeded
+                    | RemoteOperationState::Reconciled
+            ) {
+                return Err(ApplicationError::Apply(
+                    "REMOTE_RESULT_UNVERIFIED".to_owned(),
+                ));
             }
             let state = m9_remote_operation_state(operation.state);
             service
@@ -12828,6 +13875,7 @@ fn handle_m9_development_command(
             if handoff.revision != m8_record_revision(payload)? {
                 return Err(ApplicationError::Invalid);
             }
+            m9_validate_release_handoff(service, &handoff)?;
             let state = if handoff.ready { "ready" } else { "blocked" };
             service
                 .publish_development_document(
@@ -13050,7 +14098,7 @@ fn m9_reconcile_participant_apply(
         "change_bundle_participant",
         &participant.participant_id,
         participant.revision,
-        Some(project_id),
+        Some(project_id.clone()),
         state,
         CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID,
         2,
@@ -13095,40 +14143,68 @@ fn m9_validate_participant_evidence(
         return Err(ApplicationError::Invalid);
     }
     let mut gate_ids = BTreeSet::new();
+    let mut subject_binding_fingerprints = BTreeSet::new();
     for value in &participant.gate_decision_refs {
-        let gate_id = GateId::parse(value.clone()).map_err(|_| ApplicationError::Invalid)?;
-        let gate = service.get_gate_decision_v2(&project_id, &gate_id)?;
-        if gate.decision != GateDecisionKind::AutoPass
-            || !gate.remaining_risks.is_empty()
-            || gate.valid_until.is_some_and(|limit| limit <= Utc::now())
-        {
-            return Err(ApplicationError::Apply(
-                "CHANGE_BUNDLE_PROJECT_GATE_NOT_CURRENT_PASS".to_owned(),
-            ));
+        let gate = m8_current_gate(
+            service,
+            &project_id,
+            value,
+            &participant.validation_plan_refs,
+            "CHANGE_BUNDLE_PROJECT_GATE_NOT_CURRENT_PASS",
+        )?;
+        for reference in &gate.validation_result_refs {
+            let result = m8_current_validation_result(
+                service,
+                &project_id,
+                &reference.document_id,
+                "CHANGE_BUNDLE_PROJECT_GATE_NOT_CURRENT_PASS",
+            )?;
+            if result.subject_binding.checkout_id != participant.checkout_id {
+                return Err(ApplicationError::Apply(
+                    "CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned(),
+                ));
+            }
+            subject_binding_fingerprints.insert(result.subject_binding.binding_fingerprint);
         }
-        gate_ids.insert(gate_id);
+        gate_ids.insert(gate.gate_id);
     }
     for value in &participant.evidence_bundle_refs {
-        let evidence_id =
-            EvidenceBundleId::parse(value.clone()).map_err(|_| ApplicationError::Invalid)?;
-        let evidence = service.get_evidence_bundle_v2(&project_id, &evidence_id)?;
-        if evidence.completeness != Completeness::Complete
-            || evidence.authoritative_gate_state != AuthoritativeGateState::Passed
-            || !evidence.remaining_risks.is_empty()
-            || !gate_ids.contains(&evidence.gate_decision_ref.gate_id)
-        {
-            return Err(ApplicationError::Apply(
-                "CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE".to_owned(),
-            ));
-        }
+        m9_current_evidence_bundle(service, &project_id, value, &gate_ids)?;
     }
-    participant.state = if participant.merge_plan_ref.is_some() {
+    participant.actual_subject_binding_ref = Some(
+        canonical_sha256(
+            &serde_json::to_value(&subject_binding_fingerprints)
+                .map_err(|_| ApplicationError::Invalid)?,
+        )
+        .map_err(|_| ApplicationError::Invalid)?
+        .to_string(),
+    );
+    if participant.project_merge_result_ref.is_some() {
+        m9_finalize_project_merge_result(
+            service,
+            &project_id,
+            &participant,
+            participant
+                .gate_decision_refs
+                .first()
+                .ok_or(ApplicationError::Invalid)?,
+            participant
+                .evidence_bundle_refs
+                .first()
+                .ok_or(ApplicationError::Invalid)?,
+        )?;
+    }
+    participant.state = if participant.project_merge_result_ref.is_some() {
+        ParticipantState::LocalCompleted
+    } else if participant.merge_plan_ref.is_some() {
         star_contracts::coordination_v2::ParticipantState::MergeReady
     } else {
         star_contracts::coordination_v2::ParticipantState::LocalCompleted
     };
     participant.pending_action = Some(
-        if participant.merge_plan_ref.is_some() {
+        if participant.project_merge_result_ref.is_some() {
+            "bundle_goal_validate"
+        } else if participant.merge_plan_ref.is_some() {
             "merge_enqueue"
         } else {
             "bundle_goal_validate"
@@ -13175,7 +14251,161 @@ fn m9_participant_identity_stable(
         && previous.change_plan_refs == current.change_plan_refs
         && previous.patch_set_refs == current.patch_set_refs
         && previous.migration_plan_refs == current.migration_plan_refs
+        && previous.worktree_record_refs == current.worktree_record_refs
+        && previous.merge_plan_ref == current.merge_plan_ref
+        && previous.project_merge_result_ref == current.project_merge_result_ref
+        && previous.remote_snapshot_refs == current.remote_snapshot_refs
+        && previous.remote_operation_refs == current.remote_operation_refs
         && previous.recovery_plan_ref == current.recovery_plan_ref
+        && previous.compensation_refs == current.compensation_refs
+}
+
+fn m9_current_evidence_bundle(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    evidence_ref: &str,
+    allowed_gate_ids: &BTreeSet<GateId>,
+) -> Result<star_contracts::evidence_v2::EvidenceBundleV2, ApplicationError> {
+    let error = || ApplicationError::Apply("CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE".to_owned());
+    let evidence_id = EvidenceBundleId::parse(evidence_ref.to_owned()).map_err(|_| error())?;
+    let evidence = service
+        .get_evidence_bundle_v2(project_id, &evidence_id)
+        .map_err(|_| error())?;
+    if evidence.completeness != Completeness::Complete
+        || evidence.authoritative_gate_state != AuthoritativeGateState::Passed
+        || !evidence.remaining_risks.is_empty()
+        || !evidence.missing_reasons.is_empty()
+        || !allowed_gate_ids.contains(&evidence.gate_decision_ref.gate_id)
+    {
+        return Err(error());
+    }
+    let gate = service
+        .get_gate_decision_v2(project_id, &evidence.gate_decision_ref.gate_id)
+        .map_err(|_| error())?;
+    if gate.reference().map_err(|_| error())? != evidence.gate_decision_ref {
+        return Err(error());
+    }
+
+    let all_runs = service.list_validation_runs_v2(project_id)?;
+    let mut runs = Vec::with_capacity(evidence.validation_run_refs.len());
+    for reference in &evidence.validation_run_refs {
+        let run = all_runs
+            .iter()
+            .find(|run| run.validation_run_id == reference.validation_run_id)
+            .cloned()
+            .ok_or_else(error)?;
+        if run.reference().map_err(|_| error())? != *reference {
+            return Err(error());
+        }
+        runs.push(run);
+    }
+    let mut results = Vec::with_capacity(evidence.validation_result_refs.len());
+    for reference in &evidence.validation_result_refs {
+        let result = m8_current_validation_result(
+            service,
+            project_id,
+            &reference.document_id,
+            "CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE",
+        )?;
+        if result.reference().map_err(|_| error())? != *reference {
+            return Err(error());
+        }
+        results.push(result);
+    }
+    let mut diagnostics = Vec::with_capacity(evidence.diagnostic_refs.len());
+    for reference in &evidence.diagnostic_refs {
+        let diagnostic = service
+            .get_validation_diagnostic_v2(project_id, &reference.diagnostic_id)
+            .map_err(|_| error())?;
+        if diagnostic.reference().map_err(|_| error())? != *reference {
+            return Err(error());
+        }
+        diagnostics.push(diagnostic);
+    }
+    let expected_fingerprint = evidence.bundle_fingerprint.clone();
+    let sealed = evidence
+        .clone()
+        .seal(&runs, &results, &diagnostics, &gate)
+        .map_err(|_| error())?;
+    if sealed.bundle_fingerprint != expected_fingerprint {
+        return Err(error());
+    }
+    Ok(evidence)
+}
+
+fn m9_finalize_project_merge_result(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    participant: &ChangeBundleParticipantV2,
+    gate_ref: &str,
+    evidence_ref: &str,
+) -> Result<(), ApplicationError> {
+    let error = || ApplicationError::Apply("CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE".to_owned());
+    let result_id = participant
+        .project_merge_result_ref
+        .as_deref()
+        .ok_or_else(error)?;
+    let mut result: ProjectMergeResult =
+        m6_record_document(service, "project_merge_result", result_id).map_err(|_| error())?;
+    let expected_fingerprint = result.result_fingerprint.clone();
+    result = seal_project_merge_result(result).map_err(|_| error())?;
+    let merge_plan_id = participant.merge_plan_ref.as_deref().ok_or_else(error)?;
+    let plan: MergePlanV2 =
+        m6_record_document(service, "merge_plan_v2", merge_plan_id).map_err(|_| error())?;
+    let worktree: WorktreeRecord =
+        m6_record_document(service, "worktree_record", &plan.integration_worktree_ref)
+            .map_err(|_| error())?;
+    let worktree_path = m9_worktree_parent(project_id)?.join(&worktree.worktree_id);
+    let observed = GitCoordinationAdapter::observe(&worktree_path).map_err(|_| error())?;
+    if result.result_fingerprint != expected_fingerprint
+        || result.project_id != *project_id
+        || result.repository_fingerprint != participant.repository_fingerprint
+        || result.merge_plan_ref != merge_plan_id
+        || !matches!(
+            result.result,
+            ProjectMergeResultState::IntegratedUncommitted
+                | ProjectMergeResultState::LocalCommit
+                | ProjectMergeResultState::LocalBranchUpdated
+        )
+        || result.integration_after_commit_oid.as_deref() != Some(observed.head_commit_oid.as_str())
+        || observed.repository_fingerprint != participant.repository_fingerprint
+        || worktree.participant_id != participant.participant_id
+        || worktree.project_id != *project_id
+    {
+        return Err(error());
+    }
+    let gate = m8_current_gate(
+        service,
+        project_id,
+        gate_ref,
+        &participant.validation_plan_refs,
+        "CHANGE_BUNDLE_PROJECT_GATE_NOT_CURRENT_PASS",
+    )?;
+    let mut allowed_gate_ids = BTreeSet::new();
+    allowed_gate_ids.insert(gate.gate_id.clone());
+    m9_current_evidence_bundle(service, project_id, evidence_ref, &allowed_gate_ids)?;
+
+    if result.validation_plan_ref != gate.validation_plan_ref.document_id
+        || result.gate_decision_ref != gate_ref
+        || result.evidence_bundle_ref != evidence_ref
+    {
+        result.revision = result.revision.saturating_add(1);
+        result.validation_plan_ref = gate.validation_plan_ref.document_id;
+        result.gate_decision_ref = gate_ref.to_owned();
+        result.evidence_bundle_ref = evidence_ref.to_owned();
+        result = seal_project_merge_result(result).map_err(|_| error())?;
+        service.publish_development_document(
+            "project_merge_result",
+            &result.project_merge_result_id,
+            result.revision,
+            Some(project_id.clone()),
+            m9_merge_result_state(result.result),
+            PROJECT_MERGE_RESULT_SCHEMA_ID,
+            1,
+            &result,
+        )?;
+    }
+    Ok(())
 }
 
 fn m9_run_local_merge(
@@ -13200,9 +14430,21 @@ fn m9_run_local_merge(
     {
         return Err(ApplicationError::Invalid);
     }
+    let mut participant: ChangeBundleParticipantV2 =
+        m6_record_document(service, "change_bundle_participant", &plan.participant_ref)?;
+    if participant.project_id != project_id
+        || participant.change_bundle_ref != plan.change_bundle_ref
+        || participant.merge_plan_ref.as_deref() != Some(merge_plan_id.as_str())
+        || participant.state != ParticipantState::MergeReady
+    {
+        return Err(ApplicationError::Apply(
+            "CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned(),
+        ));
+    }
     let worktree: WorktreeRecord =
         m6_record_document(service, "worktree_record", &plan.integration_worktree_ref)?;
     if worktree.project_id != project_id
+        || worktree.participant_id != participant.participant_id
         || worktree.repository_fingerprint != plan.repository_fingerprint
         || !matches!(
             worktree.state,
@@ -13218,9 +14460,34 @@ fn m9_run_local_merge(
         || result.merge_plan_ref != merge_plan_id
         || result.revision != start_revision
         || result.result != star_contracts::coordination_v2::ProjectMergeResultState::OutcomeUnknown
+        || result.repository_fingerprint != plan.repository_fingerprint
+        || result.integration_before_commit_oid != plan.target_base_commit_oid
+        || result.actual_strategy != plan.strategy
+        || result.validation_plan_ref != plan.validation_plan_ref
+        || !participant
+            .gate_decision_refs
+            .contains(&result.gate_decision_ref)
+        || !participant
+            .evidence_bundle_refs
+            .contains(&result.evidence_bundle_ref)
     {
         return Err(ApplicationError::Invalid);
     }
+    let pre_merge_gate = m8_current_gate(
+        service,
+        &project_id,
+        &result.gate_decision_ref,
+        std::slice::from_ref(&plan.validation_plan_ref),
+        "CHANGE_BUNDLE_PROJECT_GATE_NOT_CURRENT_PASS",
+    )?;
+    let mut allowed_gate_ids = BTreeSet::new();
+    allowed_gate_ids.insert(pre_merge_gate.gate_id);
+    m9_current_evidence_bundle(
+        service,
+        &project_id,
+        &result.evidence_bundle_ref,
+        &allowed_gate_ids,
+    )?;
     result.integration_after_commit_oid = None;
     result.local_branch_updated = false;
     result.branch_update_approval_ref = None;
@@ -13271,14 +14538,53 @@ fn m9_run_local_merge(
         "project_merge_result",
         &result.project_merge_result_id,
         result.revision,
-        Some(project_id),
+        Some(project_id.clone()),
         state,
         PROJECT_MERGE_RESULT_SCHEMA_ID,
         1,
         &result,
     )?;
+    participant.previous_revision_ref = Some(format!(
+        "change_bundle_participant:{}@{}",
+        participant.participant_id, participant.revision
+    ));
+    participant.revision = participant.revision.saturating_add(1);
+    participant.project_merge_result_ref = Some(result.project_merge_result_id.clone());
+    participant.actual_subject_binding_ref = Some(result.result_fingerprint.to_string());
+    participant.state = if matches!(
+        result.result,
+        ProjectMergeResultState::IntegratedUncommitted
+            | ProjectMergeResultState::LocalCommit
+            | ProjectMergeResultState::LocalBranchUpdated
+    ) {
+        ParticipantState::AwaitingValidation
+    } else if result.result == ProjectMergeResultState::OutcomeUnknown {
+        ParticipantState::OutcomeUnknown
+    } else {
+        ParticipantState::RollbackRequired
+    };
+    participant.pending_action = Some(
+        match participant.state {
+            ParticipantState::AwaitingValidation => "post_merge_validate",
+            ParticipantState::OutcomeUnknown => "merge_reconcile",
+            _ => "recovery_plan",
+        }
+        .to_owned(),
+    );
+    participant = seal_participant(participant).map_err(m6_development_error)?;
+    service.publish_development_document(
+        "change_bundle_participant",
+        &participant.participant_id,
+        participant.revision,
+        Some(project_id.clone()),
+        m9_participant_state(participant.state),
+        CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID,
+        2,
+        &participant,
+    )?;
     serialize_management_result(serde_json::json!({
         "result":result,
+        "participant":participant,
         "receipt":receipt,
         "source_mutated":true,
     }))
@@ -13333,6 +14639,315 @@ fn m9_document<T: serde::de::DeserializeOwned>(
         .map_err(|_| ApplicationError::Invalid)
 }
 
+fn m9_validate_participant_publication(
+    service: &ManagementApplicationService,
+    participant: &ChangeBundleParticipantV2,
+) -> Result<(), ApplicationError> {
+    if !matches!(
+        participant.state,
+        ParticipantState::Preparing
+            | ParticipantState::Prepared
+            | ParticipantState::AwaitingApply
+            | ParticipantState::Held
+            | ParticipantState::Failed
+            | ParticipantState::Cancelled
+    ) {
+        return Err(ApplicationError::Apply(
+            "CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE".to_owned(),
+        ));
+    }
+
+    let checkout = service
+        .get_project_checkout(&participant.checkout_id)
+        .map_err(|_| ApplicationError::Apply("CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned()))?;
+    let root = service
+        .development_project_root(&participant.project_id)
+        .map_err(|_| ApplicationError::Apply("CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned()))?;
+    let observed = GitCoordinationAdapter::observe(&root)
+        .map_err(|_| ApplicationError::Apply("CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned()))?;
+    if checkout.project_id != participant.project_id
+        || observed.repository_fingerprint != participant.repository_fingerprint
+        || observed.object_format != participant.git_object_format
+        || observed.head_commit_oid != participant.base_commit_oid
+        || observed.dirty_state != participant.dirty_state
+    {
+        return Err(ApplicationError::Apply(
+            "CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned(),
+        ));
+    }
+
+    if matches!(
+        participant.state,
+        ParticipantState::Prepared | ParticipantState::AwaitingApply
+    ) {
+        let recovery: RecoveryPlanV2 =
+            m6_record_document(service, "recovery_plan_v2", &participant.recovery_plan_ref)
+                .map_err(|_| {
+                    ApplicationError::Apply("CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE".to_owned())
+                })?;
+        if recovery.project_id != participant.project_id
+            || participant.validation_plan_refs.is_empty()
+        {
+            return Err(ApplicationError::Apply(
+                "CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE".to_owned(),
+            ));
+        }
+        for plan_id in &participant.migration_plan_refs {
+            let plan: MigrationPlanV2 = m6_record_document(service, "migration_plan", plan_id)
+                .map_err(|_| {
+                    ApplicationError::Apply("CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE".to_owned())
+                })?;
+            if plan.project_id != participant.project_id || !plan.blockers.is_empty() {
+                return Err(ApplicationError::Apply(
+                    "CHANGE_BUNDLE_PROJECT_EVIDENCE_INCOMPLETE".to_owned(),
+                ));
+            }
+        }
+    }
+
+    let Some(existing) = service.get_development_record(
+        "change_bundle_participant",
+        &participant.participant_id,
+        None,
+    )?
+    else {
+        if participant.previous_revision_ref.is_some() {
+            return Err(ApplicationError::Apply(
+                "CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned(),
+            ));
+        }
+        return Ok(());
+    };
+    let previous: ChangeBundleParticipantV2 = serde_json::from_value(existing.document)
+        .map_err(|_| ApplicationError::Apply("CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned()))?;
+    let previous_fingerprint = previous.participant_fingerprint.clone();
+    let previous = seal_participant(previous)
+        .map_err(|_| ApplicationError::Apply("CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned()))?;
+    let expected_previous = format!(
+        "change_bundle_participant:{}@{}",
+        previous.participant_id, previous.revision
+    );
+    let transition_allowed = matches!(
+        (previous.state, participant.state),
+        (
+            ParticipantState::Preparing,
+            ParticipantState::Preparing
+                | ParticipantState::Prepared
+                | ParticipantState::AwaitingApply
+                | ParticipantState::Held
+                | ParticipantState::Failed
+                | ParticipantState::Cancelled
+        ) | (
+            ParticipantState::Prepared,
+            ParticipantState::Prepared
+                | ParticipantState::AwaitingApply
+                | ParticipantState::Held
+                | ParticipantState::Failed
+                | ParticipantState::Cancelled
+        ) | (
+            ParticipantState::AwaitingApply,
+            ParticipantState::AwaitingApply | ParticipantState::Held | ParticipantState::Cancelled
+        ) | (
+            ParticipantState::Held,
+            ParticipantState::Preparing
+                | ParticipantState::Prepared
+                | ParticipantState::AwaitingApply
+                | ParticipantState::Held
+                | ParticipantState::Cancelled
+        )
+    );
+    if previous.participant_fingerprint != previous_fingerprint
+        || participant.revision != previous.revision.saturating_add(1)
+        || participant.previous_revision_ref.as_deref() != Some(expected_previous.as_str())
+        || !m9_participant_core_identity_stable(&previous, participant)
+        || !transition_allowed
+    {
+        return Err(ApplicationError::Apply(
+            "CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn m9_participant_core_identity_stable(
+    previous: &ChangeBundleParticipantV2,
+    current: &ChangeBundleParticipantV2,
+) -> bool {
+    previous.participant_id == current.participant_id
+        && previous.change_bundle_ref == current.change_bundle_ref
+        && previous.project_id == current.project_id
+        && previous.required == current.required
+        && previous.roles == current.roles
+        && previous.step_ids == current.step_ids
+        && previous.checkout_id == current.checkout_id
+        && previous.repository_fingerprint == current.repository_fingerprint
+        && previous.git_object_format == current.git_object_format
+        && previous.base_project_revision_ref == current.base_project_revision_ref
+        && previous.base_commit_oid == current.base_commit_oid
+        && previous.baseline_workspace_snapshot_ref == current.baseline_workspace_snapshot_ref
+        && previous.dirty_manifest_ref == current.dirty_manifest_ref
+        && previous.dirty_state == current.dirty_state
+        && previous.preexisting_change_set_ref == current.preexisting_change_set_ref
+}
+
+fn m9_validate_release_handoff(
+    service: &ManagementApplicationService,
+    handoff: &ChangeBundleReleaseHandoff,
+) -> Result<(), ApplicationError> {
+    let error = || ApplicationError::Apply("RELEASE_HANDOFF_INCOMPLETE".to_owned());
+    let bundle: CrossRepoChangeBundle = m6_record_document(
+        service,
+        "cross_repo_change_bundle",
+        &handoff.change_bundle_ref,
+    )
+    .map_err(|_| error())?;
+    let goal: MultiProjectGoal = m6_record_document(
+        service,
+        "multi_project_goal",
+        &bundle.multi_project_goal_ref,
+    )
+    .map_err(|_| error())?;
+    let goal_fingerprint = goal.goal_fingerprint.clone();
+    let goal = seal_multi_project_goal(goal).map_err(|_| error())?;
+    if goal.goal_fingerprint != goal_fingerprint
+        || handoff.multi_project_goal_ref != goal.multi_project_goal_id
+        || handoff.completion_target != bundle.completion_target
+    {
+        return Err(error());
+    }
+    let participants = bundle
+        .participant_refs
+        .iter()
+        .map(|participant_id| {
+            m6_record_document::<ChangeBundleParticipantV2>(
+                service,
+                "change_bundle_participant",
+                participant_id,
+            )
+            .map_err(|_| error())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let bundle_fingerprint = bundle.bundle_fingerprint.clone();
+    let current_bundle =
+        seal_cross_repo_bundle(&goal, &participants, bundle).map_err(|_| error())?;
+    if current_bundle.bundle_fingerprint != bundle_fingerprint {
+        return Err(error());
+    }
+    if !handoff.ready {
+        return Ok(());
+    }
+
+    let required_projects = participants
+        .iter()
+        .filter(|participant| participant.required)
+        .map(|participant| participant.project_id.clone())
+        .collect::<BTreeSet<_>>();
+    let input_projects = handoff
+        .project_inputs
+        .iter()
+        .map(|input| input.project_id.clone())
+        .collect::<BTreeSet<_>>();
+    let base_level = if handoff.completion_target == CompletionLevel::ReleaseHandoffReady {
+        CompletionLevel::RemoteMerged
+    } else {
+        handoff.completion_target
+    };
+    if required_projects != input_projects
+        || current_bundle.completion_level_reached < base_level
+        || handoff.completion_level_reached < handoff.completion_target
+        || !handoff.remaining_risks.is_empty()
+        || !handoff.limitations.is_empty()
+    {
+        return Err(error());
+    }
+
+    let projects = service.list_projects()?;
+    let mut overall_gate_seen = false;
+    for input in &handoff.project_inputs {
+        let participant = participants
+            .iter()
+            .find(|participant| participant.project_id == input.project_id)
+            .ok_or_else(error)?;
+        let result: ProjectMergeResult = m6_record_document(
+            service,
+            "project_merge_result",
+            &input.project_merge_result_ref,
+        )
+        .map_err(|_| error())?;
+        let expected_result_fingerprint = result.result_fingerprint.clone();
+        let result = seal_project_merge_result(result).map_err(|_| error())?;
+        let gate = m8_current_gate(
+            service,
+            &input.project_id,
+            &input.gate_decision_ref,
+            &participant.validation_plan_refs,
+            "RELEASE_HANDOFF_INCOMPLETE",
+        )?;
+        let mut gate_ids = BTreeSet::new();
+        gate_ids.insert(gate.gate_id.clone());
+        m9_current_evidence_bundle(
+            service,
+            &input.project_id,
+            &input.evidence_bundle_ref,
+            &gate_ids,
+        )?;
+        overall_gate_seen |= input.gate_decision_ref == handoff.overall_gate_ref;
+        let latest_revision_matches = projects
+            .iter()
+            .find(|project| project.project_id == input.project_id)
+            .and_then(|project| project.latest_revision_id.as_ref())
+            .is_some_and(|revision| revision.as_str() == input.project_revision_ref);
+        if participant.roles != input.roles
+            || participant.project_merge_result_ref.as_deref()
+                != Some(input.project_merge_result_ref.as_str())
+            || !participant
+                .gate_decision_refs
+                .contains(&input.gate_decision_ref)
+            || !participant
+                .evidence_bundle_refs
+                .contains(&input.evidence_bundle_ref)
+            || result.result_fingerprint != expected_result_fingerprint
+            || result.project_id != input.project_id
+            || result.integration_after_commit_oid.as_deref() != Some(input.commit_oid.as_str())
+            || !matches!(
+                result.result,
+                ProjectMergeResultState::IntegratedUncommitted
+                    | ProjectMergeResultState::LocalCommit
+                    | ProjectMergeResultState::LocalBranchUpdated
+            )
+            || input.git_object_format != participant.git_object_format
+            || !latest_revision_matches
+            || input.artifact_refs.is_empty()
+            || !input.unresolved_risks.is_empty()
+        {
+            return Err(error());
+        }
+        if base_level >= CompletionLevel::RemoteMerged {
+            let snapshot_id = input.remote_snapshot_ref.as_deref().ok_or_else(error)?;
+            let snapshot: RemoteStateSnapshotV2 =
+                m6_record_document(service, "remote_state_snapshot_v2", snapshot_id)
+                    .map_err(|_| error())?;
+            let snapshot_fingerprint = snapshot.snapshot_fingerprint.clone();
+            let snapshot = seal_remote_snapshot(snapshot).map_err(|_| error())?;
+            if participant.state != ParticipantState::Completed
+                || input.remote_merged_commit_oid.as_deref() != Some(input.commit_oid.as_str())
+                || snapshot.snapshot_fingerprint != snapshot_fingerprint
+                || snapshot.project_id != input.project_id
+                || !snapshot
+                    .refs
+                    .iter()
+                    .any(|reference| reference.object_id == input.commit_oid)
+            {
+                return Err(error());
+            }
+        }
+    }
+    if !overall_gate_seen {
+        return Err(error());
+    }
+    Ok(())
+}
+
 fn m9_worktree_parent(project_id: &ProjectId) -> Result<PathBuf, ApplicationError> {
     let root = std::env::var_os("LOCALAPPDATA").ok_or(ApplicationError::Invalid)?;
     Ok(PathBuf::from(root)
@@ -13356,6 +14971,203 @@ fn m9_receipt_fingerprint<T: serde::Serialize>(value: &T) -> Result<String, Appl
         .map_err(|_| ApplicationError::Invalid)
 }
 
+fn m9_validate_remote_operation_participant(
+    service: &ManagementApplicationService,
+    operation: &RemoteOperationRecord,
+) -> Result<ChangeBundleParticipantV2, ApplicationError> {
+    let error = || ApplicationError::Apply("CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned());
+    let participant: ChangeBundleParticipantV2 = m6_record_document(
+        service,
+        "change_bundle_participant",
+        &operation.participant_ref,
+    )
+    .map_err(|_| error())?;
+    let expected_fingerprint = participant.participant_fingerprint.clone();
+    let participant = seal_participant(participant).map_err(|_| error())?;
+    let result_id = participant
+        .project_merge_result_ref
+        .as_deref()
+        .ok_or_else(error)?;
+    let result: ProjectMergeResult =
+        m6_record_document(service, "project_merge_result", result_id).map_err(|_| error())?;
+    let result_fingerprint = result.result_fingerprint.clone();
+    let result = seal_project_merge_result(result).map_err(|_| error())?;
+    if participant.participant_fingerprint != expected_fingerprint
+        || participant.project_id != operation.project_id
+        || participant.change_bundle_ref != operation.change_bundle_ref
+        || !matches!(
+            participant.state,
+            ParticipantState::LocalCompleted | ParticipantState::RemotePending
+        )
+        || result.result_fingerprint != result_fingerprint
+        || result.project_id != operation.project_id
+        || result.repository_fingerprint != participant.repository_fingerprint
+        || result.integration_after_commit_oid.as_deref()
+            != Some(operation.local_source_revision.as_str())
+        || !matches!(
+            result.result,
+            ProjectMergeResultState::IntegratedUncommitted
+                | ProjectMergeResultState::LocalCommit
+                | ProjectMergeResultState::LocalBranchUpdated
+        )
+    {
+        return Err(error());
+    }
+    let mut gate_ids = BTreeSet::new();
+    for gate_ref in &participant.gate_decision_refs {
+        let gate = m8_current_gate(
+            service,
+            &operation.project_id,
+            gate_ref,
+            &participant.validation_plan_refs,
+            "CHANGE_BUNDLE_PROJECT_GATE_NOT_CURRENT_PASS",
+        )?;
+        gate_ids.insert(gate.gate_id);
+    }
+    if gate_ids.is_empty() || participant.evidence_bundle_refs.is_empty() {
+        return Err(error());
+    }
+    for evidence_ref in &participant.evidence_bundle_refs {
+        m9_current_evidence_bundle(service, &operation.project_id, evidence_ref, &gate_ids)?;
+    }
+    Ok(participant)
+}
+
+fn m9_mark_participant_remote_pending(
+    service: &ManagementApplicationService,
+    operation: &RemoteOperationRecord,
+) -> Result<ChangeBundleParticipantV2, ApplicationError> {
+    let mut participant = m9_validate_remote_operation_participant(service, operation)?;
+    if participant.state == ParticipantState::RemotePending
+        && participant
+            .remote_operation_refs
+            .contains(&operation.remote_operation_id)
+    {
+        return Ok(participant);
+    }
+    participant.previous_revision_ref = Some(format!(
+        "change_bundle_participant:{}@{}",
+        participant.participant_id, participant.revision
+    ));
+    participant.revision = participant.revision.saturating_add(1);
+    participant
+        .remote_snapshot_refs
+        .push(operation.before_snapshot_ref.clone());
+    participant
+        .remote_operation_refs
+        .push(operation.remote_operation_id.clone());
+    participant.state = ParticipantState::RemotePending;
+    participant.pending_action = Some("remote_approval_or_apply".to_owned());
+    participant = seal_participant(participant).map_err(m6_development_error)?;
+    service.publish_development_document(
+        "change_bundle_participant",
+        &participant.participant_id,
+        participant.revision,
+        Some(participant.project_id.clone()),
+        m9_participant_state(participant.state),
+        CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID,
+        2,
+        &participant,
+    )?;
+    Ok(participant)
+}
+
+fn m9_apply_terminal_remote_participant(
+    service: &ManagementApplicationService,
+    operation: &RemoteOperationRecord,
+) -> Result<ChangeBundleParticipantV2, ApplicationError> {
+    let mut participant: ChangeBundleParticipantV2 = m6_record_document(
+        service,
+        "change_bundle_participant",
+        &operation.participant_ref,
+    )?;
+    let desired_state = match operation.state {
+        RemoteOperationState::Succeeded | RemoteOperationState::Reconciled => {
+            ParticipantState::Completed
+        }
+        RemoteOperationState::OutcomeUnknown => ParticipantState::OutcomeUnknown,
+        RemoteOperationState::Failed => ParticipantState::Failed,
+        _ => {
+            return Err(ApplicationError::Apply(
+                "REMOTE_RESULT_UNVERIFIED".to_owned(),
+            ));
+        }
+    };
+    if participant.state == desired_state
+        && participant
+            .remote_operation_refs
+            .contains(&operation.remote_operation_id)
+    {
+        return Ok(participant);
+    }
+    if participant.project_id != operation.project_id
+        || participant.change_bundle_ref != operation.change_bundle_ref
+        || !matches!(
+            participant.state,
+            ParticipantState::LocalCompleted
+                | ParticipantState::RemotePending
+                | ParticipantState::OutcomeUnknown
+                | ParticipantState::Failed
+        )
+    {
+        return Err(ApplicationError::Apply(
+            "CHANGE_BUNDLE_PARTICIPANT_STALE".to_owned(),
+        ));
+    }
+    if matches!(
+        operation.state,
+        RemoteOperationState::Succeeded | RemoteOperationState::Reconciled
+    ) {
+        let after_id = operation
+            .after_snapshot_ref
+            .as_deref()
+            .ok_or_else(|| ApplicationError::Apply("REMOTE_RESULT_UNVERIFIED".to_owned()))?;
+        let snapshot: RemoteStateSnapshotV2 =
+            m6_record_document(service, "remote_state_snapshot_v2", after_id)?;
+        let expected_fingerprint = snapshot.snapshot_fingerprint.clone();
+        let snapshot = seal_remote_snapshot(snapshot).map_err(m6_development_error)?;
+        let (_, target_ref) =
+            parse_git_push_target(&operation.target).map_err(m6_development_error)?;
+        if snapshot.snapshot_fingerprint != expected_fingerprint
+            || snapshot.project_id != operation.project_id
+            || m9_remote_ref_oid(&snapshot, target_ref)
+                != Some(operation.local_source_revision.as_str())
+        {
+            return Err(ApplicationError::Apply(
+                "REMOTE_RESULT_UNVERIFIED".to_owned(),
+            ));
+        }
+        participant.actual_subject_binding_ref = Some(snapshot.snapshot_fingerprint.to_string());
+        participant.remote_snapshot_refs.push(after_id.to_owned());
+    }
+    participant.previous_revision_ref = Some(format!(
+        "change_bundle_participant:{}@{}",
+        participant.participant_id, participant.revision
+    ));
+    participant.revision = participant.revision.saturating_add(1);
+    participant
+        .remote_operation_refs
+        .push(operation.remote_operation_id.clone());
+    participant.state = desired_state;
+    participant.pending_action = match desired_state {
+        ParticipantState::OutcomeUnknown => Some("remote_reconcile".to_owned()),
+        ParticipantState::Failed => Some("remote_recovery_plan".to_owned()),
+        _ => None,
+    };
+    participant = seal_participant(participant).map_err(m6_development_error)?;
+    service.publish_development_document(
+        "change_bundle_participant",
+        &participant.participant_id,
+        participant.revision,
+        Some(participant.project_id.clone()),
+        m9_participant_state(participant.state),
+        CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID,
+        2,
+        &participant,
+    )?;
+    Ok(participant)
+}
+
 fn m9_prepare_remote_operation(
     service: &ManagementApplicationService,
     approvals: Option<&Arc<Mutex<ApprovalStore>>>,
@@ -13375,6 +15187,7 @@ fn m9_prepare_remote_operation(
     {
         return Err(ApplicationError::Invalid);
     }
+    m9_validate_remote_operation_participant(service, &operation)?;
     let (remote_name, target_ref) = parse_git_push_target(&operation.target)
         .map(|(remote_name, target_ref)| (remote_name.to_owned(), target_ref.to_owned()))
         .map_err(m6_development_error)?;
@@ -13408,8 +15221,10 @@ fn m9_prepare_remote_operation(
             return Err(ApplicationError::Invalid);
         }
         let approval = m9_remote_approval_record(approvals, &existing_operation)?;
+        let participant = m9_mark_participant_remote_pending(service, &existing_operation)?;
         return Ok(serde_json::json!({
             "record":existing,
+            "participant":participant,
             "approval_request":m9_remote_approval_view(&approval),
             "next_action":"approval.resolve",
             "idempotent_replay":true,
@@ -13453,8 +15268,10 @@ fn m9_prepare_remote_operation(
         1,
         &operation,
     )?;
+    let participant = m9_mark_participant_remote_pending(service, &operation)?;
     Ok(serde_json::json!({
         "record":record,
+        "participant":participant,
         "approval_request":m9_remote_approval_view(&approval),
         "next_action":"approval.resolve",
         "idempotent_replay":false,
@@ -13486,8 +15303,10 @@ fn m9_apply_remote_operation(
             | RemoteOperationState::OutcomeUnknown
             | RemoteOperationState::Reconciled
     ) {
+        let participant = m9_apply_terminal_remote_participant(service, &operation)?;
         return Ok(serde_json::json!({
             "operation":operation,
+            "participant":participant,
             "idempotent_replay":true,
             "source_effect_started_by_this_command":false,
         }));
@@ -13505,6 +15324,19 @@ fn m9_apply_remote_operation(
             &remote_name,
             &target_ref,
         );
+    }
+    if service
+        .effective_config()?
+        .boolean("remote.require_clean_target")
+        .ok_or(ApplicationError::Invalid)?
+    {
+        let local =
+            GitCoordinationAdapter::observe(&repository_root).map_err(m6_development_error)?;
+        if local.dirty_state != star_contracts::coordination_v2::DirtyState::Clean
+            || local.head_commit_oid != operation.local_source_revision
+        {
+            return Err(ApplicationError::Apply("REMOTE_SNAPSHOT_STALE".to_owned()));
+        }
     }
     if operation.state != RemoteOperationState::AwaitingApproval {
         return Err(ApplicationError::Apply(
@@ -13524,6 +15356,7 @@ fn m9_apply_remote_operation(
     if before.project_id != operation.project_id || !m9_remote_snapshot_is_current(&before) {
         return Err(ApplicationError::Apply("REMOTE_SNAPSHOT_STALE".to_owned()));
     }
+    enforce_remote_host_policy(service, &before.remote_identity)?;
     let current = m9_observe_and_publish_remote_snapshot(
         service,
         &repository_root,
@@ -13654,8 +15487,10 @@ fn m9_finish_remote_operation(
         1,
         &terminal,
     )?;
+    let participant = m9_apply_terminal_remote_participant(service, &terminal)?;
     Ok(serde_json::json!({
         "record":record,
+        "participant":participant,
         "receipt":receipt.ok(),
         "after_snapshot":after.ok(),
         "idempotent_replay":false,
@@ -14127,17 +15962,67 @@ fn handle_m10_development_command(
                 "remote_effect_started":false,
             }))
         }
+        "release.audit" if payload_has_exact_keys(payload, &["release_manifest_id"]) => {
+            let release_manifest_id = m6_required_string(payload, "release_manifest_id", 192)?;
+            let (_record, owner_project_id, manifest) =
+                m10_release_record(service, &release_manifest_id)?;
+            let project_id = owner_project_id.ok_or(ApplicationError::Invalid)?;
+            m10_final_product_audit(service, &project_id, &manifest)
+                .and_then(serialize_management_result)
+        }
         "release.lifecycle.publish"
             if payload_has_exact_keys(
                 payload,
-                &["project_id", "lifecycle_id", "evidence", "record_revision"],
+                &[
+                    "project_id",
+                    "lifecycle_id",
+                    "release_manifest_id",
+                    "effect_receipt_id",
+                    "evidence",
+                    "record_revision",
+                ],
             ) =>
         {
             let project_id = management_project_id(payload)?;
             service.development_project_root(&project_id)?;
             let lifecycle_id = m6_required_string(payload, "lifecycle_id", 192)?;
+            let release_manifest_id = m6_required_string(payload, "release_manifest_id", 192)?;
+            let effect_receipt_id = m6_required_string(payload, "effect_receipt_id", 192)?;
             let evidence: ReleaseLifecycleEvidence = m9_document(payload, "evidence")?;
             evidence.validate_complete().map_err(m10_release_error)?;
+            let (_record, owner_project_id, manifest) =
+                m10_release_record(service, &release_manifest_id)?;
+            let artifact_set_digest = manifest
+                .artifact_set_digest
+                .as_ref()
+                .ok_or(ApplicationError::Invalid)?;
+            let receipt = m8_effect_receipt(
+                service,
+                &project_id,
+                &effect_receipt_id,
+                DevelopmentEffectKind::ReleaseLifecycle,
+                artifact_set_digest,
+            )?;
+            let expected_result_fingerprint = canonical_sha256(
+                &serde_json::to_value(&evidence).map_err(|_| ApplicationError::Invalid)?,
+            )
+            .map_err(|_| ApplicationError::Invalid)?;
+            let expected_subject_ref = format!("release_manifest:{release_manifest_id}");
+            if owner_project_id.as_ref() != Some(&project_id)
+                || evidence.candidate_artifact_set_digest != *artifact_set_digest
+                || receipt.exact_subject_ref != expected_subject_ref
+                || receipt.state != DevelopmentEffectState::Succeeded
+                || !receipt.source_effect_started
+                || receipt.result_fingerprint.as_ref() != Some(&expected_result_fingerprint)
+                || !manifest.compatibility.iter().any(|target| {
+                    target.architecture == evidence.architecture
+                        && target.runtime_verification == evidence.runtime_verification
+                })
+            {
+                return Err(ApplicationError::Apply(
+                    "RELEASE_LIFECYCLE_EVIDENCE_MISMATCH".to_owned(),
+                ));
+            }
             service
                 .publish_development_document(
                     "release_lifecycle_evidence",
@@ -14370,12 +16255,231 @@ fn handle_m10_development_command(
                 )
                 .and_then(serialize_management_result)
         }
+        "cost.record" if payload_has_exact_keys(payload, &["project_id", "record"]) => {
+            let project_id = management_project_id(payload)?;
+            service.development_project_root(&project_id)?;
+            let record: CostRecordV1 = m9_document(payload, "record")?;
+            let record = seal_cost_record(record).map_err(m10_release_error)?;
+            if record.project_id != project_id {
+                return Err(ApplicationError::Invalid);
+            }
+            verify_cost_record(&record).map_err(m10_release_error)?;
+            service
+                .publish_development_document(
+                    "cost_record_v1",
+                    &record.cost_record_id,
+                    record.revision,
+                    Some(project_id),
+                    "provider_verified",
+                    COST_RECORD_V1_SCHEMA_ID,
+                    1,
+                    &record,
+                )
+                .and_then(serialize_management_result)
+        }
+        "cost.show" if payload_has_exact_keys(payload, &["project_id", "cost_record_id"]) => {
+            let project_id = management_project_id(payload)?;
+            let cost_record_id = m6_required_string(payload, "cost_record_id", 192)?;
+            let record = service
+                .get_development_record("cost_record_v1", &cost_record_id, None)?
+                .ok_or(ApplicationError::NotFound)?;
+            if record.project_id.as_ref() != Some(&project_id) {
+                return Err(ApplicationError::NotFound);
+            }
+            let cost: CostRecordV1 = serde_json::from_value(record.document.clone())
+                .map_err(|_| ApplicationError::Invalid)?;
+            verify_cost_record(&cost).map_err(m10_release_error)?;
+            serialize_management_result(record)
+        }
+        "budget.snapshot" if payload_has_exact_keys(payload, &["project_id", "input"]) => {
+            let project_id = management_project_id(payload)?;
+            service.development_project_root(&project_id)?;
+            let input: BudgetSnapshotInput = m9_document(payload, "input")?;
+            if input.project_id != project_id {
+                return Err(ApplicationError::Invalid);
+            }
+            let cost_records =
+                m10_load_cost_records(service, &project_id, &input.cost_record_refs)?;
+            let snapshot = build_budget_snapshot(
+                input,
+                &cost_records,
+                service.effective_config()?.config_fingerprint.clone(),
+            )
+            .map_err(m10_release_error)?;
+            verify_budget_snapshot(&snapshot, &cost_records).map_err(m10_release_error)?;
+            let state = m10_budget_decision(snapshot.decision);
+            service
+                .publish_development_document(
+                    "budget_snapshot_v1",
+                    &snapshot.snapshot_id,
+                    snapshot.revision,
+                    Some(project_id),
+                    state,
+                    BUDGET_SNAPSHOT_V1_SCHEMA_ID,
+                    1,
+                    &snapshot,
+                )
+                .and_then(serialize_management_result)
+        }
+        "budget.show" if payload_has_exact_keys(payload, &["project_id", "snapshot_id"]) => {
+            let project_id = management_project_id(payload)?;
+            let snapshot_id = m6_required_string(payload, "snapshot_id", 192)?;
+            let record = service
+                .get_development_record("budget_snapshot_v1", &snapshot_id, None)?
+                .ok_or(ApplicationError::NotFound)?;
+            if record.project_id.as_ref() != Some(&project_id) {
+                return Err(ApplicationError::NotFound);
+            }
+            let snapshot: BudgetSnapshotV1 = serde_json::from_value(record.document.clone())
+                .map_err(|_| ApplicationError::Invalid)?;
+            let cost_records =
+                m10_load_cost_records(service, &project_id, &snapshot.cost_record_refs)?;
+            verify_budget_snapshot(&snapshot, &cost_records).map_err(m10_release_error)?;
+            serialize_management_result(record)
+        }
+        "evaluation.case.publish"
+            if payload_has_exact_keys(payload, &["project_id", "source_ref"]) =>
+        {
+            let project_id = management_project_id(payload)?;
+            let project_root = service.development_project_root(&project_id)?;
+            let source_ref = m6_required_string(payload, "source_ref", 1_024)?;
+            let definition: EvaluationCaseDefinitionV1 =
+                m10_read_canonical_evaluation_source(&project_root, &source_ref)?;
+            let definition =
+                seal_evaluation_case_definition(definition).map_err(m10_release_error)?;
+            if definition.project_id != project_id || definition.source_ref != source_ref {
+                return Err(ApplicationError::Invalid);
+            }
+            verify_evaluation_case_definition(&definition).map_err(m10_release_error)?;
+            let record_id =
+                m10_evaluation_case_record_id(&definition.case_id, &definition.case_version);
+            service
+                .publish_development_document(
+                    "evaluation_case_definition_v1",
+                    &record_id,
+                    definition.revision,
+                    Some(project_id),
+                    "active",
+                    EVALUATION_CASE_DEFINITION_V1_SCHEMA_ID,
+                    1,
+                    &definition,
+                )
+                .and_then(serialize_management_result)
+        }
+        "evaluation.case.show"
+            if payload_has_exact_keys(payload, &["project_id", "case_id", "case_version"]) =>
+        {
+            let project_id = management_project_id(payload)?;
+            let case_id = m6_required_string(payload, "case_id", 192)?;
+            let case_version = m6_required_string(payload, "case_version", 128)?;
+            let record_id = m10_evaluation_case_record_id(&case_id, &case_version);
+            let record = service
+                .get_development_record("evaluation_case_definition_v1", &record_id, None)?
+                .ok_or(ApplicationError::NotFound)?;
+            if record.project_id.as_ref() != Some(&project_id) {
+                return Err(ApplicationError::NotFound);
+            }
+            let definition: EvaluationCaseDefinitionV1 =
+                serde_json::from_value(record.document.clone())
+                    .map_err(|_| ApplicationError::Invalid)?;
+            verify_evaluation_case_definition(&definition).map_err(m10_release_error)?;
+            serialize_management_result(record)
+        }
+        "evaluation.policy.publish"
+            if payload_has_exact_keys(payload, &["project_id", "source_ref"]) =>
+        {
+            let project_id = management_project_id(payload)?;
+            let project_root = service.development_project_root(&project_id)?;
+            let source_ref = m6_required_string(payload, "source_ref", 1_024)?;
+            let policy: EvaluationPolicyV1 =
+                m10_read_canonical_evaluation_source(&project_root, &source_ref)?;
+            let policy = seal_evaluation_policy(policy).map_err(m10_release_error)?;
+            if policy.project_id != project_id || policy.source_ref != source_ref {
+                return Err(ApplicationError::Invalid);
+            }
+            verify_evaluation_policy(&policy).map_err(m10_release_error)?;
+            for case_ref in &policy.case_refs {
+                let case = m10_load_evaluation_case_definition(service, &project_id, case_ref)?;
+                if case.corpus_ref != policy.corpus_ref
+                    || case.evaluation_context != policy.evaluation_context
+                {
+                    return Err(ApplicationError::Apply(
+                        "EVALUATION_POLICY_CHANGED".to_owned(),
+                    ));
+                }
+            }
+            let record_id =
+                m10_evaluation_policy_record_id(&policy.policy_id, &policy.policy_version);
+            service
+                .publish_development_document(
+                    "evaluation_policy_v1",
+                    &record_id,
+                    policy.revision,
+                    Some(project_id),
+                    "active",
+                    EVALUATION_POLICY_V1_SCHEMA_ID,
+                    1,
+                    &policy,
+                )
+                .and_then(serialize_management_result)
+        }
+        "evaluation.policy.show"
+            if payload_has_exact_keys(payload, &["project_id", "policy_id", "policy_version"]) =>
+        {
+            let project_id = management_project_id(payload)?;
+            let policy_id = m6_required_string(payload, "policy_id", 192)?;
+            let policy_version = m6_required_string(payload, "policy_version", 128)?;
+            let record_id = m10_evaluation_policy_record_id(&policy_id, &policy_version);
+            let record = service
+                .get_development_record("evaluation_policy_v1", &record_id, None)?
+                .ok_or(ApplicationError::NotFound)?;
+            if record.project_id.as_ref() != Some(&project_id) {
+                return Err(ApplicationError::NotFound);
+            }
+            let policy: EvaluationPolicyV1 = serde_json::from_value(record.document.clone())
+                .map_err(|_| ApplicationError::Invalid)?;
+            verify_evaluation_policy(&policy).map_err(m10_release_error)?;
+            serialize_management_result(record)
+        }
         "evaluation.run" if payload_has_exact_keys(payload, &["project_id", "input"]) => {
             let project_id = management_project_id(payload)?;
             service.development_project_root(&project_id)?;
-            let input: EvaluationInput = m9_document(payload, "input")?;
-            m10_validate_evaluation_run_refs(service, &project_id, &input)?;
+            let config = service.effective_config()?;
+            let mut input_document = payload
+                .get("input")
+                .cloned()
+                .ok_or(ApplicationError::Invalid)?;
+            materialize_document_config_default(
+                config,
+                &mut input_document,
+                "evaluation.default_mode",
+                "mode",
+            )?;
+            let mut input: EvaluationInput =
+                serde_json::from_value(input_document).map_err(|_| ApplicationError::Invalid)?;
+            let policy =
+                m10_materialize_evaluation_source_records(service, &project_id, &mut input)?;
+            let configured_max_attempts = config
+                .integer("evaluation.max_attempts_per_case")
+                .ok_or(ApplicationError::Invalid)?
+                as usize;
+            let max_attempts = configured_max_attempts.min(
+                usize::try_from(policy.max_attempts_per_case)
+                    .map_err(|_| ApplicationError::Invalid)?,
+            );
+            if input.case_results.iter().any(|case| {
+                case.baseline_run_refs.len() > max_attempts
+                    || case.candidate_run_refs.len() > max_attempts
+            }) {
+                return Err(ApplicationError::Apply(
+                    "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+                ));
+            }
+            m10_materialize_evaluation_evidence(service, &project_id, &mut input)?;
             let run = evaluate(input).map_err(m10_release_error)?;
+            verify_evaluation_run(&run).map_err(m10_release_error)?;
+            m10_verify_evaluation_source_records(service, &project_id, &run)?;
+            m10_verify_evaluation_cost_records(service, &project_id, &run)?;
             let state = m10_evaluation_recommendation(run.recommendation);
             service
                 .publish_development_document(
@@ -14392,9 +16496,114 @@ fn handle_m10_development_command(
         }
         "evaluation.show" if payload_has_exact_keys(payload, &["evaluation_run_id"]) => {
             let evaluation_run_id = m6_required_string(payload, "evaluation_run_id", 192)?;
-            service
+            let record = service
                 .get_development_record("evaluation_run_v2", &evaluation_run_id, None)?
-                .ok_or(ApplicationError::NotFound)
+                .ok_or(ApplicationError::NotFound)?;
+            let run: EvaluationRunV2 = serde_json::from_value(record.document.clone())
+                .map_err(|_| ApplicationError::Invalid)?;
+            verify_evaluation_run(&run).map_err(m10_release_error)?;
+            let project_id = record
+                .project_id
+                .as_ref()
+                .ok_or(ApplicationError::Invalid)?;
+            m10_verify_evaluation_source_records(service, project_id, &run)?;
+            m10_verify_evaluation_cost_records(service, project_id, &run)?;
+            serialize_management_result(record)
+        }
+        command @ ("evaluation.compare" | "evaluation.recommend")
+            if payload_has_exact_keys(payload, &["evaluation_run_id"]) =>
+        {
+            let evaluation_run_id = m6_required_string(payload, "evaluation_run_id", 192)?;
+            let record = service
+                .get_development_record("evaluation_run_v2", &evaluation_run_id, None)?
+                .ok_or(ApplicationError::NotFound)?;
+            let project_id = record
+                .project_id
+                .as_ref()
+                .ok_or(ApplicationError::Invalid)?;
+            let run: EvaluationRunV2 =
+                serde_json::from_value(record.document).map_err(|_| ApplicationError::Invalid)?;
+            verify_evaluation_run(&run).map_err(m10_release_error)?;
+            m10_verify_evaluation_source_records(service, project_id, &run)?;
+            m10_verify_evaluation_cost_records(service, project_id, &run)?;
+            let result = if command == "evaluation.compare" {
+                serde_json::json!({
+                    "schema_id":"star.evaluation-comparison-view",
+                    "schema_version":1,
+                    "evaluation_run_id":run.evaluation_run_id,
+                    "subject":run.subject,
+                    "ground_truth_summary":run.ground_truth_summary,
+                    "finding_metrics":run.finding_metrics,
+                    "efficiency_metrics":run.efficiency_metrics,
+                    "usage_and_cost_refs":run.usage_and_cost_refs,
+                    "usage_and_cost_metrics":run.usage_and_cost_metrics,
+                    "comparability":run.comparability,
+                    "comparison":run.comparison,
+                    "run_fingerprint":run.run_fingerprint,
+                })
+            } else {
+                serde_json::json!({
+                    "schema_id":"star.evaluation-recommendation-view",
+                    "schema_version":1,
+                    "evaluation_run_id":run.evaluation_run_id,
+                    "recommendation":run.recommendation,
+                    "limitations":run.limitations,
+                    "protected_metric_results":run.protected_metric_results,
+                    "decision_ref":run.decision_ref,
+                    "run_fingerprint":run.run_fingerprint,
+                })
+            };
+            serialize_management_result(result)
+        }
+        "evaluation.radar"
+            if payload_has_exact_keys(
+                payload,
+                &[
+                    "project_id",
+                    "evaluation_run_id",
+                    "snapshot_id",
+                    "evaluation_time",
+                    "valid_until",
+                    "revision",
+                ],
+            ) =>
+        {
+            let project_id = management_project_id(payload)?;
+            let evaluation_run_id = m6_required_string(payload, "evaluation_run_id", 192)?;
+            let snapshot_id = m6_required_string(payload, "snapshot_id", 192)?;
+            let evaluation_time = m6_required_string(payload, "evaluation_time", 64)?;
+            let valid_until = m6_optional_string(payload, "valid_until", 64)?;
+            let record = service
+                .get_development_record("evaluation_run_v2", &evaluation_run_id, None)?
+                .ok_or(ApplicationError::NotFound)?;
+            if record.project_id.as_ref() != Some(&project_id) {
+                return Err(ApplicationError::NotFound);
+            }
+            let run: EvaluationRunV2 =
+                serde_json::from_value(record.document).map_err(|_| ApplicationError::Invalid)?;
+            verify_evaluation_run(&run).map_err(m10_release_error)?;
+            m10_verify_evaluation_source_records(service, &project_id, &run)?;
+            m10_verify_evaluation_cost_records(service, &project_id, &run)?;
+            let item = m10_evaluation_radar_item(&project_id, &evaluation_time, &run)?;
+            let snapshot = build_maintenance_radar_snapshot(
+                snapshot_id.clone(),
+                evaluation_time,
+                valid_until,
+                vec![item],
+            )
+            .map_err(m6_development_error)?;
+            let state = m6_coverage_state(snapshot.completeness);
+            service
+                .publish_development_document(
+                    "maintenance_radar_snapshot",
+                    &snapshot_id,
+                    m6_revision(payload)?,
+                    Some(project_id),
+                    state,
+                    MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
+                    1,
+                    &snapshot,
+                )
                 .and_then(serialize_management_result)
         }
         "evaluation.catalog.publish"
@@ -14402,13 +16611,42 @@ fn handle_m10_development_command(
         {
             let item: EvaluationCatalogItem = m9_document(payload, "item")?;
             let item = seal_catalog_item(item).map_err(m10_release_error)?;
+            if item.lifecycle != EvaluationCatalogLifecycle::Active {
+                return Err(ApplicationError::Apply(
+                    "EVALUATION_CATALOG_EVIDENCE_MISMATCH".to_owned(),
+                ));
+            }
             m10_validate_catalog_evaluation_ref(service, &item)?;
             let record_id = format!("{}@{}", item.item_id, item.item_version);
+            let record_revision = m8_record_revision(payload)?;
+            if let Some(existing) =
+                service.get_development_record("evaluation_catalog_item", &record_id, None)?
+            {
+                let previous: EvaluationCatalogItem = serde_json::from_value(existing.document)
+                    .map_err(|_| ApplicationError::Invalid)?;
+                let expected = previous.item_fingerprint.clone();
+                let sealed = seal_catalog_item(previous.clone()).map_err(m10_release_error)?;
+                if sealed != previous
+                    || sealed.item_fingerprint != expected
+                    || previous.lifecycle != EvaluationCatalogLifecycle::Active
+                    || previous.item_id != item.item_id
+                    || previous.item_version != item.item_version
+                    || previous.definition_fingerprint != item.definition_fingerprint
+                    || previous.trial_candidate != item.trial_candidate
+                    || record_revision != existing.revision.saturating_add(1)
+                {
+                    return Err(ApplicationError::Apply(
+                        "EVALUATION_CATALOG_EVIDENCE_MISMATCH".to_owned(),
+                    ));
+                }
+            } else if record_revision != 1 {
+                return Err(ApplicationError::Invalid);
+            }
             service
                 .publish_development_document(
                     "evaluation_catalog_item",
                     &record_id,
-                    m8_record_revision(payload)?,
+                    record_revision,
                     None,
                     m10_catalog_lifecycle(item.lifecycle),
                     EVALUATION_CATALOG_ITEM_SCHEMA_ID,
@@ -14433,6 +16671,13 @@ fn handle_m10_development_command(
             }
             let item: EvaluationCatalogItem =
                 serde_json::from_value(existing.document).map_err(|_| ApplicationError::Invalid)?;
+            let expected_fingerprint = item.item_fingerprint.clone();
+            let sealed_existing = seal_catalog_item(item.clone()).map_err(m10_release_error)?;
+            if sealed_existing != item || sealed_existing.item_fingerprint != expected_fingerprint {
+                return Err(ApplicationError::Apply(
+                    "EVALUATION_CATALOG_EVIDENCE_MISMATCH".to_owned(),
+                ));
+            }
             let next: EvaluationCatalogLifecycle = serde_json::from_value(
                 payload
                     .get("next")
@@ -14497,6 +16742,441 @@ fn m10_read_artifacts(
             })
         })
         .collect()
+}
+
+fn m10_load_cost_records(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    refs: &[CostRecordRefV1],
+) -> Result<Vec<CostRecordV1>, ApplicationError> {
+    if refs.iter().collect::<BTreeSet<_>>().len() != refs.len() {
+        return Err(ApplicationError::Apply(
+            "EVALUATION_RUN_EVIDENCE_MISSING".to_owned(),
+        ));
+    }
+    refs.iter()
+        .map(|reference| {
+            let record = service
+                .get_development_record(
+                    "cost_record_v1",
+                    &reference.cost_record_id,
+                    Some(reference.revision),
+                )?
+                .ok_or(ApplicationError::NotFound)?;
+            if record.project_id.as_ref() != Some(project_id) {
+                return Err(ApplicationError::NotFound);
+            }
+            let cost: CostRecordV1 =
+                serde_json::from_value(record.document).map_err(|_| ApplicationError::Invalid)?;
+            verify_cost_record(&cost).map_err(m10_release_error)?;
+            if cost.cost_record_id != reference.cost_record_id
+                || cost.revision != reference.revision
+                || cost.content_fingerprint != reference.content_fingerprint
+            {
+                return Err(ApplicationError::Apply(
+                    "EVALUATION_RUN_EVIDENCE_MISSING".to_owned(),
+                ));
+            }
+            Ok(cost)
+        })
+        .collect()
+}
+
+fn m10_read_canonical_evaluation_source<T: serde::de::DeserializeOwned>(
+    project_root: &Path,
+    source_ref: &str,
+) -> Result<T, ApplicationError> {
+    let bytes = m6_read_required_project_file(project_root, source_ref, 8 * 1024 * 1024)?;
+    let text = std::str::from_utf8(&bytes).map_err(|_| ApplicationError::Invalid)?;
+    let value = parse_no_duplicate_keys(text).map_err(|_| ApplicationError::Invalid)?;
+    serde_json::from_value(value).map_err(|_| ApplicationError::Invalid)
+}
+
+fn m10_evaluation_case_record_id(case_id: &str, case_version: &str) -> String {
+    format!("{case_id}@{case_version}")
+}
+
+fn m10_evaluation_policy_record_id(policy_id: &str, policy_version: &str) -> String {
+    format!("{policy_id}@{policy_version}")
+}
+
+fn m10_load_evaluation_case_definition(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    reference: &EvaluationCaseDefinitionRefV1,
+) -> Result<EvaluationCaseDefinitionV1, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_POLICY_CHANGED".to_owned());
+    let record_id = m10_evaluation_case_record_id(&reference.case_id, &reference.case_version);
+    let record = service
+        .get_development_record("evaluation_case_definition_v1", &record_id, None)?
+        .ok_or(ApplicationError::NotFound)?;
+    if record.project_id.as_ref() != Some(project_id) {
+        return Err(ApplicationError::NotFound);
+    }
+    let definition: EvaluationCaseDefinitionV1 =
+        serde_json::from_value(record.document).map_err(|_| error())?;
+    verify_evaluation_case_definition(&definition).map_err(|_| error())?;
+    let project_root = service.development_project_root(project_id)?;
+    let source: EvaluationCaseDefinitionV1 =
+        m10_read_canonical_evaluation_source(&project_root, &definition.source_ref)?;
+    let source = seal_evaluation_case_definition(source).map_err(|_| error())?;
+    if source != definition
+        || definition.case_id != reference.case_id
+        || definition.case_version != reference.case_version
+        || definition.content_fingerprint != reference.content_fingerprint
+    {
+        return Err(error());
+    }
+    Ok(definition)
+}
+
+fn m10_load_evaluation_policy(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    reference: &star_contracts::release_v2::EvaluationPolicyRefV1,
+) -> Result<EvaluationPolicyV1, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_POLICY_CHANGED".to_owned());
+    let record_id =
+        m10_evaluation_policy_record_id(&reference.policy_id, &reference.policy_version);
+    let record = service
+        .get_development_record("evaluation_policy_v1", &record_id, Some(reference.revision))?
+        .ok_or(ApplicationError::NotFound)?;
+    if record.project_id.as_ref() != Some(project_id) {
+        return Err(ApplicationError::NotFound);
+    }
+    let policy: EvaluationPolicyV1 =
+        serde_json::from_value(record.document).map_err(|_| error())?;
+    verify_evaluation_policy(&policy).map_err(|_| error())?;
+    let project_root = service.development_project_root(project_id)?;
+    let source: EvaluationPolicyV1 =
+        m10_read_canonical_evaluation_source(&project_root, &policy.source_ref)?;
+    let source = seal_evaluation_policy(source).map_err(|_| error())?;
+    if source != policy
+        || policy.policy_id != reference.policy_id
+        || policy.policy_version != reference.policy_version
+        || policy.revision != reference.revision
+        || policy.content_fingerprint != reference.content_fingerprint
+    {
+        return Err(error());
+    }
+    Ok(policy)
+}
+
+fn m10_materialize_evaluation_source_records(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    input: &mut EvaluationInput,
+) -> Result<EvaluationPolicyV1, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_POLICY_CHANGED".to_owned());
+    let policy = m10_load_evaluation_policy(service, project_id, &input.evaluation_policy_ref)?;
+    if policy.project_id != *project_id
+        || policy.subject_kind != input.candidate.subject.kind
+        || policy.subject_kind != input.baseline.subject.kind
+        || policy.evaluation_context != input.evaluation_context
+        || policy.mode != input.mode
+        || policy.corpus_ref != input.corpus_ref
+    {
+        return Err(error());
+    }
+    let supplied_cases = input
+        .case_results
+        .iter()
+        .map(|case| (case.case_id.clone(), case.case_version.clone()))
+        .collect::<BTreeSet<_>>();
+    let policy_cases = policy
+        .case_refs
+        .iter()
+        .map(|reference| (reference.case_id.clone(), reference.case_version.clone()))
+        .collect::<BTreeSet<_>>();
+    if supplied_cases != policy_cases || supplied_cases.len() != input.case_results.len() {
+        return Err(error());
+    }
+    let supplied_protected = input
+        .protected_metric_results
+        .iter()
+        .map(|metric| (metric.metric_id.clone(), metric.evidence_ref.clone()))
+        .collect::<BTreeMap<_, _>>();
+    if supplied_protected.len() != input.protected_metric_results.len()
+        || supplied_protected.keys().cloned().collect::<BTreeSet<_>>()
+            != policy
+                .protected_metric_ids
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>()
+        || supplied_protected
+            .values()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(error());
+    }
+    input.protected_metric_results = policy
+        .protected_metric_ids
+        .iter()
+        .map(|metric_id| ProtectedMetricResult {
+            metric_id: metric_id.clone(),
+            weakened: false,
+            evidence_ref: supplied_protected
+                .get(metric_id)
+                .cloned()
+                .unwrap_or_default(),
+        })
+        .collect();
+    input.comparability = policy
+        .comparability_dimensions
+        .iter()
+        .map(
+            |dimension| star_contracts::release_v2::EvaluationComparability {
+                dimension: dimension.clone(),
+                state: ComparabilityState::NotComparable,
+                evidence_ref: format!("evaluation-policy:{}", policy.content_fingerprint),
+            },
+        )
+        .collect();
+    input.minimum_sample_count = policy.minimum_sample_count;
+    for case in &mut input.case_results {
+        let reference = policy
+            .case_refs
+            .iter()
+            .find(|reference| {
+                reference.case_id == case.case_id && reference.case_version == case.case_version
+            })
+            .ok_or_else(error)?;
+        let definition = m10_load_evaluation_case_definition(service, project_id, reference)?;
+        if definition.corpus_ref != input.corpus_ref
+            || definition.evaluation_context != input.evaluation_context
+        {
+            return Err(error());
+        }
+        case.case_definition_ref = reference.clone();
+        case.adjudication = definition.adjudication;
+        case.adjudication_evidence_refs = definition.ground_truth_evidence_refs.clone();
+        case.adjudication_evidence_refs.push(format!(
+            "evaluation-case:{}@{}#{}",
+            definition.case_id, definition.case_version, definition.content_fingerprint
+        ));
+    }
+    input.case_results.sort_by(|left, right| {
+        (&left.case_id, &left.case_version).cmp(&(&right.case_id, &right.case_version))
+    });
+    Ok(policy)
+}
+
+fn m10_verify_evaluation_source_records(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    run: &EvaluationRunV2,
+) -> Result<(), ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_POLICY_CHANGED".to_owned());
+    let policy = m10_load_evaluation_policy(service, project_id, &run.evaluation_policy_ref)?;
+    if policy.subject_kind != run.subject_kind
+        || policy.evaluation_context != run.evaluation_context
+        || policy.mode != run.mode
+        || policy.corpus_ref != run.corpus_ref
+        || policy.minimum_sample_count != run.minimum_sample_count
+    {
+        return Err(error());
+    }
+    let run_cases = run
+        .case_results
+        .iter()
+        .map(|case| case.case_definition_ref.clone())
+        .collect::<BTreeSet<_>>();
+    let policy_cases = policy.case_refs.iter().cloned().collect::<BTreeSet<_>>();
+    if run_cases != policy_cases || run_cases.len() != run.case_results.len() {
+        return Err(error());
+    }
+    for reference in &policy.case_refs {
+        m10_load_evaluation_case_definition(service, project_id, reference)?;
+    }
+    Ok(())
+}
+
+fn m10_verify_evaluation_cost_records(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    run: &EvaluationRunV2,
+) -> Result<(), ApplicationError> {
+    let records = m10_load_cost_records(service, project_id, &run.usage_and_cost_refs)?;
+    let record_refs = records
+        .iter()
+        .map(|record| CostRecordRefV1 {
+            cost_record_id: record.cost_record_id.clone(),
+            revision: record.revision,
+            content_fingerprint: record.content_fingerprint.clone(),
+        })
+        .collect::<BTreeSet<_>>();
+    let case_refs = run
+        .case_results
+        .iter()
+        .flat_map(|case| {
+            case.baseline_cost_refs
+                .iter()
+                .chain(&case.candidate_cost_refs)
+                .cloned()
+        })
+        .collect::<BTreeSet<_>>();
+    if record_refs != case_refs {
+        return Err(ApplicationError::Apply(
+            "EVALUATION_RUN_EVIDENCE_MISSING".to_owned(),
+        ));
+    }
+    let by_ref = records
+        .iter()
+        .map(|record| {
+            (
+                CostRecordRefV1 {
+                    cost_record_id: record.cost_record_id.clone(),
+                    revision: record.revision,
+                    content_fingerprint: record.content_fingerprint.clone(),
+                },
+                record,
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    for case in &run.case_results {
+        let baseline = case
+            .baseline_cost_refs
+            .iter()
+            .map(|reference| {
+                by_ref
+                    .get(reference)
+                    .copied()
+                    .ok_or(ApplicationError::NotFound)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let candidate = case
+            .candidate_cost_refs
+            .iter()
+            .map(|reference| {
+                by_ref
+                    .get(reference)
+                    .copied()
+                    .ok_or(ApplicationError::NotFound)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if m10_cost_record_quantities(&baseline)? != case.baseline_usage_and_cost
+            || m10_cost_record_quantities(&candidate)? != case.candidate_usage_and_cost
+        {
+            return Err(ApplicationError::Apply(
+                "EVALUATION_RUN_EVIDENCE_MISSING".to_owned(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn m10_budget_decision(decision: BudgetDecisionV1) -> &'static str {
+    match decision {
+        BudgetDecisionV1::WithinBudget => "within_budget",
+        BudgetDecisionV1::ApprovalRequired => "approval_required",
+        BudgetDecisionV1::Exhausted => "exhausted",
+        BudgetDecisionV1::Unknown => "unknown",
+    }
+}
+
+fn m10_evaluation_radar_item(
+    project_id: &ProjectId,
+    evaluation_time: &str,
+    run: &EvaluationRunV2,
+) -> Result<MaintenanceRadarItem, ApplicationError> {
+    let item_id = format!("evaluation.{}", run.evaluation_run_id.as_str());
+    let (blocking_rank, risk_rank, blocking) = match run.recommendation {
+        EvaluationRecommendation::Reject => (3, 4, true),
+        EvaluationRecommendation::NeedsReview => (2, 3, false),
+        EvaluationRecommendation::Trial => (1, 2, false),
+        EvaluationRecommendation::Keep | EvaluationRecommendation::Accept => (0, 1, false),
+    };
+    let mut diagnostic_refs = run
+        .case_results
+        .iter()
+        .flat_map(|case| &case.adjudication_evidence_refs)
+        .filter(|reference| reference.starts_with("diagnostic:"))
+        .cloned()
+        .collect::<Vec<_>>();
+    diagnostic_refs.sort();
+    diagnostic_refs.dedup();
+    let mut suppression_refs = run
+        .case_results
+        .iter()
+        .flat_map(|case| &case.adjudication_evidence_refs)
+        .filter(|reference| reference.starts_with("suppression:"))
+        .cloned()
+        .collect::<Vec<_>>();
+    suppression_refs.sort();
+    suppression_refs.dedup();
+    Ok(MaintenanceRadarItem {
+        item_id: item_id.clone(),
+        project_id: project_id.clone(),
+        category: RadarCategory::ContractDrift,
+        subject: format!(
+            "{:?}:{}@{}",
+            run.subject.kind, run.subject.item_id, run.subject.version
+        )
+        .to_ascii_lowercase(),
+        priority: RadarPriority {
+            blocking_rank,
+            risk_rank,
+            freshness_rank: 0,
+            regression_rank: u8::from(
+                run.finding_metrics.candidate_new_or_worsened_count
+                    > run.finding_metrics.baseline_new_or_worsened_count,
+            ) * 3,
+            evidence_rank: if run.limitations.is_empty() { 0 } else { 2 },
+            time_rank: evaluation_time.to_owned(),
+            stable_identity: item_id,
+        },
+        finding_refs: Vec::new(),
+        diagnostic_refs,
+        dependency_refs: Vec::new(),
+        regression_refs: Vec::new(),
+        suppression_refs,
+        evidence_refs: vec![format!(
+            "evaluation-run:{}#{}",
+            run.evaluation_run_id, run.run_fingerprint
+        )],
+        evaluation_run_refs: vec![EvaluationRunEvidenceRef {
+            evaluation_run_id: run.evaluation_run_id.clone(),
+            run_fingerprint: run.run_fingerprint.clone(),
+        }],
+        blocking,
+        freshness: ExternalFreshness::Current,
+        completeness: if run.limitations.is_empty() {
+            CoverageState::Complete
+        } else {
+            CoverageState::Partial
+        },
+    })
+}
+
+fn m10_validate_radar_evaluation_refs(
+    service: &ManagementApplicationService,
+    item: &MaintenanceRadarItem,
+) -> Result<(), ApplicationError> {
+    for reference in &item.evaluation_run_refs {
+        let record = service
+            .get_development_record(
+                "evaluation_run_v2",
+                reference.evaluation_run_id.as_str(),
+                None,
+            )?
+            .ok_or(ApplicationError::NotFound)?;
+        if record.project_id.as_ref() != Some(&item.project_id) {
+            return Err(ApplicationError::NotFound);
+        }
+        let run: EvaluationRunV2 =
+            serde_json::from_value(record.document).map_err(|_| ApplicationError::Invalid)?;
+        verify_evaluation_run(&run).map_err(m10_release_error)?;
+        m10_verify_evaluation_source_records(service, &item.project_id, &run)?;
+        m10_verify_evaluation_cost_records(service, &item.project_id, &run)?;
+        if run.evaluation_run_id != reference.evaluation_run_id
+            || run.run_fingerprint != reference.run_fingerprint
+        {
+            return Err(ApplicationError::Apply(
+                "EVALUATION_RUN_EVIDENCE_MISSING".to_owned(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn m10_build_asset_binding(
@@ -14602,14 +17282,158 @@ fn m10_release_record(
     let record = service
         .get_development_record("release_manifest_v2", release_manifest_id, None)?
         .ok_or(ApplicationError::NotFound)?;
-    let manifest =
+    let manifest: ReleaseManifestV2 =
         serde_json::from_value(record.document.clone()).map_err(|_| ApplicationError::Invalid)?;
+    verify_release_manifest(&manifest).map_err(m10_release_error)?;
     let project_id = record.project_id.clone();
     Ok((
         serde_json::to_value(record).map_err(|_| ApplicationError::Invalid)?,
         project_id,
         manifest,
     ))
+}
+
+fn m10_final_product_audit(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    manifest: &ReleaseManifestV2,
+) -> Result<star_contracts::release_v2::FinalProductAuditV1, ApplicationError> {
+    let feature_statuses = PRODUCT_FEATURE_RUNTIME_SPECS
+        .iter()
+        .map(|feature| ProductFeatureOwnershipStatusV1 {
+            feature_id: feature.feature_id.to_owned(),
+            semantic_owner_ref: feature.semantic_owner_ref.to_owned(),
+            physical_owner: feature.physical_owner.to_owned(),
+            command_surfaces: feature
+                .command_surfaces
+                .iter()
+                .map(|command| (*command).to_owned())
+                .collect(),
+            missing_command_surfaces: feature
+                .command_surfaces
+                .iter()
+                .filter(|command| !product_command_handler_current(command))
+                .map(|command| (*command).to_owned())
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+
+    let catalog = service.development_profile_catalog()?;
+    let mut profile_statuses = Vec::with_capacity(catalog.entries.len());
+    let mut m11_profile_conformant = false;
+    for entry in &catalog.entries {
+        let profile_id = entry.profile_ref.profile_id.clone();
+        let resolution = service.resolve_development_profiles(std::slice::from_ref(&profile_id))?;
+        let exact_resolution = resolution.catalog_fingerprint == catalog.catalog_fingerprint
+            && resolution.selected_profiles == vec![entry.profile_ref.clone()]
+            && resolution.definition_refs.iter().any(|definition| {
+                definition.profile_ref == entry.profile_ref
+                    && definition.definition_hash == entry.definition_hash
+            });
+        let limitations = if exact_resolution {
+            Vec::new()
+        } else {
+            vec!["profile_resolution_mismatch".to_owned()]
+        };
+        if profile_id == "rust_style_auto_fix" {
+            let parent_ids = resolution
+                .parent_closure
+                .iter()
+                .map(|parent| parent.profile_id.as_str())
+                .collect::<BTreeSet<_>>();
+            let required_checks = resolution
+                .required_check_families
+                .iter()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>();
+            m11_profile_conformant = exact_resolution
+                && parent_ids.contains("refactor_codemod")
+                && parent_ids.contains("ai_development_validation")
+                && ["format", "lint", "build", "test"]
+                    .iter()
+                    .all(|check| required_checks.contains(check))
+                && entry
+                    .descriptor
+                    .extensions
+                    .rust_style
+                    .as_ref()
+                    .is_some_and(|metadata| {
+                        metadata.profile_kind == "rust_style_auto_fix"
+                            && metadata.pipeline_ref == "rust_style_v1@1"
+                            && metadata.network == "denied"
+                            && metadata
+                                .required_gates
+                                .iter()
+                                .any(|gate| gate == "patch_pre_apply")
+                            && metadata
+                                .required_gates
+                                .iter()
+                                .any(|gate| gate == "patch_post_apply")
+                    });
+        }
+        profile_statuses.push(ProductProfileConformanceStatusV1 {
+            profile_id,
+            profile_version: entry.profile_ref.profile_version.clone(),
+            definition_hash: entry.definition_hash.clone(),
+            resolution_fingerprint: resolution.profile_resolution_fingerprint,
+            conformant: exact_resolution,
+            limitations,
+        });
+    }
+
+    let artifact_set_digest = manifest
+        .artifact_set_digest
+        .as_ref()
+        .ok_or(ApplicationError::Invalid)?;
+    let mut lifecycle_by_architecture = BTreeMap::new();
+    for record in
+        service.list_development_records("release_lifecycle_evidence", Some(project_id))?
+    {
+        let evidence: ReleaseLifecycleEvidence = serde_json::from_value(record.document.clone())
+            .map_err(|_| ApplicationError::Invalid)?;
+        if evidence.candidate_artifact_set_digest != *artifact_set_digest {
+            continue;
+        }
+        evidence.validate_complete().map_err(m10_release_error)?;
+        let target = manifest
+            .compatibility
+            .iter()
+            .find(|target| target.architecture == evidence.architecture)
+            .ok_or_else(|| {
+                ApplicationError::Apply("RELEASE_LIFECYCLE_EVIDENCE_MISMATCH".to_owned())
+            })?;
+        if target.runtime_verification != evidence.runtime_verification {
+            return Err(ApplicationError::Apply(
+                "RELEASE_LIFECYCLE_EVIDENCE_MISMATCH".to_owned(),
+            ));
+        }
+        let status = ProductLifecycleEvidenceStatusV1 {
+            architecture: evidence.architecture,
+            support_tier: target.support_tier,
+            runtime_verification: evidence.runtime_verification,
+            evidence_record_id: record.record_id,
+            evidence_fingerprint: record.document_fingerprint,
+            candidate_artifact_set_digest: evidence.candidate_artifact_set_digest,
+        };
+        if let Some(existing) =
+            lifecycle_by_architecture.insert(status.architecture, status.clone())
+            && existing.evidence_fingerprint != status.evidence_fingerprint
+        {
+            return Err(ApplicationError::Apply(
+                "RELEASE_LIFECYCLE_EVIDENCE_MISMATCH".to_owned(),
+            ));
+        }
+    }
+
+    build_final_product_audit(
+        manifest,
+        catalog.catalog_fingerprint,
+        feature_statuses,
+        profile_statuses,
+        m11_profile_conformant,
+        lifecycle_by_architecture.into_values().collect(),
+    )
+    .map_err(m10_release_error)
 }
 
 fn m10_find_build_once_candidate(
@@ -14685,21 +17509,33 @@ fn m10_verification_observations(
             .iter()
             .find(|run| &run.validation_run_id == run_id)
             .ok_or(ApplicationError::NotFound)?;
-        let gate = service.get_gate_decision_v2(project_id, gate_id)?;
+        let expected_run_fingerprint = run.result_fingerprint.clone();
+        let sealed_run = run
+            .clone()
+            .seal()
+            .map_err(|_| ApplicationError::Apply("RELEASE_EVIDENCE_INCOMPLETE".to_owned()))?;
+        let allowed_validation_plan_refs = [observation.validation_plan_ref.as_str().to_owned()];
+        let gate = m8_current_gate(
+            service,
+            project_id,
+            gate_id.as_str(),
+            &allowed_validation_plan_refs,
+            "RELEASE_EVIDENCE_INCOMPLETE",
+        )?;
+        let run_ref = sealed_run
+            .reference()
+            .map_err(|_| ApplicationError::Apply("RELEASE_EVIDENCE_INCOMPLETE".to_owned()))?;
         if observation.completeness != star_contracts::release_v2::EvidenceCompleteness::Complete
             || observation.artifact_set_digest.as_ref() != Some(digest)
             || observation.validation_plan_ref != planning.validation_plan.validation_plan_id
             || run.validation_plan_ref.document_id != observation.validation_plan_ref.as_str()
-            || run.outcome != star_contracts::evidence::ValidationOutcome::Pass
-            || run.completeness != Completeness::Complete
+            || sealed_run.result_fingerprint != expected_run_fingerprint
+            || !sealed_run.satisfies_required_check()
+            || sealed_run.subject_binding.freshness != EvidenceFreshnessV2::Current
+            || sealed_run.subject_binding.effective_config_fingerprint
+                != service.effective_config()?.config_fingerprint
             || gate.validation_plan_ref.document_id != observation.validation_plan_ref.as_str()
-            || gate.decision != GateDecisionKind::AutoPass
-            || !gate.remaining_risks.is_empty()
-            || gate.valid_until.is_some_and(|until| until <= Utc::now())
-            || !gate
-                .satisfied_run_refs
-                .iter()
-                .any(|run_ref| run_ref.validation_run_id == *run_id)
+            || !gate.satisfied_run_refs.contains(&run_ref)
         {
             return Err(ApplicationError::Apply(
                 "RELEASE_EVIDENCE_INCOMPLETE".to_owned(),
@@ -14710,27 +17546,1207 @@ fn m10_verification_observations(
     Ok(observations)
 }
 
-fn m10_validate_evaluation_run_refs(
+fn m10_materialize_evaluation_evidence(
     service: &ManagementApplicationService,
     project_id: &ProjectId,
-    input: &EvaluationInput,
+    input: &mut EvaluationInput,
 ) -> Result<(), ApplicationError> {
-    let runs = service
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    input.radar_item_refs.clear();
+    let config_fingerprint = service.effective_config()?.config_fingerprint.clone();
+    let stored_runs = service
         .list_validation_runs_v2(project_id)?
         .into_iter()
-        .map(|run| run.validation_run_id)
-        .collect::<BTreeSet<_>>();
-    if input.case_results.iter().any(|case| {
-        case.baseline_run_refs
+        .map(|run| (run.validation_run_id.clone(), run))
+        .collect::<BTreeMap<_, _>>();
+    let stored_diagnostics = service
+        .list_validation_diagnostics_v2(project_id)?
+        .into_iter()
+        .map(|diagnostic| (diagnostic.diagnostic_id.clone(), diagnostic))
+        .collect::<BTreeMap<_, _>>();
+    let dispositions = service
+        .validation_decision_inspection(project_id)?
+        .dispositions
+        .into_iter()
+        .map(|disposition| {
+            let expected = disposition.content_fingerprint.clone();
+            let sealed = disposition.clone().seal().map_err(|_| error())?;
+            if sealed != disposition || sealed.content_fingerprint != expected {
+                return Err(error());
+            }
+            Ok(sealed)
+        })
+        .collect::<Result<Vec<_>, ApplicationError>>()?;
+    let gate_candidates = service.list_gate_decisions_v2(project_id)?;
+    if gate_candidates.len() > 4_096 {
+        return Err(error());
+    }
+    let cost_records = m10_list_latest_cost_records(service, project_id)?;
+    let baseline_definition = input.baseline.clone();
+    let candidate_definition = input.candidate.clone();
+    let mut used_run_ids = BTreeSet::new();
+    let mut materialized_runs = BTreeMap::new();
+    let mut verified_gates = BTreeMap::new();
+
+    for case in &mut input.case_results {
+        let baseline_ids = case.baseline_run_refs.clone();
+        let candidate_ids = case.candidate_run_refs.clone();
+        if baseline_ids
             .iter()
-            .chain(&case.candidate_run_refs)
-            .any(|run| !runs.contains(run))
+            .chain(&candidate_ids)
+            .any(|run_id| !used_run_ids.insert(run_id.clone()))
+        {
+            return Err(error());
+        }
+        let baseline_runs = baseline_ids
+            .iter()
+            .map(|run_id| {
+                let run = stored_runs.get(run_id).ok_or_else(error)?;
+                m10_current_evaluation_validation_run(run, project_id, &config_fingerprint)
+            })
+            .collect::<Result<Vec<_>, ApplicationError>>()?;
+        let candidate_runs = candidate_ids
+            .iter()
+            .map(|run_id| {
+                let run = stored_runs.get(run_id).ok_or_else(error)?;
+                m10_current_evaluation_validation_run(run, project_id, &config_fingerprint)
+            })
+            .collect::<Result<Vec<_>, ApplicationError>>()?;
+        for run in baseline_runs.iter().chain(&candidate_runs) {
+            materialized_runs.insert(run.validation_run_id.clone(), run.clone());
+        }
+        if !m10_evaluation_definition_matches_runs(&baseline_definition, &baseline_runs)
+            || !m10_evaluation_definition_matches_runs(&candidate_definition, &candidate_runs)
+        {
+            return Err(error());
+        }
+
+        let relevant_runs = baseline_runs
+            .iter()
+            .chain(&candidate_runs)
+            .collect::<Vec<_>>();
+        let mut relevant_diagnostics = Vec::new();
+        for run in &relevant_runs {
+            for diagnostic_id in &run.diagnostic_ids {
+                let diagnostic = stored_diagnostics.get(diagnostic_id).ok_or_else(error)?;
+                let diagnostic = m10_sealed_evaluation_diagnostic(diagnostic, project_id)?;
+                if diagnostic.validation_run_id != run.validation_run_id
+                    || diagnostic
+                        .subject_binding_fingerprint
+                        .as_ref()
+                        .is_some_and(|fingerprint| {
+                            fingerprint != &run.subject_binding.binding_fingerprint
+                        })
+                {
+                    return Err(error());
+                }
+                relevant_diagnostics.push(diagnostic);
+            }
+        }
+
+        let finding_evidence = m10_materialize_case_finding_evidence(
+            service,
+            project_id,
+            &baseline_ids,
+            &candidate_ids,
+            &relevant_diagnostics,
+            &gate_candidates,
+            &mut verified_gates,
+        )?;
+        case.baseline_finding_count = finding_evidence.baseline_finding_count;
+        case.candidate_finding_count = finding_evidence.candidate_finding_count;
+        case.baseline_new_or_worsened_count = finding_evidence.baseline_new_or_worsened_count;
+        case.candidate_new_or_worsened_count = finding_evidence.candidate_new_or_worsened_count;
+        case.baseline_existing_debt_count = finding_evidence.baseline_existing_debt_count;
+        case.candidate_existing_debt_count = finding_evidence.candidate_existing_debt_count;
+        case.baseline_suppressions = finding_evidence.baseline_suppressions;
+        case.candidate_suppressions = finding_evidence.candidate_suppressions;
+        case.suppression_newly_added_count = finding_evidence.suppression_newly_added_count;
+        case.suppression_broadened_count = finding_evidence.suppression_broadened_count;
+        case.suppression_removed_count = finding_evidence.suppression_removed_count;
+        let (
+            baseline_cost_refs,
+            candidate_cost_refs,
+            baseline_usage_and_cost,
+            candidate_usage_and_cost,
+        ) = m10_materialize_case_cost_refs(&cost_records, &baseline_ids, &candidate_ids)?;
+        case.baseline_cost_refs = baseline_cost_refs;
+        case.candidate_cost_refs = candidate_cost_refs;
+        case.baseline_usage_and_cost = baseline_usage_and_cost;
+        case.candidate_usage_and_cost = candidate_usage_and_cost;
+
+        case.baseline_detected = m10_evaluation_detected(&baseline_runs);
+        case.candidate_detected = m10_evaluation_detected(&candidate_runs);
+        case.baseline_duration_ms = m10_evaluation_duration_ms(&baseline_runs)?;
+        case.candidate_duration_ms = m10_evaluation_duration_ms(&candidate_runs)?;
+        case.baseline_rework_count =
+            u32::try_from(baseline_runs.len().saturating_sub(1)).map_err(|_| error())?;
+        case.candidate_rework_count =
+            u32::try_from(candidate_runs.len().saturating_sub(1)).map_err(|_| error())?;
+        case.baseline_outcome = m10_evaluation_outcome(&baseline_runs);
+        case.candidate_outcome = m10_evaluation_outcome(&candidate_runs);
+        case.candidate_flaky = m10_evaluation_flaky(&candidate_runs);
+
+        let ground_truth_adjudication = case.adjudication;
+        let mut confirmed = false;
+        let mut false_positive = false;
+        let mut deferred = false;
+        let mut adjudication_refs = case.adjudication_evidence_refs.clone();
+        adjudication_refs.extend(finding_evidence.evidence_refs);
+        for disposition in &dispositions {
+            if disposition.project_id != *project_id
+                || disposition.status != DispositionStatus::Active
+                || disposition.subject_kind != DecisionSubjectKindV2::Diagnostic
+            {
+                continue;
+            }
+            let matches_diagnostic = relevant_diagnostics.iter().any(|diagnostic| {
+                disposition.subject_fingerprint == diagnostic.fingerprint
+                    && disposition.subject_binding_constraint.as_ref()
+                        == diagnostic.subject_binding_fingerprint.as_ref()
+            });
+            if !matches_diagnostic {
+                continue;
+            }
+            adjudication_refs.push(format!(
+                "disposition:{}@{}#{}",
+                disposition.disposition_id, disposition.revision, disposition.content_fingerprint
+            ));
+            match disposition.decision {
+                DispositionDecision::FalsePositive => false_positive = true,
+                DispositionDecision::Deferred => deferred = true,
+                DispositionDecision::NeedsAction
+                | DispositionDecision::AcceptedRisk
+                | DispositionDecision::Duplicate
+                | DispositionDecision::Fixed => confirmed = true,
+            }
+        }
+        case.adjudication = match ground_truth_adjudication {
+            CaseAdjudication::ConfirmedDefect if false_positive || deferred => {
+                CaseAdjudication::Unresolved
+            }
+            CaseAdjudication::FalsePositive if confirmed || deferred => {
+                CaseAdjudication::Unresolved
+            }
+            CaseAdjudication::NotApplicable if confirmed || false_positive || deferred => {
+                CaseAdjudication::Unresolved
+            }
+            CaseAdjudication::Unresolved => match (confirmed, false_positive, deferred) {
+                (true, false, false) => CaseAdjudication::ConfirmedDefect,
+                (false, true, false) => CaseAdjudication::FalsePositive,
+                _ => CaseAdjudication::Unresolved,
+            },
+            adjudication => adjudication,
+        };
+        if adjudication_refs.is_empty() {
+            adjudication_refs.extend(relevant_diagnostics.iter().map(|diagnostic| {
+                format!(
+                    "diagnostic:{}@{}#{}",
+                    diagnostic.diagnostic_id, diagnostic.sequence, diagnostic.fingerprint
+                )
+            }));
+        }
+        if adjudication_refs.is_empty() {
+            adjudication_refs.extend(relevant_runs.iter().map(|run| {
+                format!(
+                    "validation-run:{}@{}#{}",
+                    run.validation_run_id, run.revision, run.result_fingerprint
+                )
+            }));
+        }
+        adjudication_refs.sort();
+        adjudication_refs.dedup();
+        case.adjudication_evidence_refs = adjudication_refs;
+
+        case.task_source_binding = canonical_sha256(&serde_json::json!({
+            "case_id":case.case_id,
+            "case_version":case.case_version,
+            "case_definition_ref":case.case_definition_ref,
+            "corpus_ref":case.corpus_ref,
+            "evaluation_context":case.evaluation_context,
+            "evaluation_policy_ref":input.evaluation_policy_ref,
+            "baseline":baseline_definition,
+            "candidate":candidate_definition,
+            "baseline_runs":baseline_runs.iter().map(m10_evaluation_run_binding).collect::<Vec<_>>(),
+            "candidate_runs":candidate_runs.iter().map(m10_evaluation_run_binding).collect::<Vec<_>>(),
+            "baseline_cost_refs":case.baseline_cost_refs,
+            "candidate_cost_refs":case.candidate_cost_refs,
+            "baseline_usage_and_cost":case.baseline_usage_and_cost,
+            "candidate_usage_and_cost":case.candidate_usage_and_cost,
+        }))
+        .map_err(|_| error())?;
+        case.limitations.retain(|value| !value.trim().is_empty());
+        if case.adjudication == CaseAdjudication::Unresolved {
+            case.limitations
+                .push("adjudication_evidence_incomplete".to_owned());
+        }
+        if matches!(case.baseline_outcome, EvaluationOutcome::Unknown)
+            || matches!(case.candidate_outcome, EvaluationOutcome::Unknown)
+        {
+            case.limitations
+                .push("validation_outcome_unknown".to_owned());
+        }
+        if case.baseline_cost_refs.is_empty() || case.candidate_cost_refs.is_empty() {
+            case.limitations
+                .push("provider_usage_or_cost_measurement_unavailable".to_owned());
+        }
+        case.limitations.sort();
+        case.limitations.dedup();
+    }
+
+    let mut case_selection = input
+        .case_results
+        .iter()
+        .map(|case| {
+            serde_json::json!({
+                "case_id":case.case_id,
+                "case_version":case.case_version,
+                "case_definition_ref":case.case_definition_ref,
+                "corpus_ref":case.corpus_ref,
+                "evaluation_context":case.evaluation_context,
+            })
+        })
+        .collect::<Vec<_>>();
+    case_selection.sort_by_key(|value| serde_json::to_string(value).unwrap_or_default());
+    input.case_selection_fingerprint = canonical_sha256(&serde_json::json!({
+        "evaluation_policy_ref":input.evaluation_policy_ref,
+        "corpus_ref":input.corpus_ref,
+        "cases":case_selection,
+    }))
+    .map_err(|_| error())?;
+    let measurement_cases = input.case_results.iter().map(|case| {
+        let baseline_runs = case.baseline_run_refs.iter().map(|run_id| {
+            let run = materialized_runs.get(run_id).ok_or_else(error)?;
+            Ok(serde_json::json!({
+                "run_ref":run_id,
+                "attempt":run.attempt,
+                "timeout_ms":run.invocation.timeout_ms,
+                "expected_exit_codes":run.invocation.expected_exit_codes,
+                "output_limits":run.invocation.output_limits,
+                "execution_environment_fingerprint":run.subject_binding.execution_environment_fingerprint,
+                "normalizer_fingerprint":run.subject_binding.normalizer_fingerprint,
+            }))
+        }).collect::<Result<Vec<_>, ApplicationError>>()?;
+        let candidate_runs = case.candidate_run_refs.iter().map(|run_id| {
+            let run = materialized_runs.get(run_id).ok_or_else(error)?;
+            Ok(serde_json::json!({
+                "run_ref":run_id,
+                "attempt":run.attempt,
+                "timeout_ms":run.invocation.timeout_ms,
+                "expected_exit_codes":run.invocation.expected_exit_codes,
+                "output_limits":run.invocation.output_limits,
+                "execution_environment_fingerprint":run.subject_binding.execution_environment_fingerprint,
+                "normalizer_fingerprint":run.subject_binding.normalizer_fingerprint,
+            }))
+        }).collect::<Result<Vec<_>, ApplicationError>>()?;
+        Ok(serde_json::json!({
+            "case_id":case.case_id,
+            "task_source_binding":case.task_source_binding,
+            "baseline_runs":baseline_runs,
+            "candidate_runs":candidate_runs,
+        }))
+    }).collect::<Result<Vec<_>, ApplicationError>>()?;
+    input.measurement_protocol_fingerprint = canonical_sha256(&serde_json::json!({
+        "evaluation_context":input.evaluation_context,
+        "mode":input.mode,
+        "evaluation_policy_ref":input.evaluation_policy_ref,
+        "minimum_sample_count":input.minimum_sample_count,
+        "cases":measurement_cases,
+    }))
+    .map_err(|_| error())?;
+
+    for comparison in &mut input.comparability {
+        let (state, evidence_ref) = m10_materialized_comparability(
+            &comparison.dimension,
+            &input.case_results,
+            &materialized_runs,
+            input.candidate.subject.kind,
+            &input.candidate.subject.item_id,
+        )?;
+        comparison.state = state;
+        comparison.evidence_ref = evidence_ref;
+    }
+
+    let candidate_runs = input
+        .case_results
+        .iter()
+        .flat_map(|case| &case.candidate_run_refs)
+        .map(|run_id| materialized_runs.get(run_id).ok_or_else(error))
+        .collect::<Result<Vec<_>, ApplicationError>>()?;
+    for protected in &mut input.protected_metric_results {
+        let (mut weakened, evidence_ref) = m10_materialize_protected_gate_evidence(
+            service,
+            project_id,
+            &protected.evidence_ref,
+            &candidate_runs,
+        )?;
+        if protected.metric_id == "validator_guard" {
+            weakened |= input.comparability.iter().any(|item| {
+                item.dimension == "catalog" && item.state == ComparabilityState::NotComparable
+            });
+        }
+        if protected.metric_id == "profile"
+            && input.candidate.subject.kind != EvaluationSubjectKind::Profile
+        {
+            weakened |= input.comparability.iter().any(|item| {
+                item.dimension == "config" && item.state == ComparabilityState::NotComparable
+            });
+        }
+        protected.weakened = weakened;
+        protected.evidence_ref = evidence_ref;
+    }
+    Ok(())
+}
+
+#[derive(Default)]
+struct M10CaseFindingEvidence {
+    baseline_finding_count: u32,
+    candidate_finding_count: u32,
+    baseline_new_or_worsened_count: u32,
+    candidate_new_or_worsened_count: u32,
+    baseline_existing_debt_count: u32,
+    candidate_existing_debt_count: u32,
+    baseline_suppressions: EvaluationSuppressionSummary,
+    candidate_suppressions: EvaluationSuppressionSummary,
+    suppression_newly_added_count: u32,
+    suppression_broadened_count: u32,
+    suppression_removed_count: u32,
+    evidence_refs: Vec<String>,
+}
+
+fn m10_materialize_case_finding_evidence(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    baseline_run_ids: &[star_contracts::ValidationRunId],
+    candidate_run_ids: &[star_contracts::ValidationRunId],
+    diagnostics: &[DiagnosticV2],
+    gate_candidates: &[GateDecisionV2],
+    verified_gates: &mut BTreeMap<GateId, GateDecisionV2>,
+) -> Result<M10CaseFindingEvidence, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let baseline = baseline_run_ids.iter().cloned().collect::<BTreeSet<_>>();
+    let candidate = candidate_run_ids.iter().cloned().collect::<BTreeSet<_>>();
+    let relevant = baseline.union(&candidate).cloned().collect::<BTreeSet<_>>();
+    let mut covered_runs = BTreeSet::new();
+    let mut evaluations = BTreeMap::new();
+    let diagnostic_ids = diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.diagnostic_id.clone())
+        .collect::<BTreeSet<_>>();
+
+    for gate in gate_candidates.iter().filter(|gate| {
+        gate.required_run_refs
+            .iter()
+            .chain(&gate.satisfied_run_refs)
+            .any(|reference| relevant.contains(&reference.validation_run_id))
     }) {
+        let gate = if let Some(gate) = verified_gates.get(&gate.gate_id) {
+            gate.clone()
+        } else {
+            let verified = m10_current_evaluation_gate(service, project_id, gate.gate_id.as_str())?;
+            verified_gates.insert(verified.gate_id.clone(), verified.clone());
+            verified
+        };
+        if gate.valid_until.is_some_and(|until| until <= Utc::now()) {
+            return Err(error());
+        }
+        covered_runs.extend(
+            gate.required_run_refs
+                .iter()
+                .filter(|reference| relevant.contains(&reference.validation_run_id))
+                .map(|reference| reference.validation_run_id.clone()),
+        );
+        for evaluation in &gate.diagnostic_evaluations {
+            let DiagnosticEvaluationSubjectV2::CurrentDiagnostic { diagnostic_ref } =
+                &evaluation.evaluation_subject
+            else {
+                continue;
+            };
+            if !diagnostic_ids.contains(&diagnostic_ref.diagnostic_id) {
+                continue;
+            }
+            if let Some(previous) = evaluations.insert(
+                diagnostic_ref.diagnostic_id.clone(),
+                (diagnostic_ref.clone(), evaluation.clone()),
+            ) && previous.1 != *evaluation
+            {
+                return Err(error());
+            }
+        }
+    }
+    if covered_runs != relevant {
+        return Err(error());
+    }
+
+    let mut result = M10CaseFindingEvidence::default();
+    let mut baseline_active = BTreeMap::<String, DecisionDocumentRefV2>::new();
+    let mut candidate_active = BTreeMap::<String, DecisionDocumentRefV2>::new();
+    for diagnostic in diagnostics {
+        let (diagnostic_ref, evaluation) = evaluations
+            .get(&diagnostic.diagnostic_id)
+            .ok_or_else(error)?;
+        if diagnostic_ref.sequence != diagnostic.sequence
+            || diagnostic_ref.sha256 != diagnostic.fingerprint
+            || evaluation.subject_binding_fingerprint
+                != diagnostic
+                    .subject_binding_fingerprint
+                    .clone()
+                    .ok_or_else(error)?
+        {
+            return Err(error());
+        }
+        let side = if baseline.contains(&diagnostic.validation_run_id) {
+            0_u8
+        } else if candidate.contains(&diagnostic.validation_run_id) {
+            1_u8
+        } else {
+            return Err(error());
+        };
+        if side == 0 {
+            result.baseline_finding_count = result.baseline_finding_count.saturating_add(1);
+        } else {
+            result.candidate_finding_count = result.candidate_finding_count.saturating_add(1);
+        }
+        match (side, evaluation.baseline_relation) {
+            (0, BaselineRelationV2::New | BaselineRelationV2::Worsened) => {
+                result.baseline_new_or_worsened_count =
+                    result.baseline_new_or_worsened_count.saturating_add(1);
+            }
+            (1, BaselineRelationV2::New | BaselineRelationV2::Worsened) => {
+                result.candidate_new_or_worsened_count =
+                    result.candidate_new_or_worsened_count.saturating_add(1);
+            }
+            (0, BaselineRelationV2::ExistingUnchanged) => {
+                result.baseline_existing_debt_count =
+                    result.baseline_existing_debt_count.saturating_add(1);
+            }
+            (1, BaselineRelationV2::ExistingUnchanged) => {
+                result.candidate_existing_debt_count =
+                    result.candidate_existing_debt_count.saturating_add(1);
+            }
+            _ => {}
+        }
+        let summary = if side == 0 {
+            &mut result.baseline_suppressions
+        } else {
+            &mut result.candidate_suppressions
+        };
+        m10_increment_suppression_summary(summary, evaluation.suppression_state);
+        result.evidence_refs.push(format!(
+            "diagnostic:{}@{}#{}",
+            diagnostic.diagnostic_id, diagnostic.sequence, diagnostic.fingerprint
+        ));
+        result.evidence_refs.push(format!(
+            "diagnostic-evaluation:{}",
+            evaluation.evaluation_fingerprint
+        ));
+        if let Some(reference) = &evaluation.suppression_ref {
+            result.evidence_refs.push(format!(
+                "suppression:{}@{}#{}",
+                reference.document_id, reference.revision, reference.fingerprint
+            ));
+            if evaluation.suppression_state == SuppressionStateV2::Active {
+                let target = if side == 0 {
+                    &mut baseline_active
+                } else {
+                    &mut candidate_active
+                };
+                if let Some(previous) =
+                    target.insert(reference.document_id.clone(), reference.clone())
+                    && previous != *reference
+                {
+                    return Err(error());
+                }
+            }
+        }
+    }
+    result.suppression_newly_added_count = u32::try_from(
+        candidate_active
+            .keys()
+            .filter(|id| !baseline_active.contains_key(*id))
+            .count(),
+    )
+    .map_err(|_| error())?;
+    result.suppression_removed_count = u32::try_from(
+        baseline_active
+            .keys()
+            .filter(|id| !candidate_active.contains_key(*id))
+            .count(),
+    )
+    .map_err(|_| error())?;
+    for (id, baseline_ref) in &baseline_active {
+        let Some(candidate_ref) = candidate_active.get(id) else {
+            continue;
+        };
+        if baseline_ref == candidate_ref {
+            continue;
+        }
+        let baseline_suppression =
+            m10_load_suppression_revision(service, project_id, baseline_ref)?;
+        let candidate_suppression =
+            m10_load_suppression_revision(service, project_id, candidate_ref)?;
+        if m10_suppression_broadened(&baseline_suppression, &candidate_suppression) {
+            result.suppression_broadened_count =
+                result.suppression_broadened_count.saturating_add(1);
+        }
+    }
+    result.evidence_refs.sort();
+    result.evidence_refs.dedup();
+    Ok(result)
+}
+
+fn m10_increment_suppression_summary(
+    summary: &mut EvaluationSuppressionSummary,
+    state: SuppressionStateV2,
+) {
+    match state {
+        SuppressionStateV2::None => {}
+        SuppressionStateV2::Active => summary.active = summary.active.saturating_add(1),
+        SuppressionStateV2::Expired => summary.expired = summary.expired.saturating_add(1),
+        SuppressionStateV2::Stale => summary.stale = summary.stale.saturating_add(1),
+        SuppressionStateV2::Revoked => summary.revoked = summary.revoked.saturating_add(1),
+        SuppressionStateV2::Invalid => summary.invalid = summary.invalid.saturating_add(1),
+    }
+}
+
+fn m10_load_suppression_revision(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    reference: &DecisionDocumentRefV2,
+) -> Result<SuppressionV2, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let suppression_id =
+        SuppressionId::parse(reference.document_id.clone()).map_err(|_| error())?;
+    let suppression = service
+        .get_validation_suppression_v2(project_id, &suppression_id, reference.revision)
+        .map_err(|_| error())?;
+    let expected = suppression.content_fingerprint.clone();
+    let sealed = suppression.clone().seal().map_err(|_| error())?;
+    if sealed != suppression
+        || sealed.suppression_id != suppression_id
+        || sealed.revision != reference.revision
+        || sealed.content_fingerprint != expected
+        || sealed.content_fingerprint != reference.fingerprint
+    {
+        return Err(error());
+    }
+    Ok(sealed)
+}
+
+fn m10_suppression_broadened(baseline: &SuppressionV2, candidate: &SuppressionV2) -> bool {
+    if baseline.project_id != candidate.project_id
+        || baseline.subject_kind != candidate.subject_kind
+        || baseline.suppression_id != candidate.suppression_id
+    {
+        return true;
+    }
+    m10_option_relaxed(
+        &baseline.subject_fingerprint,
+        &candidate.subject_fingerprint,
+    ) || m10_option_relaxed(
+        &baseline.rule_ref_constraint,
+        &candidate.rule_ref_constraint,
+    ) || m10_option_relaxed(
+        &baseline.subject_binding_constraint,
+        &candidate.subject_binding_constraint,
+    ) || m10_option_relaxed(
+        &baseline.scope_constraint.package_id,
+        &candidate.scope_constraint.package_id,
+    ) || m10_option_relaxed(
+        &baseline.scope_constraint.workspace_id,
+        &candidate.scope_constraint.workspace_id,
+    ) || m10_scope_values_broadened(
+        &baseline.scope_constraint.paths,
+        &candidate.scope_constraint.paths,
+    ) || m10_scope_values_broadened(
+        &baseline.scope_constraint.symbol_ids,
+        &candidate.scope_constraint.symbol_ids,
+    ) || m10_scope_values_broadened(
+        &baseline.scope_constraint.gate_phases,
+        &candidate.scope_constraint.gate_phases,
+    ) || (!baseline.permanent && candidate.permanent)
+        || matches!((&baseline.expires_at, &candidate.expires_at), (Some(before), Some(after)) if after > before)
+        || (baseline.expires_at.is_some() && candidate.expires_at.is_none())
+}
+
+fn m10_option_relaxed<T>(baseline: &Option<T>, candidate: &Option<T>) -> bool {
+    baseline.is_some() && candidate.is_none()
+}
+
+fn m10_scope_values_broadened<T: Ord>(baseline: &[T], candidate: &[T]) -> bool {
+    if baseline.is_empty() {
+        return false;
+    }
+    if candidate.is_empty() {
+        return true;
+    }
+    let before = baseline.iter().collect::<BTreeSet<_>>();
+    let after = candidate.iter().collect::<BTreeSet<_>>();
+    before.is_subset(&after) && before != after
+}
+
+fn m10_list_latest_cost_records(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+) -> Result<Vec<CostRecordV1>, ApplicationError> {
+    let records = service.list_development_records("cost_record_v1", Some(project_id))?;
+    if records.len() > 16_384 {
         return Err(ApplicationError::Apply(
             "EVALUATION_RUN_EVIDENCE_MISSING".to_owned(),
         ));
     }
-    Ok(())
+    let mut latest = BTreeMap::<String, CostRecordV1>::new();
+    for record in records {
+        let cost: CostRecordV1 =
+            serde_json::from_value(record.document).map_err(|_| ApplicationError::Invalid)?;
+        if cost.project_id != *project_id {
+            return Err(ApplicationError::Invalid);
+        }
+        let replace = latest
+            .get(&cost.cost_record_id)
+            .is_none_or(|previous| cost.revision > previous.revision);
+        if replace {
+            latest.insert(cost.cost_record_id.clone(), cost);
+        }
+    }
+    latest
+        .into_values()
+        .map(|record| {
+            verify_cost_record(&record).map_err(m10_release_error)?;
+            Ok(record)
+        })
+        .collect()
+}
+
+type M10CaseCostMaterialization = (
+    Vec<CostRecordRefV1>,
+    Vec<CostRecordRefV1>,
+    Vec<EvaluationQuantityV1>,
+    Vec<EvaluationQuantityV1>,
+);
+
+fn m10_materialize_case_cost_refs(
+    records: &[CostRecordV1],
+    baseline_run_ids: &[star_contracts::ValidationRunId],
+    candidate_run_ids: &[star_contracts::ValidationRunId],
+) -> Result<M10CaseCostMaterialization, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let baseline = baseline_run_ids.iter().collect::<BTreeSet<_>>();
+    let candidate = candidate_run_ids.iter().collect::<BTreeSet<_>>();
+    let relevant = baseline.union(&candidate).copied().collect::<BTreeSet<_>>();
+    let mut baseline_refs = Vec::new();
+    let mut candidate_refs = Vec::new();
+    let mut baseline_records = Vec::new();
+    let mut candidate_records = Vec::new();
+    for record in records {
+        let record_runs = record.validation_run_refs.iter().collect::<BTreeSet<_>>();
+        if record_runs.is_disjoint(&relevant) {
+            continue;
+        }
+        let reference = CostRecordRefV1 {
+            cost_record_id: record.cost_record_id.clone(),
+            revision: record.revision,
+            content_fingerprint: record.content_fingerprint.clone(),
+        };
+        if !record_runs.is_empty() && record_runs.is_subset(&baseline) {
+            baseline_refs.push(reference);
+            baseline_records.push(record);
+        } else if !record_runs.is_empty() && record_runs.is_subset(&candidate) {
+            candidate_refs.push(reference);
+            candidate_records.push(record);
+        } else {
+            return Err(error());
+        }
+    }
+    baseline_refs.sort();
+    candidate_refs.sort();
+    Ok((
+        baseline_refs,
+        candidate_refs,
+        m10_cost_record_quantities(&baseline_records)?,
+        m10_cost_record_quantities(&candidate_records)?,
+    ))
+}
+
+fn m10_cost_record_quantities(
+    records: &[&CostRecordV1],
+) -> Result<Vec<EvaluationQuantityV1>, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let mut totals = BTreeMap::<String, u64>::new();
+    for record in records {
+        for usage in &record.usage {
+            let previous = totals.get(&usage.unit).copied().unwrap_or_default();
+            totals.insert(
+                usage.unit.clone(),
+                previous.checked_add(usage.quantity).ok_or_else(error)?,
+            );
+        }
+        if let Some(cost) = &record.monetary_cost {
+            let unit = format!("money_{}_microunits", cost.currency.to_ascii_lowercase());
+            let previous = totals.get(&unit).copied().unwrap_or_default();
+            totals.insert(
+                unit,
+                previous
+                    .checked_add(cost.amount_microunits)
+                    .ok_or_else(error)?,
+            );
+        }
+    }
+    Ok(totals
+        .into_iter()
+        .map(|(unit, quantity)| EvaluationQuantityV1 { unit, quantity })
+        .collect())
+}
+
+fn m10_current_evaluation_validation_run(
+    run: &ValidationRunV2,
+    project_id: &ProjectId,
+    config_fingerprint: &Sha256Hash,
+) -> Result<ValidationRunV2, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let sealed = m10_sealed_evaluation_validation_run(run)?;
+    if &sealed.project_id != project_id
+        || sealed.completeness != Completeness::Complete
+        || sealed.subject_binding.freshness != EvidenceFreshnessV2::Current
+        || &sealed.subject_binding.effective_config_fingerprint != config_fingerprint
+        || sealed.started_at.is_none()
+        || sealed.finished_at.is_none()
+        || sealed.process_start_state != ProcessStartStateV2::Started
+        || sealed.outcome == ValidationOutcome::NotRun
+        || sealed.stability == ValidationStabilityV2::NotEvaluated
+        || sealed.termination_reason.is_none()
+        || sealed.observed_tool.is_none()
+    {
+        return Err(error());
+    }
+    Ok(sealed)
+}
+
+fn m10_sealed_evaluation_validation_run(
+    run: &ValidationRunV2,
+) -> Result<ValidationRunV2, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let expected = run.result_fingerprint.clone();
+    let sealed = run.clone().seal().map_err(|_| error())?;
+    if sealed != *run || sealed.result_fingerprint != expected {
+        return Err(error());
+    }
+    Ok(sealed)
+}
+
+fn m10_sealed_evaluation_diagnostic(
+    diagnostic: &DiagnosticV2,
+    project_id: &ProjectId,
+) -> Result<DiagnosticV2, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let expected = diagnostic.fingerprint.clone();
+    let sealed = diagnostic.clone().seal().map_err(|_| error())?;
+    if sealed != *diagnostic || sealed.fingerprint != expected || &sealed.project_id != project_id {
+        return Err(error());
+    }
+    Ok(sealed)
+}
+
+fn m10_evaluation_detected(runs: &[ValidationRunV2]) -> bool {
+    runs.iter()
+        .any(|run| run.outcome == ValidationOutcome::Fail || !run.diagnostic_ids.is_empty())
+}
+
+fn m10_evaluation_duration_ms(runs: &[ValidationRunV2]) -> Result<u64, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    runs.iter().try_fold(0_u64, |total, run| {
+        let started = run.started_at.ok_or_else(error)?;
+        let finished = run.finished_at.ok_or_else(error)?;
+        let duration =
+            u64::try_from((finished - started).num_milliseconds()).map_err(|_| error())?;
+        total.checked_add(duration).ok_or_else(error)
+    })
+}
+
+fn m10_evaluation_outcome(runs: &[ValidationRunV2]) -> EvaluationOutcome {
+    if runs.iter().any(|run| {
+        run.process_start_state == ProcessStartStateV2::Unknown
+            || run.outcome == ValidationOutcome::Cancelled
+            || run.termination_reason == Some(TerminationReason::OutcomeUnknown)
+    }) {
+        EvaluationOutcome::Unknown
+    } else if runs.iter().any(|run| {
+        run.outcome == ValidationOutcome::Error
+            || matches!(
+                run.termination_reason,
+                Some(TerminationReason::Timeout | TerminationReason::LaunchError)
+            )
+    }) {
+        EvaluationOutcome::Failure
+    } else {
+        EvaluationOutcome::Success
+    }
+}
+
+fn m10_evaluation_flaky(runs: &[ValidationRunV2]) -> bool {
+    let signatures = runs
+        .iter()
+        .map(|run| {
+            serde_json::to_string(&serde_json::json!({
+                "outcome":run.outcome,
+                "diagnostic_ids":run.diagnostic_ids,
+                "exit_code":run.exit_code,
+                "termination_reason":run.termination_reason,
+            }))
+            .unwrap_or_default()
+        })
+        .collect::<BTreeSet<_>>();
+    runs.iter()
+        .any(|run| run.stability == ValidationStabilityV2::Flaky)
+        || signatures.len() > 1
+}
+
+fn m10_evaluation_run_binding(run: &ValidationRunV2) -> serde_json::Value {
+    serde_json::json!({
+        "validation_run_id":run.validation_run_id,
+        "revision":run.revision,
+        "result_fingerprint":run.result_fingerprint,
+        "subject_binding":run.subject_binding,
+        "invocation_fingerprint":run.invocation.input_fingerprint,
+    })
+}
+
+fn m10_evaluation_definition_matches_runs(
+    definition: &EvaluationDefinition,
+    runs: &[ValidationRunV2],
+) -> bool {
+    runs.iter().all(|run| {
+        let binding = &run.subject_binding;
+        let common = binding.profile_resolution_fingerprint
+            == definition.resolved_closure_fingerprint
+            && binding.gate_policy_fingerprint == definition.policy_fingerprint;
+        let subject = match definition.subject.kind {
+            EvaluationSubjectKind::RoutePolicy => {
+                binding.gate_policy_fingerprint == definition.subject.definition_fingerprint
+            }
+            EvaluationSubjectKind::Rule => binding.rule_refs.iter().any(|reference| {
+                reference.catalog_id == definition.subject.item_id
+                    && reference.item_version == definition.subject.version
+                    && reference.sha256 == definition.subject.definition_fingerprint
+            }),
+            EvaluationSubjectKind::Check => {
+                run.check_ref.document_id == definition.subject.item_id
+                    && run.check_ref.sha256 == definition.subject.definition_fingerprint
+            }
+            EvaluationSubjectKind::Profile => {
+                binding.profile_resolution_fingerprint == definition.subject.definition_fingerprint
+            }
+            EvaluationSubjectKind::Recipe => binding
+                .patch_set_ref
+                .iter()
+                .chain(&binding.change_plan_refs)
+                .any(|reference| {
+                    reference.document_id == definition.subject.item_id
+                        && reference.sha256 == definition.subject.definition_fingerprint
+                }),
+        };
+        common && subject
+    })
+}
+
+fn m10_materialized_comparability(
+    dimension: &str,
+    cases: &[EvaluationCaseResult],
+    runs: &BTreeMap<star_contracts::ValidationRunId, ValidationRunV2>,
+    subject_kind: EvaluationSubjectKind,
+    subject_item_id: &str,
+) -> Result<(ComparabilityState, String), ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    if ![
+        "case",
+        "source",
+        "config",
+        "catalog",
+        "tool",
+        "environment",
+        "protocol",
+    ]
+    .contains(&dimension)
+    {
+        return Err(error());
+    }
+    let mut compatible = true;
+    let mut evidence = Vec::new();
+    for case in cases {
+        if dimension == "case" {
+            evidence.push(serde_json::json!({
+                "case_id":case.case_id,
+                "case_version":case.case_version,
+                "corpus_ref":case.corpus_ref,
+                "evaluation_context":case.evaluation_context,
+            }));
+            continue;
+        }
+        let baseline = case
+            .baseline_run_refs
+            .iter()
+            .map(|run_id| {
+                let run = runs.get(run_id).ok_or_else(error)?;
+                m10_evaluation_dimension_hash(run, dimension, subject_kind, subject_item_id)
+            })
+            .collect::<Result<BTreeSet<_>, ApplicationError>>()?;
+        let candidate = case
+            .candidate_run_refs
+            .iter()
+            .map(|run_id| {
+                let run = runs.get(run_id).ok_or_else(error)?;
+                m10_evaluation_dimension_hash(run, dimension, subject_kind, subject_item_id)
+            })
+            .collect::<Result<BTreeSet<_>, ApplicationError>>()?;
+        let pair_compatible = baseline.len() == 1 && candidate.len() == 1 && baseline == candidate;
+        compatible &= pair_compatible;
+        evidence.push(serde_json::json!({
+            "case_id":case.case_id,
+            "baseline":baseline,
+            "candidate":candidate,
+            "compatible":pair_compatible,
+        }));
+    }
+    let fingerprint = canonical_sha256(&serde_json::json!({
+        "dimension":dimension,
+        "subject_kind":subject_kind,
+        "subject_item_id":subject_item_id,
+        "pairs":evidence,
+    }))
+    .map_err(|_| error())?;
+    Ok((
+        if compatible {
+            ComparabilityState::Compatible
+        } else {
+            ComparabilityState::NotComparable
+        },
+        format!("evaluation-comparability:{dimension}#{fingerprint}"),
+    ))
+}
+
+fn m10_evaluation_dimension_hash(
+    run: &ValidationRunV2,
+    dimension: &str,
+    subject_kind: EvaluationSubjectKind,
+    subject_item_id: &str,
+) -> Result<Sha256Hash, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let binding = &run.subject_binding;
+    let value = match dimension {
+        "source" => serde_json::json!({
+            "project_id":binding.project_id,
+            "checkout_id":binding.checkout_id,
+            "project_revision_id":binding.project_revision_id,
+            "workspace_snapshot_id":binding.workspace_snapshot_id,
+            "workspace_content_fingerprint":binding.workspace_content_fingerprint,
+            "task_spec_ref":binding.task_spec_ref,
+            "scope_revision_ref":binding.scope_revision_ref,
+            "impact_analysis_ref":binding.impact_analysis_ref,
+        }),
+        "config" => serde_json::json!({
+            "effective_config_fingerprint":binding.effective_config_fingerprint,
+            "profile_resolution_fingerprint":if subject_kind == EvaluationSubjectKind::Profile {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(binding.profile_resolution_fingerprint)
+            },
+            "gate_policy_fingerprint":if subject_kind == EvaluationSubjectKind::RoutePolicy {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(binding.gate_policy_fingerprint)
+            },
+        }),
+        "catalog" => {
+            let non_subject_rules = binding
+                .rule_refs
+                .iter()
+                .filter(|reference| reference.catalog_id != subject_item_id)
+                .collect::<Vec<_>>();
+            serde_json::json!({
+                "validator_registry_fingerprint":binding.validator_registry_fingerprint,
+                "non_subject_rule_refs":non_subject_rules,
+            })
+        }
+        "tool" => serde_json::json!({
+            "tool_registry_snapshot_ref":binding.tool_registry_snapshot_ref,
+            "tool_descriptor_ref":if subject_kind == EvaluationSubjectKind::Check {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(binding.tool_descriptor_ref)
+            },
+            "observed_tool_fingerprint":if subject_kind == EvaluationSubjectKind::Check {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(binding.observed_tool_fingerprint)
+            },
+            "invocation_tool_ref":if subject_kind == EvaluationSubjectKind::Check {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(run.invocation.tool_ref)
+            },
+            "executable_binding_fingerprint":if subject_kind == EvaluationSubjectKind::Check {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(run.invocation.executable_binding_fingerprint)
+            },
+        }),
+        "environment" => serde_json::json!({
+            "execution_environment_fingerprint":binding.execution_environment_fingerprint,
+        }),
+        "protocol" => serde_json::json!({
+            "phase":run.phase,
+            "gate_phase":binding.gate_phase,
+            "timeout_ms":run.invocation.timeout_ms,
+            "expected_exit_codes":run.invocation.expected_exit_codes,
+            "output_limits":run.invocation.output_limits,
+            "permission_action":run.invocation.permission_action,
+            "normalizer_fingerprint":binding.normalizer_fingerprint,
+        }),
+        _ => return Err(error()),
+    };
+    canonical_sha256(&value).map_err(|_| error())
+}
+
+fn m10_materialize_protected_gate_evidence(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    supplied_refs: &str,
+    candidate_runs: &[&ValidationRunV2],
+) -> Result<(bool, String), ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let refs = supplied_refs
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect::<BTreeSet<_>>();
+    if refs.is_empty() {
+        return Err(error());
+    }
+    let mut required = BTreeSet::new();
+    let mut weakened = false;
+    let mut canonical_refs = Vec::new();
+    for supplied in refs {
+        let gate_id = supplied
+            .strip_prefix("gate:")
+            .unwrap_or(supplied)
+            .split(['@', '#'])
+            .next()
+            .ok_or_else(error)?;
+        let gate = m10_current_evaluation_gate(service, project_id, gate_id)?;
+        required.extend(gate.required_run_refs.iter().cloned());
+        weakened |= gate.decision != GateDecisionKind::AutoPass
+            || !gate.blocking_diagnostic_refs.is_empty()
+            || !gate.remaining_risks.is_empty()
+            || gate.valid_until.is_some_and(|until| until <= Utc::now());
+        canonical_refs.push(serde_json::json!({
+            "gate_id":gate.gate_id,
+            "revision":gate.revision,
+            "decision":gate.decision,
+            "decision_fingerprint":gate.decision_fingerprint,
+        }));
+    }
+    let candidate_refs = candidate_runs
+        .iter()
+        .map(|run| run.reference().map_err(|_| error()))
+        .collect::<Result<BTreeSet<_>, ApplicationError>>()?;
+    if !candidate_refs.is_subset(&required) {
+        return Err(error());
+    }
+    let fingerprint = canonical_sha256(&serde_json::json!({
+        "candidate_run_refs":candidate_refs,
+        "gates":canonical_refs,
+    }))
+    .map_err(|_| error())?;
+    Ok((weakened, format!("evaluation-gates#{fingerprint}")))
+}
+
+fn m10_current_evaluation_gate(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    gate_ref: &str,
+) -> Result<GateDecisionV2, ApplicationError> {
+    let error = || ApplicationError::Apply("EVALUATION_RUN_EVIDENCE_MISSING".to_owned());
+    let gate_id = GateId::parse(gate_ref.to_owned()).map_err(|_| error())?;
+    let gate = service
+        .get_gate_decision_v2(project_id, &gate_id)
+        .map_err(|_| error())?;
+    let stored_runs = service
+        .list_validation_runs_v2(project_id)?
+        .into_iter()
+        .map(|run| (run.validation_run_id.clone(), run))
+        .collect::<BTreeMap<_, _>>();
+    let runs = gate
+        .required_run_refs
+        .iter()
+        .map(|reference| {
+            let run = stored_runs
+                .get(&reference.validation_run_id)
+                .ok_or_else(error)?;
+            let run = m10_sealed_evaluation_validation_run(run)?;
+            let actual = run.reference().map_err(|_| error())?;
+            if &actual != reference {
+                return Err(error());
+            }
+            Ok(run)
+        })
+        .collect::<Result<Vec<_>, ApplicationError>>()?;
+    let diagnostics = service
+        .list_validation_diagnostics_v2(project_id)?
+        .into_iter()
+        .map(|diagnostic| m10_sealed_evaluation_diagnostic(&diagnostic, project_id))
+        .collect::<Result<Vec<_>, ApplicationError>>()?;
+    let config_fingerprint = service.effective_config()?.config_fingerprint.clone();
+    let mut results = Vec::new();
+    for reference in &gate.validation_result_refs {
+        let result_id =
+            ValidationResultId::parse(reference.document_id.clone()).map_err(|_| error())?;
+        let result = service
+            .get_validation_result_v2(project_id, &result_id)
+            .map_err(|_| error())?;
+        let selected_runs = result
+            .validation_run_refs
+            .iter()
+            .map(|run_ref| {
+                let run = stored_runs
+                    .get(&run_ref.validation_run_id)
+                    .ok_or_else(error)?;
+                let run = m10_sealed_evaluation_validation_run(run)?;
+                let actual = run.reference().map_err(|_| error())?;
+                if &actual != run_ref {
+                    return Err(error());
+                }
+                Ok(run)
+            })
+            .collect::<Result<Vec<_>, ApplicationError>>()?;
+        let expected = result.result_fingerprint.clone();
+        let sealed = result.clone().seal(&selected_runs).map_err(|_| error())?;
+        let actual_ref = sealed.reference().map_err(|_| error())?;
+        if sealed != result
+            || sealed.result_fingerprint != expected
+            || &actual_ref != reference
+            || sealed.project_id != *project_id
+            || sealed.freshness != EvidenceFreshnessV2::Current
+            || sealed.subject_binding.freshness != EvidenceFreshnessV2::Current
+            || sealed.subject_binding.effective_config_fingerprint != config_fingerprint
+        {
+            return Err(error());
+        }
+        results.push(sealed);
+    }
+    let expected = gate.decision_fingerprint.clone();
+    let sealed = gate
+        .clone()
+        .seal(&runs, &diagnostics, &results)
+        .map_err(|_| error())?;
+    if sealed != gate
+        || sealed.decision_fingerprint != expected
+        || sealed
+            .valid_until
+            .is_some_and(|until| until <= sealed.decided_at)
+    {
+        return Err(error());
+    }
+    Ok(sealed)
 }
 
 fn m10_validate_catalog_evaluation_ref(
@@ -14741,11 +18757,58 @@ fn m10_validate_catalog_evaluation_ref(
         let record = service
             .get_development_record("evaluation_run_v2", run_id.as_str(), None)?
             .ok_or(ApplicationError::NotFound)?;
+        let project_id = record.project_id.clone().ok_or(ApplicationError::Invalid)?;
         let run: EvaluationRunV2 =
             serde_json::from_value(record.document).map_err(|_| ApplicationError::Invalid)?;
-        if run.subject.item_id != item.item_id
-            || run.subject.definition_fingerprint != item.definition_fingerprint
-        {
+        verify_evaluation_run(&run).map_err(|_| {
+            ApplicationError::Apply("EVALUATION_CATALOG_EVIDENCE_MISMATCH".to_owned())
+        })?;
+        m10_verify_evaluation_source_records(service, &project_id, &run).map_err(|_| {
+            ApplicationError::Apply("EVALUATION_CATALOG_EVIDENCE_MISMATCH".to_owned())
+        })?;
+        m10_verify_evaluation_cost_records(service, &project_id, &run).map_err(|_| {
+            ApplicationError::Apply("EVALUATION_CATALOG_EVIDENCE_MISMATCH".to_owned())
+        })?;
+        let candidate_matches = run.candidate.subject.item_id == item.item_id
+            && run.candidate.subject.version == item.item_version
+            && run.candidate.subject.definition_fingerprint == item.definition_fingerprint;
+        let baseline_matches = run.baseline.subject.item_id == item.item_id
+            && run.baseline.subject.version == item.item_version
+            && run.baseline.subject.definition_fingerprint == item.definition_fingerprint;
+        let expected_replacement = format!(
+            "{}@{}#{}",
+            run.candidate.subject.item_id,
+            run.candidate.subject.version,
+            run.candidate.subject.definition_fingerprint
+        );
+        let decisive_accept = run.recommendation == EvaluationRecommendation::Accept
+            && run.limitations.is_empty()
+            && run
+                .comparability
+                .iter()
+                .all(|item| item.state == ComparabilityState::Compatible)
+            && run
+                .protected_metric_results
+                .iter()
+                .all(|item| !item.weakened);
+        let valid = run.corpus_ref == item.corpus_ref
+            && match item.lifecycle {
+                EvaluationCatalogLifecycle::Active => {
+                    candidate_matches && run.recommendation != EvaluationRecommendation::Reject
+                }
+                EvaluationCatalogLifecycle::Deprecated | EvaluationCatalogLifecycle::Retired => {
+                    !item.trial_candidate
+                        && baseline_matches
+                        && item.replacement_ref.as_deref() == Some(expected_replacement.as_str())
+                        && decisive_accept
+                }
+                EvaluationCatalogLifecycle::Rejected => {
+                    item.trial_candidate
+                        && candidate_matches
+                        && run.recommendation == EvaluationRecommendation::Reject
+                }
+            };
+        if !valid {
             return Err(ApplicationError::Apply(
                 "EVALUATION_CATALOG_EVIDENCE_MISMATCH".to_owned(),
             ));
@@ -15140,10 +19203,7 @@ fn m8_validate_migration_effect_receipt(
     plan: &MigrationPlanV2,
     attempt: &MigrationAttempt,
 ) -> Result<(), ApplicationError> {
-    if !matches!(
-        command,
-        "migration.execute" | "migration.resume" | "migration.rollback"
-    ) {
+    if command == "migration.validate" {
         return Ok(());
     }
     let receipt_id = attempt
@@ -15222,6 +19282,444 @@ fn m8_validate_performance_effect_receipt(
     ))
 }
 
+fn m8_current_validation_result(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    result_ref: &str,
+    error_code: &'static str,
+) -> Result<ValidationResultV2, ApplicationError> {
+    let result_id = ValidationResultId::parse(result_ref.to_owned())
+        .map_err(|_| ApplicationError::Apply(error_code.to_owned()))?;
+    let result = service
+        .get_validation_result_v2(project_id, &result_id)
+        .map_err(|_| ApplicationError::Apply(error_code.to_owned()))?;
+    let selected_runs = service
+        .list_validation_runs_v2(project_id)?
+        .into_iter()
+        .filter(|run| {
+            result
+                .validation_run_refs
+                .iter()
+                .any(|reference| reference.validation_run_id == run.validation_run_id)
+        })
+        .collect::<Vec<_>>();
+    let expected_fingerprint = result.result_fingerprint.clone();
+    let sealed = result
+        .clone()
+        .seal(&selected_runs)
+        .map_err(|_| ApplicationError::Apply(error_code.to_owned()))?;
+    if sealed.result_fingerprint != expected_fingerprint
+        || &result.project_id != project_id
+        || result.outcome != ValidationOutcome::Pass
+        || result.completeness != Completeness::Complete
+        || result.freshness != EvidenceFreshnessV2::Current
+        || result.stability != ValidationStabilityV2::Stable
+        || result.subject_binding.freshness != EvidenceFreshnessV2::Current
+        || result.subject_binding.effective_config_fingerprint
+            != service.effective_config()?.config_fingerprint
+    {
+        return Err(ApplicationError::Apply(error_code.to_owned()));
+    }
+    Ok(result)
+}
+
+fn m8_current_gate(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    gate_ref: &str,
+    allowed_validation_plan_refs: &[String],
+    error_code: &'static str,
+) -> Result<GateDecisionV2, ApplicationError> {
+    let gate_id = GateId::parse(gate_ref.to_owned())
+        .map_err(|_| ApplicationError::Apply(error_code.to_owned()))?;
+    let gate = service
+        .get_gate_decision_v2(project_id, &gate_id)
+        .map_err(|_| ApplicationError::Apply(error_code.to_owned()))?;
+    if gate.decision != GateDecisionKind::AutoPass
+        || !gate.remaining_risks.is_empty()
+        || gate.valid_until.is_some_and(|until| until <= Utc::now())
+        || gate.validation_result_refs.is_empty()
+        || !allowed_validation_plan_refs.is_empty()
+            && !allowed_validation_plan_refs
+                .iter()
+                .any(|reference| reference == &gate.validation_plan_ref.document_id)
+    {
+        return Err(ApplicationError::Apply(error_code.to_owned()));
+    }
+    let mut results = Vec::with_capacity(gate.validation_result_refs.len());
+    for reference in &gate.validation_result_refs {
+        let result =
+            m8_current_validation_result(service, project_id, &reference.document_id, error_code)?;
+        let actual = result
+            .reference()
+            .map_err(|_| ApplicationError::Apply(error_code.to_owned()))?;
+        if &actual != reference || gate.decided_at < result.created_at {
+            return Err(ApplicationError::Apply(error_code.to_owned()));
+        }
+        results.push(result);
+    }
+    let runs = service.list_validation_runs_v2(project_id)?;
+    let diagnostics = service.list_validation_diagnostics_v2(project_id)?;
+    let expected_fingerprint = gate.decision_fingerprint.clone();
+    let sealed = gate
+        .clone()
+        .seal(&runs, &diagnostics, &results)
+        .map_err(|_| ApplicationError::Apply(error_code.to_owned()))?;
+    if sealed.decision_fingerprint != expected_fingerprint {
+        return Err(ApplicationError::Apply(error_code.to_owned()));
+    }
+    Ok(gate)
+}
+
+fn m8_validate_cross_project_migration_handoff(
+    service: &ManagementApplicationService,
+    handoff: &CrossProjectMigrationHandoff,
+) -> Result<(), ApplicationError> {
+    let mut project_ids = BTreeSet::new();
+    let mut plan_ids = BTreeSet::new();
+    for participant in &handoff.participants {
+        if !project_ids.insert(participant.project_id.clone())
+            || !plan_ids.insert(participant.plan_ref.as_str())
+        {
+            return Err(ApplicationError::Apply(
+                "CROSS_PROJECT_MIGRATION_DEFERRED".to_owned(),
+            ));
+        }
+        let plan: MigrationPlanV2 =
+            m6_record_document(service, "migration_plan", &participant.plan_ref).map_err(|_| {
+                ApplicationError::Apply("CROSS_PROJECT_MIGRATION_DEFERRED".to_owned())
+            })?;
+        let ready = plan.support_decision
+            == star_contracts::migration_v2::MigrationSupportDecision::Migratable
+            && plan.blockers.is_empty()
+            && !plan.validation_plan_refs.is_empty()
+            && !plan.rollback_plan_ref.trim().is_empty();
+        if plan.project_id != participant.project_id
+            || plan.plan_fingerprint != participant.plan_fingerprint
+            || (participant.state == "ready") != ready
+        {
+            return Err(ApplicationError::Apply(
+                "CROSS_PROJECT_MIGRATION_DEFERRED".to_owned(),
+            ));
+        }
+    }
+    if handoff.ready_for_change_bundle
+        && (!handoff.blockers.is_empty()
+            || handoff
+                .participants
+                .iter()
+                .any(|participant| participant.state != "ready"))
+    {
+        return Err(ApplicationError::Apply(
+            "CROSS_PROJECT_MIGRATION_DEFERRED".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn m8_validate_migration_validation_report(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    plan: &MigrationPlanV2,
+    report: &MigrationValidationReport,
+) -> Result<(), ApplicationError> {
+    let attempt: MigrationAttempt =
+        m6_record_document(service, "migration_attempt", report.attempt_ref.as_str())
+            .map_err(|_| ApplicationError::Apply("MIGRATION_INVARIANT_FAILED".to_owned()))?;
+    if attempt.plan_ref != plan.migration_plan_id
+        || attempt.plan_fingerprint != plan.plan_fingerprint
+        || report.plan_ref != plan.migration_plan_id
+    {
+        return Err(ApplicationError::Apply(
+            "MIGRATION_INVARIANT_FAILED".to_owned(),
+        ));
+    }
+    if report.state != "pass" {
+        return Ok(());
+    }
+    if attempt.state != star_contracts::migration_v2::MigrationAttemptState::Succeeded
+        || attempt.loss_observed == Some(true)
+        || report.reference_validation_refs.is_empty()
+        || report.gate_refs.is_empty()
+        || report.target_version_observed.is_none()
+    {
+        return Err(ApplicationError::Apply(
+            "MIGRATION_INVARIANT_FAILED".to_owned(),
+        ));
+    }
+    let results = report
+        .reference_validation_refs
+        .iter()
+        .map(|reference| {
+            m8_current_validation_result(
+                service,
+                project_id,
+                reference,
+                "MIGRATION_INVARIANT_FAILED",
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if results.iter().any(|result| {
+        result.subject_binding.checkout_id.as_str() != plan.checkout_id
+            || attempt
+                .subject_binding_after
+                .as_ref()
+                .is_some_and(|fingerprint| {
+                    fingerprint != &result.subject_binding.binding_fingerprint
+                })
+    }) {
+        return Err(ApplicationError::Apply(
+            "MIGRATION_INVARIANT_FAILED".to_owned(),
+        ));
+    }
+    let gates = report
+        .gate_refs
+        .iter()
+        .map(|reference| {
+            m8_current_gate(
+                service,
+                project_id,
+                reference,
+                &plan.validation_plan_refs,
+                "MIGRATION_INVARIANT_FAILED",
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let expected_result_refs = results
+        .iter()
+        .map(ValidationResultV2::reference)
+        .collect::<Result<BTreeSet<_>, _>>()
+        .map_err(|_| ApplicationError::Apply("MIGRATION_INVARIANT_FAILED".to_owned()))?;
+    let covered_result_refs = gates
+        .iter()
+        .flat_map(|gate| gate.validation_result_refs.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    if !expected_result_refs.is_subset(&covered_result_refs) {
+        return Err(ApplicationError::Apply(
+            "MIGRATION_INVARIANT_FAILED".to_owned(),
+        ));
+    }
+    let mut known_evidence = report
+        .reference_validation_refs
+        .iter()
+        .chain(report.gate_refs.iter())
+        .chain(attempt.receipt_refs.iter())
+        .collect::<BTreeSet<_>>();
+    if let Some(reference) = attempt.tool_observation_ref.as_ref() {
+        known_evidence.insert(reference);
+    }
+    if report.invariant_results.iter().any(|invariant| {
+        invariant.state != "pass"
+            || invariant.loss_observed
+            || invariant.evidence_refs.is_empty()
+            || !invariant
+                .evidence_refs
+                .iter()
+                .any(|reference| known_evidence.contains(reference))
+    }) {
+        return Err(ApplicationError::Apply(
+            "MIGRATION_INVARIANT_FAILED".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn m8_validate_restore_verification(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    plan: &MigrationPlanV2,
+    record: &RestoreVerificationRecord,
+) -> Result<(), ApplicationError> {
+    if record.state != "verified" {
+        return Ok(());
+    }
+    let behavior_results = record
+        .behavior_check_refs
+        .iter()
+        .map(|reference| {
+            m8_current_validation_result(
+                service,
+                project_id,
+                reference,
+                "MIGRATION_BACKUP_UNVERIFIED",
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if !behavior_results.iter().any(|result| {
+        result.subject_binding.binding_fingerprint == record.restored_subject_fingerprint
+    }) {
+        return Err(ApplicationError::Apply(
+            "MIGRATION_BACKUP_UNVERIFIED".to_owned(),
+        ));
+    }
+    let backup_verified = service
+        .list_development_records("migration_attempt", Some(project_id))?
+        .into_iter()
+        .filter_map(|stored| serde_json::from_value::<MigrationAttempt>(stored.document).ok())
+        .filter(|attempt| {
+            attempt.plan_ref == plan.migration_plan_id
+                && attempt.plan_fingerprint == plan.plan_fingerprint
+                && attempt.phase == star_contracts::migration_v2::MigrationPhase::Backup
+                && attempt.state == star_contracts::migration_v2::MigrationAttemptState::Succeeded
+        })
+        .any(|attempt| {
+            let Some(receipt_id) = attempt.tool_observation_ref.as_deref() else {
+                return false;
+            };
+            if !attempt.receipt_refs.iter().any(|value| value == receipt_id) {
+                return false;
+            }
+            let Ok(receipt) = m8_effect_receipt(
+                service,
+                project_id,
+                receipt_id,
+                DevelopmentEffectKind::MigrationExecute,
+                &plan.plan_fingerprint,
+            ) else {
+                return false;
+            };
+            receipt.state == DevelopmentEffectState::Succeeded
+                && receipt.source_effect_started
+                && (receipt
+                    .output_artifact_refs
+                    .contains(&record.backup_fingerprint)
+                    || receipt.result_fingerprint.as_ref() == Some(&record.backup_fingerprint))
+        });
+    if !backup_verified {
+        return Err(ApplicationError::Apply(
+            "MIGRATION_BACKUP_UNVERIFIED".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn m8_validate_equivalence_evidence(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    plan: &LanguageMigrationPlan,
+    report: &EquivalenceReport,
+) -> Result<(), ApplicationError> {
+    if report.plan_ref != plan.plan_id {
+        return Err(ApplicationError::Apply(
+            "LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned(),
+        ));
+    }
+    if report.equivalence_state != star_contracts::migration_v2::EquivalenceState::Equivalent {
+        return Ok(());
+    }
+    if !plan.unknown_semantics.is_empty()
+        || plan.comparison_plan_refs.is_empty()
+        || report.gate_refs.is_empty()
+        || report.build_compile_result.trim().is_empty()
+    {
+        return Err(ApplicationError::Apply(
+            "LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned(),
+        ));
+    }
+    let validation_refs = std::iter::once(&report.build_compile_result)
+        .chain(report.test_contract_results.iter())
+        .chain(report.consumer_results.iter())
+        .collect::<BTreeSet<_>>();
+    let validation_results = validation_refs
+        .iter()
+        .map(|reference| {
+            m8_current_validation_result(
+                service,
+                project_id,
+                reference,
+                "LANGUAGE_EQUIVALENCE_INCOMPLETE",
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if validation_results.iter().any(|result| {
+        result.subject_binding.checkout_id.as_str() != plan.checkout_id
+            || result.subject_binding.binding_fingerprint != report.candidate_subject
+    }) {
+        return Err(ApplicationError::Apply(
+            "LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned(),
+        ));
+    }
+    let comparisons = report
+        .performance_comparison_refs
+        .iter()
+        .map(|reference| {
+            let stored = service
+                .get_development_record("performance_comparison", reference, None)?
+                .ok_or_else(|| {
+                    ApplicationError::Apply("LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned())
+                })?;
+            if stored.project_id.as_ref() != Some(project_id) {
+                return Err(ApplicationError::Apply(
+                    "LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned(),
+                ));
+            }
+            serde_json::from_value::<PerformanceComparisonV2>(stored.document)
+                .map_err(|_| ApplicationError::Apply("LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if comparisons.iter().any(|comparison| {
+        !comparison.correctness_verified
+            || !comparison.comparable
+            || comparison.state != star_contracts::migration_v2::PerformanceComparisonState::Pass
+    }) {
+        return Err(ApplicationError::Apply(
+            "LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned(),
+        ));
+    }
+    let gates = report
+        .gate_refs
+        .iter()
+        .map(|reference| {
+            m8_current_gate(
+                service,
+                project_id,
+                reference,
+                &plan.comparison_plan_refs,
+                "LANGUAGE_EQUIVALENCE_INCOMPLETE",
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let expected_result_refs = validation_results
+        .iter()
+        .map(ValidationResultV2::reference)
+        .collect::<Result<BTreeSet<_>, _>>()
+        .map_err(|_| ApplicationError::Apply("LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned()))?;
+    let covered_result_refs = gates
+        .iter()
+        .flat_map(|gate| gate.validation_result_refs.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    if !expected_result_refs.is_subset(&covered_result_refs)
+        || plan
+            .platform_evidence_matrix
+            .iter()
+            .any(|required| !report.platform_matrix_results.contains(required))
+    {
+        return Err(ApplicationError::Apply(
+            "LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned(),
+        ));
+    }
+    let known_evidence = validation_refs
+        .iter()
+        .copied()
+        .chain(report.performance_comparison_refs.iter())
+        .chain(report.gate_refs.iter())
+        .chain(report.platform_matrix_results.iter())
+        .collect::<BTreeSet<_>>();
+    if report.dimension_results.iter().any(|dimension| {
+        dimension.required
+            && (dimension.evidence_refs.is_empty()
+                || !dimension
+                    .evidence_refs
+                    .iter()
+                    .any(|reference| known_evidence.contains(reference)))
+    }) {
+        return Err(ApplicationError::Apply(
+            "LANGUAGE_EQUIVALENCE_INCOMPLETE".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 fn m8_performance_state(
     state: star_contracts::migration_v2::PerformanceComparisonState,
 ) -> &'static str {
@@ -15246,6 +19744,210 @@ fn m8_equivalence_state(state: star_contracts::migration_v2::EquivalenceState) -
         EquivalenceState::HumanReview => "human_review",
         EquivalenceState::Unverified => "unverified",
     }
+}
+
+fn m7_validate_reproduction_effect_receipts(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    failure: &FailureRecord,
+    attempts: &[ReproductionAttemptV2],
+) -> Result<(), ApplicationError> {
+    let expected_subject_ref = format!("failure_record:{}", failure.failure_record_id);
+    let mut used_receipts = BTreeSet::new();
+    for attempt in attempts {
+        let completed = matches!(
+            attempt.result,
+            ReproductionResult::Reproduced
+                | ReproductionResult::DifferentFailure
+                | ReproductionResult::NotReproduced
+        );
+        let Some(receipt_id) = attempt.effect_receipt_ref.as_deref() else {
+            if completed {
+                return Err(ApplicationError::Apply(
+                    "REPRODUCTION_INPUT_INCOMPLETE".to_owned(),
+                ));
+            }
+            continue;
+        };
+        if !used_receipts.insert(receipt_id) {
+            return Err(ApplicationError::Apply(
+                "REPRODUCTION_SUBJECT_CHANGED".to_owned(),
+            ));
+        }
+        let receipt_record = service
+            .get_development_record("development_effect_receipt", receipt_id, None)?
+            .ok_or_else(|| ApplicationError::Apply("REPRODUCTION_INPUT_INCOMPLETE".to_owned()))?;
+        if receipt_record.project_id.as_ref() != Some(project_id) {
+            return Err(ApplicationError::Apply(
+                "REPRODUCTION_SUBJECT_CHANGED".to_owned(),
+            ));
+        }
+        let receipt: DevelopmentEffectReceiptV1 =
+            serde_json::from_value(receipt_record.document)
+                .map_err(|_| ApplicationError::Apply("REPRODUCTION_INPUT_INCOMPLETE".to_owned()))?;
+        let receipt = verify_development_effect_receipt(receipt)?;
+        if &receipt.project_id != project_id
+            || receipt.effect_kind != DevelopmentEffectKind::FailureReproduction
+            || receipt.exact_subject_ref != expected_subject_ref
+            || receipt.exact_subject_fingerprint != failure.occurrence_fingerprint
+        {
+            return Err(ApplicationError::Apply(
+                "REPRODUCTION_SUBJECT_CHANGED".to_owned(),
+            ));
+        }
+        if receipt.state == DevelopmentEffectState::Succeeded {
+            let observation = reproduction_attempt_observation(attempt)
+                .map_err(|_| ApplicationError::Apply("REPRODUCTION_INPUT_INCOMPLETE".to_owned()))?;
+            let expected = reproduction_attempt_observation_fingerprint(observation)
+                .map_err(m6_development_error)?;
+            if !receipt.source_effect_started
+                || receipt.result_fingerprint.as_ref() != Some(&expected)
+            {
+                return Err(ApplicationError::Apply(
+                    "REPRODUCTION_SUBJECT_CHANGED".to_owned(),
+                ));
+            }
+        } else if completed {
+            return Err(ApplicationError::Apply(
+                "REPRODUCTION_INPUT_INCOMPLETE".to_owned(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn m7_validate_regression_evidence(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    failure: &FailureRecord,
+    record: &RegressionRecord,
+) -> Result<(), ApplicationError> {
+    for recurrence_ref in &record.recurrence_failure_refs {
+        let recurrence: FailureRecord =
+            m6_record_document(service, "failure_record", recurrence_ref)
+                .map_err(|_| ApplicationError::Apply("REGRESSION_EVIDENCE_MISMATCH".to_owned()))?;
+        if &recurrence.subject_binding.project_id != project_id
+            || recurrence.family_fingerprint != failure.family_fingerprint
+            || recurrence.verification_state != VerificationState::Verified
+        {
+            return Err(ApplicationError::Apply(
+                "REGRESSION_EVIDENCE_MISMATCH".to_owned(),
+            ));
+        }
+    }
+
+    let validation_result_id = ValidationResultId::parse(record.after_validation_ref.clone())
+        .map_err(|_| ApplicationError::Apply("REGRESSION_EVIDENCE_MISMATCH".to_owned()))?;
+    let result = service
+        .get_validation_result_v2(project_id, &validation_result_id)
+        .map_err(|_| ApplicationError::Apply("REGRESSION_EVIDENCE_MISMATCH".to_owned()))?;
+    let runs = service.list_validation_runs_v2(project_id)?;
+    let selected_runs = runs
+        .into_iter()
+        .filter(|run| {
+            result
+                .validation_run_refs
+                .iter()
+                .any(|reference| reference.validation_run_id == run.validation_run_id)
+        })
+        .collect::<Vec<_>>();
+    let expected_result_fingerprint = result.result_fingerprint.clone();
+    let sealed_result = result
+        .clone()
+        .seal(&selected_runs)
+        .map_err(|_| ApplicationError::Apply("REGRESSION_EVIDENCE_MISMATCH".to_owned()))?;
+    if sealed_result.result_fingerprint != expected_result_fingerprint
+        || &result.project_id != project_id
+        || result.subject_binding.binding_fingerprint != record.after_subject_fingerprint
+    {
+        return Err(ApplicationError::Apply(
+            "REGRESSION_EVIDENCE_MISMATCH".to_owned(),
+        ));
+    }
+
+    if record.verification_state != VerificationState::Verified {
+        return Ok(());
+    }
+    let effective_config = service.effective_config()?;
+    if failure.verification_state != VerificationState::Verified
+        || result.outcome != ValidationOutcome::Pass
+        || result.completeness != Completeness::Complete
+        || result.freshness != EvidenceFreshnessV2::Current
+        || result.stability != ValidationStabilityV2::Stable
+        || result.subject_binding.freshness != EvidenceFreshnessV2::Current
+        || result.subject_binding.effective_config_fingerprint
+            != effective_config.config_fingerprint
+        || result.subject_binding.checkout_id.as_str() != failure.subject_binding.checkout_ref
+    {
+        return Err(ApplicationError::Apply(
+            "REGRESSION_EVIDENCE_MISMATCH".to_owned(),
+        ));
+    }
+
+    let compatible = record.evidence_refs.iter().any(|evidence_ref| {
+        let Some(pack_record) = service
+            .get_development_record("reproduction_pack", evidence_ref, None)
+            .ok()
+            .flatten()
+        else {
+            return false;
+        };
+        if pack_record.project_id.as_ref() != Some(project_id) {
+            return false;
+        }
+        let Ok(pack) = serde_json::from_value::<ReproductionPackV2>(pack_record.document) else {
+            return false;
+        };
+        let Ok(pack) = verify_reproduction_pack_v2(pack) else {
+            return false;
+        };
+        if pack.failure_record_ref != failure.failure_record_id
+            || pack.family_fingerprint != failure.family_fingerprint
+            || pack.occurrence_fingerprint != failure.occurrence_fingerprint
+            || &pack.subject_binding.project_id != project_id
+            || pack.subject_binding.checkout_ref != failure.subject_binding.checkout_ref
+            || pack.input_refs != failure.input_refs
+            || pack.seed != failure.seed
+            || pack.result != ReproductionResult::NotReproduced
+            || pack.completeness != CoverageState::Complete
+        {
+            return false;
+        }
+        selected_runs.iter().any(|run| {
+            m7_validation_run_matches_failure(run, failure)
+                && pack.attempts.iter().any(|attempt| {
+                    attempt.result == ReproductionResult::NotReproduced
+                        && attempt.effect_receipt_ref.is_some()
+                        && attempt.environment_fingerprint
+                            == run.subject_binding.execution_environment_fingerprint
+                        && attempt.input_fingerprint == run.invocation.input_fingerprint
+                })
+        })
+    });
+    if !compatible {
+        return Err(ApplicationError::Apply(
+            "REGRESSION_EVIDENCE_MISMATCH".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn m7_validation_run_matches_failure(run: &ValidationRunV2, failure: &FailureRecord) -> bool {
+    let cwd_matches = match &run.invocation.cwd {
+        InvocationWorkingDirectoryV2::ProjectRoot => matches!(
+            failure.invocation.logical_cwd.as_str(),
+            "project-root" | "project_root"
+        ),
+        InvocationWorkingDirectoryV2::ProjectPath { path } => {
+            failure.invocation.logical_cwd == path.as_str()
+        }
+    };
+    run.satisfies_required_check()
+        && run.check_ref.document_id == failure.invocation.command_descriptor
+        && run.invocation.executable == failure.invocation.executable_identity
+        && run.invocation.args == failure.invocation.structured_args
+        && cwd_matches
+        && run.subject_binding.execution_environment_fingerprint == failure.environment_fingerprint
 }
 
 fn m7_string_vec(
@@ -15652,7 +20354,11 @@ fn m6_evaluation_state(state: EvaluationState) -> &'static str {
 }
 
 fn m6_development_error(error: star_development::DevelopmentError) -> ApplicationError {
+    if let star_development::DevelopmentError::Coded(code) = error {
+        return ApplicationError::Apply(code.to_string());
+    }
     let code = match error {
+        star_development::DevelopmentError::Coded(_) => unreachable!("handled above"),
         star_development::DevelopmentError::Invalid => "DEVELOPMENT_INPUT_INVALID",
         star_development::DevelopmentError::Unverified => "DEVELOPMENT_INPUT_UNVERIFIED",
         star_development::DevelopmentError::Conflict => "DEVELOPMENT_INPUT_CONFLICT",
@@ -15684,63 +20390,93 @@ fn management_command_response(
         Err(error) => {
             let (code, message) = match error {
                 ApplicationError::Invalid => (
-                    "MANAGEMENT_ARGUMENT_INVALID",
+                    "TOOL_ARGUMENT_INVALID",
                     "The management command arguments are invalid.",
                 ),
                 ApplicationError::NotFound => (
-                    "MANAGEMENT_NOT_FOUND",
+                    "PROJECT_NOT_ATTACHED",
                     "The requested management object does not exist.",
                 ),
                 ApplicationError::IndexNotCurrent => (
-                    "INDEX_NOT_CURRENT",
+                    "PLANNING_SNAPSHOT_STALE",
                     "The requested code index is stale or unverified.",
                 ),
                 ApplicationError::IndexIdentityConflict => (
-                    "INDEX_IDENTITY_CONFLICT",
+                    "PLANNING_OUTPUT_COHERENCE",
                     "The same code index analysis input produced conflicting content.",
                 ),
                 ApplicationError::Planning(_) => (
-                    "MANAGEMENT_PLANNING_BLOCKED",
+                    "PLANNING_OUTPUT_COHERENCE",
                     "The task could not be converted into a sealed impact and validation plan.",
                 ),
                 ApplicationError::CheckGraph(_) => (
-                    "MANAGEMENT_CHECK_GRAPH_BLOCKED",
+                    "VALIDATION_CHECK_GRAPH_INVALID",
                     "The validation CheckGraph could not produce sealed complete evidence.",
                 ),
                 ApplicationError::ProcessExecutor(_) => (
-                    "MANAGEMENT_VALIDATION_EXECUTOR_BLOCKED",
+                    "TOOL_PROCESS_START_FAILED",
                     "The registered validation executable could not be resolved or run safely.",
                 ),
-                ApplicationError::Apply(_) => (
-                    "MANAGEMENT_PATCH_BLOCKED",
-                    "The PatchSet could not be applied under its exact preconditions.",
-                ),
-                ApplicationError::Repository(_) => (
-                    "MANAGEMENT_STORE_FAILED",
-                    "The Controller could not safely use the management store.",
-                ),
+                ApplicationError::Apply(code) => {
+                    return invalid_request_response(
+                        request,
+                        &code,
+                        "The operation was rejected by its stable safety contract.",
+                        registry_revision,
+                    );
+                }
+                ApplicationError::Repository(error) => {
+                    let code = match error.category {
+                        RepositoryErrorCategory::Unavailable => "MANAGEMENT_STORE_UNAVAILABLE",
+                        RepositoryErrorCategory::Busy | RepositoryErrorCategory::QuotaExceeded => {
+                            "MANAGEMENT_STORE_BUSY"
+                        }
+                        RepositoryErrorCategory::RevisionConflict => "MANAGEMENT_REVISION_CONFLICT",
+                        RepositoryErrorCategory::IdempotencyConflict => {
+                            "MANAGEMENT_IDEMPOTENCY_CONFLICT"
+                        }
+                        RepositoryErrorCategory::MigrationRequired => {
+                            "MANAGEMENT_MIGRATION_REQUIRED"
+                        }
+                        RepositoryErrorCategory::IncompatibleVersion => {
+                            "MANAGEMENT_VERSION_UNSUPPORTED"
+                        }
+                        RepositoryErrorCategory::IntegrityFailed
+                        | RepositoryErrorCategory::Corrupt => "MANAGEMENT_INTEGRITY_FAILED",
+                        RepositoryErrorCategory::ReadOnly => "MANAGEMENT_READ_ONLY",
+                        RepositoryErrorCategory::NotFound | RepositoryErrorCategory::Invalid => {
+                            "MANAGEMENT_IDENTITY_CONFLICT"
+                        }
+                    };
+                    return invalid_request_response(
+                        request,
+                        code,
+                        "The Controller could not safely use the management store.",
+                        registry_revision,
+                    );
+                }
                 ApplicationError::Project(_) => (
-                    "MANAGEMENT_SCAN_FAILED",
+                    "SCAN_INCOMPLETE",
                     "The Controller could not safely observe the project.",
                 ),
                 ApplicationError::Validation(_) => (
-                    "MANAGEMENT_VALIDATION_FAILED",
+                    "VALIDATION_EVIDENCE_INCOMPLETE",
                     "The Controller could not evaluate the required validation.",
                 ),
                 ApplicationError::Execution(_) => (
-                    "MANAGEMENT_PATCH_PREPARE_FAILED",
+                    "PATCH_PREVIEW_INCOMPLETE",
                     "The Controller could not prepare an immutable PatchSet.",
                 ),
                 ApplicationError::RustStyle(_) => (
-                    "RUST_STYLE_WORKFLOW_BLOCKED",
+                    "RUST_STYLE_COVERAGE_INCOMPLETE",
                     "The pinned Rust style workflow could not produce complete verified evidence.",
                 ),
                 ApplicationError::ProfileCatalog(_) => (
-                    "PROFILE_CATALOG_INVALID",
+                    "CATALOG_LIFECYCLE_MIGRATION_REQUIRED",
                     "The installed development profile catalog is incomplete or invalid.",
                 ),
                 ApplicationError::ProfileContract(_) => (
-                    "PROFILE_RESOLUTION_INVALID",
+                    "PLANNING_INPUT_CHANGED",
                     "The requested development profile selection could not be resolved exactly.",
                 ),
             };
@@ -15797,6 +20533,22 @@ fn management_patch_migration_plan(
         .ok_or(ApplicationError::Invalid)
 }
 
+fn management_change_plan_migration_plan(
+    payload: &serde_json::Value,
+) -> Result<ChangePlanV1ToV2MigrationPlan, ApplicationError> {
+    let plan = serde_json::from_value::<ChangePlanV1ToV2MigrationPlan>(
+        payload
+            .get("plan")
+            .cloned()
+            .ok_or(ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)?;
+    let sealed = plan.clone().seal().map_err(|_| ApplicationError::Invalid)?;
+    (sealed == plan)
+        .then_some(sealed)
+        .ok_or(ApplicationError::Invalid)
+}
+
 fn management_rebuild_plan(payload: &serde_json::Value) -> Result<RebuildPlan, ApplicationError> {
     serde_json::from_value(
         payload
@@ -15831,15 +20583,52 @@ fn management_local_state_import_plan(
     .map_err(|_| ApplicationError::Invalid)
 }
 
+struct ControllerRecoveryExecutionConfigResolver {
+    appdata: PathBuf,
+    config_layers: Vec<ConfigLayerV1>,
+}
+
+impl RecoveryExecutionConfigResolver for ControllerRecoveryExecutionConfigResolver {
+    fn resolve(&self, project_root: &Path) -> Result<RecoveryExecutionConfig, ApplicationError> {
+        let config = UserExecutionConfig::load_for_project_and_layers(
+            &self.appdata,
+            project_root,
+            self.config_layers.clone(),
+        )
+        .map_err(|_| ApplicationError::Apply("CONFIG_CONSTRAINT_CONFLICT".to_owned()))?;
+        Ok(RecoveryExecutionConfig {
+            scan_incremental: config.scan_incremental,
+            scan_policy: config.scan_policy,
+            index_policy: config.index_policy,
+            planning_policy: config.planning_policy,
+            effective_config: Some(config.effective),
+        })
+    }
+}
+
 fn management_recovery_application<'a>(
     recovery: &'a SqliteManagementRecovery,
     binding_root: &Path,
+    execution_config: &UserExecutionConfig,
+    appdata: &Path,
+    config_layers: &[ConfigLayerV1],
 ) -> Result<ManagementRecoveryApplicationService<'a>, ApplicationError> {
     let service = ManagementRecoveryApplicationService::new(
         recovery,
         Arc::new(WindowsProjectRootBindingStore::open(binding_root)?),
         Arc::new(LocalArtifactStore::default()),
     )
+    .with_execution_config(
+        execution_config.scan_incremental,
+        execution_config.scan_policy.clone(),
+        execution_config.index_policy.clone(),
+        execution_config.planning_policy.clone(),
+        execution_config.effective.clone(),
+    )
+    .with_execution_config_resolver(Arc::new(ControllerRecoveryExecutionConfigResolver {
+        appdata: appdata.to_path_buf(),
+        config_layers: config_layers.to_vec(),
+    }))
     .with_syntax_adapter(Arc::new(RustSyntaxAdapter));
     Ok(match RustAnalyzerSemanticAdapter::discover_pinned() {
         Ok(adapter) => service.with_semantic_adapter(Arc::new(adapter)),
@@ -16486,6 +21275,7 @@ mod tests {
             idempotency_key: None,
             deadline: None,
             actor: serde_json::json!({"kind":"internal_test"}),
+            config_overrides: Vec::new(),
             trace_context: None,
         }
     }
@@ -16677,11 +21467,158 @@ mod tests {
             handle_development_effect_record(&service, &operations, Some(&approvals), &stale,)
                 .is_err()
         );
+
+        let reproduction_subject = Sha256Hash::digest(b"failure-occurrence");
+        let reproduction_arguments = serde_json::json!({
+            "exact_subject_fingerprint":reproduction_subject,
+            "failure_record_id":"failure-one",
+            "attempt":1
+        });
+        let reproduction_arguments_hash =
+            star_contracts::canonical::canonical_sha256(&reproduction_arguments).unwrap();
+        let observation = ReproductionAttemptObservationV1 {
+            schema_id:
+                star_contracts::maintenance_v2::REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID
+                    .to_owned(),
+            schema_version: 1,
+            attempt: 1,
+            result: ReproductionResult::NotReproduced,
+            family_fingerprint: None,
+            occurrence_fingerprint: None,
+            environment_fingerprint: Sha256Hash::digest(b"reproduction-environment"),
+            input_fingerprint: Sha256Hash::digest(b"reproduction-input"),
+            duration_ms: 50,
+            evidence_refs: vec!["artifact:reproduction".to_owned()],
+            limitations: Vec::new(),
+        };
+        let reproduction_operation = operations
+            .lock()
+            .unwrap()
+            .create(OperationCreate {
+                command: "tool.invoke".to_owned(),
+                correlation_id: "reproduction-operation".to_owned(),
+                tool_id: "fixture.failure.reproduce".to_owned(),
+                descriptor_hash: Sha256Hash::digest(b"reproduction-descriptor").to_string(),
+                arguments_hash: reproduction_arguments_hash.to_string(),
+                permission_actions: vec!["process.failure.reproduce".to_owned()],
+                goal_id: None,
+                run_id: None,
+                stage_id: None,
+                output_provenance: Some(serde_json::json!({
+                    "executable_identity_ref":{"sha256":executable_hash}
+                })),
+                cancellable: true,
+                idempotency_key: None,
+                invocation_hash: Sha256Hash::digest(b"reproduction-invocation").to_string(),
+            })
+            .unwrap();
+        {
+            let mut store = operations.lock().unwrap();
+            store
+                .transition(
+                    reproduction_operation.operation_id.as_str(),
+                    "queued",
+                    "queued",
+                )
+                .unwrap();
+            store
+                .transition(
+                    reproduction_operation.operation_id.as_str(),
+                    "starting",
+                    "starting",
+                )
+                .unwrap();
+            store
+                .record_process_started(
+                    reproduction_operation.operation_id.as_str(),
+                    ProcessStartEvidence {
+                        process_id: 43,
+                        creation_time_100ns: 8,
+                        job_id: "job-reproduction".to_owned(),
+                    },
+                    serde_json::json!({"identity":{"sha256":executable_hash}}),
+                )
+                .unwrap();
+            store
+                .record_process_finished(
+                    reproduction_operation.operation_id.as_str(),
+                    ProcessEndEvidence {
+                        exit_code: Some(0),
+                        termination: "exited".to_owned(),
+                        stdout_bytes: 32,
+                        stderr_bytes: 0,
+                        stdout_limit_exceeded: false,
+                        stderr_limit_exceeded: false,
+                    },
+                )
+                .unwrap();
+            store
+                .complete(
+                    reproduction_operation.operation_id.as_str(),
+                    Ok(serde_json::json!({"data":observation.clone(),"artifacts":[]})),
+                )
+                .unwrap();
+        }
+        let reproduction_payload = serde_json::json!({
+            "project_id":project_id.clone(),
+            "receipt_id":"reproduction-receipt-one",
+            "effect_kind":"failure_reproduction",
+            "exact_subject_ref":"failure_record:failure-one",
+            "exact_subject_fingerprint":reproduction_subject.clone(),
+            "operation_id":reproduction_operation.operation_id,
+            "bound_arguments":reproduction_arguments,
+            "approval_ref":null,
+            "permission_decision_ref":null,
+            "gate_decision_ref":null,
+            "record_revision":1,
+        });
+        let reproduction_receipt =
+            handle_development_effect_record(&service, &operations, None, &reproduction_payload)
+                .unwrap();
+        let expected_observation_fingerprint =
+            reproduction_attempt_observation_fingerprint(observation.clone()).unwrap();
+        assert_eq!(
+            reproduction_receipt["document"]["result_fingerprint"],
+            serde_json::json!(expected_observation_fingerprint)
+        );
+
+        let mut failure: FailureRecord = serde_json::from_str(include_str!(
+            "../../../specs/fixtures/management/v1/failure-record/full.json"
+        ))
+        .unwrap();
+        failure.failure_record_id = "failure-one".to_owned();
+        failure.subject_binding.project_id = project_id.clone();
+        failure.occurrence_fingerprint = reproduction_subject;
+        let attempt = ReproductionAttemptV2 {
+            attempt: observation.attempt,
+            result: observation.result,
+            family_fingerprint: observation.family_fingerprint,
+            occurrence_fingerprint: observation.occurrence_fingerprint,
+            environment_fingerprint: observation.environment_fingerprint,
+            input_fingerprint: observation.input_fingerprint,
+            duration_ms: observation.duration_ms,
+            evidence_refs: observation.evidence_refs,
+            limitations: observation.limitations,
+            effect_receipt_ref: Some("reproduction-receipt-one".to_owned()),
+        };
+        m7_validate_reproduction_effect_receipts(
+            &service,
+            &project_id,
+            &failure,
+            std::slice::from_ref(&attempt),
+        )
+        .unwrap();
+        let mut unbound = attempt;
+        unbound.effect_receipt_ref = None;
+        assert!(
+            m7_validate_reproduction_effect_receipts(&service, &project_id, &failure, &[unbound],)
+                .is_err()
+        );
     }
 
     #[test]
     fn recovery_only_controller_handlers_restore_rebuild_and_block_ordinary_writes() {
-        let root = std::env::temp_dir().join(format!(
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
             "star-controller-recovery-{}-{}",
             std::process::id(),
             star_ipc::nonce()
@@ -16699,6 +21636,11 @@ mod tests {
                 "schema_version = 1\nproject_id = \"{}\"\ndisplay_name = \"controller-recovery-fixture\"\nrepository_kind = \"none\"\nsource_of_truth = [\"source\"]\n",
                 project_id.as_str()
             ),
+        )
+        .unwrap();
+        std::fs::write(
+            source.join(".star-control/config.toml"),
+            "schema_version = 1\n[scan]\nmax_files = 4096\n",
         )
         .unwrap();
         std::fs::write(source.join("src/lib.rs"), b"fn main() {}\n").unwrap();
@@ -16731,6 +21673,9 @@ mod tests {
         std::fs::write(&first_corrupt_store, b"controller-corrupt-before-restore").unwrap();
 
         let recovery = SqliteManagementRecovery::open(&management_root, "controller-test").unwrap();
+        let recovery_execution_config = UserExecutionConfig::default();
+        let expected_rebuild_config =
+            UserExecutionConfig::load_for_project_and_layers(&root, &source, vec![]).unwrap();
         assert!(
             SqliteManagementRecovery::open(&management_root, "second-writer").is_err(),
             "a recovery-only Controller must retain the single-writer lease"
@@ -16746,6 +21691,9 @@ mod tests {
                 binding_root: &binding_root,
                 project_directory: &source,
                 policy_profile: UserPolicyProfile::SafeDefault,
+                execution_config: recovery_execution_config.clone(),
+                appdata: &root,
+                config_layers: vec![],
                 registry_revision: 1,
             },
             direct_core_request("management.status", serde_json::json!({})),
@@ -16764,6 +21712,9 @@ mod tests {
                 binding_root: &binding_root,
                 project_directory: &source,
                 policy_profile: UserPolicyProfile::SafeDefault,
+                execution_config: recovery_execution_config.clone(),
+                appdata: &root,
+                config_layers: vec![],
                 registry_revision: 1,
             },
             direct_core_request(
@@ -16785,6 +21736,9 @@ mod tests {
                 binding_root: &binding_root,
                 project_directory: &source,
                 policy_profile: UserPolicyProfile::SafeDefault,
+                execution_config: recovery_execution_config.clone(),
+                appdata: &root,
+                config_layers: vec![],
                 registry_revision: 1,
             },
             direct_core_request(
@@ -16806,6 +21760,9 @@ mod tests {
                 binding_root: &binding_root,
                 project_directory: &source,
                 policy_profile: UserPolicyProfile::SafeDefault,
+                execution_config: recovery_execution_config.clone(),
+                appdata: &root,
+                config_layers: vec![],
                 registry_revision: 1,
             },
             direct_core_request(
@@ -16844,6 +21801,9 @@ mod tests {
                 binding_root: &binding_root,
                 project_directory: &source,
                 policy_profile: UserPolicyProfile::SafeDefault,
+                execution_config: recovery_execution_config.clone(),
+                appdata: &root,
+                config_layers: vec![],
                 registry_revision: 1,
             },
             direct_core_request("management.rebuild.plan", serde_json::json!({})),
@@ -16851,6 +21811,10 @@ mod tests {
         assert_eq!(rebuild_plan_response.status, IpcStatus::Ok);
         let rebuild_plan: RebuildPlan =
             serde_json::from_value(rebuild_plan_response.data.unwrap()).unwrap();
+        assert_eq!(
+            rebuild_plan.projects[0].effective_config_fingerprint,
+            expected_rebuild_config.effective.config_fingerprint
+        );
         let rebuild_response = handle_management_command(
             ManagementCommandContext {
                 service: None,
@@ -16862,6 +21826,9 @@ mod tests {
                 binding_root: &binding_root,
                 project_directory: &source,
                 policy_profile: UserPolicyProfile::SafeDefault,
+                execution_config: recovery_execution_config,
+                appdata: &root,
+                config_layers: vec![],
                 registry_revision: 1,
             },
             direct_core_request(
@@ -17407,6 +22374,7 @@ mod tests {
                     "kind":"test",
                     "project_root":std::env::current_dir().unwrap().display().to_string()
                 }),
+                config_overrides: Vec::new(),
                 trace_context: None,
             },
             &action,
@@ -17510,6 +22478,7 @@ mod tests {
             idempotency_key: Some("stable".to_owned()),
             deadline: None,
             actor,
+            config_overrides: Vec::new(),
             trace_context: None,
         };
         assert!(invoke_payload_matches_ipc_envelope(&request));
@@ -17737,6 +22706,7 @@ mod tests {
                     "kind":"mcp",
                     "project_root":std::env::current_dir().unwrap().display().to_string()
                 }),
+                config_overrides: Vec::new(),
                 trace_context: None,
             },
             action,
@@ -18014,6 +22984,7 @@ mod tests {
             idempotency_key: None,
             deadline: None,
             actor: serde_json::json!({"kind":"mcp"}),
+            config_overrides: Vec::new(),
             trace_context: None,
         };
         let response = completed_operation_response(
@@ -18522,6 +23493,7 @@ mod tests {
             idempotency_key: None,
             deadline: None,
             actor: serde_json::json!({"kind":"internal_test"}),
+            config_overrides: Vec::new(),
             trace_context: None,
         };
         let update_store = Arc::clone(&operations);
@@ -18867,6 +23839,157 @@ mod tests {
     }
 
     #[test]
+    fn effective_config_is_a_management_owned_restart_safe_read() {
+        assert!(is_management_command("config.effective"));
+        assert!(update_restart_pending_command_allowed("config.effective"));
+    }
+
+    #[test]
+    fn command_config_defaults_materialize_missing_typed_document_fields() {
+        let configured = UserExecutionConfig::default()
+            .apply_layer(ConfigLayerV1 {
+                source: ConfigSourceRefV1 {
+                    source_kind: ConfigSourceKindV1::Command,
+                    source_id: "command:document-defaults".to_owned(),
+                    source_fingerprint: Sha256Hash::digest(b"command-document-defaults"),
+                },
+                overrides: vec![
+                    ConfigOverrideV1 {
+                        key: "migration.default_strategy".to_owned(),
+                        value: ConfigValueV1::String("atomic_replace".to_owned()),
+                    },
+                    ConfigOverrideV1 {
+                        key: "performance_build.default_warmup_runs".to_owned(),
+                        value: ConfigValueV1::Integer(2),
+                    },
+                    ConfigOverrideV1 {
+                        key: "performance_build.default_measurement_runs".to_owned(),
+                        value: ConfigValueV1::Integer(7),
+                    },
+                    ConfigOverrideV1 {
+                        key: "evaluation.default_mode".to_owned(),
+                        value: ConfigValueV1::String("replay".to_owned()),
+                    },
+                ],
+            })
+            .unwrap();
+        let mut migration = serde_json::json!({});
+        materialize_document_config_default(
+            &configured.effective,
+            &mut migration,
+            "migration.default_strategy",
+            "strategy",
+        )
+        .unwrap();
+        assert_eq!(migration["strategy"], "atomic_replace");
+
+        let mut performance = serde_json::json!({});
+        materialize_document_config_default(
+            &configured.effective,
+            &mut performance,
+            "performance_build.default_warmup_runs",
+            "warmup_count",
+        )
+        .unwrap();
+        materialize_document_config_default(
+            &configured.effective,
+            &mut performance,
+            "performance_build.default_measurement_runs",
+            "measured_count",
+        )
+        .unwrap();
+        assert_eq!(performance["warmup_count"], 2);
+        assert_eq!(performance["measured_count"], 7);
+
+        let mut evaluation = serde_json::json!({});
+        materialize_document_config_default(
+            &configured.effective,
+            &mut evaluation,
+            "evaluation.default_mode",
+            "mode",
+        )
+        .unwrap();
+        assert_eq!(evaluation["mode"], "replay");
+
+        let mut explicit = serde_json::json!({"strategy":"side_by_side"});
+        materialize_document_config_default(
+            &configured.effective,
+            &mut explicit,
+            "migration.default_strategy",
+            "strategy",
+        )
+        .unwrap();
+        assert_eq!(explicit["strategy"], "side_by_side");
+    }
+
+    #[test]
+    fn effective_config_denies_all_live_migration_and_publish_phases() {
+        let root = std::env::temp_dir().join(format!(
+            "star-controller-policy-deny-{}-{}",
+            std::process::id(),
+            star_ipc::nonce()
+        ));
+        let repositories = Arc::new(
+            SqliteManagementRepositorySet::open(root.join("management"), "policy-deny-test")
+                .unwrap(),
+        );
+        let bindings =
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("root-bindings")).unwrap());
+        let configured = UserExecutionConfig::default()
+            .apply_layer(ConfigLayerV1 {
+                source: ConfigSourceRefV1 {
+                    source_kind: ConfigSourceKindV1::Command,
+                    source_id: "command:deny-live-effects".to_owned(),
+                    source_fingerprint: Sha256Hash::digest(b"deny-live-effects"),
+                },
+                overrides: vec![
+                    ConfigOverrideV1 {
+                        key: "migration.live_execute_action".to_owned(),
+                        value: ConfigValueV1::String("deny".to_owned()),
+                    },
+                    ConfigOverrideV1 {
+                        key: "release.publish_action".to_owned(),
+                        value: ConfigValueV1::String("deny".to_owned()),
+                    },
+                ],
+            })
+            .unwrap();
+        let service = ManagementApplicationService::new(
+            repositories,
+            bindings,
+            Arc::new(LocalArtifactStore::default()),
+        )
+        .with_effective_config(configured.effective);
+
+        for command in [
+            "migration.execute",
+            "migration.resume",
+            "release.publish.prepare",
+            "release.publish.authorize",
+            "release.publish.apply",
+        ] {
+            assert!(
+                matches!(
+                    enforce_effective_command_policy(&service, command),
+                    Err(ApplicationError::Apply(code)) if code == "CONFIG_CONSTRAINT_CONFLICT"
+                ),
+                "{command}"
+            );
+        }
+        for command in [
+            "migration.inspect",
+            "migration.plan",
+            "release.candidate.create",
+            "release.status",
+        ] {
+            assert!(
+                enforce_effective_command_policy(&service, command).is_ok(),
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
     fn m7_commands_are_management_owned_and_do_not_hide_mutating_effects() {
         for command in [
             "failures.inspect",
@@ -18944,6 +24067,65 @@ mod tests {
                 "{command}"
             );
         }
+    }
+
+    #[test]
+    fn every_effectful_migration_phase_requires_a_terminal_effect_receipt() {
+        let root = std::env::temp_dir().join(format!(
+            "star-controller-migration-receipt-{}-{}",
+            std::process::id(),
+            star_ipc::nonce()
+        ));
+        let service = ManagementApplicationService::new(
+            Arc::new(
+                SqliteManagementRepositorySet::open(root.join("management"), "migration-receipt")
+                    .unwrap(),
+            ),
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("root-bindings")).unwrap()),
+            Arc::new(LocalArtifactStore::default()),
+        );
+        let project_id = ProjectId::new();
+        let mut plan: MigrationPlanV2 = serde_json::from_str(include_str!(
+            "../../../specs/fixtures/management/v1/migration-plan-v2/full.json"
+        ))
+        .unwrap();
+        plan.project_id = project_id.clone();
+        let mut attempt: MigrationAttempt = serde_json::from_str(include_str!(
+            "../../../specs/fixtures/management/v1/migration-attempt/full.json"
+        ))
+        .unwrap();
+        attempt.tool_observation_ref = None;
+        attempt.receipt_refs.clear();
+
+        for command in [
+            "migration.dry-run",
+            "migration.backup",
+            "migration.rehearse",
+            "migration.execute",
+            "migration.resume",
+            "migration.rollback",
+        ] {
+            assert!(matches!(
+                m8_validate_migration_effect_receipt(
+                    &service,
+                    command,
+                    &project_id,
+                    &plan,
+                    &attempt,
+                ),
+                Err(ApplicationError::Apply(code)) if code == "MIGRATION_EFFECT_RECEIPT_REQUIRED"
+            ));
+        }
+        assert!(
+            m8_validate_migration_effect_receipt(
+                &service,
+                "migration.validate",
+                &project_id,
+                &plan,
+                &attempt,
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -19038,6 +24220,8 @@ mod tests {
             arguments,
             actor: serde_json::json!({"kind":"internal_test"}),
             runtime_scope: serde_json::json!({"kind":"management_remote_operation"}),
+            created_at: Some("2026-07-23T00:00:00Z".to_owned()),
+            expires_at: Some("2026-07-23T00:30:00Z".to_owned()),
             decision: Some(ApprovalDecision::Approve),
             resolved_at: Some("2026-07-23T00:00:00Z".to_owned()),
             decision_reason: Some("test".to_owned()),
@@ -19066,6 +24250,7 @@ mod tests {
             "release.promote",
             "release.show",
             "release.status",
+            "release.audit",
             "release.lifecycle.publish",
             "release.publish.prepare",
             "release.publish.authorize",
@@ -19078,7 +24263,12 @@ mod tests {
             assert!(is_management_command(command), "{command}");
             assert!(is_m10_development_command(command), "{command}");
         }
-        for command in ["release.show", "release.status", "evaluation.show"] {
+        for command in [
+            "release.show",
+            "release.status",
+            "release.audit",
+            "evaluation.show",
+        ] {
             assert!(update_restart_pending_command_allowed(command), "{command}");
         }
         for command in [
@@ -19092,6 +24282,21 @@ mod tests {
                 !update_restart_pending_command_allowed(command),
                 "{command}"
             );
+        }
+        assert_eq!(PRODUCT_FEATURE_RUNTIME_SPECS.len(), 23);
+        for feature in PRODUCT_FEATURE_RUNTIME_SPECS {
+            assert!(
+                !feature.command_surfaces.is_empty(),
+                "{}",
+                feature.feature_id
+            );
+            for command in feature.command_surfaces {
+                assert!(
+                    product_command_handler_current(command),
+                    "{}:{command}",
+                    feature.feature_id
+                );
+            }
         }
     }
 

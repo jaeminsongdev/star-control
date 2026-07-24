@@ -1,6 +1,6 @@
 # P-0054 실제 기능 완성 감사 — 2026-07-23
 
-> 이 문서는 P-0054 내부 제품 seal 당시의 historical snapshot이다. 이후 registered external effect·GitHub publisher·ARM64/lifecycle/remote 증거의 최신 상태는 [P-0055 비서명 외부 봉인 감사](p0055-nonsigning-external-seal-2026-07-23.md)를 따른다.
+> 이 문서는 P-0054 내부 제품 seal 당시의 historical snapshot이다. P-0055 external seal 이후 source까지 포함한 최신 구현·복구 판정은 [P-0056 최신 기능·복구 감사](p0056-current-functional-recovery-audit-2026-07-24.md)를 따른다. 아래 Schema count·미구현·외부 Gate 문구를 current 상태로 재사용하지 않는다.
 
 ## 판정
 

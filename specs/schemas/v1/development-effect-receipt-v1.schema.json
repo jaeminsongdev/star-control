@@ -2,6 +2,7 @@
   "$defs": {
     "DevelopmentEffectKind": {
       "enum": [
+        "failure_reproduction",
         "security_refresh",
         "debugger_capture",
         "license_scan",
@@ -11,7 +12,8 @@
         "migration_execute",
         "performance_run",
         "language_cutover",
-        "remote_recovery"
+        "remote_recovery",
+        "release_lifecycle"
       ],
       "type": "string"
     },

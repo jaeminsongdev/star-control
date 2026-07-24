@@ -142,7 +142,7 @@ Profile 단계 template은 다음 순서다.
 
 `change prepare`와 `patch apply`는 별도 command다. prepare에 숨은 `--apply` 경로를 두지 않으며 PatchSet은 한 Project·한 Checkout만 소유한다. 9단계에서도 이를 cross-project PatchSet으로 넓히지 않고 `ChangeBundleParticipant`가 project별 Profile 실행을 조정한다. merge·commit·push는 M4 Profile completion이 아니며 별도 9단계 Git/remote permission·Gate를 따른다.
 
-P-0045는 trailing-whitespace Recipe의 immutable PatchSet, isolated byte preview, exact approval, TOCTOU 재관찰, atomic apply·rollback bounded Slice와 CLI apply 경로를 구현했다. 이 상태는 모든 Recipe/PatchSet v2 migration·transformer·worktree adapter가 구현됐다는 뜻이 아니다.
+P-0045는 trailing-whitespace Recipe의 immutable PatchSet, isolated byte preview, exact approval, TOCTOU 재관찰, atomic apply·rollback bounded Slice와 CLI apply 경로를 구현했다. 이후 current source는 Recipe/PatchSet v2 migration plan/apply/rollback, typed transformer와 owned worktree apply/recovery까지 확장했다. 외부 transformer가 등록되지 않았거나 current precondition을 증명하지 못하면 unavailable/blocked를 유지한다.
 
 ### `api_contract_change`
 
@@ -628,7 +628,7 @@ Profile metadata 기본값은 다음과 같다.
 
 다른 revision의 evidence, required `not_run|partial|unverified|stale|flaky`, contradicted claim과 out-of-scope change가 있으면 `AUTO_PASS`할 수 없다. CLI-only mode는 AI 독립 검토 부재를 실패로 만들지 않으며, 의미 검토가 필수이면 `HUMAN_REVIEW` 상태에서 사용자를 기다린다.
 
-P-0044는 이 Profile이 공통으로 소비할 CheckGraph runner, Diagnostic v2, GateDecision v2와 EvidenceBundle v2의 첫 bounded 제품 Slice를 구현했다. 다만 **Codex 결과 전용 validator·Corpus·baseline/suppression ratchet은 아직 구현되지 않았다**. 따라서 generic M3 runner의 존재를 이 Profile의 end-to-end 완료나 Codex 결과 검증 완료로 해석하지 않는다.
+P-0044는 이 Profile이 공통으로 소비할 첫 CheckGraph Slice를 구현했고, P-0056 current source는 Rule·Diagnostic·Baseline·Suppression·Disposition v2, stable error catalog, validator two-snapshot guard와 sealed positive/negative/edge/regression Corpus, baseline/suppression ratchet을 Controller 경로에 연결했다. required external Check가 unavailable이거나 evidence가 partial/stale이면 Profile end-to-end pass로 승격하지 않는다.
 
 ### `test_correctness`
 
@@ -665,7 +665,7 @@ Profile 단계는 다음과 같다.
 
 test framework AST adapter가 없으면 text heuristic은 `suspected`와 실제 confidence를 사용한다. 확정할 수 없는 assertion 의미를 자동 `BLOCK`으로 과장하지 않되 required correctness를 증명하지 못했으면 `AUTO_PASS`도 하지 않는다.
 
-이 Profile의 M3 metadata·Rule·runner 동작은 현재 문서 설계이며 test adapter·Corpus·제품 Gate가 구현됐다는 뜻이 아니다.
+이 Profile의 M3 metadata·Rule·runner, test-trust/skip/focus/retry rule와 regression evidence Gate는 current source와 sealed Corpus에 구현돼 있다. 특정 test framework의 semantic adapter가 없으면 text heuristic confidence를 사실대로 낮추고 registered process Check 결과를 함께 요구한다.
 
 ### `architecture_quality`
 
@@ -701,7 +701,7 @@ test framework AST adapter가 없으면 text heuristic은 `suspected`와 실제 
 
 Profile은 범용 parser·graph DB·compiler를 만들지 않는다. Project Catalog·Code Index와 등록된 compiler/LSP/architecture tool 결과를 정규화한다. source graph가 stale·partial이면 architecture 위반 0건을 성공으로 표시하지 않는다.
 
-이 Profile의 M3 metadata·Rule·ratchet 동작은 현재 문서 설계이며 architecture validator·Corpus·제품 Gate가 구현됐다는 뜻이 아니다.
+이 Profile의 M3 metadata·Rule·ratchet, architecture/contract/generated/hardcoding required-check 판정과 Corpus는 current source에 구현돼 있다. 외부 architecture tool이 없는 Project에서는 built-in graph·manifest·text evidence의 실제 tier를 기록하며 unverified edge를 confirmed violation이나 clean pass로 바꾸지 않는다.
 
 ### `project_understanding`
 
@@ -709,7 +709,7 @@ Profile은 범용 parser·graph DB·compiler를 만들지 않는다. Project Cat
 
 이 Profile은 CLI-only·source read-only다. project task·package script를 실행하거나 source를 수정하지 않으며 AI·embedding·LLM 의미 추론 자동화를 요구하지 않는다. semantic adapter가 없거나 parse가 실패하면 syntax·text fallback을 실제 tier로 표시하고, unsupported·partial·stale·no-result 이유를 ContextPack에서 보존한다.
 
-위 Project Catalog·Code Index 동작은 현재 1단계 목표 설계이며 제품 scanner·parser·DB·watcher가 구현됐다는 뜻이 아니다.
+위 Project Catalog·Code Index 동작은 current source의 scanner, text·Rust syntax·optional pinned semantic adapter, DB/index cache와 full/incremental CLI에 구현돼 있다. Project watcher는 정확성 전제가 아니며 외부 주기 실행도 같은 incremental command를 사용한다. semantic adapter가 unavailable한 플랫폼은 syntax/text fallback과 `native_unverified|partial` limitation을 그대로 노출한다.
 
 ### `rust_style_auto_fix`
 

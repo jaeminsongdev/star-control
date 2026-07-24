@@ -602,6 +602,58 @@ fn seal_manifest(mut manifest: ReleaseManifestV2) -> Result<ReleaseManifestV2, R
     Ok(manifest)
 }
 
+pub fn verify_release_manifest(manifest: &ReleaseManifestV2) -> Result<(), ReleaseError> {
+    if manifest.schema_id != RELEASE_MANIFEST_V2_SCHEMA_ID
+        || manifest.schema_version != 2
+        || manifest.revision == 0
+        || manifest.artifacts.is_empty()
+        || !token(&manifest.product_id, 96)
+        || !token(&manifest.version, 96)
+        || !token(&manifest.channel, 64)
+    {
+        return Err(ReleaseError::Invalid);
+    }
+    let mut artifacts = manifest.artifacts.clone();
+    artifacts.sort();
+    artifacts.dedup();
+    let artifact_set_digest = artifact_set_digest(&artifacts)?;
+    if artifacts != manifest.artifacts
+        || manifest.artifact_set_digest.as_ref() != Some(&artifact_set_digest)
+    {
+        return Err(ReleaseError::Conflict);
+    }
+    let verification_layers = manifest
+        .verification_layers
+        .iter()
+        .map(|layer| layer.layer)
+        .collect::<std::collections::BTreeSet<_>>();
+    let supply_chain_kinds = manifest
+        .supply_chain_applicability
+        .iter()
+        .map(|decision| decision.kind)
+        .collect::<std::collections::BTreeSet<_>>();
+    let compatibility_architectures = manifest
+        .compatibility
+        .iter()
+        .map(|target| target.architecture)
+        .collect::<std::collections::BTreeSet<_>>();
+    if verification_layers.len() != manifest.verification_layers.len()
+        || supply_chain_kinds.len() != manifest.supply_chain_applicability.len()
+        || compatibility_architectures.len() != manifest.compatibility.len()
+        || manifest
+            .remote_actions
+            .iter()
+            .any(|action| action.immutable_subject_digest != artifact_set_digest)
+    {
+        return Err(ReleaseError::Conflict);
+    }
+    let sealed = seal_manifest(manifest.clone())?;
+    if sealed.manifest_fingerprint != manifest.manifest_fingerprint {
+        return Err(ReleaseError::Conflict);
+    }
+    Ok(())
+}
+
 fn placeholder() -> Sha256Hash {
     Sha256Hash::digest(b"unsealed-release-manifest")
 }

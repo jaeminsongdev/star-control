@@ -1,6 +1,10 @@
 {
   "files": [
     {
+      "file": "effective-config-v1.schema.json",
+      "hash": "sha256:59fa2067581c230771a6d75a322b7ef945de21dc4a584d97e730f06db9f245a9"
+    },
+    {
       "file": "validation-plan.schema.json",
       "hash": "sha256:fcc9d0210f9eb3e53b4b20e71bca1078b5045f74d9d171e70b0266719d4ecc71"
     },
@@ -30,7 +34,19 @@
     },
     {
       "file": "planning-bundle.schema.json",
-      "hash": "sha256:6a5f7db05ba38f276ca87d386818481fc498afe2fde728f0ee2c0ddebd7993a6"
+      "hash": "sha256:e395daff47a6aa0d7010aa12ffe34078ec8e549aa1a4ac15e25053534aa88d1f"
+    },
+    {
+      "file": "change-plan-v2.schema.json",
+      "hash": "sha256:1bf7aff5d1b9f85ea2dc937d8364124f94cb158cb74701a356af553708ee865d"
+    },
+    {
+      "file": "change-plan-v1-to-v2-migration-plan.schema.json",
+      "hash": "sha256:aaa9317c8d949388ad3a2f7ed99a21f0aa9105748cca025313d1ffc9271a3a63"
+    },
+    {
+      "file": "change-plan-v1-to-v2-migration-result.schema.json",
+      "hash": "sha256:689d4d9563a1e8696d8b5e0f2ad7b1a3fa69b52a02ca2cb3a30b7fe3daa2eeb4"
     },
     {
       "file": "goal-record.schema.json",
@@ -102,15 +118,19 @@
     },
     {
       "file": "development-effect-receipt-v1.schema.json",
-      "hash": "sha256:44288ade08d6f61bb87c95e0928d7bf74de9fcec15bca77490883cb946a41bee"
+      "hash": "sha256:f4b0b50e5f7747a003461762c4a6660b405a016e2ffed0697f418894855a42ac"
     },
     {
       "file": "failure-record.schema.json",
       "hash": "sha256:ab21a01e5ecd0cdead56868e76d7446dc40c368843e2b36aeea4c503a354c66b"
     },
     {
+      "file": "reproduction-attempt-observation-v1.schema.json",
+      "hash": "sha256:129ae3344799dfb649ac347d7a621c93e06387fa9390b94758b829523cd8b259"
+    },
+    {
       "file": "reproduction-pack-v2.schema.json",
-      "hash": "sha256:5effab8a0b149a570ea20587fd57ea9bb33eccdf043ab97fab15f2ac8b94793f"
+      "hash": "sha256:27b65aebb0d14eb507d8c0f97d9f90bb782a2effa8f566c32a5ec5b3a03e7df7"
     },
     {
       "file": "regression-record.schema.json",
@@ -138,7 +158,7 @@
     },
     {
       "file": "maintenance-radar-snapshot.schema.json",
-      "hash": "sha256:08874c9e4191cd30fc0d69feb6df43873b1e70ac3e13c9f558d9628131db9a75"
+      "hash": "sha256:030f3399e1f6564cc98048a9b0081929c7024b3ba5b7bb4ecfb2a91edebd1f9c"
     },
     {
       "file": "project-migration-manifest.schema.json",
@@ -274,11 +294,31 @@
     },
     {
       "file": "evaluation-run-v2.schema.json",
-      "hash": "sha256:064838f3487018936c0624d49d39cd27e9120b72b7904c763f0f87715b140731"
+      "hash": "sha256:fe809df8dfa8cb3c22910537f6c954cf0792693bfd3dc3f64cb282bae990eda3"
     },
     {
       "file": "evaluation-catalog-item.schema.json",
-      "hash": "sha256:67c578243e1027417ebde5d7d5afc6196d13092d52c1b9b0b502f2e50747b66f"
+      "hash": "sha256:73efa2523e33afe61052e4f2599fd4f23ba9e1d1f5e4382fe72855fc722f34a0"
+    },
+    {
+      "file": "evaluation-case-definition-v1.schema.json",
+      "hash": "sha256:64a3006c549844cac8247c963b8112afbd2b5c1a32d4030f2262dbd51125c303"
+    },
+    {
+      "file": "evaluation-policy-v1.schema.json",
+      "hash": "sha256:365cca89a3fbc3f0bdf1279647c5c80d2342dbd3c28a93bf45873a1f323a45ab"
+    },
+    {
+      "file": "cost-record-v1.schema.json",
+      "hash": "sha256:342b134d70b9a03e8514272b3da64e1bf8db9bcb49e0da2b8c413e5d15b15c12"
+    },
+    {
+      "file": "budget-snapshot-v1.schema.json",
+      "hash": "sha256:76e9a629d2343a36bdfeb182f4df80ac9de9495657263687a44ffe992e973140"
+    },
+    {
+      "file": "final-product-audit-v1.schema.json",
+      "hash": "sha256:ce134c0c281fb599d26368fb3911101788485397d3f96e4aa906242937b0c213"
     },
     {
       "file": "rust-toolchain-binding.schema.json",
@@ -342,19 +382,27 @@
     },
     {
       "file": "diagnostic-v2.schema.json",
-      "hash": "sha256:e0ae2d9740434340a95b6a925ab45e001f25baf7d4a1c117b2c1d02a3e4658b5"
+      "hash": "sha256:424e8aa301a60e27a771c78047ea1fc731dffb921bd36bc69c0ad0abcbb7799a"
+    },
+    {
+      "file": "rule-v2.schema.json",
+      "hash": "sha256:082d90b1a59ae5970062ba9fe861f314de234d5733d951d0a2a8389242737b1f"
+    },
+    {
+      "file": "stable-error-code-catalog.schema.json",
+      "hash": "sha256:4af9f946f24c7366b091d28752c6b1c5fcb84a0372a47af884477ca9ff61b25e"
     },
     {
       "file": "baseline-v2.schema.json",
-      "hash": "sha256:7bb6ea78b61f32bc6b59f5f3ca2015f0ec724486c4e26991a695db915f61e69f"
+      "hash": "sha256:183858a6bd0c5822479b694953fbed41fec4008e6b614e681c22253ebecd30c6"
     },
     {
       "file": "suppression-v2.schema.json",
-      "hash": "sha256:9b54a93322515a7606829c10137b722abc88cc5d5b9b49fdc2b4ba1814afb40e"
+      "hash": "sha256:02c3032305e19d0545cc3b83b556affb5cdcfdef50720557c7287a56827be609"
     },
     {
       "file": "disposition-v2.schema.json",
-      "hash": "sha256:ffaa7c221b86ef4b9823c2d96690b6587e1100a9a3f3faf6863a041743078426"
+      "hash": "sha256:b683ee6f04ae12d36157122b5149b42c0041d95f73bea6049fdf84c4fe5ed35e"
     },
     {
       "file": "review-pack.schema.json",
@@ -367,6 +415,10 @@
     {
       "file": "validator-guard-evidence-v2.schema.json",
       "hash": "sha256:37c3af461e2e7fa9e85b37f7bce0f76310b23ce895a2d8a89cabba969a956e1f"
+    },
+    {
+      "file": "validator-corpus-manifest-v2.schema.json",
+      "hash": "sha256:f0116db1065a33066ba4df6f668b3b4dcbdcd8a50f82c88e1f760be5c8fea81d"
     },
     {
       "file": "change-recipe-v2.schema.json",
@@ -574,7 +626,11 @@
     },
     {
       "file": "management-local-state-bundle.schema.json",
-      "hash": "sha256:5c64d2d316314847511da8b2f9bcd423b7abd988d1d3c23c73a56d7ce099fe00"
+      "hash": "sha256:bc045b867b187c28e22127f887dcaa1ced0d2e7b424b8ca467991059c8bd7c66"
+    },
+    {
+      "file": "management-local-state-bundle-v2.schema.json",
+      "hash": "sha256:25db320a2b7859f03b6ec85d849512f55bf4a01abec2a19ca0a4d933134e692b"
     },
     {
       "file": "management-local-state-export-plan.schema.json",
@@ -582,7 +638,7 @@
     },
     {
       "file": "management-local-state-export-result.schema.json",
-      "hash": "sha256:cfe43991505a4089d9d49050c3d5e04e7129bbd76c702829c5b89d2472e05317"
+      "hash": "sha256:2382a842aacf2ee28eef9e022aa40c912906be48602480c3b3ea0960ec2ddc06"
     },
     {
       "file": "management-local-state-import-plan.schema.json",
@@ -646,7 +702,7 @@
     },
     {
       "file": "ipc.schema.json",
-      "hash": "sha256:1f893e920c302c3f40a57755bc3fae11a999054ced5ed0473c4012c077be40cb"
+      "hash": "sha256:39443c3be526cb2bebfe7ec17455e30307efd1f54fa588bddaad388ee99db19e"
     },
     {
       "file": "mcp-star-tool-search.input.schema.json",
@@ -662,7 +718,7 @@
     },
     {
       "file": "mcp-star-tool-call.input.schema.json",
-      "hash": "sha256:b7da00d771e919c10723c39503ae0425e6e20643e0ee0076e7a85ec15723367b"
+      "hash": "sha256:ba4136c9aa5d7f507fc90c7992e60596ebdad41394fcf002b5078e3267149c51"
     },
     {
       "file": "mcp-star-tool-operation-get.input.schema.json",
@@ -678,31 +734,31 @@
     },
     {
       "file": "mcp-tool-result.schema.json",
-      "hash": "sha256:47de23dba0ae25a4f60f4d50b489c1984a617367400af7be0d5ddca212628b26"
+      "hash": "sha256:b85e71ebe8f55c76153748bbcd89d839b44c8a6ade1b025620df7a9c26e70480"
     },
     {
       "file": "mcp-star-tool-call-read-closed.input.schema.json",
-      "hash": "sha256:6687d0472af39d133c3cee55b52d5ba4e76a4911e6b81cd4965c53dd5e77eec0"
+      "hash": "sha256:1c801304521bb2be212245a8eb0092e27ece8ea419ba5fff52959d078e178d6c"
     },
     {
       "file": "mcp-star-tool-call-read-open.input.schema.json",
-      "hash": "sha256:9860a13b276ec77b7f88c7e6c6f56321bb54c92fff36a2417240c8764af75e75"
+      "hash": "sha256:4d81262a6a51a17646e5f4fced6aa8b2132b3362629c94de577bbad69feeb3aa"
     },
     {
       "file": "mcp-star-tool-call-write-closed.input.schema.json",
-      "hash": "sha256:ed19f164e03bb9b0dc4d441de9230975e51fde91fb76705b42636b93d400d700"
+      "hash": "sha256:d96be12ba48c3a9d55c4f60dcc811423838de2d1aca40318ef064871b4fb42ef"
     },
     {
       "file": "mcp-star-tool-call-destructive-closed.input.schema.json",
-      "hash": "sha256:b2dc1a320c2f2e6071a969ef50b28560b772928454ad6c1f6d0e9f5ee7470ed6"
+      "hash": "sha256:cf1d945a6906b313b634820db82ddeb80e37c88d59bf1bcfe874281e41139436"
     },
     {
       "file": "mcp-star-tool-call-write-open.input.schema.json",
-      "hash": "sha256:fde881204144c5e71953e5cf0b4359b2c28d13208e5e0a650da273841a7267f1"
+      "hash": "sha256:9ad74fe1436e43832370ef148c10e1946ab6debdbc7124768b105d3bfe64f0a5"
     },
     {
       "file": "mcp-star-tool-call-destructive-open.input.schema.json",
-      "hash": "sha256:1e2644620e407a6255610b2ea66b4a937fa210ca6db5d817d0233a20e8889ebf"
+      "hash": "sha256:437b63b21a435a15048e063b1eb6e30aab3ddabffec4565f127926fbfc743629"
     },
     {
       "file": "mcp-star-tool-search.result.schema.json",

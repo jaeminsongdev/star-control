@@ -11,6 +11,7 @@ use std::{
 };
 
 use star_contracts::{
+    config_v1::ConfigOverrideV1,
     ids::RequestId,
     ipc::{IpcResponse, IpcStatus},
 };
@@ -26,7 +27,7 @@ star tools probe <package-id> [--executable <id>] [--json]\n\
 star tools trust <package-id> --manifest-hash <sha256> [--expires <rfc3339>] [--json]\n\
 star tools revoke <package-id> [--cancel-running] --reason <text> [--json]\n\
 star tools scaffold <exe-path> --output <toml-path>\n\
-star tools call <tool-id> <descriptor-sha256> <arguments-json> --lane read_closed|read_open|write_closed|write_open|destructive_closed|destructive_open [--wait auto|accepted|completed] [--timeout-ms <milliseconds>] [--idempotency <key>] [--json]\n\
+star tools call <tool-id> <descriptor-sha256> <arguments-json> --lane read_closed|read_open|write_closed|write_open|destructive_closed|destructive_open [--goal <goal-id>] [--wait auto|accepted|completed] [--timeout-ms <milliseconds>] [--idempotency <key>] [--config-overrides <typed-overrides-json>] [--json]\n\
 star approvals resolve <approval-id> <scope-sha256> <approve|deny> [--reason <text>] [--json]\n\
 star operations get <operation-id> [--after-sequence <n>] [--wait-ms <milliseconds>] [--json]\n\
 star operations cancel <operation-id> [--reason <text>] [--json]\n\
@@ -78,6 +79,7 @@ star registry status <project-id> [--manifest <project-relative-path>] [--json]\
 star contract snapshot <project-id> <snapshot-id> --role baseline|current [--source-revision <git-revision>] [--manifest <project-relative-path>] [--registry-snapshot <ref>] [--revision <n>] [--json]\n\
 star contract compare <project-id> <report-id> <baseline-snapshot-id> <current-snapshot-id> [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
 star docs check <project-id> <snapshot-id> --registrations <json-file> [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
+star config effective [--json]\n\
 star config trace <project-id> <trace-id> --input <json-file> [--revision <n>] [--json]\n\
 star environment fingerprint <project-id> <snapshot-id> [--revision <n>] [--json]\n\
 star project doctor <project-id> <report-id> <environment-snapshot-id> --input <json-file> [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
@@ -133,13 +135,23 @@ star change-bundle recovery apply <project-id> <plan-id> --approve <sha256> --pe
 star release candidate create <project-id> <candidate-json> [--json]\n\
 star release artifacts verify <project-id> <release-manifest-id> <artifacts-json> [--json]\n\
 star release verification record <project-id> <release-manifest-id> <verification-json> [--json]\n\
-star release promote|show|status <release-manifest-id> [--json]\n\
-star release lifecycle publish <project-id> <lifecycle-id> <evidence-json> [--revision <n>] [--json]\n\
+star release promote|show|status|audit <release-manifest-id> [--json]\n\
+star release lifecycle publish <project-id> <lifecycle-id> <release-manifest-id> <effect-receipt-id> <evidence-json> [--revision <n>] [--json]\n\
 star release publish prepare <release-manifest-id> <before-snapshot-id> [--json]\n\
 star release publish authorize <release-manifest-id> <approval-id> [--json]\n\
 star release publish apply <release-manifest-id> [--json]\n\
+star cost record <project-id> <cost-record-json> [--json]\n\
+star cost show <project-id> <cost-record-id> [--json]\n\
+star budget snapshot <project-id> <budget-input-json> [--json]\n\
+star budget show <project-id> <snapshot-id> [--json]\n\
 star evaluation run <project-id> <input-json> [--json]\n\
 star evaluation show <evaluation-run-id> [--json]\n\
+star evaluation case publish <project-id> <source-ref> [--json]\n\
+star evaluation case show <project-id> <case-id> <case-version> [--json]\n\
+star evaluation policy publish <project-id> <source-ref> [--json]\n\
+star evaluation policy show <project-id> <policy-id> <policy-version> [--json]\n\
+star evaluation compare|recommend <evaluation-run-id> [--json]\n\
+star evaluation radar <project-id> <evaluation-run-id> <snapshot-id> --input <json-file> [--revision <n>] [--json]\n\
 star evaluation catalog publish <item-json> [--revision <n>] [--json]\n\
 star evaluation catalog transition <record-id> <deprecated|retired|rejected> [--trial-candidate] [--revision <n>] [--json]\n\
 star profile list [--json]\n\
@@ -183,6 +195,9 @@ star management migrate project-v1-v2 rollback <plan-json> --approve <sha256> [-
 star management migrate patch-v1-v2 plan <project-id> [--json]\n\
 star management migrate patch-v1-v2 apply <plan-json> --approve <sha256> [--json]\n\
 star management migrate patch-v1-v2 rollback <plan-json> --approve <sha256> [--json]\n\
+star management migrate change-plan-v1-v2 plan <project-id> <task-spec-id> [--json]\n\
+star management migrate change-plan-v1-v2 apply <plan-json> --approve <sha256> [--json]\n\
+star management migrate change-plan-v1-v2 rollback <plan-json> --approve <sha256> [--json]\n\
 star installation finalize --architecture x64|arm64 [--replace-existing] [--json]\n\
 star installation bridge initialize --state-generation <id> [--json]\n\
 star installation status [--json]\n\
@@ -225,7 +240,13 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
         [first, second, tail @ ..] if first == "tools" && second == "call" => {
             let (positionals, options) = parse_tail(
                 tail,
-                &["--lane", "--wait", "--timeout-ms", "--idempotency"],
+                &[
+                    "--lane",
+                    "--goal",
+                    "--wait",
+                    "--timeout-ms",
+                    "--idempotency",
+                ],
                 &[],
             )?;
             require_positionals(&positionals, 3, "tools call")?;
@@ -270,6 +291,11 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             if let Some(value) = &idempotency_key {
                 validate_idempotency_key(value)?;
             }
+            let goal_id = options.get("--goal").and_then(Clone::clone);
+            if let Some(goal_id) = &goal_id {
+                star_contracts::ids::GoalId::parse(goal_id.clone())
+                    .map_err(|_| "--goal must be a valid durable GoalId".to_owned())?;
+            }
             let mcp_request_id = RequestId::new();
             Ok(Parsed {
                 command: "tool.invoke".to_owned(),
@@ -285,6 +311,7 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                     "wait_mode":wait_mode,
                     "requested_timeout_ms":requested_timeout_ms,
                     "idempotency_key":idempotency_key,
+                    "goal_id":goal_id,
                 }),
                 json,
             })
@@ -1435,6 +1462,11 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                 json,
             })
         }
+        [first, second] if first == "config" && second == "effective" => Ok(Parsed {
+            command: "config.effective".to_owned(),
+            payload: serde_json::json!({}),
+            json,
+        }),
         [first, second, tail @ ..] if first == "config" && second == "trace" => {
             let (positionals, options) = parse_tail(tail, &["--input", "--revision"], &[])?;
             require_positionals(&positionals, 2, "config trace")?;
@@ -2515,10 +2547,11 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             })
         }
         [first, second, tail @ ..]
-            if first == "release" && matches!(second.as_str(), "promote" | "show" | "status") =>
+            if first == "release"
+                && matches!(second.as_str(), "promote" | "show" | "status" | "audit") =>
         {
             let (positionals, _) = parse_tail(tail, &[], &[])?;
-            require_positionals(&positionals, 1, "release promote|show|status")?;
+            require_positionals(&positionals, 1, "release promote|show|status|audit")?;
             validate_development_id(&positionals[0], "release-manifest-id")?;
             Ok(Parsed {
                 command: format!("release.{second}"),
@@ -2530,10 +2563,12 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             if first == "release" && second == "lifecycle" && third == "publish" =>
         {
             let (positionals, options) = parse_tail(tail, &["--revision"], &[])?;
-            require_positionals(&positionals, 3, "release lifecycle publish")?;
+            require_positionals(&positionals, 5, "release lifecycle publish")?;
             validate_project_id(&positionals[0], "release lifecycle publish")?;
             validate_development_id(&positionals[1], "lifecycle-id")?;
-            let evidence = read_bounded_json_file(&positionals[2])?;
+            validate_development_id(&positionals[2], "release-manifest-id")?;
+            validate_development_id(&positionals[3], "effect-receipt-id")?;
+            let evidence = read_bounded_json_file(&positionals[4])?;
             evidence
                 .as_object()
                 .ok_or_else(|| "lifecycle evidence JSON must be an object".to_owned())?;
@@ -2542,6 +2577,8 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                 payload: serde_json::json!({
                     "project_id":positionals[0],
                     "lifecycle_id":positionals[1],
+                    "release_manifest_id":positionals[2],
+                    "effect_receipt_id":positionals[3],
                     "evidence":evidence,
                     "record_revision":development_revision(&options)?,
                 }),
@@ -2585,6 +2622,118 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                 json,
             })
         }
+        [first, second, tail @ ..] if first == "cost" && second == "record" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "cost record")?;
+            validate_project_id(&positionals[0], "cost record")?;
+            let record = read_bounded_json_file(&positionals[1])?;
+            serde_json::from_value::<star_contracts::release_v2::CostRecordV1>(record.clone())
+                .map_err(|_| "cost record JSON has an invalid shape".to_owned())?;
+            Ok(Parsed {
+                command: "cost.record".to_owned(),
+                payload: serde_json::json!({"project_id":positionals[0],"record":record}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "cost" && second == "show" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "cost show")?;
+            validate_project_id(&positionals[0], "cost show")?;
+            validate_development_id(&positionals[1], "cost-record-id")?;
+            Ok(Parsed {
+                command: "cost.show".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "cost_record_id":positionals[1],
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "budget" && second == "snapshot" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "budget snapshot")?;
+            validate_project_id(&positionals[0], "budget snapshot")?;
+            let input = read_bounded_json_file(&positionals[1])?;
+            input
+                .as_object()
+                .ok_or_else(|| "budget snapshot input JSON must be an object".to_owned())?;
+            Ok(Parsed {
+                command: "budget.snapshot".to_owned(),
+                payload: serde_json::json!({"project_id":positionals[0],"input":input}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "budget" && second == "show" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "budget show")?;
+            validate_project_id(&positionals[0], "budget show")?;
+            validate_development_id(&positionals[1], "budget-snapshot-id")?;
+            Ok(Parsed {
+                command: "budget.show".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "snapshot_id":positionals[1],
+                }),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "evaluation"
+                && matches!(second.as_str(), "case" | "policy")
+                && third == "publish" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "evaluation case|policy publish")?;
+            validate_project_id(&positionals[0], "evaluation case|policy publish")?;
+            validate_evaluation_source_ref(&positionals[1])?;
+            let document = read_bounded_json_file(&positionals[1])?;
+            if second == "case" {
+                serde_json::from_value::<star_contracts::release_v2::EvaluationCaseDefinitionV1>(
+                    document,
+                )
+                .map_err(|_| "evaluation case definition JSON has an invalid shape".to_owned())?;
+            } else {
+                serde_json::from_value::<star_contracts::release_v2::EvaluationPolicyV1>(document)
+                    .map_err(|_| "evaluation policy JSON has an invalid shape".to_owned())?;
+            }
+            Ok(Parsed {
+                command: format!("evaluation.{second}.publish"),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "source_ref":positionals[1],
+                }),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "evaluation"
+                && matches!(second.as_str(), "case" | "policy")
+                && third == "show" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 3, "evaluation case|policy show")?;
+            validate_project_id(&positionals[0], "evaluation case|policy show")?;
+            validate_development_id(&positionals[1], "evaluation source id")?;
+            validate_development_id(&positionals[2], "evaluation source version")?;
+            let payload = if second == "case" {
+                serde_json::json!({
+                    "project_id":positionals[0],
+                    "case_id":positionals[1],
+                    "case_version":positionals[2],
+                })
+            } else {
+                serde_json::json!({
+                    "project_id":positionals[0],
+                    "policy_id":positionals[1],
+                    "policy_version":positionals[2],
+                })
+            };
+            Ok(Parsed {
+                command: format!("evaluation.{second}.show"),
+                payload,
+                json,
+            })
+        }
         [first, second, tail @ ..] if first == "evaluation" && second == "run" => {
             let (positionals, _) = parse_tail(tail, &[], &[])?;
             require_positionals(&positionals, 2, "evaluation run")?;
@@ -2606,6 +2755,39 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             Ok(Parsed {
                 command: "evaluation.show".to_owned(),
                 payload: serde_json::json!({"evaluation_run_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, tail @ ..]
+            if first == "evaluation" && matches!(second.as_str(), "compare" | "recommend") =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "evaluation compare|recommend")?;
+            validate_development_id(&positionals[0], "evaluation-run-id")?;
+            Ok(Parsed {
+                command: format!("evaluation.{second}"),
+                payload: serde_json::json!({"evaluation_run_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "evaluation" && second == "radar" => {
+            let (positionals, options) = parse_tail(tail, &["--input", "--revision"], &[])?;
+            require_positionals(&positionals, 3, "evaluation radar")?;
+            validate_project_id(&positionals[0], "evaluation radar")?;
+            validate_development_id(&positionals[1], "evaluation-run-id")?;
+            validate_development_id(&positionals[2], "snapshot-id")?;
+            let input = read_bounded_json_file(&required_option(&options, "--input")?)?;
+            require_json_object_keys(&input, &["evaluation_time", "valid_until"])?;
+            Ok(Parsed {
+                command: "evaluation.radar".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "evaluation_run_id":positionals[1],
+                    "snapshot_id":positionals[2],
+                    "evaluation_time":input.get("evaluation_time"),
+                    "valid_until":input.get("valid_until"),
+                    "revision":development_revision(&options)?,
+                }),
                 json,
             })
         }
@@ -3213,6 +3395,67 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
         [first, second, third, fourth, tail @ ..]
             if first == "management"
                 && second == "migrate"
+                && third == "change-plan-v1-v2"
+                && fourth == "plan" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "management migrate change-plan-v1-v2 plan")?;
+            star_contracts::ids::ProjectId::parse(positionals[0].clone()).map_err(|_| {
+                "management migrate change-plan-v1-v2 plan requires a valid ProjectId".to_owned()
+            })?;
+            star_contracts::ids::TaskSpecId::parse(positionals[1].clone()).map_err(|_| {
+                "management migrate change-plan-v1-v2 plan requires a valid TaskSpecId".to_owned()
+            })?;
+            Ok(Parsed {
+                command: "management.migrate.change-plan-v1-v2.plan".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "task_spec_id":positionals[1],
+                }),
+                json,
+            })
+        }
+        [first, second, third, fourth, tail @ ..]
+            if first == "management"
+                && second == "migrate"
+                && third == "change-plan-v1-v2"
+                && matches!(fourth.as_str(), "apply" | "rollback") =>
+        {
+            let (positionals, options) = parse_tail(tail, &["--approve"], &[])?;
+            require_positionals(
+                &positionals,
+                1,
+                "management migrate change-plan-v1-v2 apply|rollback",
+            )?;
+            let approval = required_option(&options, "--approve")?;
+            approval
+                .parse::<star_contracts::Sha256Hash>()
+                .map_err(|_| {
+                    "--approve must be the exact ChangePlan migration plan sha256".to_owned()
+                })?;
+            let plan = serde_json::from_value::<
+                star_contracts::planning::ChangePlanV1ToV2MigrationPlan,
+            >(read_bounded_json_file(&positionals[0])?)
+            .map_err(|_| "plan JSON must be ChangePlanV1ToV2MigrationPlan".to_owned())?;
+            let sealed = plan
+                .clone()
+                .seal()
+                .map_err(|_| "ChangePlan migration plan violates invariants".to_owned())?;
+            if sealed != plan {
+                return Err("ChangePlan migration plan is not canonical".to_owned());
+            }
+            Ok(Parsed {
+                command: format!("management.migrate.change-plan-v1-v2.{fourth}"),
+                payload: serde_json::json!({
+                    "plan":plan,
+                    "approved_plan_fingerprint":approval,
+                }),
+                json,
+            })
+        }
+        [first, second, third, fourth, tail @ ..]
+            if first == "management"
+                && second == "migrate"
                 && third == "patch-v1-v2"
                 && matches!(fourth.as_str(), "apply" | "rollback") =>
         {
@@ -3645,6 +3888,12 @@ fn validate_development_id(value: &str, label: &str) -> Result<(), String> {
     }
 }
 
+fn validate_evaluation_source_ref(value: &str) -> Result<(), String> {
+    star_contracts::management::ProjectPathRef::parse(value.to_owned())
+        .map(|_| ())
+        .map_err(|_| "evaluation source-ref must be a safe project-relative path".to_owned())
+}
+
 fn development_manifest_path(options: &BTreeMap<String, Option<String>>) -> Result<String, String> {
     let path = options
         .get("--manifest")
@@ -3778,6 +4027,45 @@ fn read_bounded_json_file(value: &str) -> Result<serde_json::Value, String> {
         .map_err(|_| "management plan JSON is not valid UTF-8".to_owned())?;
     star_contracts::parse_no_duplicate_keys(&source)
         .map_err(|_| "management plan JSON is invalid or has duplicate keys".to_owned())
+}
+
+fn take_global_config_overrides(args: &mut Vec<String>) -> Result<Vec<ConfigOverrideV1>, String> {
+    let positions = args
+        .iter()
+        .enumerate()
+        .filter_map(|(index, value)| (value == "--config-overrides").then_some(index))
+        .collect::<Vec<_>>();
+    if positions.is_empty() {
+        return Ok(Vec::new());
+    }
+    if positions.len() != 1 {
+        return Err("--config-overrides may be supplied only once".to_owned());
+    }
+    let index = positions[0];
+    let path = args
+        .get(index + 1)
+        .filter(|value| !value.starts_with("--"))
+        .cloned()
+        .ok_or_else(|| "--config-overrides requires a JSON file".to_owned())?;
+    let value = read_bounded_json_file(&path)?;
+    let overrides: Vec<ConfigOverrideV1> = serde_json::from_value(value).map_err(|_| {
+        "--config-overrides must contain an array of typed {key,value} overrides".to_owned()
+    })?;
+    let keys = overrides
+        .iter()
+        .map(|config_override| config_override.key.as_str())
+        .collect::<Vec<_>>();
+    if overrides.is_empty()
+        || overrides.len() > 128
+        || keys
+            .iter()
+            .enumerate()
+            .any(|(index, key)| keys[..index].contains(key))
+    {
+        return Err("--config-overrides must contain 1..128 unique typed keys".to_owned());
+    }
+    args.drain(index..=index + 1);
+    Ok(overrides)
 }
 
 fn install_directory() -> Result<PathBuf, String> {
@@ -3953,7 +4241,7 @@ async fn call_controller_command(
 
 #[tokio::main]
 async fn main() {
-    let raw: Vec<_> = std::env::args().skip(1).collect();
+    let mut raw: Vec<_> = std::env::args().skip(1).collect();
     if raw.len() == 1 && matches!(raw[0].as_str(), "--version" | "-V") {
         println!("{VERSION}");
         return;
@@ -3966,16 +4254,35 @@ async fn main() {
         println!("{HELP}");
         return;
     }
-    if let Some(exit) = local_commands::dispatch(&raw).await {
+    let config_overrides = match take_global_config_overrides(&mut raw) {
+        Ok(overrides) => overrides,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+    };
+    if config_overrides.is_empty()
+        && let Some(exit) = local_commands::dispatch(&raw).await
+    {
         std::process::exit(exit);
     }
-    let parsed = match parse(&raw) {
+    let mut parsed = match parse(&raw) {
         Ok(parsed) => parsed,
         Err(error) => {
             eprintln!("{error}");
             std::process::exit(2);
         }
     };
+    if !config_overrides.is_empty() {
+        let Some(payload) = parsed.payload.as_object_mut() else {
+            eprintln!("command payload cannot carry typed config overrides");
+            std::process::exit(2);
+        };
+        payload.insert(
+            "config_overrides".to_owned(),
+            serde_json::to_value(config_overrides).expect("typed overrides serialize"),
+        );
+    }
     let (bootstrap, config) = match install_directory().and_then(|directory| {
         let bootstrap = VerifiedControllerImage::from_install_directory(&directory)
             .map_err(|error| error.to_string())?;
@@ -4186,6 +4493,7 @@ mod tests {
         )
         .unwrap();
         let descriptor = star_contracts::Sha256Hash::digest(b"descriptor");
+        let goal = star_contracts::ids::GoalId::new();
         let call = parse(&args(&[
             "tools",
             "call",
@@ -4196,10 +4504,13 @@ mod tests {
             "write_closed",
             "--wait",
             "completed",
+            "--goal",
+            goal.as_str(),
         ]))
         .unwrap();
         assert_eq!(call.command, "tool.invoke");
         assert_eq!(call.payload["mcp_risk_lane"], "write_closed");
+        assert_eq!(call.payload["goal_id"], goal.as_str());
 
         let project = star_contracts::ids::ProjectId::new();
         let operation = star_contracts::ids::OperationId::new();
@@ -4236,6 +4547,33 @@ mod tests {
         ]))
         .unwrap();
         assert_eq!(resolve.command, "approval.resolve");
+    }
+
+    #[test]
+    fn global_typed_config_override_file_is_bounded_and_removed_before_command_parsing() {
+        let path = std::env::temp_dir().join(format!(
+            "star-cli-config-overrides-{}.json",
+            star_contracts::ids::RequestId::new()
+        ));
+        std::fs::write(
+            &path,
+            serde_json::to_vec(&serde_json::json!([{
+                "key":"scan.max_files",
+                "value":{"kind":"integer","value":1000}
+            }]))
+            .unwrap(),
+        )
+        .unwrap();
+        let mut raw = args(&[
+            "config",
+            "effective",
+            "--config-overrides",
+            path.to_str().unwrap(),
+        ]);
+        let overrides = take_global_config_overrides(&mut raw).unwrap();
+        assert_eq!(overrides.len(), 1);
+        assert_eq!(raw, args(&["config", "effective"]));
+        assert_eq!(parse(&raw).unwrap().command, "config.effective");
     }
 
     #[test]
@@ -5161,6 +5499,17 @@ mod tests {
             release.payload["release_manifest_id"],
             "rel_01KY0000000000000000000000"
         );
+        let audit = parse(&[
+            "release".into(),
+            "audit".into(),
+            "rel_01KY0000000000000000000000".into(),
+        ])
+        .unwrap();
+        assert_eq!(audit.command, "release.audit");
+        assert_eq!(
+            audit.payload["release_manifest_id"],
+            "rel_01KY0000000000000000000000"
+        );
 
         let transition = parse(&[
             "evaluation".into(),
@@ -5222,6 +5571,14 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn effective_config_command_is_controller_owned_and_argument_free() {
+        let effective = parse(&["config".into(), "effective".into()]).unwrap();
+        assert_eq!(effective.command, "config.effective");
+        assert_eq!(effective.payload, serde_json::json!({}));
+        assert!(parse(&["config".into(), "effective".into(), "unexpected".into(),]).is_err());
     }
 
     fn response(status: IpcStatus, code: Option<&str>) -> IpcResponse {

@@ -472,6 +472,11 @@ pub struct ScanPolicy {
     pub max_files: usize,
     pub max_total_bytes: u64,
     pub max_parallel_files: usize,
+    /// Optional project-relative glob allowlist. An empty list means the whole
+    /// checkout remains eligible.
+    pub include_path_patterns: Vec<String>,
+    /// Project-relative glob denylist applied after the allowlist.
+    pub exclude_path_patterns: Vec<String>,
     /// Registered nested checkout roots, relative to this checkout, whose bytes
     /// belong to another Project/Checkout partition.
     pub excluded_relative_roots: Vec<ProjectPathRef>,
@@ -488,6 +493,8 @@ impl Default for ScanPolicy {
             max_files: 200_000,
             max_total_bytes: 8 * 1024 * 1024 * 1024,
             max_parallel_files: 4,
+            include_path_patterns: Vec::new(),
+            exclude_path_patterns: vec![".ai-runs/**".to_owned(), ".git/**".to_owned()],
             excluded_relative_roots: Vec::new(),
         }
     }
@@ -828,9 +835,10 @@ pub fn observe_project(
     let paths: Vec<_> = paths
         .into_iter()
         .filter(|path| {
-            path.strip_prefix(root)
-                .ok()
-                .is_none_or(|relative| !is_excluded_relative_path(relative, policy))
+            path.strip_prefix(root).ok().is_none_or(|relative| {
+                is_included_relative_path(relative, policy)
+                    && !is_excluded_relative_path(relative, policy)
+            })
         })
         .collect();
     if paths.len() > policy.max_files {
@@ -1117,15 +1125,100 @@ fn filesystem_paths(root: &Path, policy: &ScanPolicy) -> Result<Vec<PathBuf>, Pr
 }
 
 fn is_excluded_relative_path(relative: &Path, policy: &ScanPolicy) -> bool {
-    let relative_text = relative
-        .components()
-        .filter_map(|component| component.as_os_str().to_str())
-        .collect::<Vec<_>>()
-        .join("/");
+    let Some(relative_text) = normalized_relative_text(relative) else {
+        return true;
+    };
     policy.excluded_relative_roots.iter().any(|excluded| {
         relative_text == excluded.as_str()
             || relative_text.starts_with(&format!("{}/", excluded.as_str()))
-    })
+    }) || policy
+        .exclude_path_patterns
+        .iter()
+        .any(|pattern| project_glob_matches(pattern, &relative_text))
+}
+
+fn is_included_relative_path(relative: &Path, policy: &ScanPolicy) -> bool {
+    if policy.include_path_patterns.is_empty() {
+        return true;
+    }
+    let Some(relative_text) = normalized_relative_text(relative) else {
+        return false;
+    };
+    policy
+        .include_path_patterns
+        .iter()
+        .any(|pattern| project_glob_matches(pattern, &relative_text))
+}
+
+fn normalized_relative_text(relative: &Path) -> Option<String> {
+    relative
+        .components()
+        .map(|component| component.as_os_str().to_str())
+        .collect::<Option<Vec<_>>>()
+        .map(|components| components.join("/"))
+}
+
+pub fn valid_project_relative_glob(pattern: &str) -> bool {
+    !pattern.is_empty()
+        && pattern.len() <= 256
+        && !pattern.contains(['\\', '\0'])
+        && !pattern.starts_with('/')
+        && !pattern
+            .split('/')
+            .any(|segment| segment == ".." || segment.is_empty())
+        && pattern
+            .bytes()
+            .all(|byte| byte.is_ascii_graphic() && byte != b'[' && byte != b']')
+}
+
+fn project_glob_matches(pattern: &str, value: &str) -> bool {
+    if !valid_project_relative_glob(pattern) {
+        return false;
+    }
+    if let Some(prefix) = pattern.strip_suffix("/**")
+        && value == prefix
+    {
+        return true;
+    }
+    let pattern = pattern.as_bytes();
+    let value = value.as_bytes();
+    let mut memo = vec![None; (pattern.len() + 1) * (value.len() + 1)];
+    fn matches_at(
+        pattern: &[u8],
+        value: &[u8],
+        pattern_index: usize,
+        value_index: usize,
+        memo: &mut [Option<bool>],
+    ) -> bool {
+        let width = value.len() + 1;
+        let slot = pattern_index * width + value_index;
+        if let Some(result) = memo[slot] {
+            return result;
+        }
+        let result = if pattern_index == pattern.len() {
+            value_index == value.len()
+        } else if pattern[pattern_index] == b'*' && pattern.get(pattern_index + 1) == Some(&b'*') {
+            matches_at(pattern, value, pattern_index + 2, value_index, memo)
+                || (value_index < value.len()
+                    && matches_at(pattern, value, pattern_index, value_index + 1, memo))
+        } else if pattern[pattern_index] == b'*' {
+            matches_at(pattern, value, pattern_index + 1, value_index, memo)
+                || (value_index < value.len()
+                    && value[value_index] != b'/'
+                    && matches_at(pattern, value, pattern_index, value_index + 1, memo))
+        } else if pattern[pattern_index] == b'?' {
+            value_index < value.len()
+                && value[value_index] != b'/'
+                && matches_at(pattern, value, pattern_index + 1, value_index + 1, memo)
+        } else {
+            value_index < value.len()
+                && pattern[pattern_index] == value[value_index]
+                && matches_at(pattern, value, pattern_index + 1, value_index + 1, memo)
+        };
+        memo[slot] = Some(result);
+        result
+    }
+    matches_at(pattern, value, 0, 0, &mut memo)
 }
 
 fn relative_path(root: &Path, path: &Path) -> Result<ProjectPathRef, ProjectError> {
@@ -1195,6 +1288,32 @@ fn language_for(path: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_relative_globs_are_bounded_and_apply_include_then_exclude() {
+        assert!(valid_project_relative_glob("src/**"));
+        assert!(valid_project_relative_glob("**/*.rs"));
+        assert!(!valid_project_relative_glob("../src/**"));
+        assert!(!valid_project_relative_glob("C:\\src\\**"));
+        assert!(project_glob_matches("src/**", "src/lib.rs"));
+        assert!(project_glob_matches("**/*.rs", "src/lib.rs"));
+        assert!(!project_glob_matches("src/*.rs", "src/nested/lib.rs"));
+
+        let policy = ScanPolicy {
+            include_path_patterns: vec!["src/**".to_owned()],
+            exclude_path_patterns: vec!["src/generated/**".to_owned()],
+            ..ScanPolicy::default()
+        };
+        assert!(is_included_relative_path(Path::new("src/lib.rs"), &policy));
+        assert!(!is_included_relative_path(
+            Path::new("docs/readme.md"),
+            &policy
+        ));
+        assert!(is_excluded_relative_path(
+            Path::new("src/generated/out.rs"),
+            &policy
+        ));
+    }
 
     fn git(root: &Path, arguments: &[&str]) {
         let status = hidden_command("git")

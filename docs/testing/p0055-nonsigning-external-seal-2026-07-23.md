@@ -1,5 +1,7 @@
 # P-0055 비서명 외부 Gate·복구 Slice 봉인 감사
 
+> 이 문서는 exact source `0d0eca9a`의 historical seal이다. 이후 source의 기능·복구·외부 Gate 판정은 [P-0056 최신 기능·복구 감사](p0056-current-functional-recovery-audit-2026-07-24.md)를 따른다. 아래 artifact·hash·remote readback을 새 source에 재사용하지 않는다.
+
 ## 목적과 판정 경계
 
 이 문서는 `main` 기준 P-0054 내부 제품 구현 위에서 서명을 제외한 외부 실행 경로를 실제 adapter·Operation·영수증·도메인 상태·원격 readback까지 닫는 P-0055의 진행·최종 증거 정본이다. 사용자는 package/dependency 설치, network, disposable install/update/repair/uninstall, GitHub branch/tag/draft/upload/readback/cleanup과 ARM64 교차 simulation을 승인했다.

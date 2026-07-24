@@ -4,7 +4,7 @@
 
 이 문서는 Star-Control 0단계인 공통 개발 관리 계약과 로컬 관리 DB 기반의 의미 정본이다. 이후 scanner, validator, patch 도구, CLI와 Codex 진입점은 이 계약을 공유한다.
 
-현재 상태는 **설계 확정, P0 첫 수직 Slice와 P-0054 실사용 전 복구 Slice 구현·로컬 검증 완료**다. P-0054는 typed backup/restore/rebuild/local-state plan·apply, recovery-only Controller·CLI, active-set 원자 활성화와 disposable 손상 복구 Corpus까지 구현했다. 이 문서는 전체 목표 계약을 소유하며 P-0054보다 넓은 1~11단계 lifecycle·query 항목은 [최종 구현 로드맵](../roadmap/final-implementation.md)과 `PLANS.md`에서 후속 범위로 구분한다. 저장소 topology와 운영 기본값은 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)이 확정한다.
+현재 상태는 **설계 확정, P0와 P-0056 실사용 전 복구·M1~M11 공통 경로 구현 및 로컬 검증 완료**다. typed backup/restore/rebuild/local-state plan·apply, recovery-only Controller·CLI, active-set 원자 활성화, v1/v2 local decision 보존과 disposable 손상 복구 Corpus가 제품 경로에 연결돼 있다. 현재 source와 외부 Gate의 exact 판정은 [P-0056 감사](../testing/p0056-current-functional-recovery-audit-2026-07-24.md)와 `PLANS.md`가 소유한다. 저장소 topology와 운영 기본값은 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)이 확정한다.
 
 이 문서가 소유하는 범위는 다음과 같다.
 
@@ -123,7 +123,7 @@ star MCP ───────┘                                 │
 
 ### application command 최소 집합
 
-아래 `mutation`은 local management projection·decision·evidence 변경을 뜻한다. Project source·Git metadata 변경 여부와는 다르다. 1단계의 `project.discover`부터 `graph.neighbors`까지, 2단계 planning과 5단계 Registry query·change-plan command는 모두 `source_effect=none`이며 DTO와 dependency graph에 patch·write-capable filesystem·Git mutation port가 없다. source 변경은 별도 M4 PatchApplication만 수행한다. 다음 표의 1·2·5단계 행은 **목표 계약이며 현재 구현 완료를 뜻하지 않는다**.
+아래 `mutation`은 local management projection·decision·evidence 변경을 뜻한다. Project source·Git metadata 변경 여부와는 다르다. 1단계의 `project.discover`부터 `graph.neighbors`까지, 2단계 planning과 5단계 Registry query·change-plan command는 모두 `source_effect=none`이며 DTO와 dependency graph에 patch·write-capable filesystem·Git mutation port가 없다. source 변경은 별도 M4 PatchApplication만 수행한다. P-0056 현재 source는 표의 1·2·5단계 Controller/CLI 경로를 구현하며, unavailable 외부 adapter나 stale subject를 성공으로 합성하지 않는다.
 
 | command | 주요 입력 | 성공 결과 | mutation |
 |---|---|---|---:|
@@ -382,7 +382,7 @@ Rule set fingerprint는 활성 Rule의 `rule_id`, `rule_version`, `definition_fi
 
 #### M3 Rule v2 target
 
-P0 Rule v1은 source Finding producer를 표현한다. M3의 test·architecture·hardcoding·docs·security와 validation meta Diagnostic도 같은 stable RuleRef를 사용해야 하므로 `star.rule` v2는 다음 conditional field를 추가한다. 이 target은 아직 Schema·migration·제품 code에 구현되지 않았다.
+P0 Rule v1은 source Finding producer를 표현한다. M3의 test·architecture·hardcoding·docs·security와 validation meta Diagnostic도 같은 stable RuleRef를 사용해야 하므로 `star.rule` v2는 다음 conditional field를 추가한다. P-0056 current source는 v2 Schema·fixture, deterministic v1 migration, runner Rule registry와 Validator Guard corpus를 구현한다.
 
 | 필드 | 필수 | 규칙 |
 |---|---:|---|
@@ -406,7 +406,7 @@ ScanRun의 `rule_set_fingerprint`에는 `scan_finding|both` Rule의 scan 의미�
 
 ScanRun은 한 snapshot과 rule set을 검사한 실행 사실이다.
 
-P0 v1의 아래 필드는 유지한다. 1단계 target은 여기에 `checkout_id`, `project_catalog_snapshot_id`, `requested_mode`, `effective_mode`, `analysis_input_fingerprint`, `decision_projection_fingerprint`, `index_config_fingerprint`, `classification_fingerprint`, `adapter_set_fingerprint`, partition별 status·coverage와 `code_index_snapshot_id`를 추가한다. target extension은 [Project Catalog·Code Index 계약](project-catalog-and-code-index.md)에서 소유하며 현재 Schema에 이미 존재하는 것으로 읽지 않는다.
+현재 `ScanRun`은 P0의 안정 실행 envelope를 유지하고 M1 세부를 한 record에 평탄화하지 않는다. `CodeIndexSnapshot`이 `scan_run_id`로 ScanRun에 결합되어 `checkout_id`, `project_catalog_snapshot_id`, scan mode, `analysis_input_fingerprint`, index/classification/adapter fingerprint, partition·coverage와 `code_index_snapshot_id`를 소유한다. `ProjectCatalogSnapshot`은 discovery scope/config와 Project·Checkout·workspace relation을, FindingView와 evidence binding은 decision projection revision을 소유한다. 세 record의 ID·source/config fingerprint 결합이 현재 M1 evidence이며 아래 ScanRun 필드만 보고 M1 coverage가 없다고 해석하지 않는다.
 
 | 필드 | 필수 | 규칙 |
 |---|---:|---|
@@ -546,7 +546,7 @@ shared suppression은 Git 선언이 정본이고 DB는 projection이다. local s
 
 #### M3 Suppression v2 target
 
-3단계 공통 Gate는 ValidationRun이 만든 Diagnostic에도 같은 예외 lifecycle을 사용한다. 따라서 `star.suppression` v2는 v1 Finding selector를 유지하면서 다음을 추가한다. 이 target은 아직 Schema·migration·제품 code에 구현되지 않았다.
+3단계 공통 Gate는 ValidationRun이 만든 Diagnostic에도 같은 예외 lifecycle을 사용한다. 따라서 `star.suppression` v2는 v1 Finding selector를 유지하면서 다음을 추가한다. P-0056 current source는 v2 Schema·fixture, deterministic v1 migration, revisioned repository·Gate evaluation과 portable recovery를 구현한다.
 
 | 필드 | 필수 | 규칙 |
 |---|---:|---|
@@ -632,7 +632,7 @@ Diagnostic false positive·accepted risk triage를 숨기지 않고 추적하기
 
 Disposition은 분류와 metric input이지 Gate 예외가 아니다. `false_positive|accepted_risk|deferred`여도 raw Finding·Diagnostic과 Gate effect를 바꾸지 않는다. blocking issue를 일시 허용하려면 별도 bounded Suppression ID·reason·expiry·approval이 필요하며 DiagnosticEvaluation이 두 ref를 모두 남긴다.
 
-v1→v2 migration은 Finding ID·fingerprint와 decision을 `subject_kind=finding`으로 lossless 이동한다. source fingerprint·scope를 증명하지 못한 active decision은 `stale`로 보존하고 현재 Diagnostic에 적용하지 않는다. 이 target과 migration은 아직 제품에 구현되지 않았다.
+v1→v2 migration은 Finding ID·fingerprint와 decision을 `subject_kind=finding`으로 lossless 이동한다. source fingerprint·scope를 증명하지 못한 active decision은 `stale`로 보존하고 현재 Diagnostic에 적용하지 않는다. P-0056은 이 pure migration, v2 Schema·fixture, revisioned repository와 local-state bundle v2 import/export를 구현했다. migration 자체가 과거 결정을 current Gate에 자동 승격하지는 않는다.
 
 ## 변경과 검증
 
@@ -684,7 +684,7 @@ ChangePlan은 source를 수정하지 않는다. workspace snapshot이나 recipe 
 
 #### 2단계 ChangePlan v2 target
 
-2단계 **변경 계획·영향 분석·affected 선택**은 사용자가 직접 지정한 변경도 표현해야 하므로 `star.change-plan` v2를 요구한다. 이 절은 **목표 계약이며 아직 Schema·DB migration·제품 code에 구현되지 않았다**. v1 row를 자동으로 일반 사용자 계획으로 재해석하지 않는다.
+2단계 **변경 계획·영향 분석·affected 선택**은 사용자가 직접 지정한 변경도 표현해야 하므로 `star.change-plan` v2를 요구한다. P-0056 현재 source는 v2 contract·Schema·fixture, planning repository와 Controller/CLI, v1→v2 plan/apply/rollback을 구현했다. v1 row는 자동으로 일반 사용자 계획으로 재해석하지 않고, missing lineage는 blocked/replan 대상으로 보존한다.
 
 v2는 v1 lifecycle을 유지하면서 다음 필드를 추가·변경한다.
 
@@ -792,7 +792,7 @@ M4 `star.patch-set` v2는 적용 상태를 갱신하지 않는 immutable proposa
 
 ValidationResult가 pass여도 source revision이나 config fingerprint가 달라진 새 workspace에 재사용할 수 없다.
 
-M3 target은 위 v1 field를 유지하면서 [EvidenceSubjectBinding](validation-and-evidence.md#evidence-subject-binding), `freshness`, `stability`, 전체 attempt summary와 normalizer fingerprint를 추가한다. exact shape와 `clean_pass|ratchet_satisfied` 분리는 [검사·완료·증거 계약](validation-and-evidence.md#validationresult-계약)이 소유한다. Baseline·Suppression은 이 record의 raw outcome을 변경하지 않는다.
+현재 M3 v2는 위 v1 compatibility field를 유지하면서 [EvidenceSubjectBinding](validation-and-evidence.md#evidence-subject-binding), `freshness`, `stability`, 전체 attempt summary와 normalizer fingerprint를 구현한다. exact shape와 `clean_pass|ratchet_satisfied` 분리는 [검사·완료·증거 계약](validation-and-evidence.md#validationresult-계약)이 소유한다. Baseline·Suppression은 이 record의 raw outcome을 변경하지 않는다.
 
 ### GateDecision과 ArtifactRef 연결
 
@@ -1076,7 +1076,9 @@ global DB가 단순히 없으면 새 empty generation을 열 수 있다. corrupt
 
 ### local-only state export/import
 
-`LocalStateBundle` v1이 포함하는 값은 ProjectId·source revision·effective config fingerprint·redaction contract version, local Suppression·Baseline·Disposition과 `draft|ready|blocked` active ChangePlan이다. source byte, shared 선언, root locator·절대 경로, secret·사용자 이름·전체 source line, 과거 actor·event timestamp·idempotency history와 이미 terminal인 plan은 의도적으로 제외한다. shared 값은 Git에서 다시 투영하고 제외된 역사 자료는 current decision 복구에 필요하지 않거나 안전한 portable payload가 아니기 때문이다.
+새 export는 `LocalStateBundle` v2를 쓴다. 공통 binding인 ProjectId·source revision·effective config fingerprint·redaction contract version에 v1 local Suppression·Baseline·Disposition, `draft|ready|blocked` ChangePlan과 v2 local `SuppressionV2`·`BaselineV2`·`DispositionV2`를 정렬·봉인해 포함한다. reader는 legacy v1 bundle을 계속 검증하며 v1 bundle에 v2 field가 나타나면 거부한다. source byte, shared 선언, root locator·절대 경로, secret·사용자 이름·전체 source line, 과거 actor·event timestamp·idempotency history와 terminal plan은 의도적으로 제외한다.
+
+정상 management backup/restore는 global/project generation을 한 세대로 보존하므로 global `PlanningBundle` v2도 함께 복원한다. portable project bundle에는 global coordinator가 소유하는 `PlanningBundle` v2를 넣지 않는다. project bundle import만으로 global/project 두 store를 원자 갱신할 수 없기 때문이다. backup 없는 source rebuild는 이 진행 상태를 `ActiveChangePlan/LOCAL_STATE_NOT_SOURCE_DERIVED` loss로 보고하고 성공적으로 복원한 것처럼 표시하지 않는다. shared 값은 Git에서 다시 투영한다.
 
 export/import는 모두 versioned JSON, payload SHA-256, plan fingerprint와 typed result를 사용한다. export destination과 import source는 absolute normalized JSON path이며 plan/apply 사이 ProjectId·source revision·config fingerprint·schema version·store revision·payload가 달라지면 적용하지 않는다. 동일 ID가 이미 있거나 bundle scope가 다르면 `LocalStateConflict`를 반환하고 자동 merge·overwrite하지 않는다. exact apply 재시도는 private receipt와 현재 imported entity set을 대조해 같은 결과로 수렴한다.
 

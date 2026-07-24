@@ -346,10 +346,8 @@ pub fn validate_rebuild_plan(plan: &RebuildPlan) -> Result<(), RecoveryDomainErr
 pub fn local_state_bundle_fingerprint(
     bundle: &LocalStateBundle,
 ) -> Result<Sha256Hash, RecoveryDomainError> {
-    versioned_fingerprint(
-        "star.management-local-state-bundle",
-        1,
-        &serde_json::json!({
+    let payload = match bundle.schema_version {
+        1 => serde_json::json!({
             "bundle_id":bundle.bundle_id,
             "project_id":bundle.project_id,
             "source_revision_id":bundle.source_revision_id,
@@ -360,6 +358,26 @@ pub fn local_state_bundle_fingerprint(
             "local_dispositions":bundle.local_dispositions,
             "active_change_plans":bundle.active_change_plans,
         }),
+        2 => serde_json::json!({
+            "bundle_id":bundle.bundle_id,
+            "project_id":bundle.project_id,
+            "source_revision_id":bundle.source_revision_id,
+            "effective_config_fingerprint":bundle.effective_config_fingerprint,
+            "redaction_contract_version":bundle.redaction_contract_version,
+            "local_suppressions":bundle.local_suppressions,
+            "local_baselines":bundle.local_baselines,
+            "local_dispositions":bundle.local_dispositions,
+            "active_change_plans":bundle.active_change_plans,
+            "local_suppressions_v2":bundle.local_suppressions_v2,
+            "local_baselines_v2":bundle.local_baselines_v2,
+            "local_dispositions_v2":bundle.local_dispositions_v2,
+        }),
+        _ => return Err(RecoveryDomainError::InvalidSchema),
+    };
+    versioned_fingerprint(
+        "star.management-local-state-bundle",
+        bundle.schema_version,
+        &payload,
     )
     .map_err(|_| RecoveryDomainError::FingerprintMismatch)
 }
@@ -374,15 +392,21 @@ pub fn seal_local_state_bundle(
     mut local_baselines: Vec<star_contracts::management::Baseline>,
     mut local_dispositions: Vec<star_contracts::management::Disposition>,
     mut active_change_plans: Vec<star_contracts::management::ChangePlan>,
+    mut local_suppressions_v2: Vec<star_contracts::evidence_v2::SuppressionV2>,
+    mut local_baselines_v2: Vec<star_contracts::evidence_v2::BaselineV2>,
+    mut local_dispositions_v2: Vec<star_contracts::evidence_v2::DispositionV2>,
     redactor: &PersistenceRedactor,
 ) -> Result<LocalStateBundle, RecoveryDomainError> {
     local_suppressions.sort_by(|left, right| left.suppression_id.cmp(&right.suppression_id));
     local_baselines.sort_by(|left, right| left.baseline_id.cmp(&right.baseline_id));
     local_dispositions.sort_by(|left, right| left.disposition_id.cmp(&right.disposition_id));
     active_change_plans.sort_by(|left, right| left.change_plan_id.cmp(&right.change_plan_id));
+    local_suppressions_v2.sort_by(|left, right| left.suppression_id.cmp(&right.suppression_id));
+    local_baselines_v2.sort_by(|left, right| left.baseline_id.cmp(&right.baseline_id));
+    local_dispositions_v2.sort_by(|left, right| left.disposition_id.cmp(&right.disposition_id));
     let mut bundle = LocalStateBundle {
         schema_id: LOCAL_STATE_BUNDLE_SCHEMA_ID.to_owned(),
-        schema_version: 1,
+        schema_version: 2,
         bundle_id,
         project_id,
         source_revision_id,
@@ -392,6 +416,9 @@ pub fn seal_local_state_bundle(
         local_baselines,
         local_dispositions,
         active_change_plans,
+        local_suppressions_v2,
+        local_baselines_v2,
+        local_dispositions_v2,
         content_fingerprint: Sha256Hash::digest(b"unsealed"),
     };
     validate_local_state_shape(&bundle)?;
@@ -407,7 +434,11 @@ pub fn validate_local_state_bundle(
     redactor: &PersistenceRedactor,
 ) -> Result<(), RecoveryDomainError> {
     if bundle.schema_id != LOCAL_STATE_BUNDLE_SCHEMA_ID
-        || bundle.schema_version != 1
+        || !matches!(bundle.schema_version, 1 | 2)
+        || (bundle.schema_version == 1
+            && (!bundle.local_suppressions_v2.is_empty()
+                || !bundle.local_baselines_v2.is_empty()
+                || !bundle.local_dispositions_v2.is_empty()))
         || bundle.redaction_contract_version
             != star_contracts::management::REDACTION_CONTRACT_VERSION
     {
@@ -520,6 +551,45 @@ pub fn seal_local_state_import_plan(
             &right.reason_code,
         ))
     });
+    let mut suppression_ids = bundle
+        .local_suppressions
+        .iter()
+        .map(|value| value.suppression_id.clone())
+        .chain(
+            bundle
+                .local_suppressions_v2
+                .iter()
+                .map(|value| value.suppression_id.clone()),
+        )
+        .collect::<Vec<_>>();
+    suppression_ids.sort();
+    suppression_ids.dedup();
+    let mut baseline_ids = bundle
+        .local_baselines
+        .iter()
+        .map(|value| value.baseline_id.clone())
+        .chain(
+            bundle
+                .local_baselines_v2
+                .iter()
+                .map(|value| value.baseline_id.clone()),
+        )
+        .collect::<Vec<_>>();
+    baseline_ids.sort();
+    baseline_ids.dedup();
+    let mut disposition_ids = bundle
+        .local_dispositions
+        .iter()
+        .map(|value| value.disposition_id.clone())
+        .chain(
+            bundle
+                .local_dispositions_v2
+                .iter()
+                .map(|value| value.disposition_id.clone()),
+        )
+        .collect::<Vec<_>>();
+    disposition_ids.sort();
+    disposition_ids.dedup();
     let mut plan = LocalStateImportPlan {
         schema_id: LOCAL_STATE_IMPORT_PLAN_SCHEMA_ID.to_owned(),
         schema_version: 1,
@@ -530,21 +600,9 @@ pub fn seal_local_state_import_plan(
         expected_config_fingerprint: bundle.effective_config_fingerprint.clone(),
         expected_store_revision,
         payload_sha256,
-        suppression_ids: bundle
-            .local_suppressions
-            .iter()
-            .map(|value| value.suppression_id.clone())
-            .collect(),
-        baseline_ids: bundle
-            .local_baselines
-            .iter()
-            .map(|value| value.baseline_id.clone())
-            .collect(),
-        disposition_ids: bundle
-            .local_dispositions
-            .iter()
-            .map(|value| value.disposition_id.clone())
-            .collect(),
+        suppression_ids,
+        baseline_ids,
+        disposition_ids,
         change_plan_ids: bundle
             .active_change_plans
             .iter()
@@ -576,6 +634,12 @@ fn validate_local_state_shape(bundle: &LocalStateBundle) -> Result<(), RecoveryD
         value.project_id != bundle.project_id || value.scope_kind != SuppressionScope::Local
     }) || bundle.local_baselines.iter().any(|value| {
         value.project_id != bundle.project_id || value.scope_kind != BaselineScope::Local
+    }) || bundle.local_suppressions_v2.iter().any(|value| {
+        value.project_id != bundle.project_id || value.clone().seal().as_ref() != Ok(value)
+    }) || bundle.local_baselines_v2.iter().any(|value| {
+        value.project_id != bundle.project_id || value.clone().seal().as_ref() != Ok(value)
+    }) || bundle.local_dispositions_v2.iter().any(|value| {
+        value.project_id != bundle.project_id || value.clone().seal().as_ref() != Ok(value)
     }) || bundle.active_change_plans.iter().any(|value| {
         value.project_id != bundle.project_id
             || !matches!(
@@ -602,6 +666,21 @@ fn validate_local_state_shape(bundle: &LocalStateBundle) -> Result<(), RecoveryD
             .active_change_plans
             .iter()
             .map(|value| value.change_plan_id.as_str()),
+    ) || !strictly_sorted_unique(
+        bundle
+            .local_suppressions_v2
+            .iter()
+            .map(|value| value.suppression_id.as_str()),
+    ) || !strictly_sorted_unique(
+        bundle
+            .local_baselines_v2
+            .iter()
+            .map(|value| value.baseline_id.as_str()),
+    ) || !strictly_sorted_unique(
+        bundle
+            .local_dispositions_v2
+            .iter()
+            .map(|value| value.disposition_id.as_str()),
     ) {
         return Err(RecoveryDomainError::InvalidLocalStateBundle);
     }
@@ -974,5 +1053,33 @@ mod tests {
             require_exact_approval(&expected, "not-a-fingerprint"),
             Err(RecoveryDomainError::ApprovalMismatch)
         );
+    }
+
+    #[test]
+    fn legacy_v1_local_state_bundle_remains_readable_and_fingerprint_compatible() {
+        let legacy_json = serde_json::json!({
+            "schema_id": LOCAL_STATE_BUNDLE_SCHEMA_ID,
+            "schema_version": 1,
+            "bundle_id": LocalStateBundleId::new(),
+            "project_id": ProjectId::new(),
+            "source_revision_id": star_contracts::ids::ProjectRevisionId::new(),
+            "effective_config_fingerprint": hash("legacy-effective-config"),
+            "redaction_contract_version": star_contracts::management::REDACTION_CONTRACT_VERSION,
+            "local_suppressions": [],
+            "local_baselines": [],
+            "local_dispositions": [],
+            "active_change_plans": [],
+            "content_fingerprint": hash("unsealed"),
+        });
+        let mut bundle: LocalStateBundle = serde_json::from_value(legacy_json).unwrap();
+        assert!(bundle.local_suppressions_v2.is_empty());
+        assert!(bundle.local_baselines_v2.is_empty());
+        assert!(bundle.local_dispositions_v2.is_empty());
+        bundle.content_fingerprint = local_state_bundle_fingerprint(&bundle).unwrap();
+        validate_local_state_bundle(&bundle, &PersistenceRedactor::for_current_user()).unwrap();
+        let encoded = serde_json::to_value(&bundle).unwrap();
+        assert!(encoded.get("local_suppressions_v2").is_none());
+        assert!(encoded.get("local_baselines_v2").is_none());
+        assert!(encoded.get("local_dispositions_v2").is_none());
     }
 }

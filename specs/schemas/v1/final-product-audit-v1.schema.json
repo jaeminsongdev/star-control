@@ -1,0 +1,240 @@
+{
+  "$defs": {
+    "ProductAuditStatusV1": {
+      "enum": [
+        "conformant",
+        "blocked_external",
+        "blocked"
+      ],
+      "type": "string"
+    },
+    "ProductFeatureOwnershipStatusV1": {
+      "additionalProperties": false,
+      "properties": {
+        "command_surfaces": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "feature_id": {
+          "type": "string"
+        },
+        "missing_command_surfaces": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "physical_owner": {
+          "type": "string"
+        },
+        "semantic_owner_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "feature_id",
+        "semantic_owner_ref",
+        "physical_owner",
+        "command_surfaces"
+      ],
+      "type": "object"
+    },
+    "ProductLifecycleEvidenceStatusV1": {
+      "additionalProperties": false,
+      "properties": {
+        "architecture": {
+          "$ref": "#/$defs/ReleaseArchitecture"
+        },
+        "candidate_artifact_set_digest": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evidence_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evidence_record_id": {
+          "type": "string"
+        },
+        "runtime_verification": {
+          "$ref": "#/$defs/RuntimeVerificationState"
+        },
+        "support_tier": {
+          "$ref": "#/$defs/ReleaseSupportTier"
+        }
+      },
+      "required": [
+        "architecture",
+        "support_tier",
+        "runtime_verification",
+        "evidence_record_id",
+        "evidence_fingerprint",
+        "candidate_artifact_set_digest"
+      ],
+      "type": "object"
+    },
+    "ProductProfileConformanceStatusV1": {
+      "additionalProperties": false,
+      "properties": {
+        "conformant": {
+          "type": "boolean"
+        },
+        "definition_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "profile_id": {
+          "type": "string"
+        },
+        "profile_version": {
+          "type": "string"
+        },
+        "resolution_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_version",
+        "definition_hash",
+        "resolution_fingerprint",
+        "conformant"
+      ],
+      "type": "object"
+    },
+    "ReleaseArchitecture": {
+      "enum": [
+        "x64",
+        "arm64"
+      ],
+      "type": "string"
+    },
+    "ReleaseStatus": {
+      "enum": [
+        "draft",
+        "candidate",
+        "blocked",
+        "blocked_external",
+        "ready",
+        "approved",
+        "publishing",
+        "publish_outcome_unknown",
+        "published",
+        "rollback_required",
+        "withdrawn"
+      ],
+      "type": "string"
+    },
+    "ReleaseSupportTier": {
+      "enum": [
+        "stable",
+        "preview"
+      ],
+      "type": "string"
+    },
+    "RuntimeVerificationState": {
+      "enum": [
+        "native_verified",
+        "native_unverified",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.final-product-audit:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_set_digest": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "audit_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "external_gate_reasons": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "feature_statuses": {
+      "items": {
+        "$ref": "#/$defs/ProductFeatureOwnershipStatusV1"
+      },
+      "type": "array"
+    },
+    "internal_conformance": {
+      "type": "boolean"
+    },
+    "lifecycle_statuses": {
+      "items": {
+        "$ref": "#/$defs/ProductLifecycleEvidenceStatusV1"
+      },
+      "type": "array"
+    },
+    "m11_profile_conformant": {
+      "type": "boolean"
+    },
+    "profile_catalog_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "profile_statuses": {
+      "items": {
+        "$ref": "#/$defs/ProductProfileConformanceStatusV1"
+      },
+      "type": "array"
+    },
+    "release_manifest_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "release_manifest_id": {
+      "pattern": "^rel_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "release_status": {
+      "$ref": "#/$defs/ReleaseStatus"
+    },
+    "schema_id": {
+      "const": "star.final-product-audit",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/ProductAuditStatusV1"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "release_manifest_id",
+    "release_manifest_fingerprint",
+    "artifact_set_digest",
+    "profile_catalog_fingerprint",
+    "feature_statuses",
+    "profile_statuses",
+    "m11_profile_conformant",
+    "lifecycle_statuses",
+    "internal_conformance",
+    "release_status",
+    "status",
+    "audit_fingerprint"
+  ],
+  "title": "FinalProductAuditV1",
+  "type": "object"
+}

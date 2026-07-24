@@ -1,0 +1,14 @@
+{
+  "adjudication": "confirmed_defect",
+  "case_id": "fixture",
+  "case_version": "fixture",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "corpus_ref": "fixture",
+  "evaluation_context": "cli_only",
+  "ground_truth_evidence_refs": [],
+  "project_id": "prj_00000000000000000000000000",
+  "revision": 0,
+  "schema_id": "star.evaluation-case-definition",
+  "schema_version": 1,
+  "source_ref": "fixture"
+}

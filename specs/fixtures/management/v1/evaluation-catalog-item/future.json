@@ -7,5 +7,6 @@
   "lifecycle": "active",
   "owner": "fixture",
   "schema_id": "star.evaluation-catalog-item",
-  "schema_version": 2
+  "schema_version": 2,
+  "trial_candidate": false
 }

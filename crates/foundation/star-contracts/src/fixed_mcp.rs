@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ipc::ErrorEnvelope;
 use crate::registry::{RegistrySource, ToolReadiness};
-use crate::{ApprovalId, OperationId, RequestId, Sha256Hash};
+use crate::{ApprovalId, OperationId, RequestId, Sha256Hash, config_v1::ConfigOverrideV1};
 
 pub const SERVER_NAME: &str = "star-control";
 pub const SERVER_TITLE: &str = "Star-Control";
@@ -272,6 +272,9 @@ pub struct CallInput {
     pub tool_id: String,
     pub descriptor_hash: Sha256Hash,
     pub arguments: serde_json::Map<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(length(max = 128))]
+    pub config_overrides: Vec<ConfigOverrideV1>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_request_id: Option<RequestId>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -344,6 +347,28 @@ fn schema_root(
     })
 }
 
+fn config_override_array_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type":"array",
+        "maxItems":128,
+        "items":{
+            "type":"object",
+            "additionalProperties":false,
+            "required":["key","value"],
+            "properties":{
+                "key":{"type":"string","pattern":r"^[a-z0-9_]+(?:\.[a-z0-9_]+)*$","maxLength":160},
+                "value":{"oneOf":[
+                    {"type":"object","additionalProperties":false,"required":["kind","value"],"properties":{"kind":{"const":"boolean"},"value":{"type":"boolean"}}},
+                    {"type":"object","additionalProperties":false,"required":["kind","value"],"properties":{"kind":{"const":"integer"},"value":{"type":"integer","minimum":0}}},
+                    {"type":"object","additionalProperties":false,"required":["kind","value"],"properties":{"kind":{"const":"string"},"value":{"type":"string","maxLength":256}}},
+                    {"type":"object","additionalProperties":false,"required":["kind","value"],"properties":{"kind":{"const":"string_set"},"value":{"type":"array","maxItems":256,"uniqueItems":true,"items":{"type":"string","maxLength":256}}}},
+                    {"type":"object","additionalProperties":false,"required":["kind","value"],"properties":{"kind":{"const":"json"},"value":true}}
+                ]}
+            }
+        }
+    })
+}
+
 fn string_array(
     item: serde_json::Value,
     maximum: usize,
@@ -408,6 +433,7 @@ pub fn fixed_input_schema(tool_name: &str) -> Option<serde_json::Value> {
                 "tool_id":{"type":"string","minLength":3,"maxLength":128,"pattern":GLOBAL_ID_PATTERN},
                 "descriptor_hash":{"type":"string","pattern":HASH_PATTERN},
                 "arguments":{"type":"object"},
+                "config_overrides":config_override_array_schema(),
                 "client_request_id":nullable(serde_json::json!({"type":"string","pattern":REQUEST_ID_PATTERN})),
                 "idempotency_key":nullable(serde_json::json!({"type":"string","minLength":1,"maxLength":128,"pattern":r"^[^\u0000]+$"})),
                 "goal_id":nullable(serde_json::json!({"type":"string","pattern":GOAL_ID_PATTERN})),
@@ -754,11 +780,26 @@ pub fn fixed_input_valid(name: &str, arguments: serde_json::Value) -> bool {
                 ))
                 .and_then(crate::canonical::jcs_bytes)
                 .map(|bytes| bytes.len());
+            let override_size = arguments
+                .get("config_overrides")
+                .map(crate::canonical::jcs_bytes)
+                .transpose()
+                .map(|bytes| bytes.map_or(0, |bytes| bytes.len()));
             serde_json::from_value::<CallInput>(arguments)
                 .ok()
                 .is_some_and(|input| {
                     global_id(&input.tool_id)
                         && canonical_size.is_ok_and(|size| size <= 4 * 1024 * 1024)
+                        && override_size.is_ok_and(|size| size <= 64 * 1024)
+                        && input.config_overrides.len() <= 128
+                        && {
+                            let keys = input
+                                .config_overrides
+                                .iter()
+                                .map(|value| value.key.as_str())
+                                .collect::<Vec<_>>();
+                            all_unique(&keys)
+                        }
                         && input
                             .idempotency_key
                             .as_ref()

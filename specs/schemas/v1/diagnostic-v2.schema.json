@@ -119,6 +119,226 @@
       ],
       "type": "string"
     },
+    "DiagnosticEvidenceRefV2": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifact": {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            "kind": {
+              "const": "artifact",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "artifact"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "document": {
+              "$ref": "#/$defs/DocumentRef"
+            },
+            "kind": {
+              "const": "document",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "document"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "finding_fingerprint": {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            "finding_id": {
+              "pattern": "^fnd_[a-z2-7]{52}$",
+              "type": "string"
+            },
+            "kind": {
+              "const": "finding",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "finding_id",
+            "finding_fingerprint"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "diagnostic_ref": {
+              "$ref": "#/$defs/DiagnosticRef"
+            },
+            "kind": {
+              "const": "diagnostic",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "diagnostic_ref"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DiagnosticObservationStatusV2": {
+      "enum": [
+        "confirmed",
+        "suspected",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "DiagnosticRef": {
+      "additionalProperties": false,
+      "properties": {
+        "diagnostic_id": {
+          "type": "string"
+        },
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "diagnostic_id",
+        "sequence",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "DiagnosticScopeV2": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "goal_id": {
+              "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            },
+            "kind": {
+              "const": "goal",
+              "type": "string"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "goal_id",
+            "revision"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "goal_id": {
+              "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            },
+            "kind": {
+              "const": "run",
+              "type": "string"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "run_id": {
+              "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "goal_id",
+            "run_id",
+            "revision"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "goal_id": {
+              "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            },
+            "kind": {
+              "const": "stage",
+              "type": "string"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "run_id": {
+              "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            },
+            "stage_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "goal_id",
+            "run_id",
+            "stage_id",
+            "revision"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "validation_run",
+              "type": "string"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "validation_run_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "validation_run_id",
+            "revision"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "DiagnosticSeverity": {
       "enum": [
         "info",
@@ -137,6 +357,64 @@
         "resolved"
       ],
       "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "LocationRef": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextPosition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/ProjectPathRef"
+        },
+        "start": {
+          "$ref": "#/$defs/TextPosition"
+        },
+        "symbol": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "start"
+      ],
+      "type": "object"
     },
     "ProducerRef": {
       "additionalProperties": false,
@@ -162,6 +440,34 @@
       ],
       "type": "object"
     },
+    "ProjectPathKind": {
+      "enum": [
+        "file",
+        "directory"
+      ],
+      "type": "string"
+    },
+    "ProjectPathRef": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "path_kind": {
+          "$ref": "#/$defs/ProjectPathKind"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "path",
+        "path_kind"
+      ],
+      "type": "object"
+    },
     "RedactionStatus": {
       "enum": [
         "not_needed",
@@ -170,6 +476,32 @@
         "unknown"
       ],
       "type": "string"
+    },
+    "Remediation": {
+      "additionalProperties": false,
+      "properties": {
+        "action_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "automatic_fix_available": {
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "automatic_fix_available"
+      ],
+      "type": "object"
     },
     "RetentionClass": {
       "enum": [
@@ -180,10 +512,56 @@
       ],
       "type": "string"
     },
+    "RuleRefV2": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "fingerprint_contract_version": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "rule_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "rule_version",
+        "definition_fingerprint",
+        "fingerprint_contract_version"
+      ],
+      "type": "object"
+    },
     "Sha256Hash": {
       "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
       "pattern": "^sha256:[0-9a-f]{64}$",
       "type": "string"
+    },
+    "TextPosition": {
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "line": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "line",
+        "column"
+      ],
+      "type": "object"
     }
   },
   "$id": "urn:star-control:schema:star.diagnostic:v2",
@@ -204,7 +582,7 @@
     },
     "evidence_refs": {
       "items": {
-        "$ref": "#/$defs/ArtifactRef"
+        "$ref": "#/$defs/DiagnosticEvidenceRefV2"
       },
       "type": "array"
     },
@@ -219,18 +597,50 @@
       "format": "date-time",
       "type": "string"
     },
+    "locations": {
+      "items": {
+        "$ref": "#/$defs/LocationRef"
+      },
+      "type": "array"
+    },
     "message": {
       "type": "string"
     },
+    "observation_status": {
+      "$ref": "#/$defs/DiagnosticObservationStatusV2"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "package_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "plan_item_id": {
       "type": "string"
+    },
+    "producer": {
+      "$ref": "#/$defs/ProducerRef"
     },
     "project_id": {
       "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
       "type": "string"
     },
+    "remediation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Remediation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "rule_ref": {
-      "$ref": "#/$defs/CatalogRef"
+      "$ref": "#/$defs/RuleRefV2"
     },
     "schema_id": {
       "const": "star.diagnostic",
@@ -239,6 +649,9 @@
     "schema_version": {
       "const": 2,
       "type": "integer"
+    },
+    "scope": {
+      "$ref": "#/$defs/DiagnosticScopeV2"
     },
     "sequence": {
       "format": "uint64",
@@ -251,11 +664,27 @@
     "status": {
       "$ref": "#/$defs/DiagnosticStatus"
     },
+    "subject_binding_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "title": {
       "type": "string"
     },
     "validation_run_id": {
       "type": "string"
+    },
+    "workspace_id": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
   "required": [
@@ -265,16 +694,21 @@
     "sequence",
     "code",
     "rule_ref",
+    "producer",
     "title",
     "message",
     "severity",
     "confidence",
     "status",
+    "observation_status",
     "blocking",
     "project_id",
     "plan_item_id",
     "validation_run_id",
+    "scope",
+    "locations",
     "evidence_refs",
+    "observed_at",
     "first_seen_at",
     "last_seen_at",
     "fingerprint"

@@ -6,7 +6,7 @@
 
 0단계 공통 개발 관리 의미는 [공통 개발 관리와 로컬 관리 DB 계약](development-management.md), [ADR-0006](../decisions/ADR-0006-공통-개발-관리와-로컬-관리-DB-경계.md)과 [ADR-0007](../decisions/ADR-0007-P0-하이브리드-저장소와-운영-정책.md)에 확정했다. P0 inventory의 persisted type은 `star-contracts` type, generated JSON Schema, minimal/full/invalid/future fixture와 fingerprint golden으로 구현했다. P-0041~P-0043은 `ProjectCheckout`, `ProjectCatalogSnapshot`, `CodeIndexSnapshot`과 full planning bundle(`TaskSpec`, `ScopeRevision`, `ChangeSet`, `ImpactAnalysis`, `RiskPathDescriptor`, `ValidationPlan` v2)을 추가했다. P-0044~P-0052는 M3 CheckGraph/evidence와 Goal/Plan/Run, M4 immutable PatchSet, M5~M9 development engine·17/17 core source readiness, M10 ReleaseManifest/EvaluationRun build-once engine, M11 Rust fixed pipeline의 첫 bounded 제품 Slice를 구현했다. P-0030/P-0031의 exact-root status와 `tracked_path_precursor`는 별도 v1 운영 precursor로 유지한다.
 
-P-0054는 최신 `main`에서 Recovery Slice, M1~M11 내부 제품 경로와 최종 16 Profile Catalog를 contract→engine→repository→Controller→CLI로 확장했다. 현재 구현과 검증 범위는 `PLANS.md`, `docs/testing/m1-*`~`m11-*`, [P-0054 실제 기능 완성 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)가 소유한다. 외부 scanner·debugger·package-manager mutation, live migration/cutover, authenticated remote, signer·publisher와 ARM64 native 실행은 내부 구현 완료와 분리된 Gate이며 실행하지 않은 효과를 완료로 표시하지 않는다. P-0053 local release 감사는 x64 격리 lifecycle과 ARM64 `native_unverified` simulation을 다루며 public release는 Authenticode·clean signed install·GitHub exact action 승인 때문에 `blocked_external`이다. MCP exact 구현 값은 [MCP 구현 동결 계약](mcp-implementation-contract.md), [ToolPackageManifest Reference](tool-package-manifest-reference.md), [Windows Tool Runtime](../architecture/windows-tool-runtime.md)과 [MCP 검증 행렬](../testing/mcp-verification-matrix.md)에 동결됐고, current source와 설치본의 차이는 [MCP 완료 감사](../testing/mcp-completion-audit.md)에 분리한다.
+P-0054는 최신 `main`에서 Recovery Slice, M1~M11 내부 제품 경로와 최종 16 Profile Catalog를 contract→engine→repository→Controller→CLI로 확장했다. P-0056은 current evidence·effect receipt, evaluation source policy/case, verified cost/budget, actual Finding/Suppression metric과 23/16 final audit를 추가했다. 현재 구현과 검증 범위는 `PLANS.md`, `docs/testing/m1-*`~`m11-*`, [P-0054 실제 기능 완성 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)와 [P-0056 최신 감사](../testing/p0056-current-functional-recovery-audit-2026-07-24.md)가 소유한다. 외부 scanner·debugger·package-manager mutation, live migration/cutover, authenticated remote, signer·publisher와 ARM64 native 실행은 내부 구현 완료와 분리된 Gate이며 실행하지 않은 효과를 완료로 표시하지 않는다. P-0053 local release 감사는 x64 격리 lifecycle과 ARM64 `native_unverified` simulation을 다루며 public release는 Authenticode·clean signed install·GitHub exact action 승인 때문에 `blocked_external`이다. MCP exact 구현 값은 [MCP 구현 동결 계약](mcp-implementation-contract.md), [ToolPackageManifest Reference](tool-package-manifest-reference.md), [Windows Tool Runtime](../architecture/windows-tool-runtime.md)과 [MCP 검증 행렬](../testing/mcp-verification-matrix.md)에 동결됐고, current source와 설치본의 차이는 [MCP 완료 감사](../testing/mcp-completion-audit.md)에 분리한다.
 
 ## 계약 원칙
 
@@ -164,7 +164,8 @@ DocumentRef가 가리키는 내용이 바뀌면 같은 revision을 재사용하�
 | CleanRoomSpecification | `star.clean-room-specification` | [계약 호환성·환경](contract-compatibility-and-environment.md) | Git/approved plan clean-room constraint. M6 v1 목표 |
 | DependencySecurityInputManifest | `star.dependency-security-input-manifest` | [계약 호환성·환경](contract-compatibility-and-environment.md) | 후속 7단계 read-only discovery handoff. M6 v1 목표 |
 | FailureRecord | `star.failure-record` | [7단계 유지보수](failure-security-and-dependency-maintenance.md) | project store failure occurrence·causality. M7 v1 목표 |
-| RegressionRecord | `star.regression-record` | [7단계 유지보수](failure-security-and-dependency-maintenance.md) | before/after·recurrence evidence. M7 v1 목표 |
+| ReproductionAttemptObservationV1 | `star.reproduction-attempt-observation` | [7단계 유지보수](failure-security-and-dependency-maintenance.md) | registered rerun의 semantic output과 effect receipt 결속. M7 current |
+| RegressionRecord | `star.regression-record` | [7단계 유지보수](failure-security-and-dependency-maintenance.md) | current before/after·receipt-bound reproduction·recurrence evidence. M7 current |
 | RecoveryPlan | `star.recovery-plan` | [7단계 유지보수](failure-security-and-dependency-maintenance.md) | rollback·roll-forward·restore plan/attempt. M7 v1 목표 |
 | DependencySnapshot | `star.dependency-snapshot` | [7단계 유지보수](failure-security-and-dependency-maintenance.md) | source-derived dependency relation·state. M7 v1 목표 |
 | SupplyChainSnapshot | `star.supply-chain-snapshot` | [7단계 유지보수](failure-security-and-dependency-maintenance.md) | security·workflow·release observation. M7 v1 목표 |
@@ -194,20 +195,20 @@ DocumentRef가 가리키는 내용이 바뀌면 같은 revision을 재사용하�
 | ProjectRevision | `star.project-revision` | [공통 개발 관리](development-management.md) | 관리 DB·scan input |
 | WorkspaceSnapshot | `star.workspace-snapshot` | [공통 개발 관리](development-management.md) | 관리 DB·artifact manifest |
 | ScanRun | `star.scan-run` | [공통 개발 관리](development-management.md) | 관리 DB·scan evidence |
-| Rule | `star.rule` | [공통 개발 관리](development-management.md) | Git·Catalog 선언, resolved snapshot |
+| Rule | `star.rule` | [공통 개발 관리](development-management.md) | Git·Catalog 선언, resolved snapshot. v1 reader와 M3 v2 writer/migration 구현 |
 | Finding | `star.finding` | [공통 개발 관리](development-management.md) | 관리 DB projection |
 | Occurrence | `star.occurrence` | [공통 개발 관리](development-management.md) | 관리 DB·evidence reference |
 | Symbol | `star.symbol` | [공통 개발 관리](development-management.md) | 관리 DB derived index |
 | SymbolReference | `star.symbol-reference` | [공통 개발 관리](development-management.md) | 관리 DB derived edge |
 | CanonicalSource | `star.canonical-source` | [공통 개발 관리](development-management.md) | Project source identity |
-| Suppression | `star.suppression` | [공통 개발 관리](development-management.md) | Git shared 선언 또는 local DB state. M3 v2는 Diagnostic selector 추가 목표 |
-| Baseline | `star.baseline` | [공통 개발 관리](development-management.md) | Git shared 선언 또는 local DB state. M3 v2는 공통 issue entry 추가 목표 |
-| Disposition | `star.disposition` | [공통 개발 관리](development-management.md) | local triage state. M3 v2는 Diagnostic subject 추가 목표 |
-| ChangePlan | `star.change-plan` | [공통 개발 관리](development-management.md) | local application state |
-| PatchSet | `star.patch-set` | [공통 개발 관리](development-management.md), [4단계 엔진](safe-patch-and-codemod.md) | immutable preview summary·`.ai-runs` forward/reverse diff. M4 v2 목표 |
-| ChangeRecipe | `star.change-recipe` | [공통 개발 관리](development-management.md), [4단계 엔진](safe-patch-and-codemod.md) | Git·Catalog 선언. M4 descriptor v2 목표 |
-| RecipeExecution | `star.recipe-execution` | [4단계 엔진](safe-patch-and-codemod.md) | project repository·preview/tool evidence. M4 v1 목표 |
-| PatchApplication | `star.patch-application` | [4단계 엔진](safe-patch-and-codemod.md) | project repository·actual apply/recovery evidence. M4 v1 목표 |
+| Suppression | `star.suppression` | [공통 개발 관리](development-management.md) | Git shared 선언 또는 local DB state. v1/v2 reader·writer·portable recovery 구현 |
+| Baseline | `star.baseline` | [공통 개발 관리](development-management.md) | Git shared 선언 또는 local DB state. v1/v2 reader·writer·portable recovery 구현 |
+| Disposition | `star.disposition` | [공통 개발 관리](development-management.md) | local triage state. v1/v2 reader·writer·portable recovery 구현 |
+| ChangePlan | `star.change-plan` | [공통 개발 관리](development-management.md) | v1 local state와 v2 planning participant, plan/apply/rollback migration |
+| PatchSet | `star.patch-set` | [공통 개발 관리](development-management.md), [4단계 엔진](safe-patch-and-codemod.md) | immutable preview summary·`.ai-runs` forward/reverse diff와 M4 v2 migration 구현 |
+| ChangeRecipe | `star.change-recipe` | [공통 개발 관리](development-management.md), [4단계 엔진](safe-patch-and-codemod.md) | Git·Catalog v2 descriptor와 migration 구현 |
+| RecipeExecution | `star.recipe-execution` | [4단계 엔진](safe-patch-and-codemod.md) | project repository·preview/tool evidence 구현 |
+| PatchApplication | `star.patch-application` | [4단계 엔진](safe-patch-and-codemod.md) | project repository·actual apply/recovery evidence 구현 |
 | ValidationResult | `star.validation-result` | [공통 개발 관리](development-management.md) | 관리 DB·evidence |
 | ManagementStoreStatus | `star.management-store-status` | [공통 개발 관리](development-management.md) | Controller lifecycle query |
 | CoordinatedOperation | `star.coordinated-operation` | [공통 개발 관리](development-management.md) | global store·project participant receipt |
@@ -239,10 +240,13 @@ DocumentRef가 가리키는 내용이 바뀌면 같은 revision을 재사용하�
 | Handoff | `star.handoff` | [이벤트·상태](events-and-state.md) | stage·final report |
 | MergePlan | `star.merge-plan` | [목표·단계](goal-and-stage.md), [9단계 ChangeBundle](cross-repo-change-bundle.md) | project-local merge state. P6 v2 목표 |
 | ReproductionPack | `star.reproduction-pack` | [7단계 유지보수](failure-security-and-dependency-maintenance.md), [검증·증거](validation-and-evidence.md) | curated failure reproduction manifest·ArtifactRef. M7 v1 의미 상세화 |
-| CostRecord | `star.cost-record` | [검증·증거](validation-and-evidence.md) | evidence·evaluation |
-| BudgetSnapshot | `star.budget-snapshot` | [검증·증거](validation-and-evidence.md) | route·permission·gate |
-| EvaluationRun | `star.evaluation-run` | [검증·증거](validation-and-evidence.md) | Rule·Check·Profile·Recipe의 CLI/Codex 분리 shadow 비교·규칙 개선. M10 v2 목표 |
-| ReleaseManifest | `star.release-manifest` | [검증·증거](validation-and-evidence.md) | build-once artifact·release readiness·approval·published observation. M10 v2 목표 |
+| CostRecordV1 | `star.cost-record` | [검증·증거](validation-and-evidence.md) | provider-verified usage/cost와 exact ValidationRun attribution. M10 구현 |
+| BudgetSnapshotV1 | `star.budget-snapshot` | [검증·증거](validation-and-evidence.md) | exact CostRecord 기반 observed/reserved/remaining/unknown·permission decision. M10 구현 |
+| EvaluationCaseDefinitionV1 | `star.evaluation-case-definition` | [10단계 평가](ci-release-evaluation-and-product-completion.md) | precommitted case/corpus/context/ground truth source. M10 구현 |
+| EvaluationPolicyV1 | `star.evaluation-policy` | [10단계 평가](ci-release-evaluation-and-product-completion.md) | exact case set·sample/attempt·comparability·protected metric policy. M10 구현 |
+| EvaluationRunV2 | `star.evaluation-run` | [검증·증거](validation-and-evidence.md) | Rule·Check·Profile·Recipe의 CLI/Codex 분리 shadow 비교·실제 Finding/Suppression/cost. M10 구현 |
+| ReleaseManifestV2 | `star.release-manifest` | [검증·증거](validation-and-evidence.md) | build-once artifact·release readiness·approval·published observation. M10 구현 |
+| FinalProductAuditV1 | `star.final-product-audit` | [10단계 최종 감사](ci-release-evaluation-and-product-completion.md#최종-기능-소유권-감사) | current handler 23개·Profile 16개·M11·lifecycle·외부 Gate 분리. M10 구현 |
 | RemoteStateSnapshot | `star.remote-state-snapshot` | [검증·증거](validation-and-evidence.md), [9단계 ChangeBundle](cross-repo-change-bundle.md) | adapter-bound Git·PR·check·release 조회. P7 v2 목표 |
 | ErrorEnvelope | `star.error` | [오류·진단](errors-and-diagnostics.md) | CLI·MCP·IPC |
 | ReleaseFileManifest | `star.release-file-manifest` | [Windows 설치·Codex 연동](windows-installation-and-codex-integration.md) | architecture별 설치 stage의 파일·hash 정본 |
@@ -448,7 +452,7 @@ JSON key 순서는 의미가 없다. contract hash와 fingerprint를 만들 때�
 - 더 높은 미지원 version: 쓰지 않고 read-only inspection 또는 명확한 거부
 - 설정·state·IPC·Catalog·Plugin version은 서로 독립 관리
 
-## 구현 전 완료 조건
+## 계약 구현 완료 조건
 
 1. Inventory의 각 계약에 소유 문서와 `star-contracts` module이 하나씩 대응한다.
 2. 모든 enum, ID, 시간, 경로와 absence 규칙이 일관된다.

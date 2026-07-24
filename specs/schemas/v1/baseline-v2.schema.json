@@ -10,7 +10,7 @@
           "$ref": "#/$defs/Sha256Hash"
         },
         "rule_ref": {
-          "$ref": "#/$defs/CatalogRef"
+          "$ref": "#/$defs/RuleRefV2"
         },
         "scope_fingerprint": {
           "$ref": "#/$defs/Sha256Hash"
@@ -28,32 +28,6 @@
       ],
       "type": "object"
     },
-    "CatalogRef": {
-      "additionalProperties": false,
-      "properties": {
-        "catalog_id": {
-          "type": "string"
-        },
-        "format_version": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "item_version": {
-          "type": "string"
-        },
-        "sha256": {
-          "$ref": "#/$defs/Sha256Hash"
-        }
-      },
-      "required": [
-        "catalog_id",
-        "format_version",
-        "item_version",
-        "sha256"
-      ],
-      "type": "object"
-    },
     "DiagnosticSeverity": {
       "enum": [
         "info",
@@ -62,6 +36,32 @@
         "critical"
       ],
       "type": "string"
+    },
+    "RuleRefV2": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "fingerprint_contract_version": {
+          "format": "uint32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "rule_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "rule_version",
+        "definition_fingerprint",
+        "fingerprint_contract_version"
+      ],
+      "type": "object"
     },
     "Sha256Hash": {
       "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",

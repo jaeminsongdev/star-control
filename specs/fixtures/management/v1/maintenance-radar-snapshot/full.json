@@ -13,6 +13,12 @@
       "diagnostic_refs": [
         "fixture"
       ],
+      "evaluation_run_refs": [
+        {
+          "evaluation_run_id": "evr_00000000000000000000000000",
+          "run_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
       "evidence_refs": [
         "fixture"
       ],

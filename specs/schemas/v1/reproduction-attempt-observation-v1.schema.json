@@ -1,0 +1,97 @@
+{
+  "$defs": {
+    "ReproductionResult": {
+      "enum": [
+        "reproduced",
+        "different_failure",
+        "not_reproduced",
+        "blocked_external",
+        "incomplete"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.reproduction-attempt-observation:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Normalized semantic result emitted by a registered reproduction adapter.\n\nThe Controller seals the canonical fingerprint of this value into a\n`DevelopmentEffectReceiptV1`; a caller cannot promote an unexecuted attempt\nto a complete reproduction outcome by merely constructing a pack payload.",
+  "properties": {
+    "attempt": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "duration_ms": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "environment_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "evidence_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "family_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "input_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "occurrence_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "result": {
+      "$ref": "#/$defs/ReproductionResult"
+    },
+    "schema_id": {
+      "const": "star.reproduction-attempt-observation",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "attempt",
+    "result",
+    "environment_fingerprint",
+    "input_fingerprint",
+    "duration_ms"
+  ],
+  "title": "ReproductionAttemptObservationV1",
+  "type": "object"
+}

@@ -1,23 +1,70 @@
 {
+  "approved_by": {
+    "actor_id": "fixture",
+    "actor_type": "user",
+    "auth_source": "fixture",
+    "display_name": "fixture"
+  },
   "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "created_at": "2026-01-01T00:00:00Z",
-  "diagnostic_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "expires_at": "2026-01-01T00:00:00Z",
+  "justification": "fixture",
   "permanent": false,
   "project_id": "prj_00000000000000000000000000",
+  "provenance": "fixture",
   "reason": "fixture",
   "reason_code": "fixture",
+  "review_evidence_refs": [
+    {
+      "artifact": {
+        "artifact_id": "art_00000000000000000000000000",
+        "created_at": "2026-01-01T00:00:00Z",
+        "kind": "log",
+        "media_type": "fixture",
+        "producer": {
+          "build_id": "fixture",
+          "component": "fixture",
+          "platform": "fixture",
+          "product_version": "fixture"
+        },
+        "project_id": "prj_00000000000000000000000000",
+        "redaction_status": "not_needed",
+        "relative_path": "src/lib.rs",
+        "retention_class": "temporary",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "size_bytes": 0,
+        "source_artifact_ref": null
+      },
+      "kind": "artifact"
+    }
+  ],
   "revision": 0,
-  "rule_ref": {
-    "catalog_id": "fixture",
-    "format_version": 0,
-    "item_version": "fixture",
-    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  "rule_ref_constraint": {
+    "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "fingerprint_contract_version": 1,
+    "rule_id": "fixture",
+    "rule_version": "fixture"
   },
   "schema_id": "star.suppression",
   "schema_version": 2,
-  "scope_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "scope_constraint": {
+    "gate_phases": [
+      "during_stage"
+    ],
+    "package_id": "fixture",
+    "paths": [
+      "src/lib.rs"
+    ],
+    "project_id": "prj_00000000000000000000000000",
+    "symbol_ids": [
+      "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "workspace_id": "fixture"
+  },
+  "selector": "fixture",
   "status": "active",
-  "subject_binding_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_binding_constraint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "subject_kind": "finding",
   "suppression_id": "sup_00000000000000000000000000"
 }

@@ -1,0 +1,23 @@
+{
+  "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "entries": [
+    {
+      "key": "fixture",
+      "merge_strategy": "replace",
+      "provenance": [
+        {
+          "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_kind": "built_in"
+        }
+      ],
+      "value": {
+        "kind": "boolean",
+        "value": false
+      }
+    }
+  ],
+  "policy_profile_id": "fixture",
+  "schema_id": "star.effective-config",
+  "schema_version": 1
+}

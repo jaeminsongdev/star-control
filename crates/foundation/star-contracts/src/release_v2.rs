@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +11,11 @@ pub const RELEASE_MANIFEST_V2_SCHEMA_ID: &str = "star.release-manifest";
 pub const RELEASE_ASSET_BINDING_V1_SCHEMA_ID: &str = "star.release-asset-binding";
 pub const EVALUATION_RUN_V2_SCHEMA_ID: &str = "star.evaluation-run";
 pub const EVALUATION_CATALOG_ITEM_SCHEMA_ID: &str = "star.evaluation-catalog-item";
+pub const EVALUATION_CASE_DEFINITION_V1_SCHEMA_ID: &str = "star.evaluation-case-definition";
+pub const EVALUATION_POLICY_V1_SCHEMA_ID: &str = "star.evaluation-policy";
+pub const COST_RECORD_V1_SCHEMA_ID: &str = "star.cost-record";
+pub const BUDGET_SNAPSHOT_V1_SCHEMA_ID: &str = "star.budget-snapshot";
+pub const FINAL_PRODUCT_AUDIT_V1_SCHEMA_ID: &str = "star.final-product-audit";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -271,6 +277,69 @@ pub struct ReleaseManifestV2 {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+pub enum ProductAuditStatusV1 {
+    Conformant,
+    BlockedExternal,
+    Blocked,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProductFeatureOwnershipStatusV1 {
+    pub feature_id: String,
+    pub semantic_owner_ref: String,
+    pub physical_owner: String,
+    pub command_surfaces: Vec<String>,
+    #[serde(default)]
+    pub missing_command_surfaces: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProductProfileConformanceStatusV1 {
+    pub profile_id: String,
+    pub profile_version: String,
+    pub definition_hash: Sha256Hash,
+    pub resolution_fingerprint: Sha256Hash,
+    pub conformant: bool,
+    #[serde(default)]
+    pub limitations: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProductLifecycleEvidenceStatusV1 {
+    pub architecture: ReleaseArchitecture,
+    pub support_tier: ReleaseSupportTier,
+    pub runtime_verification: RuntimeVerificationState,
+    pub evidence_record_id: String,
+    pub evidence_fingerprint: Sha256Hash,
+    pub candidate_artifact_set_digest: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FinalProductAuditV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub release_manifest_id: ReleaseManifestId,
+    pub release_manifest_fingerprint: Sha256Hash,
+    pub artifact_set_digest: Sha256Hash,
+    pub profile_catalog_fingerprint: Sha256Hash,
+    pub feature_statuses: Vec<ProductFeatureOwnershipStatusV1>,
+    pub profile_statuses: Vec<ProductProfileConformanceStatusV1>,
+    pub m11_profile_conformant: bool,
+    pub lifecycle_statuses: Vec<ProductLifecycleEvidenceStatusV1>,
+    pub internal_conformance: bool,
+    pub release_status: ReleaseStatus,
+    #[serde(default)]
+    pub external_gate_reasons: Vec<String>,
+    pub status: ProductAuditStatusV1,
+    pub audit_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum EvaluationSubjectKind {
     RoutePolicy,
     Rule,
@@ -349,6 +418,96 @@ pub struct EvaluationDefinition {
     pub policy_fingerprint: Sha256Hash,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluationCaseDefinitionRefV1 {
+    pub case_id: String,
+    pub case_version: String,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluationCaseDefinitionV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub revision: u64,
+    pub project_id: ProjectId,
+    pub case_id: String,
+    pub case_version: String,
+    pub corpus_ref: String,
+    pub evaluation_context: EvaluationContext,
+    pub adjudication: CaseAdjudication,
+    pub ground_truth_evidence_refs: Vec<String>,
+    pub source_ref: String,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluationPolicyRefV1 {
+    pub policy_id: String,
+    pub policy_version: String,
+    pub revision: u64,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluationPolicyV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub revision: u64,
+    pub project_id: ProjectId,
+    pub policy_id: String,
+    pub policy_version: String,
+    pub subject_kind: EvaluationSubjectKind,
+    pub evaluation_context: EvaluationContext,
+    pub mode: EvaluationMode,
+    pub corpus_ref: String,
+    pub case_refs: Vec<EvaluationCaseDefinitionRefV1>,
+    pub minimum_sample_count: u32,
+    pub max_attempts_per_case: u32,
+    pub comparability_dimensions: Vec<String>,
+    pub protected_metric_ids: Vec<String>,
+    pub require_provider_cost: bool,
+    pub source_ref: String,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CostRecordRefV1 {
+    pub cost_record_id: String,
+    pub revision: u64,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluationQuantityV1 {
+    pub unit: String,
+    pub quantity: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluationQuantityComparisonV1 {
+    pub unit: String,
+    pub baseline_quantity: u64,
+    pub candidate_quantity: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EvaluationSuppressionSummary {
+    pub active: u32,
+    pub expired: u32,
+    pub stale: u32,
+    pub revoked: u32,
+    pub invalid: u32,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EvaluationCaseResult {
@@ -356,10 +515,13 @@ pub struct EvaluationCaseResult {
     pub case_version: String,
     pub corpus_ref: String,
     pub evaluation_context: EvaluationContext,
+    pub case_definition_ref: EvaluationCaseDefinitionRefV1,
     pub task_source_binding: Sha256Hash,
     pub baseline_run_refs: Vec<ValidationRunId>,
     pub candidate_run_refs: Vec<ValidationRunId>,
     pub adjudication: CaseAdjudication,
+    #[serde(default)]
+    pub adjudication_evidence_refs: Vec<String>,
     pub baseline_detected: bool,
     pub candidate_detected: bool,
     pub baseline_duration_ms: u64,
@@ -369,6 +531,36 @@ pub struct EvaluationCaseResult {
     pub baseline_outcome: EvaluationOutcome,
     pub candidate_outcome: EvaluationOutcome,
     pub candidate_flaky: bool,
+    #[serde(default)]
+    pub baseline_finding_count: u32,
+    #[serde(default)]
+    pub candidate_finding_count: u32,
+    #[serde(default)]
+    pub baseline_new_or_worsened_count: u32,
+    #[serde(default)]
+    pub candidate_new_or_worsened_count: u32,
+    #[serde(default)]
+    pub baseline_existing_debt_count: u32,
+    #[serde(default)]
+    pub candidate_existing_debt_count: u32,
+    #[serde(default)]
+    pub baseline_suppressions: EvaluationSuppressionSummary,
+    #[serde(default)]
+    pub candidate_suppressions: EvaluationSuppressionSummary,
+    #[serde(default)]
+    pub suppression_newly_added_count: u32,
+    #[serde(default)]
+    pub suppression_broadened_count: u32,
+    #[serde(default)]
+    pub suppression_removed_count: u32,
+    #[serde(default)]
+    pub baseline_cost_refs: Vec<CostRecordRefV1>,
+    #[serde(default)]
+    pub candidate_cost_refs: Vec<CostRecordRefV1>,
+    #[serde(default)]
+    pub baseline_usage_and_cost: Vec<EvaluationQuantityV1>,
+    #[serde(default)]
+    pub candidate_usage_and_cost: Vec<EvaluationQuantityV1>,
     pub limitations: Vec<String>,
 }
 
@@ -402,6 +594,17 @@ pub struct EvaluationMetricSummary {
     pub baseline_rework_count: u32,
     pub candidate_rework_count: u32,
     pub candidate_rollbacks: u32,
+    pub baseline_finding_count: u32,
+    pub candidate_finding_count: u32,
+    pub baseline_new_or_worsened_count: u32,
+    pub candidate_new_or_worsened_count: u32,
+    pub baseline_existing_debt_count: u32,
+    pub candidate_existing_debt_count: u32,
+    pub baseline_suppressions: EvaluationSuppressionSummary,
+    pub candidate_suppressions: EvaluationSuppressionSummary,
+    pub suppression_newly_added_count: u32,
+    pub suppression_broadened_count: u32,
+    pub suppression_removed_count: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -413,17 +616,20 @@ pub struct EvaluationRunV2 {
     pub subject_kind: EvaluationSubjectKind,
     pub subject: EvaluationSubject,
     pub evaluation_context: EvaluationContext,
+    pub evaluation_policy_ref: EvaluationPolicyRefV1,
     pub baseline: EvaluationDefinition,
     pub candidate: EvaluationDefinition,
     pub mode: EvaluationMode,
     pub corpus_ref: String,
     pub case_selection_fingerprint: Sha256Hash,
     pub measurement_protocol_fingerprint: Sha256Hash,
+    pub minimum_sample_count: u32,
     pub case_results: Vec<EvaluationCaseResult>,
     pub ground_truth_summary: EvaluationMetricSummary,
     pub finding_metrics: EvaluationMetricSummary,
     pub efficiency_metrics: EvaluationMetricSummary,
-    pub usage_and_cost_refs: Vec<String>,
+    pub usage_and_cost_refs: Vec<CostRecordRefV1>,
+    pub usage_and_cost_metrics: Vec<EvaluationQuantityComparisonV1>,
     pub comparability: Vec<EvaluationComparability>,
     pub protected_metric_results: Vec<ProtectedMetricResult>,
     pub limitations: Vec<String>,
@@ -432,6 +638,100 @@ pub struct EvaluationRunV2 {
     pub decision_ref: Option<String>,
     pub radar_item_refs: Vec<String>,
     pub run_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CostScopeKindV1 {
+    Goal,
+    Stage,
+    Attempt,
+    ValidationRun,
+    ExternalAction,
+    Evaluation,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CostUsageV1 {
+    pub unit: String,
+    pub quantity: u64,
+    pub provider_evidence_ref: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VerifiedMonetaryCostV1 {
+    pub amount_microunits: u64,
+    pub currency: String,
+    pub price_source_ref: String,
+    pub provider_statement_ref: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CostRecordV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub cost_record_id: String,
+    pub revision: u64,
+    pub project_id: ProjectId,
+    pub scope_kind: CostScopeKindV1,
+    pub scope_ref: String,
+    #[serde(default)]
+    pub validation_run_refs: Vec<ValidationRunId>,
+    pub source: String,
+    #[serde(default)]
+    pub usage: Vec<CostUsageV1>,
+    pub monetary_cost: Option<VerifiedMonetaryCostV1>,
+    pub estimated: bool,
+    pub paid_action: bool,
+    pub measured_at: DateTime<Utc>,
+    #[serde(default)]
+    pub measurement_unavailable: Vec<String>,
+    pub provider_evidence_refs: Vec<String>,
+    pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BudgetQuantityV1 {
+    pub unit: String,
+    pub quantity: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BudgetDecisionV1 {
+    WithinBudget,
+    ApprovalRequired,
+    Exhausted,
+    Unknown,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BudgetSnapshotV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub snapshot_id: String,
+    pub revision: u64,
+    pub project_id: ProjectId,
+    pub scope_ref: String,
+    pub limits: Vec<BudgetQuantityV1>,
+    pub observed: Vec<BudgetQuantityV1>,
+    pub reserved: Vec<BudgetQuantityV1>,
+    pub remaining: Vec<BudgetQuantityV1>,
+    #[serde(default)]
+    pub unknown_measurements: Vec<String>,
+    pub decision: BudgetDecisionV1,
+    pub cost_record_refs: Vec<CostRecordRefV1>,
+    #[serde(default)]
+    pub permission_approval_refs: Vec<String>,
+    pub paid_action_pending: bool,
+    pub config_fingerprint: Sha256Hash,
+    pub evaluated_at: DateTime<Utc>,
+    pub content_fingerprint: Sha256Hash,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -451,6 +751,7 @@ pub struct EvaluationCatalogItem {
     pub item_id: String,
     pub item_version: String,
     pub definition_fingerprint: Sha256Hash,
+    pub trial_candidate: bool,
     pub lifecycle: EvaluationCatalogLifecycle,
     pub owner: String,
     pub corpus_ref: String,

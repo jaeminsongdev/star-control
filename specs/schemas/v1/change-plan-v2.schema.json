@@ -1,0 +1,552 @@
+{
+  "$defs": {
+    "ChangeGraphEdgeV2": {
+      "additionalProperties": false,
+      "properties": {
+        "atomic_group_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "from_unit_id": {
+          "type": "string"
+        },
+        "relation": {
+          "$ref": "#/$defs/ChangeGraphRelationV2"
+        },
+        "to_unit_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_unit_id",
+        "to_unit_id",
+        "relation"
+      ],
+      "type": "object"
+    },
+    "ChangeGraphRelationV2": {
+      "enum": [
+        "requires",
+        "must_precede",
+        "same_atomic_group"
+      ],
+      "type": "string"
+    },
+    "ChangePlanOriginV2": {
+      "enum": [
+        "user_planned",
+        "finding_recipe",
+        "mixed"
+      ],
+      "type": "string"
+    },
+    "ChangePlanReadinessV2": {
+      "enum": [
+        "draft",
+        "ready",
+        "blocked",
+        "invalidated"
+      ],
+      "type": "string"
+    },
+    "ChangePlanStatusV2": {
+      "enum": [
+        "draft",
+        "ready",
+        "applied",
+        "validated",
+        "blocked",
+        "abandoned",
+        "superseded"
+      ],
+      "type": "string"
+    },
+    "ChangeRecipeRef": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "recipe_id": {
+          "type": "string"
+        },
+        "recipe_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "recipe_id",
+        "recipe_version",
+        "definition_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ChangeUnitSourceV2": {
+      "enum": [
+        "user",
+        "accepted_scope_revision"
+      ],
+      "type": "string"
+    },
+    "CompletionCriterionMappingV2": {
+      "additionalProperties": false,
+      "properties": {
+        "check_plan_item_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "criterion_id": {
+          "type": "string"
+        },
+        "explicit_user_decision_omission": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "manual_observation_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "unit_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "criterion_id",
+        "unit_ids",
+        "check_plan_item_ids",
+        "manual_observation_refs"
+      ],
+      "type": "object"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ExpectedImpactRefV2": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_impact_edge_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "unit_id": {
+          "type": "string"
+        },
+        "unresolved_frontier_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "unit_id",
+        "accepted_impact_edge_ids",
+        "unresolved_frontier_refs"
+      ],
+      "type": "object"
+    },
+    "FindingRefV2": {
+      "additionalProperties": false,
+      "properties": {
+        "finding_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "finding_id": {
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "finding_fingerprint"
+      ],
+      "type": "object"
+    },
+    "IntendedChangeKind": {
+      "enum": [
+        "add",
+        "modify",
+        "delete",
+        "rename",
+        "contract_change"
+      ],
+      "type": "string"
+    },
+    "PlannedChangeUnitV2": {
+      "additionalProperties": false,
+      "properties": {
+        "change_kind": {
+          "$ref": "#/$defs/IntendedChangeKind"
+        },
+        "completion_criterion_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expected_paths": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "impact_edge_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "intended_postcondition": {
+          "type": "string"
+        },
+        "permission_requirements": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "precondition_fingerprints": {
+          "items": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "risk_path_refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source": {
+          "$ref": "#/$defs/ChangeUnitSourceV2"
+        },
+        "target_selector": {
+          "$ref": "#/$defs/PlanningSelector"
+        },
+        "unit_id": {
+          "type": "string"
+        },
+        "unresolved_target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "unit_id",
+        "target_selector",
+        "change_kind",
+        "intended_postcondition",
+        "source",
+        "reason",
+        "expected_paths",
+        "precondition_fingerprints",
+        "permission_requirements",
+        "risk_path_refs",
+        "impact_edge_refs",
+        "completion_criterion_refs"
+      ],
+      "type": "object"
+    },
+    "PlanningSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SelectorKind"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "type": "object"
+    },
+    "RelatedProjectImpactV2": {
+      "additionalProperties": false,
+      "properties": {
+        "impact_analysis_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "impact_analysis_ref"
+      ],
+      "type": "object"
+    },
+    "SelectorKind": {
+      "enum": [
+        "path",
+        "package",
+        "workspace",
+        "symbol",
+        "contract",
+        "config_key",
+        "schema",
+        "managed_declaration",
+        "source_class"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.change-plan:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "change_graph": {
+      "items": {
+        "$ref": "#/$defs/ChangeGraphEdgeV2"
+      },
+      "type": "array"
+    },
+    "change_origin": {
+      "$ref": "#/$defs/ChangePlanOriginV2"
+    },
+    "change_plan_id": {
+      "pattern": "^cpl_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "change_set_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "completion_criteria_mapping": {
+      "items": {
+        "$ref": "#/$defs/CompletionCriterionMappingV2"
+      },
+      "type": "array"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "deterministic_unit_order": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "expected_impact_refs": {
+      "items": {
+        "$ref": "#/$defs/ExpectedImpactRefV2"
+      },
+      "type": "array"
+    },
+    "expected_paths": {
+      "items": {
+        "minLength": 1,
+        "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "finding_refs": {
+      "items": {
+        "$ref": "#/$defs/FindingRefV2",
+        "pattern": "^fnd_[a-z2-7]{52}$"
+      },
+      "type": "array"
+    },
+    "impact_analysis_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "parameters": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "permission_plan_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "permission_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "planned_change_units": {
+      "items": {
+        "$ref": "#/$defs/PlannedChangeUnitV2"
+      },
+      "type": "array"
+    },
+    "preconditions": {
+      "items": {
+        "$ref": "#/$defs/Sha256Hash"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "readiness": {
+      "$ref": "#/$defs/ChangePlanReadinessV2"
+    },
+    "recipe_refs": {
+      "items": {
+        "$ref": "#/$defs/ChangeRecipeRef"
+      },
+      "type": "array"
+    },
+    "related_project_impacts": {
+      "items": {
+        "$ref": "#/$defs/RelatedProjectImpactV2"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "risk_path_refs": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.change-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "scope_revision_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "status": {
+      "$ref": "#/$defs/ChangePlanStatusV2"
+    },
+    "target_checkout_id": {
+      "type": "string"
+    },
+    "target_project_revision_id": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "target_workspace_snapshot_id": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "task_spec_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "unresolved_impacts": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "validation_plan_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "change_plan_id",
+    "revision",
+    "task_spec_ref",
+    "scope_revision_ref",
+    "impact_analysis_ref",
+    "change_origin",
+    "project_id",
+    "target_checkout_id",
+    "target_project_revision_id",
+    "target_workspace_snapshot_id",
+    "change_set_ref",
+    "related_project_impacts",
+    "planned_change_units",
+    "change_graph",
+    "deterministic_unit_order",
+    "expected_impact_refs",
+    "completion_criteria_mapping",
+    "expected_paths",
+    "finding_refs",
+    "recipe_refs",
+    "parameters",
+    "risk_path_refs",
+    "preconditions",
+    "unresolved_impacts",
+    "permission_requirements",
+    "validation_plan_ref",
+    "readiness",
+    "status",
+    "created_at",
+    "updated_at",
+    "content_fingerprint"
+  ],
+  "title": "ChangePlanV2",
+  "type": "object"
+}

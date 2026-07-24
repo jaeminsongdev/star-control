@@ -1361,6 +1361,7 @@ dependencies = [
  "star-evidence",
  "star-ipc",
  "star-planning",
+ "star-ports",
  "star-project",
  "star-release",
  "star-state",
@@ -1376,6 +1377,7 @@ dependencies = [
 name = "star-development"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "serde",
  "serde_json",
  "star-contracts",
@@ -1518,6 +1520,7 @@ dependencies = [
 name = "star-release"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "serde",
  "serde_json",
  "star-contracts",

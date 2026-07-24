@@ -1,0 +1,16 @@
+{
+  "backup_required": false,
+  "dry_run": false,
+  "entries": [],
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "project_id": "prj_00000000000000000000000000",
+  "rollback_supported": false,
+  "schema_id": "star.change-plan-v1-to-v2-migration-plan",
+  "schema_version": 2,
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "audit_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "external_gate_reasons": [
+    "fixture"
+  ],
+  "feature_statuses": [
+    {
+      "command_surfaces": [
+        "fixture"
+      ],
+      "feature_id": "fixture",
+      "missing_command_surfaces": [
+        "fixture"
+      ],
+      "physical_owner": "fixture",
+      "semantic_owner_ref": "fixture"
+    }
+  ],
+  "internal_conformance": false,
+  "lifecycle_statuses": [
+    {
+      "architecture": "x64",
+      "candidate_artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "evidence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "evidence_record_id": "fixture",
+      "runtime_verification": "native_verified",
+      "support_tier": "stable"
+    }
+  ],
+  "m11_profile_conformant": false,
+  "profile_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "profile_statuses": [
+    {
+      "conformant": false,
+      "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "limitations": [
+        "fixture"
+      ],
+      "profile_id": "fixture",
+      "profile_version": "fixture",
+      "resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "release_manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "release_manifest_id": "rel_00000000000000000000000000",
+  "release_status": "draft",
+  "schema_id": "star.final-product-audit",
+  "schema_version": 1,
+  "status": "conformant"
+}

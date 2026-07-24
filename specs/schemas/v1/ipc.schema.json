@@ -167,6 +167,112 @@
       "type": "object"
     },
     "request": {
+      "$defs": {
+        "ConfigOverrideV1": {
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "maxLength": 160,
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ConfigValueV1"
+            }
+          },
+          "required": [
+            "key",
+            "value"
+          ],
+          "type": "object"
+        },
+        "ConfigValueV1": {
+          "oneOf": [
+            {
+              "properties": {
+                "kind": {
+                  "const": "boolean",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "integer",
+                  "type": "string"
+                },
+                "value": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "kind",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "string",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "string_set",
+                  "type": "string"
+                },
+                "value": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "kind": {
+                  "const": "json",
+                  "type": "string"
+                },
+                "value": true
+              },
+              "required": [
+                "kind",
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
       "$id": "urn:star-control:schema:ipc.request:v1",
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
@@ -177,6 +283,13 @@
         },
         "command": {
           "type": "string"
+        },
+        "config_overrides": {
+          "items": {
+            "$ref": "#/$defs/ConfigOverrideV1"
+          },
+          "maxItems": 128,
+          "type": "array"
         },
         "deadline": {
           "type": [
@@ -222,12 +335,25 @@
           "enum": [
             "config",
             "contract",
+            "environment",
             "state",
             "policy",
             "route",
+            "planning",
+            "impact",
+            "affected",
+            "registry",
             "tool",
             "codex",
             "validation",
+            "reproduction",
+            "security",
+            "dependency",
+            "maintenance",
+            "migration",
+            "performance",
+            "equivalence",
+            "patch",
             "vcs",
             "ipc",
             "release",

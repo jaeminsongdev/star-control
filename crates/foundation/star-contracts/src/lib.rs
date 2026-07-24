@@ -5,10 +5,12 @@
 //! process, or transport dependency.
 
 pub mod canonical;
+pub mod config_v1;
 pub mod coordination_v2;
 pub mod development;
 pub mod development_effect;
 pub mod development_v2;
+pub mod error_codes;
 pub mod evidence;
 pub mod evidence_v2;
 pub mod fixed_mcp;

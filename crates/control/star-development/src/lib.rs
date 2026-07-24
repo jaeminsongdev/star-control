@@ -11,11 +11,13 @@ pub mod managed_registry_v2;
 pub mod migration;
 pub mod migration_v2;
 
-use star_contracts::Sha256Hash;
+use star_contracts::{Sha256Hash, error_codes::StableErrorCode};
 use star_domain::versioned_fingerprint;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum DevelopmentError {
+    #[error("stable development contract failure: {0}")]
+    Coded(StableErrorCode),
     #[error("input is invalid")]
     Invalid,
     #[error("input is stale, partial, or unverified")]
@@ -28,6 +30,14 @@ pub enum DevelopmentError {
     Adapter,
     #[error("fingerprint calculation failed")]
     Fingerprint,
+}
+
+impl DevelopmentError {
+    pub fn code(value: &'static str) -> Self {
+        StableErrorCode::parse(value)
+            .map(Self::Coded)
+            .unwrap_or(Self::Invalid)
+    }
 }
 
 pub(crate) fn fingerprint<T: serde::Serialize>(

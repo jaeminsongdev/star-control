@@ -217,7 +217,7 @@ source effect가 있는 StageSpec은 한 ProjectId·CheckoutId만 가진다. 여
 
 ProjectRef는 [공통 개발 관리 계약](development-management.md)의 Project를 Goal 안에서 가리키는 작은 view다. shared identity와 source metadata를 다시 소유하지 않는다.
 
-아래 checkout·Catalog·Index field는 1단계 v2 **목표 계약**이며 현재 P0 schema·제품 구현 완료를 뜻하지 않는다. v2 migration gate 전 persisted v1은 단일 `root_binding_id` 표현만 지원한다.
+아래 checkout·Catalog·Index field는 P-0041~P-0056 현재 구현된 v2 ProjectRef view다. persisted v1의 단일 `root_binding_id`는 compatibility reader와 v1→v2 migration input으로만 지원하며 current write는 `checkout_id`와 typed snapshot ref를 사용한다.
 
 | 필드 | 필수 | 의미 |
 |---|---|---|
@@ -236,7 +236,7 @@ ProjectRef는 [공통 개발 관리 계약](development-management.md)의 Projec
 
 여러 프로젝트 목표에서는 `project_id`로만 연결하며 한 프로젝트의 절대 경로를 다른 프로젝트 evidence에 복제하지 않는다.
 
-raw root path는 persisted ProjectRef, event, DB와 evidence에 넣지 않는다. Windows adapter가 ProjectCheckout의 `root_binding_id`를 Controller process memory에서 해석한 뒤 ProjectPathRef를 실제 I/O에만 사용한다. P0 ProjectRef v1의 `root_binding_id`·`base_revision`은 1단계 구현 시 v2 `checkout_id`·typed snapshot ref로 migration하며 두 표현의 불일치는 오류다.
+raw root path는 persisted ProjectRef, event, DB와 evidence에 넣지 않는다. Windows adapter가 ProjectCheckout의 protected root binding을 Controller process memory에서 해석한 뒤 ProjectPathRef를 실제 I/O에만 사용한다. P-0041 migration은 P0 ProjectRef v1의 `root_binding_id`·`base_revision`을 v2 `checkout_id`·typed snapshot ref로 이동하며, compatibility 입력에 두 표현이 함께 있으면 exact attachment를 증명하지 못하는 불일치를 오류로 처리한다.
 
 ### SourceRecord
 
@@ -333,7 +333,7 @@ StageSpec은 실행 중 조용히 덮어쓰지 않는다. 범위나 완료 조�
 
 ContextPack은 전체 파일 내용 묶음이 아니라 왜 선택했는지 설명할 수 있는 참조 목록이다.
 
-ProjectCatalogSnapshot·CodeIndexSnapshot·quality/freshness field는 1단계 v2 목표 계약이다. 구현 전에는 존재하지 않는 snapshot을 합성하거나 P0 ScanRun을 semantic index 근거로 승격하지 않는다.
+ProjectCatalogSnapshot·CodeIndexSnapshot·quality/freshness field는 현재 M1 v2 계약과 repository projection에 구현돼 있다. ContextPack은 current complete snapshot만 exact ref로 소비하며, snapshot이 없거나 stale·partial이면 합성하거나 P0 ScanRun을 semantic index 근거로 승격하지 않는다.
 
 | 필드 | 의미 |
 |---|---|

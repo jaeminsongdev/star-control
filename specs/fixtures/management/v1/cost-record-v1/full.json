@@ -1,0 +1,36 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "cost_record_id": "fixture",
+  "estimated": false,
+  "measured_at": "2026-01-01T00:00:00Z",
+  "measurement_unavailable": [
+    "fixture"
+  ],
+  "monetary_cost": {
+    "amount_microunits": 0,
+    "currency": "fixture",
+    "price_source_ref": "fixture",
+    "provider_statement_ref": "fixture"
+  },
+  "paid_action": false,
+  "project_id": "prj_00000000000000000000000000",
+  "provider_evidence_refs": [
+    "fixture"
+  ],
+  "revision": 0,
+  "schema_id": "star.cost-record",
+  "schema_version": 1,
+  "scope_kind": "goal",
+  "scope_ref": "fixture",
+  "source": "fixture",
+  "usage": [
+    {
+      "provider_evidence_ref": "fixture",
+      "quantity": 0,
+      "unit": "fixture"
+    }
+  ],
+  "validation_run_refs": [
+    "val_00000000000000000000000000"
+  ]
+}

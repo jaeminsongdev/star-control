@@ -8,6 +8,23 @@
       ],
       "type": "string"
     },
+    "EvaluationRunEvidenceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "evaluation_run_id": {
+          "pattern": "^evr_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "run_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "evaluation_run_id",
+        "run_fingerprint"
+      ],
+      "type": "object"
+    },
     "ExternalFreshness": {
       "enum": [
         "current",
@@ -41,6 +58,13 @@
           "default": [],
           "items": {
             "type": "string"
+          },
+          "type": "array"
+        },
+        "evaluation_run_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvaluationRunEvidenceRef"
           },
           "type": "array"
         },

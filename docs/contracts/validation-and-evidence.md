@@ -366,9 +366,9 @@ backup byte 존재와 restore 검증을 하나의 boolean으로 만들지 않는
 
 이 절은 1단계 read-only scan이 “현재 source를 얼마나 보았는가”를 검증 가능한 증거로 만드는 규칙을 소유한다. 구체적인 entity·partition 필드는 [Project Catalog·Code Index 계약](project-catalog-and-code-index.md)을 반복하지 않고 참조한다.
 
-아래 항목은 1단계 목표 evidence 계약이며 현재 ScanRun Schema나 DB에 구현된 것으로 읽지 않는다.
+아래 항목은 P-0056 현재 M1 evidence 계약이다. 구현은 `ScanRun`, `ProjectCatalogSnapshot`, `CodeIndexSnapshot`과 Finding/evidence projection에 정규화되어 있으며 모든 항목을 ScanRun 한 record의 field로 읽지 않는다. 각 record는 `scan_run_id`, Catalog/Index ID와 source/config fingerprint로 결합되고 repository가 current complete generation을 원자 publish한다.
 
-### ScanRun evidence 최소 집합
+### M1 scan/index evidence 최소 집합
 
 | 묶음 | 필수 근거 |
 |---|---|
@@ -952,15 +952,16 @@ EvaluationRun은 Router, Rule, Check, Profile, ChangeRecipe와 정책 후보가 
 | `evaluation_run_id` | 문서 ID |
 | `subject_kind`, `subject` | route/policy, Rule, Check, Profile, Recipe 중 하나의 stable ID·version·definition fingerprint |
 | `evaluation_context` | `cli_only` 또는 `codex_integrated`; 다른 context를 같은 cohort로 합치지 않음 |
+| `evaluation_policy_ref` | precommitted `EvaluationPolicyV1` ID/version/revision/fingerprint |
 | `baseline`, `candidate` | 비교 대상 definition·resolved closure·policy snapshot |
 | `mode` | `offline`, `replay`, `shadow` |
 | `corpus_ref` | 실제 사례를 비식별화한 평가 자료와 version |
-| `case_selection`, `measurement_protocol` | case filter·sample floor·attempt·timeout·retry·metric·threshold의 사전 고정 값 |
-| `case_result_refs` | 사례별 subject binding·run·Diagnostic/Finding·adjudication·rework·outcome artifact |
+| `case_selection_fingerprint`, `measurement_protocol_fingerprint`, `minimum_sample_count` | exact policy/case set·attempt·timeout·retry·metric의 사전 고정 값 |
+| `case_results` | `case_definition_ref`, subject binding, baseline/candidate ValidationRun, Diagnostic/Finding, adjudication, rework·outcome |
 | `ground_truth_summary` | confirmed defect, false positive, unresolved, not-applicable 수와 denominator |
 | `finding_metrics` | Rule/Check·severity·new/existing/worsened별 finding, false negative, flaky와 suppression 상태 |
 | `efficiency_metrics` | first-result·total·review·rework duration, retry·failure·rollback·revert·acceptance |
-| `usage_and_cost_refs` | 실제 단위와 provider가 검증 가능한 금액만 가진 CostRecord |
+| `usage_and_cost_refs`, `usage_and_cost_metrics` | exact CostRecord ref와 unit별 baseline/candidate aggregate |
 | `comparability` | case/source/config/Catalog/Tool/environment/protocol dimension별 compatible·not-comparable |
 | `protected_metric_results` | validator guard, required Check·severity·ratchet·Corpus·freshness 약화 여부 |
 | `limitations` | 표본·측정·외부 조건의 한계 |
@@ -971,7 +972,11 @@ EvaluationRun은 Router, Rule, Check, Profile, ChangeRecipe와 정책 후보가 
 
 case adjudication은 `confirmed_defect|false_positive|unresolved|not_applicable`을 구분한다. unresolved를 defect나 false positive에 넣지 않고 denominator 0은 100%가 아니라 `not_computable`이다. suppression은 raw finding을 삭제하거나 false positive를 대신하지 않는다.
 
+`EvaluationCaseDefinitionV1`은 Project/case/corpus/context/ground truth evidence/source ref를, `EvaluationPolicyV1`은 exact case set·sample/attempt floor·comparability dimensions·protected metrics·provider-cost 요구를 seal한다. Controller는 safe project-relative source JSON과 stored projection을 실행·조회·Radar·Catalog transition 때마다 재비교한다. result input의 adjudication이나 sample count로 policy를 덮어쓰지 않는다.
+
 baseline/candidate는 case·source·config·Catalog·Tool·environment·measurement protocol이 같을 때만 비교 가능하다. 실행 시간 단축이 false negative·new/worsened finding·rollback 증가 또는 validator weakening을 상쇄하지 않는다. monetary cost는 provider가 검증 가능한 값과 price source를 제공한 경우만 기록하고, 없으면 0이 아니라 `measurement_unavailable`이다.
+
+`CostRecordV1`은 estimated=false, exact Project/scope/current ValidationRun, provider evidence, usage unit과 optional ISO currency microunit/price source를 요구한다. `BudgetSnapshotV1`은 exact CostRecord ref에서 observed/reserved/remaining/unknown과 permission-aware decision을 다시 계산할 수 있어야 한다. cost가 없거나 attribution이 baseline/candidate cohort에 걸치면 EvaluationRun은 `needs_review` 또는 evidence missing으로 남는다.
 
 shadow mode는 실제 작업의 route, permission, 검사와 파일을 바꾸지 않는다. EvaluationRun의 recommendation만으로 Catalog나 설정을 자동 갱신하지 않는다. `accept`도 review된 source change·migration·M3 Gate의 입력일 뿐 자동 적용 명령이 아니다.
 
@@ -1010,6 +1015,8 @@ ReleaseManifest는 Star-Control 자체 또는 대상 프로젝트 release 후보
 `blocked_external`은 certificate·timestamp provider처럼 required 외부 prerequisite가 없어 local run만으로 해소할 수 없는 상태이며 pass가 아니다. `ready`는 publish됐다는 뜻이 아니고, `approved`는 remote effect가 성공했다는 뜻이 아니다. top-level `published`는 주 publication action의 exact provider after snapshot이 version·source/tag·artifact digest·channel을 확인한 event가 있을 때만 기록한다. deploy는 role별 remote action `verified`와 `deployed_verified` projection을 사용하며 top-level status를 되감거나 가짜 published를 만들지 않는다. adapter success response, local tag, branch name과 이전 snapshot만으로 `published`를 만들지 않는다.
 
 필요하지 않은 SBOM·provenance·signing은 field를 조용히 생략하지 않고 applicability=`not_required`, versioned policy·이유·decision ref를 둔다. required인데 unavailable/incomplete이면 release Gate는 block한다.
+
+`FinalProductAuditV1`은 exact ReleaseManifest/artifact-set, current Profile Catalog fingerprint, A01~D03 23개 feature의 semantic/physical owner와 실제 handler surface, exact 16 Profile resolution, M11 closure, architecture별 receipt-bound lifecycle evidence를 봉인한다. `internal_conformance`와 `status=conformant|blocked_external|blocked`를 분리한다. ARM64 Preview fake/cfg/target simulation은 `native_unverified`로 허용하지만 ARM64 Stable native pass로 승격할 수 없고, missing lifecycle·Stable non-native·required signing/provider는 external Gate로 남는다.
 
 ### 10단계 release evidence phase
 

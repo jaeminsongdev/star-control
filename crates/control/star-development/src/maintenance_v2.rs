@@ -3,9 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use star_contracts::{
-    ProjectId, Sha256Hash,
+    ProjectId, Sha256Hash, canonical_sha256,
     development_v2::CoverageState,
     maintenance_v2::{
         DEPENDENCY_SNAPSHOT_SCHEMA_ID, DEPENDENCY_UPDATE_PLAN_SCHEMA_ID, DependencyRecord,
@@ -15,9 +16,10 @@ use star_contracts::{
         FailureCausalityRole, FailureInvocation, FailureKind, FailureRecord, FailureSubjectBinding,
         MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID, MaintenanceRadarItem, MaintenanceRadarSnapshot,
         PrimarySymptom, RECOVERY_PLAN_V2_SCHEMA_ID, REGRESSION_RECORD_SCHEMA_ID,
-        REPRODUCTION_PACK_V2_SCHEMA_ID, RecoveryPlanState, RecoveryPlanV2, RegressionRecord,
-        RegressionState, ReproductionArtifactRef, ReproductionAttemptV2, ReproductionPackV2,
-        ReproductionResult, RootCandidateRef, SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID,
+        REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID, REPRODUCTION_PACK_V2_SCHEMA_ID,
+        RecoveryPlanState, RecoveryPlanV2, RegressionRecord, RegressionState,
+        ReproductionArtifactRef, ReproductionAttemptObservationV1, ReproductionAttemptV2,
+        ReproductionPackV2, ReproductionResult, RootCandidateRef, SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID,
         SupplyChainObservation, SupplyChainSnapshot, UpdateCandidate, VerificationState,
     },
 };
@@ -75,6 +77,61 @@ pub struct ReproductionPackInput {
     pub artifacts: Vec<ReproductionArtifactRef>,
     #[serde(default)]
     pub limitations: Vec<String>,
+}
+
+pub fn seal_reproduction_attempt_observation(
+    mut observation: ReproductionAttemptObservationV1,
+) -> Result<ReproductionAttemptObservationV1, DevelopmentError> {
+    observation.evidence_refs.sort();
+    observation.evidence_refs.dedup();
+    observation.limitations.sort();
+    observation.limitations.dedup();
+    let invalid_text =
+        |value: &String| value.trim().is_empty() || value.len() > 1_024 || value.contains('\0');
+    if observation.schema_id != REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID
+        || observation.schema_version != 1
+        || observation.attempt == 0
+        || observation.evidence_refs.iter().any(invalid_text)
+        || observation.limitations.iter().any(invalid_text)
+        || matches!(
+            observation.result,
+            ReproductionResult::Reproduced | ReproductionResult::DifferentFailure
+        ) && (observation.family_fingerprint.is_none()
+            || observation.occurrence_fingerprint.is_none())
+        || matches!(
+            observation.result,
+            ReproductionResult::BlockedExternal | ReproductionResult::Incomplete
+        ) && observation.limitations.is_empty()
+    {
+        return Err(DevelopmentError::Invalid);
+    }
+    Ok(observation)
+}
+
+pub fn reproduction_attempt_observation(
+    attempt: &ReproductionAttemptV2,
+) -> Result<ReproductionAttemptObservationV1, DevelopmentError> {
+    seal_reproduction_attempt_observation(ReproductionAttemptObservationV1 {
+        schema_id: REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        attempt: attempt.attempt,
+        result: attempt.result,
+        family_fingerprint: attempt.family_fingerprint.clone(),
+        occurrence_fingerprint: attempt.occurrence_fingerprint.clone(),
+        environment_fingerprint: attempt.environment_fingerprint.clone(),
+        input_fingerprint: attempt.input_fingerprint.clone(),
+        duration_ms: attempt.duration_ms,
+        evidence_refs: attempt.evidence_refs.clone(),
+        limitations: attempt.limitations.clone(),
+    })
+}
+
+pub fn reproduction_attempt_observation_fingerprint(
+    observation: ReproductionAttemptObservationV1,
+) -> Result<Sha256Hash, DevelopmentError> {
+    let value = serde_json::to_value(seal_reproduction_attempt_observation(observation)?)
+        .map_err(|_| DevelopmentError::Fingerprint)?;
+    canonical_sha256(&value).map_err(|_| DevelopmentError::Fingerprint)
 }
 
 pub fn build_failure_record(input: FailureRecordInput) -> Result<FailureRecord, DevelopmentError> {
@@ -224,6 +281,31 @@ pub fn build_reproduction_pack_v2(
     {
         return Err(DevelopmentError::Invalid);
     }
+    for attempt in &mut input.attempts {
+        attempt.evidence_refs.sort();
+        attempt.evidence_refs.dedup();
+        attempt.limitations.sort();
+        attempt.limitations.dedup();
+        let completed = matches!(
+            attempt.result,
+            ReproductionResult::Reproduced
+                | ReproductionResult::DifferentFailure
+                | ReproductionResult::NotReproduced
+        );
+        if completed
+            && attempt
+                .effect_receipt_ref
+                .as_deref()
+                .is_none_or(|receipt| !token(receipt, 192))
+            || attempt
+                .effect_receipt_ref
+                .as_deref()
+                .is_some_and(|receipt| !token(receipt, 192))
+            || reproduction_attempt_observation(attempt).is_err()
+        {
+            return Err(DevelopmentError::Invalid);
+        }
+    }
     input.attempts.sort_by_key(|attempt| attempt.attempt);
     if input.attempts.is_empty()
         || input.attempts.iter().any(|attempt| attempt.attempt == 0)
@@ -231,6 +313,12 @@ pub fn build_reproduction_pack_v2(
             .attempts
             .windows(2)
             .any(|pair| pair[0].attempt == pair[1].attempt)
+        || input.attempts.iter().any(|attempt| {
+            attempt.result == ReproductionResult::Reproduced
+                && attempt.family_fingerprint.as_ref() != Some(&failure.family_fingerprint)
+                || attempt.result == ReproductionResult::DifferentFailure
+                    && attempt.family_fingerprint.as_ref() == Some(&failure.family_fingerprint)
+        })
         || input.artifacts.iter().any(|artifact| {
             matches!(
                 artifact.redaction_status.as_str(),
@@ -307,7 +395,26 @@ pub fn build_reproduction_pack_v2(
         limitations: input.limitations,
         pack_fingerprint: placeholder(),
     };
-    pack.pack_fingerprint = fingerprint(
+    pack.pack_fingerprint = reproduction_pack_fingerprint(&pack)?;
+    Ok(pack)
+}
+
+pub fn verify_reproduction_pack_v2(
+    pack: ReproductionPackV2,
+) -> Result<ReproductionPackV2, DevelopmentError> {
+    if pack.schema_id != REPRODUCTION_PACK_V2_SCHEMA_ID
+        || pack.schema_version != 2
+        || pack.pack_fingerprint != reproduction_pack_fingerprint(&pack)?
+    {
+        return Err(DevelopmentError::Invalid);
+    }
+    Ok(pack)
+}
+
+fn reproduction_pack_fingerprint(
+    pack: &ReproductionPackV2,
+) -> Result<Sha256Hash, DevelopmentError> {
+    fingerprint(
         REPRODUCTION_PACK_V2_SCHEMA_ID,
         &serde_json::json!({
             "reproduction_pack_id": pack.reproduction_pack_id,
@@ -330,8 +437,7 @@ pub fn build_reproduction_pack_v2(
             "completeness": pack.completeness,
             "limitations": pack.limitations,
         }),
-    )?;
-    Ok(pack)
+    )
 }
 
 pub fn seal_regression_record(
@@ -502,6 +608,18 @@ pub fn build_external_data_snapshot(
     {
         return Err(DevelopmentError::Invalid);
     }
+    let retrieved =
+        DateTime::parse_from_rfc3339(&retrieved_at).map_err(|_| DevelopmentError::Invalid)?;
+    let valid =
+        DateTime::parse_from_rfc3339(&valid_until).map_err(|_| DevelopmentError::Invalid)?;
+    let evaluated =
+        DateTime::parse_from_rfc3339(&evaluation_time).map_err(|_| DevelopmentError::Invalid)?;
+    let maximum_age = chrono::Duration::seconds(
+        i64::try_from(source.maximum_age_seconds).map_err(|_| DevelopmentError::Invalid)?,
+    );
+    if valid < retrieved || valid - retrieved > maximum_age || evaluated < retrieved {
+        return Err(DevelopmentError::Invalid);
+    }
     observations.sort_by(|left, right| left.subject.cmp(&right.subject));
     if observations
         .windows(2)
@@ -511,7 +629,7 @@ pub fn build_external_data_snapshot(
     }
     let freshness = if !available {
         ExternalFreshness::Unavailable
-    } else if evaluation_time > valid_until {
+    } else if evaluated > valid {
         ExternalFreshness::Expired
     } else {
         ExternalFreshness::Current
@@ -738,6 +856,22 @@ pub fn build_maintenance_radar_snapshot(
     valid_until: Option<String>,
     mut items: Vec<MaintenanceRadarItem>,
 ) -> Result<MaintenanceRadarSnapshot, DevelopmentError> {
+    for item in &mut items {
+        item.finding_refs.sort();
+        item.finding_refs.dedup();
+        item.diagnostic_refs.sort();
+        item.diagnostic_refs.dedup();
+        item.dependency_refs.sort();
+        item.dependency_refs.dedup();
+        item.regression_refs.sort();
+        item.regression_refs.dedup();
+        item.suppression_refs.sort();
+        item.suppression_refs.dedup();
+        item.evidence_refs.sort();
+        item.evidence_refs.dedup();
+        item.evaluation_run_refs.sort();
+        item.evaluation_run_refs.dedup();
+    }
     if !token(&snapshot_id, 192)
         || !timestamp_shape(&evaluation_time)
         || valid_until
@@ -1374,6 +1508,53 @@ mod tests {
         assert_eq!(first.family_fingerprint, second.family_fingerprint);
         assert_ne!(first.occurrence_fingerprint, second.occurrence_fingerprint);
         assert!(!first.primary_symptom.message_template.contains("tmp"));
+    }
+
+    #[test]
+    fn complete_reproduction_attempt_requires_a_receipt_bound_semantic_observation() {
+        let failure = build_failure_record(failure_input(ProjectId::new(), "test failed")).unwrap();
+        let mut attempt = ReproductionAttemptV2 {
+            attempt: 1,
+            result: ReproductionResult::Reproduced,
+            family_fingerprint: Some(failure.family_fingerprint.clone()),
+            occurrence_fingerprint: Some(Sha256Hash::digest(b"rerun-occurrence")),
+            environment_fingerprint: failure.environment_fingerprint.clone(),
+            input_fingerprint: Sha256Hash::digest(b"input"),
+            duration_ms: 25,
+            evidence_refs: vec!["artifact:rerun".to_owned()],
+            limitations: Vec::new(),
+            effect_receipt_ref: None,
+        };
+        let input = |attempt| ReproductionPackInput {
+            reproduction_pack_id: "reproduction-one".to_owned(),
+            dirty_state: "clean".to_owned(),
+            manifest_refs: vec!["manifest:one".to_owned()],
+            expected_result: "test fails".to_owned(),
+            observed_result: "test failed".to_owned(),
+            attempts: vec![attempt],
+            artifacts: Vec::new(),
+            limitations: Vec::new(),
+        };
+
+        assert_eq!(
+            build_reproduction_pack_v2(&failure, input(attempt.clone())),
+            Err(DevelopmentError::Invalid)
+        );
+        attempt.effect_receipt_ref = Some("receipt-one".to_owned());
+        let observation = reproduction_attempt_observation(&attempt).unwrap();
+        let fingerprint =
+            reproduction_attempt_observation_fingerprint(observation.clone()).unwrap();
+        assert_eq!(
+            fingerprint,
+            canonical_sha256(&serde_json::to_value(observation).unwrap())
+                .expect("sealed observation hashes")
+        );
+        assert_eq!(
+            build_reproduction_pack_v2(&failure, input(attempt))
+                .unwrap()
+                .result,
+            ReproductionResult::Reproduced
+        );
     }
 
     #[test]

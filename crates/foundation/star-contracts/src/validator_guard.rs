@@ -19,10 +19,13 @@ use crate::{
         ValidationOutcome,
     },
     ids::{ProjectId, ValidatorGuardEvidenceId},
+    management::ProjectPathRef,
 };
 
 pub const VALIDATOR_GUARD_EVIDENCE_SCHEMA_ID: &str = "star.validator-guard-evidence";
 pub const VALIDATOR_GUARD_EVIDENCE_SCHEMA_VERSION: u32 = 2;
+pub const VALIDATOR_CORPUS_MANIFEST_SCHEMA_ID: &str = "star.validator-corpus-manifest";
+pub const VALIDATOR_CORPUS_MANIFEST_SCHEMA_VERSION: u32 = 2;
 
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
@@ -55,6 +58,265 @@ pub enum GuardComparisonOutcomeV2 {
     Strengthened,
     Weakened,
     Unverified,
+}
+
+/// Immutable source fixture declaration used by both the trusted and candidate
+/// validator executors. Expected behavior is part of the reviewed source
+/// manifest; an executor result can never rewrite it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ValidatorCorpusFixtureV2 {
+    pub fixture_id: String,
+    pub fixture_kind: GuardFixtureKindV2,
+    pub input_path: ProjectPathRef,
+    pub input_sha256: Sha256Hash,
+    pub rule_id: String,
+    pub rule_version: String,
+    pub expected_diagnostic_codes: Vec<String>,
+    pub expected_gate_decision: GateDecisionKind,
+    pub protected_behavior: Vec<String>,
+    pub expected_behavior_fingerprint: Sha256Hash,
+}
+
+impl ValidatorCorpusFixtureV2 {
+    fn seal(mut self) -> Result<Self, ValidatorCorpusError> {
+        self.expected_diagnostic_codes.sort();
+        self.expected_diagnostic_codes.dedup();
+        self.protected_behavior.sort();
+        self.protected_behavior.dedup();
+        if self.fixture_id.trim().is_empty()
+            || self.rule_id.trim().is_empty()
+            || self.rule_version.trim().is_empty()
+            || self.protected_behavior.is_empty()
+            || self
+                .protected_behavior
+                .iter()
+                .any(|value| value.trim().is_empty())
+            || self.expected_diagnostic_codes.iter().any(|code| {
+                code.is_empty()
+                    || !code.bytes().all(|byte| {
+                        byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_'
+                    })
+            })
+            || (self.fixture_kind == GuardFixtureKindV2::Positive
+                && (self.expected_gate_decision != GateDecisionKind::AutoPass
+                    || !self.expected_diagnostic_codes.is_empty()))
+            || (self.fixture_kind != GuardFixtureKindV2::Positive
+                && (self.expected_gate_decision == GateDecisionKind::AutoPass
+                    || self.expected_diagnostic_codes.is_empty()))
+        {
+            return Err(ValidatorCorpusError::Fixture);
+        }
+        self.expected_behavior_fingerprint = guard_fingerprint(
+            "star.validator-corpus-fixture",
+            &serde_json::json!({
+                "fixture_id":self.fixture_id,
+                "fixture_kind":self.fixture_kind,
+                "input_path":self.input_path,
+                "input_sha256":self.input_sha256,
+                "rule_id":self.rule_id,
+                "rule_version":self.rule_version,
+                "expected_diagnostic_codes":self.expected_diagnostic_codes,
+                "expected_gate_decision":self.expected_gate_decision,
+                "protected_behavior":self.protected_behavior,
+            }),
+        )
+        .map_err(|_| ValidatorCorpusError::Fingerprint)?;
+        Ok(self)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ValidatorCorpusManifestV2 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub corpus_id: String,
+    pub revision: u64,
+    pub protected_surface_paths: Vec<ProjectPathRef>,
+    pub fixtures: Vec<ValidatorCorpusFixtureV2>,
+    pub manifest_fingerprint: Sha256Hash,
+}
+
+impl ValidatorCorpusManifestV2 {
+    pub fn seal(mut self) -> Result<Self, ValidatorCorpusError> {
+        self.protected_surface_paths.sort();
+        self.protected_surface_paths.dedup();
+        self.fixtures = self
+            .fixtures
+            .into_iter()
+            .map(ValidatorCorpusFixtureV2::seal)
+            .collect::<Result<Vec<_>, _>>()?;
+        self.fixtures
+            .sort_by(|left, right| left.fixture_id.cmp(&right.fixture_id));
+        let fixture_ids = self
+            .fixtures
+            .iter()
+            .map(|fixture| fixture.fixture_id.as_str())
+            .collect::<BTreeSet<_>>();
+        let input_paths = self
+            .fixtures
+            .iter()
+            .map(|fixture| fixture.input_path.as_str())
+            .collect::<BTreeSet<_>>();
+        let kinds = self
+            .fixtures
+            .iter()
+            .map(|fixture| fixture.fixture_kind)
+            .collect::<BTreeSet<_>>();
+        let required = [
+            GuardFixtureKindV2::Positive,
+            GuardFixtureKindV2::Negative,
+            GuardFixtureKindV2::Edge,
+            GuardFixtureKindV2::Regression,
+        ];
+        if self.schema_id != VALIDATOR_CORPUS_MANIFEST_SCHEMA_ID
+            || self.schema_version != VALIDATOR_CORPUS_MANIFEST_SCHEMA_VERSION
+            || self.corpus_id.trim().is_empty()
+            || self.revision == 0
+            || self.protected_surface_paths.is_empty()
+            || fixture_ids.len() != self.fixtures.len()
+            || input_paths.len() != self.fixtures.len()
+            || !required.into_iter().all(|kind| kinds.contains(&kind))
+        {
+            return Err(ValidatorCorpusError::Manifest);
+        }
+        self.manifest_fingerprint = guard_fingerprint(
+            "star.validator-corpus-manifest",
+            &serde_json::json!({
+                "corpus_id":self.corpus_id,
+                "revision":self.revision,
+                "protected_surface_paths":self.protected_surface_paths,
+                "fixtures":self.fixtures,
+            }),
+        )
+        .map_err(|_| ValidatorCorpusError::Fingerprint)?;
+        Ok(self)
+    }
+
+    pub fn reference(&self) -> Result<DocumentRef, ValidatorCorpusError> {
+        let sealed = self.clone().seal()?;
+        let sha256 = document_hash(&sealed).map_err(|_| ValidatorCorpusError::Fingerprint)?;
+        Ok(DocumentRef {
+            schema_id: VALIDATOR_CORPUS_MANIFEST_SCHEMA_ID.to_owned(),
+            document_id: sealed.corpus_id,
+            revision: sealed.revision,
+            sha256,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum ValidatorCorpusError {
+    #[error("validator corpus fixture is invalid")]
+    Fixture,
+    #[error("validator corpus manifest is invalid")]
+    Manifest,
+    #[error("validator corpus fingerprint could not be calculated")]
+    Fingerprint,
+}
+
+/// Normalized output of one trusted/candidate validator Corpus comparison.
+/// A `*_passed` value means the executor matched the reviewed expectation for
+/// that fixture; it does not mean the fixture itself represents a success
+/// case.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ValidatorCorpusObservationFixtureV2 {
+    pub fixture_kind: GuardFixtureKindV2,
+    pub previous_snapshot_passed: bool,
+    pub current_snapshot_passed: bool,
+    pub result_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ValidatorCorpusObservationV2 {
+    pub protected_surface_changed: bool,
+    pub previous_snapshot_fingerprint: Option<Sha256Hash>,
+    pub current_snapshot_fingerprint: Option<Sha256Hash>,
+    pub behavior_weakened: bool,
+    pub independent_previous_executor: bool,
+    pub fixtures: Vec<ValidatorCorpusObservationFixtureV2>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ValidatorCorpusEvaluationV2 {
+    pub diagnostic_codes: Vec<String>,
+    pub gate_decision: GateDecisionKind,
+    pub evaluation_fingerprint: Sha256Hash,
+}
+
+pub fn evaluate_validator_corpus_observation(
+    observation: &ValidatorCorpusObservationV2,
+) -> Result<ValidatorCorpusEvaluationV2, ValidatorCorpusError> {
+    let mut diagnostic_codes = Vec::new();
+    if observation.behavior_weakened {
+        diagnostic_codes.push("VALIDATOR_BEHAVIOR_WEAKENED".to_owned());
+    }
+    if observation.protected_surface_changed {
+        let distinct_snapshots = observation
+            .previous_snapshot_fingerprint
+            .as_ref()
+            .zip(observation.current_snapshot_fingerprint.as_ref())
+            .is_some_and(|(previous, current)| previous != current);
+        if !distinct_snapshots {
+            diagnostic_codes.push("VALIDATOR_TWO_SNAPSHOT_MISSING".to_owned());
+        }
+        if !observation.independent_previous_executor {
+            diagnostic_codes.push("VALIDATOR_SELF_APPROVAL_ONLY".to_owned());
+        }
+        let required = [
+            GuardFixtureKindV2::Positive,
+            GuardFixtureKindV2::Negative,
+            GuardFixtureKindV2::Edge,
+            GuardFixtureKindV2::Regression,
+        ];
+        let observed_kinds = observation
+            .fixtures
+            .iter()
+            .map(|fixture| fixture.fixture_kind)
+            .collect::<BTreeSet<_>>();
+        let unique_results = observation
+            .fixtures
+            .iter()
+            .map(|fixture| fixture.result_fingerprint.clone())
+            .collect::<BTreeSet<_>>();
+        let fixture_coverage_complete = required
+            .into_iter()
+            .all(|kind| observed_kinds.contains(&kind))
+            && observed_kinds.len() == observation.fixtures.len()
+            && unique_results.len() == observation.fixtures.len()
+            && observation
+                .fixtures
+                .iter()
+                .all(|fixture| fixture.previous_snapshot_passed && fixture.current_snapshot_passed);
+        if !fixture_coverage_complete {
+            diagnostic_codes.push("VALIDATOR_FIXTURE_COVERAGE_MISSING".to_owned());
+        }
+    }
+    diagnostic_codes.sort();
+    diagnostic_codes.dedup();
+    let gate_decision = if diagnostic_codes.is_empty() {
+        GateDecisionKind::AutoPass
+    } else {
+        GateDecisionKind::Block
+    };
+    let evaluation_fingerprint = guard_fingerprint(
+        "star.validator-corpus-evaluation",
+        &serde_json::json!({
+            "observation":observation,
+            "diagnostic_codes":diagnostic_codes,
+            "gate_decision":gate_decision,
+        }),
+    )
+    .map_err(|_| ValidatorCorpusError::Fingerprint)?;
+    Ok(ValidatorCorpusEvaluationV2 {
+        diagnostic_codes,
+        gate_decision,
+        evaluation_fingerprint,
+    })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -525,5 +787,38 @@ mod tests {
         changed.comparisons[0].outcome = GuardComparisonOutcomeV2::Weakened;
         let sealed = changed.seal().unwrap();
         assert!(sealed.behavior_weakened());
+    }
+
+    #[test]
+    fn checked_in_validator_corpus_is_hash_bound_and_matches_the_pure_evaluator() {
+        let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+        let manifest_path = workspace.join("specs/corpus/validator-guard/manifest.json");
+        let declared: ValidatorCorpusManifestV2 =
+            serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        let sealed = declared.clone().seal().unwrap();
+        assert_eq!(declared, sealed, "checked-in Corpus fingerprints drifted");
+
+        for fixture in &sealed.fixtures {
+            let input_path = workspace.join(fixture.input_path.as_str());
+            let bytes = std::fs::read(&input_path).unwrap();
+            assert_eq!(
+                Sha256Hash::digest(&bytes),
+                fixture.input_sha256,
+                "fixture byte hash drifted: {}",
+                fixture.input_path.as_str()
+            );
+            let observation: ValidatorCorpusObservationV2 = serde_json::from_slice(&bytes).unwrap();
+            let evaluation = evaluate_validator_corpus_observation(&observation).unwrap();
+            assert_eq!(
+                evaluation.diagnostic_codes, fixture.expected_diagnostic_codes,
+                "fixture diagnostics drifted: {}",
+                fixture.fixture_id
+            );
+            assert_eq!(
+                evaluation.gate_decision, fixture.expected_gate_decision,
+                "fixture gate drifted: {}",
+                fixture.fixture_id
+            );
+        }
     }
 }

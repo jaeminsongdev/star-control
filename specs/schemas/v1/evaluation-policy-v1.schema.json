@@ -1,0 +1,153 @@
+{
+  "$defs": {
+    "EvaluationCaseDefinitionRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "type": "string"
+        },
+        "case_version": {
+          "type": "string"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "case_id",
+        "case_version",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "EvaluationContext": {
+      "enum": [
+        "cli_only",
+        "codex_integrated"
+      ],
+      "type": "string"
+    },
+    "EvaluationMode": {
+      "enum": [
+        "offline",
+        "replay",
+        "shadow"
+      ],
+      "type": "string"
+    },
+    "EvaluationSubjectKind": {
+      "enum": [
+        "route_policy",
+        "rule",
+        "check",
+        "profile",
+        "recipe"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.evaluation-policy:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "case_refs": {
+      "items": {
+        "$ref": "#/$defs/EvaluationCaseDefinitionRefV1"
+      },
+      "type": "array"
+    },
+    "comparability_dimensions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "corpus_ref": {
+      "type": "string"
+    },
+    "evaluation_context": {
+      "$ref": "#/$defs/EvaluationContext"
+    },
+    "max_attempts_per_case": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "minimum_sample_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "mode": {
+      "$ref": "#/$defs/EvaluationMode"
+    },
+    "policy_id": {
+      "type": "string"
+    },
+    "policy_version": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "protected_metric_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "require_provider_cost": {
+      "type": "boolean"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.evaluation-policy",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_ref": {
+      "type": "string"
+    },
+    "subject_kind": {
+      "$ref": "#/$defs/EvaluationSubjectKind"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "revision",
+    "project_id",
+    "policy_id",
+    "policy_version",
+    "subject_kind",
+    "evaluation_context",
+    "mode",
+    "corpus_ref",
+    "case_refs",
+    "minimum_sample_count",
+    "max_attempts_per_case",
+    "comparability_dimensions",
+    "protected_metric_ids",
+    "require_provider_cost",
+    "source_ref",
+    "content_fingerprint"
+  ],
+  "title": "EvaluationPolicyV1",
+  "type": "object"
+}

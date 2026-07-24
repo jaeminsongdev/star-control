@@ -1,0 +1,207 @@
+{
+  "$defs": {
+    "ConfigMergeStrategyV1": {
+      "enum": [
+        "replace",
+        "deep_merge",
+        "most_restrictive",
+        "minimum_limit",
+        "intersection",
+        "union",
+        "immutable",
+        "policy_allow_then_false_wins",
+        "true_wins",
+        "false_wins",
+        "maximum_floor",
+        "explicit_widening"
+      ],
+      "type": "string"
+    },
+    "ConfigSourceKindV1": {
+      "enum": [
+        "built_in",
+        "policy_profile",
+        "user",
+        "project",
+        "goal",
+        "command",
+        "platform_constraint"
+      ],
+      "type": "string"
+    },
+    "ConfigSourceRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "source_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_id": {
+          "pattern": "^src_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/ConfigSourceKindV1"
+        }
+      },
+      "required": [
+        "source_kind",
+        "source_id",
+        "source_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ConfigValueV1": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "boolean",
+              "type": "string"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "integer",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "string",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "string_set",
+              "type": "string"
+            },
+            "value": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "json",
+              "type": "string"
+            },
+            "value": true
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EffectiveConfigEntryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "merge_strategy": {
+          "$ref": "#/$defs/ConfigMergeStrategyV1"
+        },
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/ConfigSourceRefV1"
+          },
+          "type": "array"
+        },
+        "value": {
+          "$ref": "#/$defs/ConfigValueV1"
+        }
+      },
+      "required": [
+        "key",
+        "value",
+        "merge_strategy",
+        "provenance"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.effective-config:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/EffectiveConfigEntryV1"
+      },
+      "type": "array"
+    },
+    "policy_profile_id": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.effective-config",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "policy_profile_id",
+    "entries",
+    "config_fingerprint"
+  ],
+  "title": "EffectiveConfigV1",
+  "type": "object"
+}

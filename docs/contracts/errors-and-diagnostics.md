@@ -55,7 +55,7 @@ code는 `<CATEGORY>_<SPECIFIC_REASON>` 형식이며 이미 배포한 의미를 �
 | `tool` | `TOOL_MANIFEST_INVALID`, `TOOL_DESCRIPTOR_STALE`, `TOOL_LANE_MISMATCH`, `TOOL_EXECUTABLE_UNTRUSTED`, `TOOL_EXECUTABLE_INCOMPATIBLE`, `TOOL_PROTOCOL_INVALID` | live Tool Registry·실행 protocol 문제 |
 | `codex` | `CODEX_NOT_READY`, `CODEX_PROTOCOL_MISMATCH`, `CODEX_OPERATION_LOST` | Plugin·MCP·App Server 연동 문제 |
 | `validation` | `VALIDATION_CHECK_FAILED`, `VALIDATION_TOOL_ERROR`, `VALIDATION_INCOMPLETE`, `VALIDATION_SUBJECT_CHANGED`, `VALIDATION_PROFILE_CLOSURE_STALE` | 검사 실패·미확인·stale subject·plan closure |
-| `reproduction` | `REPRODUCTION_INPUT_INCOMPLETE`, `REPRODUCTION_EXTERNAL_CONDITION_UNVERIFIED`, `RECOVERY_PLAN_INVALID` | 실패 재현·회귀·복구 계약 실패 |
+| `reproduction` | `REPRODUCTION_INPUT_INCOMPLETE`, `REPRODUCTION_EXTERNAL_CONDITION_UNVERIFIED`, `REGRESSION_EVIDENCE_MISMATCH`, `RECOVERY_PLAN_INVALID` | 실패 재현·회귀·복구 계약 실패 |
 | `security` | `SECURITY_DATA_STALE`, `SECURITY_DATA_SOURCE_UNVERIFIED`, `SECURITY_REDACTION_FAILED` | 외부 보안 자료·redaction 처리 실패 |
 | `dependency` | `DEPENDENCY_INPUT_STALE`, `DEPENDENCY_MANAGER_UNREGISTERED`, `DEPENDENCY_UPDATE_REPLAN_REQUIRED` | dependency 관찰·update 준비 실패 |
 | `maintenance` | `MAINTENANCE_STORE_INCOMPATIBLE`, `MAINTENANCE_RADAR_INPUT_STALE` | 공통 저장 계약·Radar projection 실패 |
@@ -195,7 +195,7 @@ backend 고유 오류 이름·SQL text·database filename과 raw path를 code나
 
 [6단계 계약 호환성·환경 정본](contract-compatibility-and-environment.md)의 command·preflight를 안전하게 수행할 수 없는 경우만 ErrorEnvelope를 사용한다. baseline/current 차이, breaking change, 문서 drift, config key 미사용, toolchain 누락과 Windows 차이는 정상적으로 생산된 Diagnostic이지 command error가 아니다.
 
-아래 code와 Rule ID는 M6 목표 계약이며 현재 제품·Registry·Catalog에 구현됐다는 뜻이 아니다. 구현 change에서 M5 ManagedDeclaration·namespace/lifecycle과 Catalog Rule·mapping을 먼저 등록하고 Schema·fixture·consumer를 같은 Gate로 검증한다.
+아래 code와 Rule ID는 P-0056의 closed `StableErrorCode`/`StableErrorCodeCatalog`와 generated Schema에 등록돼 있다. source의 machine-readable error literal도 catalog membership test를 통과해야 한다. 실제 M6 판정은 M5 ManagedDeclaration·namespace/lifecycle과 current Catalog Rule·mapping을 함께 검증하며, catalog 존재만으로 unavailable adapter 결과를 합성하지 않는다.
 
 | code | 발생 조건 | 기본 행동 |
 |---|---|---|
@@ -223,7 +223,7 @@ backend 고유 오류 이름·SQL text·database filename과 raw path를 code나
 
 [7단계 정본](failure-security-and-dependency-maintenance.md)의 preflight·adapter invocation·document publish를 안전하게 수행할 수 없는 경우만 ErrorEnvelope를 사용한다. 재현된 failure, secret 후보, vulnerable/outdated dependency, mutable workflow action과 flaky test는 정상적으로 생산된 Diagnostic·Finding이다.
 
-아래 code와 Rule ID는 M7 목표 계약이며 현재 제품·Registry·Catalog에 구현됐다는 뜻이 아니다.
+아래 code와 Rule ID는 P-0056 closed error catalog와 generated Schema에 등록돼 있고 M7 Controller/application 경로가 exact code를 사용한다. 외부 advisory·debugger·package provider가 unavailable이면 해당 code와 typed limitation을 반환하며 성공으로 대체하지 않는다.
 
 | code | 발생 조건 | 기본 행동 |
 |---|---|---|
@@ -232,6 +232,7 @@ backend 고유 오류 이름·SQL text·database filename과 raw path를 code나
 | `REPRODUCTION_INPUT_INCOMPLETE` | revision·structured args·environment·input/seed·expected/actual required field 누락 | pack publish·fixed claim 금지 |
 | `REPRODUCTION_SUBJECT_CHANGED` | attempt 중 source·manifest·lockfile·tool/environment binding 변경 | occurrence 분리, 새 plan 요구 |
 | `REPRODUCTION_EXTERNAL_CONDITION_UNVERIFIED` | service·device·clock·network 조건을 확인/재현할 수 없음 | `blocked_external\|unverified` 보존 |
+| `REGRESSION_EVIDENCE_MISMATCH` | before failure, current ValidationResult/Run, compatible receipt-bound `not_reproduced` pack 또는 recurrence가 exact Project·family·subject와 불일치 | `verified_fixed\|recurring` publish 거부 |
 | `RECOVERY_PLAN_INVALID` | rollback·roll-forward·restore가 섞였거나 precondition·stop·validation 누락 | 실행 permit 금지 |
 | `SECURITY_DATA_STALE` | required external source의 valid_until 경과 | clean/pass 금지, 승인된 refresh 제안 |
 | `SECURITY_DATA_SOURCE_UNVERIFIED` | source/query/schema/tool/coverage provenance 누락 | vulnerability/license/current status를 unknown으로 유지 |
@@ -254,7 +255,7 @@ backend 고유 오류 이름·SQL text·database filename과 raw path를 code나
 
 ### 8단계 migration·performance·language/platform 대표 오류
 
-[8단계 정본](migration-performance-and-platform.md)의 상태 전이와 Gate를 안전하게 계산할 수 없는 경우 아래 ErrorEnvelope code를 사용한다. migration 실패·부분 성공, 성능 비교 불가와 기능 동등성 미확인은 성공을 꾸며내지 않고 각각 typed result와 Diagnostic으로도 보존한다. 아래 code는 M8 목표 계약이며 현재 제품에 구현됐다는 뜻이 아니다.
+[8단계 정본](migration-performance-and-platform.md)의 상태 전이와 Gate를 안전하게 계산할 수 없는 경우 아래 ErrorEnvelope code를 사용한다. migration 실패·부분 성공, 성능 비교 불가와 기능 동등성 미확인은 성공을 꾸며내지 않고 각각 typed result와 Diagnostic으로도 보존한다. P-0056은 아래 code를 closed catalog/Schema와 M8 Controller 경로에 연결했으며 provider 미등록·partial·outcome unknown을 pass로 승격하지 않는다.
 
 | code | 발생 조건 | 기본 행동 |
 |---|---|---|
@@ -290,7 +291,7 @@ backend 고유 오류 이름·SQL text·database filename과 raw path를 code나
 
 ### 9단계 CrossRepo ChangeBundle 대표 오류
 
-[9단계 정본](cross-repo-change-bundle.md)의 Project relation, participant, worktree, merge queue와 remote operation을 안전하게 계산하거나 수행할 수 없을 때 아래 ErrorEnvelope code를 사용한다. project별 실패·부분 성공·검증 미완료는 ErrorEnvelope만으로 축약하지 않고 해당 participant state, `ProjectMergeResult`, `GateDecision`과 Diagnostic에도 보존한다. 아래 code는 9단계 목표 계약이며 현재 제품에 구현됐다는 뜻이 아니다.
+[9단계 정본](cross-repo-change-bundle.md)의 Project relation, participant, worktree, merge queue와 remote operation을 안전하게 계산하거나 수행할 수 없을 때 아래 ErrorEnvelope code를 사용한다. project별 실패·부분 성공·검증 미완료는 ErrorEnvelope만으로 축약하지 않고 해당 participant state, `ProjectMergeResult`, `GateDecision`과 Diagnostic에도 보존한다. P-0056은 아래 code를 closed catalog/Schema와 local Git·remote provider Controller 경로에 연결했다.
 
 | code | 발생 조건 | 기본 행동 |
 |---|---|---|
@@ -336,6 +337,7 @@ backend 고유 오류 이름·SQL text·database filename과 raw path를 code나
 | `RELEASE_METADATA_INCOMPLETE` | version·changelog·metadata·license·applicability 근거 누락 | `block` |
 | `RELEASE_PLATFORM_EVIDENCE_MISSING` | required x64 Stable native evidence 또는 ARM64 Preview cross-build·simulation evidence 누락 | `blocked_external` 또는 `block` |
 | `RELEASE_INSTALL_LIFECYCLE_FAILED` | install·safe_default·update·rollback·uninstall의 required Check 실패 | `rollback_required` 또는 `block` |
+| `RELEASE_LIFECYCLE_EVIDENCE_MISMATCH` | lifecycle 결과가 exact artifact-set digest·architecture·runtime verification 또는 effect receipt와 불일치 | lifecycle publication과 final audit 거부 |
 | `RELEASE_APPROVAL_REQUIRED` | publish·deploy·withdrawal·rollback exact action 승인 없음 | effect 없이 대기 |
 | `RELEASE_APPROVAL_STALE` | manifest/digest/destination/before snapshot/expiry가 승인과 다름 | 새 snapshot·승인 요구 |
 | `RELEASE_REMOTE_RESULT_UNVERIFIED` | receipt 뒤 after snapshot이 version·source/tag·digest를 확인하지 못함 | action `outcome_unknown`; publication이면 top-level `publish_outcome_unknown`, published 금지 |
@@ -350,7 +352,7 @@ Diagnostic namespace는 release에 `star.validation.release.subject-stale`, `art
 
 ### 11단계 Rust style 대표 reason code
 
-[Rust 코드 스타일 자동 교정](../features/rust-code-style-auto-fix.md)의 discovery·candidate·auto-apply는 다음 stable code를 사용한다. 이 code는 M11 목표 계약이며 현재 Rust enum·Schema·제품 code에 구현됐다는 뜻이 아니다.
+[Rust 코드 스타일 자동 교정](../features/rust-code-style-auto-fix.md)의 discovery·candidate·auto-apply는 다음 stable code를 사용한다. P-0056 current source는 이 code를 closed Rust type·Schema와 M11 inspect/check/prepare/apply/recovery 경로에 연결하며, unsupported suggestion이나 incomplete target coverage를 성공으로 합성하지 않는다.
 
 | code | 조건 | 표현·공통 mapping | 기본 행동 |
 |---|---|---|---|
@@ -403,7 +405,7 @@ process를 시작하지 못한 required Check는 위 ErrorEnvelope와 `Validatio
 
 ## Diagnostic 계약
 
-P0/v1의 bare `rule_id`와 optional suppression projection은 읽기 compatibility를 위해 보존한다. M3 target `star.diagnostic` v2는 producer가 관찰 사실만 만들도록 typed `rule_ref`, producer provenance와 fingerprint contract를 필수화하고 baseline·suppression·gate effect는 [GateDecision의 DiagnosticEvaluation](validation-and-evidence.md#diagnosticevaluation)로 분리한다. 이 target은 현재 Schema·migration·제품 code에 구현됐다는 뜻이 아니다.
+P0/v1의 bare `rule_id`와 optional suppression projection은 읽기 compatibility를 위해 보존한다. M3 `star.diagnostic` v2는 producer가 관찰 사실만 만들도록 typed `rule_ref`, producer provenance와 fingerprint contract를 필수화하고 baseline·suppression·gate effect는 [GateDecision의 DiagnosticEvaluation](validation-and-evidence.md#diagnosticevaluation)로 분리한다. P-0056 current source는 v2 Schema·fixture, deterministic v1 projection, repository, runner, Controller/CLI query와 Validator Guard corpus를 구현했다. historical v1 evidence는 current Gate 결과로 자동 재사용하지 않는다.
 
 | 필드 | 형식 | 의미 |
 |---|---|---|
@@ -475,7 +477,7 @@ doctor·clean-room Diagnostic의 `review_prerequisite`와 `inspect_environment`�
 
 M7의 `request_external_refresh`와 `request_patch_approval`은 승인 요청을 설명할 뿐 승인 token이 아니다. `prepare_dependency_patch`는 isolated preview와 immutable PatchSet 생성까지만 허용하고, `plan_rollback|plan_restore`는 실행을 내포하지 않는다. network/download/dependency change·민감 dump가 필요한 remediation은 항상 `safe_auto_fix=false`다.
 
-새 remediation action kind는 아직 미구현인 M3 Diagnostic v2 목표 Schema에 함께 포함한다. v2가 배포된 뒤 action enum을 추가해야 한다면 old reader의 unknown-enum 처리를 먼저 비교하고 [Version과 Migration 계약](versioning-and-migrations.md)에 따라 새 schema version 또는 명시적 compatibility entry를 발행한다.
+P-0056 현재 `DiagnosticV2` Schema와 fixture는 위 remediation action kind를 typed enum으로 포함한다. 여기에 새 action kind를 추가할 때는 old v2 reader의 unknown-enum 처리를 먼저 비교하고 [Version과 Migration 계약](versioning-and-migrations.md)에 따라 새 schema version 또는 명시적 compatibility entry를 발행한다. 기존 v2 byte에 새 의미를 소급하거나 문자열 fallback으로 우회하지 않는다.
 
 ## 사용자 메시지 규칙
 

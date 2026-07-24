@@ -1,0 +1,61 @@
+{
+  "change_graph": [],
+  "change_origin": "user_planned",
+  "change_plan_id": "cpl_00000000000000000000000000",
+  "change_set_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "completion_criteria_mapping": [],
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "created_at": "2026-01-01T00:00:00Z",
+  "deterministic_unit_order": [],
+  "expected_impact_refs": [],
+  "expected_paths": [],
+  "finding_refs": [],
+  "impact_analysis_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "parameters": {},
+  "permission_requirements": [],
+  "planned_change_units": [],
+  "preconditions": [],
+  "project_id": "prj_00000000000000000000000000",
+  "readiness": "draft",
+  "recipe_refs": [],
+  "related_project_impacts": [],
+  "revision": 1,
+  "risk_path_refs": [],
+  "schema_id": "star.change-plan",
+  "schema_version": 2,
+  "scope_revision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "status": "draft",
+  "target_checkout_id": "cko_00000000000000000000000000",
+  "target_project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "target_workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "unexpected": true,
+  "unresolved_impacts": [],
+  "updated_at": "2026-01-01T00:00:00Z",
+  "validation_plan_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}
