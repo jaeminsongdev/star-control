@@ -25,6 +25,7 @@ pub enum RestartState {
     RollbackRequired,
     RollingBack,
     RolledBack,
+    PartiallyApplied,
     RollbackFailed,
     RelaunchFailed,
     AppliedValidationPending,
@@ -116,6 +117,7 @@ fn allowed(from: RestartState, to: RestartState) -> bool {
             )
             | (RestartState::RollbackRequired, RestartState::RollingBack)
             | (RestartState::RollingBack, RestartState::RolledBack)
+            | (RestartState::RollingBack, RestartState::PartiallyApplied)
             | (RestartState::RollingBack, RestartState::RollbackFailed)
             | (RestartState::Committed, RestartState::Exited)
             | (RestartState::AppliedValidationPending, RestartState::Exited)
@@ -150,5 +152,16 @@ mod tests {
         let mut update = RestartTransaction::new("op_1".to_owned());
         assert!(!update.transition(RestartState::Planned, RestartState::Applying));
         assert_eq!(update.state, RestartState::Planned);
+    }
+
+    #[test]
+    fn replacement_file_residue_is_not_reported_as_full_rollback() {
+        let mut update = RestartTransaction::new("op_1".to_owned());
+        update.state = RestartState::Applying;
+        assert!(update.transition(RestartState::Applying, RestartState::RollbackRequired));
+        assert!(update.transition(RestartState::RollbackRequired, RestartState::RollingBack));
+        assert!(update.transition(RestartState::RollingBack, RestartState::PartiallyApplied));
+        assert_eq!(update.state, RestartState::PartiallyApplied);
+        assert!(!update.transition(RestartState::PartiallyApplied, RestartState::RolledBack));
     }
 }

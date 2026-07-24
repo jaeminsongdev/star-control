@@ -13,8 +13,8 @@ ARM64는 `aarch64-pc-windows-msvc` 교차 빌드, PE architecture, file manifest
 
 ## 현재 판정
 
-- **제품 구현과 격리 비서명 증거:** `DONE`. M7~M10 external effect, Recovery consume path, x64 격리 lifecycle, ARM64 cross-build/simulation, SBOM·audit·pre-sign provenance, candidate Inspector 17/17과 disposable GitHub draft byte readback을 완료했다.
-- **P-0055 immutable delivery seal:** `BLOCKED_HOST_POLICY`. 정확한 staged index tree는 만들었지만 호스트 실행 정책이 `git commit`을 `AskForApproval=Never`로 거부해 clean revision·push·candidate commit target draft를 만들 수 없다.
+- **제품 구현과 exact local candidate:** `DONE`. M7~M10 external effect, Recovery consume path를 implementation commit `4554c4a`로 봉인했고, 제품 증거 기준 commit `b20d234`에서 x64 격리 lifecycle, ARM64 cross-build/simulation, SBOM·audit·pre-sign provenance와 candidate Inspector core 17/17·FULL 10/10을 다시 통과했다.
+- **P-0055 remote delivery seal:** `DONE`. origin branch와 GitHub commit API가 exact `b20d234`/tree `ea4407e`를 확인했고, exact-target draft asset의 local/provider/download SHA-256 일치와 release/tag cleanup을 readback했다. draft는 publish하지 않았다.
 - **current Codex candidate 통합:** `BLOCKED_ACTIVE_HOST`. exact candidate는 Inspector 17/17이지만 현재 설치본 registry revision 4는 6개 ready core action이다. 실행 중인 Codex에서 installer를 겹쳐 실행하지 않았고 설치 Controller는 원래 generation으로 복구했다.
 - **공개 Stable:** `blocked_external`. Runtime·installer Authenticode와 trusted timestamp가 없고 unsigned publish는 차단된다.
 
@@ -26,9 +26,10 @@ ARM64는 `aarch64-pc-windows-msvc` 교차 빌드, PE architecture, file manifest
 | 시작 branch | `main` |
 | 기준 HEAD / `origin/main` | `a93de7e68aff3ac02315d3a324aeaa497e1ede38` |
 | 작업 branch | `codex/p0055-nonsigning-external-seal` |
-| 최종 코드 candidate index tree | `2eb3680b3f0cf5a8ae6b0daadff6fe54f003e067` |
-| commit/push | 호스트 정책이 직접 `git commit`을 거부해 미생성·미push |
-| 포함 변경 | 기존 P-0054 dirty implementation 전체와 그 위의 P-0055 외부 seal |
+| implementation commit / tree | `4554c4a56564ecea800a335dfbf4bb82d546e299` / `2eb3680b3f0cf5a8ae6b0daadff6fe54f003e067` |
+| 제품 증거 기준 commit / tree | `b20d234b38a7dcb347049b6b95aff3407c5dedc9` / `ea4407eab1a782fcd94ff671686cdedf952b44e6` |
+| commit/push | local 두 commit과 clean worktree PASS / origin branch exact `b20d234` readback PASS |
+| 포함 변경 | P-0054/P-0055 구현 전체와 첫 정본 감사 snapshot. 이후 증거 문서-only 갱신은 473-file 출시 byte set에 포함되지 않음 |
 | 보존 | P-0054/P-0055 source 전체, `legacy/`, Codex runtime DB/state, installed Plugin cache. `target/`·`dist/` 증거는 정리하지 않음 |
 | 금지 | Authenticode signing, unsigned Stable publish, source 대신 `dist/`·`target/` 직접 수정, 검사 약화 |
 
@@ -90,16 +91,16 @@ Controller는 저장된 영수증을 읽을 때도 다시 seal하여 fingerprint
 | 시각/묶음 | 명령·대상 | 결과 | 증거 |
 |---|---|---|---|
 | 구현 focused | contracts·execution·Controller·CLI와 `star-adapter-github` test/Clippy | PASS | GitHub 5, Controller 86, CLI 19+1; 위험 permission durable approval 회귀 포함 |
-| final FULL | Star Operation `opn_01KY7RG0QP2SHGYRX5BHMQQT8X` | 10/10 complete·stable PASS | `target/validation/20260723T151125247Z-6868/report.json`, `sha256:52ca57a2a84d45314fc7d35977ef0c5cea21b09d5dda7ae5ee30015fcf681a4b` |
-| final RELEASE | Star Operation `opn_01KY7RXZ6Z1TMCVF639XR85VA4` | 13/15 PASS, failed 1, unverified 1 | `target/validation/20260723T151902921Z-24688/report.json`, `sha256:cbc1ce2afb1bbbf281939ae09c36b515ba7478caac384af7d7061abea260ea46`; clean-worktree fail + signing/publication unverified |
-| x64 build/package/lifecycle | workspace release → 473-file stage verify → isolated finalize/Bridge v2/status | PASS | set `sha256:bf38c2144047b449846e6dcced57c224a0134ca9a2788bbc8ff6c71c6dcc6325`, manifest `sha256:67bf451156d5137ba11d3c405ac56bc2414d79463c1921a96877be3647a47620`, all Runtime PE `0x8664`, lifecycle `verified=true` |
-| ARM64 cross-build/simulation | Rust 1.96 workspace release, corpus check·Clippy, stage verify·fake lifecycle | PASS / `native_unverified` | set `sha256:fcf34fe11c9b7911a30730acae4c40062418ed358c71eabe1aee5762c880ae9d`, manifest `sha256:f13e6727da2e634cc75a7f5c7605c6b5ae797d6055b20b5d98032b2d937f56ed`, all Runtime PE `0xaa64` |
-| installer model | Inno Setup 6 x64·ARM64 unsigned model | PASS / public 불가 | x64 24,120,745 bytes `sha256:0b4d1e3f247b6261ed24b6542fa502a09aeed22ab621a7484caa508c8c0183f8`; ARM64 20,154,992 bytes `sha256:4845da887cc97d8104d7dcc72269c659d5baad08b125220fa2ff10c82e697fbd` |
-| SBOM/audit/provenance | Syft 1.45.0, current RustSec, pre-sign provenance | PASS / public 불가 | SBOM 각 7 packages; audit 223 dependencies·vulnerability 0·warning 0; provenance `sha256:117b600af6be1840329a57b4d2ad744d0245860f4f71adebdba29b266b14ecf5` |
-| candidate MCP | official Inspector 0.22.0, exact x64 candidate | PASS | fixed 12/12, required core search 17/17·describe 17/17, Controller SHA-256 `635f1f48…fbf3` |
+| final FULL | official Inspector 0.22.0 + `SessionStart→UserPromptSubmit→Stop`, Operation `opn_01KY7WS7Y2ZEXB10WPKR2D583X` | 10/10 complete·stable PASS | `target/validation/20260723T162621247Z-36040/report.json`, `sha256:26c029c48f4ec2374906310edf4ffdc656b778aeda174797308ea578079e5b32`; requested=required=selected `full` |
+| final RELEASE | native exact source `b20d234` | 14/15 PASS, failed 0, unverified 1 | `target/validation/20260723T154718929Z-29140/report.json`, `sha256:631c204633f4b5b1d44c8abde7006eeaec4a8a96666f08e31d4027cc4003b5df`; signing/publication만 unverified |
+| x64 build/package/lifecycle | workspace release → 473-file stage verify → isolated finalize/Bridge v2/status | PASS | set `sha256:20ae1b660d135a363c4061a4808a9ce10dc6fe537485c47d9cf6824223d92eaa`, manifest `sha256:d96015a0bdb6f2fc437e0251a87266acecb20b12b79d629af6486df606edbe0c`, all Runtime PE `0x8664`, lifecycle `verified=true` |
+| ARM64 cross-build/simulation | Rust 1.96 workspace release, corpus check·Clippy, stage verify·fake lifecycle | PASS / `native_unverified` | set `sha256:9872eb8e00d845a3a1dcad6f1b63972fadae56d791ab257a114efb170c15b808`, manifest `sha256:958b141dbc0ea2dd8565c3ab138e6577241bfdfc2ef5f761c46d6ad65b3dfd5a`, all Runtime PE `0xaa64` |
+| installer model | Inno Setup 6.7.3 x64·ARM64 unsigned model | PASS / public 불가 | x64 24,125,769 bytes `sha256:a9d029b083c2b7d515421ae0d8a474668cd13a3f582ba8db2299d290d411289f`; ARM64 20,153,290 bytes `sha256:6b9f2bfc0316c5fc61e9549e7addad4e77e9cfc4cdfc7368d1af41116a3ccb72` |
+| SBOM/audit/provenance | Syft 1.45.0, current RustSec, pre-sign provenance | PASS / public 불가 | SBOM 각 7 packages; audit 223 dependencies·vulnerability 0·warning 0; provenance `sha256:5f819316082de1ced749ee69524dadbb350d21b5883cdf009558eb044c9da78c` |
+| candidate MCP | official Inspector 0.22.0, exact x64 candidate | PASS | fixed 12/12, required core search 17/17·describe 17/17, `validation.run` Operation 종단 성공, Controller SHA-256 `635f1f48…fbf3` |
 | current Codex | restored installed Controller live search | NOT CLOSED | registry revision 4, ready core 6/17. candidate를 current 설치본으로 승격하지 않음 |
-| GitHub draft upload/readback/cleanup | authenticated `jaeminsongdev/star-control`, disposable draft | byte 왕복·cleanup PASS / candidate target 미충족 | asset/provider/download `sha256:761d2714…0130`; release·release API·tag ref 모두 absent. target은 commit 부재로 base `a93de7e…` |
-| Git delivery | branch, stage, commit, push, remote readback | BLOCKED_HOST_POLICY | implementation 530 paths staged·artifact subject tree `2eb3680b…`; 이 최종 감사 문서 delta는 구현 commit 뒤 별도 stage 대상이다. 직접 `git commit`이 `approval required by policy, but AskForApproval is set to Never`로 거부됨 |
+| GitHub draft upload/readback/cleanup | authenticated `jaeminsongdev/star-control`, disposable exact-target draft | PASS / unpublished | release `359047620`, target `b20d234`; 515-byte asset local/provider/download `sha256:67b05a54…6637` 일치. release ID/tag와 tag ref 모두 cleanup 후 absent. roundtrip evidence `sha256:9d764cdb…6cdf` |
+| Git delivery | branch, commit, push, remote readback | PASS | `4554c4a` implementation + `b20d234` docs/product-evidence 기준 commit. origin branch와 GitHub commit API가 exact commit/tree/parent를 확인함 |
 
 Windows Cargo incremental finalization에서 간헐적 access-denied warning이 나타날 수 있다. test process의 종료 코드를 우선 기록하되 경고를 숨기지 않으며, 현재 정책상 `target/`을 삭제해 우회하지 않는다.
 
@@ -107,19 +108,18 @@ Windows Cargo incremental finalization에서 간헐적 access-denied warning이 
 
 P-0055는 다음이 모두 충족될 때만 `DONE / non-signing external seal`로 바꾼다. 현재 판정은 다음과 같다.
 
-- focused test, generated Schema/fixture, format, lint와 FULL: **PASS**, 단 commit이 없어 immutable revision은 아님.
-- RELEASE failed 0: **미충족**. signing check는 예상 `unverified`이고 clean-worktree가 host commit 정책 때문에 1 fail이다.
+- focused test, generated Schema/fixture, format, lint와 exact local commit FULL: **PASS**.
+- RELEASE failed 0: **PASS**. 유일한 unverified는 승인 범위 밖 signing/publication이다.
 - x64 build/package/disposable lifecycle: **PASS**. current Codex 17/17: **미충족**, candidate Inspector만 17/17이다.
 - ARM64 cross-build·PE/manifest·installer model·simulation corpus와 `native_unverified`: **PASS**.
 - SBOM·cargo audit·pre-sign provenance current artifact 결합: **PASS**.
-- authenticated GitHub draft byte upload/readback/hash/cleanup: **PASS**. exact candidate commit target: **미충족**, commit이 없어 base commit을 사용했다.
-- branch/stage: **PASS**. commit/push/remote source readback: **미충족**, host policy 차단이다.
+- authenticated GitHub exact `b20d234` draft byte upload/readback/hash/cleanup: **PASS**. draft는 publish하지 않았고 cleanup final state는 absent다.
+- branch/local commit/clean worktree/push/remote source readback: **PASS**.
 - STRICT 검토: **PASS with fix**. 위험 권한 durable approval/Gate 실재 검증, remote asset 실제 download, exact remote-name snapshot을 보강했고 partial/unknown·unsigned Stable 승격은 차단된다.
 
 ## 남는 외부 위험
 
-현재 남은 blocker는 세 층이다.
+현재 남은 blocker는 두 층이다.
 
-1. **호스트 Git 정책:** staged index tree `2eb3680b…`를 local commit으로 만들고 branch를 push할 수 있는 실행 경로가 필요하다. commit 뒤 source revision을 commit SHA로 바꿔 FULL/RELEASE·package·SBOM/provenance·GitHub exact target readback을 다시 봉인해야 한다.
-2. **current Codex 전환:** Codex와 Star process를 닫을 수 있는 별도 install/update 창에서 exact committed candidate를 설치하고 새 Codex task에서 core 17개 search·describe·invoke를 재감사해야 한다. 실행 중 task 안에서 installer를 겹쳐 실행하지 않는다.
-3. **서명/공개:** Authenticode certificate·private key·trusted timestamp provider가 없으므로 signed Runtime·installer, signed clean install, signed provenance와 public Stable publish는 계속 `blocked_external`이다. signing 뒤에는 signed byte를 새 candidate로 보고 SBOM·provenance·설치·Codex·GitHub publish/readback을 재실행한다.
+1. **current Codex 전환:** exact candidate review는 `mixed_update`, `requires_codex_restart=true`, `rollback_available=true`다. 공식 restart transaction으로 candidate를 설치하고 새 Codex task에서 core 17개 search·describe·invoke를 재감사해야 한다. 실행 중 task에서 일반 installer를 겹쳐 실행하지 않는다.
+2. **서명/공개:** Authenticode certificate·private key·trusted timestamp provider가 없으므로 signed Runtime·installer, signed clean install, signed provenance와 public Stable publish는 계속 `blocked_external`이다. signing 뒤에는 signed byte를 새 candidate로 보고 SBOM·provenance·설치·Codex·GitHub publish/readback을 재실행한다.

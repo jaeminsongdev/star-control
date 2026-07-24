@@ -409,6 +409,120 @@ impl InstallationManager {
         })
     }
 
+    /// Returns the one Runtime Generation owned by the verified release-file
+    /// manifest currently installed at `install_root`.
+    ///
+    /// Old generations are deliberately retained for rollback, so directory
+    /// enumeration cannot identify the generation delivered by a replacement
+    /// installer.  The release manifest is the sole ownership boundary.
+    pub fn verified_bundled_runtime_generation(
+        &self,
+        install_root: &Path,
+    ) -> Result<RuntimeGenerationRef, WindowsAdapterError> {
+        let install_root = canonical_fixed_directory(install_root)?;
+        self.status(&install_root)?;
+        let manifest_bytes = read_regular_bounded(
+            &install_root.join(RELEASE_MANIFEST_FILE),
+            RELEASE_MANIFEST_MAX_BYTES,
+        )?;
+        let manifest = parse_release_manifest(&manifest_bytes)?;
+
+        let mut generation_ids = BTreeSet::new();
+        for entry in &manifest.files {
+            let mut components = entry.path.split('/');
+            if components.next() == Some("runtime")
+                && components.next() == Some("generations")
+                && let Some(generation_id) = components.next()
+            {
+                if generation_id.is_empty()
+                    || generation_id.contains('/')
+                    || generation_id.contains('\\')
+                    || Path::new(generation_id)
+                        .components()
+                        .any(|component| !matches!(component, Component::Normal(_)))
+                {
+                    return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+                }
+                generation_ids.insert(generation_id.to_owned());
+            }
+        }
+        if generation_ids.len() != 1 {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+        let generation_id = generation_ids
+            .into_iter()
+            .next()
+            .ok_or(WindowsAdapterError::InvalidRuntimeGeneration)?;
+        for required in [
+            "runtime-generation.v1.json",
+            "runtime-release-manifest.json",
+        ] {
+            let path = format!("runtime/generations/{generation_id}/{required}");
+            if !manifest.files.iter().any(|entry| entry.path == path) {
+                return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+            }
+        }
+
+        let runtime_root = canonical_fixed_directory(
+            &install_root
+                .join("runtime")
+                .join("generations")
+                .join(&generation_id),
+        )?;
+        let generation = load_runtime_generation_manifest(&runtime_root)?;
+        validate_runtime_generation(&runtime_root, &generation)?;
+        if generation.generation.generation_id != generation_id {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+        Ok(RuntimeGenerationRef {
+            generation_id,
+            runtime_root: normal_windows_path(&runtime_root)
+                .to_string_lossy()
+                .into_owned(),
+            release_manifest_sha256: generation.generation.release_manifest_sha256,
+        })
+    }
+
+    /// Returns the manifest-declared tool IDs for one verified Runtime
+    /// Generation under this installation.  This is used by an offline
+    /// installer postcheck to prove that the live Registry did not silently
+    /// omit an owned release action.
+    pub fn verified_runtime_tool_ids(
+        &self,
+        install_root: &Path,
+        generation: &RuntimeGenerationRef,
+    ) -> Result<BTreeSet<String>, WindowsAdapterError> {
+        let install_root = canonical_fixed_directory(install_root)?;
+        let expected_root = canonical_fixed_directory(
+            &install_root
+                .join("runtime")
+                .join("generations")
+                .join(&generation.generation_id),
+        )?;
+        let declared_root = canonical_fixed_directory(Path::new(&generation.runtime_root))?;
+        if expected_root != declared_root {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+        let manifest = load_runtime_generation_manifest(&expected_root)?;
+        validate_runtime_generation(&expected_root, &manifest)?;
+        if manifest.generation.generation_id != generation.generation_id
+            || manifest.generation.release_manifest_sha256 != generation.release_manifest_sha256
+        {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+        let actions = load_generation_actions(&expected_root, &manifest)?;
+        let mut tool_ids = BTreeSet::new();
+        for action in actions.into_values() {
+            if !tool_ids.insert(action.tool_id) {
+                return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+            }
+        }
+        if tool_ids.is_empty() {
+            return Err(WindowsAdapterError::InvalidRuntimeGeneration);
+        }
+        Ok(tool_ids)
+    }
+
     /// Inspects a complete, separately staged release without copying it into
     /// the installation. The resulting class tells the caller whether a
     /// restart transaction may handle the candidate or whether the offline
@@ -1715,6 +1829,34 @@ mod tests {
         atomic_write_json(&root.join(RELEASE_MANIFEST_FILE), &manifest).unwrap();
     }
 
+    fn bind_runtime_generations_to_release_fixture(
+        root: &Path,
+        mut manifest: ReleaseFileManifest,
+        generation_ids: &[&str],
+    ) -> ReleaseFileManifest {
+        for generation_id in generation_ids {
+            for name in [
+                "runtime-generation.v1.json",
+                "runtime-release-manifest.json",
+            ] {
+                let relative = format!("runtime/generations/{generation_id}/{name}");
+                let bytes = std::fs::read(root.join(relative.replace('/', "\\"))).unwrap();
+                manifest.files.push(ReleaseFileEntry {
+                    path: relative,
+                    size: bytes.len() as u64,
+                    sha256: Sha256Hash::digest(&bytes),
+                });
+            }
+        }
+        manifest
+            .files
+            .sort_by(|left, right| left.path.cmp(&right.path));
+        manifest.set_sha256 =
+            canonical_sha256(&serde_json::to_value(&manifest.files).unwrap()).unwrap();
+        atomic_write_json(&root.join(RELEASE_MANIFEST_FILE), &manifest).unwrap();
+        manifest
+    }
+
     fn write_runtime_generation_fixture(root: &Path, generation_id: &str) -> PathBuf {
         let runtime = root.join(generation_id);
         std::fs::create_dir_all(runtime.join("catalog")).unwrap();
@@ -2137,6 +2279,72 @@ mod tests {
                 .activation_revision,
             1
         );
+    }
+
+    #[test]
+    fn replacement_installer_selects_only_the_manifest_owned_runtime_generation() {
+        let root = fixture_root("bundled-runtime-selection");
+        let data = fixture_root("bundled-runtime-selection-data");
+        let release = write_release_fixture(&root);
+        let manager = InstallationManager::new(data);
+        let source_container = fixture_root("bundled-runtime-selection-source");
+        let retained_source = write_runtime_generation_fixture(&source_container, "rt_retained");
+        let bundled_source = write_runtime_generation_fixture(&source_container, "rt_bundled");
+        let retained = manager
+            .stage_runtime_generation(&root, &retained_source)
+            .unwrap();
+        manager
+            .stage_runtime_generation(&root, &bundled_source)
+            .unwrap();
+        bind_runtime_generations_to_release_fixture(&root, release, &["rt_bundled"]);
+        manager
+            .finalize(&root, compiled_architecture().unwrap(), false)
+            .unwrap();
+        manager
+            .activate_runtime_bridge(
+                &root,
+                &RuntimeActivationRecord {
+                    schema_id: RUNTIME_ACTIVATION_RECORD_SCHEMA_ID.to_owned(),
+                    schema_version: 1,
+                    activation_revision: 1,
+                    active: retained,
+                    previous: None,
+                    state_generation_id: "prior_state".to_owned(),
+                    bridge_contract_version: 2,
+                    activated_at: Utc::now(),
+                },
+                2,
+            )
+            .unwrap();
+
+        let bundled = manager.verified_bundled_runtime_generation(&root).unwrap();
+        assert_eq!(bundled.generation_id, "rt_bundled");
+        let tool_ids = manager.verified_runtime_tool_ids(&root, &bundled).unwrap();
+        assert_eq!(tool_ids.len(), 17);
+        assert!(tool_ids.contains("star.core.goal.start"));
+        assert!(tool_ids.contains("star.core.validation.run"));
+    }
+
+    #[test]
+    fn replacement_installer_rejects_ambiguous_manifest_owned_generations() {
+        let root = fixture_root("bundled-runtime-ambiguous");
+        let data = fixture_root("bundled-runtime-ambiguous-data");
+        let release = write_release_fixture(&root);
+        let manager = InstallationManager::new(data);
+        let source_container = fixture_root("bundled-runtime-ambiguous-source");
+        for generation_id in ["rt_first", "rt_second"] {
+            let source = write_runtime_generation_fixture(&source_container, generation_id);
+            manager.stage_runtime_generation(&root, &source).unwrap();
+        }
+        bind_runtime_generations_to_release_fixture(&root, release, &["rt_first", "rt_second"]);
+        manager
+            .finalize(&root, compiled_architecture().unwrap(), false)
+            .unwrap();
+
+        assert!(matches!(
+            manager.verified_bundled_runtime_generation(&root),
+            Err(WindowsAdapterError::InvalidRuntimeGeneration)
+        ));
     }
 
     #[test]

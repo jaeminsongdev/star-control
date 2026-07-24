@@ -189,6 +189,7 @@ star integration install [--codex <exe>] [--skip-register] [--json]
 star integration repair [--codex <exe>] [--skip-register] [--json]
 star integration status [--json]
 star integration uninstall [--codex <exe>] [--json]
+star update offline-installer-restart --install-root <absolute-path> --installer <absolute-exe> --codex-desktop <absolute-exe> [--json]
 star hook session-start
 ```
 
@@ -221,8 +222,9 @@ update·repair에서 task를 해제하면 자동 시작은 exact owned value를 
 ### update와 repair
 
 - 같은 AppId가 이전 경로를 재사용한다.
-- offline installer update·repair는 사용자가 Codex 앱을 완전히 종료한 뒤 Codex 밖의 별도 PowerShell에서 실행한다. Installer는 실행 중인 Codex나 Star-Control process를 강제로 닫지 않는다.
+- Installer EXE를 직접 실행하는 update·repair는 사용자가 Codex 앱을 완전히 종료한 뒤 Codex 밖의 별도 PowerShell에서 실행한다. Installer 자체는 실행 중인 Codex나 Star-Control process를 강제로 닫지 않는다. 실행 중 host에서 승인된 전환은 `star update offline-installer-restart`만 사용하며, detached Updater가 exact Codex census·10초 countdown·bounded 종료와 같은 Desktop 재실행을 소유한다.
 - 설치 후 `codex_integration_update`는 Installer가 아니라 `star-updater.exe`만 처리한다. updater가 verified Codex process census와 Controller update lease를 확보한 뒤 `restart_armed`에서 정확히 10초를 세고, 새 mutation admission을 막고, 대상 Codex를 정상 종료 요청 후 exact identity fallback으로만 종료한다. MCP EOF와 owner-death가 확인된 뒤에만 Plugin·Hook·`.mcp.json`을 교체하고, postcheck 뒤 같은 Codex executable을 다시 시작한다. chat 주입·thread 재개·새 turn·중단 Tool replay는 없다.
+- full/mixed replacement installer가 기존 v2 설치를 갱신하면 setup의 bridge initialize는 prior selector를 보존한다. detached Updater는 setup 성공 뒤 새 root manifest가 소유한 정확히 한 Runtime Generation을 선택·활성화하고, manifest-declared release ToolId 전체와 live declared/ready 집합의 exact equality를 검증한다. 실패하면 prior selector를 복원·기동하되 replacement fixed files가 남으므로 `partially_applied`를 기록하고, selector 복구 실패는 `rollback_failed`로 기록한다. setup exit 0과 file 교체만으로 update 완료나 full rollback을 표시하지 않는다.
 - 새 version의 finalize가 전부 성공한 뒤 record를 바꾼다.
 - Codex template hash 또는 install path가 바뀌면 `integration repair`가 새 version source를 렌더링하고 공식 add command를 다시 실행한다.
 - 실패한 setup은 Inno Setup의 transaction rollback을 사용한다. 성공 뒤 이전 version으로 돌아가려면 보관한 이전 installer를 명시적으로 다시 실행한다.

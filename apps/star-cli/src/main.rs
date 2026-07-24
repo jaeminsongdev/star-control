@@ -195,6 +195,7 @@ star update verify [--json]\n\
 star update stage <runtime-generation-dir> [--json]\n\
 star update inspect <generation-id|absolute-release-stage> [--json]\n\
 star update apply <generation-id> --state-generation <id> --approve <sha256> [--json]\n\
+star update offline-installer-restart --install-root <absolute-path> --installer <absolute-exe> --codex-desktop <absolute-exe> [--json]\n\
 star hook session-start\n\
 star controller start [--background]\n\
 star controller autostart enable|disable|status";
