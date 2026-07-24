@@ -70,6 +70,9 @@ enum LocalCommand {
         installer: PathBuf,
         codex_desktop: PathBuf,
     },
+    UpdateReconcileInstalledRuntime {
+        target_install_root: PathBuf,
+    },
     ControllerAutostart {
         action: String,
     },
@@ -278,6 +281,26 @@ fn parse(args: &[String]) -> Result<Option<ParsedLocal>, String> {
                 target_install_root,
                 installer,
                 codex_desktop,
+            }
+        }
+        [first, second, tail @ ..]
+            if first == "update" && second == "reconcile-installed-runtime" =>
+        {
+            let [flag, value] = tail else {
+                return Err(
+                    "update reconcile-installed-runtime requires one --install-root value"
+                        .to_owned(),
+                );
+            };
+            if flag != "--install-root" {
+                return Err("update reconcile-installed-runtime requires --install-root".to_owned());
+            }
+            let target_install_root = PathBuf::from(value);
+            if !target_install_root.is_absolute() {
+                return Err("--install-root must be an absolute path".to_owned());
+            }
+            LocalCommand::UpdateReconcileInstalledRuntime {
+                target_install_root,
             }
         }
         [first, second, tail @ ..] if first == "integration" && second == "uninstall" => {
@@ -786,6 +809,9 @@ async fn run(parsed: ParsedLocal) -> i32 {
                 }
             }
         }
+        LocalCommand::UpdateReconcileInstalledRuntime {
+            target_install_root,
+        } => reconcile_installed_runtime(&install_root, &target_install_root, parsed.json).await,
         LocalCommand::ControllerAutostart { action } => {
             let expected =
                 match autostart::expected_command(&install_root.join("star-controller.exe")) {
@@ -868,6 +894,70 @@ async fn apply_runtime_generation(
         json,
     )
     .await
+}
+
+async fn reconcile_installed_runtime(
+    command_root: &std::path::Path,
+    target_install_root: &std::path::Path,
+    json: bool,
+) -> i32 {
+    let updater = command_root.join("star-updater.exe");
+    if !updater.is_file() {
+        eprintln!("star-updater.exe is unavailable beside the invoking CLI");
+        return 4;
+    }
+    let manager = match InstallationManager::for_current_user() {
+        Ok(manager) => manager,
+        Err(error) => return print_windows_error(error),
+    };
+    let same_root = match (
+        command_root.canonicalize(),
+        target_install_root.canonicalize(),
+    ) {
+        (Ok(command_root), Ok(target_install_root)) => command_root
+            .as_os_str()
+            .eq_ignore_ascii_case(target_install_root.as_os_str()),
+        _ => command_root
+            .as_os_str()
+            .eq_ignore_ascii_case(target_install_root.as_os_str()),
+    };
+    let verified = if same_root {
+        manager.status(target_install_root).map(|_| ())
+    } else {
+        manager
+            .inspect_integration_candidate(target_install_root, command_root)
+            .map(|_| ())
+    };
+    if let Err(error) = verified {
+        return print_windows_error(error);
+    }
+    let output = match tokio::process::Command::new(&updater)
+        .arg("reconcile-installed-runtime")
+        .arg("--install-root")
+        .arg(target_install_root)
+        .output()
+        .await
+    {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!("star-updater could not start: {error}");
+            return 4;
+        }
+    };
+    if !output.status.success() {
+        if !output.stderr.is_empty() {
+            eprint!("{}", String::from_utf8_lossy(&output.stderr));
+        }
+        return output.status.code().unwrap_or(4);
+    }
+    let value = match serde_json::from_slice::<serde_json::Value>(&output.stdout) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("star-updater returned malformed reconcile output: {error}");
+            return 4;
+        }
+    };
+    print_value(&value, json)
 }
 
 async fn apply_runtime_generation_legacy(
@@ -1450,6 +1540,18 @@ mod tests {
             .unwrap()
             .command,
             LocalCommand::UpdateOfflineInstallerRestart { .. }
+        ));
+        assert!(matches!(
+            parse(&args(&[
+                "update",
+                "reconcile-installed-runtime",
+                "--install-root",
+                r"D:\Star-Control",
+            ]))
+            .unwrap()
+            .unwrap()
+            .command,
+            LocalCommand::UpdateReconcileInstalledRuntime { .. }
         ));
     }
 

@@ -155,6 +155,18 @@ mod tests {
     }
 
     #[test]
+    fn close_failure_can_end_draining_as_aborted() {
+        let mut update = RestartTransaction::new("op_1".to_owned());
+        assert!(update.stage());
+        assert!(update.verify_candidate(1, None));
+        let deadline = update.arm(now()).unwrap();
+        assert!(update.begin_draining(deadline));
+        assert!(update.transition(RestartState::Draining, RestartState::Aborted));
+        assert_eq!(update.state, RestartState::Aborted);
+        assert!(!update.transition(RestartState::Aborted, RestartState::Applying));
+    }
+
+    #[test]
     fn replacement_file_residue_is_not_reported_as_full_rollback() {
         let mut update = RestartTransaction::new("op_1".to_owned());
         update.state = RestartState::Applying;

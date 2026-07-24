@@ -106,6 +106,7 @@ MCP Gateway는 connection-scoped stdio process다.
 |---|---|---|
 | `tool_hot_reload` | Controller Registry watcher | 없음 |
 | `runtime_update` | Updater under update lease | 없음 |
+| `installed_runtime_reconcile` | Updater + installed trusted CLI postcheck | 없음 |
 | `codex_integration_update` | Updater under update lease | 필요 |
 | `updater_update` | offline installer | 필요 경계 밖 |
 | `mixed_update` | offline installer + detached Updater postcheck | 필요 |
@@ -215,6 +216,16 @@ postcheck가 실패하면 prior selector와 Controller를 복원하되 replaceme
 남으므로 `partially_applied`를 남기며, prior 복구 실패는 `rollback_failed`로 남긴다.
 `partially_applied`를 full prior release의 `rolled_back`으로 승격하지 않는다. 디렉터리 이름 정렬이나 설치기 exit 0만으로
 active Runtime 성공을 추론하지 않는다.
+
+### 무재시작 installed Runtime reconcile
+
+설치 payload와 Codex integration byte는 이미 검증됐고 activation selector만 root manifest 소유 generation과 다른 경우에는 `star update reconcile-installed-runtime --install-root <absolute-path>`를 사용한다. 이 operation은 Codex process census·countdown·Desktop 종료를 수행하지 않는다.
+
+Updater는 update lease 아래 stale pre-apply restart receipt를 `aborted`로 종결하고, prior Controller image를 캡처한 뒤 selector를 새 generation으로 원자 교체한다. 이후 prior image에 graceful shutdown을 요청하고 12초 뒤에도 같은 image가 남을 때만 exact tree fallback을 사용한다. 실행 중인 Codex와 MCP는 유지되며 MCP supervisor가 새 selector의 Controller로 reconnect한다. fallback PID는 결과에 포함한다.
+
+staged updater는 설치 Controller의 authenticated CLI allowlist에 자동 편입되지 않는다. live Registry 검증은 설치 record와 release manifest를 통과한 `<install-root>\star.exe`가 `tools list --source release`와 `--readiness ready`를 bounded subprocess로 각각 호출해 담당한다. declared/ready 두 집합이 package manifest의 expected ToolId exact set과 같고 integration status도 verified여야 성공이다. 실패하면 prior selector를 먼저 복구하고 candidate Controller를 drain한다.
+
+이 operation은 installer-owned fixed file을 쓰지 않는다. root EXE·Plugin·Hook byte가 다르면 `installed_runtime_reconcile` 성공 여부와 무관하게 offline installer restart가 필요하다.
 
 ### 실패 상태
 

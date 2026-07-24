@@ -819,7 +819,7 @@ Star-Control이 소유하는 것은 이 도구의 **선택 가능한 descriptor,
 |---|---|
 | 구현됨 | P0와 P-0041~P-0055 bounded M1~M11 Slice, required core 17/17 source readiness, P-0026 installer transport, P-0039 4-EXE updater lifecycle, M10 release/evaluation engine, exact GitHub publisher·receipt/readback 경로 |
 | 후속 제품 확장 | current bounded Slice의 pass를 임의 provider/language·native ARM64·signed publication에 일반화하지 않음 |
-| 외부/환경 gate | clean committed revision, current Codex candidate install 17/17, signed Windows x64 lifecycle, Authenticode certificate·timestamp provider와 signed final GitHub publication |
+| 외부/환경 gate | current recovery source의 clean committed reseal, signed Windows x64 lifecycle, Authenticode certificate·timestamp provider와 signed final GitHub publication |
 | 별도 사용자 승인 gate | package/dependency 설치, system setting, paid CI/signing, publish·deploy·withdrawal·remote/account effect |
 
 문서 설계 완료를 product ready나 release ready로 표시하지 않는다. `ready`·`approved`·`published`는 실제 구현과 current evidence가 생긴 뒤에만 runtime 상태로 사용할 수 있다.
@@ -969,14 +969,14 @@ P-0055에서 14번의 비서명 부분은 구현·격리 검증했다. GitHub ad
 
 ## P-0055 비서명 감사 이후 남은 외부 gate
 
-P-0055 implementation tree `2eb3680b3f0cf5a8ae6b0daadff6fe54f003e067`은 commit `4554c4a`로, 제품 증거 기준은 local·origin exact commit `b20d234b38a7dcb347049b6b95aff3407c5dedc9`로 봉인했다. exact revision final FULL 10/10, x64/ARM64 473-file stage·PE architecture·installer model, x64 isolated finalize/Bridge/status, ARM64 fake lifecycle, SPDX SBOM·RustSec audit·pre-sign provenance와 official Inspector fixed 12/12·core search/describe 17/17·Hook-correct `validation.run`을 통과했다. RELEASE는 clean-worktree를 포함해 14/15 PASS이고 signing/publication만 unverified다. exact-target authenticated disposable draft도 asset local/provider/download digest 일치와 release/tag cleanup을 통과했다. current installed Codex는 registry revision 4의 ready core 6개이므로 candidate Inspector run을 current 설치 증거로 승격하지 않는다.
+P-0055의 original implementation과 exact `b20d234` local/remote candidate는 final FULL 10/10, x64/ARM64 473-file stage·PE architecture·installer model, x64 isolated finalize/Bridge/status, ARM64 fake lifecycle, SPDX SBOM·RustSec audit·pre-sign provenance, official Inspector 17/17과 exact-target authenticated disposable draft byte 왕복을 통과했다. current host 설치에서 root fixed EXE 교체 뒤 activation selector가 6/17 generation에 남는 결함이 확인되어 `7eedc7b`에 manifest-owned replacement reconcile을 구현했고, 이어 interrupted pre-apply receipt `aborted` 종결과 무재시작 installed-runtime reconcile을 보강했다. current installed payload는 activation revision 5 `rt_c569d8e23ed61e8e`, integration verified, Registry revision 7 declared=ready 17/17이며 current Codex 17 action search·describe·invoke와 `validation.run` TARGET Operation을 통과했다. 현재 보강 source의 clean exact artifact·remote reseal은 아직 진행 중이므로 과거 artifact digest를 상속하지 않는다.
 
 - approved certificate와 timestamp provider로 x64·ARM64 Runtime EXE를 서명하고, exact pre-sign file inventory를 유지한 채 `seal-signed`를 통과한 새 candidate를 만든다. `seal-signed`의 Windows trust 검증은 approved signer·timestamp receipt 자체를 대체하지 않으며 그 exact evidence는 `signature_refs`에 결합한다.
 - 그 signed Runtime stage에서 installer를 한 번 만들고 installer 자체를 서명한 뒤 digest·manifest·release Gate를 다시 계산한다. unsigned 검증은 signed byte에 상속하지 않는다.
 - disposable clean Windows 11 24H2 x64에서 actual installer install·safe-default first run·supported update·injected failure rollback·repair·uninstall과 user data 보존을 current signed candidate로 검증한다.
 - local candidate branch·remote `b20d234` source readback과 exact candidate target draft/readback·cleanup은 P-0055에서 완료했다. 이후 signed byte는 새 candidate이므로 이 증거를 상속하지 않고 다시 수행한다.
-- Codex를 닫은 별도 install/update 창에서 source candidate를 설치한 뒤 required core 17개 모두의 current Codex search/describe/invoke와 current Inspector evidence를 재생성한다.
+- current installed payload의 required core 17개 search·describe·invoke는 무재시작 reconcile로 확인했다. 이후 signed byte는 새 candidate이므로 signed installer maintenance 경계에서 같은 current Codex·Inspector evidence를 다시 생성한다.
 - pre-sign SBOM·provenance는 생성됐지만 signed byte에 상속하지 않는다. signing과 installer 서명 뒤 exact final artifact set으로 다시 생성해 GitHub repository/tag/channel/asset digest approval에 결합한다.
 - tag·GitHub draft·asset upload·publish는 각 exact action 승인을 받은 뒤 실행한다. timeout은 write 재시도하지 않고 read-only reconcile하며, remote after snapshot이 exact digest를 확인하기 전에는 `published`가 아니다.
 
-P-0040~P-0053 historical 구현은 clean revision chain으로 보존되고 P-0054/P-0055 구현과 exact candidate origin/GitHub draft roundtrip도 봉인됐다. 그러나 current Codex integration과 usable Authenticode certificate·timestamp provider·signed candidate가 없으므로 비서명 current-host seal은 미완료이고 public release 상태는 `blocked_external`이다. local/remote 구현 완료, unpublished disposable draft, unsigned installer model 또는 ARM64 simulation을 `ready|approved|published`로 승격하지 않는다.
+P-0040~P-0053 historical 구현은 clean revision chain으로 보존되고 P-0054/P-0055 original candidate의 origin/GitHub draft roundtrip도 봉인됐다. current Codex Runtime 17/17은 확인했지만 현재 recovery 보강 source의 exact local/remote artifact reseal과 usable Authenticode certificate·timestamp provider·signed candidate는 아직 없다. 따라서 비서명 reseal은 진행 중이고 public release 상태는 `blocked_external`이다. unpublished disposable draft, unsigned installer model 또는 ARM64 simulation을 `ready|approved|published`로 승격하지 않는다.

@@ -20,6 +20,7 @@ use star_contracts::{
         RUNTIME_ACTIVATION_RECORD_SCHEMA_ID, RuntimeActivationRecord, RuntimeGenerationRef,
     },
     ipc::IpcStatus,
+    parse_no_duplicate_keys,
 };
 use star_ipc::{
     client::{ControllerClient, ControllerClientError, cli_client_config},
@@ -38,6 +39,7 @@ use crate::{
 
 const GRACEFUL_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
 const CONTROLLER_DRAIN_TIMEOUT: Duration = Duration::from_secs(12);
+const REGISTRY_POSTCHECK_TIMEOUT: Duration = Duration::from_secs(12);
 
 #[derive(Clone, Debug)]
 pub struct IntegrationRepairRestartRequest {
@@ -64,6 +66,14 @@ pub struct OfflineInstallerRestartRequest {
     pub codex_desktop_executable: PathBuf,
 }
 
+/// Reconciles a stale Runtime selector with the generation owned by the
+/// already-installed release manifest.  This path does not replace program
+/// files and therefore does not require Codex Desktop to restart.
+#[derive(Clone, Debug)]
+pub struct InstalledRuntimeReconcileRequest {
+    pub install_root: PathBuf,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct IntegrationRepairRestartOutcome {
     pub operation_id: String,
@@ -72,6 +82,19 @@ pub struct IntegrationRepairRestartOutcome {
     pub graceful_close_pids: Vec<u32>,
     pub fallback_terminated_pids: Vec<u32>,
     pub relaunched_pid: u32,
+    pub integration_state: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct InstalledRuntimeReconcileOutcome {
+    pub operation_id: String,
+    pub recovered_restart_operation_id: Option<String>,
+    pub activation_changed: bool,
+    pub prior_generation_id: String,
+    pub active_generation_id: String,
+    pub activation_revision: u64,
+    pub expected_tool_ids: Vec<String>,
+    pub fallback_terminated_pids: Vec<u32>,
     pub integration_state: String,
 }
 
@@ -136,16 +159,26 @@ pub enum IntegrationRestartError {
     Installer(i32),
     #[error("installed Runtime Generation did not expose its complete ready release Registry")]
     RuntimePostcheck,
+    #[error("installed Runtime reconciliation failed and the prior selector was restored: {0}")]
+    RuntimeReconcileRolledBack(String),
+    #[error(
+        "installed Runtime reconciliation failed and restoring the prior selector also failed: {0}"
+    )]
+    RuntimeReconcileRollbackFailed(String),
     #[error(
         "replacement files remain installed after Runtime postcheck failure; the prior Runtime selector was restored"
     )]
     RuntimePartiallyApplied,
     #[error("Controller update handoff failed: {0}")]
     Controller(#[from] ControllerClientError),
+    #[error("active Controller did not stop within the bounded reconciliation window")]
+    ControllerDrainTimeout,
     #[error("Controller image could not be verified for update handoff: {0}")]
     ControllerImage(#[from] ControllerStartError),
     #[error("restart receipt could not be persisted: {0}")]
     Receipt(WindowsAdapterError),
+    #[error("restart receipt could not be read: {0}")]
+    ReceiptRead(#[from] IntegrationReceiptError),
     #[error("restart transaction reached an invalid internal state")]
     StateTransition,
 }
@@ -210,6 +243,7 @@ pub async fn run_offline_installer_and_restart(
         terminate_verified_tree_excluding(&desktop, Some(std::process::id()))?
     };
     if !exact_image_instances(&snapshot()?, &desktop).is_empty() {
+        persist_aborted(&mut transaction, &receipt_request);
         return Err(IntegrationRestartError::CloseTimeout);
     }
     transition_or_error(
@@ -386,17 +420,154 @@ pub async fn run_offline_installer_and_restart(
     })
 }
 
+/// Repairs only the active Runtime selector when a complete release payload is
+/// already installed.  The installed release manifest is the sole owner of
+/// the candidate generation and its package manifests define the exact ToolId
+/// set that must be both declared and ready before the new selector is kept.
+pub async fn reconcile_installed_runtime(
+    request: InstalledRuntimeReconcileRequest,
+) -> Result<InstalledRuntimeReconcileOutcome, IntegrationRestartError> {
+    let _update_lease = acquire_update_lease()?;
+    let recovered_restart_operation_id = abort_interrupted_preapply_restart(&request.install_root)?;
+    let installation = InstallationManager::for_current_user()?;
+    installation.status(&request.install_root)?;
+    let prior = installation.load_runtime_activation_record(&request.install_root)?;
+    let bundled = installation.verified_bundled_runtime_generation(&request.install_root)?;
+    let expected_tool_ids =
+        installation.verified_runtime_tool_ids(&request.install_root, &bundled)?;
+    let operation_id = format!("upd_{}", star_ipc::nonce());
+    let next = next_installed_runtime_reconcile_activation(&prior, bundled.clone(), &operation_id);
+    let activation_changed = next.is_some();
+    let mut fallback_terminated_pids = Vec::new();
+
+    if let Some(next) = next {
+        let prior_controller =
+            VerifiedControllerImage::from_install_directory(&request.install_root)?
+                .path()
+                .to_path_buf();
+        if let Err(error) = installation.activate_runtime_bridge(
+            &request.install_root,
+            &next,
+            prior.bridge_contract_version,
+        ) {
+            return Err(IntegrationRestartError::Installation(error));
+        }
+        match shutdown_controller_image_and_wait(&prior_controller).await {
+            Ok(terminated) => fallback_terminated_pids = terminated,
+            Err(error) => {
+                let reason = error.to_string();
+                if let Err(rollback) =
+                    restore_runtime_selector(&installation, &request.install_root, &prior).await
+                {
+                    return Err(IntegrationRestartError::RuntimeReconcileRollbackFailed(
+                        format!("{reason}; rollback: {rollback}"),
+                    ));
+                }
+                return Err(IntegrationRestartError::RuntimeReconcileRolledBack(reason));
+            }
+        }
+    }
+
+    let postcheck = async {
+        verify_active_release_registry(&request.install_root, &expected_tool_ids).await?;
+        CodexIntegrationManager::for_current_user()
+            .and_then(|manager| manager.status(&request.install_root))
+            .map_err(IntegrationRestartError::Integration)
+    }
+    .await;
+
+    let integration = match postcheck {
+        Ok(integration) => integration,
+        Err(error) if activation_changed => {
+            let reason = error.to_string();
+            if let Err(rollback) =
+                restore_runtime_selector(&installation, &request.install_root, &prior).await
+            {
+                return Err(IntegrationRestartError::RuntimeReconcileRollbackFailed(
+                    format!("{reason}; rollback: {rollback}"),
+                ));
+            }
+            return Err(IntegrationRestartError::RuntimeReconcileRolledBack(reason));
+        }
+        Err(error) => return Err(error),
+    };
+    let active = installation.load_runtime_activation_record(&request.install_root)?;
+    if active.active != bundled {
+        return Err(IntegrationRestartError::RuntimePostcheck);
+    }
+    Ok(InstalledRuntimeReconcileOutcome {
+        operation_id,
+        recovered_restart_operation_id,
+        activation_changed,
+        prior_generation_id: prior.active.generation_id,
+        active_generation_id: active.active.generation_id,
+        activation_revision: active.activation_revision,
+        expected_tool_ids: expected_tool_ids.into_iter().collect(),
+        fallback_terminated_pids,
+        integration_state: integration.local_state,
+    })
+}
+
+fn abort_interrupted_preapply_restart(
+    install_root: &Path,
+) -> Result<Option<String>, IntegrationRestartError> {
+    let Some(receipt) = latest_integration_restart_receipt()? else {
+        return Ok(None);
+    };
+    if !same_existing_path(&receipt.install_root, install_root)
+        || !is_preapply_restart_state(receipt.state)
+    {
+        return Ok(None);
+    }
+    // The caller holds the global update lease.  Therefore no live updater can
+    // still own this pre-apply receipt, and ending it as `aborted` cannot race
+    // an installation write.
+    let mut transaction = RestartTransaction {
+        operation_id: receipt.operation_id.clone(),
+        state: receipt.state,
+        affected_instance_count: receipt.affected_instance_count,
+        affected_task_count: receipt.affected_task_count,
+        countdown_deadline: None,
+    };
+    let receipt_request = IntegrationRepairRestartRequest {
+        install_root: receipt.install_root,
+        codex_desktop_executable: receipt.codex_desktop_executable,
+    };
+    transition_or_error(transaction.transition(transaction.state, RestartState::Aborted))?;
+    persist_receipt(&transaction, &receipt_request)?;
+    Ok(Some(transaction.operation_id))
+}
+
+fn is_preapply_restart_state(state: RestartState) -> bool {
+    matches!(
+        state,
+        RestartState::Planned
+            | RestartState::Staged
+            | RestartState::CandidateVerified
+            | RestartState::RestartArmed
+            | RestartState::Countdown
+            | RestartState::Draining
+            | RestartState::CodexStopped
+    )
+}
+
 async fn verify_active_release_registry(
     install_root: &Path,
     expected_tool_ids: &BTreeSet<String>,
 ) -> Result<(), IntegrationRestartError> {
-    let client = start_active_controller_client(install_root).await?;
-    let declared = collect_release_tool_ids(&client, false).await?;
-    let ready = collect_release_tool_ids(&client, true).await?;
-    if !complete_release_registry(expected_tool_ids, &declared, &ready) {
-        return Err(IntegrationRestartError::RuntimePostcheck);
+    VerifiedControllerImage::from_install_directory(install_root)?.start_background()?;
+    let deadline = tokio::time::Instant::now() + REGISTRY_POSTCHECK_TIMEOUT;
+    while tokio::time::Instant::now() < deadline {
+        let declared = collect_release_tool_ids_via_installed_cli(install_root, false).await;
+        let ready = collect_release_tool_ids_via_installed_cli(install_root, true).await;
+        if let (Ok(declared), Ok(ready)) = (declared, ready)
+            && complete_release_registry(expected_tool_ids, &declared, &ready)
+        {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
     }
-    Ok(())
+    Err(IntegrationRestartError::RuntimePostcheck)
 }
 
 fn next_offline_runtime_activation(
@@ -404,13 +575,33 @@ fn next_offline_runtime_activation(
     bundled: RuntimeGenerationRef,
     operation_id: &str,
 ) -> Option<RuntimeActivationRecord> {
+    next_runtime_activation(prior, bundled, format!("offline_installer_{operation_id}"))
+}
+
+fn next_installed_runtime_reconcile_activation(
+    prior: &RuntimeActivationRecord,
+    bundled: RuntimeGenerationRef,
+    operation_id: &str,
+) -> Option<RuntimeActivationRecord> {
+    next_runtime_activation(
+        prior,
+        bundled,
+        format!("installed_runtime_reconcile_{operation_id}"),
+    )
+}
+
+fn next_runtime_activation(
+    prior: &RuntimeActivationRecord,
+    bundled: RuntimeGenerationRef,
+    state_generation_id: String,
+) -> Option<RuntimeActivationRecord> {
     (prior.active != bundled).then(|| RuntimeActivationRecord {
         schema_id: RUNTIME_ACTIVATION_RECORD_SCHEMA_ID.to_owned(),
         schema_version: 1,
         activation_revision: prior.activation_revision.saturating_add(1),
         active: bundled,
         previous: Some(prior.active.clone()),
-        state_generation_id: format!("offline_installer_{operation_id}"),
+        state_generation_id,
         bridge_contract_version: prior.bridge_contract_version,
         activated_at: Utc::now(),
     })
@@ -424,92 +615,109 @@ fn complete_release_registry(
     !expected.is_empty() && declared == expected && ready == expected
 }
 
-async fn start_active_controller_client(
+async fn probe_active_controller_via_installed_cli(
     install_root: &Path,
-) -> Result<ControllerClient, IntegrationRestartError> {
+) -> Result<(), IntegrationRestartError> {
     let image = VerifiedControllerImage::from_install_directory(install_root)?;
     image.start_background()?;
-    let client = ControllerClient::new(cli_client_config(image.path().to_path_buf())?);
-    for _ in 0..40 {
-        match client
-            .call("controller.start", serde_json::json!({}), RequestId::new())
+    let deadline = tokio::time::Instant::now() + REGISTRY_POSTCHECK_TIMEOUT;
+    while tokio::time::Instant::now() < deadline {
+        if collect_release_tool_ids_via_installed_cli(install_root, false)
             .await
+            .is_ok()
         {
-            Ok(response) if response.status == IpcStatus::Ok => return Ok(client),
-            Ok(_) => break,
-            Err(ControllerClientError::Unavailable) => {
-                tokio::time::sleep(Duration::from_millis(250)).await;
-            }
-            Err(_) => break,
+            return Ok(());
         }
+        tokio::time::sleep(Duration::from_millis(250)).await;
     }
     Err(IntegrationRestartError::RuntimePostcheck)
 }
 
-async fn collect_release_tool_ids(
-    client: &ControllerClient,
+async fn collect_release_tool_ids_via_installed_cli(
+    install_root: &Path,
     ready_only: bool,
 ) -> Result<BTreeSet<String>, IntegrationRestartError> {
+    let star = install_root.join("star.exe");
+    if !star.is_file() {
+        return Err(IntegrationRestartError::RuntimePostcheck);
+    }
+    let mut command = tokio::process::Command::new(star);
+    command.kill_on_drop(true);
+    command.args(["tools", "list", "--source", "release"]);
+    if ready_only {
+        command.args(["--readiness", "ready"]);
+    }
+    command.arg("--json");
+    let output = tokio::time::timeout(Duration::from_secs(2), command.output())
+        .await
+        .map_err(|_| IntegrationRestartError::RuntimePostcheck)?
+        .map_err(|_| IntegrationRestartError::RuntimePostcheck)?;
+    if !output.status.success() || output.stdout.len() > 1024 * 1024 {
+        return Err(IntegrationRestartError::RuntimePostcheck);
+    }
+    tool_ids_from_cli_output(&output.stdout, ready_only)
+}
+
+fn same_existing_path(left: &Path, right: &Path) -> bool {
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(left), Ok(right)) => left.as_os_str().eq_ignore_ascii_case(right.as_os_str()),
+        _ => left.as_os_str().eq_ignore_ascii_case(right.as_os_str()),
+    }
+}
+
+fn tool_ids_from_cli_output(
+    stdout: &[u8],
+    ready_only: bool,
+) -> Result<BTreeSet<String>, IntegrationRestartError> {
+    let text =
+        std::str::from_utf8(stdout).map_err(|_| IntegrationRestartError::RuntimePostcheck)?;
+    let value =
+        parse_no_duplicate_keys(text).map_err(|_| IntegrationRestartError::RuntimePostcheck)?;
+    if value.get("status").and_then(serde_json::Value::as_str) != Some("ok") {
+        return Err(IntegrationRestartError::RuntimePostcheck);
+    }
+    let data = value
+        .get("data")
+        .and_then(serde_json::Value::as_object)
+        .ok_or(IntegrationRestartError::RuntimePostcheck)?;
+    if !matches!(
+        data.get("next_cursor"),
+        None | Some(serde_json::Value::Null)
+    ) {
+        return Err(IntegrationRestartError::RuntimePostcheck);
+    }
+    let items = data
+        .get("items")
+        .and_then(serde_json::Value::as_array)
+        .ok_or(IntegrationRestartError::RuntimePostcheck)?;
     let mut tool_ids = BTreeSet::new();
-    let mut cursor: Option<String> = None;
-    for _ in 0..64 {
-        let mut payload = serde_json::json!({
-            "query":"",
-            "limit":50,
-            "sources":["release"]
-        });
-        let object = payload
-            .as_object_mut()
-            .ok_or(IntegrationRestartError::RuntimePostcheck)?;
-        object.insert(
-            "readiness".to_owned(),
-            if ready_only {
-                serde_json::json!(["ready"])
-            } else {
-                serde_json::json!([
-                    "ready",
-                    "unavailable",
-                    "untrusted",
-                    "incompatible",
-                    "degraded"
-                ])
-            },
-        );
-        if let Some(cursor) = &cursor {
-            object.insert("cursor".to_owned(), serde_json::json!(cursor));
-        }
-        let response = client
-            .call("tool.search", payload, RequestId::new())
-            .await?;
-        if response.status != IpcStatus::Ok {
+    for item in items {
+        if item.get("source").and_then(serde_json::Value::as_str) != Some("release") {
             return Err(IntegrationRestartError::RuntimePostcheck);
         }
-        let data = response
-            .data
+        let readiness = item
+            .get("readiness")
+            .and_then(serde_json::Value::as_str)
+            .filter(|readiness| {
+                matches!(
+                    *readiness,
+                    "ready" | "unavailable" | "untrusted" | "incompatible" | "degraded"
+                )
+            })
             .ok_or(IntegrationRestartError::RuntimePostcheck)?;
-        let items = data
-            .get("items")
-            .and_then(serde_json::Value::as_array)
-            .ok_or(IntegrationRestartError::RuntimePostcheck)?;
-        for item in items {
-            let tool_id = item
-                .get("tool_id")
-                .and_then(serde_json::Value::as_str)
-                .filter(|tool_id| !tool_id.is_empty())
-                .ok_or(IntegrationRestartError::RuntimePostcheck)?;
-            if !tool_ids.insert(tool_id.to_owned()) {
-                return Err(IntegrationRestartError::RuntimePostcheck);
-            }
+        if ready_only && readiness != "ready" {
+            return Err(IntegrationRestartError::RuntimePostcheck);
         }
-        match data.get("next_cursor") {
-            Some(serde_json::Value::Null) => return Ok(tool_ids),
-            Some(serde_json::Value::String(next)) if !next.is_empty() => {
-                cursor = Some(next.clone());
-            }
-            _ => return Err(IntegrationRestartError::RuntimePostcheck),
+        let tool_id = item
+            .get("tool_id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|tool_id| !tool_id.is_empty())
+            .ok_or(IntegrationRestartError::RuntimePostcheck)?;
+        if !tool_ids.insert(tool_id.to_owned()) {
+            return Err(IntegrationRestartError::RuntimePostcheck);
         }
     }
-    Err(IntegrationRestartError::RuntimePostcheck)
+    Ok(tool_ids)
 }
 
 async fn recover_runtime_selector_and_relaunch(
@@ -554,7 +762,7 @@ async fn restore_prior_runtime(
     let _ = wait_for_installed_star_processes_to_exit(install_root).await?;
     let _ = terminate_installed_star_processes(install_root)?;
     installation.activate_runtime_bridge(install_root, prior, prior.bridge_contract_version)?;
-    let _ = start_active_controller_client(install_root).await?;
+    probe_active_controller_via_installed_cli(install_root).await?;
     Ok(())
 }
 
@@ -613,6 +821,7 @@ async fn restart_codex_integration(
         terminate_verified_tree_excluding(&desktop, Some(std::process::id()))?
     };
     if !exact_image_instances(&snapshot()?, &desktop).is_empty() {
+        persist_aborted(&mut transaction, &request);
         return Err(IntegrationRestartError::CloseTimeout);
     }
     transition_or_error(
@@ -945,6 +1154,59 @@ async fn shutdown_controller_for_update(
     }
 }
 
+async fn shutdown_controller_image_and_wait(
+    controller: &Path,
+) -> Result<Vec<u32>, IntegrationRestartError> {
+    if exact_image_instances(&snapshot()?, controller).is_empty() {
+        return Ok(Vec::new());
+    }
+    // A healthy Controller may close its pipe immediately after accepting the
+    // shutdown request, before the client finishes decoding the response.  The
+    // exact image census is the authoritative completion signal.
+    let client = ControllerClient::new(cli_client_config(controller.to_path_buf())?);
+    let handoff = client
+        .call(
+            "controller.shutdown",
+            serde_json::json!({}),
+            RequestId::new(),
+        )
+        .await
+        .map(|_| ())
+        .map_err(IntegrationRestartError::Controller);
+    let deadline = tokio::time::Instant::now() + CONTROLLER_DRAIN_TIMEOUT;
+    while tokio::time::Instant::now() < deadline {
+        if exact_image_instances(&snapshot()?, controller).is_empty() {
+            return Ok(Vec::new());
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    if exact_image_instances(&snapshot()?, controller).is_empty() {
+        Ok(Vec::new())
+    } else {
+        let terminated = terminate_verified_tree(controller)?;
+        if exact_image_instances(&snapshot()?, controller).is_empty() {
+            Ok(terminated)
+        } else {
+            handoff?;
+            Err(IntegrationRestartError::ControllerDrainTimeout)
+        }
+    }
+}
+
+async fn restore_runtime_selector(
+    installation: &InstallationManager,
+    install_root: &Path,
+    prior: &RuntimeActivationRecord,
+) -> Result<(), IntegrationRestartError> {
+    let candidate_controller = VerifiedControllerImage::from_install_directory(install_root)?
+        .path()
+        .to_path_buf();
+    installation.activate_runtime_bridge(install_root, prior, prior.bridge_contract_version)?;
+    let _ = shutdown_controller_image_and_wait(&candidate_controller).await?;
+    VerifiedControllerImage::from_install_directory(install_root)?.start_background()?;
+    Ok(())
+}
+
 /// Wait for a normal `controller.shutdown` handoff without making an older
 /// install manifest a prerequisite for the offline installer.  This only
 /// observes exact executable paths that are inside the caller-selected root.
@@ -1091,6 +1353,17 @@ mod tests {
         assert_eq!(next.state_generation_id, "offline_installer_upd_fixture");
         assert_eq!(next.bridge_contract_version, 2);
         assert!(next_offline_runtime_activation(&next, next.active.clone(), "ignored").is_none());
+
+        let reconciled = next_installed_runtime_reconcile_activation(
+            &prior,
+            generation("rt_reconciled", b"reconciled"),
+            "upd_reconcile",
+        )
+        .unwrap();
+        assert_eq!(
+            reconciled.state_generation_id,
+            "installed_runtime_reconcile_upd_reconcile"
+        );
     }
 
     #[test]
@@ -1112,5 +1385,67 @@ mod tests {
             &BTreeSet::new(),
             &BTreeSet::new(),
         ));
+    }
+
+    #[test]
+    fn interrupted_restart_recovery_never_relabels_an_apply_state() {
+        assert!(is_preapply_restart_state(RestartState::Draining));
+        assert!(is_preapply_restart_state(RestartState::CodexStopped));
+        assert!(!is_preapply_restart_state(RestartState::Applying));
+        assert!(!is_preapply_restart_state(RestartState::RollbackRequired));
+        assert!(!is_preapply_restart_state(RestartState::PartiallyApplied));
+        assert!(!is_preapply_restart_state(RestartState::Exited));
+    }
+
+    #[test]
+    fn installed_cli_postcheck_accepts_only_one_complete_release_page() {
+        let valid = serde_json::to_vec(&serde_json::json!({
+            "status":"ok",
+            "data":{
+                "items":[
+                    {"tool_id":"star.core.goal.start","source":"release","readiness":"ready"},
+                    {"tool_id":"star.core.validation.run","source":"release","readiness":"ready"}
+                ],
+                "next_cursor":null
+            }
+        }))
+        .unwrap();
+        assert_eq!(
+            tool_ids_from_cli_output(&valid, true).unwrap(),
+            ids(&["star.core.goal.start", "star.core.validation.run"])
+        );
+
+        let duplicate = serde_json::to_vec(&serde_json::json!({
+            "status":"ok",
+            "data":{
+                "items":[
+                    {"tool_id":"star.core.goal.start","source":"release","readiness":"ready"},
+                    {"tool_id":"star.core.goal.start","source":"release","readiness":"ready"}
+                ],
+                "next_cursor":null
+            }
+        }))
+        .unwrap();
+        assert!(tool_ids_from_cli_output(&duplicate, true).is_err());
+
+        let paged = serde_json::to_vec(&serde_json::json!({
+            "status":"ok",
+            "data":{"items":[],"next_cursor":"unexpected"}
+        }))
+        .unwrap();
+        assert!(tool_ids_from_cli_output(&paged, false).is_err());
+
+        let unavailable = serde_json::to_vec(&serde_json::json!({
+            "status":"ok",
+            "data":{
+                "items":[
+                    {"tool_id":"star.core.goal.start","source":"release","readiness":"unavailable"}
+                ],
+                "next_cursor":null
+            }
+        }))
+        .unwrap();
+        assert!(tool_ids_from_cli_output(&unavailable, false).is_ok());
+        assert!(tool_ids_from_cli_output(&unavailable, true).is_err());
     }
 }

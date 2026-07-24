@@ -58,7 +58,8 @@ Codex CLI 등록이 실행 환경에서 허용되지 않으면 설치 자체는 
 ## update·repair·제거
 
 - update·repair는 같은 installer를 다시 실행하고 이전 선택 경로를 재사용한다.
-- update·repair·제거 전에 Codex 앱을 완전히 종료하고, Codex 밖의 별도 PowerShell에서 installer를 실행한다. 실행 중인 Codex 작업 안에서 installer를 호출하지 않는다.
+- installer EXE를 직접 실행하는 update·repair·제거 전에는 Codex 앱을 완전히 종료하고 Codex 밖의 별도 PowerShell을 사용한다. 실행 중 host에서 full/mixed payload를 교체해야 할 때는 검증된 `star update offline-installer-restart`만 사용한다.
+- 설치 payload는 이미 verified이고 Runtime selector만 root manifest 소유 generation보다 stale이면 installer를 다시 실행하지 않는다. `star update reconcile-installed-runtime --install-root <absolute-path> --json`은 Codex/MCP를 유지한 채 prior Controller exact image만 drain하고 installed trusted CLI로 release declared/ready exact set을 검증한다. fixed EXE·Plugin·Hook byte가 다르면 이 경로를 사용하지 않는다.
 - Installer는 실행 중인 Codex나 Star-Control process를 강제로 닫지 않는다. 설치 전 WMI preflight가 `ChatGPT.exe`, `Codex.exe`, `star-controller.exe`, `star-mcp.exe`, `star-updater.exe`를 확인하며, 실행 중이거나 확인할 수 없으면 파일을 변경하기 전에 중단한다. integration install·repair·uninstall도 Codex가 실행 중이면 쓰기 전에 실패한다.
 - Controller autostart는 설치본에서 항상 비활성화한다. Hook/MCP가 필요할 때 시작된 Controller는 모든 관측 작업세션 종료 뒤 30초 lease로 종료한다.
 - 기본 제거는 program payload, installation record와 exact-owned 자동 시작 entry를 제거한다. 사용자 설정·runtime state·Project 자료는 보존한다.

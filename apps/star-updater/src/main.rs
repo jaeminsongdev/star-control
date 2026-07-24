@@ -12,17 +12,19 @@ use star_contracts::Sha256Hash;
 use star_updater_core::{
     RuntimeApplyRequest, apply_runtime_generation,
     integration_restart::{
-        IntegrationCandidateRestartRequest, IntegrationRepairRestartRequest,
-        OfflineInstallerRestartRequest, apply_codex_integration_candidate_and_restart,
+        InstalledRuntimeReconcileRequest, IntegrationCandidateRestartRequest,
+        IntegrationRepairRestartRequest, OfflineInstallerRestartRequest,
+        apply_codex_integration_candidate_and_restart, reconcile_installed_runtime,
         repair_codex_integration_and_restart, run_offline_installer_and_restart,
     },
     process_census::{exact_image_instances, owned_process_tree, snapshot},
 };
 
-const HELP: &str = "star-updater runtime-apply <generation-id> --install-root <path> --state-generation <id> --approve <sha256> [--json]\nstar-updater offline-installer-restart --installer <absolute-path> --install-root <path> --codex-desktop <absolute-path>\nstar-updater integration-apply-restart <candidate-release-root> --install-root <path> --codex-desktop <absolute-path> --approve <sha256>\nstar-updater integration-repair-restart --install-root <path> --codex-desktop <absolute-path>\nstar-updater census --codex-exe <absolute-path>";
+const HELP: &str = "star-updater runtime-apply <generation-id> --install-root <path> --state-generation <id> --approve <sha256> [--json]\nstar-updater reconcile-installed-runtime --install-root <path>\nstar-updater offline-installer-restart --installer <absolute-path> --install-root <path> --codex-desktop <absolute-path>\nstar-updater integration-apply-restart <candidate-release-root> --install-root <path> --codex-desktop <absolute-path> --approve <sha256>\nstar-updater integration-repair-restart --install-root <path> --codex-desktop <absolute-path>\nstar-updater census --codex-exe <absolute-path>";
 
 enum Command {
     RuntimeApply(RuntimeApplyRequest),
+    InstalledRuntimeReconcile(InstalledRuntimeReconcileRequest),
     IntegrationCandidateRestart(IntegrationCandidateRestartRequest),
     OfflineInstallerRestart(OfflineInstallerRestartRequest),
     IntegrationRepairRestart(IntegrationRepairRestartRequest),
@@ -53,6 +55,21 @@ async fn main() {
                 4
             }
         },
+        Ok(Some(Command::InstalledRuntimeReconcile(request))) => {
+            match reconcile_installed_runtime(request).await {
+                Ok(outcome) => {
+                    println!(
+                        "{}",
+                        serde_json::to_string(&outcome).expect("reconcile outcome serializes")
+                    );
+                    0
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    4
+                }
+            }
+        }
         Ok(Some(Command::Census { codex_executable })) => match snapshot() {
             Ok(processes) => {
                 let owned = owned_process_tree(&processes, &codex_executable);
@@ -135,6 +152,24 @@ async fn main() {
 }
 
 fn parse(args: &[String]) -> Result<Option<Command>, String> {
+    if let [command, flag, install_root] = args
+        && command == "reconcile-installed-runtime"
+        && flag == "--install-root"
+    {
+        let install_root = PathBuf::from(install_root);
+        if !install_root.is_absolute() {
+            return Err("--install-root must be an absolute path".to_owned());
+        }
+        return Ok(Some(Command::InstalledRuntimeReconcile(
+            InstalledRuntimeReconcileRequest { install_root },
+        )));
+    }
+    if args
+        .first()
+        .is_some_and(|value| value == "reconcile-installed-runtime")
+    {
+        return Err("reconcile-installed-runtime requires one absolute --install-root".to_owned());
+    }
     if let [command, tail @ ..] = args
         && command == "offline-installer-restart"
     {
@@ -319,6 +354,28 @@ mod tests {
     fn runtime_apply_requires_exact_mutation_binding() {
         let args = vec!["runtime-apply".to_owned(), "rt_example".to_owned()];
         assert!(parse(&args).is_err());
+    }
+
+    #[test]
+    fn installed_runtime_reconcile_requires_one_absolute_install_root() {
+        assert!(parse(&["reconcile-installed-runtime".to_owned()]).is_err());
+        assert!(
+            parse(&[
+                "reconcile-installed-runtime".to_owned(),
+                "--install-root".to_owned(),
+                "relative".to_owned(),
+            ])
+            .is_err()
+        );
+        assert!(matches!(
+            parse(&[
+                "reconcile-installed-runtime".to_owned(),
+                "--install-root".to_owned(),
+                r"D:\Star-Control".to_owned(),
+            ])
+            .unwrap(),
+            Some(Command::InstalledRuntimeReconcile(_))
+        ));
     }
 
     #[test]
