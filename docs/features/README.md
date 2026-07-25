@@ -85,6 +85,8 @@
 | D02 | 비용·실효성 평가와 배정 규칙 개선 | 자동화가 실제로 시간을 아끼는지 확인 | 직접 구현 |
 | D03 | Windows 공개 배포와 제품 수명주기 | 설치·업데이트·복구를 개인 기억 없이 수행 | 직접 구현 + 배포 도구 연결 |
 
+P-0058부터 위 23행의 machine-readable 정본은 `catalog/product-features.toml`이다. 각 행은 owner 문서, generated Schema, owning handler, CLI/Controller 경로, applicable MCP/Codex 경로와 positive·negative·failure·recovery test를 가져야 하며 `scripts/validation/check_product_inventory.py`가 current source byte와 대조한다. 생성된 `catalog/product-source-evidence.json`이 stale이거나 한 층이라도 비면 FULL/RELEASE Gate와 `FinalProductAuditV2`는 통과하지 않는다. 문서 표나 과거 P-ID의 성공만으로 구현 완료를 상속하지 않는다.
+
 
 ## 상세 기능 문서
 

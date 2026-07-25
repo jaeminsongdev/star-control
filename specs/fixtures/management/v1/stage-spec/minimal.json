@@ -1,0 +1,21 @@
+{
+  "completion_criteria": [],
+  "dependencies": [],
+  "excluded_work": [],
+  "executor_kind": "deterministic_local",
+  "expected_change_scope": [],
+  "failure_policy": "retry",
+  "goal_id": "gol_00000000000000000000000000",
+  "included_work": [],
+  "objective": "fixture",
+  "project_ids": [],
+  "revision": 0,
+  "schema_id": "star.stage-spec",
+  "schema_version": 1,
+  "stage_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "stage_id": "stg_00000000000000000000000000",
+  "stage_mode": "plan",
+  "state": "draft",
+  "title": "fixture",
+  "work_profile_id": "fixture"
+}

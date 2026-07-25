@@ -1,0 +1,126 @@
+{
+  "evidence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "feature_count": 0,
+  "features": [
+    {
+      "cli_commands": [
+        "fixture"
+      ],
+      "codex_refs": [
+        {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "feature_id": "fixture",
+      "generated_schemas": [
+        {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "mcp_actions": [
+        "fixture"
+      ],
+      "mcp_required": false,
+      "owner_document": {
+        "marker": "fixture",
+        "path": "src/lib.rs",
+        "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "negative": {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "positive": {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "recovery": {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    }
+  ],
+  "generated_schema_count": 0,
+  "generated_schema_manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "inventory_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "mcp_matrix_count": 0,
+  "mcp_matrix_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "profile_count": 0,
+  "profiles": [
+    {
+      "activation_inputs_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "allowed_effect_classes": [
+        "read"
+      ],
+      "approval_checkpoints": [
+        "network"
+      ],
+      "conformance_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "conformance_refs": [
+        {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "definition_source": {
+        "marker": "fixture",
+        "path": "src/lib.rs",
+        "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "descriptor_definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "gate_phases": [
+        "during_stage"
+      ],
+      "permission_actions": [
+        "fixture"
+      ],
+      "permission_floor": "local_read_only",
+      "profile_id": "fixture",
+      "profile_version": "fixture",
+      "required_check_families": [
+        "fixture"
+      ],
+      "required_rule_families": [
+        "fixture"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_stop"
+    }
+  ],
+  "runtime_executables": [
+    "fixture"
+  ],
+  "schema_id": "star.product-source-evidence",
+  "schema_version": 1,
+  "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "stable_error_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "stable_error_count": 0
+}

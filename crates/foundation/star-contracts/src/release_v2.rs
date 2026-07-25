@@ -16,6 +16,9 @@ pub const EVALUATION_POLICY_V1_SCHEMA_ID: &str = "star.evaluation-policy";
 pub const COST_RECORD_V1_SCHEMA_ID: &str = "star.cost-record";
 pub const BUDGET_SNAPSHOT_V1_SCHEMA_ID: &str = "star.budget-snapshot";
 pub const FINAL_PRODUCT_AUDIT_V1_SCHEMA_ID: &str = "star.final-product-audit";
+pub const PRODUCT_SOURCE_EVIDENCE_V1_SCHEMA_ID: &str = "star.product-source-evidence";
+pub const FINAL_PRODUCT_AUDIT_V2_SCHEMA_ID: &str = "star.final-product-audit-v2";
+pub const RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID: &str = "star.release-lifecycle-evidence";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -300,7 +303,18 @@ pub struct ProductProfileConformanceStatusV1 {
     pub profile_id: String,
     pub profile_version: String,
     pub definition_hash: Sha256Hash,
+    pub source_definition_fingerprint: Sha256Hash,
     pub resolution_fingerprint: Sha256Hash,
+    pub activation_inputs_fingerprint: Sha256Hash,
+    pub conformance_policy_fingerprint: Sha256Hash,
+    pub project_context_fingerprint: Sha256Hash,
+    pub effective_config_fingerprint: Sha256Hash,
+    pub toolchain_fingerprint: Sha256Hash,
+    pub required_check_families: Vec<String>,
+    pub covered_check_families: Vec<String>,
+    pub approval_path_verified: bool,
+    pub unknown_outcome_path_verified: bool,
+    pub rollback_path_verified: bool,
     pub conformant: bool,
     #[serde(default)]
     pub limitations: Vec<String>,
@@ -317,6 +331,53 @@ pub struct ProductLifecycleEvidenceStatusV1 {
     pub candidate_artifact_set_digest: Sha256Hash,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LifecycleExecutionMode {
+    NativeIsolated,
+    FakeModel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LifecyclePhase {
+    NotInstalled,
+    Installed,
+    FirstRunVerified,
+    UpdateStaged,
+    RollbackRequired,
+    RolledBack,
+    Repaired,
+    Uninstalled,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LifecycleEvent {
+    pub sequence: u32,
+    pub phase: LifecyclePhase,
+    pub active_artifact_set_digest: Option<Sha256Hash>,
+    pub evidence_ref: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseLifecycleEvidence {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub architecture: ReleaseArchitecture,
+    pub execution_mode: LifecycleExecutionMode,
+    pub runtime_verification: RuntimeVerificationState,
+    pub phase: LifecyclePhase,
+    pub candidate_artifact_set_digest: Sha256Hash,
+    pub active_artifact_set_digest: Option<Sha256Hash>,
+    pub previous_artifact_set_digest: Option<Sha256Hash>,
+    pub user_data_digest_before: Sha256Hash,
+    pub user_data_digest_after: Sha256Hash,
+    pub events: Vec<LifecycleEvent>,
+    pub limitations: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FinalProductAuditV1 {
@@ -327,6 +388,105 @@ pub struct FinalProductAuditV1 {
     pub artifact_set_digest: Sha256Hash,
     pub profile_catalog_fingerprint: Sha256Hash,
     pub feature_statuses: Vec<ProductFeatureOwnershipStatusV1>,
+    pub profile_statuses: Vec<ProductProfileConformanceStatusV1>,
+    pub m11_profile_conformant: bool,
+    pub lifecycle_statuses: Vec<ProductLifecycleEvidenceStatusV1>,
+    pub internal_conformance: bool,
+    pub release_status: ReleaseStatus,
+    #[serde(default)]
+    pub external_gate_reasons: Vec<String>,
+    pub status: ProductAuditStatusV1,
+    pub audit_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProductSourceFileEvidenceV1 {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub marker: Option<String>,
+    pub source_sha256: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProductFeatureTestEvidenceV1 {
+    pub positive: ProductSourceFileEvidenceV1,
+    pub negative: ProductSourceFileEvidenceV1,
+    pub failure: ProductSourceFileEvidenceV1,
+    pub recovery: ProductSourceFileEvidenceV1,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProductFeatureSourceEvidenceV1 {
+    pub feature_id: String,
+    pub owner_document: ProductSourceFileEvidenceV1,
+    pub generated_schemas: Vec<ProductSourceFileEvidenceV1>,
+    pub handler_refs: Vec<ProductSourceFileEvidenceV1>,
+    pub cli_commands: Vec<String>,
+    pub product_surface_fingerprints: Vec<Sha256Hash>,
+    pub mcp_required: bool,
+    pub mcp_actions: Vec<String>,
+    pub codex_required: bool,
+    pub codex_refs: Vec<ProductSourceFileEvidenceV1>,
+    pub test_refs: ProductFeatureTestEvidenceV1,
+    pub feature_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProductProfileSourceEvidenceV1 {
+    pub profile_id: String,
+    pub profile_version: String,
+    pub definition_fingerprint: Sha256Hash,
+    pub descriptor_definition_hash: Sha256Hash,
+    pub definition_source: ProductSourceFileEvidenceV1,
+    pub activation_inputs_fingerprint: Sha256Hash,
+    pub conformance_policy_fingerprint: Sha256Hash,
+    pub required_rule_families: Vec<String>,
+    pub required_check_families: Vec<String>,
+    pub gate_phases: Vec<crate::profile::ProfileGatePhaseV1>,
+    pub permission_actions: Vec<String>,
+    pub approval_checkpoints: Vec<crate::profile::ProfileApprovalCheckpointV1>,
+    pub allowed_effect_classes: Vec<crate::profile::ProfileEffectClassV1>,
+    pub permission_floor: crate::profile::ProfilePermissionFloorV1,
+    pub unknown_outcome_policy: crate::profile::ProfileUnknownOutcomePolicyV1,
+    pub rollback_policy: crate::profile::ProfileRollbackPolicyV1,
+    pub conformance_refs: Vec<ProductSourceFileEvidenceV1>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProductSourceEvidenceV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub source_fingerprint: Sha256Hash,
+    pub inventory_fingerprint: Sha256Hash,
+    pub generated_schema_manifest_fingerprint: Sha256Hash,
+    pub stable_error_catalog_fingerprint: Sha256Hash,
+    pub mcp_matrix_fingerprint: Sha256Hash,
+    pub feature_count: u32,
+    pub profile_count: u32,
+    pub runtime_executables: Vec<String>,
+    pub generated_schema_count: u32,
+    pub stable_error_count: u32,
+    pub mcp_matrix_count: u32,
+    pub features: Vec<ProductFeatureSourceEvidenceV1>,
+    pub profiles: Vec<ProductProfileSourceEvidenceV1>,
+    pub evidence_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FinalProductAuditV2 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub release_manifest_id: ReleaseManifestId,
+    pub release_manifest_fingerprint: Sha256Hash,
+    pub artifact_set_digest: Sha256Hash,
+    pub source_evidence: ProductSourceEvidenceV1,
+    pub profile_catalog_fingerprint: Sha256Hash,
     pub profile_statuses: Vec<ProductProfileConformanceStatusV1>,
     pub m11_profile_conformant: bool,
     pub lifecycle_statuses: Vec<ProductLifecycleEvidenceStatusV1>,

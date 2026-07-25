@@ -99,6 +99,14 @@
       "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
       "type": "string"
     },
+    "registry_snapshot_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash",
+      "default": "sha256:1aea8d8daa4929a51764b0c85535f9f64784762e905e0aab8cf1503449e45e4a"
+    },
+    "registry_snapshot_ref": {
+      "default": "",
+      "type": "string"
+    },
     "schema_id": {
       "const": "star.documentation-snapshot",
       "type": "string"

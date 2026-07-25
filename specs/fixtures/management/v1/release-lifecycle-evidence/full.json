@@ -1,0 +1,24 @@
+{
+  "active_artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "architecture": "x64",
+  "candidate_artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "events": [
+    {
+      "active_artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "evidence_ref": "fixture",
+      "phase": "not_installed",
+      "sequence": 0
+    }
+  ],
+  "execution_mode": "native_isolated",
+  "limitations": [
+    "fixture"
+  ],
+  "phase": "not_installed",
+  "previous_artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "runtime_verification": "native_verified",
+  "schema_id": "star.release-lifecycle-evidence",
+  "schema_version": 1,
+  "user_data_digest_after": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "user_data_digest_before": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

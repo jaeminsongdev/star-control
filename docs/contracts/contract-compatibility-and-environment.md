@@ -49,7 +49,7 @@
 | 입력 | 역할 | 신선도 기준 |
 |---|---|---|
 | `.star-control/contracts.toml` | 비교 대상 public surface, baseline policy, docs·assumption·environment constraint 선언 | exact Git blob 또는 workspace content hash |
-| `.star-control/managed-registry/manifest.toml`과 fragment | 관리형 ID·namespace·binding·consumer·lifecycle 정본 | `ManagedRegistrySnapshot.source_fingerprint`와 일치 |
+| `.star-control/registry/manifest.toml`과 fragment | 관리형 ID·namespace·binding·consumer·lifecycle 정본 | `ManagedRegistrySnapshot.content_fingerprint`와 일치 |
 | 공개 source, CLI descriptor, Schema, 파일 형식 선언 | current surface 관찰 | M1 `CodeIndex` generation과 source revision 일치 |
 | docs source와 generated manifest | 문서·reference 관찰 | source hash·generator ID/version·input hash 결합 |
 | package manifest, package-manager lockfile, task/tool descriptor | toolchain·명령·dependency 환경 발견 | 파일 hash와 Catalog generation 일치 |
@@ -291,6 +291,8 @@ snapshot은 `subject_binding`, `document_sources[]`, 정렬된 `entries[]`, `cat
 | generated reference | source/generator/input/output provenance와 content hash가 일치 | doctor 자동 재생성 금지 |
 
 문서의 CLI 실제 동작은 command 등록 signature, parser schema, safe probe의 exit code·machine output과 비교한다. `--help`만 맞는다고 behavior를 증명하지 않는다. 반대로 실행이 unsafe하면 문서를 실패로 꾸미지 않고 `not_run`과 이유를 보존한다.
+
+`docs.check`의 command/config 등록 집합은 요청자가 배열로 주입하지 않는다. Controller는 `--registry-manifest`가 가리키는 Git source에서 current·complete·valid `ManagedRegistrySnapshot`과 complete `RegistryConsistencyRecord`를 재계산하고, `cli_command`·`config_key` declaration의 active/deprecated value만 사용한다. reserved/removed declaration은 등록된 실행 표면으로 세지 않는다. `DocumentationSnapshot.registry_snapshot_ref`와 `registry_snapshot_fingerprint`가 이 근거를 고정하며 missing/stale/drift registry는 문서 pass를 만들지 못한다.
 
 `command_output`은 volatile timestamp, temp path, tool patch version처럼 허용된 normalization만 적용한다. error code, field name, exit code, required option과 의미 있는 순서는 삭제하지 않는다.
 

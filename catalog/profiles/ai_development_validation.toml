@@ -1,6 +1,6 @@
-schema_version = 1
+schema_version = 2
 profile_id = "ai_development_validation"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "AI 개발 결과 검증"
 summary = "CLI와 Codex가 같은 결정적 Gate와 validator guard를 사용하도록 강제한다."
 triggers = ["codex_generated_change", "codex_modified_change"]
@@ -21,6 +21,8 @@ evidence_requirements = ["change_set", "evidence_bundle", "gate", "review_pack",
 corpus_requirements = ["validator_guard"]
 approval_checkpoints = []
 default_stop_state = "goal_gate_decided"
+unknown_outcome_policy = "preserve_and_stop"
+rollback_policy = "not_applicable"
 allowed_effect_classes = ["read", "plan", "validate"]
 permission_floor = "local_read_only"
 

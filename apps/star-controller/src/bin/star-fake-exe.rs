@@ -12,6 +12,77 @@ fn read_json_request() -> serde_json::Value {
     serde_json::from_str(input.trim_end()).expect("JSON request")
 }
 
+fn run_fake_codex_app_server() {
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout().lock();
+    for line in stdin.lock().lines() {
+        let line = line.expect("Codex JSONL request reads");
+        let request: serde_json::Value = serde_json::from_str(&line).expect("Codex JSONL request");
+        let Some(id) = request.get("id").cloned() else {
+            assert_eq!(request["method"], "initialized");
+            continue;
+        };
+        let method = request["method"].as_str().expect("Codex method");
+        let result = match method {
+            "initialize" => serde_json::json!({
+                "userAgent":"star-fake-codex/1.0",
+                "platformFamily":"windows",
+                "platformOs":"windows",
+            }),
+            "model/list" => serde_json::json!({
+                "data":[{
+                    "id":"fake-terra",
+                    "model":"gpt-5.6-terra",
+                    "displayName":"Fake Terra",
+                    "hidden":false,
+                    "isDefault":true,
+                    "supportedReasoningEfforts":[
+                        {"reasoningEffort":"medium","description":"standard"},
+                        {"reasoningEffort":"high","description":"extended"}
+                    ],
+                    "defaultReasoningEffort":"medium"
+                }],
+                "nextCursor":null,
+            }),
+            "modelProvider/capabilities/read" => serde_json::json!({
+                "namespaceTools":true,
+                "imageGeneration":false,
+                "webSearch":false,
+            }),
+            "thread/start" => serde_json::json!({"thread":{"id":"fake-thread-start"}}),
+            "thread/resume" => serde_json::json!({"thread":{"id":request["params"]["threadId"]}}),
+            "thread/fork" => serde_json::json!({"thread":{"id":"fake-thread-fork"}}),
+            "turn/start" => serde_json::json!({"turn":{"id":"fake-turn"}}),
+            "turn/interrupt" => serde_json::json!({}),
+            _ => panic!("unsupported fake Codex method: {method}"),
+        };
+        writeln!(stdout, "{}", serde_json::json!({"id":id,"result":result}))
+            .expect("Codex response writes");
+        stdout.flush().expect("Codex response flushes");
+        if method == "turn/start" {
+            writeln!(
+                stdout,
+                "{}",
+                serde_json::json!({
+                    "method":"turn/started",
+                    "params":{"turn":{"id":"fake-turn","status":"inProgress"}}
+                })
+            )
+            .expect("Codex start notification writes");
+            writeln!(
+                stdout,
+                "{}",
+                serde_json::json!({
+                    "method":"turn/completed",
+                    "params":{"turn":{"id":"fake-turn","status":"completed"}}
+                })
+            )
+            .expect("Codex completion notification writes");
+            stdout.flush().expect("Codex notifications flush");
+        }
+    }
+}
+
 fn main() {
     let mode = std::env::args_os()
         .nth(1)
@@ -19,6 +90,39 @@ fn main() {
         .to_string_lossy()
         .into_owned();
     match mode.as_str() {
+        "--version" => println!("star-fake-codex 1.0.0"),
+        "app-server" if std::env::args().nth(2).as_deref() == Some("generate-json-schema") => {
+            let output = std::env::args_os()
+                .skip_while(|argument| argument != "--out")
+                .nth(1)
+                .expect("schema output path");
+            std::fs::create_dir_all(&output).expect("schema output creates");
+            std::fs::write(
+                std::path::Path::new(&output).join("app-server.schema.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "oneOf":[
+                        {"properties":{"method":{"const":"initialize"}}},
+                        {"properties":{"method":{"const":"model/list"}}},
+                        {"properties":{"method":{"const":"modelProvider/capabilities/read"}}},
+                        {"properties":{"method":{"const":"thread/start"}}},
+                        {"properties":{"method":{"const":"thread/resume"}}},
+                        {"properties":{"method":{"const":"thread/fork"}}},
+                        {"properties":{"method":{"const":"turn/start"}}},
+                        {"properties":{"method":{"const":"turn/steer"}}},
+                        {"properties":{"method":{"const":"turn/interrupt"}}}
+                    ],
+                    "properties":{
+                        "approvalPolicy":{},"sandbox":{},"sandboxPolicy":{},
+                        "networkAccess":{},"serviceTier":{}
+                    }
+                }))
+                .unwrap(),
+            )
+            .expect("schema file writes");
+        }
+        "app-server" if std::env::args().nth(2).as_deref() == Some("--listen") => {
+            run_fake_codex_app_server();
+        }
         "argv" => {
             let args: Vec<_> = std::env::args().skip(2).collect();
             println!("argv:{}", args.join("|"));

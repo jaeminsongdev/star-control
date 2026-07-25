@@ -16,6 +16,8 @@
     }
   ],
   "project_id": "prj_00000000000000000000000000",
+  "registry_snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "registry_snapshot_ref": "fixture",
   "schema_id": "star.documentation-snapshot",
   "schema_version": 1,
   "snapshot_id": "fixture",

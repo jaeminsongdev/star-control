@@ -1,0 +1,400 @@
+{
+  "$defs": {
+    "ProductFeatureSourceEvidenceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "cli_commands": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "codex_refs": {
+          "items": {
+            "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+          },
+          "type": "array"
+        },
+        "codex_required": {
+          "type": "boolean"
+        },
+        "feature_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "feature_id": {
+          "type": "string"
+        },
+        "generated_schemas": {
+          "items": {
+            "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+          },
+          "type": "array"
+        },
+        "handler_refs": {
+          "items": {
+            "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+          },
+          "type": "array"
+        },
+        "mcp_actions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mcp_required": {
+          "type": "boolean"
+        },
+        "owner_document": {
+          "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+        },
+        "product_surface_fingerprints": {
+          "items": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "type": "array"
+        },
+        "test_refs": {
+          "$ref": "#/$defs/ProductFeatureTestEvidenceV1"
+        }
+      },
+      "required": [
+        "feature_id",
+        "owner_document",
+        "generated_schemas",
+        "handler_refs",
+        "cli_commands",
+        "product_surface_fingerprints",
+        "mcp_required",
+        "mcp_actions",
+        "codex_required",
+        "codex_refs",
+        "test_refs",
+        "feature_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ProductFeatureTestEvidenceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "failure": {
+          "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+        },
+        "negative": {
+          "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+        },
+        "positive": {
+          "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+        },
+        "recovery": {
+          "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+        }
+      },
+      "required": [
+        "positive",
+        "negative",
+        "failure",
+        "recovery"
+      ],
+      "type": "object"
+    },
+    "ProductProfileSourceEvidenceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "activation_inputs_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "allowed_effect_classes": {
+          "items": {
+            "$ref": "#/$defs/ProfileEffectClassV1"
+          },
+          "type": "array"
+        },
+        "approval_checkpoints": {
+          "items": {
+            "$ref": "#/$defs/ProfileApprovalCheckpointV1"
+          },
+          "type": "array"
+        },
+        "conformance_policy_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "conformance_refs": {
+          "items": {
+            "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+          },
+          "type": "array"
+        },
+        "definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "definition_source": {
+          "$ref": "#/$defs/ProductSourceFileEvidenceV1"
+        },
+        "descriptor_definition_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "gate_phases": {
+          "items": {
+            "$ref": "#/$defs/ProfileGatePhaseV1"
+          },
+          "type": "array"
+        },
+        "permission_actions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "permission_floor": {
+          "$ref": "#/$defs/ProfilePermissionFloorV1"
+        },
+        "profile_id": {
+          "type": "string"
+        },
+        "profile_version": {
+          "type": "string"
+        },
+        "required_check_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required_rule_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rollback_policy": {
+          "$ref": "#/$defs/ProfileRollbackPolicyV1"
+        },
+        "unknown_outcome_policy": {
+          "$ref": "#/$defs/ProfileUnknownOutcomePolicyV1"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_version",
+        "definition_fingerprint",
+        "descriptor_definition_hash",
+        "definition_source",
+        "activation_inputs_fingerprint",
+        "conformance_policy_fingerprint",
+        "required_rule_families",
+        "required_check_families",
+        "gate_phases",
+        "permission_actions",
+        "approval_checkpoints",
+        "allowed_effect_classes",
+        "permission_floor",
+        "unknown_outcome_policy",
+        "rollback_policy",
+        "conformance_refs"
+      ],
+      "type": "object"
+    },
+    "ProductSourceFileEvidenceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "marker": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "path",
+        "source_sha256"
+      ],
+      "type": "object"
+    },
+    "ProfileApprovalCheckpointV1": {
+      "enum": [
+        "network",
+        "download",
+        "debug_attach",
+        "dependency_change",
+        "patch_apply",
+        "migration_execute",
+        "destructive_migration",
+        "unknown_field_loss",
+        "cross_project_effect",
+        "language_cutover",
+        "remote_write",
+        "release_publish"
+      ],
+      "type": "string"
+    },
+    "ProfileEffectClassV1": {
+      "enum": [
+        "read",
+        "plan",
+        "validate",
+        "local_state_write",
+        "workspace_mutation",
+        "network_read",
+        "remote_write",
+        "publish"
+      ],
+      "type": "string"
+    },
+    "ProfileGatePhaseV1": {
+      "enum": [
+        "during_stage",
+        "stage_exit",
+        "goal_exit",
+        "patch_pre_apply",
+        "patch_post_apply",
+        "merge",
+        "migration_pre_execute",
+        "migration_post_execute",
+        "migration_post_rollback",
+        "performance_compare",
+        "language_cutover",
+        "release",
+        "release_preflight",
+        "release_build",
+        "release_verify",
+        "release_package",
+        "release_install_lifecycle",
+        "release_ready",
+        "release_publish_preflight",
+        "release_publish_verify"
+      ],
+      "type": "string"
+    },
+    "ProfilePermissionFloorV1": {
+      "enum": [
+        "local_read_only",
+        "exact_prompt",
+        "exact_durable_approval",
+        "deny_external"
+      ],
+      "type": "string"
+    },
+    "ProfileRollbackPolicyV1": {
+      "enum": [
+        "not_applicable",
+        "recovery_plan_required",
+        "backup_and_restore_required",
+        "compensation_plan_required"
+      ],
+      "type": "string"
+    },
+    "ProfileUnknownOutcomePolicyV1": {
+      "enum": [
+        "preserve_and_stop",
+        "preserve_and_reconcile"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.product-source-evidence:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "evidence_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "feature_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "features": {
+      "items": {
+        "$ref": "#/$defs/ProductFeatureSourceEvidenceV1"
+      },
+      "type": "array"
+    },
+    "generated_schema_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "generated_schema_manifest_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "inventory_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "mcp_matrix_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "mcp_matrix_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "profile_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "profiles": {
+      "items": {
+        "$ref": "#/$defs/ProductProfileSourceEvidenceV1"
+      },
+      "type": "array"
+    },
+    "runtime_executables": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.product-source-evidence",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "stable_error_catalog_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "stable_error_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "source_fingerprint",
+    "inventory_fingerprint",
+    "generated_schema_manifest_fingerprint",
+    "stable_error_catalog_fingerprint",
+    "mcp_matrix_fingerprint",
+    "feature_count",
+    "profile_count",
+    "runtime_executables",
+    "generated_schema_count",
+    "stable_error_count",
+    "mcp_matrix_count",
+    "features",
+    "profiles",
+    "evidence_fingerprint"
+  ],
+  "title": "ProductSourceEvidenceV1",
+  "type": "object"
+}

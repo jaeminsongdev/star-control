@@ -32,14 +32,29 @@
   "profile_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "profile_statuses": [
     {
+      "activation_inputs_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "approval_path_verified": false,
+      "conformance_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "conformant": false,
+      "covered_check_families": [
+        "fixture"
+      ],
       "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "limitations": [
         "fixture"
       ],
       "profile_id": "fixture",
       "profile_version": "fixture",
-      "resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      "project_context_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "required_check_families": [
+        "fixture"
+      ],
+      "resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "rollback_path_verified": false,
+      "source_definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "toolchain_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "unknown_outcome_path_verified": false
     }
   ],
   "release_manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",

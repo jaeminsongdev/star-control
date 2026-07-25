@@ -146,5 +146,10 @@ mod tests {
                 .iter()
                 .any(|family| family == "security")
         );
+        assert!(!first.unknown_outcome_policies.is_empty());
+        assert!(!first.rollback_policies.is_empty());
+        assert!(catalog.entries.iter().all(|entry| {
+            entry.descriptor.schema_version == 2 && entry.profile_ref.profile_version == "1.1.0"
+        }));
     }
 }

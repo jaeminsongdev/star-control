@@ -1,0 +1,334 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "CapabilitySourceV1": {
+      "enum": [
+        "codex_app_server"
+      ],
+      "type": "string"
+    },
+    "CodexPermissionCapabilitiesV1": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_policy_configurable": {
+          "type": "boolean"
+        },
+        "network_policy_observable": {
+          "type": "boolean"
+        },
+        "paid_action_observable": {
+          "type": "boolean"
+        },
+        "sandbox_mode_configurable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "approval_policy_configurable",
+        "sandbox_mode_configurable",
+        "network_policy_observable",
+        "paid_action_observable"
+      ],
+      "type": "object"
+    },
+    "ExecutionModeV1": {
+      "enum": [
+        "single",
+        "max",
+        "ultra"
+      ],
+      "type": "string"
+    },
+    "ModelCapabilityV1": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "default_reasoning_effort": {
+          "$ref": "#/$defs/ReasoningEffortV1"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "is_default": {
+          "type": "boolean"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "supported_reasoning_efforts": {
+          "items": {
+            "$ref": "#/$defs/ReasoningEffortV1"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "model_id",
+        "display_name",
+        "hidden",
+        "is_default",
+        "supported_reasoning_efforts",
+        "default_reasoning_effort"
+      ],
+      "type": "object"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "ReasoningEffortV1": {
+      "enum": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "type": "string"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.capability-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "capability_snapshot_id": {
+      "pattern": "^cap_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "captured_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "codex_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expires_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "limits": {
+      "additionalProperties": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "managed_execution_modes": {
+      "items": {
+        "$ref": "#/$defs/ExecutionModeV1"
+      },
+      "type": "array"
+    },
+    "models": {
+      "items": {
+        "$ref": "#/$defs/ModelCapabilityV1"
+      },
+      "type": "array"
+    },
+    "native_execution_modes": {
+      "items": {
+        "$ref": "#/$defs/ExecutionModeV1"
+      },
+      "type": "array"
+    },
+    "operations": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "type": "object"
+    },
+    "permission_capabilities": {
+      "$ref": "#/$defs/CodexPermissionCapabilitiesV1"
+    },
+    "protocol_schema_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "protocol_version": {
+      "type": "string"
+    },
+    "raw_artifact_ref": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_id": {
+      "const": "star.capability-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "snapshot_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "source": {
+      "$ref": "#/$defs/CapabilitySourceV1"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "capability_snapshot_id",
+    "source",
+    "captured_at",
+    "expires_at",
+    "protocol_version",
+    "protocol_schema_fingerprint",
+    "models",
+    "operations",
+    "native_execution_modes",
+    "managed_execution_modes",
+    "permission_capabilities",
+    "limits",
+    "limitations",
+    "raw_artifact_ref",
+    "snapshot_fingerprint"
+  ],
+  "title": "CapabilitySnapshotV1",
+  "type": "object"
+}

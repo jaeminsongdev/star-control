@@ -29,6 +29,16 @@ string_enum!(IndexTier {
     Syntax,
     Semantic
 });
+
+impl IndexTier {
+    pub const fn partition_suffix(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Syntax => "syntax",
+            Self::Semantic => "semantic",
+        }
+    }
+}
 string_enum!(IndexPartitionKind {
     Inventory,
     Classification,

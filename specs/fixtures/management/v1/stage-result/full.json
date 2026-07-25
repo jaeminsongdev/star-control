@@ -1,0 +1,45 @@
+{
+  "completed_criteria": [
+    "fixture"
+  ],
+  "execution_record_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "failure_code": "fixture",
+  "goal_id": "gol_00000000000000000000000000",
+  "outcome": "completed",
+  "project_evidence": [
+    {
+      "evidence_bundle_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "project_id": "prj_00000000000000000000000000"
+    }
+  ],
+  "recorded_at": "2026-01-01T00:00:00Z",
+  "recovery_action": "fixture",
+  "result_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "revision": 0,
+  "schema_id": "star.stage-result",
+  "schema_version": 1,
+  "source_effect_may_have_started": false,
+  "stage_graph_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "stage_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "stage_result_id": "fixture"
+}

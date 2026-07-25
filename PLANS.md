@@ -23,6 +23,7 @@
 | P-0056 internal | `DONE / exact FULL PASS` | 최신 main 재감사, v2 validation/planning·EffectiveConfig·recovery bundle v2, M7/M8 receipt/current evidence, M9 handoff, M10 case/policy·cost/budget·actual finding/suppression/Radar·23/16 audit와 M11 공통 Patch/Gate 경로 구현. generated 202 Schema, workspace test·all-feature Clippy·170/170 matrix와 TARGET effective FULL 10/10 PASS |
 | P-0056 external | `DONE / non-signing unpublished seal` | exact `1bce4724` RELEASE 비서명 범위, x64 격리 lifecycle·rollback, ARM64 cross simulation, installer·SBOM·RustSec·pre-sign provenance, GitHub draft byte 왕복·cleanup과 remote commit/tree readback PASS |
 | P-0057 current-system audit | `DONE / source fixed` | 세 기준선 분리, live lifecycle·17 action E2E, recovery·trust/Registry·13개 repo·비서명 install/supply-chain·ARM64 경계 감사. empty-v1 migration/active-set, watcher root dedupe, destructive action approval 결함은 source에서 수정 |
+| P-0058 feature/Profile independent audit | `SOURCE_PASS / commit 대기` | 0~13 독립 감사와 발견 결함 수정, 23/23·16/16·Runtime 4/4·Schema 213·error 528·MCP 170/170 current evidence, TARGET/FULL PASS. v1 snapshot 읽기 호환성·current-evidence 거부 경계도 회귀 검증. RELEASE local 14개 PASS, 외부 signing/publication은 `unverified`, clean-worktree는 commit 후 재검증 |
 | installed P-0057 update | `held / approval_required` | 실행 중 source `b20d234`는 수정 전 byte. 실제 install/system state와 Codex restart는 별도 사용자 승인 전까지 변경하지 않음 |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish 필요 |
 
@@ -52,13 +53,14 @@
 | P-0056 artifact | commit `1bce4724c34414cef74862dbe9bf9de1f094ad2f`, tree `4e1c3b1d55bfbe35eb7eaf4455c02bde711bcac4` | `dist/release-evidence/p0056-1bce4724`; 비서명 RELEASE·package·lifecycle·공급망·unpublished provider evidence의 historical exact seal이며 live source/설치 Runtime에 상속하지 않음 |
 | installed Runtime | release source `b20d234b38a7dcb347049b6b95aff3407c5dedc9`, active generation `rt_c569d8e23ed61e8e` | root manifest `sha256:d96015a0bdb6f2fc437e0251a87266acecb20b12b79d629af6486df606edbe0c`; Runtime manifest `sha256:634a36495a2fe51937e0ba6369f30287021bcfa036fd7c5e1de8cef566e36ae9`; install/update verify와 doctor PASS, Registry revision 7 |
 
-## 현재 Context Pack
+## P-0058 현재 Context Pack
 
-- repo/branch: `D:\개발\관제\Star-Control`, `main`; 시작 HEAD와 `origin/main`은 exact `816be57`, 시작 worktree clean
-- current Slice: P-0057 current-system audit source seal. 상세 증거와 미배포 경계는 `docs/testing/p0057-current-system-audit-2026-07-25.md`
-- 완료: 세 기준선, live install/restart/lease, 17 action E2E, recovery/approval/Registry 수정, M1~M6 negative test, 13개 repo, unsigned x64 lifecycle/installer, RustSec, ARM64 cross-build
-- live held: installed management `recovery_only`, watcher unavailable 중복, destructive core approval 결함은 source fix 전 Runtime에 남음. update/restart 전 해당 mutation을 사용하지 않음
-- final validation: current HEAD FULL 10/10 `complete/stable/pass`; RELEASE 14/15, failed 0, external signing/publication 1 `unverified`. exact report hash는 source에 되먹임하지 않고 최종 handoff에 고정
+- repo/branch: `D:\개발\관제\Star-Control`, `main`; 시작 HEAD `91399ce8809018d2407f16b090e48d524102ac81`, tree `61a9a36e2635fe4fa95cdab9e63bfdd69dc351ac`, 시작 worktree clean, `origin/main` 대비 1 commit ahead
+- current Slice: P-0058 23개 기능·16개 Profile 독립 전수점검. P-0056/P-0057 결과는 후보 증거일 뿐 current 판정으로 상속하지 않음
+- audit order: 공통 evidence acceptance Gate 뒤 상태/저장→Registry/안전→M1→M2→배정/실행→M3→M4~M6→M7→M8→M9→C01 16 Profile→M10/P8→P9 순서
+- implemented: 정본 inventory를 generated Schema·owner handler·CLI/Controller/MCP·positive/negative/failure/recovery test와 기계적으로 연결. A02/A05/A06/C01/B05/B06/B07/B09/D02/D03 false-ready와 stale evidence 경계, 기존 v1 snapshot의 additive read/current-evidence rejection 경계를 수정하고 generated Schema manifest를 213개로 갱신
+- next: 잘못 생성된 root `--help/`는 승인 후 workspace 밖 `D:\개발\관제\Star-Control-p0058-quarantine-20260725T142500\--help`로 이동해 Git 입력에서 제거했다. STRICT diff/stage 검토 뒤 local commit, clean-worktree RELEASE 재검증과 `origin/main` push를 수행한다. Desktop package 내부 `codex.exe`는 process 생성이 `Access is denied`여서 live A05/A06 installed evidence가 없으며, 별도 Codex CLI 설치/제공 전에는 fake process source E2E와 구분한다
+- final validation: TARGET effective FULL 11/11 PASS, FULL 11/11 PASS. RELEASE는 local build·ARM64 cross-build·lifecycle 포함 14개 PASS, external signing/publication `unverified/not_run`, pre-commit clean-worktree 1개 FAIL. commit 후 clean-worktree만 재확인하고 외부 non-pass는 그대로 보존한 뒤 push
 - 금지: 실제 사용자 management/project data 변경, `legacy/`·`target/` 정리, Codex runtime DB/cache 직접 수정, 불필요한 Desktop restart, 승인 없는 dependency/system setting/push/publish/signing
 
 ## 현재 Gate

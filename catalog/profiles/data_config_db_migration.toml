@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "data_config_db_migration"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "Data Config DB Migration"
 summary = "version chain, backup, rehearsal, resume, rollback과 restore verification을 강제한다."
-parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.1.0" }
 triggers = ["config_format_change", "data_format_change", "database_schema_change"]
 stage_template = ["inspect", "plan", "backup", "rehearse", "execute", "validate", "restore_verify"]
 context_rules = ["exact_source_version", "unknown_field_preservation", "verified_backup"]
@@ -22,6 +22,8 @@ evidence_requirements = ["backup_manifest", "migration_attempt", "restore_verifi
 corpus_requirements = ["migration_chain", "resume", "rollback"]
 approval_checkpoints = ["destructive_migration", "migration_execute", "unknown_field_loss"]
 default_stop_state = "awaiting_approval"
+unknown_outcome_policy = "preserve_and_reconcile"
+rollback_policy = "backup_and_restore_required"
 allowed_effect_classes = ["read", "plan", "validate", "local_state_write", "workspace_mutation"]
 permission_floor = "exact_durable_approval"
 

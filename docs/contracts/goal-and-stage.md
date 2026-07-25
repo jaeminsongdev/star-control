@@ -6,6 +6,8 @@ Star-Control은 목표를 아주 작은 할 일 목록으로 분해하지 않는
 
 Codex 실행 단계 안의 세부 코딩 순서는 해당 단계에 배정된 Codex가 프로젝트 상황에 맞게 정한다. Project scan·index와 CLI-only change planning 같은 deterministic local 단계는 별도 model plan 없이 typed application 계약을 실행한다.
 
+P-0058 current source는 `StageSpecV1`·`StageGraphV1` contract와 generated Schema, cycle·parallel write-overlap 검증, completed stage를 보존하는 immutable replan을 구현한다. Controller single-writer 경로는 GoalStore의 `plan_revision` CAS로 graph를 게시하며 CLI/Controller `stage plan|show|replan`이 같은 handler를 사용한다. 따라서 이 절의 Stage 계약은 더 이상 문서 전용 설계가 아니며, source byte가 달라지면 `catalog/product-source-evidence.json`과 final audit가 stale로 차단한다.
+
 ## 새 단계가 필요한 조건
 
 다음 중 하나가 달라지면 별도 단계로 나눈다.
@@ -297,7 +299,10 @@ raw root path는 persisted ProjectRef, event, DB와 evidence에 넣지 않는다
 | `objective` | 예 | 이 단계가 끝내야 하는 한 가지 결과 |
 | `stage_mode` | 예 | `plan \| execute \| review` |
 | `executor_kind` | 예 | `deterministic_local \| codex`; CLI-only M1/M2 계산은 전자 |
-| `work_profile_id` | 예 | 적용할 작업 Profile |
+| `work_profile_id`, `work_profile_version` | 예 | 적용할 단일 작업 Profile의 exact ID/version |
+| `work_profile_definition_hash` | 예 | 선택 Profile descriptor 전체의 canonical hash |
+| `profile_catalog_fingerprint` | 예 | Stage를 계획한 16개 Profile catalog snapshot |
+| `profile_resolution_fingerprint` | 예 | 선택 Profile, parent closure, required Rule·Check·permission·unknown·rollback 정책을 합친 exact resolution |
 | `project_ids` | 예 | 대상 프로젝트 |
 | `included_work` | 예 | 단계 안에서 처리할 책임 |
 | `excluded_work` | 예 | 다음 단계 또는 범위 밖 책임 |
@@ -306,14 +311,14 @@ raw root path는 persisted ProjectRef, event, DB와 evidence에 넣지 않는다
 | `parallel_group` | 아니요 | 함께 실행 가능한 group ID |
 | `completion_criteria` | 예 | 단계 전용 완료 조건 |
 | `failure_policy` | 예 | retry·replan·block·rollback |
-| `route_decision_ref` | Codex Stage | 계획 뒤 생성되는 RouteDecision. deterministic local에는 금지 |
+| `route_decision_ref` | 아니요 | 생성된 RouteDecision의 역조회 projection. 배정 전 placeholder ref를 만들지 않음 |
 | `permission_plan_ref` | 아니요 | 실행 전 확정되는 PermissionPlan |
 | `validation_plan_ref` | 아니요 | 실행 전 확정되는 ValidationPlan |
 | `impact_analysis_ref` | change planning 뒤 | 영향 계산 근거 |
 | `change_plan_refs` | change planning 뒤 | planned-change Project별 다음 변경 단계 입력 배열 |
 | `state` | 예 | Stage 상태 |
 
-StageSpec은 실행 중 조용히 덮어쓰지 않는다. 범위나 완료 조건이 달라지면 revision을 올리고 `stage.replanned` event에 이전 revision과 이유를 남긴다. `work_profile_id=change_planning`인 Stage는 실행 가능해지기 전에 TaskSpec과 ScopeRevision을 가져야 하며, 완료 결과는 같은 revision을 참조하는 ImpactAnalysis·ChangePlan·ValidationPlan을 제공해야 한다. CLI-only M2 Stage는 `executor_kind=deterministic_local`이고 RouteDecision·CapabilitySnapshot·Codex thread를 만들지 않는다.
+StageSpec은 실행 중 조용히 덮어쓰지 않는다. 범위나 완료 조건이 달라지면 revision을 올리고 StageGraph의 `previous_graph_fingerprint`와 `replan_reason`에 이전 revision과 이유를 남긴다. Controller는 `stage.plan|replan`에서 `work_profile_id`를 현재 catalog의 단일 Profile로 resolve하고 version·definition·catalog·resolution fingerprint를 Stage fingerprint와 permission scope에 materialize한다. ContextPack, PermissionPlan, RouteDecision, Codex start/resume/fork는 외부 효과 전에 같은 ID를 다시 resolve해 네 binding이 하나라도 달라지면 `VALIDATION_PROFILE_CLOSURE_STALE`로 중지하고 재계획한다. 완료된 Stage는 역사 증거이므로 replan에서 덮어쓰지 않는다. Codex Stage가 `ready` 이후로 전이하려면 PermissionPlan과 ValidationPlan이 있어야 하며, 실제 실행은 별도 RouteDecision을 exact Stage revision·PermissionPlan과 함께 검증한다. `route_decision_ref`는 역조회 projection으로 선택 사항이고 배정 전 placeholder ref를 합성하지 않는다. `work_profile_id=change_planning`인 Stage는 실행 가능해지기 전에 TaskSpec과 ScopeRevision을 가져야 하며, 완료 결과는 같은 revision을 참조하는 ImpactAnalysis·ChangePlan·ValidationPlan을 제공해야 한다. CLI-only M2 Stage는 `executor_kind=deterministic_local`이고 RouteDecision·CapabilitySnapshot·Codex thread를 만들지 않는다.
 
 ### StageGraph
 
@@ -326,8 +331,9 @@ StageSpec은 실행 중 조용히 덮어쓰지 않는다. 범위나 완료 조�
 | `parallel_groups` | 동시 실행 가능 묶음과 한도 |
 | `critical_path` | 전체 완료를 막는 경로 |
 | `integration_stage_id` | 병렬 결과를 합치는 단계 |
+| `previous_graph_fingerprint`, `replan_reason` | revision 2 이상에서 직전 graph byte와 재계획 사유 |
 
-`relation`은 `requires | provides_contract | validates | merges` 중 하나다. cycle은 거부하고, 읽기 전용 조사 외에는 같은 예상 변경 범위가 겹치는 Stage를 같은 parallel group에 둘 수 없다.
+`relation`은 `requires | provides_contract | validates | merges` 중 하나다. 각 Stage의 `dependencies`와 `requires` edge set은 정확히 같아야 하며 cycle과 연결되지 않은 critical path를 거부한다. `parallel_group`을 선언한 모든 Stage는 정확히 한 group의 member여야 하고, 읽기 전용 조사 외에는 같은 경로나 부모·자식 경로처럼 예상 변경 범위가 겹치는 Stage를 같은 group에 둘 수 없다.
 
 ## ContextPack 상세 계약
 
@@ -403,29 +409,24 @@ action ID가 없거나 분류할 수 없는 동작은 `default_action`을 사용
 
 ## StageResult 계약
 
-StageResult는 한 Stage revision의 실제 실행과 수용 결과를 묶는다. 실패한 attempt를 지우지 않고 최종 수용 attempt와 함께 참조한다.
+`StageResultV1`은 한 Stage revision의 실제 실행과 수용 결과를 current `StageGraphV1`에 묶는 immutable completion record다. Controller는 결과를 먼저 봉인한 뒤 같은 GoalStore CAS에서 Stage의 `result_ref`와 terminal state를 함께 갱신한다. 따라서 terminal state만 먼저 쓰거나 다른 graph/stage revision의 결과를 재사용할 수 없다.
 
 | 필드 | 의미 |
 |---|---|
 | `stage_result_id` | 문서 ID |
-| `goal_id`, `run_id`, `stage_id`, `stage_revision` | 대상 Stage |
-| `outcome` | `succeeded`, `failed`, `blocked`, `cancelled` |
-| `attempts` | AttemptId, Codex면 RouteDecision·local이면 application operation ref, 시작·종료, 결과·오류 reference |
-| `accepted_attempt_id` | 결과로 채택한 attempt. 성공일 때 필수 |
-| `context_pack_ref` | 실제 입력 자료 |
-| `permission_plan_ref` | 실제 권한 범위 |
-| `codex_thread_refs` | Codex Stage일 때 adapter가 정규화한 opaque thread·turn reference; deterministic local에는 생략 |
-| `result_summary` | 완료 조건 기준의 짧은 결과 |
-| `output_artifact_refs` | 생성 문서·파일·report |
-| `change_set_ref` | 실제 변경 목록 |
-| `claim_evidence` | Stage 완료 주장과 evidence reference 대응 |
-| `diagnostic_refs` | 실행 중 발견한 문제 |
-| `validation_plan_ref`, `gate_decision_ref` | 검사와 Stage gate |
-| `cost_record_refs` | 실제 측정 usage |
-| `scope_deviations` | 계획과 달라진 범위·이유·승인 |
-| `checkpoint_ref`, `handoff_ref` | 이어하기와 결과 전달 |
+| `revision`, `goal_id` | result revision과 owning Goal |
+| `stage_graph_ref` | 결과를 수용한 exact graph ID·plan revision·fingerprint |
+| `stage_ref` | exact Stage ID·revision·`stage_fingerprint` |
+| `outcome` | `completed`, `failed`, `blocked`, `cancelled`, `outcome_unknown` |
+| `completed_criteria` | StageSpec의 완료 조건 중 실제 충족한 exact set |
+| `project_evidence` | Stage의 모든 ProjectId별 current `EvidenceBundle` document ref |
+| `execution_record_ref` | Codex executor이면 terminal `CodexExecutionRecordV1`; deterministic local이면 생략 가능 |
+| `failure_code` | non-completed 결과의 bounded stable failure code |
+| `recovery_action` | `outcome_unknown` 또는 source effect 이후 실패의 필수 reconciliation/rollback action |
+| `source_effect_may_have_started` | process receipt가 source effect 경계를 넘었는지 |
+| `recorded_at`, `result_fingerprint` | 기록 시각과 위 필드 전체의 canonical hash |
 
-`outcome=succeeded`는 process 종료만으로 만들 수 없다. required 완료 조건과 Stage Gate를 충족해야 한다. 실패·취소 결과에도 이미 생긴 변경, side effect와 복구 상태를 빠짐없이 둔다.
+`outcome=completed`는 process 종료만으로 만들 수 없다. `completed_criteria`가 StageSpec의 전체 완료 조건과 exact해야 하고, Stage의 모든 Project에 current EvidenceBundle이 있어야 한다. Codex Stage는 terminal execution record가 exact Stage·Route·ContextPack·PermissionPlan을 가리켜야 한다. `outcome_unknown`은 `source_effect_may_have_started=true`와 non-empty `recovery_action` 없이는 봉인되지 않는다. Goal `completed` 전이는 모든 Stage가 이 경로로 완료되고 completion Stage의 evidence ref가 Goal completion evidence로 사용될 때만 허용한다.
 
 ## MergePlan 상세 계약
 

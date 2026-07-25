@@ -45,6 +45,14 @@
     "ExternalDataSourceDescriptor": {
       "additionalProperties": false,
       "properties": {
+        "coverage": {
+          "$ref": "#/$defs/CoverageState",
+          "default": "partial"
+        },
+        "dataset_or_query": {
+          "default": "",
+          "type": "string"
+        },
         "integrity_policy": {
           "type": "string"
         },
@@ -59,6 +67,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "network_mode": {
+          "default": "",
+          "type": "string"
+        },
         "provider": {
           "type": "string"
         },
@@ -70,6 +82,18 @@
           "type": "string"
         },
         "source_kind": {
+          "type": "string"
+        },
+        "source_schema_version": {
+          "default": "",
+          "type": "string"
+        },
+        "source_uri": {
+          "default": "",
+          "type": "string"
+        },
+        "tool_identity_ref": {
+          "default": "",
           "type": "string"
         }
       },
@@ -122,11 +146,38 @@
       },
       "type": "array"
     },
+    "modified_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "normalized_artifact_ref": {
+      "default": "",
+      "type": "string"
+    },
+    "normalized_sha256": {
+      "$ref": "#/$defs/Sha256Hash",
+      "default": "sha256:f9c45062b80c9df4697f68f965031cb0dbf96b6299a30b356c88d16571507e7b"
+    },
     "observations": {
       "items": {
         "$ref": "#/$defs/ExternalDataObservation"
       },
       "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "published_at": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "retrieved_at": {
       "type": "string"

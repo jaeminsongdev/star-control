@@ -1,0 +1,52 @@
+{
+  "code_index_snapshot_refs": [],
+  "context_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "context_pack_id": "ctx_00000000000000000000000000",
+  "estimated_tokens": 0,
+  "expires_at": "2026-01-01T00:00:00Z",
+  "freshness_policy": "require_current",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "items": [],
+  "omissions": [],
+  "project_catalog_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "project_inputs": [],
+  "quality_summary": {
+    "current_items": 0,
+    "limitations": [],
+    "partial_items": 0,
+    "stale_items": 0,
+    "state": "current",
+    "tier_coverage": {},
+    "unsupported_items": 0
+  },
+  "revision": 0,
+  "schema_id": "star.context-pack",
+  "schema_version": 1,
+  "scope_revision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "stage_graph_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "stage_id": "stg_00000000000000000000000000",
+  "stage_revision": 0,
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "token_budget": 0,
+  "unexpected": true
+}

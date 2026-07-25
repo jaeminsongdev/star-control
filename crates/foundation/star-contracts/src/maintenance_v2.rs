@@ -111,6 +111,8 @@ pub struct FailureRecord {
     pub invocation: FailureInvocation,
     pub environment_compatibility_class: String,
     pub environment_fingerprint: Sha256Hash,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_fingerprint: Option<Sha256Hash>,
     #[serde(default)]
     pub input_refs: Vec<String>,
     pub seed: Option<String>,
@@ -201,6 +203,8 @@ pub struct ReproductionPackV2 {
     pub invocation: FailureInvocation,
     pub environment_compatibility_class: String,
     pub environment_fingerprint: Sha256Hash,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_fingerprint: Option<Sha256Hash>,
     #[serde(default)]
     pub manifest_refs: Vec<String>,
     #[serde(default)]
@@ -319,8 +323,20 @@ pub struct ExternalDataSourceDescriptor {
     pub source_id: String,
     pub source_kind: String,
     pub provider: String,
+    #[serde(default)]
+    pub source_uri: String,
+    #[serde(default)]
+    pub dataset_or_query: String,
+    #[serde(default)]
+    pub source_schema_version: String,
+    #[serde(default)]
+    pub tool_identity_ref: String,
     pub retrieval_mode: String,
+    #[serde(default)]
+    pub network_mode: String,
     pub integrity_policy: String,
+    #[serde(default = "legacy_external_coverage")]
+    pub coverage: CoverageState,
     pub maximum_age_seconds: u64,
     pub license_ref: Option<String>,
 }
@@ -341,18 +357,34 @@ pub struct ExternalDataSnapshot {
     pub schema_id: String,
     pub schema_version: u32,
     pub snapshot_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<ProjectId>,
     pub source: ExternalDataSourceDescriptor,
+    pub published_at: Option<String>,
+    pub modified_at: Option<String>,
     pub retrieved_at: String,
     pub valid_until: String,
     pub evaluation_time: String,
     pub source_artifact_ref: String,
     pub source_sha256: Sha256Hash,
+    #[serde(default)]
+    pub normalized_artifact_ref: String,
+    #[serde(default = "legacy_missing_external_fingerprint")]
+    pub normalized_sha256: Sha256Hash,
     pub observations: Vec<ExternalDataObservation>,
     pub freshness: ExternalFreshness,
     pub completeness: CoverageState,
     #[serde(default)]
     pub limitations: Vec<String>,
     pub content_fingerprint: Sha256Hash,
+}
+
+fn legacy_external_coverage() -> CoverageState {
+    CoverageState::Partial
+}
+
+fn legacy_missing_external_fingerprint() -> Sha256Hash {
+    Sha256Hash::digest(b"legacy-missing-external-normalization")
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

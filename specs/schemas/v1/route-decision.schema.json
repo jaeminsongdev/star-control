@@ -1,0 +1,371 @@
+{
+  "$defs": {
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "EstimatedUsageClassV1": {
+      "enum": [
+        "small",
+        "standard",
+        "large",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "ExecutionModeV1": {
+      "enum": [
+        "single",
+        "max",
+        "ultra"
+      ],
+      "type": "string"
+    },
+    "ExecutionRealizationV1": {
+      "enum": [
+        "native",
+        "managed"
+      ],
+      "type": "string"
+    },
+    "ModelRoleV1": {
+      "enum": [
+        "luna",
+        "terra",
+        "sol"
+      ],
+      "type": "string"
+    },
+    "ReasoningEffortV1": {
+      "enum": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "type": "string"
+    },
+    "RouteAlternativeV1": {
+      "additionalProperties": false,
+      "properties": {
+        "execution_mode": {
+          "$ref": "#/$defs/ExecutionModeV1"
+        },
+        "model_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_role": {
+          "$ref": "#/$defs/ModelRoleV1"
+        },
+        "reason_not_selected": {
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "$ref": "#/$defs/ReasoningEffortV1"
+        }
+      },
+      "required": [
+        "model_role",
+        "reasoning_effort",
+        "execution_mode",
+        "reason_not_selected"
+      ],
+      "type": "object"
+    },
+    "RouteConfidenceV1": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "type": "string"
+    },
+    "RouteDecisionKindV1": {
+      "enum": [
+        "initial",
+        "retry",
+        "escalation",
+        "user_override"
+      ],
+      "type": "string"
+    },
+    "RouteFallbackV1": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "type": "string"
+        },
+        "execution_mode": {
+          "$ref": "#/$defs/ExecutionModeV1"
+        },
+        "model_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_role": {
+          "$ref": "#/$defs/ModelRoleV1"
+        },
+        "ordinal": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reasoning_effort": {
+          "$ref": "#/$defs/ReasoningEffortV1"
+        }
+      },
+      "required": [
+        "ordinal",
+        "model_role",
+        "reasoning_effort",
+        "execution_mode",
+        "condition"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StageModeV1": {
+      "enum": [
+        "plan",
+        "execute",
+        "review"
+      ],
+      "type": "string"
+    },
+    "ValidationRiskLevel": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.route-decision:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "alternatives": {
+      "items": {
+        "$ref": "#/$defs/RouteAlternativeV1"
+      },
+      "type": "array"
+    },
+    "budget_snapshot_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "capability_snapshot_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "confidence": {
+      "$ref": "#/$defs/RouteConfidenceV1"
+    },
+    "config_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "decided_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "decision_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "decision_kind": {
+      "$ref": "#/$defs/RouteDecisionKindV1"
+    },
+    "estimated_usage_class": {
+      "$ref": "#/$defs/EstimatedUsageClassV1"
+    },
+    "execution_mode": {
+      "$ref": "#/$defs/ExecutionModeV1"
+    },
+    "execution_realization": {
+      "$ref": "#/$defs/ExecutionRealizationV1"
+    },
+    "fallback_chain": {
+      "items": {
+        "$ref": "#/$defs/RouteFallbackV1"
+      },
+      "type": "array"
+    },
+    "goal_id": {
+      "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "model_role": {
+      "$ref": "#/$defs/ModelRoleV1"
+    },
+    "parallelizable": {
+      "type": "boolean"
+    },
+    "permission_plan_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "plan_reasoning_effort": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReasoningEffortV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rationale": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "reasoning_effort": {
+      "$ref": "#/$defs/ReasoningEffortV1"
+    },
+    "requested_execution_mode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExecutionModeV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requested_model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "requested_reasoning_effort": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReasoningEffortV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "resolved_model": {
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "risk_level": {
+      "$ref": "#/$defs/ValidationRiskLevel"
+    },
+    "route_decision_id": {
+      "pattern": "^rte_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.route-decision",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "stage_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "stage_graph_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "stage_id": {
+      "pattern": "^stg_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "stage_mode": {
+      "$ref": "#/$defs/StageModeV1"
+    },
+    "stage_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "route_decision_id",
+    "revision",
+    "goal_id",
+    "run_id",
+    "stage_id",
+    "stage_revision",
+    "stage_fingerprint",
+    "stage_graph_ref",
+    "decision_kind",
+    "model_role",
+    "resolved_model",
+    "reasoning_effort",
+    "stage_mode",
+    "execution_mode",
+    "execution_realization",
+    "capability_snapshot_ref",
+    "config_fingerprint",
+    "risk_level",
+    "parallelizable",
+    "estimated_usage_class",
+    "confidence",
+    "rationale",
+    "alternatives",
+    "fallback_chain",
+    "permission_plan_ref",
+    "decided_at",
+    "decision_fingerprint"
+  ],
+  "title": "RouteDecisionV1",
+  "type": "object"
+}

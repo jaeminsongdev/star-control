@@ -130,6 +130,7 @@ function Get-StarValidationChecks {
         [void]$checks.Add((New-ValidationCheckSpec -Id "cargo-clippy" -Unit "workspace" -Executable "cargo" -Arguments @("clippy", "--workspace", "--all-targets", "--all-features", "--locked", "--", "-D", "warnings") -WorkingDirectory $Context.Root))
         [void]$checks.Add((New-ValidationCheckSpec -Id "schema-check" -Unit "contracts" -Executable "cargo" -Arguments @("run", "--locked", "-p", "star-schema-gen", "--", "--check") -WorkingDirectory $Context.Root))
         [void]$checks.Add((New-ValidationCheckSpec -Id "mcp-matrix" -Unit "contracts" -Executable "cargo" -Arguments @("run", "--locked", "-p", "star-matrix-check") -WorkingDirectory $Context.Root))
+        [void]$checks.Add((New-ValidationCheckSpec -Id "product-inventory" -Unit "contracts" -Executable "python" -Arguments @("-X", "utf8", (Join-Path $Context.Root "scripts/validation/check_product_inventory.py")) -WorkingDirectory $Context.Root))
     } else {
         $packages = if ($explicitPackage) {
             @($Context.Unit)
@@ -168,8 +169,10 @@ function New-ProjectValidationConfig {
             "scripts/validate.ps1",
             "scripts/validation/common.ps1",
             "scripts/validation/project.ps1",
+            "scripts/validation/check_product_inventory.py",
             "scripts/validation/project-validation-report.schema.json",
             "scripts/validation/requirements-validation.txt",
+            "catalog/product-features.toml",
             ".github/workflows/full.yml"
         )
         ClassifyPath = { param($Path) Get-StarValidationImpact -Path $Path }

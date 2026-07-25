@@ -1,0 +1,3354 @@
+{
+  "evidence_fingerprint": "sha256:b6a8d6537dbfe7cfad6e8e20cc78760af021c1f8656d5fdca173c79416eca85b",
+  "feature_count": 23,
+  "features": [
+    {
+      "cli_commands": [
+        "goal.start",
+        "goal.status",
+        "goal.pause",
+        "goal.resume",
+        "goal.cancel",
+        "goal.complete"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:3a26c8700c8cc2f9c7018d185c9aab834cc19d35480fc8a4a5f644698c99e72d",
+      "feature_id": "A01",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/task-spec.schema.json",
+          "source_sha256": "sha256:bcfb7d3b42ed932246104a3eab3f192425f63ef834fa7f89663775585b18f58f"
+        },
+        {
+          "path": "specs/schemas/v1/goal-record.schema.json",
+          "source_sha256": "sha256:981d5aea81b1c71ea9985f5548493e182ed67115f68ea1cc6a6dc480b3b48eac"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub struct GoalStore",
+          "path": "apps/star-controller/src/goal_store.rs",
+          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+        },
+        {
+          "marker": "run_goal_start_command",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn complete_goal_from_evidence",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "goal.start",
+        "goal.status",
+        "goal.pause",
+        "goal.resume",
+        "goal.cancel"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/contracts/goal-and-stage.md",
+        "source_sha256": "sha256:f62b1b558864e314459358c74a135f5e9af4a315ba11ce01a29f566f3b44b00b"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "persisted_state_reloads_and_future_version_is_rejected",
+          "path": "apps/star-controller/src/goal_store.rs",
+          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+        },
+        "negative": {
+          "marker": "question_plan_run_and_lifecycle_are_revision_guarded",
+          "path": "apps/star-controller/src/goal_store.rs",
+          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+        },
+        "positive": {
+          "marker": "goal_config_is_fingerprinted_persistent_and_idempotency_bound",
+          "path": "apps/star-controller/src/goal_store.rs",
+          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+        },
+        "recovery": {
+          "marker": "stage_result_and_goal_completion_are_evidence_bound_and_restart_safe",
+          "path": "apps/star-controller/src/goal_store.rs",
+          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "stage.plan",
+        "stage.show",
+        "stage.replan",
+        "stage.result.record",
+        "stage.result.show"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:ee945f375cb3c50c889d669825285c30102f8edeade13a40ee32ad69a07e81f6",
+      "feature_id": "A02",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/stage-spec.schema.json",
+          "source_sha256": "sha256:db6d4c85847a2d1ec53e81194ceb869c514f0dc2f90d8124f9160ccd035b0299"
+        },
+        {
+          "path": "specs/schemas/v1/stage-graph.schema.json",
+          "source_sha256": "sha256:0854bbc38493787cc3b20e9812c3a6aa8526bc59a32625a9d752415b13e19003"
+        },
+        {
+          "path": "specs/schemas/v1/stage-result.schema.json",
+          "source_sha256": "sha256:41b65853f2873a2954daa9328800b5c7a4423365ef5b059dfe79ed0265c7af00"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn build_stage_graph",
+          "path": "crates/control/star-planning/src/orchestration.rs",
+          "source_sha256": "sha256:626b8f9a20f1c2f936a9b462a3d28084abc1e0a2b5117da530b4154d8bd2bac3"
+        },
+        {
+          "marker": "stage.plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/contracts/goal-and-stage.md",
+        "source_sha256": "sha256:f62b1b558864e314459358c74a135f5e9af4a315ba11ce01a29f566f3b44b00b"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "planning_failure_rejects_completed_stage_rewrite",
+          "path": "crates/control/star-planning/src/orchestration.rs",
+          "source_sha256": "sha256:626b8f9a20f1c2f936a9b462a3d28084abc1e0a2b5117da530b4154d8bd2bac3"
+        },
+        "negative": {
+          "marker": "planning_negative_rejects_stale_revision",
+          "path": "crates/control/star-planning/src/orchestration.rs",
+          "source_sha256": "sha256:626b8f9a20f1c2f936a9b462a3d28084abc1e0a2b5117da530b4154d8bd2bac3"
+        },
+        "positive": {
+          "marker": "stage_result_and_goal_completion_are_evidence_bound_and_restart_safe",
+          "path": "apps/star-controller/src/goal_store.rs",
+          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+        },
+        "recovery": {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "project.discover",
+        "scan.run",
+        "index.status",
+        "index.search",
+        "context.pack.build",
+        "context.pack.show"
+      ],
+      "codex_refs": [
+        {
+          "marker": "fn render_context_bound_instruction",
+          "path": "apps/star-controller/src/codex_product.rs",
+          "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        }
+      ],
+      "codex_required": true,
+      "feature_fingerprint": "sha256:c3326801ac99bff10417f075816867b4b61d58216cfa2876252f492cb39958c6",
+      "feature_id": "A03",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/project-catalog-snapshot.schema.json",
+          "source_sha256": "sha256:97443b675e809e19cddd17d877539e7008a3c3d219aa4f8921d50ce9ebef3c9f"
+        },
+        {
+          "path": "specs/schemas/v1/code-index-snapshot.schema.json",
+          "source_sha256": "sha256:3b3711756e6d7a6f84f1be14cafe70916f53e8c24f66c2bb4b64c7b501dbb2bd"
+        },
+        {
+          "path": "specs/schemas/v1/workspace-snapshot.schema.json",
+          "source_sha256": "sha256:43dd4cd9f1b2cc391a1ba8d6ad63f73ada5573f37c9d778aeac0b0ff0e7285ab"
+        },
+        {
+          "path": "specs/schemas/v1/context-pack.schema.json",
+          "source_sha256": "sha256:5cc7c8980ce444c2311c308679d20c12bf3e420fb0ba7ef9463e47d87f7daef3"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn build_project_catalog_snapshot",
+          "path": "crates/control/star-project/src/catalog_snapshot.rs",
+          "source_sha256": "sha256:01aed529764cd9df7ae7be8345f2809768b2d340c439f2136d8fd47dd17981fe"
+        },
+        {
+          "marker": "pub fn build_code_index",
+          "path": "crates/control/star-project/src/index.rs",
+          "source_sha256": "sha256:09c3629a92b47b863b5cf5eef04140bc83232f6e78dfca3667cdbe62957070b7"
+        },
+        {
+          "marker": "pub fn verify_context_pack_current",
+          "path": "crates/control/star-application/src/lib.rs",
+          "source_sha256": "sha256:935feb3e149db54bb684375c2a204d2c9ae3be8f4af4516c016a8087c82cc1dd"
+        },
+        {
+          "marker": "fn build_context_pack",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "project.list",
+        "project.status"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/contracts/project-catalog-and-code-index.md",
+        "source_sha256": "sha256:e9f5557034c9c81d5bb1a177e16fc83225cdaee3428bf5ef35dbc1f0871a201f"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "context_pack_failure_stale_source_cannot_satisfy_require_current",
+          "path": "crates/foundation/star-contracts/src/context_pack.rs",
+          "source_sha256": "sha256:496b53a0ce92e0a5b9584facc54632cb613ac0c1820e9f2af871da2503bfa845"
+        },
+        "negative": {
+          "marker": "context_pack_negative_secret_content_cannot_be_inlined",
+          "path": "crates/foundation/star-contracts/src/context_pack.rs",
+          "source_sha256": "sha256:496b53a0ce92e0a5b9584facc54632cb613ac0c1820e9f2af871da2503bfa845"
+        },
+        "positive": {
+          "marker": "context_pack_positive_seals_current_exact_sources",
+          "path": "crates/foundation/star-contracts/src/context_pack.rs",
+          "source_sha256": "sha256:496b53a0ce92e0a5b9584facc54632cb613ac0c1820e9f2af871da2503bfa845"
+        },
+        "recovery": {
+          "marker": "context_pack_recovery_pinned_snapshot_preserves_limitation",
+          "path": "crates/foundation/star-contracts/src/context_pack.rs",
+          "source_sha256": "sha256:496b53a0ce92e0a5b9584facc54632cb613ac0c1820e9f2af871da2503bfa845"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "planning.impact.inspect",
+        "planning.affected-checks.show",
+        "planning.replan"
+      ],
+      "codex_refs": [
+        {
+          "marker": "star_tool_search",
+          "path": "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md",
+          "source_sha256": "sha256:ebcb2d31918303eefc341525bdba4d9b0f09ac0a68d6e225049ec412ba3b6948"
+        }
+      ],
+      "codex_required": true,
+      "feature_fingerprint": "sha256:a844f5c13b434ed71b5bb7337b82653181781e445a0a567cdb59688ea3447ded",
+      "feature_id": "A04",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/impact-analysis.schema.json",
+          "source_sha256": "sha256:80fed6204f37b9d04620784bb832e87d8d3024780908bded66315153b7e9e985"
+        },
+        {
+          "path": "specs/schemas/v1/risk-path-descriptor.schema.json",
+          "source_sha256": "sha256:aafebeab87dfdc90a4d582686fdde9cc2abef10c0cad369e0182757f692a95e8"
+        },
+        {
+          "path": "specs/schemas/v1/change-plan-v2.schema.json",
+          "source_sha256": "sha256:1bf7aff5d1b9f85ea2dc937d8364124f94cb158cb74701a356af553708ee865d"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn build_planning_bundle",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "planning.impact.inspect",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "validation.plan"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/contracts/change-planning-and-impact.md",
+        "source_sha256": "sha256:c5712a3a9ba0e5e1e9c79cc0b12818e34c6b9f52bc327a72eb7d3d31b9673a91"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:ebcb2d31918303eefc341525bdba4d9b0f09ac0a68d6e225049ec412ba3b6948",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "graph_limit_never_becomes_complete_or_confirmed_empty",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        "negative": {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        "positive": {
+          "marker": "task_to_impact_to_ready_validation_plan_is_deterministic_and_typed",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        "recovery": {
+          "marker": "scope_revision_replan_preserves_document_identity_and_records_lineage",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "codex.capability.inspect",
+        "route.decide",
+        "route.show"
+      ],
+      "codex_refs": [
+        {
+          "marker": "pub struct CodexAppServerProcess",
+          "path": "crates/adapters/star-adapter-codex/src/app_server.rs",
+          "source_sha256": "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+        }
+      ],
+      "codex_required": true,
+      "feature_fingerprint": "sha256:bb784385bb532313768b43ddb62c050f0fcc925578c504d5d4eb32433085616a",
+      "feature_id": "A05",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/capability-snapshot.schema.json",
+          "source_sha256": "sha256:454dc621a260ceec3f2ce6499ab2fdf0ce3c26f54b553970c9304e356d762d44"
+        },
+        {
+          "path": "specs/schemas/v1/route-decision.schema.json",
+          "source_sha256": "sha256:a49225828b1d6607136ed1dd0a55abd887d192ca5beaff43b3bfe3bb92b95d42"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn route_codex_stage",
+          "path": "crates/control/star-planning/src/routing.rs",
+          "source_sha256": "sha256:e217d4a020b0eab136b0afc72100954601ca11f9e34e7bd94c749340c08af8c8"
+        },
+        {
+          "marker": "probe_capabilities",
+          "path": "crates/adapters/star-adapter-codex/src/app_server.rs",
+          "source_sha256": "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+        },
+        {
+          "marker": "codex.capability.inspect",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "pub(crate) fn require_latest_capability",
+          "path": "apps/star-controller/src/codex_product.rs",
+          "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/contracts/routing.md",
+        "source_sha256": "sha256:7d2b6a22262c6dbb671ae27b5d2e046345076d171172c735c7c8936e504ea21c"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5",
+        "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "codex_app_server_real_process_failure_rejects_missing_executable",
+          "path": "apps/star-controller/tests/codex_app_server.rs",
+          "source_sha256": "sha256:c1c644e99f2476d62ff676b1ca182f019921c9b97730c8bf459132440f5a6e9f"
+        },
+        "negative": {
+          "marker": "capability_selection_rejects_stale_and_ambiguous_latest_snapshots",
+          "path": "apps/star-controller/src/codex_product.rs",
+          "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        },
+        "positive": {
+          "marker": "codex_app_server_real_process_positive_capability_probe",
+          "path": "apps/star-controller/tests/codex_app_server.rs",
+          "source_sha256": "sha256:c1c644e99f2476d62ff676b1ca182f019921c9b97730c8bf459132440f5a6e9f"
+        },
+        "recovery": {
+          "marker": "routing_recovery_falls_back_from_unavailable_max_to_single",
+          "path": "crates/control/star-planning/src/routing.rs",
+          "source_sha256": "sha256:e217d4a020b0eab136b0afc72100954601ca11f9e34e7bd94c749340c08af8c8"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "context.pack.build",
+        "context.pack.show",
+        "permission.plan.create",
+        "permission.plan.show",
+        "codex.task.start",
+        "codex.task.resume",
+        "codex.task.fork",
+        "codex.task.interrupt",
+        "codex.task.status",
+        "run.continue"
+      ],
+      "codex_refs": [
+        {
+          "marker": "pub fn launch",
+          "path": "apps/star-controller/src/codex_product.rs",
+          "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        }
+      ],
+      "codex_required": true,
+      "feature_fingerprint": "sha256:e930574059855a5c268dced76faa7a8b42eac8d27bdf67b723761b4abe6e7a5d",
+      "feature_id": "A06",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/codex-execution-record.schema.json",
+          "source_sha256": "sha256:e4ba33f3cfa513df35a2d1a1ec9d79a7d2f4e9c739ebe1b04b3a900873ef65a7"
+        },
+        {
+          "path": "specs/schemas/v1/context-pack.schema.json",
+          "source_sha256": "sha256:5cc7c8980ce444c2311c308679d20c12bf3e420fb0ba7ef9463e47d87f7daef3"
+        },
+        {
+          "path": "specs/schemas/v1/permission-plan.schema.json",
+          "source_sha256": "sha256:3d5ce400622735a4705028d66d2330dfcc5c86a3d1e4fad47a7b3acd2faecb37"
+        },
+        {
+          "path": "specs/schemas/v1/development-effect-receipt-v1.schema.json",
+          "source_sha256": "sha256:08569f40dea44f54a9a2edb2596a469d41b0f6648b93ea0561e5be7fd57720a5"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub struct CodexAppServerProcess",
+          "path": "crates/adapters/star-adapter-codex/src/app_server.rs",
+          "source_sha256": "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+        },
+        {
+          "marker": "pub fn launch",
+          "path": "apps/star-controller/src/codex_product.rs",
+          "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        },
+        {
+          "marker": "codex.task.start",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn build_context_pack",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "run.continue"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/features/core-control.md",
+        "source_sha256": "sha256:c5b8d45bfb7e1172e74babd4e4e493828687c3492322283455ecc9b84dccb6af"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "app_server_failure_kills_a_hung_probe_at_the_deadline",
+          "path": "crates/adapters/star-adapter-codex/src/app_server.rs",
+          "source_sha256": "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+        },
+        "negative": {
+          "marker": "launch_capability_rejects_missing_operation_or_permission_override",
+          "path": "apps/star-controller/src/codex_product.rs",
+          "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        },
+        "positive": {
+          "marker": "codex_approval_positive_creates_and_reuses_one_exact_durable_operation",
+          "path": "apps/star-controller/src/codex_product.rs",
+          "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        },
+        "recovery": {
+          "marker": "codex_app_server_real_process_recovery_resumes_forks_and_interrupts",
+          "path": "apps/star-controller/tests/codex_app_server.rs",
+          "source_sha256": "sha256:c1c644e99f2476d62ff676b1ca182f019921c9b97730c8bf459132440f5a6e9f"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "management.status",
+        "management.backup.plan",
+        "management.restore.plan",
+        "management.rebuild.plan"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:9d95ec7a60c8f9318520c20d6940137d96e66218fb56c0b4aae413956074be89",
+      "feature_id": "A07",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/management-store-status.schema.json",
+          "source_sha256": "sha256:d44ddf1d19d20b2c54249aacd9c9e25711a675362fe8f881e2d798120d96e64a"
+        },
+        {
+          "path": "specs/schemas/v1/management-backup-plan.schema.json",
+          "source_sha256": "sha256:da2d534714aaa79c18614d5146d0503f74abafdc28777ac42732eb29b8a91c4a"
+        },
+        {
+          "path": "specs/schemas/v1/management-restore-plan.schema.json",
+          "source_sha256": "sha256:724f8ddde39d380a0bff0f7191358879108594ba36b4c03ab7d03b3e56f670c5"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub struct SqliteManagementRepositorySet",
+          "path": "crates/infrastructure/star-state/src/lib.rs",
+          "source_sha256": "sha256:e92fa3392260a43139f1c4a472d5ffa3524ad4b037d71982e44dc0f16f3ae981"
+        },
+        {
+          "marker": "management.backup.plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "goal.status",
+        "goal.pause",
+        "goal.resume"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/contracts/events-and-state.md",
+        "source_sha256": "sha256:f8280eb3115f9ff22fcd9295229acb88865fa43c3f1423cf0243661021a32f7f"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "backup_plan_restore_preserves_corrupt_generation_and_rejects_tamper",
+          "path": "crates/infrastructure/star-state/src/lib.rs",
+          "source_sha256": "sha256:e92fa3392260a43139f1c4a472d5ffa3524ad4b037d71982e44dc0f16f3ae981"
+        },
+        "negative": {
+          "marker": "active_set_header_mismatch_enters_recovery_only_even_when_manifest_is_resealed",
+          "path": "crates/infrastructure/star-state/src/lib.rs",
+          "source_sha256": "sha256:e92fa3392260a43139f1c4a472d5ffa3524ad4b037d71982e44dc0f16f3ae981"
+        },
+        "positive": {
+          "marker": "writer_lease_project_partition_backup_and_root_binding_are_real",
+          "path": "crates/infrastructure/star-state/src/lib.rs",
+          "source_sha256": "sha256:e92fa3392260a43139f1c4a472d5ffa3524ad4b037d71982e44dc0f16f3ae981"
+        },
+        "recovery": {
+          "marker": "restore_activation_is_all_old_or_all_new_across_crash_points",
+          "path": "crates/infrastructure/star-state/src/lib.rs",
+          "source_sha256": "sha256:e92fa3392260a43139f1c4a472d5ffa3524ad4b037d71982e44dc0f16f3ae981"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "permission.plan.create",
+        "permission.plan.show",
+        "approval.resolve",
+        "development.effect.record"
+      ],
+      "codex_refs": [
+        {
+          "marker": "fn load_permission_plan",
+          "path": "apps/star-controller/src/codex_product.rs",
+          "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        }
+      ],
+      "codex_required": true,
+      "feature_fingerprint": "sha256:ee6fe746b656783e47015016473291401f76a7f140ce33575491d3a23b655388",
+      "feature_id": "A08",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/permission-plan.schema.json",
+          "source_sha256": "sha256:3d5ce400622735a4705028d66d2330dfcc5c86a3d1e4fad47a7b3acd2faecb37"
+        },
+        {
+          "path": "specs/schemas/v1/development-effect-receipt-v1.schema.json",
+          "source_sha256": "sha256:08569f40dea44f54a9a2edb2596a469d41b0f6648b93ea0561e5be7fd57720a5"
+        },
+        {
+          "path": "specs/schemas/v1/tool-trust-record.schema.json",
+          "source_sha256": "sha256:a71037f7f2b18592f45c2a2ef27f8eba89dfae9e7fdc8e2d24c802fc0afab2d8"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "RegisteredDevelopmentEffectAdapter",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "action_permission_decision",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn load_permission_plan",
+          "path": "apps/star-controller/src/codex_product.rs",
+          "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        }
+      ],
+      "mcp_actions": [
+        "star_approval_resolve"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/architecture/security-and-permissions.md",
+        "source_sha256": "sha256:3da6f0a84e7f7ee6f2761767488d26e797e76f98563faf77d59b413037067b2b"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "permission_plan_failure_expired_plan_is_not_current",
+          "path": "crates/foundation/star-contracts/src/permission_plan.rs",
+          "source_sha256": "sha256:f300ecad1059234658a7ce5ce44e42781d4d2d48a8295790ee2e435622ebcee9"
+        },
+        "negative": {
+          "marker": "permission_plan_negative_unknown_paid_action_cannot_be_auto",
+          "path": "crates/foundation/star-contracts/src/permission_plan.rs",
+          "source_sha256": "sha256:f300ecad1059234658a7ce5ce44e42781d4d2d48a8295790ee2e435622ebcee9"
+        },
+        "positive": {
+          "marker": "permission_plan_positive_seals_exact_stage_scope",
+          "path": "crates/foundation/star-contracts/src/permission_plan.rs",
+          "source_sha256": "sha256:f300ecad1059234658a7ce5ce44e42781d4d2d48a8295790ee2e435622ebcee9"
+        },
+        "recovery": {
+          "marker": "permission_plan_recovery_default_deny_is_preserved",
+          "path": "crates/foundation/star-contracts/src/permission_plan.rs",
+          "source_sha256": "sha256:f300ecad1059234658a7ce5ce44e42781d4d2d48a8295790ee2e435622ebcee9"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "change-bundle.worktree.plan",
+        "change-bundle.merge.plan",
+        "change-bundle.merge.enqueue",
+        "change-bundle.merge.run"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:2fabaef1d2e6b37d757c30b545e647e87e60e86c918bb52c9c6f0398a7f5005f",
+      "feature_id": "A09",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/worktree-record.schema.json",
+          "source_sha256": "sha256:8df4ced4b9abfab3c91369c9d1286e08fdc44ca7f4ea6d2dcdbce1139671001c"
+        },
+        {
+          "path": "specs/schemas/v1/merge-queue-record.schema.json",
+          "source_sha256": "sha256:cb4b6d51cef239ab22c3f6bd345f36080467f6a8b83cdfeedb9ad06f50df41c9"
+        },
+        {
+          "path": "specs/schemas/v1/project-merge-result.schema.json",
+          "source_sha256": "sha256:afd0b76fcaaf08910e39fd9d1778e19b78e265840017fdda9b1168d63bdef3cd"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn seal_merge_plan",
+          "path": "crates/control/star-development/src/coordination_v2.rs",
+          "source_sha256": "sha256:f04b3503f9615b2ae5cff7691ba7c2d2220ecd8b2297c13b1925b47f5a822c8e"
+        },
+        {
+          "marker": "change-bundle.worktree.plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "merge.status",
+        "handoff.get"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/contracts/cross-repo-change-bundle.md",
+        "source_sha256": "sha256:ab36b7af88ab53b44e31f1684410aafba9f40d45c2af37c8f17f6238fcc8be23"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "incomplete_overlap_blocks_parallel_dispatch",
+          "path": "crates/control/star-development/src/coordination_v2.rs",
+          "source_sha256": "sha256:f04b3503f9615b2ae5cff7691ba7c2d2220ecd8b2297c13b1925b47f5a822c8e"
+        },
+        "negative": {
+          "marker": "relation_and_step_cycles_are_rejected",
+          "path": "crates/control/star-development/src/coordination_v2.rs",
+          "source_sha256": "sha256:f04b3503f9615b2ae5cff7691ba7c2d2220ecd8b2297c13b1925b47f5a822c8e"
+        },
+        "positive": {
+          "marker": "git_adapter_creates_owned_worktree_and_fast_forwards_only_with_exact_permit",
+          "path": "crates/control/star-development/src/coordination_v2.rs",
+          "source_sha256": "sha256:f04b3503f9615b2ae5cff7691ba7c2d2220ecd8b2297c13b1925b47f5a822c8e"
+        },
+        "recovery": {
+          "marker": "completion_level_requires_receipt_backed_participant_states",
+          "path": "crates/control/star-development/src/coordination_v2.rs",
+          "source_sha256": "sha256:f04b3503f9615b2ae5cff7691ba7c2d2220ecd8b2297c13b1925b47f5a822c8e"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "registry.list",
+        "registry.status",
+        "profile.resolve"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:c0d9195d017f42a2f6e2f12b891b05c35286ceb006543568ec01ce0b051c3a40",
+      "feature_id": "A10",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/managed-registry-snapshot-v2.schema.json",
+          "source_sha256": "sha256:5497a2024eaa432c46944a9ecdfaa5f09401a18added1856209b8ba5774c0ac7"
+        },
+        {
+          "path": "specs/schemas/v1/tool-registry-snapshot.schema.json",
+          "source_sha256": "sha256:de143e152a4f15425a884545418cc8a63443b5f02959b240ef8aca1da5daba3a"
+        },
+        {
+          "path": "specs/schemas/v1/development-profile-resolution.schema.json",
+          "source_sha256": "sha256:1a8815968e58c22b2cd1e53e35319e47775e994c1c15bf7ac02a2c5c3b84662b"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn load_git_registry_from_project",
+          "path": "crates/control/star-development/src/managed_registry_v2.rs",
+          "source_sha256": "sha256:c259a2f2a68d289f71b212a6f2650db84e9dc2a06a7a80bb004e818a649a387f"
+        },
+        {
+          "marker": "profile.resolve",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "star_tool_search",
+        "star_tool_describe",
+        "star_tool_registry_status"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/contracts/config-and-catalog.md",
+        "source_sha256": "sha256:fab024078c6d9fae4bf967b2c293510ae012ea06614dcbaa00299e61b591f760"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "stale_consumer_and_alias_omission_block_migration",
+          "path": "crates/control/star-development/src/managed_registry.rs",
+          "source_sha256": "sha256:d79d3616ba75367138f760b4c6c396176fe1139b5f678ecba8be8681f6926a85"
+        },
+        "negative": {
+          "marker": "root_requires_explicit_registry_checks_and_namespace_claim",
+          "path": "crates/control/star-development/src/managed_registry_v2.rs",
+          "source_sha256": "sha256:c259a2f2a68d289f71b212a6f2650db84e9dc2a06a7a80bb004e818a649a387f"
+        },
+        "positive": {
+          "marker": "git_source_only_loader_rebuilds_snapshot_and_detects_binding_drift",
+          "path": "crates/control/star-development/src/managed_registry_v2.rs",
+          "source_sha256": "sha256:c259a2f2a68d289f71b212a6f2650db84e9dc2a06a7a80bb004e818a649a387f"
+        },
+        "recovery": {
+          "marker": "registry_random_valid_invalid_delete_and_recreate_sequences_preserve_lkg_invariants",
+          "path": "apps/star-controller/tests/property_fuzz.rs",
+          "source_sha256": "sha256:7c490ef36d37cae0cddbe938c50391038925db2e9d153125a93928fd3bbe4319"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "validation.run-plan",
+        "evidence.bundle.export",
+        "review-pack.export"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:505dffe7fe4ba00406c53883d0172ee1ee157708f8011b73e44e0fe250c9ae10",
+      "feature_id": "B01",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/validation-result-v2.schema.json",
+          "source_sha256": "sha256:6949fd2f178afe99985a39234e06048f0ba1e7b7cf248a7961e5d29d6e2ec996"
+        },
+        {
+          "path": "specs/schemas/v1/evidence-bundle-v2.schema.json",
+          "source_sha256": "sha256:5072b0cabfffc4733963ba795657f8ee7cdaeacbc32f92e2587712960e62f03d"
+        },
+        {
+          "path": "specs/schemas/v1/review-pack.schema.json",
+          "source_sha256": "sha256:f5c4216d85c794e72b4b97bcc098f3ece4fe423aa4b38195785b04d25005bff6"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn run_check_graph",
+          "path": "crates/control/star-validation/src/runner.rs",
+          "source_sha256": "sha256:e104f0519138895cc126becbb2fd97ed684153a333674e0bff421aefbf2b294f"
+        },
+        {
+          "marker": "validation.run-plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "validation.plan",
+        "validation.run",
+        "evidence.get"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/contracts/validation-and-evidence.md",
+        "source_sha256": "sha256:36a9cf9b793f81ab2a36993e4c37b1d7844ac5196f6fd961a23a85ce4be9fa91"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "timeout_and_flaky_evidence_block_and_never_run_dependents",
+          "path": "crates/control/star-validation/src/runner.rs",
+          "source_sha256": "sha256:e104f0519138895cc126becbb2fd97ed684153a333674e0bff421aefbf2b294f"
+        },
+        "negative": {
+          "marker": "completion_claims_are_compared_with_current_runs_and_change_sets",
+          "path": "crates/control/star-validation/src/runner.rs",
+          "source_sha256": "sha256:e104f0519138895cc126becbb2fd97ed684153a333674e0bff421aefbf2b294f"
+        },
+        "positive": {
+          "marker": "final_artifact_manifest_is_bound_before_the_evidence_bundle_is_sealed",
+          "path": "crates/control/star-validation/src/runner.rs",
+          "source_sha256": "sha256:e104f0519138895cc126becbb2fd97ed684153a333674e0bff421aefbf2b294f"
+        },
+        "recovery": {
+          "marker": "complete_cached_evidence_remains_reusable_during_human_review",
+          "path": "apps/star-controller/src/validation_planning.rs",
+          "source_sha256": "sha256:15d74a52791d816ae0d4fb3322e2fff5019ed8d5e20374264c14fe363b8a9e16"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "validation.run-plan",
+        "baseline.inspect",
+        "suppression.inspect"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:f89d6c5fd6ab00959391259a2a053f6eefd40ba1912811c86fead86c756ef589",
+      "feature_id": "B02",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/baseline-v2.schema.json",
+          "source_sha256": "sha256:183858a6bd0c5822479b694953fbed41fec4008e6b614e681c22253ebecd30c6"
+        },
+        {
+          "path": "specs/schemas/v1/suppression-v2.schema.json",
+          "source_sha256": "sha256:02c3032305e19d0545cc3b83b556affb5cdcfdef50720557c7287a56827be609"
+        },
+        {
+          "path": "specs/schemas/v1/diagnostic-v2.schema.json",
+          "source_sha256": "sha256:1ecbf4b6ba9b032d3f3743129e436ddaa9c8ffc598f016f241a4583337b60512"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn evaluate_rule_facts",
+          "path": "crates/control/star-validation/src/rules.rs",
+          "source_sha256": "sha256:16c2912e6a7e8e5f1142218b0ea1f110778b5780e8d446745f5c8316b66dab6b"
+        },
+        {
+          "marker": "validation.run-plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "validation.run"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/features/validation.md",
+        "source_sha256": "sha256:3a8849bda054bfd12abbba38c7e5e11b45bc497a9ed0c3d626d70fd14909dbe0"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "partial_unverified_or_flaky_counts_cannot_be_reported_as_pass",
+          "path": "apps/star-controller/src/validation_execution.rs",
+          "source_sha256": "sha256:fb96b61ef43ec3e88e37f69739bfd986036df3f28f6aefed81186cac5e80e1ee"
+        },
+        "negative": {
+          "marker": "validator_corpus_or_profile_weakening_is_release_blocking_reject",
+          "path": "crates/control/star-release/src/evaluation.rs",
+          "source_sha256": "sha256:8e900fa9701a33f0ca1131d0ad393b2a498fe5d1886b9a9877e51c3b3f3ba799"
+        },
+        "positive": {
+          "marker": "successful_checks_with_required_review_are_not_auto_passed",
+          "path": "crates/control/star-validation/src/runner.rs",
+          "source_sha256": "sha256:e104f0519138895cc126becbb2fd97ed684153a333674e0bff421aefbf2b294f"
+        },
+        "recovery": {
+          "marker": "cache_reuses_only_identical_complete_stable_unsuppressed_evidence",
+          "path": "crates/control/star-validation/src/planning.rs",
+          "source_sha256": "sha256:f556b45a3296680dcec01695f386c68de4216b468b80d97cd01f45b50ff21a3f"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "validation.preflight",
+        "validation.run-plan"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:fff38636fe89f8bc7979e9a33da36f8310892b390df1732c5d2344c646affd97",
+      "feature_id": "B03",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/validator-corpus-manifest-v2.schema.json",
+          "source_sha256": "sha256:f0116db1065a33066ba4df6f668b3b4dcbdcd8a50f82c88e1f760be5c8fea81d"
+        },
+        {
+          "path": "specs/schemas/v1/validator-guard-evidence-v2.schema.json",
+          "source_sha256": "sha256:37c3af461e2e7fa9e85b37f7bce0f76310b23ce895a2d8a89cabba969a956e1f"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub struct ValidatorGuardEvidenceV2",
+          "path": "crates/foundation/star-contracts/src/validator_guard.rs",
+          "source_sha256": "sha256:97ab484a761c132fd5994858ed8182b03bd3431af1f9d1568f3cc1cc7fc779aa"
+        },
+        {
+          "marker": "pub fn builtin_validator_corpus",
+          "path": "crates/control/star-validation/src/rules.rs",
+          "source_sha256": "sha256:16c2912e6a7e8e5f1142218b0ea1f110778b5780e8d446745f5c8316b66dab6b"
+        },
+        {
+          "marker": "fn collect_m3_rule_diagnostics",
+          "path": "crates/control/star-application/src/lib.rs",
+          "source_sha256": "sha256:935feb3e149db54bb684375c2a204d2c9ae3be8f4af4516c016a8087c82cc1dd"
+        }
+      ],
+      "mcp_actions": [
+        "validation.run"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/features/common-validation-gate.md",
+        "source_sha256": "sha256:ade01665a2b9810a7f5ad7d98959fcb83e8f7584513efadb3484b0df1a9fc174"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "false_positive_candidates_never_become_automatic_pass_facts",
+          "path": "crates/control/star-validation/src/rules.rs",
+          "source_sha256": "sha256:16c2912e6a7e8e5f1142218b0ea1f110778b5780e8d446745f5c8316b66dab6b"
+        },
+        "negative": {
+          "marker": "weakening_is_valid_evidence_but_never_auto_pass_eligible",
+          "path": "crates/foundation/star-contracts/src/validator_guard.rs",
+          "source_sha256": "sha256:97ab484a761c132fd5994858ed8182b03bd3431af1f9d1568f3cc1cc7fc779aa"
+        },
+        "positive": {
+          "marker": "guard_evidence_requires_distinct_executors_and_complete_fixture_kinds",
+          "path": "crates/foundation/star-contracts/src/validator_guard.rs",
+          "source_sha256": "sha256:97ab484a761c132fd5994858ed8182b03bd3431af1f9d1568f3cc1cc7fc779aa"
+        },
+        "recovery": {
+          "marker": "checked_in_validator_corpus_is_hash_bound_and_enforces_expected_behavior",
+          "path": "crates/control/star-validation/src/rules.rs",
+          "source_sha256": "sha256:16c2912e6a7e8e5f1142218b0ea1f110778b5780e8d446745f5c8316b66dab6b"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "contract.snapshot",
+        "contract.compare",
+        "registry.declaration.plan"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:de3a52d87481d9fcd3c870a6ca2e0ce71d43554cbdbad9d62bfb488e09f738eb",
+      "feature_id": "B04",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/contract-surface-snapshot.schema.json",
+          "source_sha256": "sha256:0cc0714492f07fe7527e954461b3bdc1f5496743ce86448de6e85bbfbd9bd0e2"
+        },
+        {
+          "path": "specs/schemas/v1/compatibility-report-v2.schema.json",
+          "source_sha256": "sha256:a1018e1b3dad4ebc04df5c15531342e68a7d5ad191b4dd3236920b57bf240b43"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn compare_surface_snapshots",
+          "path": "crates/control/star-development/src/compatibility_v2.rs",
+          "source_sha256": "sha256:2d2ea3bb024764780910243a9b7ddce4af18f0f007b63143dd1be7eb57ceb1f3"
+        },
+        {
+          "marker": "contract.compare",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/contracts/contract-compatibility-and-environment.md",
+        "source_sha256": "sha256:6c0900d2ffb5b25b925b58e633e4f0eb94fbc195095c4123b069c914a0d0e009"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "managed_registry_missing_stale_drift_and_family_gaps_are_fail_closed",
+          "path": "crates/control/star-validation/src/rules.rs",
+          "source_sha256": "sha256:16c2912e6a7e8e5f1142218b0ea1f110778b5780e8d446745f5c8316b66dab6b"
+        },
+        "negative": {
+          "marker": "snapshot_compare_marks_removed_or_modified_public_surface_breaking",
+          "path": "crates/control/star-development/src/compatibility_v2.rs",
+          "source_sha256": "sha256:2d2ea3bb024764780910243a9b7ddce4af18f0f007b63143dd1be7eb57ceb1f3"
+        },
+        "positive": {
+          "marker": "environment_fingerprint_excludes_absolute_project_path_and_doctor_is_read_only",
+          "path": "crates/control/star-development/src/compatibility_v2.rs",
+          "source_sha256": "sha256:2d2ea3bb024764780910243a9b7ddce4af18f0f007b63143dd1be7eb57ceb1f3"
+        },
+        "recovery": {
+          "marker": "fixed_pipeline_builds_patch_and_second_run_is_zero_diff",
+          "path": "crates/control/star-application/src/rust_style.rs",
+          "source_sha256": "sha256:e95dc6c09e92ce02dd646afdbed76f82fe7ae67dac7d275c29beff224cb80560"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "security.inspect",
+        "deps.scan",
+        "deps.prepare",
+        "maintenance.radar"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:f33fe7520bdd9e300063b79c15bb9550ebba57e7c24dd2f0f53761be0c50ecdf",
+      "feature_id": "B05",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/dependency-snapshot.schema.json",
+          "source_sha256": "sha256:19cdca27c5d276f81345484a9ebd25ab4e6c52b9d8e0290f50ef2b8851f170eb"
+        },
+        {
+          "path": "specs/schemas/v1/supply-chain-snapshot.schema.json",
+          "source_sha256": "sha256:dff554d59510df8c74f9731203608f52403c9541fc93c0c14418fe13f70939ba"
+        },
+        {
+          "path": "specs/schemas/v1/maintenance-radar-snapshot.schema.json",
+          "source_sha256": "sha256:030f3399e1f6564cc98048a9b0081929c7024b3ba5b7bb4ecfb2a91edebd1f9c"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn scan_dependency_snapshot",
+          "path": "crates/control/star-development/src/maintenance_v2.rs",
+          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+        },
+        {
+          "marker": "security.inspect",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/contracts/failure-security-and-dependency-maintenance.md",
+        "source_sha256": "sha256:31d16511808ab3354fb5079b7f0ae5be46fe85cf8668498ecc9993a85ceba892"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "cargo_dependency_scan_is_source_only_and_marks_missing_lock_partial",
+          "path": "crates/control/star-development/src/maintenance_v2.rs",
+          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+        },
+        "negative": {
+          "marker": "supply_chain_rejects_cross_project_or_unbound_observation_sources",
+          "path": "crates/control/star-development/src/maintenance_v2.rs",
+          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+        },
+        "positive": {
+          "marker": "external_security_snapshot_binds_query_raw_and_normalized_artifacts_and_coverage",
+          "path": "crates/control/star-development/src/maintenance_v2.rs",
+          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+        },
+        "recovery": {
+          "marker": "registered_effect_adapter_covers_m7_m8_m9_permissions_and_preserves_unknown",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "failures.inspect",
+        "failures.reproduce",
+        "failures.recovery-plan"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:a41cfdea36a44a99248d32b1cefab88d8be71ed1cdf8e40e0610908acee93c9c",
+      "feature_id": "B06",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/failure-record.schema.json",
+          "source_sha256": "sha256:f863dfaa74468f5771ef20ba20c6a971188b41c43b45e92bcba1716c2e5b029c"
+        },
+        {
+          "path": "specs/schemas/v1/reproduction-pack-v2.schema.json",
+          "source_sha256": "sha256:478e9e1d131076b5d5aa2a9fc7785d5299e93fdddc75fbd441f37d375b8b76d3"
+        },
+        {
+          "path": "specs/schemas/v1/recovery-plan-v2.schema.json",
+          "source_sha256": "sha256:02eaffba3a6df1b2f6e4b032360ef73eb00ad1bc80ced1d2fe39cc94dbc3997e"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn build_failure_record",
+          "path": "crates/control/star-development/src/maintenance_v2.rs",
+          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+        },
+        {
+          "marker": "fn m7_validate_verified_failure_input",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "failures.reproduce",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/contracts/failure-security-and-dependency-maintenance.md",
+        "source_sha256": "sha256:31d16511808ab3354fb5079b7f0ae5be46fe85cf8668498ecc9993a85ceba892"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "development_effect_receipt_binds_terminal_operation_subject_and_executable",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        "negative": {
+          "marker": "verified_failure_requires_current_exact_validation_and_diagnostic_evidence",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        "positive": {
+          "marker": "failure_family_redacts_path_pid_and_timestamp_but_occurrence_stays_exact",
+          "path": "crates/control/star-development/src/maintenance_v2.rs",
+          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+        },
+        "recovery": {
+          "marker": "reproduction_and_radar_preserve_unverified_external_state",
+          "path": "crates/control/star-development/src/maintenance.rs",
+          "source_sha256": "sha256:bf9a29a644d7f168162d79f9b2614c8898560992c473dc4cc72106f1e22423ee"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "docs.check",
+        "config.trace",
+        "environment.fingerprint",
+        "project.doctor"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:98b428c244d59d8c7e9421ab47eb2d0a6ecf4f094458f1f23a5f1d20c3deddb3",
+      "feature_id": "B07",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/documentation-snapshot.schema.json",
+          "source_sha256": "sha256:174c2c62f4ec38e33321768ba3709d743c91a623c081f498aad4a31f81f81471"
+        },
+        {
+          "path": "specs/schemas/v1/environment-snapshot.schema.json",
+          "source_sha256": "sha256:4e3ded131d00a94d8b43a729d50146ca2ad024a7013c50432491340b2cb18694"
+        },
+        {
+          "path": "specs/schemas/v1/project-doctor-report.schema.json",
+          "source_sha256": "sha256:5d05c04b2b9b8e34790c4ab05842447f66c5624fb110536cbbdf96b1bd17b0c0"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn build_documentation_snapshot",
+          "path": "crates/control/star-development/src/compatibility_v2.rs",
+          "source_sha256": "sha256:2d2ea3bb024764780910243a9b7ddce4af18f0f007b63143dd1be7eb57ceb1f3"
+        },
+        {
+          "marker": "pub fn trace_config_key",
+          "path": "crates/control/star-development/src/compatibility_v2.rs",
+          "source_sha256": "sha256:2d2ea3bb024764780910243a9b7ddce4af18f0f007b63143dd1be7eb57ceb1f3"
+        },
+        {
+          "marker": "pub fn evaluate_project_doctor",
+          "path": "crates/control/star-development/src/compatibility_v2.rs",
+          "source_sha256": "sha256:2d2ea3bb024764780910243a9b7ddce4af18f0f007b63143dd1be7eb57ceb1f3"
+        },
+        {
+          "marker": "docs.check",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "project.doctor",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "doctor.run"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/contracts/contract-compatibility-and-environment.md",
+        "source_sha256": "sha256:6c0900d2ffb5b25b925b58e633e4f0eb94fbc195095c4123b069c914a0d0e009"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "command_config_defaults_materialize_missing_typed_document_fields",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        "negative": {
+          "marker": "execution_settings_reject_unknown_keys_and_unwired_policy_weakening",
+          "path": "apps/star-controller/src/policy_profile.rs",
+          "source_sha256": "sha256:68d4b464334b68afcb316afcd2fa59407f587d3f2b89d0ae1dc9ebd41f1c0d7c"
+        },
+        "positive": {
+          "marker": "documentation_snapshot_is_bound_to_the_current_managed_registry",
+          "path": "crates/control/star-development/src/compatibility_v2.rs",
+          "source_sha256": "sha256:2d2ea3bb024764780910243a9b7ddce4af18f0f007b63143dd1be7eb57ceb1f3"
+        },
+        "recovery": {
+          "marker": "effective_config_is_a_management_owned_restart_safe_read",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "migration.execute",
+        "migration.resume",
+        "migration.rollback",
+        "performance.run",
+        "performance.compare",
+        "language-migration.cutover"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:c2aab30e9ed183f08a6af6bde8519d2ee2a861b9deb7bf3b00a64df59a112a05",
+      "feature_id": "B08",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/migration-checkpoint-v2.schema.json",
+          "source_sha256": "sha256:ff30e0d4d65a5194be3959a1e1b8403836feb16171b44c25663aba38bb70a0e8"
+        },
+        {
+          "path": "specs/schemas/v1/performance-comparison-v2.schema.json",
+          "source_sha256": "sha256:43689639cf725dd874fdb1b9ad0d6b6d9133ab417d76c64c206d09a4beaa32e3"
+        },
+        {
+          "path": "specs/schemas/v1/equivalence-report.schema.json",
+          "source_sha256": "sha256:2016558b37ea5dac03ce914515c05cc3009ac4b9f98ea41d054a77192cf19b54"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn seal_migration_checkpoint",
+          "path": "crates/control/star-development/src/migration_v2.rs",
+          "source_sha256": "sha256:b08357adc381b5fa5ba9aa09d2db3d4b5c6f22b3c0e55ea18a9b6cae5a218539"
+        },
+        {
+          "marker": "migration.execute",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/contracts/migration-performance-and-platform.md",
+        "source_sha256": "sha256:c119cd4846032f0494b4a888b6317eab103f0bc5cbabb7463032c1a9d94bca1f"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "not_replay_safe_checkpoint_requires_reconciliation",
+          "path": "crates/control/star-development/src/migration_v2.rs",
+          "source_sha256": "sha256:b08357adc381b5fa5ba9aa09d2db3d4b5c6f22b3c0e55ea18a9b6cae5a218539"
+        },
+        "negative": {
+          "marker": "performance_requires_comparable_binding_and_arm64_simulation_is_unverified",
+          "path": "crates/control/star-development/src/migration.rs",
+          "source_sha256": "sha256:209a81b6580e7a084e03139f7d95749c7a4443f97f1d620859b675c1515f8e42"
+        },
+        "positive": {
+          "marker": "performance_comparison_requires_same_binding_and_numeric_budget",
+          "path": "crates/control/star-development/src/migration_v2.rs",
+          "source_sha256": "sha256:b08357adc381b5fa5ba9aa09d2db3d4b5c6f22b3c0e55ea18a9b6cae5a218539"
+        },
+        "recovery": {
+          "marker": "interrupted_migration_resumes_from_exact_prefix_and_can_rollback",
+          "path": "crates/control/star-development/src/migration.rs",
+          "source_sha256": "sha256:209a81b6580e7a084e03139f7d95749c7a4443f97f1d620859b675c1515f8e42"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "release.candidate.create",
+        "release.verification.record",
+        "release.promote",
+        "release.status"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:68a07a9ec2bcc16d00b056b1d1ecfceb2412efea4cd20f71032a82ea0e5c99e9",
+      "feature_id": "B09",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/release-manifest-v2.schema.json",
+          "source_sha256": "sha256:78fef69b7e26be0d72908a219d5f47aa0823173c7966c2edc271dc6d93fb1d75"
+        },
+        {
+          "path": "specs/schemas/v1/release-asset-binding-v1.schema.json",
+          "source_sha256": "sha256:1ad86694735111b8cc19fd7345723f9fe90f90498fc7f98fac2088630cd7de14"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn seal_candidate",
+          "path": "crates/control/star-release/src/candidate.rs",
+          "source_sha256": "sha256:d4439c7a0eaa90d6a1f38e08ccf68c7aaa531daa09a58d7e677cdabcec79f5b1"
+        },
+        {
+          "marker": "release.verification.record",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/contracts/ci-release-evaluation-and-product-completion.md",
+        "source_sha256": "sha256:2da35b49e08310fbde8d19e1e0930cff288c8e448c6842d5f7eb3a7704833cfd"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "signing_changes_candidate_and_clears_unsigned_verification",
+          "path": "crates/control/star-release/src/candidate.rs",
+          "source_sha256": "sha256:d4439c7a0eaa90d6a1f38e08ccf68c7aaa531daa09a58d7e677cdabcec79f5b1"
+        },
+        "negative": {
+          "marker": "partial_or_digest_mismatched_ci_never_becomes_ready",
+          "path": "crates/control/star-release/src/candidate.rs",
+          "source_sha256": "sha256:d4439c7a0eaa90d6a1f38e08ccf68c7aaa531daa09a58d7e677cdabcec79f5b1"
+        },
+        "positive": {
+          "marker": "build_once_store_rejects_overwrite_and_verifies_exact_bytes",
+          "path": "crates/control/star-release/src/candidate.rs",
+          "source_sha256": "sha256:d4439c7a0eaa90d6a1f38e08ccf68c7aaa531daa09a58d7e677cdabcec79f5b1"
+        },
+        "recovery": {
+          "marker": "partial_publish_and_remote_digest_mismatch_require_rollback",
+          "path": "crates/control/star-release/src/candidate.rs",
+          "source_sha256": "sha256:d4439c7a0eaa90d6a1f38e08ccf68c7aaa531daa09a58d7e677cdabcec79f5b1"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "profile.list",
+        "profile.show",
+        "profile.resolve"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:f5dae7555e24787bb9ed1a0d0d67a9e574c6526d126bd43cde9885f330559947",
+      "feature_id": "C01",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/development-profile-descriptor.schema.json",
+          "source_sha256": "sha256:4e9de94594ede580a95512780dbca8a5ea5805bcd953917f226d224d3bd937ae"
+        },
+        {
+          "path": "specs/schemas/v1/development-profile-catalog-snapshot.schema.json",
+          "source_sha256": "sha256:9150b642645d73b6ec3e6a8f5a59d75ba3541003c7d92591897e6b8b836cd734"
+        },
+        {
+          "path": "specs/schemas/v1/development-profile-resolution.schema.json",
+          "source_sha256": "sha256:1a8815968e58c22b2cd1e53e35319e47775e994c1c15bf7ac02a2c5c3b84662b"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "load_development_profile_catalog",
+          "path": "crates/control/star-application/src/profile_catalog.rs",
+          "source_sha256": "sha256:6ae448aa92b50f594c8e92151f03d1c43d18707ceb76cd0fe84045f236563ab1"
+        },
+        {
+          "marker": "pub fn verify_stage_profile_current",
+          "path": "crates/control/star-application/src/lib.rs",
+          "source_sha256": "sha256:935feb3e149db54bb684375c2a204d2c9ae3be8f4af4516c016a8087c82cc1dd"
+        },
+        {
+          "marker": "fn bind_stage_plan_profiles",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "profile.resolve",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/features/profiles.md",
+        "source_sha256": "sha256:03ff5f38e9506ae10009e0ab774e9d839d6f1d79ac6c6bc5b6a009816d062130"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "missing_parent_and_cycle_are_rejected",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        "negative": {
+          "marker": "stage_profile_binding_rejects_unknown_and_stale_catalog_resolution",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        "positive": {
+          "marker": "product_catalog_loads_all_sixteen_and_resolves_deterministically",
+          "path": "crates/control/star-application/src/profile_catalog.rs",
+          "source_sha256": "sha256:6ae448aa92b50f594c8e92151f03d1c43d18707ceb76cd0fe84045f236563ab1"
+        },
+        "recovery": {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "change-bundle.remote.snapshot",
+        "change-bundle.remote.operation.prepare",
+        "change-bundle.remote.operation.apply",
+        "change-bundle.release-handoff.plan"
+      ],
+      "codex_refs": [
+        {
+          "marker": "star_tool_search",
+          "path": "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md",
+          "source_sha256": "sha256:ebcb2d31918303eefc341525bdba4d9b0f09ac0a68d6e225049ec412ba3b6948"
+        }
+      ],
+      "codex_required": true,
+      "feature_fingerprint": "sha256:0bee47d9e506d039c05cf2e67129ef146ab39096957322f53773e5d5c2619663",
+      "feature_id": "D01",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/cross-repo-change-bundle.schema.json",
+          "source_sha256": "sha256:1ffcd365f0bc39306bf4e0bd2477811e87b25a594c11a6462b387c46c104563f"
+        },
+        {
+          "path": "specs/schemas/v1/remote-state-snapshot-v2.schema.json",
+          "source_sha256": "sha256:b50ce59e3eb979ee37ce6811710fc21bebe0fff2a2caec60981f59f65b5f30d5"
+        },
+        {
+          "path": "specs/schemas/v1/remote-operation-record.schema.json",
+          "source_sha256": "sha256:03a85cf5dce60df1c61af91e80c1264daf212f0302c1191fcff3ca7814b36cef"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn seal_remote_operation",
+          "path": "crates/control/star-development/src/coordination_v2.rs",
+          "source_sha256": "sha256:f04b3503f9615b2ae5cff7691ba7c2d2220ecd8b2297c13b1925b47f5a822c8e"
+        },
+        {
+          "marker": "pub struct GhCliClient",
+          "path": "crates/adapters/star-adapter-github/src/lib.rs",
+          "source_sha256": "sha256:735106e2d2cca9b55b99212ed1fe7fd6e769241d8cfb31b8943a637dd4accfc0"
+        },
+        {
+          "marker": "change-bundle.remote.snapshot",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [
+        "merge.status",
+        "handoff.get"
+      ],
+      "mcp_required": true,
+      "owner_document": {
+        "path": "docs/contracts/cross-repo-change-bundle.md",
+        "source_sha256": "sha256:ab36b7af88ab53b44e31f1684410aafba9f40d45c2af37c8f17f6238fcc8be23"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:5ee5be3d21f78af6c284a4ab241c3c673056babb444458858c16a6c0f9df8553",
+        "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
+        "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
+        "sha256:ebcb2d31918303eefc341525bdba4d9b0f09ac0a68d6e225049ec412ba3b6948",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "conflicting_remote_asset_never_clobbers",
+          "path": "crates/adapters/star-adapter-github/src/lib.rs",
+          "source_sha256": "sha256:735106e2d2cca9b55b99212ed1fe7fd6e769241d8cfb31b8943a637dd4accfc0"
+        },
+        "negative": {
+          "marker": "m9_remote_approval_is_bound_to_the_exact_project_ref_and_source_commit",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        "positive": {
+          "marker": "remote_operation_recomputes_request_identity_and_requires_approval_evidence",
+          "path": "crates/control/star-development/src/coordination_v2.rs",
+          "source_sha256": "sha256:f04b3503f9615b2ae5cff7691ba7c2d2220ecd8b2297c13b1925b47f5a822c8e"
+        },
+        "recovery": {
+          "marker": "timeout_reconcile_is_read_only_and_preserves_unknown_or_partial",
+          "path": "crates/adapters/star-adapter-github/src/lib.rs",
+          "source_sha256": "sha256:735106e2d2cca9b55b99212ed1fe7fd6e769241d8cfb31b8943a637dd4accfc0"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "evaluation.run",
+        "evaluation.compare",
+        "cost.record",
+        "budget.snapshot"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:3a1d8710b2617ad1b155a965da953b2d9a7104c65920f49e7a0ffe4d754edc47",
+      "feature_id": "D02",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/evaluation-run-v2.schema.json",
+          "source_sha256": "sha256:fe809df8dfa8cb3c22910537f6c954cf0792693bfd3dc3f64cb282bae990eda3"
+        },
+        {
+          "path": "specs/schemas/v1/evaluation-case-definition-v1.schema.json",
+          "source_sha256": "sha256:64a3006c549844cac8247c963b8112afbd2b5c1a32d4030f2262dbd51125c303"
+        },
+        {
+          "path": "specs/schemas/v1/cost-record-v1.schema.json",
+          "source_sha256": "sha256:342b134d70b9a03e8514272b3da64e1bf8db9bcb49e0da2b8c413e5d15b15c12"
+        },
+        {
+          "path": "specs/schemas/v1/budget-snapshot-v1.schema.json",
+          "source_sha256": "sha256:76e9a629d2343a36bdfeb182f4df80ac9de9495657263687a44ffe992e973140"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub fn evaluate",
+          "path": "crates/control/star-release/src/evaluation.rs",
+          "source_sha256": "sha256:8e900fa9701a33f0ca1131d0ad393b2a498fe5d1886b9a9877e51c3b3f3ba799"
+        },
+        {
+          "marker": "evaluation.run",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/contracts/ci-release-evaluation-and-product-completion.md",
+        "source_sha256": "sha256:2da35b49e08310fbde8d19e1e0930cff288c8e448c6842d5f7eb3a7704833cfd"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "worsened_failure_or_unknown_outcome_is_never_accepted",
+          "path": "crates/control/star-release/src/evaluation.rs",
+          "source_sha256": "sha256:8e900fa9701a33f0ca1131d0ad393b2a498fe5d1886b9a9877e51c3b3f3ba799"
+        },
+        "negative": {
+          "marker": "faster_candidate_with_worsened_false_positive_is_rejected",
+          "path": "crates/control/star-release/src/evaluation.rs",
+          "source_sha256": "sha256:8e900fa9701a33f0ca1131d0ad393b2a498fe5d1886b9a9877e51c3b3f3ba799"
+        },
+        "positive": {
+          "marker": "comparable_candidate_with_more_detected_defects_and_less_rework_is_accepted",
+          "path": "crates/control/star-release/src/evaluation.rs",
+          "source_sha256": "sha256:8e900fa9701a33f0ca1131d0ad393b2a498fe5d1886b9a9877e51c3b3f3ba799"
+        },
+        "recovery": {
+          "marker": "catalog_lifecycle_is_closed_and_preserves_tombstone",
+          "path": "crates/control/star-release/src/evaluation.rs",
+          "source_sha256": "sha256:8e900fa9701a33f0ca1131d0ad393b2a498fe5d1886b9a9877e51c3b3f3ba799"
+        }
+      }
+    },
+    {
+      "cli_commands": [
+        "release.lifecycle.publish",
+        "release.publish.prepare",
+        "release.status",
+        "release.audit"
+      ],
+      "codex_refs": [],
+      "codex_required": false,
+      "feature_fingerprint": "sha256:07cc0eff1c6a67274fd536a9272e111129aa44885d27385369ab625cd3683838",
+      "feature_id": "D03",
+      "generated_schemas": [
+        {
+          "path": "specs/schemas/v1/installation-record.schema.json",
+          "source_sha256": "sha256:576dea76240a9b2c4923a4420da81182a731bfd78243aea184be04b56204e2b5"
+        },
+        {
+          "path": "specs/schemas/v1/runtime-activation-record.schema.json",
+          "source_sha256": "sha256:3ccd769c1d657a3e66c1d41b0937604000f00e4eae5b5a1c8744e7741f025bf8"
+        },
+        {
+          "path": "specs/schemas/v1/release-lifecycle-evidence.schema.json",
+          "source_sha256": "sha256:4e8305c43a956d63ba486a848f501e46018e4ddb8072842409ec902b683c12e2"
+        },
+        {
+          "path": "specs/schemas/v1/product-source-evidence-v1.schema.json",
+          "source_sha256": "sha256:aebdb44050ad8c35e17bb38cc0d57dc68724d6086f25519ad83ada12ce0c0b28"
+        },
+        {
+          "path": "specs/schemas/v1/final-product-audit-v2.schema.json",
+          "source_sha256": "sha256:ca87d0e7003b06345ab35e5116c3d7387d61210d568056d4eedd874eb3230f66"
+        }
+      ],
+      "handler_refs": [
+        {
+          "marker": "pub struct ReleaseLifecycleEvidence",
+          "path": "crates/foundation/star-contracts/src/release_v2.rs",
+          "source_sha256": "sha256:c2dcabcb3b3f9e65259a55e9b9e50fa29665ba678acbffe4a3e771e0cad2e2f4"
+        },
+        {
+          "marker": "pub trait ReleaseLifecycleEvidenceExt",
+          "path": "crates/control/star-release/src/lifecycle.rs",
+          "source_sha256": "sha256:1a91227a77913e6e0bd35d696b4473d8f4767677ebbcfd7f275f4fd1455e1c32"
+        },
+        {
+          "marker": "pub fn build_final_product_audit_v2",
+          "path": "crates/control/star-release/src/audit.rs",
+          "source_sha256": "sha256:f64cc1a3dedf6dd70cfa824c5203a97b030239bf41283cfbb52dff410afb04fd"
+        },
+        {
+          "marker": "pub struct InstallationManager",
+          "path": "crates/adapters/star-adapter-windows/src/lib.rs",
+          "source_sha256": "sha256:8bc944fadd9ff0962a5b87c6cca8e5874b89fb32fd4c5b97c51bba1ce330a6e9"
+        },
+        {
+          "marker": "fn main",
+          "path": "apps/star-updater/src/main.rs",
+          "source_sha256": "sha256:3b5990543bd900b125954bf4b23daa720d46133874d06a4b6c9d5dcb606d8089"
+        }
+      ],
+      "mcp_actions": [],
+      "mcp_required": false,
+      "owner_document": {
+        "path": "docs/contracts/ci-release-evaluation-and-product-completion.md",
+        "source_sha256": "sha256:2da35b49e08310fbde8d19e1e0930cff288c8e448c6842d5f7eb3a7704833cfd"
+      },
+      "product_surface_fingerprints": [
+        "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+      ],
+      "test_refs": {
+        "failure": {
+          "marker": "arm64_fake_lifecycle_stays_unverified_and_native_receipt_path_remains_available",
+          "path": "crates/control/star-release/src/lifecycle.rs",
+          "source_sha256": "sha256:1a91227a77913e6e0bd35d696b4473d8f4767677ebbcfd7f275f4fd1455e1c32"
+        },
+        "negative": {
+          "marker": "v2_source_evidence_rejects_tampering_and_collapsed_test_classes",
+          "path": "crates/control/star-release/src/audit.rs",
+          "source_sha256": "sha256:f64cc1a3dedf6dd70cfa824c5203a97b030239bf41283cfbb52dff410afb04fd"
+        },
+        "positive": {
+          "marker": "v2_audit_binds_current_source_inventory_profiles_and_lifecycle",
+          "path": "crates/control/star-release/src/audit.rs",
+          "source_sha256": "sha256:f64cc1a3dedf6dd70cfa824c5203a97b030239bf41283cfbb52dff410afb04fd"
+        },
+        "recovery": {
+          "marker": "interrupted_integration_candidate_is_recovered_before_next_transaction",
+          "path": "crates/adapters/star-adapter-windows/src/lib.rs",
+          "source_sha256": "sha256:8bc944fadd9ff0962a5b87c6cca8e5874b89fb32fd4c5b97c51bba1ce330a6e9"
+        }
+      }
+    }
+  ],
+  "generated_schema_count": 213,
+  "generated_schema_manifest_fingerprint": "sha256:fcf16f0f0cc189340c78c570b8ae1794fabbd513ac880b2c475902e7210f47de",
+  "inventory_fingerprint": "sha256:1cc405ff111278e1e70e8cb8d19821e6e356b20f4e2bfc08f017317825cd5d44",
+  "mcp_matrix_count": 170,
+  "mcp_matrix_fingerprint": "sha256:dbe4791f29fdef3e791c72875aed70e68825ef874b35fe664e288cda66d934dc",
+  "profile_count": 16,
+  "profiles": [
+    {
+      "activation_inputs_fingerprint": "sha256:bc5af8713bd97312876d2a9e50de5e410d2ac6e4e7f6368a289c50fa769ace61",
+      "allowed_effect_classes": [
+        "read",
+        "local_state_write"
+      ],
+      "approval_checkpoints": [],
+      "conformance_policy_fingerprint": "sha256:30d32295e2d6d953bb629f71d6a560ab417900c2549ef40dabf88aae738f9b90",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:d16df2e5e3aa9212eb71ba2083a2be2b648846f24cd9716fcba992de322b394f",
+      "definition_source": {
+        "path": "catalog/profiles/project_understanding.toml",
+        "source_sha256": "sha256:d16df2e5e3aa9212eb71ba2083a2be2b648846f24cd9716fcba992de322b394f"
+      },
+      "descriptor_definition_hash": "sha256:69467d8d46055f8325a59be0c9705489eb84ffb4ec2f99c159fb3479ce2e5425",
+      "gate_phases": [
+        "during_stage",
+        "stage_exit"
+      ],
+      "permission_actions": [],
+      "permission_floor": "local_read_only",
+      "profile_id": "project_understanding",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "architecture"
+      ],
+      "required_rule_families": [
+        "catalog_freshness",
+        "source_identity"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:e01c9993ace565a8789a01c0631799d2515de94fcd006c225beb27a97a4e68cc",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate"
+      ],
+      "approval_checkpoints": [],
+      "conformance_policy_fingerprint": "sha256:3333f141f33dda8e71bbc695a840d06dc8fcc859ae3d50bf90c6e361c0bd769b",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:38bc286893509604cf7af534cbb160e85c847ddc5111e3db36d2a08f1d3df242",
+      "definition_source": {
+        "path": "catalog/profiles/docs_config_environment.toml",
+        "source_sha256": "sha256:38bc286893509604cf7af534cbb160e85c847ddc5111e3db36d2a08f1d3df242"
+      },
+      "descriptor_definition_hash": "sha256:93bda631911e29d033031e0d77a74d2faf2a24d431c932858140e7725523c7f8",
+      "gate_phases": [
+        "during_stage",
+        "stage_exit",
+        "goal_exit"
+      ],
+      "permission_actions": [],
+      "permission_floor": "local_read_only",
+      "profile_id": "docs_config_environment",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "docs",
+        "environment"
+      ],
+      "required_rule_families": [
+        "config_contract",
+        "documentation",
+        "environment_reproducibility"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_stop"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:6195c4efe8efdd3024667faf342b604e6ccba08bd2fc604bdf098d9fd81044cd",
+      "allowed_effect_classes": [
+        "read",
+        "plan"
+      ],
+      "approval_checkpoints": [],
+      "conformance_policy_fingerprint": "sha256:fb43bb7cbbf6bd13addab47db7bdf331e19142a4127713c62332db171b950332",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:07c885f59697a11de4985c23db9b8b27183f1b6b92ced5563403d3d95cfd7643",
+      "definition_source": {
+        "path": "catalog/profiles/change_planning.toml",
+        "source_sha256": "sha256:07c885f59697a11de4985c23db9b8b27183f1b6b92ced5563403d3d95cfd7643"
+      },
+      "descriptor_definition_hash": "sha256:b0cf7b0a38b30506a152321be0b5fc8cd0f565cc39ccc70019971b20480273f3",
+      "gate_phases": [
+        "during_stage",
+        "stage_exit"
+      ],
+      "permission_actions": [],
+      "permission_floor": "local_read_only",
+      "profile_id": "change_planning",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "architecture"
+      ],
+      "required_rule_families": [
+        "scope_integrity",
+        "validation_coverage"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_stop"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:d9378bdb96b60c9ad6198157bf77988fc3006316917c4ea9398e8c6972671abc",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate"
+      ],
+      "approval_checkpoints": [],
+      "conformance_policy_fingerprint": "sha256:b94efe17277797d33e08cacdb6db7d4a8beeabab148b6008e0cb4a564589a0a9",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:baf30b7674adbdba3d489c36dcba1ec43336b769a3f6ff80040a8197a70f0551",
+      "definition_source": {
+        "path": "catalog/profiles/test_correctness.toml",
+        "source_sha256": "sha256:baf30b7674adbdba3d489c36dcba1ec43336b769a3f6ff80040a8197a70f0551"
+      },
+      "descriptor_definition_hash": "sha256:cf0780e8794bc0c024f2d72e6cac688a34469de77698ce028e10890ec297d981",
+      "gate_phases": [
+        "during_stage",
+        "stage_exit",
+        "goal_exit"
+      ],
+      "permission_actions": [],
+      "permission_floor": "local_read_only",
+      "profile_id": "test_correctness",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "test"
+      ],
+      "required_rule_families": [
+        "regression",
+        "test_coverage",
+        "test_weakening"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_stop"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:0f64655c4792e354288abe8af4b1ec2a0e990ce701e1f8c3b05685664b218350",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate"
+      ],
+      "approval_checkpoints": [],
+      "conformance_policy_fingerprint": "sha256:669955f1588a64e9668840edef95410687c6487c94c5014607ebb217da2b5b0b",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:548f4e066cd462ee35b0d0efb602079f52148c53999e7728497fb41767fe8f73",
+      "definition_source": {
+        "path": "catalog/profiles/architecture_quality.toml",
+        "source_sha256": "sha256:548f4e066cd462ee35b0d0efb602079f52148c53999e7728497fb41767fe8f73"
+      },
+      "descriptor_definition_hash": "sha256:e1a7936f7ac6d9d4abd5beca959a45d6d11fff41ae27e4247d9a529f1959962a",
+      "gate_phases": [
+        "during_stage",
+        "stage_exit",
+        "goal_exit"
+      ],
+      "permission_actions": [],
+      "permission_floor": "local_read_only",
+      "profile_id": "architecture_quality",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "architecture"
+      ],
+      "required_rule_families": [
+        "architecture",
+        "boundary",
+        "dependency_cycle"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_stop"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:313f1d754e88df0ce09304eedde155bb3a3f825f68bdcae612ad77d778e6e068",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate"
+      ],
+      "approval_checkpoints": [],
+      "conformance_policy_fingerprint": "sha256:241ca744ccc387909b872ac7af9f2dc341627877e01f0de77c120ba7b2d67083",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:ad21f1e3b09d390846b288efb8a5a924a0acd2af924271fee3eefa80fa205da8",
+      "definition_source": {
+        "path": "catalog/profiles/ai_development_validation.toml",
+        "source_sha256": "sha256:ad21f1e3b09d390846b288efb8a5a924a0acd2af924271fee3eefa80fa205da8"
+      },
+      "descriptor_definition_hash": "sha256:8904f801116c651df87f47b4e886f569db9c43d1d074cd9b7eb9ef6db1996228",
+      "gate_phases": [
+        "during_stage",
+        "stage_exit",
+        "goal_exit"
+      ],
+      "permission_actions": [],
+      "permission_floor": "local_read_only",
+      "profile_id": "ai_development_validation",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "architecture",
+        "hardcoding",
+        "security"
+      ],
+      "required_rule_families": [
+        "architecture",
+        "hardcoding",
+        "security",
+        "validator_guard"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_stop"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:324bc805b6f3f4d606ab32d3164f904169cd620f1b01808f294d890f1af9c559",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate",
+        "workspace_mutation"
+      ],
+      "approval_checkpoints": [
+        "patch_apply"
+      ],
+      "conformance_policy_fingerprint": "sha256:c7484d3b8f7feee09683307db09db095d766f169f8a1372e9992fd95a3b8b2b3",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:49883a47f11e9468ac1765a3dd5fa26ad1b01ba1c4ee6b65401599f1e055f2db",
+      "definition_source": {
+        "path": "catalog/profiles/refactor_codemod.toml",
+        "source_sha256": "sha256:49883a47f11e9468ac1765a3dd5fa26ad1b01ba1c4ee6b65401599f1e055f2db"
+      },
+      "descriptor_definition_hash": "sha256:8d6eacf0c353b270404bbf30920b6c3f2bc518dd2745b39889674649301800d9",
+      "gate_phases": [
+        "patch_pre_apply",
+        "patch_post_apply",
+        "goal_exit"
+      ],
+      "permission_actions": [
+        "patch.apply"
+      ],
+      "permission_floor": "exact_durable_approval",
+      "profile_id": "refactor_codemod",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "architecture",
+        "test"
+      ],
+      "required_rule_families": [
+        "patch_scope",
+        "postcondition",
+        "replay_idempotence"
+      ],
+      "rollback_policy": "recovery_plan_required",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:ccdd6102d98153eac8493488ae021de4c579e74ca15b43e84ae33f2214471895",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate"
+      ],
+      "approval_checkpoints": [],
+      "conformance_policy_fingerprint": "sha256:7c88ccfcfd301ec1e0be7f195e8fffa54ae20653e0f3e0ef183b4cd393a18aec",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:2fefa3cfb972b6e7b4970aa26b6244221b09003ccc52767b76eb1dbe4f519afa",
+      "definition_source": {
+        "path": "catalog/profiles/api_contract_change.toml",
+        "source_sha256": "sha256:2fefa3cfb972b6e7b4970aa26b6244221b09003ccc52767b76eb1dbe4f519afa"
+      },
+      "descriptor_definition_hash": "sha256:131951655fa34c02366eb138dc7b73c4932409ce04f136fbc96ddcd4ce7606f4",
+      "gate_phases": [
+        "during_stage",
+        "stage_exit",
+        "goal_exit",
+        "merge"
+      ],
+      "permission_actions": [],
+      "permission_floor": "local_read_only",
+      "profile_id": "api_contract_change",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "contract",
+        "test"
+      ],
+      "required_rule_families": [
+        "compatibility",
+        "contract_surface",
+        "consumer_floor"
+      ],
+      "rollback_policy": "recovery_plan_required",
+      "unknown_outcome_policy": "preserve_and_stop"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:d140414892f30eebb6ffc94eb0d05a7f0e378a2f55af188fdf97e598483ccb49",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate",
+        "workspace_mutation"
+      ],
+      "approval_checkpoints": [
+        "patch_apply"
+      ],
+      "conformance_policy_fingerprint": "sha256:2622f1c5fad35ae26d292df88ce3ea5463e87d95c704fa528d525a1dd872e3a5",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:01580862b804b854069fe97122eae710a59caf9adb7417f5d86bad74dac63f72",
+      "definition_source": {
+        "path": "catalog/profiles/rust_style_auto_fix.toml",
+        "source_sha256": "sha256:01580862b804b854069fe97122eae710a59caf9adb7417f5d86bad74dac63f72"
+      },
+      "descriptor_definition_hash": "sha256:b0a551efc0ac1e32ef78661453b29f557cc96d4a98f6fc461d616e1a3c6981d8",
+      "gate_phases": [
+        "patch_pre_apply",
+        "patch_post_apply",
+        "goal_exit"
+      ],
+      "permission_actions": [
+        "patch.apply",
+        "rust_style.personal_auto"
+      ],
+      "permission_floor": "exact_durable_approval",
+      "profile_id": "rust_style_auto_fix",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "architecture",
+        "build",
+        "format",
+        "hardcoding",
+        "lint",
+        "security",
+        "test"
+      ],
+      "required_rule_families": [
+        "architecture",
+        "hardcoding",
+        "rust_style",
+        "security",
+        "side_effect"
+      ],
+      "rollback_policy": "recovery_plan_required",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:1b0eb47ae20c2e4bbf2f164ef5b96a26836294f416f18579897ac77c0155f868",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate"
+      ],
+      "approval_checkpoints": [
+        "debug_attach"
+      ],
+      "conformance_policy_fingerprint": "sha256:39d8228a586b5ee5b3c2475e845de841cff4f0e81f8a3560d7016bd8236e44d8",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:d15f9d6e75ba3badda3415a3eb473ef6c1971c4fff5a1f3fa9b74e778f515bc2",
+      "definition_source": {
+        "path": "catalog/profiles/debug_recovery.toml",
+        "source_sha256": "sha256:d15f9d6e75ba3badda3415a3eb473ef6c1971c4fff5a1f3fa9b74e778f515bc2"
+      },
+      "descriptor_definition_hash": "sha256:421ef9fbd15978f4bac40993a1a3767a43512403934935d68cf1a19f5091409a",
+      "gate_phases": [
+        "during_stage",
+        "stage_exit",
+        "goal_exit"
+      ],
+      "permission_actions": [
+        "debug.attach"
+      ],
+      "permission_floor": "exact_prompt",
+      "profile_id": "debug_recovery",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "reproduction",
+        "test"
+      ],
+      "required_rule_families": [
+        "failure_identity",
+        "recovery_plan",
+        "redaction",
+        "regression_evidence",
+        "reproduction"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:37df86fc3396dde9b5402b4f397c6829366c211c22d26e4c40d58b2f4f1f5886",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate",
+        "network_read"
+      ],
+      "approval_checkpoints": [
+        "network"
+      ],
+      "conformance_policy_fingerprint": "sha256:457183a3dc6c5e3624b6bf9266a3e34a499588889ad6d410ae5a79d360d074d3",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:1c5974d47c9f1d3f9eab1a769165de0a092b244810c5da1eaac2a88ddd6d67f3",
+      "definition_source": {
+        "path": "catalog/profiles/security_supply_chain.toml",
+        "source_sha256": "sha256:1c5974d47c9f1d3f9eab1a769165de0a092b244810c5da1eaac2a88ddd6d67f3"
+      },
+      "descriptor_definition_hash": "sha256:2f194a8c788b8d74220d83d9667ae5f9498530b600534b9bcb899004a5712f91",
+      "gate_phases": [
+        "during_stage",
+        "stage_exit",
+        "goal_exit",
+        "release"
+      ],
+      "permission_actions": [
+        "network.read"
+      ],
+      "permission_floor": "exact_prompt",
+      "profile_id": "security_supply_chain",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "security"
+      ],
+      "required_rule_families": [
+        "dependency_supply_chain",
+        "external_data_freshness",
+        "release_integrity",
+        "secret_redaction",
+        "sensitive_change",
+        "workflow_security"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:a95afcd9e81d6ac72407ad7b7fe19c794872954a5bd0d72a45a8e12828063885",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate",
+        "network_read",
+        "workspace_mutation"
+      ],
+      "approval_checkpoints": [
+        "dependency_change",
+        "download",
+        "network",
+        "patch_apply"
+      ],
+      "conformance_policy_fingerprint": "sha256:06831a1327c119ad12747d3175956f1860d17de08a157eed2c059c811ba8547f",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:e1b3b6a55630227bba2c71548dcb0a9832cde3ebf64a5a7257ff568765365a9c",
+      "definition_source": {
+        "path": "catalog/profiles/dependency_upgrade.toml",
+        "source_sha256": "sha256:e1b3b6a55630227bba2c71548dcb0a9832cde3ebf64a5a7257ff568765365a9c"
+      },
+      "descriptor_definition_hash": "sha256:c52a64ab62c484c375fcfd72aa11f4d5ae70007c722d8aaaafd34e3c24f875ce",
+      "gate_phases": [
+        "during_stage",
+        "patch_pre_apply",
+        "patch_post_apply",
+        "goal_exit"
+      ],
+      "permission_actions": [
+        "dependency.change",
+        "network.read"
+      ],
+      "permission_floor": "exact_durable_approval",
+      "profile_id": "dependency_upgrade",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "build",
+        "dependency",
+        "security",
+        "test"
+      ],
+      "required_rule_families": [
+        "dependency_compatibility",
+        "dependency_security",
+        "rollback"
+      ],
+      "rollback_policy": "recovery_plan_required",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:01264d8c6bd0a275d5d82b6bd2b66000e8d4464660e161d6d5c1d56327f0d91f",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate",
+        "local_state_write",
+        "workspace_mutation"
+      ],
+      "approval_checkpoints": [
+        "destructive_migration",
+        "migration_execute",
+        "unknown_field_loss"
+      ],
+      "conformance_policy_fingerprint": "sha256:87109fcb807a415e7bb9d9822fbdec7e77e2c85a14eb0a6ef1877ffad122ceef",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:4523b0fb62d606474bc6554a3bcf69dff12a2ccb6424a3c2081e76e6c6059cef",
+      "definition_source": {
+        "path": "catalog/profiles/data_config_db_migration.toml",
+        "source_sha256": "sha256:4523b0fb62d606474bc6554a3bcf69dff12a2ccb6424a3c2081e76e6c6059cef"
+      },
+      "descriptor_definition_hash": "sha256:0da63e44e63cb89eb5c17628f89856dd8b309145ba939e25a386b9a944e07f9f",
+      "gate_phases": [
+        "migration_pre_execute",
+        "migration_post_execute",
+        "migration_post_rollback",
+        "goal_exit"
+      ],
+      "permission_actions": [
+        "migration.execute"
+      ],
+      "permission_floor": "exact_durable_approval",
+      "profile_id": "data_config_db_migration",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "migration",
+        "test"
+      ],
+      "required_rule_families": [
+        "migration_chain",
+        "migration_invariant",
+        "restore_verification"
+      ],
+      "rollback_policy": "backup_and_restore_required",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:1fc28945c212aaeb91fa90e22aa3b269f87c3229b115b0b4e409ce72cbc773c4",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate"
+      ],
+      "approval_checkpoints": [],
+      "conformance_policy_fingerprint": "sha256:d531e3328b44eb2a444abb235bad04e8a9b0b6d6f1a7e13ee701a26f9c1052b6",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:d4df2b614fe4eae9558aa3ea0eb0ed945d3e2dfabf862b6eb19243ad5b3588e7",
+      "definition_source": {
+        "path": "catalog/profiles/performance_build.toml",
+        "source_sha256": "sha256:d4df2b614fe4eae9558aa3ea0eb0ed945d3e2dfabf862b6eb19243ad5b3588e7"
+      },
+      "descriptor_definition_hash": "sha256:ef327469c78d13296d3cfee07cb8b89b754c53d399fea0fb44ddc3909b6d32eb",
+      "gate_phases": [
+        "during_stage",
+        "performance_compare",
+        "goal_exit"
+      ],
+      "permission_actions": [],
+      "permission_floor": "local_read_only",
+      "profile_id": "performance_build",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "build",
+        "performance",
+        "test"
+      ],
+      "required_rule_families": [
+        "comparability",
+        "correctness",
+        "performance_regression"
+      ],
+      "rollback_policy": "not_applicable",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:f89d187c8c238162bafdf01c64dcea56f3279b6b8fca751cfffd7e17574c9946",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate",
+        "workspace_mutation"
+      ],
+      "approval_checkpoints": [
+        "cross_project_effect",
+        "language_cutover",
+        "patch_apply"
+      ],
+      "conformance_policy_fingerprint": "sha256:56344c9dee6f1338b2c38dd0c6774a25b4e8cea00b0a4649353455df3e677b7e",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:179927fcc7e6a8dbdf5c117559fdb0a85297e0acaef8882ebe7bb2b8c0158851",
+      "definition_source": {
+        "path": "catalog/profiles/language_platform_migration.toml",
+        "source_sha256": "sha256:179927fcc7e6a8dbdf5c117559fdb0a85297e0acaef8882ebe7bb2b8c0158851"
+      },
+      "descriptor_definition_hash": "sha256:8428cb0b9edc822475553c6d94b741bdaa3271ae3c96e757bfd63c65a8301336",
+      "gate_phases": [
+        "during_stage",
+        "language_cutover",
+        "goal_exit"
+      ],
+      "permission_actions": [
+        "language.cutover"
+      ],
+      "permission_floor": "exact_durable_approval",
+      "profile_id": "language_platform_migration",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "compatibility",
+        "equivalence",
+        "test"
+      ],
+      "required_rule_families": [
+        "behavior_equivalence",
+        "consumer_order",
+        "platform_evidence"
+      ],
+      "rollback_policy": "backup_and_restore_required",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    },
+    {
+      "activation_inputs_fingerprint": "sha256:1f2deee2dd9389912c22fe52dd2b21c6383d9d44a91a49f469f3c6cc4af19aeb",
+      "allowed_effect_classes": [
+        "read",
+        "plan",
+        "validate",
+        "local_state_write",
+        "network_read",
+        "remote_write",
+        "publish"
+      ],
+      "approval_checkpoints": [
+        "remote_write",
+        "release_publish"
+      ],
+      "conformance_policy_fingerprint": "sha256:ec2b794276fe26f1fac67708d595c788c0f5a9e80d97b22988f3423d95269e8c",
+      "conformance_refs": [
+        {
+          "marker": "pub fn resolve_development_profiles",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "exact_builtin_set_resolves_deterministically",
+          "path": "crates/foundation/star-contracts/src/profile.rs",
+          "source_sha256": "sha256:2ce3fbfd028373dcf2a50e81b7edc38a038adf9162f60e9f65eccb9a6dbb02ad"
+        },
+        {
+          "marker": "fn select_validation_plan",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "missing_required_check_is_blocked_not_not_applicable",
+          "path": "crates/control/star-planning/src/lib.rs",
+          "source_sha256": "sha256:84ba4f8ccaf117d1a302a16b4b4e0c7dbbf3c492cf5659d6b7fe5b23bec3c3f2"
+        },
+        {
+          "marker": "fn create_permission_plan",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "fn record_stage_result",
+          "path": "apps/star-controller/src/main.rs",
+          "source_sha256": "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc"
+        },
+        {
+          "marker": "stage_result_recovery_requires_effect_boundary_and_action",
+          "path": "crates/foundation/star-contracts/src/stage.rs",
+          "source_sha256": "sha256:d6bd738dbbb4681551f8f8e5d075ae28528534c2ec4ddd0716f94938556d0c52"
+        },
+        {
+          "marker": "pub fn rollback_applied",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        },
+        {
+          "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+          "path": "crates/control/star-execution/src/lib.rs",
+          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+        }
+      ],
+      "definition_fingerprint": "sha256:643ee6dedb38b47fdfc39ed2aef3263dd005d57fa25070618511587b9e8da750",
+      "definition_source": {
+        "path": "catalog/profiles/ci_release_deploy.toml",
+        "source_sha256": "sha256:643ee6dedb38b47fdfc39ed2aef3263dd005d57fa25070618511587b9e8da750"
+      },
+      "descriptor_definition_hash": "sha256:8da70e4d66c3e9adba33509ce5c44a59f34413652ee002e8bced9dc13682ab2f",
+      "gate_phases": [
+        "release_preflight",
+        "release_build",
+        "release_verify",
+        "release_package",
+        "release_install_lifecycle",
+        "release_ready",
+        "release_publish_preflight",
+        "release_publish_verify"
+      ],
+      "permission_actions": [
+        "release.publish",
+        "remote_write"
+      ],
+      "permission_floor": "exact_durable_approval",
+      "profile_id": "ci_release_deploy",
+      "profile_version": "1.1.0",
+      "required_check_families": [
+        "build",
+        "release",
+        "security",
+        "test"
+      ],
+      "required_rule_families": [
+        "artifact_identity",
+        "release_integrity",
+        "supply_chain"
+      ],
+      "rollback_policy": "compensation_plan_required",
+      "unknown_outcome_policy": "preserve_and_reconcile"
+    }
+  ],
+  "runtime_executables": [
+    "star",
+    "star-controller",
+    "star-mcp",
+    "star-updater"
+  ],
+  "schema_id": "star.product-source-evidence",
+  "schema_version": 1,
+  "source_fingerprint": "sha256:ea79304774503a2a466b2e1bd4fcd1f7711edaca4125869536225534d58f6f96",
+  "stable_error_catalog_fingerprint": "sha256:dd069e4e80bf54af35e4d52434ac9a87208047d146f395eb0736de768cd2f5b8",
+  "stable_error_count": 528
+}

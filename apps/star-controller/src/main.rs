@@ -1,12 +1,17 @@
 #![cfg(windows)]
 #![windows_subsystem = "windows"]
 
+mod codex_product;
 mod validation_cache;
 mod validation_execution;
 mod validation_planning;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{SecondsFormat, Utc};
+use star_adapter_codex::app_server::{
+    CodexAppServerError, CodexAppServerProcess, default_codex_environment_names,
+    generate_protocol_schema_bundle, inspect_protocol_schema_bundle, probe_codex_version,
+};
 use star_adapter_github::{GhCliClient, GhCliConfig, GitHubReleasePublisher};
 use star_adapter_rust_index::{RustAnalyzerSemanticAdapter, RustSyntaxAdapter};
 use star_application::rust_style_runtime::RustStyleScope;
@@ -18,15 +23,23 @@ use star_application::{
     RecoveryExecutionConfig, RecoveryExecutionConfigResolver,
 };
 use star_contracts::evidence::{
-    ActorRef, ActorType, AuthoritativeGateState, Completeness, GateDecisionKind, GateScope,
-    TerminationReason, ValidationOutcome, ValidationProfile,
+    ActorRef, ActorType, ArtifactKind, AuthoritativeGateState, CatalogRef, Completeness,
+    DocumentRef, GateDecisionKind, GateScope, RedactionStatus, RetentionClass, TerminationReason,
+    ValidationOutcome, ValidationProfile,
 };
 use star_contracts::{
     Sha256Hash,
     canonical::canonical_sha256,
+    codex_execution::CodexExecutionStateV1,
     config_v1::{
         ConfigLayerV1, ConfigOverrideV1, ConfigSourceKindV1, ConfigSourceRefV1, ConfigValueV1,
         EffectiveConfigV1,
+    },
+    context_pack::{
+        CONTEXT_PACK_CONTRACT_VERSION, CONTEXT_PACK_SCHEMA_ID, ContextDeliveryV1,
+        ContextFreshnessPolicyV1, ContextIndexSnapshotRefV1, ContextItemKindV1, ContextItemV1,
+        ContextOmissionV1, ContextPackV1, ContextProjectInputV1, ContextQualityStateV1,
+        ContextQualitySummaryV1, ContextSensitivityV1, ContextSourceAuthorityV1,
     },
     coordination_v2::{
         CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID, CHANGE_BUNDLE_RELEASE_HANDOFF_SCHEMA_ID,
@@ -63,11 +76,13 @@ use star_contracts::{
     },
     fixed_mcp::ApprovalDecision,
     ids::{
-        ApprovalId, CheckoutId, DiagnosticId, EvidenceBundleId, FindingId, GateId, GoalId,
-        OperationId, PatchApplicationId, PatchSetId, ProjectId, RequestId, ReviewPackId, RunId,
-        SuppressionId, SymbolId, TaskSpecId, ValidationResultId,
+        ApprovalId, CapabilitySnapshotId, CheckoutId, CodexExecutionId, ContextPackId,
+        DiagnosticId, EvidenceBundleId, FindingId, GateId, GoalId, OperationId, PatchApplicationId,
+        PatchSetId, PermissionPlanId, ProjectId, RequestId, ReviewPackId, RouteDecisionId, RunId,
+        StageGraphId, StageId, StageResultId, SuppressionId, SymbolId, TaskSpecId,
+        ValidationResultId,
     },
-    index::{IndexScanMode, IndexTier, SourceClass},
+    index::{IndexPartitionState, IndexScanMode, IndexTier, SourceClass},
     ipc::{
         ControllerReadiness, ErrorEnvelope, IpcClientKind, IpcHello, IpcRequest, IpcResponse,
         IpcStatus,
@@ -84,7 +99,7 @@ use star_contracts::{
     },
     managed_registry::{
         ManagedDeclarationChangeKind, ManagedDeclarationClassification, ManagedDeclarationId,
-        ManagedDesiredFields,
+        ManagedDeclarationKind, ManagedDesiredFields, ManagedLifecycle,
     },
     management::{
         DispositionDecision, DispositionStatus, ProjectPathRef, ProjectV1ToV2MigrationPlan,
@@ -111,9 +126,15 @@ use star_contracts::{
         ChangeRecipeV2, PatchApplicationStateV1, PatchRecoveryStrategyV1, PatchV1ToV2MigrationPlan,
         RewriteAssuranceV2, TargetSelector, WorktreeStrategyV1,
     },
+    permission_plan::{
+        PERMISSION_PLAN_CONTRACT_VERSION, PERMISSION_PLAN_SCHEMA_ID, PaidActionRulesV1,
+        PathPermissionKindV1, PermissionDecisionV1, PermissionEnvironmentRuleV1,
+        PermissionExternalConstraintsV1, PermissionNetworkRuleV1, PermissionPathRuleV1,
+        PermissionPlanV1, PermissionProcessRuleV1,
+    },
     planning::{
         ChangePlanV1ToV2MigrationPlan, CheckOverride, CheckOverrideKind, ScopeReasonCode,
-        ValidationScopeLevel,
+        ValidationPlanV2Readiness, ValidationScopeLevel,
     },
     recovery::{BackupPlan, LocalStateExportPlan, LocalStateImportPlan, RebuildPlan, RestorePlan},
     release_v2::{
@@ -124,16 +145,25 @@ use star_contracts::{
         EvaluationCaseDefinitionV1, EvaluationCaseResult, EvaluationCatalogItem,
         EvaluationCatalogLifecycle, EvaluationDefinition, EvaluationOutcome, EvaluationPolicyV1,
         EvaluationQuantityV1, EvaluationRecommendation, EvaluationRunV2, EvaluationSubjectKind,
-        EvaluationSuppressionSummary, ProductFeatureOwnershipStatusV1,
-        ProductLifecycleEvidenceStatusV1, ProductProfileConformanceStatusV1, ProtectedMetricResult,
+        EvaluationSuppressionSummary, ProductLifecycleEvidenceStatusV1,
+        ProductProfileConformanceStatusV1, ProtectedMetricResult,
         RELEASE_ASSET_BINDING_V1_SCHEMA_ID, RELEASE_MANIFEST_V2_SCHEMA_ID, ReleaseArchitecture,
         ReleaseAssetBindingV1, ReleaseAssetSourceV1, ReleaseManifestV2, ReleaseStatus,
         VerificationLayerKind,
+    },
+    routing::{
+        CAPABILITY_SNAPSHOT_SCHEMA_ID, CapabilitySnapshotV1, ROUTE_DECISION_SCHEMA_ID,
+        ROUTING_CONTRACT_VERSION, RouteDecisionV1,
     },
     runtime::ExternalToolProgress,
     rust_style::{
         RUST_STYLE_POLICY_APPROVAL_DECISION_SCHEMA_ID, RustAutoPolicy,
         RustStylePolicyApprovalDecision, RustStylePolicyApprovalRequest,
+    },
+    stage::{
+        STAGE_CONTRACT_VERSION, STAGE_GRAPH_SCHEMA_ID, STAGE_RESULT_SCHEMA_ID,
+        STAGE_SPEC_SCHEMA_ID, StageExecutorKindV1, StageProjectEvidenceV1, StageResultOutcomeV1,
+        StageResultV1, StageSpecV1, StageStateV1,
     },
     validator_guard::ValidatorGuardEvidenceV2,
 };
@@ -154,6 +184,7 @@ use star_development::maintenance_v2::{
     ExternalDataSnapshotInput, FailureRecordInput, ReproductionPackInput,
     build_dependency_update_plan, build_external_data_snapshot, build_failure_record,
     build_maintenance_radar_snapshot, build_reproduction_pack_v2, build_supply_chain_snapshot,
+    external_data_normalized_fingerprint, external_data_request_fingerprint,
     reproduction_attempt_observation, reproduction_attempt_observation_fingerprint,
     scan_dependency_snapshot, seal_recovery_plan, seal_regression_record,
     seal_reproduction_attempt_observation, verify_reproduction_pack_v2,
@@ -178,8 +209,17 @@ use star_ipc::{
     process_identity::verify_pipe_client_image,
     windows_pipe::{PipeAcceptPool, read_json, write_json},
 };
-use star_planning::{TaskSpecDraft, process_descriptor};
-use star_ports::RepositoryErrorCategory;
+use star_planning::{
+    TaskSpecDraft,
+    orchestration::{
+        StageGraphPlanInput, StagePlanningError, build_stage_graph, replan_stage_graph,
+    },
+    process_descriptor,
+    routing::{RouteRequestV1, RoutingPolicyV1, route_codex_stage},
+};
+use star_ports::{
+    ArtifactStore, ArtifactWritePolicy, ArtifactWriteRequest, RepositoryErrorCategory,
+};
 use star_project::catalog::{
     CatalogAvailability, CatalogIdentityStatus, CatalogProjectRole, ProjectCatalogManifest,
     ProjectCatalogView, inspect_project_catalog, inspect_project_catalog_entry,
@@ -187,7 +227,7 @@ use star_project::catalog::{
 };
 use star_release::{
     ReleaseError,
-    audit::build_final_product_audit,
+    audit::{build_final_product_audit_v2, embedded_product_source_evidence},
     candidate::{
         ArtifactBytes, CiAdapter, ReleaseCandidateInput, VerificationObservation, approve_publish,
         promote_ready, publish_with_reconcile, run_ci_layers, seal_candidate,
@@ -199,7 +239,9 @@ use star_release::{
         transition_catalog_item, verify_budget_snapshot, verify_cost_record,
         verify_evaluation_case_definition, verify_evaluation_policy, verify_evaluation_run,
     },
-    lifecycle::{RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID, ReleaseLifecycleEvidence},
+    lifecycle::{
+        RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID, ReleaseLifecycleEvidence, ReleaseLifecycleEvidenceExt,
+    },
     publisher::{seal_release_asset_binding, verify_release_asset_binding},
 };
 use star_state::{
@@ -799,6 +841,7 @@ struct ControllerCommandRegistration {
     handler: ControllerCommandHandler,
 }
 
+#[cfg(test)]
 struct ProductFeatureRuntimeSpec {
     feature_id: &'static str,
     semantic_owner_ref: &'static str,
@@ -806,6 +849,7 @@ struct ProductFeatureRuntimeSpec {
     command_surfaces: &'static [&'static str],
 }
 
+#[cfg(test)]
 const PRODUCT_FEATURE_RUNTIME_SPECS: &[ProductFeatureRuntimeSpec] = &[
     ProductFeatureRuntimeSpec {
         feature_id: "A01",
@@ -5663,7 +5707,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     M9_REMOTE_PUSH_APPROVAL_TOOL_ID
                                         | M10_RELEASE_PUBLISH_APPROVAL_TOOL_ID
                                         | M11_RUST_STYLE_POLICY_APPROVAL_TOOL_ID
+                                        | "codex.task.start"
+                                        | "codex.task.resume"
+                                        | "codex.task.fork"
                                 ) {
+                                    let codex_launch = matches!(
+                                        approval.tool_id.as_str(),
+                                        "codex.task.start"
+                                            | "codex.task.resume"
+                                            | "codex.task.fork"
+                                    );
                                     let next_action = match approval.tool_id.as_str() {
                                         M9_REMOTE_PUSH_APPROVAL_TOOL_ID => {
                                             "change-bundle.remote.operation.apply"
@@ -5672,8 +5725,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             "release.publish.authorize"
                                         }
                                         M11_RUST_STYLE_POLICY_APPROVAL_TOOL_ID => "none",
+                                        "codex.task.start" => "codex.task.start",
+                                        "codex.task.resume" => "codex.task.resume",
+                                        "codex.task.fork" => "codex.task.fork",
                                         _ => "none",
                                     };
+                                    if codex_launch && decision == ApprovalDecision::Deny {
+                                        let transition = operations
+                                            .lock()
+                                            .expect("operation mutex is not poisoned")
+                                            .transition(
+                                                approval.operation_id.as_str(),
+                                                "denied",
+                                                "codex_execution_denied",
+                                            );
+                                        if transition.is_err() {
+                                            let response = invalid_request_response(
+                                                request,
+                                                "OPERATION_STORE_UNAVAILABLE",
+                                                "The denied Codex operation could not be sealed.",
+                                                registry.revision,
+                                            );
+                                            let _ = write_json(
+                                                &mut server,
+                                                &serde_json::to_value(response)?,
+                                            )
+                                            .await;
+                                            continue;
+                                        }
+                                    }
                                     let response = IpcResponse {
                                         schema_id: "star.ipc.response".to_owned(),
                                         schema_version: 1,
@@ -5692,7 +5772,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 "none"
                                             },
                                         })),
-                                        operation_id: None,
+                                        operation_id: codex_launch
+                                            .then(|| approval.operation_id.clone()),
                                         diagnostics: vec![],
                                         error: None,
                                         registry_revision: Some(registry.revision),
@@ -8941,6 +9022,8 @@ fn update_restart_pending_command_allowed(command: &str) -> bool {
             | "profile.list"
             | "profile.show"
             | "profile.resolve"
+            | "context.pack.show"
+            | "permission.plan.show"
             | "operation.get"
             | "planning.affected-checks.show"
             | "planning.get"
@@ -9154,6 +9237,22 @@ fn is_management_command(command: &str) -> bool {
             | "planning.override"
             | "planning.invalidate"
             | "planning.replan"
+            | "stage.plan"
+            | "stage.show"
+            | "stage.replan"
+            | "context.pack.build"
+            | "context.pack.show"
+            | "permission.plan.create"
+            | "permission.plan.show"
+            | "codex.capability.inspect"
+            | "codex.capability.show"
+            | "route.decide"
+            | "route.show"
+            | "codex.task.start"
+            | "codex.task.resume"
+            | "codex.task.fork"
+            | "codex.task.interrupt"
+            | "codex.task.status"
             | "validation.preflight"
             | "validation.run-plan"
             | "validation.status"
@@ -9318,6 +9417,7 @@ fn is_management_command(command: &str) -> bool {
     )
 }
 
+#[cfg(test)]
 fn product_command_handler_current(command: &str) -> bool {
     if is_direct_core_command(command) {
         controller_command_registration(command).is_some()
@@ -9697,6 +9797,1872 @@ fn managed_registry_declaration_id(
     }
 }
 
+fn map_stage_store_error(error: GoalStoreError) -> ApplicationError {
+    let code = match error {
+        GoalStoreError::NotFound => "GOAL_NOT_FOUND",
+        GoalStoreError::RevisionConflict => "PLANNING_SNAPSHOT_STALE",
+        GoalStoreError::Invalid | GoalStoreError::Lifecycle => "PLANNING_OUTPUT_COHERENCE",
+        GoalStoreError::IdempotencyConflict => "STATE_IDEMPOTENCY_CONFLICT",
+        GoalStoreError::Corrupt => "GOAL_STORE_CORRUPT",
+        GoalStoreError::LocalAppDataUnavailable | GoalStoreError::Io(_) | GoalStoreError::Dacl => {
+            "GOAL_STORE_UNAVAILABLE"
+        }
+    };
+    ApplicationError::Apply(code.to_owned())
+}
+
+fn map_stage_planning_error(error: StagePlanningError) -> GoalStoreError {
+    match error {
+        StagePlanningError::StaleRevision | StagePlanningError::CompletedStageChanged => {
+            GoalStoreError::RevisionConflict
+        }
+        StagePlanningError::Invalid | StagePlanningError::Contract(_) => GoalStoreError::Invalid,
+    }
+}
+
+fn stage_plan_input(payload: &serde_json::Value) -> Result<StageGraphPlanInput, ApplicationError> {
+    serde_json::from_value(
+        payload
+            .get("input")
+            .cloned()
+            .ok_or(ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)
+}
+
+fn bind_stage_plan_profiles(
+    service: &ManagementApplicationService,
+    mut input: StageGraphPlanInput,
+    previous: Option<&star_contracts::stage::StageGraphV1>,
+) -> Result<StageGraphPlanInput, ApplicationError> {
+    for stage in &mut input.stages {
+        let completed_stage_is_immutable = previous.is_some_and(|graph| {
+            graph.stages.iter().any(|current| {
+                current.stage_id == stage.stage_id && current.state == StageStateV1::Completed
+            })
+        });
+        if completed_stage_is_immutable {
+            continue;
+        }
+        *stage = service.bind_stage_profile_current(stage.clone())?;
+    }
+    Ok(input)
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StageResultEvidenceInput {
+    project_id: ProjectId,
+    evidence_bundle_id: EvidenceBundleId,
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StageResultRecordInput {
+    stage_graph_id: StageGraphId,
+    stage_id: StageId,
+    expected_graph_revision: u64,
+    expected_stage_revision: u64,
+    outcome: StageResultOutcomeV1,
+    #[serde(default)]
+    completed_criteria: Vec<String>,
+    #[serde(default)]
+    project_evidence: Vec<StageResultEvidenceInput>,
+    #[serde(default)]
+    execution_project_id: Option<ProjectId>,
+    #[serde(default)]
+    execution_record_id: Option<CodexExecutionId>,
+    #[serde(default)]
+    failure_code: Option<String>,
+    #[serde(default)]
+    recovery_action: Option<String>,
+    source_effect_may_have_started: bool,
+    idempotency_key: String,
+}
+
+fn load_current_stage_evidence(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    evidence_bundle_id: &EvidenceBundleId,
+    stage: &StageSpecV1,
+) -> Result<star_contracts::evidence_v2::EvidenceBundleV2, ApplicationError> {
+    let raw = service
+        .get_evidence_bundle_v2(project_id, evidence_bundle_id)
+        .map_err(|_| ApplicationError::Apply("VALIDATION_EVIDENCE_UNAVAILABLE".to_owned()))?;
+    let allowed_gate_ids = BTreeSet::from([raw.gate_decision_ref.gate_id.clone()]);
+    let evidence = m9_current_evidence_bundle(
+        service,
+        project_id,
+        evidence_bundle_id.as_str(),
+        &allowed_gate_ids,
+    )
+    .map_err(|_| ApplicationError::Apply("VALIDATION_EVIDENCE_INVALID".to_owned()))?;
+    if stage.task_spec_ref.as_ref() != Some(&evidence.task_spec_ref)
+        || stage.scope_revision_ref.as_ref() != Some(&evidence.scope_revision_ref)
+        || stage.impact_analysis_ref.as_ref() != Some(&evidence.impact_analysis_ref)
+        || stage.validation_plan_ref.as_ref() != Some(&evidence.validation_plan_ref)
+    {
+        return Err(ApplicationError::Apply(
+            "VALIDATION_EVIDENCE_BOUNDARY".to_owned(),
+        ));
+    }
+    Ok(evidence)
+}
+
+fn stage_result_replay_matches(result: &StageResultV1, input: &StageResultRecordInput) -> bool {
+    let mut requested_criteria = input.completed_criteria.clone();
+    requested_criteria.sort();
+    requested_criteria.dedup();
+    let criteria_match =
+        if input.outcome == StageResultOutcomeV1::Completed && requested_criteria.is_empty() {
+            true
+        } else {
+            result.completed_criteria == requested_criteria
+        };
+    let mut requested_evidence = input
+        .project_evidence
+        .iter()
+        .map(|evidence| {
+            (
+                evidence.project_id.as_str(),
+                evidence.evidence_bundle_id.as_str(),
+            )
+        })
+        .collect::<Vec<_>>();
+    requested_evidence.sort();
+    let recorded_evidence = result
+        .project_evidence
+        .iter()
+        .map(|evidence| {
+            (
+                evidence.project_id.as_str(),
+                evidence.evidence_bundle_ref.document_id.as_str(),
+            )
+        })
+        .collect::<Vec<_>>();
+    result.stage_graph_ref.document_id == input.stage_graph_id.as_str()
+        && result.stage_graph_ref.revision == input.expected_graph_revision
+        && result.stage_ref.document_id == input.stage_id.as_str()
+        && result.stage_ref.revision == input.expected_stage_revision
+        && result.outcome == input.outcome
+        && criteria_match
+        && requested_evidence == recorded_evidence
+        && result
+            .execution_record_ref
+            .as_ref()
+            .map(|reference| reference.document_id.as_str())
+            == input
+                .execution_record_id
+                .as_ref()
+                .map(CodexExecutionId::as_str)
+        && result.failure_code == input.failure_code
+        && result.recovery_action == input.recovery_action
+        && result.source_effect_may_have_started == input.source_effect_may_have_started
+}
+
+fn record_stage_result(
+    service: Option<&ManagementApplicationService>,
+    payload: &serde_json::Value,
+) -> Result<serde_json::Value, ApplicationError> {
+    let input: StageResultRecordInput = serde_json::from_value(
+        payload
+            .get("input")
+            .cloned()
+            .ok_or(ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)?;
+    let unique_evidence_projects = input
+        .project_evidence
+        .iter()
+        .map(|evidence| &evidence.project_id)
+        .collect::<BTreeSet<_>>();
+    if input.expected_graph_revision == 0
+        || input.expected_stage_revision == 0
+        || input.idempotency_key.trim().is_empty()
+        || input.idempotency_key.len() > 256
+        || input.idempotency_key.contains('\0')
+        || input.project_evidence.len() > 64
+        || unique_evidence_projects.len() != input.project_evidence.len()
+        || input.execution_project_id.is_some() != input.execution_record_id.is_some()
+    {
+        return Err(ApplicationError::Invalid);
+    }
+    let result_id = StageResultId::from_stable_bytes(
+        format!(
+            "{}:{}:{}",
+            input.stage_graph_id, input.stage_id, input.idempotency_key
+        )
+        .as_bytes(),
+    );
+    let existing = with_default_goal_store(|store| match store.stage_result(result_id.as_str()) {
+        Ok(result) => Ok(Some(result)),
+        Err(GoalStoreError::NotFound) => Ok(None),
+        Err(error) => Err(error),
+    })
+    .map_err(map_stage_store_error)?;
+    if let Some(existing) = existing {
+        if !stage_result_replay_matches(&existing, &input) {
+            return Err(ApplicationError::Apply(
+                "STATE_IDEMPOTENCY_CONFLICT".to_owned(),
+            ));
+        }
+        let graph = with_default_goal_store(|store| {
+            store.stage_graph(existing.stage_graph_ref.document_id.as_str())
+        })
+        .map_err(map_stage_store_error)?;
+        return Ok(serde_json::json!({"result":existing,"stage_graph":graph}));
+    }
+
+    let service = service
+        .ok_or_else(|| ApplicationError::Apply("VALIDATION_EVIDENCE_UNAVAILABLE".to_owned()))?;
+    let graph = with_default_goal_store(|store| store.stage_graph(input.stage_graph_id.as_str()))
+        .map_err(map_stage_store_error)?;
+    if graph.plan_revision != input.expected_graph_revision {
+        return Err(ApplicationError::Apply(
+            "PLANNING_SNAPSHOT_STALE".to_owned(),
+        ));
+    }
+    let stage = graph
+        .stages
+        .iter()
+        .find(|stage| stage.stage_id == input.stage_id)
+        .cloned()
+        .ok_or(ApplicationError::NotFound)?;
+    if stage.revision != input.expected_stage_revision {
+        return Err(ApplicationError::Apply(
+            "PLANNING_SNAPSHOT_STALE".to_owned(),
+        ));
+    }
+    if input
+        .execution_project_id
+        .as_ref()
+        .is_some_and(|project_id| !stage.project_ids.contains(project_id))
+    {
+        return Err(ApplicationError::Apply(
+            "PLANNING_OUTPUT_COHERENCE".to_owned(),
+        ));
+    }
+
+    let mut project_evidence = Vec::with_capacity(input.project_evidence.len());
+    for requested in &input.project_evidence {
+        let evidence = load_current_stage_evidence(
+            service,
+            &requested.project_id,
+            &requested.evidence_bundle_id,
+            &stage,
+        )?;
+        project_evidence.push(StageProjectEvidenceV1 {
+            project_id: requested.project_id.clone(),
+            evidence_bundle_ref: evidence
+                .reference()
+                .map_err(|_| ApplicationError::Apply("VALIDATION_EVIDENCE_INVALID".to_owned()))?,
+        });
+    }
+
+    let execution_record_ref = match (
+        input.execution_project_id.as_ref(),
+        input.execution_record_id.as_ref(),
+    ) {
+        (Some(project_id), Some(execution_id)) => {
+            let execution = codex_product::load_execution(service, project_id, execution_id)?;
+            let state_matches = match input.outcome {
+                StageResultOutcomeV1::Completed => {
+                    execution.state == CodexExecutionStateV1::Completed
+                }
+                StageResultOutcomeV1::Failed => execution.state == CodexExecutionStateV1::Failed,
+                StageResultOutcomeV1::Cancelled => {
+                    execution.state == CodexExecutionStateV1::Interrupted
+                }
+                StageResultOutcomeV1::Blocked => {
+                    execution.state == CodexExecutionStateV1::RecoveryRequired
+                }
+                StageResultOutcomeV1::OutcomeUnknown => matches!(
+                    execution.state,
+                    CodexExecutionStateV1::OutcomeUnknown | CodexExecutionStateV1::RecoveryRequired
+                ),
+            };
+            if execution.goal_id != graph.goal_id
+                || execution.stage_id != stage.stage_id
+                || execution.stage_revision != stage.revision
+                || stage.route_decision_ref.as_ref() != Some(&execution.route_decision_ref)
+                || !state_matches
+                || codex_product::source_effect_may_have_started(&execution)
+                    != input.source_effect_may_have_started
+            {
+                return Err(ApplicationError::Apply(
+                    "PLANNING_OUTPUT_COHERENCE".to_owned(),
+                ));
+            }
+            Some(execution.reference())
+        }
+        (None, None) => {
+            if stage.executor_kind == StageExecutorKindV1::Codex
+                || input.source_effect_may_have_started
+            {
+                return Err(ApplicationError::Apply(
+                    "PLANNING_OUTPUT_COHERENCE".to_owned(),
+                ));
+            }
+            None
+        }
+        _ => return Err(ApplicationError::Invalid),
+    };
+    let completed_criteria = if input.outcome == StageResultOutcomeV1::Completed
+        && input.completed_criteria.is_empty()
+    {
+        stage.completion_criteria.clone()
+    } else {
+        input.completed_criteria
+    };
+    let result = StageResultV1 {
+        schema_id: STAGE_RESULT_SCHEMA_ID.to_owned(),
+        schema_version: STAGE_CONTRACT_VERSION,
+        stage_result_id: result_id,
+        revision: 1,
+        goal_id: graph.goal_id.clone(),
+        stage_graph_ref: DocumentRef {
+            schema_id: STAGE_GRAPH_SCHEMA_ID.to_owned(),
+            document_id: graph.stage_graph_id.to_string(),
+            revision: graph.plan_revision,
+            sha256: graph.graph_fingerprint.clone(),
+        },
+        stage_ref: DocumentRef {
+            schema_id: STAGE_SPEC_SCHEMA_ID.to_owned(),
+            document_id: stage.stage_id.to_string(),
+            revision: stage.revision,
+            sha256: stage.stage_fingerprint.clone(),
+        },
+        outcome: input.outcome,
+        completed_criteria,
+        project_evidence,
+        execution_record_ref,
+        failure_code: input.failure_code,
+        recovery_action: input.recovery_action,
+        source_effect_may_have_started: input.source_effect_may_have_started,
+        recorded_at: Utc::now(),
+        result_fingerprint: Sha256Hash::digest(b"unsealed-stage-result"),
+    }
+    .seal()
+    .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    result
+        .verify_against(&graph, &stage)
+        .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    let (result, stage_graph) = with_default_goal_store(|store| {
+        store.record_stage_result(
+            result,
+            input.expected_graph_revision,
+            input.expected_stage_revision,
+        )
+    })
+    .map_err(map_stage_store_error)?;
+    Ok(serde_json::json!({"result":result,"stage_graph":stage_graph}))
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GoalCompleteInput {
+    goal_id: GoalId,
+    expected_revision: u64,
+    stage_graph_id: StageGraphId,
+    project_id: ProjectId,
+    evidence_bundle_id: EvidenceBundleId,
+}
+
+fn complete_goal_from_evidence(
+    service: &ManagementApplicationService,
+    payload: &serde_json::Value,
+) -> Result<serde_json::Value, ApplicationError> {
+    let input: GoalCompleteInput =
+        serde_json::from_value(payload.clone()).map_err(|_| ApplicationError::Invalid)?;
+    if input.expected_revision == 0 {
+        return Err(ApplicationError::Invalid);
+    }
+    let raw = service
+        .get_evidence_bundle_v2(&input.project_id, &input.evidence_bundle_id)
+        .map_err(|_| ApplicationError::Apply("VALIDATION_EVIDENCE_UNAVAILABLE".to_owned()))?;
+    let allowed_gate_ids = BTreeSet::from([raw.gate_decision_ref.gate_id.clone()]);
+    let evidence = m9_current_evidence_bundle(
+        service,
+        &input.project_id,
+        input.evidence_bundle_id.as_str(),
+        &allowed_gate_ids,
+    )
+    .map_err(|_| ApplicationError::Apply("VALIDATION_EVIDENCE_INVALID".to_owned()))?;
+    let evidence_ref = evidence
+        .reference()
+        .map_err(|_| ApplicationError::Apply("VALIDATION_EVIDENCE_INVALID".to_owned()))?;
+    with_default_goal_store(|store| {
+        store.complete_goal(
+            input.goal_id.as_str(),
+            input.expected_revision,
+            input.stage_graph_id.as_str(),
+            evidence_ref,
+        )
+    })
+    .map_err(map_stage_store_error)
+    .and_then(serialize_management_result)
+}
+
+fn handle_stage_product_command(
+    service: Option<&ManagementApplicationService>,
+    request: &IpcRequest,
+) -> Result<serde_json::Value, ApplicationError> {
+    match request.command.as_str() {
+        "stage.plan" if payload_has_exact_keys(&request.payload, &["input"]) => {
+            let service = service.ok_or(ApplicationError::Invalid)?;
+            let input =
+                bind_stage_plan_profiles(service, stage_plan_input(&request.payload)?, None)?;
+            let graph = build_stage_graph(input)
+                .map_err(|error| map_stage_store_error(map_stage_planning_error(error)))?;
+            with_default_goal_store(|store| store.publish_stage_graph(graph, None))
+                .map_err(map_stage_store_error)
+                .and_then(serialize_management_result)
+        }
+        "stage.show" if payload_has_exact_keys(&request.payload, &["stage_graph_id"]) => {
+            let graph_id = request
+                .payload
+                .get("stage_graph_id")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|value| StageGraphId::parse(value.to_owned()).ok())
+                .ok_or(ApplicationError::Invalid)?;
+            with_default_goal_store(|store| store.stage_graph(graph_id.as_str()))
+                .map_err(map_stage_store_error)
+                .and_then(serialize_management_result)
+        }
+        "stage.replan"
+            if payload_has_exact_keys(&request.payload, &["stage_graph_id", "input", "reason"]) =>
+        {
+            let graph_id = request
+                .payload
+                .get("stage_graph_id")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|value| StageGraphId::parse(value.to_owned()).ok())
+                .ok_or(ApplicationError::Invalid)?;
+            let reason = request
+                .payload
+                .get("reason")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(ApplicationError::Invalid)?;
+            let service = service.ok_or(ApplicationError::Invalid)?;
+            let previous = with_default_goal_store(|store| store.stage_graph(graph_id.as_str()))
+                .map_err(map_stage_store_error)?;
+            let input = bind_stage_plan_profiles(
+                service,
+                stage_plan_input(&request.payload)?,
+                Some(&previous),
+            )?;
+            let candidate = replan_stage_graph(&previous, input, reason)
+                .map_err(|error| map_stage_store_error(map_stage_planning_error(error)))?;
+            with_default_goal_store(|store| {
+                store.publish_stage_graph(candidate, Some(previous.plan_revision))
+            })
+            .map_err(map_stage_store_error)
+            .and_then(serialize_management_result)
+        }
+        "stage.result.record" if payload_has_exact_keys(&request.payload, &["input"]) => {
+            record_stage_result(service, &request.payload)
+        }
+        "stage.result.show" if payload_has_exact_keys(&request.payload, &["stage_result_id"]) => {
+            let result_id = request
+                .payload
+                .get("stage_result_id")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|value| StageResultId::parse(value.to_owned()).ok())
+                .ok_or(ApplicationError::Invalid)?;
+            with_default_goal_store(|store| store.stage_result(result_id.as_str()))
+                .map_err(map_stage_store_error)
+                .and_then(serialize_management_result)
+        }
+        _ => Err(ApplicationError::Invalid),
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ContextPackSelectionInput {
+    project_id: ProjectId,
+    relative_path: ProjectPathRef,
+    requested_tier: IndexTier,
+    inclusion_reason: String,
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ContextPackBuildInput {
+    stage_graph_id: StageGraphId,
+    stage_id: StageId,
+    selections: Vec<ContextPackSelectionInput>,
+    token_budget: u32,
+    estimated_tokens: u32,
+    #[serde(default)]
+    omissions: Vec<ContextOmissionV1>,
+    expires_in_seconds: u64,
+}
+
+fn context_item_classification(
+    source_class: SourceClass,
+) -> Result<(ContextItemKindV1, ContextSourceAuthorityV1), ApplicationError> {
+    let value = match source_class {
+        SourceClass::Source => (
+            ContextItemKindV1::Source,
+            ContextSourceAuthorityV1::CanonicalSource,
+        ),
+        SourceClass::Test => (
+            ContextItemKindV1::Test,
+            ContextSourceAuthorityV1::CanonicalSource,
+        ),
+        SourceClass::Docs => (
+            ContextItemKindV1::Docs,
+            ContextSourceAuthorityV1::ProjectPolicy,
+        ),
+        SourceClass::Config => (
+            ContextItemKindV1::Config,
+            ContextSourceAuthorityV1::CanonicalSource,
+        ),
+        SourceClass::Schema => (
+            ContextItemKindV1::Schema,
+            ContextSourceAuthorityV1::CanonicalSource,
+        ),
+        SourceClass::Migration => (
+            ContextItemKindV1::Migration,
+            ContextSourceAuthorityV1::CanonicalSource,
+        ),
+        SourceClass::Generated => (
+            ContextItemKindV1::Source,
+            ContextSourceAuthorityV1::GeneratedProjection,
+        ),
+        SourceClass::Vendor | SourceClass::Cache | SourceClass::Output | SourceClass::Unknown => {
+            return Err(ApplicationError::Apply(
+                "INDEX_TIER_EXCLUDED_BY_CLASSIFICATION".to_owned(),
+            ));
+        }
+    };
+    Ok(value)
+}
+
+fn context_item_sensitivity(source_class: SourceClass) -> ContextSensitivityV1 {
+    match source_class {
+        // Configuration can contain credentials or deployment topology even when
+        // the scanner found no literal secret. The caller cannot downgrade it.
+        SourceClass::Config => ContextSensitivityV1::Sensitive,
+        _ => ContextSensitivityV1::Internal,
+    }
+}
+
+fn build_context_pack(
+    service: &ManagementApplicationService,
+    payload: &serde_json::Value,
+) -> Result<serde_json::Value, ApplicationError> {
+    let input: ContextPackBuildInput = serde_json::from_value(
+        payload
+            .get("input")
+            .cloned()
+            .ok_or(ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)?;
+    if input.selections.is_empty()
+        || input.selections.len() > 2_048
+        || input.expires_in_seconds < 60
+        || input.expires_in_seconds > 86_400
+        || input.token_budget == 0
+        || input.estimated_tokens > input.token_budget
+        || input.selections.iter().any(|selection| {
+            selection.inclusion_reason.trim().is_empty()
+                || selection.inclusion_reason.len() > 1_024
+                || selection.inclusion_reason.contains('\0')
+        })
+    {
+        return Err(ApplicationError::Invalid);
+    }
+    let graph = with_default_goal_store(|store| store.stage_graph(input.stage_graph_id.as_str()))
+        .map_err(map_stage_store_error)?;
+    graph
+        .verify()
+        .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    let stage = graph
+        .stages
+        .iter()
+        .find(|stage| stage.stage_id == input.stage_id)
+        .ok_or(ApplicationError::NotFound)?;
+    service.verify_stage_profile_current(stage)?;
+    if stage.state != StageStateV1::Ready {
+        return Err(ApplicationError::Apply("CODEX_NOT_READY".to_owned()));
+    }
+    let task_spec_ref = stage
+        .task_spec_ref
+        .clone()
+        .ok_or_else(|| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    let scope_revision_ref = stage
+        .scope_revision_ref
+        .clone()
+        .ok_or_else(|| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    let stage_projects = stage.project_ids.iter().cloned().collect::<BTreeSet<_>>();
+    let selected_projects = input
+        .selections
+        .iter()
+        .map(|selection| selection.project_id.clone())
+        .collect::<BTreeSet<_>>();
+    let selected_paths = input
+        .selections
+        .iter()
+        .map(|selection| {
+            (
+                selection.project_id.clone(),
+                selection.relative_path.clone(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    if selected_projects != stage_projects
+        || selected_paths.len() != input.selections.len()
+        || input
+            .omissions
+            .iter()
+            .any(|omission| !stage_projects.contains(&omission.project_id))
+    {
+        return Err(ApplicationError::Apply(
+            "PLANNING_OUTPUT_COHERENCE".to_owned(),
+        ));
+    }
+
+    let mut catalog_ref = None::<DocumentRef>;
+    let mut project_inputs = Vec::new();
+    let mut index_refs = Vec::new();
+    let mut items = Vec::new();
+    let mut tier_coverage = BTreeMap::<IndexTier, u32>::new();
+    for project_id in &stage.project_ids {
+        let current = service.current_context_projection(project_id)?;
+        let snapshot = &current.index_projection.snapshot;
+        let observed_catalog_ref = DocumentRef {
+            schema_id: "star.project-catalog-snapshot".to_owned(),
+            document_id: current
+                .catalog_snapshot
+                .project_catalog_snapshot_id
+                .to_string(),
+            revision: 1,
+            sha256: current.catalog_snapshot.content_fingerprint.clone(),
+        };
+        if catalog_ref
+            .as_ref()
+            .is_some_and(|reference| reference != &observed_catalog_ref)
+        {
+            return Err(ApplicationError::IndexNotCurrent);
+        }
+        catalog_ref = Some(observed_catalog_ref);
+        let project_selections = input
+            .selections
+            .iter()
+            .filter(|selection| &selection.project_id == project_id)
+            .collect::<Vec<_>>();
+        let used_tier = project_selections
+            .iter()
+            .map(|selection| selection.requested_tier)
+            .max()
+            .ok_or(ApplicationError::Invalid)?
+            .max(snapshot.required_tier);
+        if used_tier > snapshot.max_tier {
+            return Err(ApplicationError::Apply(
+                "INDEX_PARTITION_UNAVAILABLE".to_owned(),
+            ));
+        }
+        let mut partition_fingerprints = snapshot
+            .partitions
+            .iter()
+            .filter(|partition| {
+                matches!(
+                    partition.state,
+                    IndexPartitionState::Succeeded | IndexPartitionState::Reused
+                )
+            })
+            .filter_map(|partition| partition.output_fingerprint.clone())
+            .collect::<Vec<_>>();
+        partition_fingerprints.sort();
+        partition_fingerprints.dedup();
+        if partition_fingerprints.is_empty() {
+            return Err(ApplicationError::IndexNotCurrent);
+        }
+        project_inputs.push(ContextProjectInputV1 {
+            project_id: project_id.clone(),
+            checkout_id: snapshot.checkout_id.clone(),
+            project_revision_id: snapshot.project_revision_id.clone(),
+            workspace_snapshot_id: snapshot.workspace_snapshot_id.clone(),
+            checkout_observation_fingerprint: snapshot.checkout_observation_fingerprint.clone(),
+            workspace_entries_fingerprint: current.workspace_snapshot.entries_fingerprint.clone(),
+        });
+        index_refs.push(ContextIndexSnapshotRefV1 {
+            project_id: project_id.clone(),
+            checkout_id: snapshot.checkout_id.clone(),
+            code_index_snapshot_id: snapshot.code_index_snapshot_id.clone(),
+            project_catalog_snapshot_id: snapshot.project_catalog_snapshot_id.clone(),
+            project_revision_id: snapshot.project_revision_id.clone(),
+            workspace_snapshot_id: snapshot.workspace_snapshot_id.clone(),
+            required_tier: snapshot.required_tier,
+            used_tier,
+            freshness_states: vec![star_contracts::index::IndexFreshnessState::Current],
+            partition_fingerprints,
+            content_fingerprint: snapshot.content_fingerprint.clone(),
+        });
+        for selection in project_selections {
+            let source = current
+                .index_projection
+                .source_entries
+                .iter()
+                .find(|source| source.path == selection.relative_path && source.analysis_eligible)
+                .ok_or_else(|| ApplicationError::Apply("INDEX_STALE_SOURCE".to_owned()))?;
+            let partition_key = format!(
+                "{}:{}",
+                selection.relative_path.as_str(),
+                selection.requested_tier.partition_suffix()
+            );
+            let used_tier = snapshot
+                .partitions
+                .iter()
+                .find(|partition| partition.partition_key == partition_key)
+                .filter(|partition| {
+                    matches!(
+                        partition.state,
+                        IndexPartitionState::Succeeded | IndexPartitionState::Reused
+                    ) && partition.failed_count == 0
+                        && partition.excluded_count == 0
+                        && partition.indexed_count == partition.target_count
+                })
+                .and_then(|partition| partition.used_tier)
+                .filter(|tier| *tier >= selection.requested_tier)
+                .ok_or_else(|| ApplicationError::Apply("INDEX_PARTITION_UNAVAILABLE".to_owned()))?;
+            if used_tier > snapshot.max_tier {
+                return Err(ApplicationError::Apply(
+                    "INDEX_PARTITION_UNAVAILABLE".to_owned(),
+                ));
+            }
+            let (kind, authority) = context_item_classification(source.source_class)?;
+            *tier_coverage.entry(used_tier).or_insert(0) += 1;
+            items.push(ContextItemV1 {
+                kind,
+                project_id: project_id.clone(),
+                checkout_id: snapshot.checkout_id.clone(),
+                relative_path: selection.relative_path.clone(),
+                project_revision_id: snapshot.project_revision_id.clone(),
+                workspace_snapshot_id: snapshot.workspace_snapshot_id.clone(),
+                content_sha256: source.content_sha256.clone(),
+                index_entity_key: None,
+                requested_tier: selection.requested_tier,
+                used_tier,
+                inclusion_reason: selection.inclusion_reason.trim().to_owned(),
+                source_authority: authority,
+                freshness: ContextQualityStateV1::Current,
+                sensitivity: context_item_sensitivity(source.source_class),
+                delivery: ContextDeliveryV1::ReferenceOnly,
+                limitations: Vec::new(),
+            });
+        }
+    }
+    let generated_at = Utc::now();
+    let pack = ContextPackV1 {
+        schema_id: CONTEXT_PACK_SCHEMA_ID.to_owned(),
+        schema_version: CONTEXT_PACK_CONTRACT_VERSION,
+        context_pack_id: ContextPackId::new(),
+        revision: 1,
+        stage_graph_ref: DocumentRef {
+            schema_id: "star.stage-graph".to_owned(),
+            document_id: graph.stage_graph_id.to_string(),
+            revision: graph.plan_revision,
+            sha256: graph.graph_fingerprint.clone(),
+        },
+        stage_id: stage.stage_id.clone(),
+        stage_revision: stage.revision,
+        task_spec_ref,
+        scope_revision_ref,
+        project_inputs,
+        project_catalog_snapshot_ref: catalog_ref.ok_or(ApplicationError::IndexNotCurrent)?,
+        code_index_snapshot_refs: index_refs,
+        items,
+        token_budget: input.token_budget,
+        estimated_tokens: input.estimated_tokens,
+        omissions: input.omissions,
+        quality_summary: ContextQualitySummaryV1 {
+            state: ContextQualityStateV1::Current,
+            current_items: u32::try_from(input.selections.len())
+                .map_err(|_| ApplicationError::Invalid)?,
+            stale_items: 0,
+            partial_items: 0,
+            unsupported_items: 0,
+            tier_coverage,
+            limitations: Vec::new(),
+        },
+        freshness_policy: ContextFreshnessPolicyV1::RequireCurrent,
+        generated_at,
+        expires_at: generated_at
+            + chrono::Duration::seconds(
+                i64::try_from(input.expires_in_seconds).map_err(|_| ApplicationError::Invalid)?,
+            ),
+        context_fingerprint: Sha256Hash::digest(b"unsealed-context-pack"),
+    }
+    .seal()
+    .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    service.verify_context_pack_current(&pack)?;
+    let record_project_id = (stage.project_ids.len() == 1).then(|| stage.project_ids[0].clone());
+    let record = service.publish_development_document(
+        "context_pack",
+        pack.context_pack_id.as_str(),
+        pack.revision,
+        record_project_id,
+        "current",
+        CONTEXT_PACK_SCHEMA_ID,
+        CONTEXT_PACK_CONTRACT_VERSION,
+        &pack,
+    )?;
+    serialize_management_result(record)
+}
+
+fn show_context_pack(
+    service: &ManagementApplicationService,
+    payload: &serde_json::Value,
+) -> Result<serde_json::Value, ApplicationError> {
+    let context_pack_id = payload
+        .get("context_pack_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| ContextPackId::parse(value.to_owned()).ok())
+        .ok_or(ApplicationError::Invalid)?;
+    let record = service
+        .get_development_record("context_pack", context_pack_id.as_str(), None)?
+        .ok_or(ApplicationError::NotFound)?;
+    let pack: ContextPackV1 =
+        serde_json::from_value(record.document.clone()).map_err(|_| ApplicationError::Invalid)?;
+    if pack.context_pack_id != context_pack_id || pack.verify().is_err() {
+        return Err(ApplicationError::Apply(
+            "PLANNING_OUTPUT_COHERENCE".to_owned(),
+        ));
+    }
+    let current = service.verify_context_pack_current(&pack).is_ok();
+    serialize_management_result(serde_json::json!({"record":record,"current":current}))
+}
+
+const PERMISSION_PLAN_ACTIONS: &[&str] = &[
+    "local_read",
+    "local_write",
+    "local_delete",
+    "local_mass_move",
+    "process_run",
+    "dependency_change",
+    "system_change",
+    "secret_access",
+    "network_read",
+    "network_download",
+    "external_write",
+    "account_change",
+    "plan_execute",
+    "git_commit",
+    "git_merge",
+    "git_push",
+    "pull_request",
+    "release_publish",
+    "paid_action",
+];
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PermissionPlanCreateInput {
+    stage_graph_id: StageGraphId,
+    stage_id: StageId,
+    run_id: RunId,
+    path_rules: Vec<PermissionPathRuleV1>,
+    process_rules: Vec<PermissionProcessRuleV1>,
+    network_rules: Vec<PermissionNetworkRuleV1>,
+    environment_rules: Vec<PermissionEnvironmentRuleV1>,
+    paid_evidence_basis: Vec<String>,
+    #[serde(default)]
+    paid_measured_limit: Option<u64>,
+    expires_in_seconds: u64,
+}
+
+fn permission_decision(value: &str) -> Result<PermissionDecisionV1, ApplicationError> {
+    match value {
+        "auto" => Ok(PermissionDecisionV1::Auto),
+        "prompt" => Ok(PermissionDecisionV1::Prompt),
+        "deny" => Ok(PermissionDecisionV1::Deny),
+        _ => Err(ApplicationError::Apply(
+            "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+        )),
+    }
+}
+
+fn policy_profile_catalog_ref(policy_profile_id: &str) -> Result<CatalogRef, ApplicationError> {
+    if !matches!(
+        policy_profile_id,
+        "star.policy-profile.safe-default" | "star.policy-profile.personal-auto"
+    ) {
+        return Err(ApplicationError::Apply(
+            "CONFIG_CONSTRAINT_CONFLICT".to_owned(),
+        ));
+    }
+    let definition = serde_json::json!({
+        "catalog_id":policy_profile_id,
+        "format_version":1,
+        "item_version":"1.0.0",
+        "immutable_floors":[
+            "codex_approval_preserved",
+            "codex_sandbox_preserved",
+            "unknown_paid_action_prompt",
+            "account_change_prompt",
+            "release_publish_prompt"
+        ],
+    });
+    Ok(CatalogRef {
+        catalog_id: policy_profile_id.to_owned(),
+        format_version: 1,
+        item_version: "1.0.0".to_owned(),
+        sha256: canonical_sha256(&definition).map_err(|_| ApplicationError::Invalid)?,
+    })
+}
+
+fn resolve_permission_directory(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    prefix: Option<&ProjectPathRef>,
+) -> Result<PathBuf, ApplicationError> {
+    let root = service
+        .development_project_root(project_id)?
+        .canonicalize()
+        .map_err(|_| ApplicationError::Apply("PROJECT_ROOT_UNAVAILABLE".to_owned()))?;
+    let candidate = prefix
+        .map(|prefix| {
+            prefix
+                .as_str()
+                .split('/')
+                .fold(root.clone(), |path, segment| path.join(segment))
+        })
+        .unwrap_or_else(|| root.clone());
+    let resolved = candidate
+        .canonicalize()
+        .map_err(|_| ApplicationError::Apply("POLICY_DENIED".to_owned()))?;
+    if !resolved.starts_with(&root)
+        || !resolved
+            .metadata()
+            .map(|metadata| metadata.is_dir())
+            .unwrap_or(false)
+    {
+        return Err(ApplicationError::Apply("POLICY_DENIED".to_owned()));
+    }
+    Ok(resolved)
+}
+
+fn create_permission_plan(
+    service: &ManagementApplicationService,
+    payload: &serde_json::Value,
+) -> Result<serde_json::Value, ApplicationError> {
+    let input: PermissionPlanCreateInput = serde_json::from_value(
+        payload
+            .get("input")
+            .cloned()
+            .ok_or(ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)?;
+    let stage_graph =
+        with_default_goal_store(|store| store.stage_graph(input.stage_graph_id.as_str()))
+            .map_err(map_stage_store_error)?;
+    stage_graph
+        .verify()
+        .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    let stage = stage_graph
+        .stages
+        .iter()
+        .find(|stage| stage.stage_id == input.stage_id)
+        .cloned()
+        .ok_or(ApplicationError::NotFound)?;
+    stage
+        .verify()
+        .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    service.verify_stage_profile_current(&stage)?;
+    if stage.executor_kind != star_contracts::stage::StageExecutorKindV1::Codex
+        || matches!(
+            stage.state,
+            StageStateV1::Running
+                | StageStateV1::Failed
+                | StageStateV1::Cancelled
+                | StageStateV1::Completed
+                | StageStateV1::Superseded
+        )
+    {
+        return Err(ApplicationError::Apply("POLICY_DENIED".to_owned()));
+    }
+    if input.expires_in_seconds < 60 || input.expires_in_seconds > 86_400 {
+        return Err(ApplicationError::Invalid);
+    }
+    let stage_projects = stage.project_ids.iter().cloned().collect::<BTreeSet<_>>();
+    let execute = stage.stage_mode == star_contracts::stage::StageModeV1::Execute;
+    if input
+        .path_rules
+        .iter()
+        .any(|rule| !stage_projects.contains(&rule.project_id))
+        || input
+            .process_rules
+            .iter()
+            .any(|rule| !stage_projects.contains(&rule.cwd_project_id))
+        || stage_projects.iter().any(|project_id| {
+            !input.path_rules.iter().any(|rule| {
+                &rule.project_id == project_id
+                    && rule.path_prefix.is_none()
+                    && rule.kind == PathPermissionKindV1::AllowRead
+            })
+        })
+        || input.path_rules.iter().any(|rule| {
+            matches!(
+                rule.kind,
+                PathPermissionKindV1::DenyRead | PathPermissionKindV1::DenyExternalTransfer
+            ) || (execute && rule.kind == PathPermissionKindV1::DenyWrite)
+                || (!execute && rule.kind == PathPermissionKindV1::AllowWrite)
+        })
+        || (execute
+            && stage_projects.iter().any(|project_id| {
+                !input.path_rules.iter().any(|rule| {
+                    &rule.project_id == project_id && rule.kind == PathPermissionKindV1::AllowWrite
+                })
+            }))
+        || input.process_rules.is_empty()
+        || input.environment_rules.is_empty()
+        || !input.network_rules.iter().any(|rule| {
+            rule.target == "codex-provider"
+                && rule.operation == "execute"
+                && rule.decision != PermissionDecisionV1::Deny
+        })
+    {
+        return Err(ApplicationError::Apply("POLICY_DENIED".to_owned()));
+    }
+    for project_id in &stage.project_ids {
+        resolve_permission_directory(service, project_id, None)?;
+    }
+    for rule in input
+        .path_rules
+        .iter()
+        .filter(|rule| rule.kind == PathPermissionKindV1::AllowWrite)
+    {
+        resolve_permission_directory(service, &rule.project_id, rule.path_prefix.as_ref())?;
+    }
+    for rule in &input.process_rules {
+        resolve_permission_directory(service, &rule.cwd_project_id, rule.cwd_prefix.as_ref())?;
+    }
+    let effective = service.effective_config()?;
+    effective
+        .verify()
+        .map_err(|_| ApplicationError::Apply("CONFIG_CONSTRAINT_CONFLICT".to_owned()))?;
+    let default_action = effective
+        .string("permissions.default_action")
+        .ok_or_else(|| ApplicationError::Apply("CONFIG_CONSTRAINT_CONFLICT".to_owned()))
+        .and_then(permission_decision)?;
+    let mut action_policies = BTreeMap::new();
+    for action in PERMISSION_PLAN_ACTIONS {
+        let key = format!("permissions.actions.{action}");
+        let decision = effective
+            .string(&key)
+            .ok_or_else(|| ApplicationError::Apply("CONFIG_CONSTRAINT_CONFLICT".to_owned()))
+            .and_then(permission_decision)?;
+        action_policies.insert((*action).to_owned(), decision);
+    }
+    action_policies.insert(
+        "external.ai.execute".to_owned(),
+        PermissionDecisionV1::Prompt,
+    );
+    action_policies.insert("paid_action".to_owned(), PermissionDecisionV1::Prompt);
+    let created_at = Utc::now();
+    let plan = PermissionPlanV1 {
+        schema_id: PERMISSION_PLAN_SCHEMA_ID.to_owned(),
+        schema_version: PERMISSION_PLAN_CONTRACT_VERSION,
+        permission_plan_id: PermissionPlanId::new(),
+        revision: 1,
+        goal_id: stage.goal_id.clone(),
+        run_id: input.run_id,
+        stage_id: stage.stage_id.clone(),
+        stage_revision: stage.revision,
+        stage_scope_hash: stage
+            .permission_scope_hash()
+            .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?,
+        policy_profile_ref: policy_profile_catalog_ref(&effective.policy_profile_id)?,
+        default_action,
+        action_policies,
+        path_rules: input.path_rules,
+        process_rules: input.process_rules,
+        network_rules: input.network_rules,
+        environment_rules: input.environment_rules,
+        paid_action_rules: PaidActionRulesV1 {
+            evidence_basis: input.paid_evidence_basis,
+            unknown_cost_decision: PermissionDecisionV1::Prompt,
+            measured_limit: input.paid_measured_limit,
+        },
+        external_constraints: PermissionExternalConstraintsV1 {
+            codex_approval_required: true,
+            codex_approval_policy: "never".to_owned(),
+            codex_sandbox_mode: if execute {
+                "workspace-write".to_owned()
+            } else {
+                "read-only".to_owned()
+            },
+            administrator_required: false,
+            limitations: vec![
+                "controller_child_does_not_inherit_parent_sandbox".to_owned(),
+                "provider_cost_requires_current_approval".to_owned(),
+            ],
+        },
+        effective_config_ref: DocumentRef {
+            schema_id: "star.effective-config".to_owned(),
+            document_id: "effective-config".to_owned(),
+            revision: 1,
+            sha256: effective.config_fingerprint.clone(),
+        },
+        created_at,
+        expires_at: created_at
+            + chrono::Duration::seconds(
+                i64::try_from(input.expires_in_seconds).map_err(|_| ApplicationError::Invalid)?,
+            ),
+        scope_hash: Sha256Hash::digest(b"unsealed-permission-scope"),
+        plan_fingerprint: Sha256Hash::digest(b"unsealed-permission-plan"),
+    }
+    .seal()
+    .map_err(|_| ApplicationError::Apply("CONFIG_CONSTRAINT_CONFLICT".to_owned()))?;
+    let project_id = (stage.project_ids.len() == 1).then(|| stage.project_ids[0].clone());
+    let record = service.publish_development_document(
+        "permission_plan",
+        plan.permission_plan_id.as_str(),
+        plan.revision,
+        project_id,
+        "current",
+        PERMISSION_PLAN_SCHEMA_ID,
+        PERMISSION_PLAN_CONTRACT_VERSION,
+        &plan,
+    )?;
+    serialize_management_result(record)
+}
+
+fn load_permission_plan(
+    service: &ManagementApplicationService,
+    reference: &DocumentRef,
+) -> Result<PermissionPlanV1, ApplicationError> {
+    if reference.schema_id != PERMISSION_PLAN_SCHEMA_ID {
+        return Err(ApplicationError::Invalid);
+    }
+    let permission_plan_id = PermissionPlanId::parse(reference.document_id.clone())
+        .map_err(|_| ApplicationError::Invalid)?;
+    let record = service
+        .get_development_record(
+            "permission_plan",
+            permission_plan_id.as_str(),
+            Some(reference.revision),
+        )?
+        .ok_or(ApplicationError::NotFound)?;
+    let plan: PermissionPlanV1 =
+        serde_json::from_value(record.document).map_err(|_| ApplicationError::Invalid)?;
+    if plan.permission_plan_id != permission_plan_id
+        || plan.plan_fingerprint != reference.sha256
+        || plan.verify().is_err()
+    {
+        return Err(ApplicationError::Apply(
+            "PLANNING_OUTPUT_COHERENCE".to_owned(),
+        ));
+    }
+    Ok(plan)
+}
+
+fn show_permission_plan(
+    service: &ManagementApplicationService,
+    payload: &serde_json::Value,
+) -> Result<serde_json::Value, ApplicationError> {
+    let permission_plan_id = payload
+        .get("permission_plan_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| PermissionPlanId::parse(value.to_owned()).ok())
+        .ok_or(ApplicationError::Invalid)?;
+    let reference = service
+        .get_development_record("permission_plan", permission_plan_id.as_str(), None)?
+        .ok_or(ApplicationError::NotFound)?;
+    let plan: PermissionPlanV1 = serde_json::from_value(reference.document.clone())
+        .map_err(|_| ApplicationError::Invalid)?;
+    if plan.permission_plan_id != permission_plan_id || plan.verify().is_err() {
+        return Err(ApplicationError::Apply(
+            "PLANNING_OUTPUT_COHERENCE".to_owned(),
+        ));
+    }
+    serialize_management_result(serde_json::json!({
+        "record":reference,
+        "current":plan.is_current_at(Utc::now()),
+    }))
+}
+
+fn map_codex_app_server_error(error: CodexAppServerError) -> ApplicationError {
+    let code = match error {
+        CodexAppServerError::Path
+        | CodexAppServerError::Protocol
+        | CodexAppServerError::UnsupportedServerRequest
+        | CodexAppServerError::UnsupportedReasoningEffort
+        | CodexAppServerError::Evidence => "CODEX_PROTOCOL_MISMATCH",
+        CodexAppServerError::UnsupportedExecutionMode => "ROUTE_MODE_UNAVAILABLE",
+        CodexAppServerError::Io
+        | CodexAppServerError::Timeout
+        | CodexAppServerError::Remote(_)
+        | CodexAppServerError::Exited => "CODEX_NOT_READY",
+    };
+    ApplicationError::Apply(code.to_owned())
+}
+
+fn payload_project_id(payload: &serde_json::Value) -> Result<ProjectId, ApplicationError> {
+    payload
+        .get("project_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| ProjectId::parse(value.to_owned()).ok())
+        .ok_or(ApplicationError::Invalid)
+}
+
+fn load_capability_snapshot(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    snapshot_id: &CapabilitySnapshotId,
+) -> Result<CapabilitySnapshotV1, ApplicationError> {
+    codex_product::load_capability(service, project_id, snapshot_id)
+}
+
+fn capability_approval_current(record: &ApprovalRecord) -> bool {
+    record
+        .expires_at
+        .as_deref()
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+        .is_some_and(|expires_at| expires_at > Utc::now())
+}
+
+fn capability_probe_id(operation_id: &OperationId) -> RequestId {
+    RequestId::from_stable_bytes(format!("{operation_id}:capability-probe").as_bytes())
+}
+
+fn capability_probe_runtime_scope(
+    operation_id: &OperationId,
+    arguments: &serde_json::Value,
+) -> serde_json::Value {
+    let probe_id = capability_probe_id(operation_id);
+    serde_json::json!({
+        "kind":"codex_capability_probe",
+        "network":"provider_metadata_only",
+        "allowed_environment_names":arguments["allowed_environment_names"],
+        "schema_output":{
+            "root":"management_root",
+            "relative_path":format!("codex/protocol-schema/{probe_id}"),
+        },
+        "subprocesses":[
+            {"argv":["--version"]},
+            {"argv":["app-server","generate-json-schema","--out","<schema_output>"]},
+            {
+                "argv":["app-server","--listen","stdio://"],
+                "requests":["initialize","model/list","modelProvider/capabilities/read"],
+            },
+        ],
+    })
+}
+
+fn capability_probe_target_refs(
+    project_id: &ProjectId,
+    arguments: &serde_json::Value,
+) -> Vec<serde_json::Value> {
+    vec![serde_json::json!({
+        "kind":"codex_executable",
+        "project_id":project_id,
+        "canonical_path":arguments["codex_executable"],
+        "executable_sha256":arguments["executable_sha256"],
+    })]
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "approval identity fields stay explicit at the executable probe boundary"
+)]
+fn resolve_capability_inspect_approval(
+    approvals: &Arc<Mutex<ApprovalStore>>,
+    operations: &Arc<Mutex<OperationStore>>,
+    approval_id: Option<&ApprovalId>,
+    project_id: &ProjectId,
+    actor: &serde_json::Value,
+    correlation_id: &str,
+    arguments: &serde_json::Value,
+    arguments_hash: &Sha256Hash,
+    descriptor_hash: &Sha256Hash,
+    permission_actions: &[String],
+) -> Result<Result<ApprovalRecord, serde_json::Value>, ApplicationError> {
+    let operation_matches = |approval: &ApprovalRecord,
+                             allowed_statuses: &[&str]|
+     -> Result<OperationSnapshot, ApplicationError> {
+        let operation = operations
+            .lock()
+            .map_err(|_| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?
+            .get(approval.operation_id.as_str())
+            .ok_or_else(|| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?;
+        if operation.tool_id != approval.tool_id
+            || operation.descriptor_hash != approval.descriptor_hash.to_string()
+            || operation.arguments_hash != approval.arguments_hash.to_string()
+            || operation.permission_actions != approval.permission_actions
+            || !allowed_statuses.contains(&operation.status.as_str())
+        {
+            return Err(ApplicationError::Apply("POLICY_APPROVAL_STALE".to_owned()));
+        }
+        Ok(operation)
+    };
+    let mut store = approvals.lock().map_err(|_| {
+        ApplicationError::Apply("DEVELOPMENT_EFFECT_APPROVAL_STORE_UNAVAILABLE".to_owned())
+    })?;
+    if let Some(approval_id) = approval_id {
+        let approval = store
+            .get(approval_id)
+            .ok_or_else(|| ApplicationError::Apply("POLICY_APPROVAL_STALE".to_owned()))?;
+        if approval.tool_id != "codex.capability.inspect"
+            || approval.arguments_hash != *arguments_hash
+            || approval.descriptor_hash != *descriptor_hash
+            || approval.permission_actions != permission_actions
+            || approval.runtime_scope
+                != capability_probe_runtime_scope(&approval.operation_id, arguments)
+            || approval.target_refs != capability_probe_target_refs(project_id, arguments)
+            || approval.expected_revision.is_some()
+            || approval.decision != Some(ApprovalDecision::Approve)
+            || !capability_approval_current(&approval)
+        {
+            return Err(ApplicationError::Apply("POLICY_APPROVAL_STALE".to_owned()));
+        }
+        operation_matches(
+            &approval,
+            &[
+                "approval_wait",
+                "queued",
+                "starting",
+                "running",
+                "succeeded",
+                "failed",
+                "outcome_unknown",
+            ],
+        )?;
+        return Ok(Ok(approval));
+    }
+    let approval = if let Some(existing) =
+        store.find_unresolved_exact("codex.capability.inspect", arguments_hash, None)
+    {
+        if existing.descriptor_hash != *descriptor_hash
+            || existing.permission_actions != permission_actions
+            || existing.runtime_scope
+                != capability_probe_runtime_scope(&existing.operation_id, arguments)
+            || existing.target_refs != capability_probe_target_refs(project_id, arguments)
+        {
+            return Err(ApplicationError::Apply("POLICY_APPROVAL_STALE".to_owned()));
+        }
+        operation_matches(&existing, &["approval_wait"])?;
+        existing
+    } else {
+        let invocation_hash = canonical_sha256(&serde_json::json!({
+            "command":"codex.capability.inspect",
+            "descriptor_hash":descriptor_hash,
+            "arguments_hash":arguments_hash,
+        }))
+        .map_err(|_| ApplicationError::Invalid)?;
+        let operation = {
+            let mut operation_store = operations
+                .lock()
+                .map_err(|_| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?;
+            let operation = operation_store
+                .create(OperationCreate {
+                    command: "codex.capability.inspect".to_owned(),
+                    correlation_id: correlation_id.to_owned(),
+                    tool_id: "codex.capability.inspect".to_owned(),
+                    descriptor_hash: descriptor_hash.to_string(),
+                    arguments_hash: arguments_hash.to_string(),
+                    permission_actions: permission_actions.to_vec(),
+                    goal_id: None,
+                    run_id: None,
+                    stage_id: None,
+                    output_provenance: Some(serde_json::json!({
+                        "kind":"codex_capability_probe",
+                        "project_id":project_id,
+                    })),
+                    cancellable: false,
+                    idempotency_key: None,
+                    invocation_hash: invocation_hash.to_string(),
+                })
+                .map_err(|_| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?;
+            operation_store
+                .transition(operation.operation_id.as_str(), "resolving", "policy_check")
+                .and_then(|_| {
+                    operation_store.transition(
+                        operation.operation_id.as_str(),
+                        "approval_wait",
+                        "codex_capability_approval",
+                    )
+                })
+                .map_err(|_| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?
+        };
+        match store.create(ApprovalScope {
+            operation_id: operation.operation_id.clone(),
+            tool_id: "codex.capability.inspect".to_owned(),
+            descriptor_hash: descriptor_hash.clone(),
+            arguments_hash: arguments_hash.clone(),
+            permission_actions: permission_actions.to_vec(),
+            paid_limit: serde_json::json!({"state":"not_applicable"}),
+            target_refs: capability_probe_target_refs(project_id, arguments),
+            expected_revision: None,
+            arguments: arguments.clone(),
+            actor: actor.clone(),
+            runtime_scope: capability_probe_runtime_scope(&operation.operation_id, arguments),
+        }) {
+            Ok(approval) => approval,
+            Err(_) => {
+                if let Ok(mut operation_store) = operations.lock() {
+                    let _ = operation_store.complete(
+                        operation.operation_id.as_str(),
+                        Err(serde_json::json!({
+                            "code":"DEVELOPMENT_EFFECT_APPROVAL_STORE_UNAVAILABLE",
+                            "message":"The capability approval scope could not be persisted.",
+                            "retryable":false,
+                        })),
+                    );
+                }
+                return Err(ApplicationError::Apply(
+                    "DEVELOPMENT_EFFECT_APPROVAL_STORE_UNAVAILABLE".to_owned(),
+                ));
+            }
+        }
+    };
+    Ok(Err(serde_json::json!({
+        "status":"approval_required",
+        "approval_id":approval.approval_id,
+        "operation_id":approval.operation_id,
+        "scope_hash":approval.scope_hash,
+        "expires_at":approval.expires_at,
+        "next_action":"approval.resolve",
+    })))
+}
+
+fn inspect_codex_capability(
+    service: &ManagementApplicationService,
+    management_root: &Path,
+    approvals: Option<&Arc<Mutex<ApprovalStore>>>,
+    operations: Option<&Arc<Mutex<OperationStore>>>,
+    payload: &serde_json::Value,
+    actor: &serde_json::Value,
+    correlation_id: &str,
+) -> Result<serde_json::Value, ApplicationError> {
+    let project_id = payload_project_id(payload)?;
+    let executable = payload
+        .get("codex_executable")
+        .and_then(serde_json::Value::as_str)
+        .map(PathBuf::from)
+        .ok_or(ApplicationError::Invalid)?
+        .canonicalize()
+        .map_err(|_| ApplicationError::Apply("CODEX_NOT_READY".to_owned()))?;
+    if !executable.is_file() {
+        return Err(ApplicationError::Apply("CODEX_NOT_READY".to_owned()));
+    }
+    let expires_in_seconds = payload
+        .get("expires_in_seconds")
+        .and_then(serde_json::Value::as_u64)
+        .filter(|value| (60..=86_400).contains(value))
+        .ok_or(ApplicationError::Invalid)?;
+    let allow_managed_ultra = payload
+        .get("allow_managed_ultra")
+        .and_then(serde_json::Value::as_bool)
+        .ok_or(ApplicationError::Invalid)?;
+    service.development_project_root(&project_id)?;
+    let executable_sha256 = codex_product::read_executable_hash(&executable)?;
+    let permission_actions = vec![
+        "local_read".to_owned(),
+        "local_write".to_owned(),
+        "network_read".to_owned(),
+        "process_run".to_owned(),
+        "secret_access".to_owned(),
+    ];
+    let allowed_environment_names = default_codex_environment_names();
+    let arguments = serde_json::json!({
+        "project_id":project_id,
+        "codex_executable":executable.to_string_lossy(),
+        "executable_sha256":executable_sha256,
+        "expires_in_seconds":expires_in_seconds,
+        "allow_managed_ultra":allow_managed_ultra,
+        "permission_actions":permission_actions,
+        "allowed_environment_names":allowed_environment_names,
+    });
+    let arguments_hash = canonical_sha256(&arguments).map_err(|_| ApplicationError::Invalid)?;
+    let descriptor_hash = Sha256Hash::digest(b"codex.capability.inspect|app-server-v2|approval-v1");
+    let approval_id = payload
+        .get("approval_id")
+        .filter(|value| !value.is_null())
+        .and_then(serde_json::Value::as_str)
+        .map(|value| ApprovalId::parse(value.to_owned()))
+        .transpose()
+        .map_err(|_| ApplicationError::Invalid)?;
+    let approvals = approvals.ok_or_else(|| {
+        ApplicationError::Apply("DEVELOPMENT_EFFECT_APPROVAL_STORE_UNAVAILABLE".to_owned())
+    })?;
+    let operations = operations
+        .ok_or_else(|| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?;
+    let approval = match resolve_capability_inspect_approval(
+        approvals,
+        operations,
+        approval_id.as_ref(),
+        &project_id,
+        actor,
+        correlation_id,
+        &arguments,
+        &arguments_hash,
+        &descriptor_hash,
+        &permission_actions,
+    )? {
+        Ok(approval) => approval,
+        Err(required) => return Ok(required),
+    };
+    {
+        let operation = operations
+            .lock()
+            .map_err(|_| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?
+            .get(approval.operation_id.as_str())
+            .ok_or_else(|| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?;
+        match operation.status.as_str() {
+            "succeeded" => {
+                return operation.result.ok_or_else(|| {
+                    ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned())
+                });
+            }
+            "failed" => return Err(ApplicationError::Apply("CODEX_NOT_READY".to_owned())),
+            "outcome_unknown" => {
+                return Err(ApplicationError::Apply("TOOL_OUTCOME_UNKNOWN".to_owned()));
+            }
+            "approval_wait" => {}
+            _ => return Err(ApplicationError::Apply("TOOL_OUTCOME_UNKNOWN".to_owned())),
+        }
+    }
+    {
+        let mut operation_store = operations
+            .lock()
+            .map_err(|_| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?;
+        operation_store
+            .transition(
+                approval.operation_id.as_str(),
+                "queued",
+                "capability_probe_approved",
+            )
+            .and_then(|_| {
+                operation_store.transition(
+                    approval.operation_id.as_str(),
+                    "starting",
+                    "capability_probe_starting",
+                )
+            })
+            .and_then(|_| {
+                operation_store.transition(
+                    approval.operation_id.as_str(),
+                    "running",
+                    "capability_probe_running",
+                )
+            })
+            .map_err(|_| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?;
+    }
+    let result = (|| {
+        let probe_id = capability_probe_id(&approval.operation_id);
+        let schema_root = management_root
+            .join("codex")
+            .join("protocol-schema")
+            .join(probe_id.as_str());
+        generate_protocol_schema_bundle(&executable, &schema_root)
+            .map_err(map_codex_app_server_error)?;
+        let protocol =
+            inspect_protocol_schema_bundle(&schema_root).map_err(map_codex_app_server_error)?;
+        let version = probe_codex_version(&executable).map_err(map_codex_app_server_error)?;
+        let captured_at = Utc::now();
+        let mut process =
+            CodexAppServerProcess::spawn(&executable).map_err(map_codex_app_server_error)?;
+        let evidence = process
+            .probe_capabilities(
+                version,
+                protocol,
+                captured_at,
+                std::time::Duration::from_secs(30),
+            )
+            .map_err(map_codex_app_server_error)?;
+        let evidence_value =
+            serde_json::to_value(&evidence).map_err(|_| ApplicationError::Invalid)?;
+        let project_root = service.development_project_root(&project_id)?;
+        let raw_artifact_ref = LocalArtifactStore::default()
+            .put_json_with_policy(ArtifactWriteRequest {
+                project_id: &project_id,
+                project_root: &project_root,
+                relative_path: &format!("codex/capability/{probe_id}.json"),
+                subject_kind: "codex_capability_probe",
+                subject_id: probe_id.as_str(),
+                policy: ArtifactWritePolicy {
+                    kind: ArtifactKind::Log,
+                    redaction_status: RedactionStatus::NotNeeded,
+                    retention_class: RetentionClass::Evidence,
+                },
+                value: &evidence_value,
+            })
+            .map_err(|_| ApplicationError::Apply("ARTIFACT_MANIFEST_STORE_FAILED".to_owned()))?;
+        let expires_at = captured_at
+            .checked_add_signed(chrono::Duration::seconds(
+                i64::try_from(expires_in_seconds).map_err(|_| ApplicationError::Invalid)?,
+            ))
+            .ok_or(ApplicationError::Invalid)?;
+        let snapshot = evidence
+            .into_snapshot(expires_at, raw_artifact_ref, allow_managed_ultra)
+            .map_err(map_codex_app_server_error)?;
+        let record = service.publish_development_document(
+            "capability_snapshot",
+            snapshot.capability_snapshot_id.as_str(),
+            1,
+            Some(project_id),
+            "current",
+            CAPABILITY_SNAPSHOT_SCHEMA_ID,
+            ROUTING_CONTRACT_VERSION,
+            &snapshot,
+        )?;
+        serialize_management_result(serde_json::json!({
+            "record":record,
+            "schema_bundle":{
+                "relative_state_path":format!("codex/protocol-schema/{probe_id}"),
+                "schema_fingerprint":snapshot.protocol_schema_fingerprint,
+            }
+        }))
+    })();
+    match result {
+        Ok(value) => {
+            operations
+                .lock()
+                .map_err(|_| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?
+                .complete(approval.operation_id.as_str(), Ok(value.clone()))
+                .map_err(|_| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))?;
+            Ok(value)
+        }
+        Err(error) => {
+            let code = match &error {
+                ApplicationError::Apply(code) => code.as_str(),
+                _ => "CODEX_NOT_READY",
+            };
+            if let Ok(mut operation_store) = operations.lock() {
+                let _ = operation_store.complete(
+                    approval.operation_id.as_str(),
+                    Err(serde_json::json!({
+                        "code":code,
+                        "message":"The approved capability probe failed.",
+                        "retryable":false,
+                    })),
+                );
+            }
+            Err(error)
+        }
+    }
+}
+
+fn show_codex_capability(
+    service: &ManagementApplicationService,
+    payload: &serde_json::Value,
+) -> Result<serde_json::Value, ApplicationError> {
+    let project_id = payload_project_id(payload)?;
+    let snapshot_id = payload
+        .get("capability_snapshot_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| CapabilitySnapshotId::parse(value.to_owned()).ok())
+        .ok_or(ApplicationError::Invalid)?;
+    serialize_management_result(load_capability_snapshot(
+        service,
+        &project_id,
+        &snapshot_id,
+    )?)
+}
+
+fn decide_codex_route(
+    service: &ManagementApplicationService,
+    payload: &serde_json::Value,
+) -> Result<serde_json::Value, ApplicationError> {
+    let project_id = payload_project_id(payload)?;
+    let snapshot_id = payload
+        .get("capability_snapshot_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| CapabilitySnapshotId::parse(value.to_owned()).ok())
+        .ok_or(ApplicationError::Invalid)?;
+    let stage: StageSpecV1 = serde_json::from_value(
+        payload
+            .get("stage")
+            .cloned()
+            .ok_or(ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)?;
+    stage
+        .verify()
+        .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    service.verify_stage_profile_current(&stage)?;
+    let stage_graph_id = payload
+        .get("stage_graph_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| StageGraphId::parse(value.to_owned()).ok())
+        .ok_or(ApplicationError::Invalid)?;
+    let stage_graph = with_default_goal_store(|store| store.stage_graph(stage_graph_id.as_str()))
+        .map_err(map_stage_store_error)?;
+    stage_graph
+        .verify()
+        .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?;
+    if stage.state != StageStateV1::Ready
+        || !stage.project_ids.contains(&project_id)
+        || stage_graph
+            .stages
+            .iter()
+            .find(|persisted| persisted.stage_id == stage.stage_id)
+            != Some(&stage)
+    {
+        return Err(ApplicationError::Apply(
+            "PLANNING_OUTPUT_COHERENCE".to_owned(),
+        ));
+    }
+    let policy: RoutingPolicyV1 = serde_json::from_value(
+        payload
+            .get("policy")
+            .cloned()
+            .ok_or(ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)?;
+    let request: RouteRequestV1 = serde_json::from_value(
+        payload
+            .get("request")
+            .cloned()
+            .ok_or(ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)?;
+    let stage_graph_ref = DocumentRef {
+        schema_id: "star.stage-graph".to_owned(),
+        document_id: stage_graph.stage_graph_id.to_string(),
+        revision: stage_graph.plan_revision,
+        sha256: stage_graph.graph_fingerprint.clone(),
+    };
+    if request.stage_graph_ref != stage_graph_ref {
+        return Err(ApplicationError::Apply(
+            "PLANNING_OUTPUT_COHERENCE".to_owned(),
+        ));
+    }
+    let permission_plan = load_permission_plan(service, &request.permission_plan_ref)?;
+    let effective = service.effective_config()?;
+    let mut required_actions = vec![
+        "external.ai.execute",
+        "local_read",
+        "network_read",
+        "paid_action",
+        "plan_execute",
+        "process_run",
+        "secret_access",
+    ];
+    if stage.stage_mode == star_contracts::stage::StageModeV1::Execute {
+        required_actions.push("local_write");
+    }
+    if !permission_plan.is_current_at(Utc::now())
+        || permission_plan.goal_id != stage.goal_id
+        || permission_plan.run_id != request.run_id
+        || permission_plan.stage_id != stage.stage_id
+        || permission_plan.stage_revision != stage.revision
+        || permission_plan.stage_scope_hash
+            != stage
+                .permission_scope_hash()
+                .map_err(|_| ApplicationError::Apply("PLANNING_OUTPUT_COHERENCE".to_owned()))?
+        || request.config_fingerprint != effective.config_fingerprint
+        || permission_plan.effective_config_ref.sha256 != effective.config_fingerprint
+        || permission_plan.policy_profile_ref.catalog_id != effective.policy_profile_id
+        || permission_plan.decision("external.ai.execute") != PermissionDecisionV1::Prompt
+        || permission_plan.decision("paid_action") != PermissionDecisionV1::Prompt
+        || required_actions
+            .iter()
+            .any(|action| permission_plan.decision(action) == PermissionDecisionV1::Deny)
+        || !permission_plan.external_constraints.codex_approval_required
+        || permission_plan.external_constraints.codex_approval_policy != "never"
+        || permission_plan.external_constraints.administrator_required
+        || (stage.stage_mode == star_contracts::stage::StageModeV1::Execute
+            && permission_plan.external_constraints.codex_sandbox_mode != "workspace-write")
+        || (stage.stage_mode != star_contracts::stage::StageModeV1::Execute
+            && permission_plan.external_constraints.codex_sandbox_mode != "read-only")
+        || permission_plan.process_rules.is_empty()
+        || permission_plan.allowed_environment_names().is_empty()
+        || !permission_plan.network_rules.iter().any(|rule| {
+            rule.target == "codex-provider"
+                && rule.operation == "execute"
+                && rule.decision != PermissionDecisionV1::Deny
+        })
+        || stage.project_ids.iter().any(|project_id| {
+            !permission_plan.path_rules.iter().any(|rule| {
+                &rule.project_id == project_id
+                    && rule.path_prefix.is_none()
+                    && rule.kind == PathPermissionKindV1::AllowRead
+            }) || permission_plan.path_rules.iter().any(|rule| {
+                &rule.project_id == project_id
+                    && matches!(
+                        rule.kind,
+                        PathPermissionKindV1::DenyRead | PathPermissionKindV1::DenyExternalTransfer
+                    )
+            }) || (stage.stage_mode == star_contracts::stage::StageModeV1::Execute
+                && permission_plan.path_rules.iter().any(|rule| {
+                    &rule.project_id == project_id && rule.kind == PathPermissionKindV1::DenyWrite
+                }))
+                || (stage.stage_mode == star_contracts::stage::StageModeV1::Execute
+                    && !permission_plan.path_rules.iter().any(|rule| {
+                        &rule.project_id == project_id
+                            && rule.kind == PathPermissionKindV1::AllowWrite
+                    }))
+        })
+    {
+        return Err(ApplicationError::Apply("POLICY_DENIED".to_owned()));
+    }
+    let now = Utc::now();
+    if request.decided_at > now + chrono::Duration::seconds(5)
+        || now.signed_duration_since(request.decided_at) > chrono::Duration::minutes(5)
+    {
+        return Err(ApplicationError::Apply(
+            "PLANNING_SNAPSHOT_STALE".to_owned(),
+        ));
+    }
+    let snapshot = load_capability_snapshot(service, &project_id, &snapshot_id)?;
+    codex_product::require_latest_capability(service, &project_id, &snapshot)?;
+    if !snapshot.is_current_at(now) {
+        return Err(ApplicationError::Apply("CODEX_NOT_READY".to_owned()));
+    }
+    let decision = route_codex_stage(&stage, &snapshot, &policy, request).map_err(|error| {
+        let code = match error {
+            star_planning::routing::RoutePlanningError::NoModel => "ROUTE_NO_SUPPORTED_MODEL",
+            star_planning::routing::RoutePlanningError::ExecutionMode => "ROUTE_MODE_UNAVAILABLE",
+            star_planning::routing::RoutePlanningError::CapabilityUnavailable => "CODEX_NOT_READY",
+            star_planning::routing::RoutePlanningError::DeterministicStage
+            | star_planning::routing::RoutePlanningError::Contract(_) => {
+                "PLANNING_OUTPUT_COHERENCE"
+            }
+        };
+        ApplicationError::Apply(code.to_owned())
+    })?;
+    let record = service.publish_development_document(
+        "route_decision",
+        decision.route_decision_id.as_str(),
+        decision.revision,
+        Some(project_id),
+        "decided",
+        ROUTE_DECISION_SCHEMA_ID,
+        ROUTING_CONTRACT_VERSION,
+        &decision,
+    )?;
+    serialize_management_result(record)
+}
+
+fn show_codex_route(
+    service: &ManagementApplicationService,
+    payload: &serde_json::Value,
+) -> Result<serde_json::Value, ApplicationError> {
+    let project_id = payload_project_id(payload)?;
+    let route_id = payload
+        .get("route_decision_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| RouteDecisionId::parse(value.to_owned()).ok())
+        .ok_or(ApplicationError::Invalid)?;
+    let record = service
+        .get_development_record("route_decision", route_id.as_str(), None)?
+        .ok_or(ApplicationError::NotFound)?;
+    if record.project_id.as_ref() != Some(&project_id) {
+        return Err(ApplicationError::NotFound);
+    }
+    let decision: RouteDecisionV1 =
+        serde_json::from_value(record.document.clone()).map_err(|_| ApplicationError::Invalid)?;
+    if decision.route_decision_id != route_id {
+        return Err(ApplicationError::Invalid);
+    }
+    serialize_management_result(record)
+}
+
 fn handle_management_command(
     context: ManagementCommandContext<'_>,
     request: IpcRequest,
@@ -9803,6 +11769,10 @@ fn handle_management_command(
             }
             _ => Err(ApplicationError::Invalid),
         };
+        return management_command_response(request, result, registry_revision);
+    }
+    if request.command.starts_with("stage.") {
+        let result = handle_stage_product_command(service, &request);
         return management_command_response(request, result, registry_revision);
     }
     let Some(service) = service else {
@@ -9931,6 +11901,20 @@ fn handle_management_command(
         return management_command_response(request, Err(error), registry_revision);
     }
     let result = match request.command.as_str() {
+        "goal.complete"
+            if payload_has_exact_keys(
+                &request.payload,
+                &[
+                    "goal_id",
+                    "expected_revision",
+                    "stage_graph_id",
+                    "project_id",
+                    "evidence_bundle_id",
+                ],
+            ) =>
+        {
+            complete_goal_from_evidence(service, &request.payload)
+        }
         "development.effect.record" => operations
             .ok_or_else(|| ApplicationError::Apply("OPERATION_STORE_UNAVAILABLE".to_owned()))
             .and_then(|operations| {
@@ -9959,6 +11943,91 @@ fn handle_management_command(
             &request.payload,
             &request.actor,
         ),
+        command @ ("codex.task.start" | "codex.task.resume" | "codex.task.fork") => {
+            codex_product::launch(
+                service,
+                approvals,
+                operations,
+                command,
+                &request.payload,
+                &request.actor,
+                &request.client_request_id,
+            )
+        }
+        "context.pack.build" if payload_has_exact_keys(&request.payload, &["input"]) => {
+            build_context_pack(service, &request.payload)
+        }
+        "context.pack.show" if payload_has_exact_keys(&request.payload, &["context_pack_id"]) => {
+            show_context_pack(service, &request.payload)
+        }
+        "permission.plan.create" if payload_has_exact_keys(&request.payload, &["input"]) => {
+            create_permission_plan(service, &request.payload)
+        }
+        "permission.plan.show"
+            if payload_has_exact_keys(&request.payload, &["permission_plan_id"]) =>
+        {
+            show_permission_plan(service, &request.payload)
+        }
+        "codex.task.status"
+            if payload_has_exact_keys(&request.payload, &["project_id", "codex_execution_id"]) =>
+        {
+            codex_product::status(service, operations, &request.payload)
+        }
+        "codex.task.interrupt"
+            if payload_has_exact_keys(&request.payload, &["project_id", "codex_execution_id"]) =>
+        {
+            codex_product::interrupt(service, operations, &request.payload)
+        }
+        "codex.capability.inspect"
+            if payload_has_only_keys(
+                &request.payload,
+                &[
+                    "project_id",
+                    "codex_executable",
+                    "expires_in_seconds",
+                    "allow_managed_ultra",
+                    "approval_id",
+                ],
+            ) =>
+        {
+            inspect_codex_capability(
+                service,
+                management_root,
+                approvals,
+                operations,
+                &request.payload,
+                &request.actor,
+                &request.client_request_id,
+            )
+        }
+        "codex.capability.show"
+            if payload_has_exact_keys(
+                &request.payload,
+                &["project_id", "capability_snapshot_id"],
+            ) =>
+        {
+            show_codex_capability(service, &request.payload)
+        }
+        "route.decide"
+            if payload_has_exact_keys(
+                &request.payload,
+                &[
+                    "project_id",
+                    "capability_snapshot_id",
+                    "stage_graph_id",
+                    "stage",
+                    "policy",
+                    "request",
+                ],
+            ) =>
+        {
+            decide_codex_route(service, &request.payload)
+        }
+        "route.show"
+            if payload_has_exact_keys(&request.payload, &["project_id", "route_decision_id"]) =>
+        {
+            show_codex_route(service, &request.payload)
+        }
         "config.effective" if payload_has_exact_keys(&request.payload, &[]) => service
             .effective_config()
             .and_then(serialize_management_result),
@@ -11756,6 +13825,27 @@ fn is_m10_development_command(command: &str) -> bool {
     )
 }
 
+fn m6_registered_values(
+    snapshot: &star_contracts::managed_registry::ManagedRegistrySnapshot,
+    kind: ManagedDeclarationKind,
+) -> BTreeSet<String> {
+    snapshot
+        .declarations
+        .iter()
+        .filter(|declaration| declaration.kind == kind)
+        .filter(|declaration| {
+            matches!(
+                declaration.status,
+                ManagedLifecycle::Active | ManagedLifecycle::Deprecated
+            )
+        })
+        .flat_map(|declaration| {
+            std::iter::once(declaration.semantic_key.clone())
+                .chain(declaration.primary_value.iter().cloned())
+        })
+        .collect()
+}
+
 fn handle_m6_development_command(
     service: &ManagementApplicationService,
     command: &str,
@@ -11882,8 +13972,7 @@ fn handle_m6_development_command(
                     "project_id",
                     "manifest_path",
                     "snapshot_id",
-                    "registered_commands",
-                    "registered_config_keys",
+                    "registry_manifest_path",
                     "revision",
                 ],
             ) =>
@@ -11895,15 +13984,43 @@ fn handle_m6_development_command(
                 return Err(ApplicationError::Invalid);
             }
             let snapshot_id = m6_required_string(payload, "snapshot_id", 192)?;
-            let registered_commands = m6_string_set(payload, "registered_commands", 1_024, 256)?;
+            let registry_manifest_path = payload
+                .get("registry_manifest_path")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|value| ProjectPathRef::parse(value.to_owned()).ok())
+                .ok_or(ApplicationError::Invalid)?;
+            let registry = service
+                .refresh_managed_registry_resolution(&project_id, &registry_manifest_path)?;
+            if registry.snapshot.owner_project_id != project_id
+                || registry.snapshot.freshness
+                    != star_contracts::managed_registry::RegistryFreshness::Current
+                || registry.snapshot.completeness
+                    != star_contracts::managed_registry::EvidenceCompleteness::Complete
+                || registry.snapshot.resolution_state
+                    != star_contracts::managed_registry::RegistryResolutionState::Valid
+                || registry.consistency_records.iter().any(|record| {
+                    record.status
+                        != star_contracts::managed_registry::RegistryConsistencyStatus::Current
+                        || record.completeness
+                            != star_contracts::managed_registry::EvidenceCompleteness::Complete
+                })
+            {
+                return Err(ApplicationError::Apply(
+                    "MANAGED_REGISTRY_SNAPSHOT_STALE".to_owned(),
+                ));
+            }
+            let registered_commands =
+                m6_registered_values(&registry.snapshot, ManagedDeclarationKind::CliCommand);
             let registered_config_keys =
-                m6_string_set(payload, "registered_config_keys", 4_096, 256)?;
+                m6_registered_values(&registry.snapshot, ManagedDeclarationKind::ConfigKey);
             let sources = read_documentation_sources(&root, &manifest.documentation)
                 .map_err(m6_development_error)?;
             let snapshot = build_documentation_snapshot(
                 snapshot_id.clone(),
                 project_id.clone(),
                 m6_current_subject_revision(&root, &manifest.source_fingerprint),
+                registry.snapshot.managed_registry_snapshot_id.to_string(),
+                registry.snapshot.content_fingerprint,
                 sources,
                 &registered_commands,
                 &registered_config_keys,
@@ -12218,6 +14335,7 @@ fn handle_m7_development_command(
             if input.subject_binding.project_id != project_id {
                 return Err(ApplicationError::Invalid);
             }
+            m7_validate_verified_failure_input(service, &project_id, &input)?;
             let record = build_failure_record(input).map_err(m6_development_error)?;
             let state = m7_verification_state(record.verification_state);
             service
@@ -12418,13 +14536,14 @@ fn handle_m7_development_command(
         {
             let project_id = management_project_id(payload)?;
             let snapshot_id = m6_required_string(payload, "snapshot_id", 192)?;
-            let input: ExternalDataSnapshotInput = serde_json::from_value(
+            let mut input: ExternalDataSnapshotInput = serde_json::from_value(
                 payload
                     .get("input")
                     .cloned()
                     .ok_or(ApplicationError::Invalid)?,
             )
             .map_err(|_| ApplicationError::Invalid)?;
+            input.evaluation_time = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
             let configured_max_age_seconds = service
                 .effective_config()?
                 .integer("security_supply_chain.default_max_age_hours")
@@ -12440,25 +14559,39 @@ fn handle_m7_development_command(
                 m6_record_document(service, "development_effect_receipt", &receipt_id)?;
             let available = input.available;
             let source_sha256 = input.source_sha256.clone();
+            let normalized_sha256 = input.normalized_sha256.clone();
+            let expected_subject_fingerprint =
+                external_data_request_fingerprint(&input.source).map_err(m6_development_error)?;
+            let expected_subject_ref = format!("external-data:{}", input.source.source_id);
+            if external_data_normalized_fingerprint(&input).map_err(m6_development_error)?
+                != normalized_sha256
+            {
+                return Err(ApplicationError::Apply(
+                    "SECURITY_EFFECT_RECEIPT_MISMATCH".to_owned(),
+                ));
+            }
             let receipt = verify_development_effect_receipt(receipt)?;
             if receipt.project_id != project_id
                 || !matches!(
                     receipt.effect_kind,
                     DevelopmentEffectKind::SecurityRefresh | DevelopmentEffectKind::LicenseScan
                 )
+                || receipt.exact_subject_ref != expected_subject_ref
+                || receipt.exact_subject_fingerprint != expected_subject_fingerprint
                 || available
                     && (receipt.state != DevelopmentEffectState::Succeeded
                         || !receipt.source_effect_started
                         || !receipt.output_artifact_refs.contains(&source_sha256)
-                            && receipt.result_fingerprint.as_ref() != Some(&source_sha256))
+                        || !receipt.output_artifact_refs.contains(&normalized_sha256))
                 || !available && receipt.state == DevelopmentEffectState::Succeeded
             {
                 return Err(ApplicationError::Apply(
                     "SECURITY_EFFECT_RECEIPT_MISMATCH".to_owned(),
                 ));
             }
-            let snapshot = build_external_data_snapshot(snapshot_id.clone(), input)
-                .map_err(m6_development_error)?;
+            let snapshot =
+                build_external_data_snapshot(project_id.clone(), snapshot_id.clone(), input)
+                    .map_err(m6_development_error)?;
             let state = m7_freshness_state(snapshot.freshness);
             service
                 .publish_development_document(
@@ -17356,28 +19489,36 @@ fn m10_final_product_audit(
     service: &ManagementApplicationService,
     project_id: &ProjectId,
     manifest: &ReleaseManifestV2,
-) -> Result<star_contracts::release_v2::FinalProductAuditV1, ApplicationError> {
-    let feature_statuses = PRODUCT_FEATURE_RUNTIME_SPECS
-        .iter()
-        .map(|feature| ProductFeatureOwnershipStatusV1 {
-            feature_id: feature.feature_id.to_owned(),
-            semantic_owner_ref: feature.semantic_owner_ref.to_owned(),
-            physical_owner: feature.physical_owner.to_owned(),
-            command_surfaces: feature
-                .command_surfaces
-                .iter()
-                .map(|command| (*command).to_owned())
-                .collect(),
-            missing_command_surfaces: feature
-                .command_surfaces
-                .iter()
-                .filter(|command| !product_command_handler_current(command))
-                .map(|command| (*command).to_owned())
-                .collect(),
-        })
-        .collect::<Vec<_>>();
-
+) -> Result<star_contracts::release_v2::FinalProductAuditV2, ApplicationError> {
+    let source_evidence = embedded_product_source_evidence().map_err(m10_release_error)?;
     let catalog = service.development_profile_catalog()?;
+    let current = service.current_context_projection(project_id)?;
+    let index_snapshot = &current.index_projection.snapshot;
+    let effective_config_fingerprint = service.effective_config()?.config_fingerprint.clone();
+    let project_context_fingerprint = canonical_sha256(&serde_json::json!({
+        "product_source_fingerprint":source_evidence.source_fingerprint,
+        "project_id":project_id,
+        "project_catalog_snapshot_id":current.catalog_snapshot.project_catalog_snapshot_id,
+        "project_catalog_fingerprint":current.catalog_snapshot.content_fingerprint,
+        "project_revision_id":current.workspace_snapshot.project_revision_id,
+        "workspace_snapshot_id":current.workspace_snapshot.workspace_snapshot_id,
+        "workspace_entries_fingerprint":current.workspace_snapshot.entries_fingerprint,
+        "code_index_snapshot_id":index_snapshot.code_index_snapshot_id,
+        "analysis_input_fingerprint":index_snapshot.analysis_input_fingerprint,
+        "code_index_fingerprint":index_snapshot.content_fingerprint,
+    }))
+    .map_err(|_| ApplicationError::Invalid)?;
+    let toolchain_fingerprint = canonical_sha256(
+        &serde_json::to_value(&index_snapshot.toolchains).map_err(|_| ApplicationError::Invalid)?,
+    )
+    .map_err(|_| ApplicationError::Invalid)?;
+    let toolchain_current = !index_snapshot.toolchains.is_empty()
+        && index_snapshot
+            .toolchains
+            .iter()
+            .all(|toolchain| toolchain.project_id == *project_id);
+    let validation_runs = service.list_validation_runs_v2(project_id)?;
+    let validation_results = service.list_validation_results_v2(project_id)?;
     let mut profile_statuses = Vec::with_capacity(catalog.entries.len());
     let mut m11_profile_conformant = false;
     for entry in &catalog.entries {
@@ -17389,11 +19530,108 @@ fn m10_final_product_audit(
                 definition.profile_ref == entry.profile_ref
                     && definition.definition_hash == entry.definition_hash
             });
-        let limitations = if exact_resolution {
-            Vec::new()
-        } else {
-            vec!["profile_resolution_mismatch".to_owned()]
+        let source = source_evidence
+            .profiles
+            .iter()
+            .find(|source| source.profile_id == profile_id)
+            .ok_or(ApplicationError::Invalid)?;
+        let activation_inputs_fingerprint = canonical_sha256(&serde_json::json!({
+            "parent_profile":entry.descriptor.parent_profile,
+            "triggers":entry.descriptor.triggers,
+            "stage_template":entry.descriptor.stage_template,
+            "context_rules":entry.descriptor.context_rules,
+            "route_hints":entry.descriptor.route_hints,
+        }))
+        .map_err(|_| ApplicationError::Invalid)?;
+        let conformance_policy_fingerprint = canonical_sha256(&serde_json::json!({
+            "required_rule_families":entry.descriptor.required_rule_families,
+            "required_check_families":entry.descriptor.required_check_families,
+            "gate_phases":entry.descriptor.gate_phases,
+            "permission_actions":entry.descriptor.permission_actions,
+            "approval_checkpoints":entry.descriptor.approval_checkpoints,
+            "allowed_effect_classes":entry.descriptor.allowed_effect_classes,
+            "permission_floor":entry.descriptor.permission_floor,
+            "unknown_outcome_policy":entry.descriptor.unknown_outcome_policy,
+            "rollback_policy":entry.descriptor.rollback_policy,
+        }))
+        .map_err(|_| ApplicationError::Invalid)?;
+        let source_exact = source.profile_version == entry.profile_ref.profile_version
+            && source.descriptor_definition_hash == entry.definition_hash
+            && source.activation_inputs_fingerprint == activation_inputs_fingerprint
+            && source.conformance_policy_fingerprint == conformance_policy_fingerprint
+            && source.required_rule_families == entry.descriptor.required_rule_families
+            && source.required_check_families == entry.descriptor.required_check_families
+            && source.gate_phases == entry.descriptor.gate_phases
+            && source.permission_actions == entry.descriptor.permission_actions
+            && source.approval_checkpoints == entry.descriptor.approval_checkpoints
+            && source.allowed_effect_classes == entry.descriptor.allowed_effect_classes
+            && source.permission_floor == entry.descriptor.permission_floor
+            && source.unknown_outcome_policy == entry.descriptor.unknown_outcome_policy
+            && source.rollback_policy == entry.descriptor.rollback_policy;
+        let conformance_marker = |marker: &str| {
+            source
+                .conformance_refs
+                .iter()
+                .any(|reference| reference.marker.as_deref() == Some(marker))
         };
+        let resolution_path_verified = conformance_marker("pub fn resolve_development_profiles")
+            && conformance_marker("exact_builtin_set_resolves_deterministically");
+        let validation_path_verified = conformance_marker("fn select_validation_plan")
+            && conformance_marker("missing_required_check_is_blocked_not_not_applicable");
+        let approval_path_verified = conformance_marker("fn create_permission_plan")
+            && conformance_marker("effective_permission_policy_prompts_or_denies_before_dispatch");
+        let unknown_outcome_path_verified = conformance_marker("fn record_stage_result")
+            && conformance_marker("stage_result_recovery_requires_effect_boundary_and_action");
+        let rollback_path_verified = conformance_marker("pub fn rollback_applied")
+            && conformance_marker(
+                "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
+            );
+        let mut required_check_families = resolution.required_check_families.clone();
+        required_check_families.sort();
+        required_check_families.dedup();
+        let covered_check_families = if exact_resolution
+            && source_exact
+            && resolution_path_verified
+            && validation_path_verified
+            && toolchain_current
+        {
+            m10_profile_covered_check_families(
+                service,
+                project_id,
+                &current.workspace_snapshot,
+                &effective_config_fingerprint,
+                &resolution,
+                &validation_runs,
+                &validation_results,
+            )?
+        } else {
+            Vec::new()
+        };
+        let mut limitations = Vec::new();
+        if !exact_resolution || !resolution_path_verified {
+            limitations.push("profile_resolution_mismatch".to_owned());
+        }
+        if !source_exact {
+            limitations.push("profile_source_binding_mismatch".to_owned());
+        }
+        if !validation_path_verified || covered_check_families != required_check_families {
+            limitations.push("profile_required_check_coverage_incomplete".to_owned());
+        }
+        if !approval_path_verified {
+            limitations.push("profile_approval_path_unverified".to_owned());
+        }
+        if !unknown_outcome_path_verified {
+            limitations.push("profile_unknown_outcome_path_unverified".to_owned());
+        }
+        if !rollback_path_verified {
+            limitations.push("profile_rollback_path_unverified".to_owned());
+        }
+        if !toolchain_current {
+            limitations.push("profile_toolchain_unverified".to_owned());
+        }
+        limitations.sort();
+        limitations.dedup();
+        let conformant = limitations.is_empty();
         if profile_id == "rust_style_auto_fix" {
             let parent_ids = resolution
                 .parent_closure
@@ -17405,7 +19643,7 @@ fn m10_final_product_audit(
                 .iter()
                 .map(String::as_str)
                 .collect::<BTreeSet<_>>();
-            m11_profile_conformant = exact_resolution
+            m11_profile_conformant = conformant
                 && parent_ids.contains("refactor_codemod")
                 && parent_ids.contains("ai_development_validation")
                 && ["format", "lint", "build", "test"]
@@ -17434,8 +19672,19 @@ fn m10_final_product_audit(
             profile_id,
             profile_version: entry.profile_ref.profile_version.clone(),
             definition_hash: entry.definition_hash.clone(),
+            source_definition_fingerprint: source.definition_fingerprint.clone(),
             resolution_fingerprint: resolution.profile_resolution_fingerprint,
-            conformant: exact_resolution,
+            activation_inputs_fingerprint,
+            conformance_policy_fingerprint,
+            project_context_fingerprint: project_context_fingerprint.clone(),
+            effective_config_fingerprint: effective_config_fingerprint.clone(),
+            toolchain_fingerprint: toolchain_fingerprint.clone(),
+            required_check_families,
+            covered_check_families,
+            approval_path_verified,
+            unknown_outcome_path_verified,
+            rollback_path_verified,
+            conformant,
             limitations,
         });
     }
@@ -17484,15 +19733,144 @@ fn m10_final_product_audit(
         }
     }
 
-    build_final_product_audit(
+    build_final_product_audit_v2(
         manifest,
+        source_evidence,
         catalog.catalog_fingerprint,
-        feature_statuses,
         profile_statuses,
         m11_profile_conformant,
         lifecycle_by_architecture.into_values().collect(),
     )
     .map_err(m10_release_error)
+}
+
+fn m10_profile_covered_check_families(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    workspace: &star_contracts::management::WorkspaceSnapshot,
+    effective_config_fingerprint: &Sha256Hash,
+    resolution: &star_contracts::profile::DevelopmentProfileResolutionV1,
+    runs: &[ValidationRunV2],
+    results: &[ValidationResultV2],
+) -> Result<Vec<String>, ApplicationError> {
+    let mut covered = BTreeSet::new();
+    for run in runs {
+        let binding = &run.subject_binding;
+        if run.project_id != *project_id
+            || binding.project_id != *project_id
+            || binding.project_revision_id != workspace.project_revision_id
+            || binding.workspace_snapshot_id != workspace.workspace_snapshot_id
+            || binding.workspace_content_fingerprint != workspace.entries_fingerprint
+            || binding.profile_resolution_fingerprint != resolution.profile_resolution_fingerprint
+            || binding.effective_config_fingerprint != *effective_config_fingerprint
+            || binding.freshness != EvidenceFreshnessV2::Current
+            || !binding.stale_reasons.is_empty()
+            || binding.tool_descriptor_ref.is_none()
+            || binding.observed_tool_fingerprint.is_none()
+            || !run.satisfies_required_check()
+        {
+            continue;
+        }
+        let Ok(task_spec_id) = TaskSpecId::parse(binding.task_spec_ref.document_id.clone()) else {
+            continue;
+        };
+        let Ok(bundle) = service.get_planning_bundle(&task_spec_id) else {
+            continue;
+        };
+        let plan = &bundle.validation_plan;
+        let Ok(plan_sha256) = serde_json::to_value(plan)
+            .map_err(|_| ApplicationError::Invalid)
+            .and_then(|value| canonical_sha256(&value).map_err(|_| ApplicationError::Invalid))
+        else {
+            continue;
+        };
+        if plan.readiness != ValidationPlanV2Readiness::Ready
+            || plan.config_fingerprint != *effective_config_fingerprint
+            || plan.profile_resolution.as_ref() != Some(resolution)
+            || run.validation_plan_ref.schema_id
+                != star_contracts::planning::FULL_VALIDATION_PLAN_SCHEMA_ID
+            || run.validation_plan_ref.document_id != plan.validation_plan_id.as_str()
+            || run.validation_plan_ref.revision != plan.revision
+            || run.validation_plan_ref.sha256 != plan_sha256
+        {
+            continue;
+        }
+        let Some(check) = plan.required_checks.iter().find(|check| {
+            check.project_id == *project_id
+                && check.plan_item_id == run.plan_item_id
+                && check.descriptor_ref == run.check_ref
+                && check.outcome
+                    == star_contracts::planning::CheckResolutionOutcome::SelectedRequired
+        }) else {
+            continue;
+        };
+        let Ok(run_ref) = run.reference() else {
+            continue;
+        };
+        let result_current = results.iter().any(|result| {
+            m10_validation_result_matches_run(result, run, runs)
+                && result.project_id == *project_id
+                && result.validation_plan_ref == run.validation_plan_ref
+                && result.outcome == ValidationOutcome::Pass
+                && result.completeness == Completeness::Complete
+                && result.freshness == EvidenceFreshnessV2::Current
+                && result.stability == ValidationStabilityV2::Stable
+                && result.stale_reasons.is_empty()
+                && result.subject_binding.project_revision_id == workspace.project_revision_id
+                && result.subject_binding.workspace_snapshot_id == workspace.workspace_snapshot_id
+                && result.subject_binding.workspace_content_fingerprint
+                    == workspace.entries_fingerprint
+                && result.subject_binding.profile_resolution_fingerprint
+                    == resolution.profile_resolution_fingerprint
+                && result.subject_binding.effective_config_fingerprint
+                    == *effective_config_fingerprint
+                && result.validation_run_refs.contains(&run_ref)
+        });
+        if result_current {
+            covered.insert(check.family.clone());
+        }
+    }
+    Ok(covered.into_iter().collect())
+}
+
+fn m10_validation_result_matches_run(
+    result: &ValidationResultV2,
+    run: &ValidationRunV2,
+    runs: &[ValidationRunV2],
+) -> bool {
+    let selected_runs = runs
+        .iter()
+        .filter(|candidate| {
+            result
+                .validation_run_refs
+                .iter()
+                .any(|reference| reference.validation_run_id == candidate.validation_run_id)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let Ok(sealed) = result.clone().seal(&selected_runs) else {
+        return false;
+    };
+    let result_binding = &result.subject_binding;
+    let run_binding = &run.subject_binding;
+    sealed == *result
+        && result.normalizer_fingerprint == result_binding.normalizer_fingerprint
+        && result_binding.project_id == run_binding.project_id
+        && result_binding.checkout_id == run_binding.checkout_id
+        && result_binding.project_revision_id == run_binding.project_revision_id
+        && result_binding.workspace_snapshot_id == run_binding.workspace_snapshot_id
+        && result_binding.workspace_content_fingerprint == run_binding.workspace_content_fingerprint
+        && result_binding.task_spec_ref == run_binding.task_spec_ref
+        && result_binding.scope_revision_ref == run_binding.scope_revision_ref
+        && result_binding.impact_analysis_ref == run_binding.impact_analysis_ref
+        && result_binding.change_set_refs == run_binding.change_set_refs
+        && result_binding.validation_plan_ref == run_binding.validation_plan_ref
+        && result_binding.profile_resolution_fingerprint
+            == run_binding.profile_resolution_fingerprint
+        && result_binding.effective_config_fingerprint == run_binding.effective_config_fingerprint
+        && result_binding.catalog_snapshot_ref == run_binding.catalog_snapshot_ref
+        && result_binding.freshness == run_binding.freshness
+        && result_binding.stale_reasons == run_binding.stale_reasons
 }
 
 fn m10_find_build_once_candidate(
@@ -19820,6 +22198,11 @@ fn m7_validate_reproduction_effect_receipts(
                 | ReproductionResult::DifferentFailure
                 | ReproductionResult::NotReproduced
         );
+        if completed && failure.input_fingerprint.as_ref() != Some(&attempt.input_fingerprint) {
+            return Err(ApplicationError::Apply(
+                "REPRODUCTION_SUBJECT_CHANGED".to_owned(),
+            ));
+        }
         let Some(receipt_id) = attempt.effect_receipt_ref.as_deref() else {
             if completed {
                 return Err(ApplicationError::Apply(
@@ -19873,6 +22256,127 @@ fn m7_validate_reproduction_effect_receipts(
         }
     }
     Ok(())
+}
+
+fn m7_validate_verified_failure_input(
+    service: &ManagementApplicationService,
+    project_id: &ProjectId,
+    input: &FailureRecordInput,
+) -> Result<(), ApplicationError> {
+    if input.verification_state != VerificationState::Verified {
+        return Ok(());
+    }
+    let runs = service.list_validation_runs_v2(project_id)?;
+    let diagnostics = service.list_validation_diagnostics_v2(project_id)?;
+    let findings = service.list_findings(project_id)?;
+    let Some(run) = runs
+        .iter()
+        .find(|run| run.validation_run_id.as_str() == input.subject_binding.validation_run_ref)
+    else {
+        return Err(ApplicationError::Apply(
+            "VALIDATION_EVIDENCE_INVALID".to_owned(),
+        ));
+    };
+    if !m7_verified_failure_input_matches(run, &diagnostics, &findings, input) {
+        return Err(ApplicationError::Apply(
+            "VALIDATION_EVIDENCE_INVALID".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn m7_verified_failure_input_matches(
+    run: &ValidationRunV2,
+    diagnostics: &[DiagnosticV2],
+    findings: &[star_contracts::management::Finding],
+    input: &FailureRecordInput,
+) -> bool {
+    let subject = &run.subject_binding;
+    let change_set_matches =
+        input
+            .subject_binding
+            .change_set_ref
+            .as_deref()
+            .is_some_and(|expected| {
+                subject
+                    .change_set_refs
+                    .iter()
+                    .any(|reference| reference.document_id == expected)
+            });
+    let cwd_matches = match &run.invocation.cwd {
+        InvocationWorkingDirectoryV2::ProjectRoot => matches!(
+            input.invocation.logical_cwd.as_str(),
+            "project-root" | "project_root"
+        ),
+        InvocationWorkingDirectoryV2::ProjectPath { path } => {
+            input.invocation.logical_cwd == path.as_str()
+        }
+    };
+    if run.project_id != input.subject_binding.project_id
+        || subject.project_id != input.subject_binding.project_id
+        || subject.checkout_id.as_str() != input.subject_binding.checkout_ref
+        || subject.workspace_snapshot_id.as_str() != input.subject_binding.workspace_snapshot_ref
+        || subject.project_revision_id.as_str() != input.subject_binding.project_revision_ref
+        || !change_set_matches
+        || subject.freshness != EvidenceFreshnessV2::Current
+        || run.completeness != Completeness::Complete
+        || run.stability == ValidationStabilityV2::NotEvaluated
+        || !matches!(
+            run.outcome,
+            ValidationOutcome::Fail | ValidationOutcome::Error
+        )
+        || run.process_start_state != ProcessStartStateV2::Started
+        || run.started_at.is_none()
+        || run.finished_at.is_none()
+        || run.termination_reason.is_none()
+        || run.observed_tool.is_none()
+        || run.check_ref.document_id != input.invocation.command_descriptor
+        || run.invocation.executable != input.invocation.executable_identity
+        || run.invocation.args != input.invocation.structured_args
+        || !cwd_matches
+        || subject.execution_environment_fingerprint != input.environment_fingerprint
+        || run.invocation.input_fingerprint != input.input_fingerprint
+        || input.attempt_id != run.validation_run_id.as_str()
+    {
+        return false;
+    }
+
+    let requested_diagnostics = input.diagnostic_refs.iter().collect::<BTreeSet<_>>();
+    if requested_diagnostics.is_empty()
+        || requested_diagnostics.len() != input.diagnostic_refs.len()
+        || !requested_diagnostics.iter().all(|requested| {
+            run.diagnostic_ids
+                .iter()
+                .any(|diagnostic_id| diagnostic_id.as_str() == requested.as_str())
+        })
+    {
+        return false;
+    }
+    let observed_at = chrono::DateTime::parse_from_rfc3339(&input.observed_at).ok();
+    if !requested_diagnostics.iter().all(|requested| {
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.diagnostic_id.as_str() == requested.as_str()
+                && diagnostic.project_id == run.project_id
+                && diagnostic.validation_run_id == run.validation_run_id
+                && diagnostic.status == star_contracts::evidence::DiagnosticStatus::Confirmed
+                && diagnostic.observation_status
+                    == star_contracts::evidence_v2::DiagnosticObservationStatusV2::Confirmed
+                && diagnostic.code == input.producer_code
+                && diagnostic.message == input.raw_message
+                && observed_at.is_some_and(|observed| observed == diagnostic.observed_at)
+        })
+    }) {
+        return false;
+    }
+
+    let requested_findings = input.finding_refs.iter().collect::<BTreeSet<_>>();
+    requested_findings.len() == input.finding_refs.len()
+        && requested_findings.iter().all(|requested| {
+            findings.iter().any(|finding| {
+                finding.project_id == run.project_id
+                    && finding.finding_id.as_str() == requested.as_str()
+            })
+        })
 }
 
 fn m7_validate_regression_evidence(
@@ -20007,6 +22511,7 @@ fn m7_validation_run_matches_failure(run: &ValidationRunV2, failure: &FailureRec
         && run.invocation.args == failure.invocation.structured_args
         && cwd_matches
         && run.subject_binding.execution_environment_fingerprint == failure.environment_fingerprint
+        && failure.input_fingerprint.as_ref() == Some(&run.invocation.input_fingerprint)
 }
 
 fn m7_string_vec(
@@ -20434,18 +22939,46 @@ fn management_command_response(
     registry_revision: u64,
 ) -> IpcResponse {
     match result {
-        Ok(data) => IpcResponse {
-            schema_id: "star.ipc.response".to_owned(),
-            schema_version: 1,
-            request_id: request.request_id,
-            status: IpcStatus::Ok,
-            data: Some(data),
-            operation_id: None,
-            diagnostics: vec![],
-            error: None,
-            registry_revision: Some(registry_revision),
-            correlation_id: request.client_request_id,
-        },
+        Ok(data) => {
+            let claims_approval = data.get("status").and_then(serde_json::Value::as_str)
+                == Some("approval_required")
+                && data
+                    .get("approval_id")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some();
+            let operation_id = claims_approval
+                .then(|| {
+                    data.get("operation_id")
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(|value| OperationId::parse(value.to_owned()).ok())
+                })
+                .flatten();
+            if claims_approval && operation_id.is_none() {
+                return invalid_request_response(
+                    request,
+                    "OPERATION_STORE_UNAVAILABLE",
+                    "The approval wait has no durable operation identity.",
+                    registry_revision,
+                );
+            }
+            let approval_required = claims_approval && operation_id.is_some();
+            IpcResponse {
+                schema_id: "star.ipc.response".to_owned(),
+                schema_version: 1,
+                request_id: request.request_id,
+                status: if approval_required {
+                    IpcStatus::ApprovalRequired
+                } else {
+                    IpcStatus::Ok
+                },
+                data: Some(data),
+                operation_id,
+                diagnostics: vec![],
+                error: None,
+                registry_revision: Some(registry_revision),
+                correlation_id: request.client_request_id,
+            }
+        }
         Err(error) => {
             let (code, message) = match error {
                 ApplicationError::Invalid => (
@@ -21339,6 +23872,161 @@ mod tests {
         }
     }
 
+    fn profile_binding_test_service(root: &Path) -> ManagementApplicationService {
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .unwrap()
+            .to_path_buf();
+        ManagementApplicationService::new(
+            Arc::new(
+                SqliteManagementRepositorySet::open(root.join("management"), "profile-binding")
+                    .unwrap(),
+            ),
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("root-bindings")).unwrap()),
+            Arc::new(LocalArtifactStore::default()),
+        )
+        .with_profile_catalog_root(workspace_root.join("catalog/profiles"))
+    }
+
+    fn unbound_profile_stage(profile_id: &str) -> StageSpecV1 {
+        StageSpecV1 {
+            schema_id: STAGE_SPEC_SCHEMA_ID.to_owned(),
+            schema_version: STAGE_CONTRACT_VERSION,
+            stage_id: StageId::new(),
+            revision: 1,
+            goal_id: GoalId::new(),
+            task_spec_ref: None,
+            scope_revision_ref: None,
+            title: "profile-bound stage".to_owned(),
+            objective: "verify exact current Profile binding".to_owned(),
+            stage_mode: star_contracts::stage::StageModeV1::Plan,
+            executor_kind: StageExecutorKindV1::DeterministicLocal,
+            work_profile_id: profile_id.to_owned(),
+            work_profile_version: String::new(),
+            work_profile_definition_hash: None,
+            profile_catalog_fingerprint: None,
+            profile_resolution_fingerprint: None,
+            project_ids: vec![ProjectId::new()],
+            included_work: vec!["profile_conformance".to_owned()],
+            excluded_work: vec!["external_publish".to_owned()],
+            expected_change_scope: Vec::new(),
+            dependencies: Vec::new(),
+            parallel_group: None,
+            completion_criteria: vec!["current_profile_verified".to_owned()],
+            failure_policy: star_contracts::stage::StageFailurePolicyV1::Replan,
+            route_decision_ref: None,
+            permission_plan_ref: None,
+            validation_plan_ref: None,
+            impact_analysis_ref: None,
+            change_plan_refs: Vec::new(),
+            result_ref: None,
+            state: StageStateV1::Draft,
+            stage_fingerprint: Sha256Hash::digest(b"unsealed-stage"),
+        }
+    }
+
+    #[test]
+    fn stage_profile_binding_rejects_unknown_and_stale_catalog_resolution() {
+        let root = std::env::temp_dir().join(format!(
+            "star-stage-profile-binding-{}-{}",
+            std::process::id(),
+            star_ipc::nonce()
+        ));
+        let service = profile_binding_test_service(&root);
+
+        let stage = unbound_profile_stage("project_understanding");
+        let input = bind_stage_plan_profiles(
+            &service,
+            StageGraphPlanInput {
+                goal_id: stage.goal_id.clone(),
+                plan_revision: 1,
+                stages: vec![stage],
+                edges: Vec::new(),
+                parallel_groups: Vec::new(),
+                critical_path: Vec::new(),
+                integration_stage_id: None,
+            },
+            None,
+        )
+        .unwrap();
+        let graph = build_stage_graph(input).unwrap();
+        let bound = graph.stages[0].clone();
+        service.verify_stage_profile_current(&bound).unwrap();
+
+        let mut stale = bound.clone();
+        stale.profile_catalog_fingerprint = Some(Sha256Hash::digest(b"stale-catalog"));
+        let stale = stale.seal().unwrap();
+        assert!(matches!(
+            service.verify_stage_profile_current(&stale),
+            Err(ApplicationError::Apply(code)) if code == "VALIDATION_PROFILE_CLOSURE_STALE"
+        ));
+        assert!(matches!(
+            service.bind_stage_profile_current(unbound_profile_stage("unknown_profile")),
+            Err(ApplicationError::Apply(code)) if code == "VALIDATION_PROFILE_CLOSURE_STALE"
+        ));
+    }
+
+    #[test]
+    fn final_audit_never_marks_profile_checks_covered_from_source_markers_only() {
+        let root = std::env::temp_dir().join(format!(
+            "star-profile-runtime-evidence-{}-{}",
+            std::process::id(),
+            star_ipc::nonce()
+        ));
+        let service = profile_binding_test_service(&root);
+        let project_id = ProjectId::new();
+        let mut workspace: star_contracts::management::WorkspaceSnapshot = serde_json::from_str(
+            include_str!("../../../specs/fixtures/management/v1/workspace-snapshot/full.json"),
+        )
+        .unwrap();
+        workspace.project_id = project_id.clone();
+        let resolution = service
+            .resolve_development_profiles(&["project_understanding".to_owned()])
+            .unwrap();
+        let covered = m10_profile_covered_check_families(
+            &service,
+            &project_id,
+            &workspace,
+            &Sha256Hash::digest(b"effective-config"),
+            &resolution,
+            &[],
+            &[],
+        )
+        .unwrap();
+        assert!(covered.is_empty());
+    }
+
+    #[test]
+    fn codex_approval_wait_is_not_reported_as_success() {
+        let operation_id = OperationId::new();
+        let response = management_command_response(
+            direct_core_request("codex.task.start", serde_json::json!({})),
+            Ok(serde_json::json!({
+                "status":"approval_required",
+                "approval_id":ApprovalId::new(),
+                "operation_id":operation_id,
+            })),
+            7,
+        );
+        assert_eq!(response.status, IpcStatus::ApprovalRequired);
+        assert_eq!(response.operation_id, Some(operation_id));
+
+        let missing_operation = management_command_response(
+            direct_core_request("codex.task.start", serde_json::json!({})),
+            Ok(serde_json::json!({
+                "status":"approval_required",
+                "approval_id":ApprovalId::new(),
+            })),
+            7,
+        );
+        assert_eq!(missing_operation.status, IpcStatus::Error);
+        assert_eq!(
+            missing_operation.error.unwrap().code,
+            "OPERATION_STORE_UNAVAILABLE"
+        );
+    }
+
     fn active_global_store(management_root: &Path) -> PathBuf {
         let active_set: star_contracts::recovery::ActiveSetManifest = serde_json::from_slice(
             &std::fs::read(management_root.join("active-set.json")).unwrap(),
@@ -21648,6 +24336,7 @@ mod tests {
         failure.failure_record_id = "failure-one".to_owned();
         failure.subject_binding.project_id = project_id.clone();
         failure.occurrence_fingerprint = reproduction_subject;
+        failure.input_fingerprint = Some(observation.input_fingerprint.clone());
         let attempt = ReproductionAttemptV2 {
             attempt: observation.attempt,
             result: observation.result,
@@ -24190,6 +26879,121 @@ mod tests {
     }
 
     #[test]
+    fn verified_failure_requires_current_exact_validation_and_diagnostic_evidence() {
+        let project_id = ProjectId::new();
+        let environment_fingerprint = Sha256Hash::digest(b"failure-environment");
+        let input_fingerprint = Sha256Hash::digest(b"failure-input");
+        let mut run_value: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../specs/fixtures/management/v1/validation-run-v2/full.json"
+        ))
+        .unwrap();
+        run_value["invocation"]["invocation_id"] =
+            serde_json::json!(star_contracts::ids::TaskInvocationId::new());
+        let mut run: ValidationRunV2 = serde_json::from_value(run_value).unwrap();
+        run.project_id = project_id.clone();
+        run.subject_binding.project_id = project_id.clone();
+        run.subject_binding.freshness = EvidenceFreshnessV2::Current;
+        run.subject_binding.change_set_refs[0].document_id = "change-one".to_owned();
+        run.subject_binding.execution_environment_fingerprint = environment_fingerprint.clone();
+        run.check_ref.document_id = "cargo-test".to_owned();
+        run.invocation.executable = "cargo".to_owned();
+        run.invocation.args = vec!["test".to_owned(), "failure_case".to_owned()];
+        run.invocation.cwd = InvocationWorkingDirectoryV2::ProjectRoot;
+        run.invocation.input_fingerprint = input_fingerprint.clone();
+        run.attempt = 1;
+        run.outcome = ValidationOutcome::Fail;
+        run.completeness = Completeness::Complete;
+        run.stability = ValidationStabilityV2::Stable;
+        run.process_start_state = ProcessStartStateV2::Started;
+
+        let mut diagnostic: DiagnosticV2 = serde_json::from_str(include_str!(
+            "../../../specs/fixtures/management/v1/diagnostic-v2/full.json"
+        ))
+        .unwrap();
+        diagnostic.project_id = project_id.clone();
+        diagnostic.validation_run_id = run.validation_run_id.clone();
+        diagnostic.code = "TEST_FAILURE".to_owned();
+        diagnostic.message = "assertion failed".to_owned();
+        run.diagnostic_ids = vec![diagnostic.diagnostic_id.clone()];
+
+        let input = FailureRecordInput {
+            failure_record_id: "failure-current-one".to_owned(),
+            occurrence_id: "occurrence-current-one".to_owned(),
+            diagnostic_refs: vec![diagnostic.diagnostic_id.to_string()],
+            finding_refs: Vec::new(),
+            subject_binding: star_contracts::maintenance_v2::FailureSubjectBinding {
+                project_id: project_id.clone(),
+                checkout_ref: run.subject_binding.checkout_id.to_string(),
+                workspace_snapshot_ref: run.subject_binding.workspace_snapshot_id.to_string(),
+                project_revision_ref: run.subject_binding.project_revision_id.to_string(),
+                change_set_ref: Some("change-one".to_owned()),
+                validation_run_ref: run.validation_run_id.to_string(),
+            },
+            failure_kind: star_contracts::maintenance_v2::FailureKind::Test,
+            producer_code: diagnostic.code.clone(),
+            raw_message: diagnostic.message.clone(),
+            logical_owner: "failure_case".to_owned(),
+            signature: "failure_case::assertion".to_owned(),
+            causality_role: star_contracts::maintenance_v2::FailureCausalityRole::Independent,
+            root_candidate_refs: Vec::new(),
+            cascade_parent_refs: Vec::new(),
+            invocation: star_contracts::maintenance_v2::FailureInvocation {
+                command_descriptor: run.check_ref.document_id.clone(),
+                executable_identity: run.invocation.executable.clone(),
+                structured_args: run.invocation.args.clone(),
+                logical_cwd: "project-root".to_owned(),
+                timeout_ms: run.invocation.timeout_ms.max(1),
+            },
+            environment_compatibility_class: "windows-test".to_owned(),
+            environment_fingerprint,
+            input_refs: vec!["artifact:failure-input".to_owned()],
+            input_fingerprint,
+            seed: None,
+            manifest_fingerprint: None,
+            stdout_ref: Some("artifact:failure-stdout".to_owned()),
+            stderr_ref: None,
+            artifact_refs: Vec::new(),
+            observed_at: diagnostic.observed_at.to_rfc3339(),
+            attempt_id: run.validation_run_id.to_string(),
+            verification_state: VerificationState::Verified,
+        };
+
+        assert!(m7_verified_failure_input_matches(
+            &run,
+            std::slice::from_ref(&diagnostic),
+            &[],
+            &input,
+        ));
+
+        let mut stale = run.clone();
+        stale.subject_binding.freshness = EvidenceFreshnessV2::StaleSource;
+        assert!(!m7_verified_failure_input_matches(
+            &stale,
+            std::slice::from_ref(&diagnostic),
+            &[],
+            &input,
+        ));
+
+        let mut fabricated = input.clone();
+        fabricated.raw_message = "caller fabricated failure".to_owned();
+        assert!(!m7_verified_failure_input_matches(
+            &run,
+            std::slice::from_ref(&diagnostic),
+            &[],
+            &fabricated,
+        ));
+
+        let mut passing = run;
+        passing.outcome = ValidationOutcome::Pass;
+        assert!(!m7_verified_failure_input_matches(
+            &passing,
+            &[diagnostic],
+            &[],
+            &input,
+        ));
+    }
+
+    #[test]
     fn m8_commands_are_management_owned_and_only_durable_status_reads_survive_restart_pending() {
         for command in [
             "migration.inspect",
@@ -24450,6 +27254,12 @@ mod tests {
         assert_eq!(PRODUCT_FEATURE_RUNTIME_SPECS.len(), 23);
         for feature in PRODUCT_FEATURE_RUNTIME_SPECS {
             assert!(
+                !feature.semantic_owner_ref.is_empty(),
+                "{}",
+                feature.feature_id
+            );
+            assert!(!feature.physical_owner.is_empty(), "{}", feature.feature_id);
+            assert!(
                 !feature.command_surfaces.is_empty(),
                 "{}",
                 feature.feature_id
@@ -24541,6 +27351,102 @@ mod tests {
                 &approvals,
                 &tampered,
                 serde_json::json!({"kind":"internal_test"}),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn codex_capability_probe_requires_exact_durable_approval() {
+        let root = std::env::temp_dir().join(format!(
+            "star-capability-approval-{}-{}",
+            std::process::id(),
+            star_ipc::nonce()
+        ));
+        let approvals = Arc::new(Mutex::new(
+            ApprovalStore::load(root.join("approvals.json")).unwrap(),
+        ));
+        let operations = Arc::new(Mutex::new(
+            OperationStore::load(root.join("operations.json")).unwrap(),
+        ));
+        let project_id = ProjectId::new();
+        let permission_actions = vec![
+            "local_read".to_owned(),
+            "local_write".to_owned(),
+            "network_read".to_owned(),
+            "process_run".to_owned(),
+            "secret_access".to_owned(),
+        ];
+        let arguments = serde_json::json!({
+            "project_id":project_id,
+            "codex_executable":"C:\\Codex\\codex.exe",
+            "executable_sha256":Sha256Hash::digest(b"codex"),
+            "expires_in_seconds":900,
+            "allow_managed_ultra":false,
+            "permission_actions":permission_actions,
+            "allowed_environment_names":default_codex_environment_names(),
+        });
+        let arguments_hash = canonical_sha256(&arguments).unwrap();
+        let descriptor_hash =
+            Sha256Hash::digest(b"codex.capability.inspect|app-server-v2|approval-v1");
+        let required = resolve_capability_inspect_approval(
+            &approvals,
+            &operations,
+            None,
+            &project_id,
+            &serde_json::json!({"kind":"internal_test"}),
+            "req_capability_test",
+            &arguments,
+            &arguments_hash,
+            &descriptor_hash,
+            &permission_actions,
+        )
+        .unwrap()
+        .unwrap_err();
+        let approval_id: ApprovalId =
+            serde_json::from_value(required["approval_id"].clone()).unwrap();
+        let approval = approvals.lock().unwrap().get(&approval_id).unwrap();
+        assert_eq!(approval.permission_actions, permission_actions);
+        approvals
+            .lock()
+            .unwrap()
+            .resolve(
+                &approval_id,
+                &approval.scope_hash,
+                ApprovalDecision::Approve,
+                Some("exact probe approved".to_owned()),
+                None,
+                serde_json::json!({"kind":"internal_test"}),
+            )
+            .unwrap();
+        let approved = resolve_capability_inspect_approval(
+            &approvals,
+            &operations,
+            Some(&approval_id),
+            &project_id,
+            &serde_json::json!({"kind":"internal_test"}),
+            "req_capability_test",
+            &arguments,
+            &arguments_hash,
+            &descriptor_hash,
+            &permission_actions,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(approved.approval_id, approval_id);
+
+        assert!(
+            resolve_capability_inspect_approval(
+                &approvals,
+                &operations,
+                Some(&approval_id),
+                &project_id,
+                &serde_json::json!({"kind":"internal_test"}),
+                "req_capability_test",
+                &arguments,
+                &Sha256Hash::digest(b"changed-arguments"),
+                &descriptor_hash,
+                &permission_actions,
             )
             .is_err()
         );

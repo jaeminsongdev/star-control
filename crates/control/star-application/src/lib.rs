@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use star_contracts::{
     Sha256Hash, canonical_sha256,
     config_v1::EffectiveConfigV1,
+    context_pack::ContextPackV1,
     evidence::{
         ActorRef, ActorType, ArtifactKind, ArtifactManifest, ArtifactManifestEntry, ArtifactRef,
         AuthoritativeGateState, CatalogRef, DocumentRef, GateDecision, GateDecisionKind, GateScope,
@@ -43,6 +44,7 @@ use star_contracts::{
         CoordinationState, Disposition, Finding, ManagementStoreStatus, ParticipantState, PatchSet,
         PatchSetStatus, Project, ProjectCheckout, ProjectPathRef, ProjectStorePoint, ScanRun,
         ScanStatus, StorePoint, StoreVersionVector, Suppression, SymbolReference, ValidationResult,
+        WorkspaceSnapshot,
     },
     parse_no_duplicate_keys,
     patch_v2::{
@@ -63,6 +65,7 @@ use star_contracts::{
         ScopeUserDecision, SelectorKind, SuccessCriterion, UnresolvedCheck,
         ValidationPlanV2Readiness, migrate_change_plan_v1_to_v2,
     },
+    profile::DevelopmentProfileResolutionV1,
     recovery::{
         BackupApplyResult, BackupPlan, LocalStateExportPlan, LocalStateExportResult,
         LocalStateImportPlan, LocalStateImportResult, RebuildApplyResult, RebuildPlan,
@@ -73,6 +76,7 @@ use star_contracts::{
         RustAutoPolicy, RustCompleteness, RustStylePolicyApprovalDecision,
         RustStylePolicyApprovalRequest,
     },
+    stage::StageSpecV1,
     validator_guard::{GuardFixtureKindV2, ValidatorGuardEvidenceV2},
 };
 use star_domain::{PersistenceRedactor, versioned_fingerprint};
@@ -541,6 +545,13 @@ pub struct IndexStatusResult {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct CurrentContextProjection {
+    pub catalog_snapshot: ProjectCatalogSnapshot,
+    pub workspace_snapshot: WorkspaceSnapshot,
+    pub index_projection: CodeIndexProjection,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct IndexQueryResult<T> {
     pub snapshot_id: star_contracts::ids::CodeIndexSnapshotId,
     pub requested_tier: IndexTier,
@@ -988,6 +999,31 @@ impl ManagementApplicationService {
     ) -> Result<star_contracts::profile::DevelopmentProfileResolutionV1, ApplicationError> {
         let catalog = self.development_profile_catalog()?;
         Ok(resolve_loaded_development_profiles(&catalog, profile_ids)?)
+    }
+
+    pub fn bind_stage_profile_current(
+        &self,
+        stage: StageSpecV1,
+    ) -> Result<StageSpecV1, ApplicationError> {
+        let resolution = self
+            .resolve_development_profiles(std::slice::from_ref(&stage.work_profile_id))
+            .map_err(|_| ApplicationError::Apply("VALIDATION_PROFILE_CLOSURE_STALE".to_owned()))?;
+        stage
+            .bind_profile_resolution(&resolution)
+            .map_err(|_| ApplicationError::Apply("VALIDATION_PROFILE_CLOSURE_STALE".to_owned()))
+    }
+
+    pub fn verify_stage_profile_current(
+        &self,
+        stage: &StageSpecV1,
+    ) -> Result<DevelopmentProfileResolutionV1, ApplicationError> {
+        let resolution = self
+            .resolve_development_profiles(std::slice::from_ref(&stage.work_profile_id))
+            .map_err(|_| ApplicationError::Apply("VALIDATION_PROFILE_CLOSURE_STALE".to_owned()))?;
+        stage
+            .verify_profile_binding(&resolution)
+            .map_err(|_| ApplicationError::Apply("VALIDATION_PROFILE_CLOSURE_STALE".to_owned()))?;
+        Ok(resolution)
     }
 
     pub fn with_syntax_adapter(mut self, adapter: Arc<dyn SyntaxAdapter>) -> Self {
@@ -2418,6 +2454,161 @@ impl ManagementApplicationService {
             },
             state == IndexFreshnessState::Current && required_partitions_current,
         ))
+    }
+
+    fn current_context_projection_inner(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<CurrentContextProjection, ApplicationError> {
+        let (index_projection, current) = self.load_index_projection_with_freshness(project_id)?;
+        if !current {
+            return Err(ApplicationError::IndexNotCurrent);
+        }
+        let catalog_snapshot = self
+            .repositories
+            .global()
+            .latest_project_catalog_snapshot()?
+            .ok_or(ApplicationError::NotFound)?;
+        let index_snapshot = &index_projection.snapshot;
+        if catalog_snapshot.completeness != star_contracts::management::Completeness::Complete
+            || catalog_snapshot.project_catalog_snapshot_id
+                != index_snapshot.project_catalog_snapshot_id
+        {
+            return Err(ApplicationError::IndexNotCurrent);
+        }
+        let workspace_snapshot = self
+            .repositories
+            .project(project_id)?
+            .get_workspace_snapshot(&index_snapshot.workspace_snapshot_id)?
+            .ok_or(ApplicationError::NotFound)?;
+        if workspace_snapshot.completeness != star_contracts::management::Completeness::Complete
+            || workspace_snapshot.project_id != *project_id
+            || workspace_snapshot.workspace_snapshot_id != index_snapshot.workspace_snapshot_id
+            || workspace_snapshot.project_revision_id != index_snapshot.project_revision_id
+            || index_projection.source_entries.iter().any(|entry| {
+                entry.owner_project_id != *project_id
+                    || entry.owner_checkout_id != index_snapshot.checkout_id
+            })
+        {
+            return Err(ApplicationError::IndexNotCurrent);
+        }
+        Ok(CurrentContextProjection {
+            catalog_snapshot,
+            workspace_snapshot,
+            index_projection,
+        })
+    }
+
+    pub fn current_context_projection(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<CurrentContextProjection, ApplicationError> {
+        let _guard = self.command_guard()?;
+        self.current_context_projection_inner(project_id)
+    }
+
+    pub fn verify_context_pack_current(
+        &self,
+        pack: &ContextPackV1,
+    ) -> Result<(), ApplicationError> {
+        pack.verify().map_err(|_| ApplicationError::Invalid)?;
+        if !pack.is_current_at(Utc::now()) {
+            return Err(ApplicationError::IndexNotCurrent);
+        }
+        let _guard = self.command_guard()?;
+        for input in &pack.project_inputs {
+            let current = self.current_context_projection_inner(&input.project_id)?;
+            let snapshot = &current.index_projection.snapshot;
+            if pack.project_catalog_snapshot_ref.document_id
+                != current
+                    .catalog_snapshot
+                    .project_catalog_snapshot_id
+                    .as_str()
+                || pack.project_catalog_snapshot_ref.sha256
+                    != current.catalog_snapshot.content_fingerprint
+                || input.checkout_id != snapshot.checkout_id
+                || input.project_revision_id != snapshot.project_revision_id
+                || input.workspace_snapshot_id != snapshot.workspace_snapshot_id
+                || input.checkout_observation_fingerprint
+                    != snapshot.checkout_observation_fingerprint
+                || input.workspace_entries_fingerprint
+                    != current.workspace_snapshot.entries_fingerprint
+            {
+                return Err(ApplicationError::IndexNotCurrent);
+            }
+            let reference = pack
+                .code_index_snapshot_refs
+                .iter()
+                .find(|reference| {
+                    reference.project_id == input.project_id
+                        && reference.checkout_id == input.checkout_id
+                })
+                .ok_or(ApplicationError::Invalid)?;
+            let mut partition_fingerprints = snapshot
+                .partitions
+                .iter()
+                .filter(|partition| {
+                    matches!(
+                        partition.state,
+                        IndexPartitionState::Succeeded | IndexPartitionState::Reused
+                    )
+                })
+                .filter_map(|partition| partition.output_fingerprint.clone())
+                .collect::<Vec<_>>();
+            partition_fingerprints.sort();
+            partition_fingerprints.dedup();
+            if reference.code_index_snapshot_id != snapshot.code_index_snapshot_id
+                || reference.project_catalog_snapshot_id != snapshot.project_catalog_snapshot_id
+                || reference.project_revision_id != snapshot.project_revision_id
+                || reference.workspace_snapshot_id != snapshot.workspace_snapshot_id
+                || reference.required_tier != snapshot.required_tier
+                || reference.used_tier > snapshot.max_tier
+                || reference.freshness_states != vec![IndexFreshnessState::Current]
+                || reference.partition_fingerprints != partition_fingerprints
+                || reference.content_fingerprint != snapshot.content_fingerprint
+            {
+                return Err(ApplicationError::IndexNotCurrent);
+            }
+            for item in pack
+                .items
+                .iter()
+                .filter(|item| item.project_id == input.project_id)
+            {
+                let source = current
+                    .index_projection
+                    .source_entries
+                    .iter()
+                    .find(|source| source.path == item.relative_path)
+                    .ok_or(ApplicationError::IndexNotCurrent)?;
+                let partition_key = format!(
+                    "{}:{}",
+                    item.relative_path.as_str(),
+                    item.requested_tier.partition_suffix()
+                );
+                let tier_available = snapshot.partitions.iter().any(|partition| {
+                    partition.partition_key == partition_key
+                        && matches!(
+                            partition.state,
+                            IndexPartitionState::Succeeded | IndexPartitionState::Reused
+                        )
+                        && partition.failed_count == 0
+                        && partition.excluded_count == 0
+                        && partition.indexed_count == partition.target_count
+                        && partition.used_tier == Some(item.used_tier)
+                });
+                if !tier_available
+                    || source.owner_checkout_id != input.checkout_id
+                    || source.content_sha256 != item.content_sha256
+                    || item.project_revision_id != input.project_revision_id
+                    || item.workspace_snapshot_id != input.workspace_snapshot_id
+                    || item.freshness
+                        != star_contracts::context_pack::ContextQualityStateV1::Current
+                {
+                    return Err(ApplicationError::IndexNotCurrent);
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn managed_registry_resolution_context(
@@ -4450,6 +4641,16 @@ impl ManagementApplicationService {
             .repositories
             .project(project_id)?
             .list_validation_runs_v2()?)
+    }
+
+    pub fn list_validation_results_v2(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<Vec<ValidationResultV2>, ApplicationError> {
+        Ok(self
+            .repositories
+            .project(project_id)?
+            .list_validation_results_v2()?)
     }
 
     pub fn get_validation_result_v2(

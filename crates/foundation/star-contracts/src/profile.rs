@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{Sha256Hash, canonical_sha256};
 
-pub const DEVELOPMENT_PROFILE_SCHEMA_VERSION: u32 = 1;
+pub const DEVELOPMENT_PROFILE_SCHEMA_VERSION: u32 = 2;
 pub const DEVELOPMENT_PROFILE_DESCRIPTOR_SCHEMA_ID: &str = "star.development-profile-descriptor";
 pub const DEVELOPMENT_PROFILE_CATALOG_SCHEMA_ID: &str = "star.development-profile-catalog-snapshot";
 pub const DEVELOPMENT_PROFILE_RESOLUTION_SCHEMA_ID: &str = "star.development-profile-resolution";
@@ -123,6 +123,18 @@ string_enum!(ProfileApprovalCheckpointV1 {
     ReleasePublish,
 });
 
+string_enum!(ProfileUnknownOutcomePolicyV1 {
+    PreserveAndStop,
+    PreserveAndReconcile,
+});
+
+string_enum!(ProfileRollbackPolicyV1 {
+    NotApplicable,
+    RecoveryPlanRequired,
+    BackupAndRestoreRequired,
+    CompensationPlanRequired,
+});
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DevelopmentProfileRefV1 {
@@ -221,6 +233,10 @@ pub struct DevelopmentProfileDescriptorV1 {
     pub corpus_requirements: Vec<String>,
     pub approval_checkpoints: Vec<ProfileApprovalCheckpointV1>,
     pub default_stop_state: String,
+    #[serde(default = "legacy_unknown_outcome_policy")]
+    pub unknown_outcome_policy: ProfileUnknownOutcomePolicyV1,
+    #[serde(default = "legacy_rollback_policy")]
+    pub rollback_policy: ProfileRollbackPolicyV1,
     pub allowed_effect_classes: Vec<ProfileEffectClassV1>,
     pub permission_floor: ProfilePermissionFloorV1,
     #[serde(default)]
@@ -281,7 +297,19 @@ pub struct DevelopmentProfileResolutionV1 {
     pub allowed_effect_classes: Vec<ProfileEffectClassV1>,
     pub permission_floor: ProfilePermissionFloorV1,
     pub default_stop_states: Vec<String>,
+    #[serde(default)]
+    pub unknown_outcome_policies: Vec<ProfileUnknownOutcomePolicyV1>,
+    #[serde(default)]
+    pub rollback_policies: Vec<ProfileRollbackPolicyV1>,
     pub profile_resolution_fingerprint: Sha256Hash,
+}
+
+fn legacy_unknown_outcome_policy() -> ProfileUnknownOutcomePolicyV1 {
+    ProfileUnknownOutcomePolicyV1::PreserveAndStop
+}
+
+fn legacy_rollback_policy() -> ProfileRollbackPolicyV1 {
+    ProfileRollbackPolicyV1::RecoveryPlanRequired
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -610,6 +638,8 @@ pub fn resolve_development_profiles(
     let mut checkpoints = BTreeSet::new();
     let mut effects = BTreeSet::new();
     let mut stop_states = BTreeSet::new();
+    let mut unknown_outcome_policies = BTreeSet::new();
+    let mut rollback_policies = BTreeSet::new();
     let mut baseline = ProfileBaselinePolicyV1::Off;
     let mut suppression = ProfileSuppressionPolicyV1::Exact;
     let mut stability = ProfileStabilityPolicyV1::ReportFlaky;
@@ -640,6 +670,8 @@ pub fn resolve_development_profiles(
         checkpoints.extend(descriptor.approval_checkpoints.iter().copied());
         effects.extend(descriptor.allowed_effect_classes.iter().copied());
         stop_states.insert(descriptor.default_stop_state.clone());
+        unknown_outcome_policies.insert(descriptor.unknown_outcome_policy);
+        rollback_policies.insert(descriptor.rollback_policy);
         baseline = baseline.max(descriptor.baseline_policy);
         suppression = suppression.max(descriptor.suppression_policy);
         stability = stability.max(descriptor.stability_policy);
@@ -678,6 +710,8 @@ pub fn resolve_development_profiles(
         allowed_effect_classes: effects.into_iter().collect(),
         permission_floor,
         default_stop_states: stop_states.into_iter().collect(),
+        unknown_outcome_policies: unknown_outcome_policies.into_iter().collect(),
+        rollback_policies: rollback_policies.into_iter().collect(),
         profile_resolution_fingerprint: Sha256Hash::digest(b""),
     };
     resolution.profile_resolution_fingerprint = resolution_fingerprint(&resolution)?;
@@ -704,6 +738,8 @@ impl DevelopmentProfileResolutionV1 {
         if self.schema_id != DEVELOPMENT_PROFILE_RESOLUTION_SCHEMA_ID
             || self.schema_version != DEVELOPMENT_PROFILE_SCHEMA_VERSION
             || self.selected_profiles.is_empty()
+            || self.unknown_outcome_policies.is_empty()
+            || self.rollback_policies.is_empty()
             || self.profile_resolution_fingerprint != resolution_fingerprint(self)?
         {
             return Err(DevelopmentProfileContractError::Fingerprint);
@@ -789,14 +825,14 @@ mod tests {
             built_in_clippy_fix_allowlist: vec![],
         });
         DevelopmentProfileDescriptorV1 {
-            schema_version: 1,
+            schema_version: DEVELOPMENT_PROFILE_SCHEMA_VERSION,
             profile_id: id.to_owned(),
-            profile_version: "1.0.0".to_owned(),
+            profile_version: "1.1.0".to_owned(),
             display_name: id.to_owned(),
             summary: "fixture profile".to_owned(),
             parent_profile: parent.map(|id| DevelopmentProfileRefV1 {
                 profile_id: id.to_owned(),
-                profile_version: "1.0.0".to_owned(),
+                profile_version: "1.1.0".to_owned(),
             }),
             triggers: vec!["code_change".to_owned()],
             stage_template: vec!["m3_gate".to_owned()],
@@ -820,6 +856,8 @@ mod tests {
             corpus_requirements: vec![],
             approval_checkpoints: vec![],
             default_stop_state: "ready".to_owned(),
+            unknown_outcome_policy: ProfileUnknownOutcomePolicyV1::PreserveAndStop,
+            rollback_policy: ProfileRollbackPolicyV1::NotApplicable,
             allowed_effect_classes: vec![ProfileEffectClassV1::Validate],
             permission_floor: ProfilePermissionFloorV1::LocalReadOnly,
             extensions: DevelopmentProfileExtensionsV1 {
@@ -855,6 +893,8 @@ mod tests {
         .unwrap();
         assert_eq!(first, second);
         assert_eq!(first.selected_profiles.len(), 2);
+        assert!(!first.unknown_outcome_policies.is_empty());
+        assert!(!first.rollback_policies.is_empty());
     }
 
     #[test]
@@ -881,6 +921,31 @@ mod tests {
         assert_eq!(
             build_development_profile_catalog(cycle).unwrap_err(),
             DevelopmentProfileContractError::ParentCycle
+        );
+    }
+
+    #[test]
+    fn legacy_profile_descriptor_is_readable_but_not_current() {
+        let current = descriptor("project_understanding", None);
+        let mut legacy = serde_json::to_value(current).unwrap();
+        let object = legacy.as_object_mut().unwrap();
+        object.insert("schema_version".to_owned(), serde_json::json!(1));
+        object.insert("profile_version".to_owned(), serde_json::json!("1.0.0"));
+        object.remove("unknown_outcome_policy");
+        object.remove("rollback_policy");
+        let legacy: DevelopmentProfileDescriptorV1 = serde_json::from_value(legacy).unwrap();
+
+        assert_eq!(
+            legacy.unknown_outcome_policy,
+            ProfileUnknownOutcomePolicyV1::PreserveAndStop
+        );
+        assert_eq!(
+            legacy.rollback_policy,
+            ProfileRollbackPolicyV1::RecoveryPlanRequired
+        );
+        assert_eq!(
+            legacy.validate(),
+            Err(DevelopmentProfileContractError::Invalid)
         );
     }
 }

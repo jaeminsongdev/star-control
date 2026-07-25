@@ -22,19 +22,22 @@
 
 | 원시 값 | 문서상 의미 | 기본 용도 |
 |---|---|---|
+| `none` | 모델이 명시적으로 광고한 무추론 값 | 단순 전달·변환 중 해당 모델이 지원할 때만 |
 | `minimal` | 최소 판단 | 단순 추출, 정렬, 형식 변경 |
 | `low` | 낮은 판단 | 결과 기준이 분명한 반복 작업 |
 | `medium` | 일반 판단 | 일반 구현, 명확한 검사 추가, 문서 동기화 |
 | `high` | 높은 판단 | 여러 파일 변경, 원인 분석, 구조 판단 |
 | `xhigh` | 매우 높은 판단 | 복잡하고 불확실한 문제, 중요한 계약 검토 |
+| `max` | 모델이 명시적으로 광고한 확장 추론 값 | 단일 고난도 단계 |
+| `ultra` | 모델이 명시적으로 광고한 최상위 추론 값 | 지원 모델의 고난도 단계 |
 
-`minimal | low | medium | high | xhigh`는 `model_reasoning_effort`의 원시 값이다. `xhigh` 지원 여부는 모델마다 다를 수 있으므로 Codex App Server의 CapabilitySnapshot 결과를 기준으로 한다. Plan 단계에는 필요하면 별도의 plan-mode 생각 깊이를 기록한다.
+`none | minimal | low | medium | high | xhigh | max | ultra`는 현재 App Server model metadata에서 관찰해 보존하는 원시 reasoning effort 값이다. 어떤 값도 모델 이름이나 package version에서 추정하지 않고 CapabilitySnapshot 결과를 기준으로 한다. 알 수 없는 새 값은 가장 가까운 값으로 낮추지 않고 snapshot 생성을 거부한다. Plan 단계에는 필요하면 별도의 plan-mode 생각 깊이를 기록한다.
 
-Plan 전용 값은 `none | minimal | low | medium | high | xhigh`다. `none`은 Plan 전용 생각 깊이를 요청하지 않는다는 뜻이며 일반 `reasoning_effort`에는 사용할 수 없다. Plan 값도 현재 Codex와 선택 모델이 지원하는 범위에서만 사용한다.
+Plan 값도 현재 Codex와 선택 모델이 광고한 범위에서만 사용한다. `none`이 “필드를 보내지 않음”인지 모델의 실제 값인지는 호출 Schema와 CapabilitySnapshot으로 구분하며 임의로 같은 뜻으로 합치지 않는다.
 
-## Max와 Ultra
+## execution mode의 Max와 Ultra
 
-Max와 Ultra는 일반 생각 깊이 값이 아니라 Star-Control의 `execution_mode`다.
+reasoning effort의 `max`·`ultra`와 별도로 Star-Control에는 같은 이름의 `execution_mode`가 있다. 두 축은 서로 대체할 수 없으며 RouteDecision에 각각 기록한다.
 
 - `single`: 하나의 Codex 작업으로 처리하는 기본 방식
 - `max`: 하나의 어려운 단계에 더 많은 판단 시간이나 강화된 단일 실행 방식을 요청하는 방식
@@ -42,9 +45,11 @@ Max와 Ultra는 일반 생각 깊이 값이 아니라 Star-Control의 `execution
 
 Ultra를 선택해도 최종 통합 판단은 하나의 Sol 단계가 담당한다.
 
-Codex가 실행 시점에 `max` 또는 `ultra`에 해당하는 native 기능을 제공하면 그것을 우선 사용한다. 제공하지 않으면 지원되지 않는 값을 원시 설정으로 보내지 않는다. `ultra`는 Star-Control이 여러 Codex 작업을 만들고 결과를 통합하는 관리형 병렬 실행으로 실현할 수 있고, `max`는 지원되는 단일 실행 경로가 없으면 안전한 생각 깊이와 `single` 방식으로 다시 배정한다.
+Codex가 실행 시점에 `max` 또는 `ultra`에 해당하는 별도 native execution-mode 기능을 명시적으로 제공하면 그것을 우선 사용한다. reasoning effort의 동명 값만으로 그 기능을 추정하지 않는다. 제공하지 않으면 지원되지 않는 값을 원시 설정으로 보내지 않는다. `ultra`는 향후 Star-Control이 여러 Codex 작업을 만들고 결과를 통합하는 관리형 병렬 실행으로 실현할 수 있고, `max`는 지원되는 단일 실행 경로가 없으면 안전한 생각 깊이와 `single` 방식으로 다시 배정한다.
 
 Plan은 `execution_mode`가 아니라 `stage_mode=plan`으로 기록한다. 따라서 한 RouteDecision은 모델 역할, 원시 생각 깊이, 단계 성격, 실행 방식을 각각 가진다.
+
+P-0058 current source는 `CapabilitySnapshotV1`·`RouteDecisionV1` generated Schema와 deterministic router를 구현한다. `codex capability inspect|show`는 실행 중인 App Server와 version-specific Schema bundle에서 current snapshot을 만들고, `route decide|show`는 exact Stage fingerprint·snapshot expiry·model·effort·mode를 다시 검증한다. 과거 snapshot 조회는 provenance를 위해 허용하지만 새 Route와 실행 시작은 같은 프로젝트에서 가장 최근에 관찰된 snapshot만 받으며, Route의 config fingerprint도 실행 직전 EffectiveConfig와 다시 일치해야 한다. 현재 A06 owning executor는 App Server thread/turn 한 개를 소유하는 `single/native`만 구현했으므로 snapshot도 그 경로만 광고한다. `allow_managed_ultra=true`는 관리형 fan-out·통합 handler가 없는 동안 `ROUTE_MODE_UNAVAILABLE`로 닫힌다. 외부 호출과 source write는 Router가 하지 않으며 Controller owning handler만 snapshot과 decision을 게시한다.
 
 ## RouteDecision 계약
 

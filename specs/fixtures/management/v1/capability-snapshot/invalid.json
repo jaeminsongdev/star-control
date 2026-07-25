@@ -1,0 +1,41 @@
+{
+  "capability_snapshot_id": "cap_00000000000000000000000000",
+  "captured_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2026-01-01T00:00:00Z",
+  "limitations": [],
+  "limits": {},
+  "managed_execution_modes": [],
+  "models": [],
+  "native_execution_modes": [],
+  "operations": {},
+  "permission_capabilities": {
+    "approval_policy_configurable": false,
+    "network_policy_observable": false,
+    "paid_action_observable": false,
+    "sandbox_mode_configurable": false
+  },
+  "protocol_schema_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "protocol_version": "fixture",
+  "raw_artifact_ref": {
+    "artifact_id": "art_00000000000000000000000000",
+    "created_at": "2026-01-01T00:00:00Z",
+    "kind": "log",
+    "media_type": "fixture",
+    "producer": {
+      "build_id": "fixture",
+      "component": "fixture",
+      "platform": "fixture",
+      "product_version": "fixture"
+    },
+    "redaction_status": "not_needed",
+    "relative_path": "src/lib.rs",
+    "retention_class": "temporary",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "size_bytes": 0
+  },
+  "schema_id": "star.capability-snapshot",
+  "schema_version": 1,
+  "snapshot_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "source": "codex_app_server",
+  "unexpected": true
+}

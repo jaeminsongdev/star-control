@@ -14,6 +14,9 @@ use star_contracts::{
         GoalQuestion, GoalRecord, GoalRunState, GoalRunStatus, GoalStatus, goal_timestamp_now,
     },
     parse_no_duplicate_keys,
+    stage::{
+        STAGE_GRAPH_SCHEMA_ID, StageGraphV1, StageResultOutcomeV1, StageResultV1, StageStateV1,
+    },
 };
 use thiserror::Error;
 use windows::{
@@ -34,6 +37,12 @@ struct GoalStoreFile {
     idempotency: BTreeMap<String, GoalStartReplay>,
     #[serde(default)]
     goal_configs: BTreeMap<String, GoalConfigRecord>,
+    #[serde(default)]
+    stage_graphs: BTreeMap<String, StageGraphV1>,
+    #[serde(default)]
+    stage_graph_history: BTreeMap<String, BTreeMap<u64, StageGraphV1>>,
+    #[serde(default)]
+    stage_results: BTreeMap<String, StageResultV1>,
 }
 
 impl Default for GoalStoreFile {
@@ -45,8 +54,27 @@ impl Default for GoalStoreFile {
             goals: BTreeMap::new(),
             idempotency: BTreeMap::new(),
             goal_configs: BTreeMap::new(),
+            stage_graphs: BTreeMap::new(),
+            stage_graph_history: BTreeMap::new(),
+            stage_results: BTreeMap::new(),
         }
     }
+}
+
+fn graph_result_refs_are_valid(file: &GoalStoreFile, graph: &StageGraphV1) -> bool {
+    graph.stages.iter().all(|stage| {
+        let Some(reference) = stage.result_ref.as_ref() else {
+            return true;
+        };
+        file.stage_results
+            .get(&reference.document_id)
+            .is_some_and(|result| {
+                reference == &result.reference()
+                    && result.goal_id == graph.goal_id
+                    && result.stage_ref.document_id == stage.stage_id.as_str()
+                    && stage.state == result.terminal_state()
+            })
+    })
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -162,7 +190,7 @@ impl GoalStore {
     }
 
     pub fn load(path: PathBuf) -> Result<Self, GoalStoreError> {
-        let file = match fs::read(&path) {
+        let mut file = match fs::read(&path) {
             Ok(bytes) => {
                 let text = std::str::from_utf8(&bytes).map_err(|_| GoalStoreError::Corrupt)?;
                 let value = parse_no_duplicate_keys(text).map_err(|_| GoalStoreError::Corrupt)?;
@@ -171,6 +199,16 @@ impl GoalStore {
             Err(error) if error.kind() == io::ErrorKind::NotFound => GoalStoreFile::default(),
             Err(error) => return Err(GoalStoreError::Io(error)),
         };
+        // v1 stores written before StageGraph history was introduced contain
+        // only the current graph. Preserve that graph as the first locally
+        // available immutable revision instead of fabricating missing history.
+        for (graph_id, graph) in &file.stage_graphs {
+            file.stage_graph_history
+                .entry(graph_id.clone())
+                .or_default()
+                .entry(graph.plan_revision)
+                .or_insert_with(|| graph.clone());
+        }
         if file.schema_id != STORE_SCHEMA_ID || file.format_version != STORE_FORMAT_VERSION {
             return Err(GoalStoreError::Corrupt);
         }
@@ -186,6 +224,72 @@ impl GoalStore {
                 key != config.goal_id.as_str()
                     || !file.goals.contains_key(key)
                     || config.validate().is_err()
+            })
+            || file.stage_graphs.iter().any(|(key, graph)| {
+                key != graph.stage_graph_id.as_str()
+                    || !file.goals.contains_key(graph.goal_id.as_str())
+                    || graph.verify().is_err()
+                    || !graph_result_refs_are_valid(&file, graph)
+            })
+            || file.stage_graph_history.len() != file.stage_graphs.len()
+            || file.stage_graph_history.iter().any(|(key, history)| {
+                let Some(current) = file.stage_graphs.get(key) else {
+                    return true;
+                };
+                if history.is_empty()
+                    || history.last_key_value().map(|(_, graph)| graph) != Some(current)
+                {
+                    return true;
+                }
+                let mut previous: Option<&StageGraphV1> = None;
+                for (revision, graph) in history {
+                    if *revision != graph.plan_revision
+                        || key != graph.stage_graph_id.as_str()
+                        || !file.goals.contains_key(graph.goal_id.as_str())
+                        || graph.verify().is_err()
+                        || !graph_result_refs_are_valid(&file, graph)
+                    {
+                        return true;
+                    }
+                    if let Some(previous) = previous
+                        && (graph.plan_revision != previous.plan_revision.saturating_add(1)
+                            || graph.previous_graph_fingerprint.as_ref()
+                                != Some(&previous.graph_fingerprint))
+                    {
+                        return true;
+                    }
+                    previous = Some(graph);
+                }
+                false
+            })
+            || file.stage_results.iter().any(|(key, result)| {
+                if key != result.stage_result_id.as_str() || result.verify().is_err() {
+                    return true;
+                }
+                let Some(history) = file
+                    .stage_graph_history
+                    .get(&result.stage_graph_ref.document_id)
+                else {
+                    return true;
+                };
+                let Some(graph) = history.get(&result.stage_graph_ref.revision) else {
+                    return true;
+                };
+                let Some(stage) = graph
+                    .stages
+                    .iter()
+                    .find(|stage| stage.stage_id.as_str() == result.stage_ref.document_id)
+                else {
+                    return true;
+                };
+                result.verify_against(graph, stage).is_err()
+                    || !history.values().any(|candidate_graph| {
+                        candidate_graph.stages.iter().any(|candidate_stage| {
+                            candidate_stage.stage_id.as_str() == result.stage_ref.document_id
+                                && candidate_stage.result_ref.as_ref() == Some(&result.reference())
+                                && candidate_stage.state == result.terminal_state()
+                        })
+                    })
             })
         {
             return Err(GoalStoreError::Corrupt);
@@ -258,6 +362,7 @@ impl GoalStore {
             plan_items: Vec::new(),
             pending_question: question,
             run: None,
+            completion_evidence_ref: None,
             created_at: timestamp.clone(),
             updated_at: timestamp,
             content_fingerprint: Sha256Hash::digest(b"unsealed"),
@@ -485,6 +590,246 @@ impl GoalStore {
         })
     }
 
+    pub fn stage_graph(&self, stage_graph_id: &str) -> Result<StageGraphV1, GoalStoreError> {
+        self.file
+            .stage_graphs
+            .get(stage_graph_id)
+            .cloned()
+            .ok_or(GoalStoreError::NotFound)
+    }
+
+    pub fn stage_graph_revision(
+        &self,
+        stage_graph_id: &str,
+        plan_revision: u64,
+    ) -> Result<StageGraphV1, GoalStoreError> {
+        self.file
+            .stage_graph_history
+            .get(stage_graph_id)
+            .and_then(|history| history.get(&plan_revision))
+            .cloned()
+            .ok_or(GoalStoreError::NotFound)
+    }
+
+    pub fn stage_result(&self, stage_result_id: &str) -> Result<StageResultV1, GoalStoreError> {
+        self.file
+            .stage_results
+            .get(stage_result_id)
+            .cloned()
+            .ok_or(GoalStoreError::NotFound)
+    }
+
+    pub fn publish_stage_graph(
+        &mut self,
+        graph: StageGraphV1,
+        expected_previous_revision: Option<u64>,
+    ) -> Result<StageGraphV1, GoalStoreError> {
+        graph.verify().map_err(|_| GoalStoreError::Invalid)?;
+        self.get(graph.goal_id.as_str())?;
+        match self.file.stage_graphs.get(graph.stage_graph_id.as_str()) {
+            Some(current) if current == &graph => return Ok(current.clone()),
+            Some(current) if expected_previous_revision != Some(current.plan_revision) => {
+                return Err(GoalStoreError::RevisionConflict);
+            }
+            Some(current)
+                if graph.plan_revision != current.plan_revision.saturating_add(1)
+                    || graph.previous_graph_fingerprint.as_ref()
+                        != Some(&current.graph_fingerprint) =>
+            {
+                return Err(GoalStoreError::RevisionConflict);
+            }
+            None if expected_previous_revision.is_some() => return Err(GoalStoreError::NotFound),
+            None => {}
+            Some(_) => {}
+        }
+        let history = self
+            .file
+            .stage_graph_history
+            .entry(graph.stage_graph_id.to_string())
+            .or_default();
+        if history
+            .get(&graph.plan_revision)
+            .is_some_and(|existing| existing != &graph)
+        {
+            return Err(GoalStoreError::RevisionConflict);
+        }
+        history.insert(graph.plan_revision, graph.clone());
+        self.file
+            .stage_graphs
+            .insert(graph.stage_graph_id.to_string(), graph.clone());
+        self.commit()?;
+        Ok(graph)
+    }
+
+    pub fn record_stage_result(
+        &mut self,
+        result: StageResultV1,
+        expected_graph_revision: u64,
+        expected_stage_revision: u64,
+    ) -> Result<(StageResultV1, StageGraphV1), GoalStoreError> {
+        result.verify().map_err(|_| GoalStoreError::Invalid)?;
+        if result.stage_graph_ref.schema_id != STAGE_GRAPH_SCHEMA_ID {
+            return Err(GoalStoreError::Invalid);
+        }
+        let graph_id = result.stage_graph_ref.document_id.clone();
+        if let Some(existing) = self.file.stage_results.get(result.stage_result_id.as_str()) {
+            if existing != &result {
+                return Err(GoalStoreError::RevisionConflict);
+            }
+            let latest = self.stage_graph(&graph_id)?;
+            if latest.stages.iter().any(|candidate| {
+                candidate.stage_id.as_str() == result.stage_ref.document_id
+                    && candidate.result_ref.as_ref() == Some(&result.reference())
+                    && candidate.state == result.terminal_state()
+            }) {
+                return Ok((existing.clone(), latest));
+            }
+            return Err(GoalStoreError::Corrupt);
+        }
+        let current = self.stage_graph(&graph_id)?;
+        if current.plan_revision != expected_graph_revision
+            || result.stage_graph_ref.revision != current.plan_revision
+            || result.stage_graph_ref.sha256 != current.graph_fingerprint
+        {
+            return Err(GoalStoreError::RevisionConflict);
+        }
+        let stage = current
+            .stages
+            .iter()
+            .find(|stage| stage.stage_id.as_str() == result.stage_ref.document_id)
+            .cloned()
+            .ok_or(GoalStoreError::NotFound)?;
+        if stage.revision != expected_stage_revision {
+            return Err(GoalStoreError::RevisionConflict);
+        }
+        result
+            .verify_against(&current, &stage)
+            .map_err(|_| GoalStoreError::Invalid)?;
+        if result.outcome == StageResultOutcomeV1::Completed
+            && (!matches!(stage.state, StageStateV1::Ready | StageStateV1::Running)
+                || stage.dependencies.iter().any(|dependency| {
+                    current
+                        .stages
+                        .iter()
+                        .find(|candidate| &candidate.stage_id == dependency)
+                        .is_none_or(|candidate| candidate.state != StageStateV1::Completed)
+                }))
+        {
+            return Err(GoalStoreError::Lifecycle);
+        }
+
+        let mut next = current.clone();
+        next.plan_revision = next
+            .plan_revision
+            .checked_add(1)
+            .ok_or(GoalStoreError::RevisionConflict)?;
+        next.previous_graph_fingerprint = Some(current.graph_fingerprint.clone());
+        next.replan_reason = Some(format!("stage_result:{}", result.stage_result_id));
+        let next_stage = next
+            .stages
+            .iter_mut()
+            .find(|candidate| candidate.stage_id == stage.stage_id)
+            .ok_or(GoalStoreError::Corrupt)?;
+        next_stage.revision = next_stage
+            .revision
+            .checked_add(1)
+            .ok_or(GoalStoreError::RevisionConflict)?;
+        next_stage.state = result.terminal_state();
+        next_stage.result_ref = Some(result.reference());
+        next.graph_fingerprint = Sha256Hash::digest(b"unsealed-stage-result-transition");
+        next = next.seal().map_err(|_| GoalStoreError::Invalid)?;
+
+        let history = self
+            .file
+            .stage_graph_history
+            .get_mut(&graph_id)
+            .ok_or(GoalStoreError::Corrupt)?;
+        if history.contains_key(&next.plan_revision) {
+            return Err(GoalStoreError::RevisionConflict);
+        }
+        history.insert(next.plan_revision, next.clone());
+        self.file
+            .stage_results
+            .insert(result.stage_result_id.to_string(), result.clone());
+        self.file.stage_graphs.insert(graph_id, next.clone());
+        self.commit()?;
+        Ok((result, next))
+    }
+
+    pub fn complete_goal(
+        &mut self,
+        goal_id: &str,
+        expected_revision: u64,
+        stage_graph_id: &str,
+        evidence_ref: star_contracts::evidence::DocumentRef,
+    ) -> Result<GoalRecord, GoalStoreError> {
+        let graph = self.stage_graph(stage_graph_id)?;
+        if graph.goal_id.as_str() != goal_id
+            || graph.stages.is_empty()
+            || graph
+                .stages
+                .iter()
+                .any(|stage| stage.state != StageStateV1::Completed)
+        {
+            return Err(GoalStoreError::Lifecycle);
+        }
+        let completion_stage_ids = if let Some(stage_id) = &graph.integration_stage_id {
+            vec![stage_id.clone()]
+        } else if let Some(stage_id) = graph.critical_path.last() {
+            vec![stage_id.clone()]
+        } else {
+            graph
+                .stages
+                .iter()
+                .map(|stage| stage.stage_id.clone())
+                .collect::<Vec<_>>()
+        };
+        let evidence_is_bound = completion_stage_ids.iter().any(|stage_id| {
+            graph
+                .stages
+                .iter()
+                .find(|stage| &stage.stage_id == stage_id)
+                .and_then(|stage| stage.result_ref.as_ref())
+                .and_then(|reference| {
+                    self.file
+                        .stage_results
+                        .get(&reference.document_id)
+                        .map(|result| (reference, result))
+                })
+                .is_some_and(|(reference, result)| {
+                    reference == &result.reference()
+                        && result.outcome == StageResultOutcomeV1::Completed
+                        && result
+                            .project_evidence
+                            .iter()
+                            .any(|project| project.evidence_bundle_ref == evidence_ref)
+                })
+        });
+        if !evidence_is_bound {
+            return Err(GoalStoreError::Invalid);
+        }
+        let current = self.get(goal_id)?;
+        if current.revision != expected_revision
+            || current.plan_items.is_empty()
+            || current
+                .plan_items
+                .iter()
+                .any(|item| item.status != GoalPlanItemStatus::Completed)
+            || current
+                .run
+                .as_ref()
+                .is_none_or(|run| run.status != GoalRunStatus::Running)
+        {
+            return Err(GoalStoreError::Lifecycle);
+        }
+        self.mutate(goal_id, expected_revision, |goal| {
+            goal.status = GoalStatus::Completed;
+            goal.run.as_mut().ok_or(GoalStoreError::Lifecycle)?.status = GoalRunStatus::Completed;
+            goal.completion_evidence_ref = Some(evidence_ref);
+            Ok(())
+        })
+    }
+
     fn mutate(
         &mut self,
         goal_id: &str,
@@ -556,6 +901,18 @@ fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), GoalStoreError>
 
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
+    use star_contracts::{
+        ProjectId, StageGraphId, StageId, StageResultId,
+        evidence::DocumentRef,
+        stage::{
+            STAGE_CONTRACT_VERSION, STAGE_GRAPH_SCHEMA_ID, STAGE_RESULT_SCHEMA_ID,
+            STAGE_SPEC_SCHEMA_ID, StageExecutorKindV1, StageFailurePolicyV1, StageGraphV1,
+            StageModeV1, StageProjectEvidenceV1, StageResultOutcomeV1, StageResultV1, StageSpecV1,
+            StageStateV1,
+        },
+    };
+
     use super::*;
 
     fn store(name: &str) -> GoalStore {
@@ -575,6 +932,66 @@ mod tests {
                 config_overrides: Vec::new(),
             })
             .unwrap()
+    }
+
+    fn stage_graph(
+        goal_id: &GoalId,
+        plan_revision: u64,
+        previous: Option<&StageGraphV1>,
+    ) -> StageGraphV1 {
+        let stage = StageSpecV1 {
+            schema_id: STAGE_SPEC_SCHEMA_ID.to_owned(),
+            schema_version: STAGE_CONTRACT_VERSION,
+            stage_id: StageId::from_stable_bytes(format!("{}:stage", goal_id).as_bytes()),
+            revision: plan_revision,
+            goal_id: goal_id.clone(),
+            task_spec_ref: None,
+            scope_revision_ref: None,
+            title: "persisted stage".to_owned(),
+            objective: format!("persist immutable graph revision {plan_revision}"),
+            stage_mode: StageModeV1::Plan,
+            executor_kind: StageExecutorKindV1::DeterministicLocal,
+            work_profile_id: "project_understanding".to_owned(),
+            work_profile_version: "1.1.0".to_owned(),
+            work_profile_definition_hash: Some(Sha256Hash::digest(b"profile-definition")),
+            profile_catalog_fingerprint: Some(Sha256Hash::digest(b"profile-catalog")),
+            profile_resolution_fingerprint: Some(Sha256Hash::digest(b"profile-resolution")),
+            project_ids: vec![ProjectId::from_stable_bytes(goal_id.as_str().as_bytes())],
+            included_work: vec!["stage_graph_history".to_owned()],
+            excluded_work: vec!["external_publish".to_owned()],
+            expected_change_scope: vec!["state/stage-graph".to_owned()],
+            dependencies: Vec::new(),
+            parallel_group: None,
+            completion_criteria: vec!["history_reloads".to_owned()],
+            failure_policy: StageFailurePolicyV1::Block,
+            route_decision_ref: None,
+            permission_plan_ref: None,
+            validation_plan_ref: None,
+            impact_analysis_ref: None,
+            change_plan_refs: Vec::new(),
+            result_ref: None,
+            state: StageStateV1::Ready,
+            stage_fingerprint: Sha256Hash::digest(b"unsealed-stage"),
+        };
+        StageGraphV1 {
+            schema_id: STAGE_GRAPH_SCHEMA_ID.to_owned(),
+            schema_version: STAGE_CONTRACT_VERSION,
+            stage_graph_id: StageGraphId::from_stable_bytes(
+                format!("{}:stage-graph", goal_id).as_bytes(),
+            ),
+            goal_id: goal_id.clone(),
+            plan_revision,
+            stages: vec![stage],
+            edges: Vec::new(),
+            parallel_groups: Vec::new(),
+            critical_path: Vec::new(),
+            integration_stage_id: None,
+            previous_graph_fingerprint: previous.map(|graph| graph.graph_fingerprint.clone()),
+            replan_reason: previous.map(|_| "test immutable history".to_owned()),
+            graph_fingerprint: Sha256Hash::digest(b"unsealed-graph"),
+        }
+        .seal()
+        .unwrap()
     }
 
     #[test]
@@ -699,6 +1116,193 @@ mod tests {
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         value["format_version"] = serde_json::json!(2);
         std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(matches!(
+            GoalStore::load(path),
+            Err(GoalStoreError::Corrupt)
+        ));
+    }
+
+    #[test]
+    fn paused_goal_resumes_without_losing_the_accepted_plan() {
+        let path =
+            std::env::temp_dir().join(format!("star-goal-store-resume-{}.json", star_ipc::nonce()));
+        let mut store = GoalStore::load(path.clone()).unwrap();
+        let mut goal = start(&mut store, "resume-after-restart");
+        goal = store
+            .update_plan(
+                goal.goal_id.as_str(),
+                goal.revision,
+                vec![GoalPlanItem {
+                    item_id: "accepted-plan".to_owned(),
+                    step: "preserve this exact plan".to_owned(),
+                    status: GoalPlanItemStatus::InProgress,
+                }],
+            )
+            .unwrap();
+        goal = store
+            .continue_run(goal.goal_id.as_str(), goal.revision)
+            .unwrap();
+        let paused = store.pause(goal.goal_id.as_str(), goal.revision).unwrap();
+        let accepted_plan = paused.plan_items.clone();
+        let plan_revision = paused.plan_revision;
+        drop(store);
+
+        let mut reopened = GoalStore::load(path).unwrap();
+        let resumed = reopened
+            .resume(paused.goal_id.as_str(), paused.revision)
+            .unwrap();
+        assert_eq!(resumed.status, GoalStatus::Active);
+        assert_eq!(resumed.plan_revision, plan_revision);
+        assert_eq!(resumed.plan_items, accepted_plan);
+        assert_eq!(resumed.run.unwrap().status, GoalRunStatus::Running);
+    }
+
+    #[test]
+    fn stage_graph_revision_history_survives_replan_and_restart() {
+        let mut store = store("stage-graph-history");
+        let path = store.path.clone();
+        let goal = start(&mut store, "stage-graph-history");
+        let first = stage_graph(&goal.goal_id, 1, None);
+        store.publish_stage_graph(first.clone(), None).unwrap();
+        let second = stage_graph(&goal.goal_id, 2, Some(&first));
+        store
+            .publish_stage_graph(second.clone(), Some(first.plan_revision))
+            .unwrap();
+        drop(store);
+
+        let reopened = GoalStore::load(path).unwrap();
+        assert_eq!(
+            reopened
+                .stage_graph_revision(first.stage_graph_id.as_str(), 1)
+                .unwrap(),
+            first
+        );
+        assert_eq!(
+            reopened
+                .stage_graph(second.stage_graph_id.as_str())
+                .unwrap(),
+            second
+        );
+    }
+
+    #[test]
+    fn stage_result_and_goal_completion_are_evidence_bound_and_restart_safe() {
+        let mut store = store("stage-result-completion");
+        let path = store.path.clone();
+        let mut goal = start(&mut store, "stage-result-completion");
+        goal = store
+            .update_plan(
+                goal.goal_id.as_str(),
+                goal.revision,
+                vec![GoalPlanItem {
+                    item_id: "verified-stage".to_owned(),
+                    step: "record the evidence-bound stage result".to_owned(),
+                    status: GoalPlanItemStatus::Completed,
+                }],
+            )
+            .unwrap();
+        goal = store
+            .continue_run(goal.goal_id.as_str(), goal.revision)
+            .unwrap();
+        let graph = stage_graph(&goal.goal_id, 1, None);
+        store.publish_stage_graph(graph.clone(), None).unwrap();
+        let stage = graph.stages[0].clone();
+        let evidence_ref = DocumentRef {
+            schema_id: "star.evidence-bundle".to_owned(),
+            document_id: "evb_current_stage".to_owned(),
+            revision: 1,
+            sha256: Sha256Hash::digest(b"current-stage-evidence"),
+        };
+        let result = StageResultV1 {
+            schema_id: STAGE_RESULT_SCHEMA_ID.to_owned(),
+            schema_version: STAGE_CONTRACT_VERSION,
+            stage_result_id: StageResultId::from_stable_bytes(b"stage-result-completion"),
+            revision: 1,
+            goal_id: goal.goal_id.clone(),
+            stage_graph_ref: DocumentRef {
+                schema_id: STAGE_GRAPH_SCHEMA_ID.to_owned(),
+                document_id: graph.stage_graph_id.to_string(),
+                revision: graph.plan_revision,
+                sha256: graph.graph_fingerprint.clone(),
+            },
+            stage_ref: DocumentRef {
+                schema_id: STAGE_SPEC_SCHEMA_ID.to_owned(),
+                document_id: stage.stage_id.to_string(),
+                revision: stage.revision,
+                sha256: stage.stage_fingerprint.clone(),
+            },
+            outcome: StageResultOutcomeV1::Completed,
+            completed_criteria: stage.completion_criteria.clone(),
+            project_evidence: vec![StageProjectEvidenceV1 {
+                project_id: stage.project_ids[0].clone(),
+                evidence_bundle_ref: evidence_ref.clone(),
+            }],
+            execution_record_ref: None,
+            failure_code: None,
+            recovery_action: None,
+            source_effect_may_have_started: false,
+            recorded_at: Utc::now(),
+            result_fingerprint: Sha256Hash::digest(b"unsealed-stage-result"),
+        }
+        .seal()
+        .unwrap();
+        let (persisted_result, completed_graph) = store
+            .record_stage_result(result.clone(), graph.plan_revision, stage.revision)
+            .unwrap();
+        assert_eq!(persisted_result, result);
+        assert_eq!(completed_graph.plan_revision, 2);
+        assert_eq!(completed_graph.stages[0].state, StageStateV1::Completed);
+        let (replayed_result, replayed_graph) = store
+            .record_stage_result(result.clone(), graph.plan_revision, stage.revision)
+            .unwrap();
+        assert_eq!(replayed_result, result);
+        assert_eq!(replayed_graph, completed_graph);
+
+        let goal = store
+            .complete_goal(
+                goal.goal_id.as_str(),
+                goal.revision,
+                graph.stage_graph_id.as_str(),
+                evidence_ref,
+            )
+            .unwrap();
+        assert_eq!(goal.status, GoalStatus::Completed);
+        assert_eq!(goal.run.as_ref().unwrap().status, GoalRunStatus::Completed);
+        drop(store);
+
+        let mut reopened = GoalStore::load(path.clone()).unwrap();
+        assert_eq!(
+            reopened
+                .stage_result(result.stage_result_id.as_str())
+                .unwrap(),
+            result
+        );
+        assert_eq!(
+            reopened.stage_graph(graph.stage_graph_id.as_str()).unwrap(),
+            completed_graph
+        );
+        assert_eq!(
+            reopened.get(goal.goal_id.as_str()).unwrap().status,
+            GoalStatus::Completed
+        );
+
+        let mut tampered = reopened.stage_graph(graph.stage_graph_id.as_str()).unwrap();
+        tampered.stages[0].result_ref.as_mut().unwrap().sha256 =
+            Sha256Hash::digest(b"tampered-stage-result-reference");
+        tampered.graph_fingerprint = Sha256Hash::digest(b"unsealed-tampered-graph");
+        tampered = tampered.seal().unwrap();
+        reopened
+            .file
+            .stage_graphs
+            .insert(tampered.stage_graph_id.to_string(), tampered.clone());
+        reopened
+            .file
+            .stage_graph_history
+            .get_mut(tampered.stage_graph_id.as_str())
+            .unwrap()
+            .insert(tampered.plan_revision, tampered);
+        reopened.commit().unwrap();
+        drop(reopened);
         assert!(matches!(
             GoalStore::load(path),
             Err(GoalStoreError::Corrupt)

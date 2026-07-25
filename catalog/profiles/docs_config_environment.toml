@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "docs_config_environment"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "Docs Config Environment"
 summary = "문서 명령·링크, 설정 trace, doctor와 clean-room 재현을 검증한다."
-parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.1.0" }
 triggers = ["config_change", "developer_environment_change", "documentation_change"]
 stage_template = ["documentation_snapshot", "config_trace", "doctor", "clean_room", "goal_gate"]
 context_rules = ["documented_command", "effective_config", "redacted_environment"]
@@ -22,6 +22,8 @@ evidence_requirements = ["config_trace", "doctor_report", "documentation_snapsho
 corpus_requirements = ["clean_room"]
 approval_checkpoints = []
 default_stop_state = "documentation_gate_decided"
+unknown_outcome_policy = "preserve_and_stop"
+rollback_policy = "not_applicable"
 allowed_effect_classes = ["read", "plan", "validate"]
 permission_floor = "local_read_only"
 

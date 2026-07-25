@@ -116,7 +116,7 @@ CLI와 사용자 문서에서는 `safe_default`, `personal_auto`를 각각 `star
 | `capability_max_age_ms` | integer | `900000` | 새 RouteDecision에 쓸 snapshot 최대 나이 |
 | `app_server_start_timeout_ms` | integer | `30000` | readiness 대기 한도 |
 | `require_entry_check` | boolean | `true` | Plugin·MCP 활성 상태 확인 |
-| `allow_managed_ultra` | boolean | `true` | native Ultra 부재 시 Controller 병렬 조립 허용 |
+| `allow_managed_ultra` | boolean | `false` | 관리형 fan-out·통합 executor가 구현된 릴리스에서만 활성화. 현재 `true`는 `ROUTE_MODE_UNAVAILABLE`로 거부 |
 
 ### `[routing]`
 

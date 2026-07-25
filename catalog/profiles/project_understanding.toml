@@ -1,6 +1,6 @@
-schema_version = 1
+schema_version = 2
 profile_id = "project_understanding"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "Project Understanding"
 summary = "Project Catalog, checkout, source 분류, index graph와 freshness를 수집한다."
 triggers = ["large_scope_start", "new_project", "stale_catalog"]
@@ -21,6 +21,8 @@ evidence_requirements = ["code_index_snapshot", "project_catalog_snapshot"]
 corpus_requirements = ["source_classification"]
 approval_checkpoints = []
 default_stop_state = "context_ready"
+unknown_outcome_policy = "preserve_and_reconcile"
+rollback_policy = "not_applicable"
 allowed_effect_classes = ["read", "local_state_write"]
 permission_floor = "local_read_only"
 

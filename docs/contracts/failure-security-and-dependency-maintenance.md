@@ -4,7 +4,7 @@
 
 이 문서는 Star-Control 사용자 로드맵 **7단계**의 의미 정본이다. 제품 로드맵의 `P7. 원격 저장소 연동`과 번호가 같아 보일 수 있으므로, 이 문서와 관련 Schema·CLI에서는 `M7`을 안정된 단계 식별자로 사용한다.
 
-P-0048의 `ReproductionPack`·`MaintenanceRadar`와 normalized failure family 위에 P-0054가 failure capture/reproduce, local manifest/lockfile dependency·security·license observation, update candidate/plan, append-only persistence와 Controller·CLI를 연결했다. P-0056은 complete reproduction attempt를 실제 terminal registered `ToolInvocation`의 `DevelopmentEffectReceiptV1`과 semantic result fingerprint에 결속하고, `verified_fixed`를 current M3 validation·호환 가능한 `not_reproduced` pack·verified recurrence에 결속했다. external condition의 missing/stale은 `unverified|partial`로 보존한다. debugger attach, OSV/NVD network refresh와 package-manager mutation은 pinned registered adapter·exact 승인이 없으면 실행하지 않으며 Star-Control이 취약점 DB·PKI·compiler를 재구현하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md), [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md), [P-0056 감사](../testing/p0056-current-functional-recovery-audit-2026-07-24.md)에 고정한다.
+P-0048의 `ReproductionPack`·`MaintenanceRadar`와 normalized failure family 위에 P-0054가 failure capture/reproduce, local manifest/lockfile dependency·security·license observation, update candidate/plan, append-only persistence와 Controller·CLI를 연결했다. P-0056은 complete reproduction attempt를 실제 terminal registered `ToolInvocation`의 `DevelopmentEffectReceiptV1`과 semantic result fingerprint에 결속하고, `verified_fixed`를 current M3 validation·호환 가능한 `not_reproduced` pack·verified recurrence에 결속했다. P-0058은 external-data source의 exact query/tool/network/coverage, raw artifact digest와 normalized observation artifact digest를 terminal effect receipt에 함께 결속하고 `evaluation_time`을 Controller 현재 시각으로 덮어써 caller가 stale 자료를 current로 승격하지 못하게 한다. source `published_at|modified_at`이 둘 다 없으면 fetched time만으로 current를 주장하지 않고 `unknown|partial`이다. debugger attach, OSV/NVD network refresh와 package-manager mutation은 pinned registered adapter·exact 승인이 없으면 실행하지 않으며 Star-Control이 취약점 DB·PKI·compiler를 재구현하지 않는다. 구현 증거는 [M5~M9 제품 Slice](../testing/m5-m9-development-evidence-2026-07-20.md), [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md), [P-0056 감사](../testing/p0056-current-functional-recovery-audit-2026-07-24.md)에 고정한다.
 
 상위 소유권은 다음과 같다.
 
@@ -102,6 +102,8 @@ preflight는 source·manifest·lockfile을 쓰지 않으며 network에 접근하
 
 `FailureRecord`는 두 번째 Diagnostic이 아니다. severity, message parameter, location, suppression, disposition, open/resolved lifecycle과 Gate effect는 공통 Diagnostic·Finding 계약만 소유한다. `primary_symptom`은 family fingerprint를 재현하기 위한 redacted projection이고 원본 observation은 `diagnostic_refs`로 추적한다.
 
+`failures.inspect`의 `verification_state=verified`는 caller 선언이 아니다. Controller는 `validation_run_ref`의 실제 `ValidationRunV2`를 다시 읽고 current subject, complete non-pass execution, exact Checkout·WorkspaceSnapshot·ProjectRevision·ChangeSet, Check descriptor, executable·args·cwd, environment와 input fingerprint를 대조한다. 참조 Diagnostic은 같은 Project·ValidationRun의 confirmed observation이어야 하며 code·message·observed time도 일치해야 한다. Finding ref가 있으면 같은 Project의 실제 Finding이어야 한다. 어느 하나라도 맞지 않으면 `VALIDATION_EVIDENCE_INVALID`로 publish를 거부한다. 과거 v1 문서에 새 optional `input_fingerprint`가 없으면 보존은 가능하지만 verified reproduction·regression 증거로 승격할 수 없다.
+
 ### 두 fingerprint
 
 같은 fingerprint의 재발과 exact 재현을 동시에 지원하기 위해 identity를 둘로 나눈다.
@@ -127,7 +129,7 @@ preflight는 source·manifest·lockfile을 쓰지 않으며 network에 접근하
 - ProjectRevision·WorkspaceSnapshot·ChangeSet
 - normalized structured args와 logical cwd
 - full environment fingerprint와 tool identity/version
-- input content fingerprint와 seed
+- input content fingerprint와 seed. `input_fingerprint`는 additive optional field로 문서에도 보존하며 현재 `verified` record에서는 필수다.
 - relevant manifest·lockfile fingerprint
 
 정규화기는 원문을 보관하기 전에 redaction하고, normalization rule version을 fingerprint 입력에 포함한다. rule version이 다르면 자동으로 같은 family라고 병합하지 않는다.
@@ -307,7 +309,8 @@ scanner는 `ToolDescriptor`·`CheckDescriptor`로 등록된 adapter다.
 | `schema_version` | source schema/API version |
 | `published_at`, `modified_at` | source가 제공한 시간. 없으면 `unknown` |
 | `fetched_at`, `observed_at` | adapter가 자료를 받은 시각과 core가 관찰한 시각 |
-| `content_digest` | 수신한 immutable payload의 digest. secret payload 금지 |
+| `content_digest` | 수신한 immutable raw payload의 digest. secret payload 금지 |
+| `normalized_artifact_ref`, `normalized_digest` | adapter가 raw payload에서 만든 canonical observation artifact와 digest |
 | `tool_identity` | adapter·scanner name/version/config fingerprint |
 | `network_mode` | `offline_cache\|approved_online` |
 | `coverage` | ecosystem/package/query 범위, pagination 완료 여부, missing reason |
@@ -316,7 +319,7 @@ scanner는 `ToolDescriptor`·`CheckDescriptor`로 등록된 adapter다.
 
 시간 우선순위는 source `modified_at`, source `published_at`, `fetched_at` 순이다. source가 시간을 제공하지 않으면 `fetched_at`만으로 content 자체 최신성을 확정하지 않고 `freshness_state=unknown`을 허용한다.
 
-`valid_until`은 source descriptor의 `maximum_age`와 현재 Gate의 `evaluation_time`으로 결정한다. `stale`·`unknown`·`unavailable` 자료는 warning을 반드시 만들며, required security Check의 clean/pass 근거가 되지 못한다. offline 결과에는 마지막 snapshot 시각과 “현재 외부 상태를 확인하지 않음”을 표시한다.
+`valid_until`은 source descriptor의 `maximum_age`와 현재 Gate의 `evaluation_time`으로 결정한다. `evaluation_time`은 command payload를 신뢰하지 않고 Controller가 실행 시각으로 기록한다. raw/normalized 두 artifact digest와 exact source request fingerprint는 같은 terminal `DevelopmentEffectReceiptV1`에 있어야 하며 normalized observation byte를 바꾸면 snapshot seal이 실패한다. `stale`·`unknown`·`unavailable` 또는 incomplete coverage 자료는 warning을 반드시 만들며, required security Check의 clean/pass 근거가 되지 못한다. offline 결과에는 마지막 snapshot 시각과 “현재 외부 상태를 확인하지 않음”을 표시한다.
 
 refresh는 별도 `network_read` action이다. 현재 대화의 exact scope·source·비용·credential 사용 여부에 대한 사용자 승인 전에는 실행하지 않는다. refresh 실패 시 이전 snapshot을 덮어쓰지 않고 새 failed attempt와 이전 snapshot의 stale 상태를 함께 보존한다.
 

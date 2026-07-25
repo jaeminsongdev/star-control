@@ -1,0 +1,300 @@
+{
+  "$defs": {
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StageExecutorKindV1": {
+      "enum": [
+        "deterministic_local",
+        "codex"
+      ],
+      "type": "string"
+    },
+    "StageFailurePolicyV1": {
+      "enum": [
+        "retry",
+        "replan",
+        "block",
+        "rollback"
+      ],
+      "type": "string"
+    },
+    "StageModeV1": {
+      "enum": [
+        "plan",
+        "execute",
+        "review"
+      ],
+      "type": "string"
+    },
+    "StageStateV1": {
+      "enum": [
+        "draft",
+        "ready",
+        "running",
+        "waiting_approval",
+        "paused",
+        "blocked",
+        "failed",
+        "cancelled",
+        "completed",
+        "superseded"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.stage-spec:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "change_plan_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DocumentRef"
+      },
+      "type": "array"
+    },
+    "completion_criteria": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "dependencies": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "excluded_work": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "executor_kind": {
+      "$ref": "#/$defs/StageExecutorKindV1"
+    },
+    "expected_change_scope": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "failure_policy": {
+      "$ref": "#/$defs/StageFailurePolicyV1"
+    },
+    "goal_id": {
+      "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "impact_analysis_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "included_work": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "objective": {
+      "type": "string"
+    },
+    "parallel_group": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "permission_plan_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "profile_catalog_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "profile_resolution_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "project_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "result_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "route_decision_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_id": {
+      "const": "star.stage-spec",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_revision_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stage_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "stage_id": {
+      "pattern": "^stg_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "stage_mode": {
+      "$ref": "#/$defs/StageModeV1"
+    },
+    "state": {
+      "$ref": "#/$defs/StageStateV1"
+    },
+    "task_spec_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "validation_plan_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "work_profile_definition_hash": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "work_profile_id": {
+      "type": "string"
+    },
+    "work_profile_version": {
+      "default": "",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "stage_id",
+    "revision",
+    "goal_id",
+    "title",
+    "objective",
+    "stage_mode",
+    "executor_kind",
+    "work_profile_id",
+    "project_ids",
+    "included_work",
+    "excluded_work",
+    "expected_change_scope",
+    "dependencies",
+    "completion_criteria",
+    "failure_policy",
+    "state",
+    "stage_fingerprint"
+  ],
+  "title": "StageSpecV1",
+  "type": "object"
+}

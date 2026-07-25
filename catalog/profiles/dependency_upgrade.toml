@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "dependency_upgrade"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "Dependency Upgrade"
 summary = "manifest와 lockfile 기반 후보, 호환성·보안 Gate와 rollback을 준비한다."
-parent_profile = { profile_id = "security_supply_chain", profile_version = "1.0.0" }
+parent_profile = { profile_id = "security_supply_chain", profile_version = "1.1.0" }
 triggers = ["dependency_change", "framework_upgrade", "lockfile_change"]
 stage_template = ["dependency_snapshot", "candidate_plan", "isolated_prepare", "compatibility_gate", "apply_approval"]
 context_rules = ["exact_manifest", "exact_lockfile", "offline_first"]
@@ -22,6 +22,8 @@ evidence_requirements = ["dependency_snapshot", "dependency_update_plan", "gate"
 corpus_requirements = ["rollback", "version_candidate"]
 approval_checkpoints = ["dependency_change", "download", "network", "patch_apply"]
 default_stop_state = "awaiting_apply_approval"
+unknown_outcome_policy = "preserve_and_reconcile"
+rollback_policy = "recovery_plan_required"
 allowed_effect_classes = ["read", "plan", "validate", "network_read", "workspace_mutation"]
 permission_floor = "exact_durable_approval"
 

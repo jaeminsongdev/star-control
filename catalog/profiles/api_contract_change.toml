@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "api_contract_change"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "API 계약 변경"
 summary = "공개 API, CLI, Schema, 파일 형식과 안정 ID의 호환성 변경을 검증한다."
-parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.1.0" }
 triggers = ["api_change", "cli_contract_change", "config_id_change", "schema_change"]
 stage_template = ["contract_snapshot", "compatibility_compare", "consumer_validation", "migration_guide", "goal_gate"]
 context_rules = ["current_consumers", "exact_contract_surface", "version_policy"]
@@ -22,6 +22,8 @@ evidence_requirements = ["compatibility_report", "contract_snapshot", "gate", "v
 corpus_requirements = ["backward_compatibility", "schema_fixture"]
 approval_checkpoints = []
 default_stop_state = "compatibility_decided"
+unknown_outcome_policy = "preserve_and_stop"
+rollback_policy = "recovery_plan_required"
 allowed_effect_classes = ["read", "plan", "validate"]
 permission_floor = "local_read_only"
 

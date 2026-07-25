@@ -1,0 +1,352 @@
+schema_version = 1
+expected_feature_count = 23
+expected_profile_count = 16
+expected_runtime_executable_count = 4
+expected_generated_schema_count = 213
+expected_stable_error_count = 528
+expected_mcp_matrix_count = 170
+
+[[features]]
+id = "A01"
+owner_doc = "docs/contracts/goal-and-stage.md"
+schema_files = ["task-spec.schema.json", "goal-record.schema.json"]
+handler_refs = ["apps/star-controller/src/goal_store.rs#pub struct GoalStore", "apps/star-controller/src/main.rs#run_goal_start_command", "apps/star-controller/src/main.rs#fn complete_goal_from_evidence"]
+cli_commands = ["goal.start", "goal.status", "goal.pause", "goal.resume", "goal.cancel", "goal.complete"]
+mcp_required = true
+mcp_actions = ["goal.start", "goal.status", "goal.pause", "goal.resume", "goal.cancel"]
+codex_required = false
+codex_refs = []
+positive_test = "apps/star-controller/src/goal_store.rs#goal_config_is_fingerprinted_persistent_and_idempotency_bound"
+negative_test = "apps/star-controller/src/goal_store.rs#question_plan_run_and_lifecycle_are_revision_guarded"
+failure_test = "apps/star-controller/src/goal_store.rs#persisted_state_reloads_and_future_version_is_rejected"
+recovery_test = "apps/star-controller/src/goal_store.rs#stage_result_and_goal_completion_are_evidence_bound_and_restart_safe"
+
+[[features]]
+id = "A02"
+owner_doc = "docs/contracts/goal-and-stage.md"
+schema_files = ["stage-spec.schema.json", "stage-graph.schema.json", "stage-result.schema.json"]
+handler_refs = ["crates/control/star-planning/src/orchestration.rs#pub fn build_stage_graph", "apps/star-controller/src/main.rs#stage.plan", "apps/star-controller/src/main.rs#fn record_stage_result"]
+cli_commands = ["stage.plan", "stage.show", "stage.replan", "stage.result.record", "stage.result.show"]
+mcp_required = false
+mcp_actions = []
+codex_required = false
+codex_refs = []
+positive_test = "apps/star-controller/src/goal_store.rs#stage_result_and_goal_completion_are_evidence_bound_and_restart_safe"
+negative_test = "crates/control/star-planning/src/orchestration.rs#planning_negative_rejects_stale_revision"
+failure_test = "crates/control/star-planning/src/orchestration.rs#planning_failure_rejects_completed_stage_rewrite"
+recovery_test = "crates/foundation/star-contracts/src/stage.rs#stage_result_recovery_requires_effect_boundary_and_action"
+
+[[features]]
+id = "A03"
+owner_doc = "docs/contracts/project-catalog-and-code-index.md"
+schema_files = ["project-catalog-snapshot.schema.json", "code-index-snapshot.schema.json", "workspace-snapshot.schema.json", "context-pack.schema.json"]
+handler_refs = ["crates/control/star-project/src/catalog_snapshot.rs#pub fn build_project_catalog_snapshot", "crates/control/star-project/src/index.rs#pub fn build_code_index", "crates/control/star-application/src/lib.rs#pub fn verify_context_pack_current", "apps/star-controller/src/main.rs#fn build_context_pack"]
+cli_commands = ["project.discover", "scan.run", "index.status", "index.search", "context.pack.build", "context.pack.show"]
+mcp_required = true
+mcp_actions = ["project.list", "project.status"]
+codex_required = true
+codex_refs = ["apps/star-controller/src/codex_product.rs#fn render_context_bound_instruction"]
+positive_test = "crates/foundation/star-contracts/src/context_pack.rs#context_pack_positive_seals_current_exact_sources"
+negative_test = "crates/foundation/star-contracts/src/context_pack.rs#context_pack_negative_secret_content_cannot_be_inlined"
+failure_test = "crates/foundation/star-contracts/src/context_pack.rs#context_pack_failure_stale_source_cannot_satisfy_require_current"
+recovery_test = "crates/foundation/star-contracts/src/context_pack.rs#context_pack_recovery_pinned_snapshot_preserves_limitation"
+
+[[features]]
+id = "A04"
+owner_doc = "docs/contracts/change-planning-and-impact.md"
+schema_files = ["impact-analysis.schema.json", "risk-path-descriptor.schema.json", "change-plan-v2.schema.json"]
+handler_refs = ["crates/control/star-planning/src/lib.rs#pub fn build_planning_bundle", "apps/star-controller/src/main.rs#planning.impact.inspect"]
+cli_commands = ["planning.impact.inspect", "planning.affected-checks.show", "planning.replan"]
+mcp_required = true
+mcp_actions = ["validation.plan"]
+codex_required = true
+codex_refs = ["integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md#star_tool_search"]
+positive_test = "crates/control/star-planning/src/lib.rs#task_to_impact_to_ready_validation_plan_is_deterministic_and_typed"
+negative_test = "crates/control/star-planning/src/lib.rs#missing_required_check_is_blocked_not_not_applicable"
+failure_test = "crates/control/star-planning/src/lib.rs#graph_limit_never_becomes_complete_or_confirmed_empty"
+recovery_test = "crates/control/star-planning/src/lib.rs#scope_revision_replan_preserves_document_identity_and_records_lineage"
+
+[[features]]
+id = "A05"
+owner_doc = "docs/contracts/routing.md"
+schema_files = ["capability-snapshot.schema.json", "route-decision.schema.json"]
+handler_refs = ["crates/control/star-planning/src/routing.rs#pub fn route_codex_stage", "crates/adapters/star-adapter-codex/src/app_server.rs#probe_capabilities", "apps/star-controller/src/main.rs#codex.capability.inspect", "apps/star-controller/src/codex_product.rs#pub(crate) fn require_latest_capability"]
+cli_commands = ["codex.capability.inspect", "route.decide", "route.show"]
+mcp_required = false
+mcp_actions = []
+codex_required = true
+codex_refs = ["crates/adapters/star-adapter-codex/src/app_server.rs#pub struct CodexAppServerProcess"]
+positive_test = "apps/star-controller/tests/codex_app_server.rs#codex_app_server_real_process_positive_capability_probe"
+negative_test = "apps/star-controller/src/codex_product.rs#capability_selection_rejects_stale_and_ambiguous_latest_snapshots"
+failure_test = "apps/star-controller/tests/codex_app_server.rs#codex_app_server_real_process_failure_rejects_missing_executable"
+recovery_test = "crates/control/star-planning/src/routing.rs#routing_recovery_falls_back_from_unavailable_max_to_single"
+
+[[features]]
+id = "A06"
+owner_doc = "docs/features/core-control.md"
+schema_files = ["codex-execution-record.schema.json", "context-pack.schema.json", "permission-plan.schema.json", "development-effect-receipt-v1.schema.json"]
+handler_refs = ["crates/adapters/star-adapter-codex/src/app_server.rs#pub struct CodexAppServerProcess", "apps/star-controller/src/codex_product.rs#pub fn launch", "apps/star-controller/src/main.rs#codex.task.start", "apps/star-controller/src/main.rs#fn build_context_pack", "apps/star-controller/src/main.rs#fn create_permission_plan"]
+cli_commands = ["context.pack.build", "context.pack.show", "permission.plan.create", "permission.plan.show", "codex.task.start", "codex.task.resume", "codex.task.fork", "codex.task.interrupt", "codex.task.status", "run.continue"]
+mcp_required = true
+mcp_actions = ["run.continue"]
+codex_required = true
+codex_refs = ["apps/star-controller/src/codex_product.rs#pub fn launch"]
+positive_test = "apps/star-controller/src/codex_product.rs#codex_approval_positive_creates_and_reuses_one_exact_durable_operation"
+negative_test = "apps/star-controller/src/codex_product.rs#launch_capability_rejects_missing_operation_or_permission_override"
+failure_test = "crates/adapters/star-adapter-codex/src/app_server.rs#app_server_failure_kills_a_hung_probe_at_the_deadline"
+recovery_test = "apps/star-controller/tests/codex_app_server.rs#codex_app_server_real_process_recovery_resumes_forks_and_interrupts"
+
+[[features]]
+id = "A07"
+owner_doc = "docs/contracts/events-and-state.md"
+schema_files = ["management-store-status.schema.json", "management-backup-plan.schema.json", "management-restore-plan.schema.json"]
+handler_refs = ["crates/infrastructure/star-state/src/lib.rs#pub struct SqliteManagementRepositorySet", "apps/star-controller/src/main.rs#management.backup.plan"]
+cli_commands = ["management.status", "management.backup.plan", "management.restore.plan", "management.rebuild.plan"]
+mcp_required = true
+mcp_actions = ["goal.status", "goal.pause", "goal.resume"]
+codex_required = false
+codex_refs = []
+positive_test = "crates/infrastructure/star-state/src/lib.rs#writer_lease_project_partition_backup_and_root_binding_are_real"
+negative_test = "crates/infrastructure/star-state/src/lib.rs#active_set_header_mismatch_enters_recovery_only_even_when_manifest_is_resealed"
+failure_test = "crates/infrastructure/star-state/src/lib.rs#backup_plan_restore_preserves_corrupt_generation_and_rejects_tamper"
+recovery_test = "crates/infrastructure/star-state/src/lib.rs#restore_activation_is_all_old_or_all_new_across_crash_points"
+
+[[features]]
+id = "A08"
+owner_doc = "docs/architecture/security-and-permissions.md"
+schema_files = ["permission-plan.schema.json", "development-effect-receipt-v1.schema.json", "tool-trust-record.schema.json"]
+handler_refs = ["crates/control/star-execution/src/lib.rs#RegisteredDevelopmentEffectAdapter", "apps/star-controller/src/main.rs#action_permission_decision", "apps/star-controller/src/main.rs#fn create_permission_plan", "apps/star-controller/src/codex_product.rs#fn load_permission_plan"]
+cli_commands = ["permission.plan.create", "permission.plan.show", "approval.resolve", "development.effect.record"]
+mcp_required = true
+mcp_actions = ["star_approval_resolve"]
+codex_required = true
+codex_refs = ["apps/star-controller/src/codex_product.rs#fn load_permission_plan"]
+positive_test = "crates/foundation/star-contracts/src/permission_plan.rs#permission_plan_positive_seals_exact_stage_scope"
+negative_test = "crates/foundation/star-contracts/src/permission_plan.rs#permission_plan_negative_unknown_paid_action_cannot_be_auto"
+failure_test = "crates/foundation/star-contracts/src/permission_plan.rs#permission_plan_failure_expired_plan_is_not_current"
+recovery_test = "crates/foundation/star-contracts/src/permission_plan.rs#permission_plan_recovery_default_deny_is_preserved"
+
+[[features]]
+id = "A09"
+owner_doc = "docs/contracts/cross-repo-change-bundle.md"
+schema_files = ["worktree-record.schema.json", "merge-queue-record.schema.json", "project-merge-result.schema.json"]
+handler_refs = ["crates/control/star-development/src/coordination_v2.rs#pub fn seal_merge_plan", "apps/star-controller/src/main.rs#change-bundle.worktree.plan"]
+cli_commands = ["change-bundle.worktree.plan", "change-bundle.merge.plan", "change-bundle.merge.enqueue", "change-bundle.merge.run"]
+mcp_required = true
+mcp_actions = ["merge.status", "handoff.get"]
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-development/src/coordination_v2.rs#git_adapter_creates_owned_worktree_and_fast_forwards_only_with_exact_permit"
+negative_test = "crates/control/star-development/src/coordination_v2.rs#relation_and_step_cycles_are_rejected"
+failure_test = "crates/control/star-development/src/coordination_v2.rs#incomplete_overlap_blocks_parallel_dispatch"
+recovery_test = "crates/control/star-development/src/coordination_v2.rs#completion_level_requires_receipt_backed_participant_states"
+
+[[features]]
+id = "A10"
+owner_doc = "docs/contracts/config-and-catalog.md"
+schema_files = ["managed-registry-snapshot-v2.schema.json", "tool-registry-snapshot.schema.json", "development-profile-resolution.schema.json"]
+handler_refs = ["crates/control/star-development/src/managed_registry_v2.rs#pub fn load_git_registry_from_project", "apps/star-controller/src/main.rs#profile.resolve"]
+cli_commands = ["registry.list", "registry.status", "profile.resolve"]
+mcp_required = true
+mcp_actions = ["star_tool_search", "star_tool_describe", "star_tool_registry_status"]
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-development/src/managed_registry_v2.rs#git_source_only_loader_rebuilds_snapshot_and_detects_binding_drift"
+negative_test = "crates/control/star-development/src/managed_registry_v2.rs#root_requires_explicit_registry_checks_and_namespace_claim"
+failure_test = "crates/control/star-development/src/managed_registry.rs#stale_consumer_and_alias_omission_block_migration"
+recovery_test = "apps/star-controller/tests/property_fuzz.rs#registry_random_valid_invalid_delete_and_recreate_sequences_preserve_lkg_invariants"
+
+[[features]]
+id = "B01"
+owner_doc = "docs/contracts/validation-and-evidence.md"
+schema_files = ["validation-result-v2.schema.json", "evidence-bundle-v2.schema.json", "review-pack.schema.json"]
+handler_refs = ["crates/control/star-validation/src/runner.rs#pub fn run_check_graph", "apps/star-controller/src/main.rs#validation.run-plan"]
+cli_commands = ["validation.run-plan", "evidence.bundle.export", "review-pack.export"]
+mcp_required = true
+mcp_actions = ["validation.plan", "validation.run", "evidence.get"]
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-validation/src/runner.rs#final_artifact_manifest_is_bound_before_the_evidence_bundle_is_sealed"
+negative_test = "crates/control/star-validation/src/runner.rs#completion_claims_are_compared_with_current_runs_and_change_sets"
+failure_test = "crates/control/star-validation/src/runner.rs#timeout_and_flaky_evidence_block_and_never_run_dependents"
+recovery_test = "apps/star-controller/src/validation_planning.rs#complete_cached_evidence_remains_reusable_during_human_review"
+
+[[features]]
+id = "B02"
+owner_doc = "docs/features/validation.md"
+schema_files = ["baseline-v2.schema.json", "suppression-v2.schema.json", "diagnostic-v2.schema.json"]
+handler_refs = ["crates/control/star-validation/src/rules.rs#pub fn evaluate_rule_facts", "apps/star-controller/src/main.rs#validation.run-plan"]
+cli_commands = ["validation.run-plan", "baseline.inspect", "suppression.inspect"]
+mcp_required = true
+mcp_actions = ["validation.run"]
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-validation/src/runner.rs#successful_checks_with_required_review_are_not_auto_passed"
+negative_test = "crates/control/star-release/src/evaluation.rs#validator_corpus_or_profile_weakening_is_release_blocking_reject"
+failure_test = "apps/star-controller/src/validation_execution.rs#partial_unverified_or_flaky_counts_cannot_be_reported_as_pass"
+recovery_test = "crates/control/star-validation/src/planning.rs#cache_reuses_only_identical_complete_stable_unsuppressed_evidence"
+
+[[features]]
+id = "B03"
+owner_doc = "docs/features/common-validation-gate.md"
+schema_files = ["validator-corpus-manifest-v2.schema.json", "validator-guard-evidence-v2.schema.json"]
+handler_refs = ["crates/foundation/star-contracts/src/validator_guard.rs#pub struct ValidatorGuardEvidenceV2", "crates/control/star-validation/src/rules.rs#pub fn builtin_validator_corpus", "crates/control/star-application/src/lib.rs#fn collect_m3_rule_diagnostics"]
+cli_commands = ["validation.preflight", "validation.run-plan"]
+mcp_required = true
+mcp_actions = ["validation.run"]
+codex_required = false
+codex_refs = []
+positive_test = "crates/foundation/star-contracts/src/validator_guard.rs#guard_evidence_requires_distinct_executors_and_complete_fixture_kinds"
+negative_test = "crates/foundation/star-contracts/src/validator_guard.rs#weakening_is_valid_evidence_but_never_auto_pass_eligible"
+failure_test = "crates/control/star-validation/src/rules.rs#false_positive_candidates_never_become_automatic_pass_facts"
+recovery_test = "crates/control/star-validation/src/rules.rs#checked_in_validator_corpus_is_hash_bound_and_enforces_expected_behavior"
+
+[[features]]
+id = "B04"
+owner_doc = "docs/contracts/contract-compatibility-and-environment.md"
+schema_files = ["contract-surface-snapshot.schema.json", "compatibility-report-v2.schema.json"]
+handler_refs = ["crates/control/star-development/src/compatibility_v2.rs#pub fn compare_surface_snapshots", "apps/star-controller/src/main.rs#contract.compare"]
+cli_commands = ["contract.snapshot", "contract.compare", "registry.declaration.plan"]
+mcp_required = false
+mcp_actions = []
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-development/src/compatibility_v2.rs#environment_fingerprint_excludes_absolute_project_path_and_doctor_is_read_only"
+negative_test = "crates/control/star-development/src/compatibility_v2.rs#snapshot_compare_marks_removed_or_modified_public_surface_breaking"
+failure_test = "crates/control/star-validation/src/rules.rs#managed_registry_missing_stale_drift_and_family_gaps_are_fail_closed"
+recovery_test = "crates/control/star-application/src/rust_style.rs#fixed_pipeline_builds_patch_and_second_run_is_zero_diff"
+
+[[features]]
+id = "B05"
+owner_doc = "docs/contracts/failure-security-and-dependency-maintenance.md"
+schema_files = ["dependency-snapshot.schema.json", "supply-chain-snapshot.schema.json", "maintenance-radar-snapshot.schema.json"]
+handler_refs = ["crates/control/star-development/src/maintenance_v2.rs#pub fn scan_dependency_snapshot", "apps/star-controller/src/main.rs#security.inspect"]
+cli_commands = ["security.inspect", "deps.scan", "deps.prepare", "maintenance.radar"]
+mcp_required = false
+mcp_actions = []
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-development/src/maintenance_v2.rs#external_security_snapshot_binds_query_raw_and_normalized_artifacts_and_coverage"
+negative_test = "crates/control/star-development/src/maintenance_v2.rs#supply_chain_rejects_cross_project_or_unbound_observation_sources"
+failure_test = "crates/control/star-development/src/maintenance_v2.rs#cargo_dependency_scan_is_source_only_and_marks_missing_lock_partial"
+recovery_test = "crates/control/star-execution/src/lib.rs#registered_effect_adapter_covers_m7_m8_m9_permissions_and_preserves_unknown"
+
+[[features]]
+id = "B06"
+owner_doc = "docs/contracts/failure-security-and-dependency-maintenance.md"
+schema_files = ["failure-record.schema.json", "reproduction-pack-v2.schema.json", "recovery-plan-v2.schema.json"]
+handler_refs = ["crates/control/star-development/src/maintenance_v2.rs#pub fn build_failure_record", "apps/star-controller/src/main.rs#fn m7_validate_verified_failure_input", "apps/star-controller/src/main.rs#failures.reproduce"]
+cli_commands = ["failures.inspect", "failures.reproduce", "failures.recovery-plan"]
+mcp_required = false
+mcp_actions = []
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-development/src/maintenance_v2.rs#failure_family_redacts_path_pid_and_timestamp_but_occurrence_stays_exact"
+negative_test = "apps/star-controller/src/main.rs#verified_failure_requires_current_exact_validation_and_diagnostic_evidence"
+failure_test = "apps/star-controller/src/main.rs#development_effect_receipt_binds_terminal_operation_subject_and_executable"
+recovery_test = "crates/control/star-development/src/maintenance.rs#reproduction_and_radar_preserve_unverified_external_state"
+
+[[features]]
+id = "B07"
+owner_doc = "docs/contracts/contract-compatibility-and-environment.md"
+schema_files = ["documentation-snapshot.schema.json", "environment-snapshot.schema.json", "project-doctor-report.schema.json"]
+handler_refs = ["crates/control/star-development/src/compatibility_v2.rs#pub fn build_documentation_snapshot", "crates/control/star-development/src/compatibility_v2.rs#pub fn trace_config_key", "crates/control/star-development/src/compatibility_v2.rs#pub fn evaluate_project_doctor", "apps/star-controller/src/main.rs#docs.check", "apps/star-controller/src/main.rs#project.doctor"]
+cli_commands = ["docs.check", "config.trace", "environment.fingerprint", "project.doctor"]
+mcp_required = true
+mcp_actions = ["doctor.run"]
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-development/src/compatibility_v2.rs#documentation_snapshot_is_bound_to_the_current_managed_registry"
+negative_test = "apps/star-controller/src/policy_profile.rs#execution_settings_reject_unknown_keys_and_unwired_policy_weakening"
+failure_test = "apps/star-controller/src/main.rs#command_config_defaults_materialize_missing_typed_document_fields"
+recovery_test = "apps/star-controller/src/main.rs#effective_config_is_a_management_owned_restart_safe_read"
+
+[[features]]
+id = "B08"
+owner_doc = "docs/contracts/migration-performance-and-platform.md"
+schema_files = ["migration-checkpoint-v2.schema.json", "performance-comparison-v2.schema.json", "equivalence-report.schema.json"]
+handler_refs = ["crates/control/star-development/src/migration_v2.rs#pub fn seal_migration_checkpoint", "apps/star-controller/src/main.rs#migration.execute"]
+cli_commands = ["migration.execute", "migration.resume", "migration.rollback", "performance.run", "performance.compare", "language-migration.cutover"]
+mcp_required = false
+mcp_actions = []
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-development/src/migration_v2.rs#performance_comparison_requires_same_binding_and_numeric_budget"
+negative_test = "crates/control/star-development/src/migration.rs#performance_requires_comparable_binding_and_arm64_simulation_is_unverified"
+failure_test = "crates/control/star-development/src/migration_v2.rs#not_replay_safe_checkpoint_requires_reconciliation"
+recovery_test = "crates/control/star-development/src/migration.rs#interrupted_migration_resumes_from_exact_prefix_and_can_rollback"
+
+[[features]]
+id = "B09"
+owner_doc = "docs/contracts/ci-release-evaluation-and-product-completion.md"
+schema_files = ["release-manifest-v2.schema.json", "release-asset-binding-v1.schema.json"]
+handler_refs = ["crates/control/star-release/src/candidate.rs#pub fn seal_candidate", "apps/star-controller/src/main.rs#release.verification.record"]
+cli_commands = ["release.candidate.create", "release.verification.record", "release.promote", "release.status"]
+mcp_required = false
+mcp_actions = []
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-release/src/candidate.rs#build_once_store_rejects_overwrite_and_verifies_exact_bytes"
+negative_test = "crates/control/star-release/src/candidate.rs#partial_or_digest_mismatched_ci_never_becomes_ready"
+failure_test = "crates/control/star-release/src/candidate.rs#signing_changes_candidate_and_clears_unsigned_verification"
+recovery_test = "crates/control/star-release/src/candidate.rs#partial_publish_and_remote_digest_mismatch_require_rollback"
+
+[[features]]
+id = "C01"
+owner_doc = "docs/features/profiles.md"
+schema_files = ["development-profile-descriptor.schema.json", "development-profile-catalog-snapshot.schema.json", "development-profile-resolution.schema.json"]
+handler_refs = ["crates/foundation/star-contracts/src/profile.rs#pub fn resolve_development_profiles", "crates/control/star-application/src/profile_catalog.rs#load_development_profile_catalog", "crates/control/star-application/src/lib.rs#pub fn verify_stage_profile_current", "apps/star-controller/src/main.rs#fn bind_stage_plan_profiles", "apps/star-controller/src/main.rs#profile.resolve"]
+cli_commands = ["profile.list", "profile.show", "profile.resolve"]
+mcp_required = false
+mcp_actions = []
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-application/src/profile_catalog.rs#product_catalog_loads_all_sixteen_and_resolves_deterministically"
+negative_test = "apps/star-controller/src/main.rs#stage_profile_binding_rejects_unknown_and_stale_catalog_resolution"
+failure_test = "crates/foundation/star-contracts/src/profile.rs#missing_parent_and_cycle_are_rejected"
+recovery_test = "crates/foundation/star-contracts/src/profile.rs#exact_builtin_set_resolves_deterministically"
+
+[[features]]
+id = "D01"
+owner_doc = "docs/contracts/cross-repo-change-bundle.md"
+schema_files = ["cross-repo-change-bundle.schema.json", "remote-state-snapshot-v2.schema.json", "remote-operation-record.schema.json"]
+handler_refs = ["crates/control/star-development/src/coordination_v2.rs#pub fn seal_remote_operation", "crates/adapters/star-adapter-github/src/lib.rs#pub struct GhCliClient", "apps/star-controller/src/main.rs#change-bundle.remote.snapshot"]
+cli_commands = ["change-bundle.remote.snapshot", "change-bundle.remote.operation.prepare", "change-bundle.remote.operation.apply", "change-bundle.release-handoff.plan"]
+mcp_required = true
+mcp_actions = ["merge.status", "handoff.get"]
+codex_required = true
+codex_refs = ["integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md#star_tool_search"]
+positive_test = "crates/control/star-development/src/coordination_v2.rs#remote_operation_recomputes_request_identity_and_requires_approval_evidence"
+negative_test = "apps/star-controller/src/main.rs#m9_remote_approval_is_bound_to_the_exact_project_ref_and_source_commit"
+failure_test = "crates/adapters/star-adapter-github/src/lib.rs#conflicting_remote_asset_never_clobbers"
+recovery_test = "crates/adapters/star-adapter-github/src/lib.rs#timeout_reconcile_is_read_only_and_preserves_unknown_or_partial"
+
+[[features]]
+id = "D02"
+owner_doc = "docs/contracts/ci-release-evaluation-and-product-completion.md"
+schema_files = ["evaluation-run-v2.schema.json", "evaluation-case-definition-v1.schema.json", "cost-record-v1.schema.json", "budget-snapshot-v1.schema.json"]
+handler_refs = ["crates/control/star-release/src/evaluation.rs#pub fn evaluate", "apps/star-controller/src/main.rs#evaluation.run"]
+cli_commands = ["evaluation.run", "evaluation.compare", "cost.record", "budget.snapshot"]
+mcp_required = false
+mcp_actions = []
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-release/src/evaluation.rs#comparable_candidate_with_more_detected_defects_and_less_rework_is_accepted"
+negative_test = "crates/control/star-release/src/evaluation.rs#faster_candidate_with_worsened_false_positive_is_rejected"
+failure_test = "crates/control/star-release/src/evaluation.rs#worsened_failure_or_unknown_outcome_is_never_accepted"
+recovery_test = "crates/control/star-release/src/evaluation.rs#catalog_lifecycle_is_closed_and_preserves_tombstone"
+
+[[features]]
+id = "D03"
+owner_doc = "docs/contracts/ci-release-evaluation-and-product-completion.md"
+schema_files = ["installation-record.schema.json", "runtime-activation-record.schema.json", "release-lifecycle-evidence.schema.json", "product-source-evidence-v1.schema.json", "final-product-audit-v2.schema.json"]
+handler_refs = ["crates/foundation/star-contracts/src/release_v2.rs#pub struct ReleaseLifecycleEvidence", "crates/control/star-release/src/lifecycle.rs#pub trait ReleaseLifecycleEvidenceExt", "crates/control/star-release/src/audit.rs#pub fn build_final_product_audit_v2", "crates/adapters/star-adapter-windows/src/lib.rs#pub struct InstallationManager", "apps/star-updater/src/main.rs#fn main"]
+cli_commands = ["release.lifecycle.publish", "release.publish.prepare", "release.status", "release.audit"]
+mcp_required = false
+mcp_actions = []
+codex_required = false
+codex_refs = []
+positive_test = "crates/control/star-release/src/audit.rs#v2_audit_binds_current_source_inventory_profiles_and_lifecycle"
+negative_test = "crates/control/star-release/src/audit.rs#v2_source_evidence_rejects_tampering_and_collapsed_test_classes"
+failure_test = "crates/control/star-release/src/lifecycle.rs#arm64_fake_lifecycle_stays_unverified_and_native_receipt_path_remains_available"
+recovery_test = "crates/adapters/star-adapter-windows/src/lib.rs#interrupted_integration_candidate_is_recovered_before_next_transaction"

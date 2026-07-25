@@ -77,10 +77,28 @@
     "ProductProfileConformanceStatusV1": {
       "additionalProperties": false,
       "properties": {
+        "activation_inputs_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "approval_path_verified": {
+          "type": "boolean"
+        },
+        "conformance_policy_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
         "conformant": {
           "type": "boolean"
         },
+        "covered_check_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "definition_hash": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "effective_config_fingerprint": {
           "$ref": "#/$defs/Sha256Hash"
         },
         "limitations": {
@@ -96,15 +114,47 @@
         "profile_version": {
           "type": "string"
         },
+        "project_context_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "required_check_families": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "resolution_fingerprint": {
           "$ref": "#/$defs/Sha256Hash"
+        },
+        "rollback_path_verified": {
+          "type": "boolean"
+        },
+        "source_definition_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "toolchain_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "unknown_outcome_path_verified": {
+          "type": "boolean"
         }
       },
       "required": [
         "profile_id",
         "profile_version",
         "definition_hash",
+        "source_definition_fingerprint",
         "resolution_fingerprint",
+        "activation_inputs_fingerprint",
+        "conformance_policy_fingerprint",
+        "project_context_fingerprint",
+        "effective_config_fingerprint",
+        "toolchain_fingerprint",
+        "required_check_families",
+        "covered_check_families",
+        "approval_path_verified",
+        "unknown_outcome_path_verified",
+        "rollback_path_verified",
         "conformant"
       ],
       "type": "object"

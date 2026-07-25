@@ -1,0 +1,12 @@
+{
+  "critical_path": [],
+  "edges": [],
+  "goal_id": "gol_00000000000000000000000000",
+  "graph_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "parallel_groups": [],
+  "plan_revision": 0,
+  "schema_id": "star.stage-graph",
+  "schema_version": 1,
+  "stage_graph_id": "sgr_00000000000000000000000000",
+  "stages": []
+}

@@ -28,6 +28,29 @@ star tools trust <package-id> --manifest-hash <sha256> [--expires <rfc3339>] [--
 star tools revoke <package-id> [--cancel-running] --reason <text> [--json]\n\
 star tools scaffold <exe-path> --output <toml-path>\n\
 star tools call <tool-id> <descriptor-sha256> <arguments-json> --lane read_closed|read_open|write_closed|write_open|destructive_closed|destructive_open [--goal <goal-id>] [--wait auto|accepted|completed] [--timeout-ms <milliseconds>] [--idempotency <key>] [--config-overrides <typed-overrides-json>] [--json]\n\
+star goal start <objective> --idempotency <key> [--project <project-key>] [--question-id <id> --question <prompt>] [--config-overrides <typed-overrides-json>] [--json]\n\
+star goal status <goal-id> [--json]\n\
+star goal answer <goal-id> <question-id> <answer> --revision <n> [--json]\n\
+star goal pause|resume|cancel <goal-id> --revision <n> [--json]\n\
+star goal complete <goal-id> <stage-graph-id> <project-id> <evidence-bundle-id> --revision <n> [--json]\n\
+star plan get <goal-id> [--json]\n\
+star plan update <goal-id> <items-json> --revision <n> [--json]\n\
+star run continue <goal-id> --revision <n> [--json]\n\
+star stage plan <stage-plan-input-json> [--json]\n\
+star stage show <stage-graph-id> [--json]\n\
+star stage replan <stage-graph-id> <stage-plan-input-json> --reason <text> [--json]\n\
+star stage result record <stage-result-input-json> [--json]\n\
+star stage result show <stage-result-id> [--json]\n\
+star context pack build <context-pack-input-json> [--json]\n\
+star context pack show <context-pack-id> [--json]\n\
+star permission plan create <permission-plan-input-json> [--json]\n\
+star permission plan show <permission-plan-id> [--json]\n\
+star codex capability inspect <project-id> <absolute-codex-exe> [--expires-seconds <n>] [--approval <approval-id>] [--json]\n\
+star codex capability show <project-id> <capability-snapshot-id> [--json]\n\
+star route decide <route-input-json> [--json]\n\
+star route show <project-id> <route-decision-id> [--json]\n\
+star codex task start|resume|fork <task-input-json> [--approval <approval-id>] [--json]\n\
+star codex task status|interrupt <project-id> <codex-execution-id> [--json]\n\
 star approvals resolve <approval-id> <scope-sha256> <approve|deny> [--reason <text>] [--json]\n\
 star operations get <operation-id> [--after-sequence <n>] [--wait-ms <milliseconds>] [--json]\n\
 star operations cancel <operation-id> [--reason <text>] [--json]\n\
@@ -78,7 +101,7 @@ star registry declaration plan <project-id> <change-kind> --desired <json-file> 
 star registry status <project-id> [--manifest <project-relative-path>] [--json]\n\
 star contract snapshot <project-id> <snapshot-id> --role baseline|current [--source-revision <git-revision>] [--manifest <project-relative-path>] [--registry-snapshot <ref>] [--revision <n>] [--json]\n\
 star contract compare <project-id> <report-id> <baseline-snapshot-id> <current-snapshot-id> [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
-star docs check <project-id> <snapshot-id> --registrations <json-file> [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
+star docs check <project-id> <snapshot-id> [--registry-manifest <project-relative-path>] [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
 star config effective [--json]\n\
 star config trace <project-id> <trace-id> --input <json-file> [--revision <n>] [--json]\n\
 star environment fingerprint <project-id> <snapshot-id> [--revision <n>] [--json]\n\
@@ -237,6 +260,441 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
         .cloned()
         .collect();
     match args.as_slice() {
+        [first, second, tail @ ..] if first == "goal" && second == "start" => {
+            let (positionals, options) = parse_tail(
+                tail,
+                &["--idempotency", "--project", "--question-id", "--question"],
+                &[],
+            )?;
+            require_positionals(&positionals, 1, "goal start")?;
+            let objective = positionals[0].trim();
+            if objective.is_empty() || objective.contains('\0') || objective.chars().count() > 4_096
+            {
+                return Err(
+                    "goal objective must contain 1 through 4096 non-NUL characters".to_owned(),
+                );
+            }
+            let idempotency_key = required_option(&options, "--idempotency")?;
+            validate_idempotency_key(&idempotency_key)?;
+            let question_id = options.get("--question-id").and_then(Clone::clone);
+            let question_prompt = options.get("--question").and_then(Clone::clone);
+            let question = match (question_id, question_prompt) {
+                (None, None) => None,
+                (Some(question_id), Some(prompt))
+                    if !question_id.trim().is_empty()
+                        && question_id.chars().count() <= 128
+                        && !question_id.contains('\0')
+                        && !prompt.trim().is_empty()
+                        && prompt.chars().count() <= 2_000
+                        && !prompt.contains('\0') =>
+                {
+                    Some(serde_json::json!({"question_id":question_id,"prompt":prompt}))
+                }
+                _ => {
+                    return Err(
+                        "--question-id and --question must be supplied together with bounded non-empty values"
+                            .to_owned(),
+                    );
+                }
+            };
+            let mut payload = serde_json::json!({
+                "objective":objective,
+                "project_key":options.get("--project").and_then(Clone::clone),
+                "question":question,
+                "idempotency_key":idempotency_key,
+            });
+            payload
+                .as_object_mut()
+                .expect("goal payload is an object")
+                .retain(|_, value| !value.is_null());
+            Ok(Parsed {
+                command: "goal.start".to_owned(),
+                payload,
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "goal" && second == "status" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "goal status")?;
+            star_contracts::ids::GoalId::parse(positionals[0].clone())
+                .map_err(|_| "goal status requires a valid GoalId".to_owned())?;
+            Ok(Parsed {
+                command: "goal.status".to_owned(),
+                payload: serde_json::json!({"goal_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "goal" && second == "answer" => {
+            let (positionals, options) = parse_tail(tail, &["--revision"], &[])?;
+            require_positionals(&positionals, 3, "goal answer")?;
+            star_contracts::ids::GoalId::parse(positionals[0].clone())
+                .map_err(|_| "goal answer requires a valid GoalId".to_owned())?;
+            let revision = parse_positive_revision(&required_option(&options, "--revision")?)?;
+            Ok(Parsed {
+                command: "goal.answer".to_owned(),
+                payload: serde_json::json!({
+                    "goal_id":positionals[0],
+                    "question_id":positionals[1],
+                    "answer":positionals[2],
+                    "expected_revision":revision,
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..]
+            if first == "goal" && matches!(second.as_str(), "pause" | "resume" | "cancel") =>
+        {
+            let (positionals, options) = parse_tail(tail, &["--revision"], &[])?;
+            require_positionals(&positionals, 1, "goal pause|resume|cancel")?;
+            star_contracts::ids::GoalId::parse(positionals[0].clone())
+                .map_err(|_| "goal mutation requires a valid GoalId".to_owned())?;
+            let revision = parse_positive_revision(&required_option(&options, "--revision")?)?;
+            Ok(Parsed {
+                command: format!("goal.{second}"),
+                payload: serde_json::json!({
+                    "goal_id":positionals[0],
+                    "expected_revision":revision,
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "goal" && second == "complete" => {
+            let (positionals, options) = parse_tail(tail, &["--revision"], &[])?;
+            require_positionals(&positionals, 4, "goal complete")?;
+            star_contracts::ids::GoalId::parse(positionals[0].clone())
+                .map_err(|_| "goal complete requires a valid GoalId".to_owned())?;
+            star_contracts::ids::StageGraphId::parse(positionals[1].clone())
+                .map_err(|_| "goal complete requires a valid StageGraphId".to_owned())?;
+            star_contracts::ids::ProjectId::parse(positionals[2].clone())
+                .map_err(|_| "goal complete requires a valid ProjectId".to_owned())?;
+            star_contracts::ids::EvidenceBundleId::parse(positionals[3].clone())
+                .map_err(|_| "goal complete requires a valid EvidenceBundleId".to_owned())?;
+            let revision = parse_positive_revision(&required_option(&options, "--revision")?)?;
+            Ok(Parsed {
+                command: "goal.complete".to_owned(),
+                payload: serde_json::json!({
+                    "goal_id":positionals[0],
+                    "expected_revision":revision,
+                    "stage_graph_id":positionals[1],
+                    "project_id":positionals[2],
+                    "evidence_bundle_id":positionals[3],
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "plan" && second == "get" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "plan get")?;
+            star_contracts::ids::GoalId::parse(positionals[0].clone())
+                .map_err(|_| "plan get requires a valid GoalId".to_owned())?;
+            Ok(Parsed {
+                command: "plan.get".to_owned(),
+                payload: serde_json::json!({"goal_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "plan" && second == "update" => {
+            let (positionals, options) = parse_tail(tail, &["--revision"], &[])?;
+            require_positionals(&positionals, 2, "plan update")?;
+            star_contracts::ids::GoalId::parse(positionals[0].clone())
+                .map_err(|_| "plan update requires a valid GoalId".to_owned())?;
+            let items = read_bounded_json_file(&positionals[1])?;
+            if !items.is_array() {
+                return Err("plan update items-json must contain one array".to_owned());
+            }
+            let revision = parse_positive_revision(&required_option(&options, "--revision")?)?;
+            Ok(Parsed {
+                command: "plan.update".to_owned(),
+                payload: serde_json::json!({
+                    "goal_id":positionals[0],
+                    "items":items,
+                    "expected_revision":revision,
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "run" && second == "continue" => {
+            let (positionals, options) = parse_tail(tail, &["--revision"], &[])?;
+            require_positionals(&positionals, 1, "run continue")?;
+            star_contracts::ids::GoalId::parse(positionals[0].clone())
+                .map_err(|_| "run continue requires a valid GoalId".to_owned())?;
+            let revision = parse_positive_revision(&required_option(&options, "--revision")?)?;
+            Ok(Parsed {
+                command: "run.continue".to_owned(),
+                payload: serde_json::json!({
+                    "goal_id":positionals[0],
+                    "expected_revision":revision,
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "stage" && second == "plan" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "stage plan")?;
+            let input = read_bounded_json_file(&positionals[0])?;
+            if !input.is_object() {
+                return Err("stage plan input must be one JSON object".to_owned());
+            }
+            Ok(Parsed {
+                command: "stage.plan".to_owned(),
+                payload: serde_json::json!({"input":input}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "stage" && second == "show" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "stage show")?;
+            star_contracts::ids::StageGraphId::parse(positionals[0].clone())
+                .map_err(|_| "stage show requires a valid StageGraphId".to_owned())?;
+            Ok(Parsed {
+                command: "stage.show".to_owned(),
+                payload: serde_json::json!({"stage_graph_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "stage" && second == "replan" => {
+            let (positionals, options) = parse_tail(tail, &["--reason"], &[])?;
+            require_positionals(&positionals, 2, "stage replan")?;
+            star_contracts::ids::StageGraphId::parse(positionals[0].clone())
+                .map_err(|_| "stage replan requires a valid StageGraphId".to_owned())?;
+            let input = read_bounded_json_file(&positionals[1])?;
+            if !input.is_object() {
+                return Err("stage replan input must be one JSON object".to_owned());
+            }
+            let reason = required_option(&options, "--reason")?;
+            if reason.trim().is_empty() || reason.contains('\0') || reason.chars().count() > 2_048 {
+                return Err(
+                    "stage replan reason must contain 1 through 2048 non-NUL characters".to_owned(),
+                );
+            }
+            Ok(Parsed {
+                command: "stage.replan".to_owned(),
+                payload: serde_json::json!({
+                    "stage_graph_id":positionals[0],
+                    "input":input,
+                    "reason":reason,
+                }),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "stage" && second == "result" && third == "record" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "stage result record")?;
+            let input = read_bounded_json_file(&positionals[0])?;
+            if !input.is_object() {
+                return Err("stage result input must be one JSON object".to_owned());
+            }
+            Ok(Parsed {
+                command: "stage.result.record".to_owned(),
+                payload: serde_json::json!({"input":input}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "stage" && second == "result" && third == "show" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "stage result show")?;
+            star_contracts::ids::StageResultId::parse(positionals[0].clone())
+                .map_err(|_| "stage result show requires a valid StageResultId".to_owned())?;
+            Ok(Parsed {
+                command: "stage.result.show".to_owned(),
+                payload: serde_json::json!({"stage_result_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "context" && second == "pack" && third == "build" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "context pack build")?;
+            let input = read_bounded_json_file(&positionals[0])?;
+            if !input.is_object() {
+                return Err("context pack build input must be one JSON object".to_owned());
+            }
+            Ok(Parsed {
+                command: "context.pack.build".to_owned(),
+                payload: serde_json::json!({"input":input}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "context" && second == "pack" && third == "show" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "context pack show")?;
+            star_contracts::ids::ContextPackId::parse(positionals[0].clone())
+                .map_err(|_| "context pack show requires a valid ContextPackId".to_owned())?;
+            Ok(Parsed {
+                command: "context.pack.show".to_owned(),
+                payload: serde_json::json!({"context_pack_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "permission" && second == "plan" && third == "create" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "permission plan create")?;
+            let input = read_bounded_json_file(&positionals[0])?;
+            if !input.is_object() {
+                return Err("permission plan create input must be one JSON object".to_owned());
+            }
+            Ok(Parsed {
+                command: "permission.plan.create".to_owned(),
+                payload: serde_json::json!({"input":input}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "permission" && second == "plan" && third == "show" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "permission plan show")?;
+            star_contracts::ids::PermissionPlanId::parse(positionals[0].clone())
+                .map_err(|_| "permission plan show requires a valid PermissionPlanId".to_owned())?;
+            Ok(Parsed {
+                command: "permission.plan.show".to_owned(),
+                payload: serde_json::json!({"permission_plan_id":positionals[0]}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "codex" && second == "capability" && third == "inspect" =>
+        {
+            let (positionals, options) =
+                parse_tail(tail, &["--expires-seconds", "--approval"], &[])?;
+            require_positionals(&positionals, 2, "codex capability inspect")?;
+            validate_project_id(&positionals[0], "codex capability inspect")?;
+            let executable = PathBuf::from(&positionals[1]);
+            if !executable.is_absolute() {
+                return Err(
+                    "codex capability inspect requires an absolute executable path".to_owned(),
+                );
+            }
+            let expires_in_seconds = options
+                .get("--expires-seconds")
+                .and_then(Clone::clone)
+                .unwrap_or_else(|| "900".to_owned())
+                .parse::<u64>()
+                .ok()
+                .filter(|value| (60..=86_400).contains(value))
+                .ok_or_else(|| "--expires-seconds must be from 60 through 86400".to_owned())?;
+            let approval_id = options.get("--approval").and_then(Clone::clone);
+            if let Some(approval_id) = approval_id.as_ref() {
+                star_contracts::ids::ApprovalId::parse(approval_id.clone())
+                    .map_err(|_| "--approval requires a valid ApprovalId".to_owned())?;
+            }
+            Ok(Parsed {
+                command: "codex.capability.inspect".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "codex_executable":positionals[1],
+                    "expires_in_seconds":expires_in_seconds,
+                    "allow_managed_ultra":false,
+                    "approval_id":approval_id,
+                }),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "codex" && second == "capability" && third == "show" =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "codex capability show")?;
+            validate_project_id(&positionals[0], "codex capability show")?;
+            star_contracts::ids::CapabilitySnapshotId::parse(positionals[1].clone()).map_err(
+                |_| "codex capability show requires a valid CapabilitySnapshotId".to_owned(),
+            )?;
+            Ok(Parsed {
+                command: "codex.capability.show".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "capability_snapshot_id":positionals[1],
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "route" && second == "decide" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 1, "route decide")?;
+            let payload = read_bounded_json_file(&positionals[0])?;
+            if !payload.is_object() {
+                return Err("route decide input must be one JSON object".to_owned());
+            }
+            Ok(Parsed {
+                command: "route.decide".to_owned(),
+                payload,
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "route" && second == "show" => {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "route show")?;
+            validate_project_id(&positionals[0], "route show")?;
+            star_contracts::ids::RouteDecisionId::parse(positionals[1].clone())
+                .map_err(|_| "route show requires a valid RouteDecisionId".to_owned())?;
+            Ok(Parsed {
+                command: "route.show".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "route_decision_id":positionals[1],
+                }),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "codex"
+                && second == "task"
+                && matches!(third.as_str(), "start" | "resume" | "fork") =>
+        {
+            let (positionals, options) = parse_tail(tail, &["--approval"], &[])?;
+            require_positionals(&positionals, 1, "codex task start|resume|fork")?;
+            let mut payload = read_bounded_json_file(&positionals[0])?;
+            let object = payload
+                .as_object_mut()
+                .ok_or_else(|| "codex task input must be one JSON object".to_owned())?;
+            if let Some(approval) = options.get("--approval").and_then(Clone::clone) {
+                star_contracts::ids::ApprovalId::parse(approval.clone())
+                    .map_err(|_| "--approval requires a valid ApprovalId".to_owned())?;
+                if object
+                    .insert("approval_id".to_owned(), serde_json::json!(approval))
+                    .is_some()
+                {
+                    return Err(
+                        "approval_id must be supplied either in JSON or --approval, not both"
+                            .to_owned(),
+                    );
+                }
+            }
+            Ok(Parsed {
+                command: format!("codex.task.{third}"),
+                payload,
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "codex"
+                && second == "task"
+                && matches!(third.as_str(), "status" | "interrupt") =>
+        {
+            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            require_positionals(&positionals, 2, "codex task status|interrupt")?;
+            validate_project_id(&positionals[0], "codex task status|interrupt")?;
+            star_contracts::ids::CodexExecutionId::parse(positionals[1].clone()).map_err(|_| {
+                "codex task status|interrupt requires a valid CodexExecutionId".to_owned()
+            })?;
+            Ok(Parsed {
+                command: format!("codex.task.{third}"),
+                payload: serde_json::json!({
+                    "project_id":positionals[0],
+                    "codex_execution_id":positionals[1],
+                }),
+                json,
+            })
+        }
         [first, second, tail @ ..] if first == "tools" && second == "call" => {
             let (positionals, options) = parse_tail(
                 tail,
@@ -1431,32 +1889,29 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             })
         }
         [first, second, tail @ ..] if first == "docs" && second == "check" => {
-            let (positionals, options) =
-                parse_tail(tail, &["--registrations", "--manifest", "--revision"], &[])?;
+            let (positionals, options) = parse_tail(
+                tail,
+                &["--registry-manifest", "--manifest", "--revision"],
+                &[],
+            )?;
             require_positionals(&positionals, 2, "docs check")?;
             validate_project_id(&positionals[0], "docs check")?;
             validate_development_id(&positionals[1], "snapshot-id")?;
-            let registrations =
-                read_bounded_json_file(&required_option(&options, "--registrations")?)?;
-            require_json_object_keys(&registrations, &["commands", "config_keys"])?;
-            let commands = registrations
-                .get("commands")
-                .and_then(serde_json::Value::as_array)
-                .ok_or("registrations.commands must be an array")?
-                .clone();
-            let config_keys = registrations
-                .get("config_keys")
-                .and_then(serde_json::Value::as_array)
-                .ok_or("registrations.config_keys must be an array")?
-                .clone();
+            let registry_manifest_path = options
+                .get("--registry-manifest")
+                .and_then(Clone::clone)
+                .unwrap_or_else(|| ".star-control/registry/manifest.toml".to_owned());
+            star_contracts::management::ProjectPathRef::parse(registry_manifest_path.clone())
+                .map_err(|_| {
+                    "--registry-manifest must be a safe project-relative path".to_owned()
+                })?;
             Ok(Parsed {
                 command: "docs.check".to_owned(),
                 payload: serde_json::json!({
                     "project_id":positionals[0],
                     "manifest_path":development_manifest_path(&options)?,
                     "snapshot_id":positionals[1],
-                    "registered_commands":commands,
-                    "registered_config_keys":config_keys,
+                    "registry_manifest_path":registry_manifest_path,
                     "revision":development_revision(&options)?,
                 }),
                 json,
@@ -4382,6 +4837,61 @@ mod tests {
     }
 
     #[test]
+    fn goal_plan_and_run_commands_map_to_direct_controller_handlers() {
+        let goal = star_contracts::ids::GoalId::new();
+        let graph = star_contracts::ids::StageGraphId::new();
+        let project = star_contracts::ids::ProjectId::new();
+        let evidence = star_contracts::ids::EvidenceBundleId::new();
+        let started = parse(&args(&[
+            "goal",
+            "start",
+            "audit all product features",
+            "--idempotency",
+            "feature-audit",
+            "--project",
+            "star-control",
+        ]))
+        .unwrap();
+        assert_eq!(started.command, "goal.start");
+        assert_eq!(started.payload["idempotency_key"], "feature-audit");
+        assert!(started.payload.get("question").is_none());
+
+        let status = parse(&args(&["goal", "status", goal.as_str()])).unwrap();
+        assert_eq!(status.command, "goal.status");
+        let pause = parse(&args(&["goal", "pause", goal.as_str(), "--revision", "3"])).unwrap();
+        assert_eq!(pause.command, "goal.pause");
+        assert_eq!(pause.payload["expected_revision"], 3);
+
+        let continued = parse(&args(&[
+            "run",
+            "continue",
+            goal.as_str(),
+            "--revision",
+            "4",
+        ]))
+        .unwrap();
+        assert_eq!(continued.command, "run.continue");
+
+        let completed = parse(&args(&[
+            "goal",
+            "complete",
+            goal.as_str(),
+            graph.as_str(),
+            project.as_str(),
+            evidence.as_str(),
+            "--revision",
+            "5",
+        ]))
+        .unwrap();
+        assert_eq!(completed.command, "goal.complete");
+        assert_eq!(completed.payload["expected_revision"], 5);
+
+        let result = star_contracts::ids::StageResultId::new();
+        let shown = parse(&args(&["stage", "result", "show", result.as_str()])).unwrap();
+        assert_eq!(shown.command, "stage.result.show");
+    }
+
+    #[test]
     fn every_frozen_cli_syntax_maps_to_the_exact_controller_command() {
         let hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let cases = [
@@ -5328,27 +5838,20 @@ mod tests {
         assert_eq!(environment.command, "environment.fingerprint");
         assert_eq!(environment.payload["revision"], 2);
 
-        let registrations_path = std::env::temp_dir().join(format!(
-            "star-doc-registrations-{}-{}.json",
-            std::process::id(),
-            project
-        ));
-        std::fs::write(
-            &registrations_path,
-            br#"{"commands":["star run"],"config_keys":["star.timeout"]}"#,
-        )
-        .unwrap();
         let docs = parse(&[
             "docs".into(),
             "check".into(),
             project.to_string(),
             "docs-one".into(),
-            "--registrations".into(),
-            registrations_path.to_string_lossy().into_owned(),
+            "--registry-manifest".into(),
+            ".star-control/registry/docs.toml".into(),
         ])
         .unwrap();
         assert_eq!(docs.command, "docs.check");
-        assert_eq!(docs.payload["registered_commands"][0], "star run");
+        assert_eq!(
+            docs.payload["registry_manifest_path"],
+            ".star-control/registry/docs.toml"
+        );
 
         let show = parse(&[
             "development".into(),

@@ -25,6 +25,7 @@ star-ports = { path = "../../crates/foundation/star-ports" }
 star-adapter-windows = { path = "../../crates/adapters/star-adapter-windows" }
 star-adapter-rust-index = { path = "../../crates/adapters/star-adapter-rust-index" }
 star-adapter-github = { path = "../../crates/adapters/star-adapter-github" }
+star-adapter-codex = { path = "../../crates/adapters/star-adapter-codex" }
 star-application = { path = "../../crates/control/star-application" }
 star-development = { path = "../../crates/control/star-development" }
 star-planning = { path = "../../crates/control/star-planning" }

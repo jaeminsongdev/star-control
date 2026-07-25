@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "security_supply_chain"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "Security Supply Chain"
 summary = "secret, auth, dependency, workflow, release integrity와 external-data freshness를 검증한다."
-parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.1.0" }
 triggers = ["auth_change", "dependency_change", "release_material", "security_finding", "workflow_change"]
 stage_template = ["redaction", "sensitive_change", "dependency_snapshot", "workflow_security", "release_integrity", "freshness_gate"]
 context_rules = ["offline_first", "redacted_values", "source_provenance"]
@@ -22,6 +22,8 @@ evidence_requirements = ["external_data_snapshot", "supply_chain_snapshot", "val
 corpus_requirements = ["redaction", "stale_external_data"]
 approval_checkpoints = ["network"]
 default_stop_state = "offline_snapshot_decided"
+unknown_outcome_policy = "preserve_and_reconcile"
+rollback_policy = "not_applicable"
 allowed_effect_classes = ["read", "plan", "validate", "network_read"]
 permission_floor = "exact_prompt"
 

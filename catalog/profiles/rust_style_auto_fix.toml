@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "rust_style_auto_fix"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "Rust Style Auto Fix"
 summary = "pinned stable rustfmt와 allowlisted Clippy를 isolated preview와 exact PatchSet으로 적용한다."
-parent_profile = { profile_id = "refactor_codemod", profile_version = "1.0.0" }
+parent_profile = { profile_id = "refactor_codemod", profile_version = "1.1.0" }
 triggers = ["rust_style_deviation", "rust_style_request"]
 stage_template = ["resolve", "inspect", "isolated_preview", "candidate_validation", "pre_gate", "exact_apply", "post_gate"]
 context_rules = ["complete_coverage", "current_index", "pinned_toolchain", "style_config_resolved"]
@@ -22,6 +22,8 @@ evidence_requirements = ["coverage_matrix", "evidence_bundle", "patch_set", "pol
 corpus_requirements = ["conflict", "coverage", "idempotence", "side_effect", "target", "toolchain"]
 approval_checkpoints = ["patch_apply"]
 default_stop_state = "prepared"
+unknown_outcome_policy = "preserve_and_reconcile"
+rollback_policy = "recovery_plan_required"
 allowed_effect_classes = ["read", "plan", "validate", "workspace_mutation"]
 permission_floor = "exact_durable_approval"
 

@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "language_platform_migration"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "Language Platform Migration"
 summary = "현재 동작 계약, 단계별 공존, equivalence와 cutover·rollback 증거를 관리한다."
-parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.1.0" }
 triggers = ["language_migration", "platform_migration", "runtime_migration"]
 stage_template = ["behavior_contract", "coexistence_plan", "equivalence", "consumer_order", "cutover", "rollback"]
 context_rules = ["current_behavior", "consumer_inventory", "platform_evidence"]
@@ -22,6 +22,8 @@ evidence_requirements = ["equivalence_report", "language_migration_plan", "platf
 corpus_requirements = ["equivalence", "rollback"]
 approval_checkpoints = ["cross_project_effect", "language_cutover", "patch_apply"]
 default_stop_state = "awaiting_cutover_approval"
+unknown_outcome_policy = "preserve_and_reconcile"
+rollback_policy = "backup_and_restore_required"
 allowed_effect_classes = ["read", "plan", "validate", "workspace_mutation"]
 permission_floor = "exact_durable_approval"
 

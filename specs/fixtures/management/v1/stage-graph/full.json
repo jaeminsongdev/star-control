@@ -1,0 +1,120 @@
+{
+  "critical_path": [
+    "src/lib.rs"
+  ],
+  "edges": [
+    {
+      "from": "fixture",
+      "relation": "requires",
+      "to": "fixture"
+    }
+  ],
+  "goal_id": "gol_00000000000000000000000000",
+  "graph_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "integration_stage_id": "fixture",
+  "parallel_groups": [
+    {
+      "group_id": "fixture",
+      "max_parallel": 0,
+      "stage_ids": [
+        "fixture"
+      ]
+    }
+  ],
+  "plan_revision": 0,
+  "previous_graph_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "replan_reason": "fixture",
+  "schema_id": "star.stage-graph",
+  "schema_version": 1,
+  "stage_graph_id": "sgr_00000000000000000000000000",
+  "stages": [
+    {
+      "change_plan_refs": [
+        {
+          "document_id": "fixture",
+          "revision": 0,
+          "schema_id": "fixture",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "completion_criteria": [
+        "fixture"
+      ],
+      "dependencies": [
+        "fixture"
+      ],
+      "excluded_work": [
+        "fixture"
+      ],
+      "executor_kind": "deterministic_local",
+      "expected_change_scope": [
+        "fixture"
+      ],
+      "failure_policy": "retry",
+      "goal_id": "gol_00000000000000000000000000",
+      "impact_analysis_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "included_work": [
+        "fixture"
+      ],
+      "objective": "fixture",
+      "parallel_group": "fixture",
+      "permission_plan_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "profile_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "profile_resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "project_ids": [
+        "fixture"
+      ],
+      "result_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "revision": 0,
+      "route_decision_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "schema_id": "fixture",
+      "schema_version": 0,
+      "scope_revision_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "stage_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "stage_id": "stg_00000000000000000000000000",
+      "stage_mode": "plan",
+      "state": "draft",
+      "task_spec_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "title": "fixture",
+      "validation_plan_ref": {
+        "document_id": "fixture",
+        "revision": 0,
+        "schema_id": "fixture",
+        "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "work_profile_definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "work_profile_id": "fixture",
+      "work_profile_version": "fixture"
+    }
+  ]
+}

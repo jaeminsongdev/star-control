@@ -1,73 +1,48 @@
-use serde::{Deserialize, Serialize};
-use star_contracts::{
-    Sha256Hash,
-    release_v2::{ReleaseArchitecture, RuntimeVerificationState},
+use star_contracts::Sha256Hash;
+pub use star_contracts::release_v2::{
+    LifecycleEvent, LifecycleExecutionMode, LifecyclePhase, RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID,
+    ReleaseArchitecture, ReleaseLifecycleEvidence, RuntimeVerificationState,
 };
 
 use crate::ReleaseError;
 
-pub const RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID: &str = "star.release-lifecycle-evidence";
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LifecycleExecutionMode {
-    NativeIsolated,
-    FakeModel,
+pub trait ReleaseLifecycleEvidenceExt: Sized {
+    fn new(
+        architecture: ReleaseArchitecture,
+        execution_mode: LifecycleExecutionMode,
+        candidate_artifact_set_digest: Sha256Hash,
+        user_data_digest: Sha256Hash,
+        evidence_ref: impl Into<String>,
+    ) -> Result<Self, ReleaseError>;
+    fn install(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError>;
+    fn verify_first_run(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError>;
+    fn stage_update(
+        &mut self,
+        update_artifact_set_digest: Sha256Hash,
+        evidence_ref: impl Into<String>,
+    ) -> Result<(), ReleaseError>;
+    fn record_update_failure(
+        &mut self,
+        evidence_ref: impl Into<String>,
+    ) -> Result<(), ReleaseError>;
+    fn rollback(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError>;
+    fn repair(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError>;
+    fn uninstall_preserving_user_data(
+        &mut self,
+        observed_user_data_digest: Sha256Hash,
+        evidence_ref: impl Into<String>,
+    ) -> Result<(), ReleaseError>;
+    fn validate_complete(&self) -> Result<(), ReleaseError>;
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LifecyclePhase {
-    NotInstalled,
-    Installed,
-    FirstRunVerified,
-    UpdateStaged,
-    RollbackRequired,
-    RolledBack,
-    Repaired,
-    Uninstalled,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct LifecycleEvent {
-    pub sequence: u32,
-    pub phase: LifecyclePhase,
-    pub active_artifact_set_digest: Option<Sha256Hash>,
-    pub evidence_ref: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ReleaseLifecycleEvidence {
-    pub schema_id: String,
-    pub schema_version: u32,
-    pub architecture: ReleaseArchitecture,
-    pub execution_mode: LifecycleExecutionMode,
-    pub runtime_verification: RuntimeVerificationState,
-    pub phase: LifecyclePhase,
-    pub candidate_artifact_set_digest: Sha256Hash,
-    pub active_artifact_set_digest: Option<Sha256Hash>,
-    pub previous_artifact_set_digest: Option<Sha256Hash>,
-    pub user_data_digest_before: Sha256Hash,
-    pub user_data_digest_after: Sha256Hash,
-    pub events: Vec<LifecycleEvent>,
-    pub limitations: Vec<String>,
-}
-
-impl ReleaseLifecycleEvidence {
-    pub fn new(
+impl ReleaseLifecycleEvidenceExt for ReleaseLifecycleEvidence {
+    fn new(
         architecture: ReleaseArchitecture,
         execution_mode: LifecycleExecutionMode,
         candidate_artifact_set_digest: Sha256Hash,
         user_data_digest: Sha256Hash,
         evidence_ref: impl Into<String>,
     ) -> Result<Self, ReleaseError> {
-        if architecture == ReleaseArchitecture::Arm64
-            && execution_mode != LifecycleExecutionMode::FakeModel
-        {
-            return Err(ReleaseError::Blocked);
-        }
         let evidence_ref = checked_evidence_ref(evidence_ref.into())?;
         let runtime_verification = match execution_mode {
             LifecycleExecutionMode::NativeIsolated => RuntimeVerificationState::NativeVerified,
@@ -99,8 +74,9 @@ impl ReleaseLifecycleEvidence {
         })
     }
 
-    pub fn install(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError> {
-        self.transition(
+    fn install(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError> {
+        transition(
+            self,
             LifecyclePhase::NotInstalled,
             LifecyclePhase::Installed,
             evidence_ref,
@@ -111,11 +87,9 @@ impl ReleaseLifecycleEvidence {
         )
     }
 
-    pub fn verify_first_run(
-        &mut self,
-        evidence_ref: impl Into<String>,
-    ) -> Result<(), ReleaseError> {
-        self.transition(
+    fn verify_first_run(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError> {
+        transition(
+            self,
             LifecyclePhase::Installed,
             LifecyclePhase::FirstRunVerified,
             evidence_ref,
@@ -123,7 +97,7 @@ impl ReleaseLifecycleEvidence {
         )
     }
 
-    pub fn stage_update(
+    fn stage_update(
         &mut self,
         update_artifact_set_digest: Sha256Hash,
         evidence_ref: impl Into<String>,
@@ -137,15 +111,16 @@ impl ReleaseLifecycleEvidence {
         self.previous_artifact_set_digest = self.active_artifact_set_digest.clone();
         self.candidate_artifact_set_digest = update_artifact_set_digest;
         self.phase = LifecyclePhase::UpdateStaged;
-        self.push_event(evidence_ref);
+        push_event(self, evidence_ref);
         Ok(())
     }
 
-    pub fn record_update_failure(
+    fn record_update_failure(
         &mut self,
         evidence_ref: impl Into<String>,
     ) -> Result<(), ReleaseError> {
-        self.transition(
+        transition(
+            self,
             LifecyclePhase::UpdateStaged,
             LifecyclePhase::RollbackRequired,
             evidence_ref,
@@ -156,7 +131,7 @@ impl ReleaseLifecycleEvidence {
         )
     }
 
-    pub fn rollback(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError> {
+    fn rollback(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError> {
         if self.phase != LifecyclePhase::RollbackRequired {
             return Err(ReleaseError::Conflict);
         }
@@ -167,12 +142,13 @@ impl ReleaseLifecycleEvidence {
         let evidence_ref = checked_evidence_ref(evidence_ref.into())?;
         self.active_artifact_set_digest = Some(previous);
         self.phase = LifecyclePhase::RolledBack;
-        self.push_event(evidence_ref);
+        push_event(self, evidence_ref);
         Ok(())
     }
 
-    pub fn repair(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError> {
-        self.transition(
+    fn repair(&mut self, evidence_ref: impl Into<String>) -> Result<(), ReleaseError> {
+        transition(
+            self,
             LifecyclePhase::RolledBack,
             LifecyclePhase::Repaired,
             evidence_ref,
@@ -180,7 +156,7 @@ impl ReleaseLifecycleEvidence {
         )
     }
 
-    pub fn uninstall_preserving_user_data(
+    fn uninstall_preserving_user_data(
         &mut self,
         observed_user_data_digest: Sha256Hash,
         evidence_ref: impl Into<String>,
@@ -194,61 +170,94 @@ impl ReleaseLifecycleEvidence {
         self.user_data_digest_after = observed_user_data_digest;
         self.active_artifact_set_digest = None;
         self.phase = LifecyclePhase::Uninstalled;
-        self.push_event(evidence_ref);
+        push_event(self, evidence_ref);
         Ok(())
     }
 
-    pub fn validate_complete(&self) -> Result<(), ReleaseError> {
+    fn validate_complete(&self) -> Result<(), ReleaseError> {
+        let expected_phases = [
+            LifecyclePhase::NotInstalled,
+            LifecyclePhase::Installed,
+            LifecyclePhase::FirstRunVerified,
+            LifecyclePhase::UpdateStaged,
+            LifecyclePhase::RollbackRequired,
+            LifecyclePhase::RolledBack,
+            LifecyclePhase::Repaired,
+            LifecyclePhase::Uninstalled,
+        ];
+        let Some(previous) = self.previous_artifact_set_digest.as_ref() else {
+            return Err(ReleaseError::Blocked);
+        };
+        let expected_active = [
+            None,
+            Some(previous),
+            Some(previous),
+            Some(previous),
+            Some(&self.candidate_artifact_set_digest),
+            Some(previous),
+            Some(previous),
+            None,
+        ];
+        let execution_binding_valid = match self.execution_mode {
+            LifecycleExecutionMode::NativeIsolated => {
+                self.runtime_verification == RuntimeVerificationState::NativeVerified
+                    && !self
+                        .limitations
+                        .iter()
+                        .any(|item| item == "native_unverified")
+            }
+            LifecycleExecutionMode::FakeModel => {
+                self.runtime_verification == RuntimeVerificationState::NativeUnverified
+                    && self
+                        .limitations
+                        .iter()
+                        .any(|item| item == "native_unverified")
+            }
+        };
         if self.schema_id != RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID
             || self.schema_version != 1
             || self.phase != LifecyclePhase::Uninstalled
             || self.active_artifact_set_digest.is_some()
-            || self.previous_artifact_set_digest.is_none()
             || self.user_data_digest_before != self.user_data_digest_after
-            || self.events.len() != 8
-            || self
-                .events
-                .iter()
-                .enumerate()
-                .any(|(index, event)| event.sequence != index as u32 + 1)
-            || (self.architecture == ReleaseArchitecture::Arm64
-                && (self.execution_mode != LifecycleExecutionMode::FakeModel
-                    || self.runtime_verification != RuntimeVerificationState::NativeUnverified
-                    || !self
-                        .limitations
-                        .iter()
-                        .any(|item| item == "native_unverified")))
+            || self.events.len() != expected_phases.len()
+            || self.events.iter().enumerate().any(|(index, event)| {
+                event.sequence != index as u32 + 1
+                    || event.phase != expected_phases[index]
+                    || event.active_artifact_set_digest.as_ref() != expected_active[index]
+                    || checked_evidence_ref(event.evidence_ref.clone()).is_err()
+            })
+            || !execution_binding_valid
         {
             return Err(ReleaseError::Blocked);
         }
         Ok(())
     }
+}
 
-    fn transition(
-        &mut self,
-        expected: LifecyclePhase,
-        next: LifecyclePhase,
-        evidence_ref: impl Into<String>,
-        change: impl FnOnce(&mut Self),
-    ) -> Result<(), ReleaseError> {
-        if self.phase != expected {
-            return Err(ReleaseError::Conflict);
-        }
-        let evidence_ref = checked_evidence_ref(evidence_ref.into())?;
-        change(self);
-        self.phase = next;
-        self.push_event(evidence_ref);
-        Ok(())
+fn transition(
+    evidence: &mut ReleaseLifecycleEvidence,
+    expected: LifecyclePhase,
+    next: LifecyclePhase,
+    evidence_ref: impl Into<String>,
+    change: impl FnOnce(&mut ReleaseLifecycleEvidence),
+) -> Result<(), ReleaseError> {
+    if evidence.phase != expected {
+        return Err(ReleaseError::Conflict);
     }
+    let evidence_ref = checked_evidence_ref(evidence_ref.into())?;
+    change(evidence);
+    evidence.phase = next;
+    push_event(evidence, evidence_ref);
+    Ok(())
+}
 
-    fn push_event(&mut self, evidence_ref: String) {
-        self.events.push(LifecycleEvent {
-            sequence: self.events.len() as u32 + 1,
-            phase: self.phase,
-            active_artifact_set_digest: self.active_artifact_set_digest.clone(),
-            evidence_ref,
-        });
-    }
+fn push_event(evidence: &mut ReleaseLifecycleEvidence, evidence_ref: String) {
+    evidence.events.push(LifecycleEvent {
+        sequence: evidence.events.len() as u32 + 1,
+        phase: evidence.phase,
+        active_artifact_set_digest: evidence.active_artifact_set_digest.clone(),
+        evidence_ref,
+    });
 }
 
 fn checked_evidence_ref(value: String) -> Result<String, ReleaseError> {
@@ -311,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn arm64_fake_lifecycle_cannot_be_promoted_to_native_success() {
+    fn arm64_fake_lifecycle_stays_unverified_and_native_receipt_path_remains_available() {
         let evidence = complete_lifecycle(
             ReleaseArchitecture::Arm64,
             LifecycleExecutionMode::FakeModel,
@@ -321,16 +330,37 @@ mod tests {
             RuntimeVerificationState::NativeUnverified
         );
         assert_eq!(evidence.limitations, vec!["native_unverified"]);
-        assert!(matches!(
-            ReleaseLifecycleEvidence::new(
-                ReleaseArchitecture::Arm64,
-                LifecycleExecutionMode::NativeIsolated,
-                Sha256Hash::digest(b"candidate"),
-                Sha256Hash::digest(b"user"),
-                "unsupported-native-claim",
-            ),
+        let native = complete_lifecycle(
+            ReleaseArchitecture::Arm64,
+            LifecycleExecutionMode::NativeIsolated,
+        );
+        assert_eq!(
+            native.runtime_verification,
+            RuntimeVerificationState::NativeVerified
+        );
+        assert!(native.limitations.is_empty());
+    }
+
+    #[test]
+    fn complete_lifecycle_rejects_forged_phase_or_digest_history() {
+        let evidence = complete_lifecycle(
+            ReleaseArchitecture::X64,
+            LifecycleExecutionMode::NativeIsolated,
+        );
+        let mut phase_tampered = evidence.clone();
+        phase_tampered.events[3].phase = LifecyclePhase::Repaired;
+        assert_eq!(
+            phase_tampered.validate_complete(),
             Err(ReleaseError::Blocked)
-        ));
+        );
+
+        let mut digest_tampered = evidence;
+        digest_tampered.events[4].active_artifact_set_digest =
+            digest_tampered.previous_artifact_set_digest.clone();
+        assert_eq!(
+            digest_tampered.validate_complete(),
+            Err(ReleaseError::Blocked)
+        );
     }
 
     #[test]

@@ -5,7 +5,9 @@
 //! process, or transport dependency.
 
 pub mod canonical;
+pub mod codex_execution;
 pub mod config_v1;
+pub mod context_pack;
 pub mod coordination_v2;
 pub mod development;
 pub mod development_effect;
@@ -25,26 +27,31 @@ pub mod manifest;
 pub mod migration_v2;
 pub mod orchestration;
 pub mod patch_v2;
+pub mod permission_plan;
 pub mod planning;
 pub mod profile;
 pub mod recovery;
 pub mod registry;
 pub mod release_v2;
+pub mod routing;
 pub mod runtime;
 pub mod rust_style;
 pub mod schema;
+pub mod stage;
 pub mod strict_json;
 pub mod trust;
 pub mod validator_guard;
 
 pub use canonical::{Sha256Hash, canonical_sha256, jcs_bytes};
 pub use ids::{
-    ApprovalId, ArtifactId, BackupSetId, ChangeSetId, CheckoutId, DiagnosticId, EvaluationRunId,
-    EvidenceBundleId, GateId, GoalId, ImpactAnalysisId, InstallationId, LocalStateBundleId,
-    ManagedRegistrySnapshotId, OperationId, PatchApplicationId, ProjectId, RecipeExecutionId,
-    RecoveryPlanId, RegistryConsistencyRecordId, ReleaseManifestId, RequestId, RunId,
-    ScopeRevisionId, StageId, TaskInvocationId, TaskSpecId, ToolCacheId, ToolTrustId,
-    ValidationPlanId, ValidationRunId, ValidatorGuardEvidenceId, WaiverId, WorktreeDecisionId,
+    ApprovalId, ArtifactId, BackupSetId, CapabilitySnapshotId, ChangeSetId, CheckoutId,
+    CodexExecutionId, ContextPackId, DiagnosticId, EvaluationRunId, EvidenceBundleId, GateId,
+    GoalId, ImpactAnalysisId, InstallationId, LocalStateBundleId, ManagedRegistrySnapshotId,
+    OperationId, PatchApplicationId, PermissionPlanId, ProjectId, RecipeExecutionId,
+    RecoveryPlanId, RegistryConsistencyRecordId, ReleaseManifestId, RequestId, RouteDecisionId,
+    RunId, ScopeRevisionId, StageGraphId, StageId, StageResultId, TaskInvocationId, TaskSpecId,
+    ToolCacheId, ToolTrustId, ValidationPlanId, ValidationRunId, ValidatorGuardEvidenceId,
+    WaiverId, WorktreeDecisionId,
 };
 pub use management::{MANAGEMENT_STORE_VERSION, REDACTION_CONTRACT_VERSION};
 pub use manifest::{ToolPackageManifest, parse_manifest_v1};

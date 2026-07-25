@@ -1,0 +1,75 @@
+{
+  "alternatives": [
+    {
+      "execution_mode": "single",
+      "model_id": "fixture",
+      "model_role": "luna",
+      "reason_not_selected": "fixture",
+      "reasoning_effort": "none"
+    }
+  ],
+  "budget_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "capability_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "confidence": "low",
+  "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "decided_at": "2026-01-01T00:00:00Z",
+  "decision_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "decision_kind": "initial",
+  "estimated_usage_class": "small",
+  "execution_mode": "single",
+  "execution_realization": "native",
+  "fallback_chain": [
+    {
+      "condition": "fixture",
+      "execution_mode": "single",
+      "model_id": "fixture",
+      "model_role": "luna",
+      "ordinal": 0,
+      "reasoning_effort": "none"
+    }
+  ],
+  "goal_id": "gol_00000000000000000000000000",
+  "model_role": "luna",
+  "parallelizable": false,
+  "permission_plan_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "plan_reasoning_effort": "none",
+  "rationale": [
+    "fixture"
+  ],
+  "reasoning_effort": "none",
+  "requested_execution_mode": "single",
+  "requested_model": "fixture",
+  "requested_reasoning_effort": "none",
+  "resolved_model": "fixture",
+  "revision": 0,
+  "risk_level": "low",
+  "route_decision_id": "rte_00000000000000000000000000",
+  "run_id": "run_00000000000000000000000000",
+  "schema_id": "star.route-decision",
+  "schema_version": 1,
+  "stage_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "stage_graph_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "stage_id": "stg_00000000000000000000000000",
+  "stage_mode": "plan",
+  "stage_revision": 0
+}

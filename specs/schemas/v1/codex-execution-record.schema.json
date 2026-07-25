@@ -1,0 +1,323 @@
+{
+  "$defs": {
+    "CodexExecutionOperationV1": {
+      "enum": [
+        "start",
+        "resume",
+        "fork",
+        "interrupt",
+        "status"
+      ],
+      "type": "string"
+    },
+    "CodexExecutionStateV1": {
+      "enum": [
+        "initializing",
+        "thread_ready",
+        "running",
+        "interrupt_requested",
+        "interrupted",
+        "completed",
+        "failed",
+        "outcome_unknown",
+        "recovery_required"
+      ],
+      "type": "string"
+    },
+    "CodexThreadRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "app_server_instance_id": {
+          "type": "string"
+        },
+        "capability_snapshot_ref": {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        "parent_thread_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "thread_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "thread_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "app_server_instance_id",
+        "protocol_version",
+        "thread_id",
+        "capability_snapshot_ref",
+        "thread_fingerprint"
+      ],
+      "type": "object"
+    },
+    "CodexTurnRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "thread_id": {
+          "type": "string"
+        },
+        "turn_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "turn_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "thread_id",
+        "turn_id",
+        "turn_fingerprint"
+      ],
+      "type": "object"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.codex-execution-record:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "approval_id": {
+      "type": "string"
+    },
+    "arguments_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "codex_execution_id": {
+      "pattern": "^cdx_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "context_pack_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "controller_operation_id": {
+      "type": "string"
+    },
+    "descriptor_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "executable_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "execution_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "gate_decision_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "goal_id": {
+      "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "instruction_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "last_event_kind": {
+      "type": "string"
+    },
+    "last_event_sequence": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "operation": {
+      "$ref": "#/$defs/CodexExecutionOperationV1"
+    },
+    "outcome_unknown": {
+      "type": "boolean"
+    },
+    "output_artifact_refs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DocumentRef"
+      },
+      "type": "array"
+    },
+    "parent_execution_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "permission_plan_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "recovery_action": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "redacted_error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "result_summary": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "route_decision_id": {
+      "pattern": "^rte_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "route_decision_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "run_id": {
+      "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.codex-execution-record",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "stage_id": {
+      "pattern": "^stg_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "stage_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "started_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/CodexExecutionStateV1"
+    },
+    "terminal_effect_receipt_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DocumentRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "thread_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CodexThreadRefV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tool_id": {
+      "type": "string"
+    },
+    "turn_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CodexTurnRefV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "codex_execution_id",
+    "revision",
+    "goal_id",
+    "run_id",
+    "stage_id",
+    "stage_revision",
+    "route_decision_id",
+    "route_decision_ref",
+    "context_pack_ref",
+    "permission_plan_ref",
+    "gate_decision_ref",
+    "approval_id",
+    "controller_operation_id",
+    "tool_id",
+    "descriptor_hash",
+    "arguments_hash",
+    "executable_sha256",
+    "operation",
+    "state",
+    "instruction_fingerprint",
+    "last_event_sequence",
+    "last_event_kind",
+    "started_at",
+    "updated_at",
+    "outcome_unknown",
+    "execution_fingerprint"
+  ],
+  "title": "CodexExecutionRecordV1",
+  "type": "object"
+}

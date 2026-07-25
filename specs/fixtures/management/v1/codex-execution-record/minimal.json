@@ -1,0 +1,50 @@
+{
+  "approval_id": "fixture",
+  "arguments_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "codex_execution_id": "cdx_00000000000000000000000000",
+  "context_pack_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "controller_operation_id": "fixture",
+  "descriptor_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "executable_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "execution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "gate_decision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "goal_id": "gol_00000000000000000000000000",
+  "instruction_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "last_event_kind": "fixture",
+  "last_event_sequence": 0,
+  "operation": "start",
+  "outcome_unknown": false,
+  "permission_plan_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "revision": 0,
+  "route_decision_id": "rte_00000000000000000000000000",
+  "route_decision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "run_id": "run_00000000000000000000000000",
+  "schema_id": "star.codex-execution-record",
+  "schema_version": 1,
+  "stage_id": "stg_00000000000000000000000000",
+  "stage_revision": 0,
+  "started_at": "2026-01-01T00:00:00Z",
+  "state": "initializing",
+  "tool_id": "fixture",
+  "updated_at": "2026-01-01T00:00:00Z"
+}

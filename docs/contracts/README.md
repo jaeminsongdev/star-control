@@ -139,7 +139,7 @@ DocumentRef가 가리키는 내용이 바뀌면 같은 revision을 재사용하�
 
 ## 계약 Inventory
 
-역사적 설계 Inventory의 122개 논리 항목 수는 계약 누락을 추적하기 위한 분류이며 구현 완료 수나 generated Schema 파일 수가 아니다. P-0054 current source는 Recovery·M1~M11·Profile 확장 계약을 `star-contracts` 공개 type과 checked-in Schema/fixture로 materialize했고 `specs/schemas/manifest.json`이 186개 generated Schema 파일을 열거한다. 논리 항목을 nested type 단위로 다시 세어 완료를 부풀리지 않으며, 실제 완료 판정은 Schema 존재만이 아니라 Controller 경유 경로·persistence·negative Corpus·E2E와 [P-0054 감사](../testing/p0054-functional-completion-audit-2026-07-23.md)를 함께 사용한다.
+역사적 설계 Inventory의 122개 논리 항목 수는 계약 누락을 추적하기 위한 분류이며 구현 완료 수나 generated Schema 파일 수가 아니다. P-0058 current source는 Recovery·M1~M11·Profile·Stage/Route/ContextPack/PermissionPlan/Codex execution·release lifecycle·source/final audit 계약을 `star-contracts` 공개 type과 checked-in Schema/fixture로 materialize했고 `specs/schemas/manifest.json`이 213개 generated Schema 파일을 열거한다. 논리 항목이나 nested type 수로 완료를 부풀리지 않으며, 실제 완료 판정은 Schema 존재만이 아니라 Controller 경유 경로·persistence·negative Corpus·E2E와 [P-0058 독립 감사](../testing/p0058-feature-profile-independent-audit-2026-07-25.md)를 함께 사용한다.
 
 | 계약 | Schema ID | 소유 문서 | 저장·전달 위치 |
 |---|---|---|---|
@@ -219,6 +219,7 @@ DocumentRef가 가리키는 내용이 바뀌면 같은 revision을 재사용하�
 | ContextPack | `star.context-pack` | [목표·단계](goal-and-stage.md) | stage artifact |
 | RouteDecision | `star.route-decision` | [라우팅](routing.md) | stage route |
 | CapabilitySnapshot | `star.capability-snapshot` | [라우팅](routing.md) | run·stage evidence |
+| CodexExecutionRecordV1 | `star.codex-execution-record` | [핵심 관제 A06](../features/core-control.md#a06-codex-실행-제어와-터미널-조작) | approval-bound App Server thread·turn lifecycle와 terminal receipt |
 | PermissionPlan | `star.permission-plan` | [목표·단계](goal-and-stage.md) | stage permission |
 | ApprovalRequest | `star.approval-request` | [목표·단계](goal-and-stage.md) | state, MCP·IPC |
 | RustStylePolicyApprovalRequest | `star.rust-style-policy-approval-request` | [Rust style](../features/rust-code-style-auto-fix.md) | exact M11 policy candidate 승인 요청 |
@@ -246,7 +247,9 @@ DocumentRef가 가리키는 내용이 바뀌면 같은 revision을 재사용하�
 | EvaluationPolicyV1 | `star.evaluation-policy` | [10단계 평가](ci-release-evaluation-and-product-completion.md) | exact case set·sample/attempt·comparability·protected metric policy. M10 구현 |
 | EvaluationRunV2 | `star.evaluation-run` | [검증·증거](validation-and-evidence.md) | Rule·Check·Profile·Recipe의 CLI/Codex 분리 shadow 비교·실제 Finding/Suppression/cost. M10 구현 |
 | ReleaseManifestV2 | `star.release-manifest` | [검증·증거](validation-and-evidence.md) | build-once artifact·release readiness·approval·published observation. M10 구현 |
-| FinalProductAuditV1 | `star.final-product-audit` | [10단계 최종 감사](ci-release-evaluation-and-product-completion.md#최종-기능-소유권-감사) | current handler 23개·Profile 16개·M11·lifecycle·외부 Gate 분리. M10 구현 |
+| ProductSourceEvidenceV1 | `star.product-source-evidence` | [10단계 최종 감사](ci-release-evaluation-and-product-completion.md#최종-기능-소유권-감사) | current owner·Schema·handler·제품 경로·4종 test와 23/16 inventory source fingerprint |
+| FinalProductAuditV2 | `star.final-product-audit-v2` | [10단계 최종 감사](ci-release-evaluation-and-product-completion.md#최종-기능-소유권-감사) | source evidence·Profile runtime resolution·M11·lifecycle·외부 Gate 분리. P-0058 구현 |
+| FinalProductAuditV1 | `star.final-product-audit` | [10단계 최종 감사](ci-release-evaluation-and-product-completion.md#최종-기능-소유권-감사) | 과거 record read 호환 전용. current 완료 증거로 생성하지 않음 |
 | RemoteStateSnapshot | `star.remote-state-snapshot` | [검증·증거](validation-and-evidence.md), [9단계 ChangeBundle](cross-repo-change-bundle.md) | adapter-bound Git·PR·check·release 조회. P7 v2 목표 |
 | ErrorEnvelope | `star.error` | [오류·진단](errors-and-diagnostics.md) | CLI·MCP·IPC |
 | ReleaseFileManifest | `star.release-file-manifest` | [Windows 설치·Codex 연동](windows-installation-and-codex-integration.md) | architecture별 설치 stage의 파일·hash 정본 |

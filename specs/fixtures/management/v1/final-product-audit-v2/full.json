@@ -1,0 +1,179 @@
+{
+  "artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "audit_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "external_gate_reasons": [
+    "fixture"
+  ],
+  "internal_conformance": false,
+  "lifecycle_statuses": [
+    {
+      "architecture": "x64",
+      "candidate_artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "evidence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "evidence_record_id": "fixture",
+      "runtime_verification": "native_verified",
+      "support_tier": "stable"
+    }
+  ],
+  "m11_profile_conformant": false,
+  "profile_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "profile_statuses": [
+    {
+      "activation_inputs_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "approval_path_verified": false,
+      "conformance_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "conformant": false,
+      "covered_check_families": [
+        "fixture"
+      ],
+      "definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "effective_config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "limitations": [
+        "fixture"
+      ],
+      "profile_id": "fixture",
+      "profile_version": "fixture",
+      "project_context_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "required_check_families": [
+        "fixture"
+      ],
+      "resolution_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "rollback_path_verified": false,
+      "source_definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "toolchain_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "unknown_outcome_path_verified": false
+    }
+  ],
+  "release_manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "release_manifest_id": "rel_00000000000000000000000000",
+  "release_status": "draft",
+  "schema_id": "star.final-product-audit-v2",
+  "schema_version": 2,
+  "source_evidence": {
+    "evidence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "feature_count": 0,
+    "features": [
+      {
+        "cli_commands": [
+          "fixture"
+        ],
+        "codex_refs": [
+          {
+            "marker": "fixture",
+            "path": "src/lib.rs",
+            "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "codex_required": false,
+        "feature_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "feature_id": "fixture",
+        "generated_schemas": [
+          {
+            "marker": "fixture",
+            "path": "src/lib.rs",
+            "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "handler_refs": [
+          {
+            "marker": "fixture",
+            "path": "src/lib.rs",
+            "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "mcp_actions": [
+          "fixture"
+        ],
+        "mcp_required": false,
+        "owner_document": {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "product_surface_fingerprints": [
+          "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "test_refs": {
+          "failure": {
+            "marker": "fixture",
+            "path": "src/lib.rs",
+            "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "negative": {
+            "marker": "fixture",
+            "path": "src/lib.rs",
+            "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "positive": {
+            "marker": "fixture",
+            "path": "src/lib.rs",
+            "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "recovery": {
+            "marker": "fixture",
+            "path": "src/lib.rs",
+            "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      }
+    ],
+    "generated_schema_count": 0,
+    "generated_schema_manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "inventory_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "mcp_matrix_count": 0,
+    "mcp_matrix_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "profile_count": 0,
+    "profiles": [
+      {
+        "activation_inputs_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "allowed_effect_classes": [
+          "read"
+        ],
+        "approval_checkpoints": [
+          "network"
+        ],
+        "conformance_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "conformance_refs": [
+          {
+            "marker": "fixture",
+            "path": "src/lib.rs",
+            "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "definition_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "definition_source": {
+          "marker": "fixture",
+          "path": "src/lib.rs",
+          "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "descriptor_definition_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "gate_phases": [
+          "during_stage"
+        ],
+        "permission_actions": [
+          "fixture"
+        ],
+        "permission_floor": "local_read_only",
+        "profile_id": "fixture",
+        "profile_version": "fixture",
+        "required_check_families": [
+          "fixture"
+        ],
+        "required_rule_families": [
+          "fixture"
+        ],
+        "rollback_policy": "not_applicable",
+        "unknown_outcome_policy": "preserve_and_stop"
+      }
+    ],
+    "runtime_executables": [
+      "fixture"
+    ],
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "stable_error_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "stable_error_count": 0
+  },
+  "status": "conformant"
+}

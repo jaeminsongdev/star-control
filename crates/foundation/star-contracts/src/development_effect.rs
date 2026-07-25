@@ -28,6 +28,7 @@ pub enum DevelopmentEffectKind {
     MigrationExecute,
     PerformanceRun,
     LanguageCutover,
+    CodexTurn,
     RemoteRecovery,
     ReleaseLifecycle,
 }
@@ -45,6 +46,7 @@ impl DevelopmentEffectKind {
             Self::MigrationExecute => "migration.execute",
             Self::PerformanceRun => "performance.execute",
             Self::LanguageCutover => "migration.language.cutover",
+            Self::CodexTurn => "external.ai.execute",
             Self::RemoteRecovery => "git.remote.recovery",
             Self::ReleaseLifecycle => "release.lifecycle.test",
         }
@@ -58,6 +60,7 @@ impl DevelopmentEffectKind {
                 | Self::UpdaterApply
                 | Self::MigrationExecute
                 | Self::LanguageCutover
+                | Self::CodexTurn
                 | Self::RemoteRecovery
                 | Self::ReleaseLifecycle
         )

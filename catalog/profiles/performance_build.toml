@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "performance_build"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "Performance Build"
 summary = "명시적 workload, 반복 측정, comparability와 correctness Gate를 결합한다."
-parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.1.0" }
 triggers = ["build_bottleneck", "performance_claim", "performance_regression"]
 stage_template = ["workload_spec", "baseline_run", "candidate_run", "comparison", "correctness_gate"]
 context_rules = ["comparable_environment", "explicit_workload", "raw_samples_preserved"]
@@ -22,6 +22,8 @@ evidence_requirements = ["performance_comparison", "performance_run", "workload_
 corpus_requirements = ["noise", "outlier", "sample_floor"]
 approval_checkpoints = []
 default_stop_state = "comparison_decided"
+unknown_outcome_policy = "preserve_and_reconcile"
+rollback_policy = "not_applicable"
 allowed_effect_classes = ["read", "plan", "validate"]
 permission_floor = "local_read_only"
 

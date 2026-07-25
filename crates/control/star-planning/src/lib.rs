@@ -755,6 +755,11 @@ fn build_task_spec(mut draft: TaskSpecDraft, actor: ActorRef) -> Result<TaskSpec
             right.role,
         ))
     });
+    if draft.project_targets.windows(2).any(|pair| {
+        pair[0].project_id == pair[1].project_id && pair[0].checkout_id == pair[1].checkout_id
+    }) {
+        return Err(PlanningError::TaskInput);
+    }
     draft.requested_checks.sort();
     draft.requested_checks.dedup();
     draft.check_overrides.sort_by(|left, right| {
@@ -779,6 +784,26 @@ fn build_task_spec(mut draft: TaskSpecDraft, actor: ActorRef) -> Result<TaskSpec
     draft
         .success_criteria
         .sort_by(|left, right| left.criterion_id.cmp(&right.criterion_id));
+    draft.excluded_scope.sort_by(|left, right| {
+        (&left.selector, left.applies_to, &left.reason).cmp(&(
+            &right.selector,
+            right.applies_to,
+            &right.reason,
+        ))
+    });
+    if draft.excluded_scope.windows(2).any(|pair| {
+        pair[0].selector == pair[1].selector && pair[0].applies_to == pair[1].applies_to
+    }) || draft
+        .intended_changes
+        .windows(2)
+        .any(|pair| pair[0].change_id == pair[1].change_id)
+        || draft
+            .success_criteria
+            .windows(2)
+            .any(|pair| pair[0].criterion_id == pair[1].criterion_id)
+    {
+        return Err(PlanningError::TaskInput);
+    }
     if draft
         .excluded_scope
         .iter()
@@ -2902,6 +2927,68 @@ mod tests {
     }
 
     #[test]
+    fn task_spec_negative_rejects_duplicate_project_checkout_identity() {
+        let (_, _, mut draft) = fixture();
+        let mut duplicate = draft.project_targets[0].clone();
+        duplicate.role = ProjectTargetRole::ReadOnlyImpact;
+        duplicate.reason = "same checkout cannot hold two roles".to_owned();
+        draft.project_targets.push(duplicate);
+
+        assert!(matches!(
+            build_task_spec(draft, actor()),
+            Err(PlanningError::TaskInput)
+        ));
+    }
+
+    #[test]
+    fn task_spec_negative_rejects_empty_nested_verification() {
+        let (_, _, mut draft) = fixture();
+        draft.success_criteria[0].verification = "   ".to_owned();
+
+        assert!(matches!(
+            build_task_spec(draft, actor()),
+            Err(PlanningError::Contract(PlanningContractError::Ordering))
+        ));
+    }
+
+    #[test]
+    fn scope_revision_reason_and_lineage_are_hash_bound() {
+        let (catalog, index, task) = fixture();
+        let check = descriptor(
+            "star.check.test",
+            "test",
+            vec![ValidationScopeLevel::ProjectFull],
+            vec![SourceClass::Source],
+            vec!["--scope".to_owned(), "{scope}".to_owned()],
+        )
+        .unwrap();
+        let bundle = build_planning_bundle(PlanningRequest {
+            task,
+            actor: actor(),
+            catalog,
+            projects: vec![index],
+            risk_descriptors: vec![],
+            check_descriptors: vec![check],
+            previous_success_evidence: vec![],
+            profile_resolution: None,
+            policy: PlanningPolicy::default(),
+        })
+        .unwrap();
+
+        let mut changed = bundle.scope_revision.clone();
+        changed.reason = "different accepted reason".to_owned();
+        let changed = changed.seal().unwrap();
+        assert_ne!(changed.scope_hash, bundle.scope_revision.scope_hash);
+
+        let mut invalid = bundle.scope_revision;
+        invalid.previous_scope_revision_ref = Some(scope_ref(&invalid));
+        assert!(matches!(
+            invalid.seal(),
+            Err(PlanningContractError::Identity)
+        ));
+    }
+
+    #[test]
     fn managed_declaration_selector_resolves_only_against_an_exact_current_registry_pin() {
         let (_, mut index, _) = fixture();
         let declaration_id = ManagedDeclarationId::parse("star.error.fixture").unwrap();
@@ -3313,3 +3400,5 @@ mod tests {
         assert!(bundle.validation_plan.independent_review.required);
     }
 }
+pub mod orchestration;
+pub mod routing;

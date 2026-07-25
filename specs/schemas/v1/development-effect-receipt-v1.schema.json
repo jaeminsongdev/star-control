@@ -12,6 +12,7 @@
         "migration_execute",
         "performance_run",
         "language_cutover",
+        "codex_turn",
         "remote_recovery",
         "release_lifecycle"
       ],

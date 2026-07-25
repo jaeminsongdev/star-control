@@ -1,0 +1,14 @@
+{
+  "architecture": "x64",
+  "candidate_artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "events": [],
+  "execution_mode": "native_isolated",
+  "limitations": [],
+  "phase": "not_installed",
+  "runtime_verification": "native_verified",
+  "schema_id": "star.release-lifecycle-evidence",
+  "schema_version": 1,
+  "unexpected": true,
+  "user_data_digest_after": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "user_data_digest_before": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

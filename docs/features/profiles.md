@@ -2,7 +2,17 @@
 
 상위 범위와 공통 선정 기준은 [구현 대상 기능](README.md)에서 확인한다.
 
-P-0054 current source는 `catalog/profiles/*.toml`의 정확한 16개 built-in descriptor, strict loader·validator, parent closure, required Rule/Check/evidence union, 가장 엄격한 permission/review/stability floor merge와 deterministic `profile_resolution_fingerprint`를 구현했다. `TaskSpec.profile_ids`에서 M2 `ValidationPlan.profile_resolution`과 M3 Evidence까지 같은 resolution을 bind하며 Controller/CLI `profile list|show|resolve`가 이를 조회한다. Profile은 외부 compiler·scanner·debugger·profiler·package manager·CI/publisher를 대신하지 않고 등록 adapter가 없는 효과를 완료로 합성하지 않는다.
+P-0058 current source는 `catalog/profiles/*.toml`의 정확한 16개 built-in descriptor를 `schema_version=2`, `profile_version=1.1.0`으로 고정했다. strict loader·validator, exact parent version과 acyclic closure, required Rule/Check/evidence union, 가장 엄격한 permission/review/stability floor merge에 더해 각 Profile의 `unknown_outcome_policy`와 `rollback_policy`를 deterministic `profile_resolution_fingerprint`에 포함한다. `TaskSpec.profile_ids`에서 M2 `ValidationPlan.profile_resolution`과 M3 Evidence까지 같은 resolution을 bind하며 Controller/CLI `profile list|show|resolve`가 이를 조회한다. 실행 가능한 `StageSpecV1`도 단일 Profile의 exact ID/version·descriptor definition hash·16개 catalog fingerprint·merged resolution fingerprint를 보유한다. 계획 handler가 현재 catalog로 이 binding을 만들고 ContextPack·PermissionPlan·RouteDecision·Codex 실행 경로가 외부 효과 전에 current resolution을 다시 확인하며, drift는 `VALIDATION_PROFILE_CLOSURE_STALE`로 재계획한다. `release.audit`의 Profile conformance는 resolve 성공만 신뢰하지 않고 raw descriptor·activation/policy hash, current Project/Workspace/Index·effective config·toolchain, required Check coverage와 공통 permission/recovery/rollback 경로를 다시 대조한다. Profile은 외부 compiler·scanner·debugger·profiler·package manager·CI/publisher를 대신하지 않고 등록 adapter가 없는 효과를 완료로 합성하지 않는다.
+
+독립 conformance 감사 순서는 선행 기능을 반영해 다음과 같이 고정한다.
+
+1. `project_understanding` → `docs_config_environment` → `change_planning`
+2. `test_correctness` → `architecture_quality` → `ai_development_validation`
+3. `refactor_codemod` → `api_contract_change` → `rust_style_auto_fix`
+4. `debug_recovery` → `security_supply_chain` → `dependency_upgrade`
+5. `data_config_db_migration` → `performance_build` → `language_platform_migration` → `ci_release_deploy`
+
+각 항목은 단순 resolve 성공이 아니라 current descriptor byte, parent closure, activation·required Rule/Check·Gate phase, permission floor, unknown outcome와 rollback 정책, current source/config/toolchain과 공통 engine의 executable test 경로를 함께 검사한다. 이 16개 순서와 fingerprint는 `catalog/product-source-evidence.json`에 봉인된다.
 
 
 ## C01. 16개 작업 유형별 Profile

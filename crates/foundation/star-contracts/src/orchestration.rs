@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{GoalId, RunId, Sha256Hash, canonical_sha256};
+use crate::{GoalId, RunId, Sha256Hash, canonical_sha256, evidence::DocumentRef};
 
 pub const GOAL_RECORD_SCHEMA_ID: &str = "star.goal-record";
 pub const GOAL_RECORD_SCHEMA_VERSION: u32 = 1;
@@ -82,6 +82,8 @@ pub struct GoalRecord {
     pub pending_question: Option<GoalQuestion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run: Option<GoalRunState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_evidence_ref: Option<DocumentRef>,
     pub created_at: String,
     pub updated_at: String,
     pub content_fingerprint: Sha256Hash,
@@ -145,7 +147,33 @@ impl GoalRecord {
                 in_progress += 1;
             }
         }
-        if in_progress > 1 || (self.plan_items.is_empty() && self.plan_revision != 0) {
+        if in_progress > 1
+            || self.plan_items.is_empty() != (self.plan_revision == 0)
+            || (self.status == GoalStatus::Completed
+                && (!self
+                    .plan_items
+                    .iter()
+                    .all(|item| item.status == GoalPlanItemStatus::Completed)
+                    || self
+                        .run
+                        .as_ref()
+                        .is_none_or(|run| run.status != GoalRunStatus::Completed)
+                    || self
+                        .completion_evidence_ref
+                        .as_ref()
+                        .is_none_or(|reference| {
+                            reference.schema_id != "star.evidence-bundle"
+                                || !bounded_token(&reference.document_id, 192)
+                                || reference.revision == 0
+                                || reference.sha256 == Sha256Hash::digest(b"")
+                        })))
+            || (self.status == GoalStatus::Blocked
+                && !self
+                    .plan_items
+                    .iter()
+                    .any(|item| item.status == GoalPlanItemStatus::Blocked))
+            || (self.status != GoalStatus::Completed && self.completion_evidence_ref.is_some())
+        {
             return Err(GoalContractError::Plan);
         }
         if let Some(question) = &self.pending_question
@@ -175,6 +203,15 @@ impl GoalRecord {
             if self.status == GoalStatus::Cancelled && run.status != GoalRunStatus::Cancelled {
                 return Err(GoalContractError::Lifecycle);
             }
+            if matches!(
+                self.status,
+                GoalStatus::Active | GoalStatus::WaitingQuestion | GoalStatus::Paused
+            ) && run.status != GoalRunStatus::Running
+            {
+                return Err(GoalContractError::Lifecycle);
+            }
+        } else if self.status == GoalStatus::Completed {
+            return Err(GoalContractError::Lifecycle);
         }
         if self.expected_fingerprint()? != self.content_fingerprint {
             return Err(GoalContractError::Fingerprint);
@@ -196,6 +233,7 @@ impl GoalRecord {
                 "plan_items": self.plan_items,
                 "pending_question": self.pending_question,
                 "run": self.run,
+                "completion_evidence_ref": self.completion_evidence_ref,
                 "created_at": self.created_at,
                 "updated_at": self.updated_at,
             }
@@ -217,4 +255,67 @@ fn bounded_token(value: &str, max: usize) -> bool {
 
 pub fn goal_timestamp_now() -> String {
     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn completed_goal() -> GoalRecord {
+        let timestamp = goal_timestamp_now();
+        GoalRecord {
+            schema_id: GOAL_RECORD_SCHEMA_ID.to_owned(),
+            schema_version: GOAL_RECORD_SCHEMA_VERSION,
+            goal_id: GoalId::new(),
+            revision: 3,
+            objective: "complete with current evidence".to_owned(),
+            project_key: Some("star-control".to_owned()),
+            status: GoalStatus::Completed,
+            plan_revision: 1,
+            plan_items: vec![GoalPlanItem {
+                item_id: "validate".to_owned(),
+                step: "run the exact required gate".to_owned(),
+                status: GoalPlanItemStatus::Completed,
+            }],
+            pending_question: None,
+            run: Some(GoalRunState {
+                run_id: RunId::new(),
+                attempt: 1,
+                status: GoalRunStatus::Completed,
+                continued_at: timestamp.clone(),
+            }),
+            completion_evidence_ref: None,
+            created_at: timestamp.clone(),
+            updated_at: timestamp,
+            content_fingerprint: Sha256Hash::digest(b"unsealed"),
+        }
+    }
+
+    #[test]
+    fn goal_completion_requires_exact_evidence_reference() {
+        let mut goal = completed_goal();
+        assert_eq!(goal.clone().seal(), Err(GoalContractError::Plan));
+
+        goal.completion_evidence_ref = Some(DocumentRef {
+            schema_id: "star.evidence-bundle".to_owned(),
+            document_id: "evb_current".to_owned(),
+            revision: 1,
+            sha256: Sha256Hash::digest(b"current-evidence"),
+        });
+        goal.seal().unwrap().validate().unwrap();
+    }
+
+    #[test]
+    fn goal_nonterminal_state_cannot_carry_completion_evidence() {
+        let mut goal = completed_goal();
+        goal.status = GoalStatus::Active;
+        goal.run.as_mut().unwrap().status = GoalRunStatus::Running;
+        goal.completion_evidence_ref = Some(DocumentRef {
+            schema_id: "star.evidence-bundle".to_owned(),
+            document_id: "evb_stale".to_owned(),
+            revision: 1,
+            sha256: Sha256Hash::digest(b"stale-evidence"),
+        });
+        assert_eq!(goal.seal(), Err(GoalContractError::Plan));
+    }
 }

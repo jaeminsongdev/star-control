@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "change_planning"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "변경 계획"
 summary = "TaskSpec에서 영향 graph, ChangePlan과 exact ValidationPlan을 만든다."
-parent_profile = { profile_id = "project_understanding", profile_version = "1.0.0" }
+parent_profile = { profile_id = "project_understanding", profile_version = "1.1.0" }
 triggers = ["contract_change", "multi_file_change", "multi_project_change"]
 stage_template = ["task_spec", "scope_revision", "change_set", "impact_analysis", "validation_plan"]
 context_rules = ["current_catalog", "current_index", "explicit_exclusions"]
@@ -22,6 +22,8 @@ evidence_requirements = ["change_set", "impact_analysis", "validation_plan"]
 corpus_requirements = ["planning_fixture"]
 approval_checkpoints = []
 default_stop_state = "plan_ready"
+unknown_outcome_policy = "preserve_and_stop"
+rollback_policy = "not_applicable"
 allowed_effect_classes = ["read", "plan"]
 permission_floor = "local_read_only"
 

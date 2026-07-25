@@ -10,7 +10,7 @@
     },
     {
       "file": "validation-plan-v2.schema.json",
-      "hash": "sha256:bdf106eaf9cc712283dd7589ba38a9a0b190fca4599fc6adaa26f0b5d40c145a"
+      "hash": "sha256:673f33f23db38ef626e27559424e13f64de5de87cb2301d50094f102440f5acc"
     },
     {
       "file": "task-spec.schema.json",
@@ -34,7 +34,7 @@
     },
     {
       "file": "planning-bundle.schema.json",
-      "hash": "sha256:e395daff47a6aa0d7010aa12ffe34078ec8e549aa1a4ac15e25053534aa88d1f"
+      "hash": "sha256:ca7f3b813364bada9e3c6e079d78dcc73f72ecd83ab7de25c5e00215d973fe99"
     },
     {
       "file": "change-plan-v2.schema.json",
@@ -50,7 +50,39 @@
     },
     {
       "file": "goal-record.schema.json",
-      "hash": "sha256:2a60c95c3df3260a0aed93e92185ff0ced8c9d4dfabdd0704c76b086e4608157"
+      "hash": "sha256:981d5aea81b1c71ea9985f5548493e182ed67115f68ea1cc6a6dc480b3b48eac"
+    },
+    {
+      "file": "stage-spec.schema.json",
+      "hash": "sha256:db6d4c85847a2d1ec53e81194ceb869c514f0dc2f90d8124f9160ccd035b0299"
+    },
+    {
+      "file": "stage-graph.schema.json",
+      "hash": "sha256:0854bbc38493787cc3b20e9812c3a6aa8526bc59a32625a9d752415b13e19003"
+    },
+    {
+      "file": "stage-result.schema.json",
+      "hash": "sha256:41b65853f2873a2954daa9328800b5c7a4423365ef5b059dfe79ed0265c7af00"
+    },
+    {
+      "file": "capability-snapshot.schema.json",
+      "hash": "sha256:454dc621a260ceec3f2ce6499ab2fdf0ce3c26f54b553970c9304e356d762d44"
+    },
+    {
+      "file": "route-decision.schema.json",
+      "hash": "sha256:a49225828b1d6607136ed1dd0a55abd887d192ca5beaff43b3bfe3bb92b95d42"
+    },
+    {
+      "file": "codex-execution-record.schema.json",
+      "hash": "sha256:e4ba33f3cfa513df35a2d1a1ec9d79a7d2f4e9c739ebe1b04b3a900873ef65a7"
+    },
+    {
+      "file": "context-pack.schema.json",
+      "hash": "sha256:5cc7c8980ce444c2311c308679d20c12bf3e420fb0ba7ef9463e47d87f7daef3"
+    },
+    {
+      "file": "permission-plan.schema.json",
+      "hash": "sha256:3d5ce400622735a4705028d66d2330dfcc5c86a3d1e4fad47a7b3acd2faecb37"
     },
     {
       "file": "managed-registry-snapshot.schema.json",
@@ -94,7 +126,7 @@
     },
     {
       "file": "documentation-snapshot.schema.json",
-      "hash": "sha256:1134a3f2ceb57dbadb009d187b9ae4b43e1b7a896f0c99587648d03c5a1aaada"
+      "hash": "sha256:174c2c62f4ec38e33321768ba3709d743c91a623c081f498aad4a31f81f81471"
     },
     {
       "file": "config-key-trace.schema.json",
@@ -118,11 +150,11 @@
     },
     {
       "file": "development-effect-receipt-v1.schema.json",
-      "hash": "sha256:f4b0b50e5f7747a003461762c4a6660b405a016e2ffed0697f418894855a42ac"
+      "hash": "sha256:08569f40dea44f54a9a2edb2596a469d41b0f6648b93ea0561e5be7fd57720a5"
     },
     {
       "file": "failure-record.schema.json",
-      "hash": "sha256:ab21a01e5ecd0cdead56868e76d7446dc40c368843e2b36aeea4c503a354c66b"
+      "hash": "sha256:f863dfaa74468f5771ef20ba20c6a971188b41c43b45e92bcba1716c2e5b029c"
     },
     {
       "file": "reproduction-attempt-observation-v1.schema.json",
@@ -130,7 +162,7 @@
     },
     {
       "file": "reproduction-pack-v2.schema.json",
-      "hash": "sha256:27b65aebb0d14eb507d8c0f97d9f90bb782a2effa8f566c32a5ec5b3a03e7df7"
+      "hash": "sha256:478e9e1d131076b5d5aa2a9fc7785d5299e93fdddc75fbd441f37d375b8b76d3"
     },
     {
       "file": "regression-record.schema.json",
@@ -150,7 +182,7 @@
     },
     {
       "file": "external-data-snapshot.schema.json",
-      "hash": "sha256:0a32655477750c465edb314d334b13da76765f2449e0a3190c2afe588858da40"
+      "hash": "sha256:0ba11892ae52cff500b1716e71340c9589bdbf6073a08e137638afb42d9c1af6"
     },
     {
       "file": "dependency-update-plan.schema.json",
@@ -318,7 +350,19 @@
     },
     {
       "file": "final-product-audit-v1.schema.json",
-      "hash": "sha256:ce134c0c281fb599d26368fb3911101788485397d3f96e4aa906242937b0c213"
+      "hash": "sha256:4d8aeb77d3f40c1c972309bc480988c9a1b87e11d0c1de4ef19269cd575823fb"
+    },
+    {
+      "file": "product-source-evidence-v1.schema.json",
+      "hash": "sha256:aebdb44050ad8c35e17bb38cc0d57dc68724d6086f25519ad83ada12ce0c0b28"
+    },
+    {
+      "file": "final-product-audit-v2.schema.json",
+      "hash": "sha256:ca87d0e7003b06345ab35e5116c3d7387d61210d568056d4eedd874eb3230f66"
+    },
+    {
+      "file": "release-lifecycle-evidence.schema.json",
+      "hash": "sha256:4e8305c43a956d63ba486a848f501e46018e4ddb8072842409ec902b683c12e2"
     },
     {
       "file": "rust-toolchain-binding.schema.json",
@@ -346,15 +390,15 @@
     },
     {
       "file": "development-profile-descriptor.schema.json",
-      "hash": "sha256:2a2afbee198d03c2179332aa1f0b31a426ccf8063254e7975af9a313c675d6d2"
+      "hash": "sha256:4e9de94594ede580a95512780dbca8a5ea5805bcd953917f226d224d3bd937ae"
     },
     {
       "file": "development-profile-catalog-snapshot.schema.json",
-      "hash": "sha256:39e588939558ca2408b95ce9f643bfbe7021d122ed2f3f0aa9c1a3afa20f96eb"
+      "hash": "sha256:9150b642645d73b6ec3e6a8f5a59d75ba3541003c7d92591897e6b8b836cd734"
     },
     {
       "file": "development-profile-resolution.schema.json",
-      "hash": "sha256:5c117e5941a4296b130f34bc83509b9d9d39929963a3f264d94d054957eb66c6"
+      "hash": "sha256:1a8815968e58c22b2cd1e53e35319e47775e994c1c15bf7ac02a2c5c3b84662b"
     },
     {
       "file": "validation-run.schema.json",
@@ -374,7 +418,7 @@
     },
     {
       "file": "gate-decision-v2.schema.json",
-      "hash": "sha256:2c9b2ea17d2cb8eded3724b3038f57f2eb68aeebc15cb5f2e60ea6f5219d10a1"
+      "hash": "sha256:3026e79c15ed619c24376c233a861e164adfb933e815a1fff2272aaf7d310cdc"
     },
     {
       "file": "evidence-bundle-v2.schema.json",
@@ -382,7 +426,7 @@
     },
     {
       "file": "diagnostic-v2.schema.json",
-      "hash": "sha256:424e8aa301a60e27a771c78047ea1fc731dffb921bd36bc69c0ad0abcbb7799a"
+      "hash": "sha256:1ecbf4b6ba9b032d3f3743129e436ddaa9c8ffc598f016f241a4583337b60512"
     },
     {
       "file": "rule-v2.schema.json",

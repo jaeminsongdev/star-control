@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "refactor_codemod"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "Refactor Codemod"
 summary = "typed Recipe에서 immutable PatchSet, exact apply와 pre/post Gate·복구를 수행한다."
-parent_profile = { profile_id = "ai_development_validation", profile_version = "1.0.0" }
+parent_profile = { profile_id = "ai_development_validation", profile_version = "1.1.0" }
 triggers = ["codemod", "managed_symbol_change", "refactor"]
 stage_template = ["recipe_resolve", "dry_run", "patch_set", "pre_gate", "exact_apply", "post_gate", "recovery"]
 context_rules = ["current_index", "exact_before_hash", "owned_path_scope"]
@@ -22,6 +22,8 @@ evidence_requirements = ["gate", "patch_application", "patch_set", "recipe_execu
 corpus_requirements = ["idempotence", "stale_precondition"]
 approval_checkpoints = ["patch_apply"]
 default_stop_state = "awaiting_apply_approval"
+unknown_outcome_policy = "preserve_and_reconcile"
+rollback_policy = "recovery_plan_required"
 allowed_effect_classes = ["read", "plan", "validate", "workspace_mutation"]
 permission_floor = "exact_durable_approval"
 

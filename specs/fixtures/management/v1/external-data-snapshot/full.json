@@ -6,6 +6,9 @@
   "limitations": [
     "fixture"
   ],
+  "modified_at": "fixture",
+  "normalized_artifact_ref": "art_00000000000000000000000000",
+  "normalized_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "observations": [
     {
       "advisory_refs": [
@@ -19,18 +22,26 @@
       "subject": "fixture"
     }
   ],
+  "project_id": "prj_00000000000000000000000000",
+  "published_at": "fixture",
   "retrieved_at": "fixture",
   "schema_id": "star.external-data-snapshot",
   "schema_version": 1,
   "snapshot_id": "fixture",
   "source": {
+    "coverage": "complete",
+    "dataset_or_query": "fixture",
     "integrity_policy": "fixture",
     "license_ref": "fixture",
     "maximum_age_seconds": 0,
+    "network_mode": "fixture",
     "provider": "fixture",
     "retrieval_mode": "fixture",
     "source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "source_kind": "fixture"
+    "source_kind": "fixture",
+    "source_schema_version": "fixture",
+    "source_uri": "fixture",
+    "tool_identity_ref": "fixture"
   },
   "source_artifact_ref": "art_00000000000000000000000000",
   "source_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",

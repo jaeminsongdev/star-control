@@ -1363,13 +1363,10 @@ fn common_policy_entries(
     exact_integer(controller, "shutdown_grace_ms", 10_000)?;
     exact_integer(controller, "command_timeout_ms", 300_000)?;
 
-    for (key, expected) in [
-        ("mcp_required", true),
-        ("require_entry_check", true),
-        ("allow_managed_ultra", true),
-    ] {
+    for (key, expected) in [("mcp_required", true), ("require_entry_check", true)] {
         exact_boolean(codex, key, expected)?;
     }
+    exact_boolean(codex, "allow_managed_ultra", false)?;
     exact_integer(codex, "capability_max_age_ms", 900_000)?;
     exact_integer(codex, "app_server_start_timeout_ms", 30_000)?;
 
@@ -1529,7 +1526,7 @@ fn common_policy_entries(
         ),
         (
             "allow_managed_ultra",
-            ConfigValueV1::Boolean(true),
+            ConfigValueV1::Boolean(false),
             ConfigMergeStrategyV1::FalseWins,
         ),
     ] {
@@ -3228,7 +3225,7 @@ mod tests {
         );
         assert_eq!(
             config.effective.config_fingerprint.as_str(),
-            "sha256:9327669046808f91508844a789026749a9f59fb1d3d4812054d21f25b9f3c8f1"
+            "sha256:bf0d92e8404599a3cbcf620ba87ab7e3f28c8f6b64afb442b61fb68822fdd6d8"
         );
     }
 

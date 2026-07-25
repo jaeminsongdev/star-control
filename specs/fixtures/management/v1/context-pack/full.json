@@ -1,0 +1,112 @@
+{
+  "code_index_snapshot_refs": [
+    {
+      "checkout_id": "cko_00000000000000000000000000",
+      "code_index_snapshot_id": "cix_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "freshness_states": [
+        "current"
+      ],
+      "partition_fingerprints": [
+        "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      "project_catalog_snapshot_id": "pcs_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "project_id": "prj_00000000000000000000000000",
+      "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "required_tier": "text",
+      "used_tier": "text",
+      "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "context_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "context_pack_id": "ctx_00000000000000000000000000",
+  "estimated_tokens": 0,
+  "expires_at": "2026-01-01T00:00:00Z",
+  "freshness_policy": "require_current",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "items": [
+    {
+      "checkout_id": "cko_00000000000000000000000000",
+      "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "delivery": "reference_only",
+      "freshness": "current",
+      "inclusion_reason": "fixture",
+      "index_entity_key": "fixture",
+      "kind": "source",
+      "limitations": [
+        "fixture"
+      ],
+      "project_id": "prj_00000000000000000000000000",
+      "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "relative_path": "src/lib.rs",
+      "requested_tier": "text",
+      "sensitivity": "public",
+      "source_authority": "canonical_source",
+      "used_tier": "text",
+      "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "omissions": [
+    {
+      "project_id": "prj_00000000000000000000000000",
+      "reason": "fixture",
+      "reason_code": "fixture",
+      "relative_path": "src/lib.rs"
+    }
+  ],
+  "project_catalog_snapshot_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "project_inputs": [
+    {
+      "checkout_id": "cko_00000000000000000000000000",
+      "checkout_observation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "project_id": "prj_00000000000000000000000000",
+      "project_revision_id": "prv_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "workspace_entries_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "workspace_snapshot_id": "wsp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "quality_summary": {
+    "current_items": 0,
+    "limitations": [
+      "fixture"
+    ],
+    "partial_items": 0,
+    "stale_items": 0,
+    "state": "current",
+    "tier_coverage": {
+      "semantic": 0,
+      "syntax": 0,
+      "text": 0
+    },
+    "unsupported_items": 0
+  },
+  "revision": 0,
+  "schema_id": "star.context-pack",
+  "schema_version": 1,
+  "scope_revision_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "stage_graph_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "stage_id": "stg_00000000000000000000000000",
+  "stage_revision": 0,
+  "task_spec_ref": {
+    "document_id": "fixture",
+    "revision": 0,
+    "schema_id": "fixture",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "token_budget": 0
+}

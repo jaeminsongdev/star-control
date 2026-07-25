@@ -2,6 +2,8 @@
 
 #![cfg(windows)]
 
+pub mod app_server;
+
 use std::{
     collections::BTreeMap,
     fs,

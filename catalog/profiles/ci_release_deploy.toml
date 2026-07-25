@@ -1,9 +1,9 @@
-schema_version = 1
+schema_version = 2
 profile_id = "ci_release_deploy"
-profile_version = "1.0.0"
+profile_version = "1.1.0"
 display_name = "CI Release Deploy"
 summary = "build-once artifact, 설치 lifecycle, release 승인과 평가 catalog를 결합한다."
-parent_profile = { profile_id = "security_supply_chain", profile_version = "1.0.0" }
+parent_profile = { profile_id = "security_supply_chain", profile_version = "1.1.0" }
 triggers = ["ci_change", "deploy_change", "release_candidate", "workflow_change"]
 stage_template = ["local_layers", "release_build", "artifact_verify", "install_lifecycle", "release_ready", "publish_verify"]
 context_rules = ["build_once", "current_release_manifest", "exact_artifact_identity"]
@@ -22,6 +22,8 @@ evidence_requirements = ["artifact_manifest", "evaluation_run", "evidence_bundle
 corpus_requirements = ["install_lifecycle", "release_state_machine"]
 approval_checkpoints = ["remote_write", "release_publish"]
 default_stop_state = "ready"
+unknown_outcome_policy = "preserve_and_reconcile"
+rollback_policy = "compensation_plan_required"
 allowed_effect_classes = ["read", "plan", "validate", "local_state_write", "network_read", "remote_write", "publish"]
 permission_floor = "exact_durable_approval"
 

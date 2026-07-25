@@ -1,0 +1,371 @@
+{
+  "$defs": {
+    "CatalogRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_id": {
+          "type": "string"
+        },
+        "format_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_version": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "catalog_id",
+        "format_version",
+        "item_version",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "PaidActionRulesV1": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_basis": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "measured_limit": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "unknown_cost_decision": {
+          "$ref": "#/$defs/PermissionDecisionV1"
+        }
+      },
+      "required": [
+        "evidence_basis",
+        "unknown_cost_decision"
+      ],
+      "type": "object"
+    },
+    "PathPermissionKindV1": {
+      "enum": [
+        "allow_read",
+        "deny_read",
+        "allow_write",
+        "deny_write",
+        "deny_external_transfer"
+      ],
+      "type": "string"
+    },
+    "PermissionDecisionV1": {
+      "enum": [
+        "auto",
+        "prompt",
+        "deny"
+      ],
+      "type": "string"
+    },
+    "PermissionEnvironmentRuleV1": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "$ref": "#/$defs/PermissionDecisionV1"
+        },
+        "name": {
+          "type": "string"
+        },
+        "secret_ref_kind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "PermissionExternalConstraintsV1": {
+      "additionalProperties": false,
+      "properties": {
+        "administrator_required": {
+          "type": "boolean"
+        },
+        "codex_approval_policy": {
+          "type": "string"
+        },
+        "codex_approval_required": {
+          "type": "boolean"
+        },
+        "codex_sandbox_mode": {
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "codex_approval_required",
+        "codex_approval_policy",
+        "codex_sandbox_mode",
+        "administrator_required",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "PermissionNetworkRuleV1": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "$ref": "#/$defs/PermissionDecisionV1"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "operation",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "PermissionPathRuleV1": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PathPermissionKindV1"
+        },
+        "path_prefix": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "kind",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "PermissionProcessRuleV1": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_child_processes": {
+          "type": "boolean"
+        },
+        "argument_prefix": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cwd_prefix": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cwd_project_id": {
+          "type": "string"
+        },
+        "executable_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "executable_sha256",
+        "argument_prefix",
+        "cwd_project_id",
+        "allow_child_processes"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.permission-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action_policies": {
+      "additionalProperties": {
+        "$ref": "#/$defs/PermissionDecisionV1"
+      },
+      "type": "object"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "default_action": {
+      "$ref": "#/$defs/PermissionDecisionV1"
+    },
+    "effective_config_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "environment_rules": {
+      "items": {
+        "$ref": "#/$defs/PermissionEnvironmentRuleV1"
+      },
+      "type": "array"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "external_constraints": {
+      "$ref": "#/$defs/PermissionExternalConstraintsV1"
+    },
+    "goal_id": {
+      "pattern": "^gol_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "network_rules": {
+      "items": {
+        "$ref": "#/$defs/PermissionNetworkRuleV1"
+      },
+      "type": "array"
+    },
+    "paid_action_rules": {
+      "$ref": "#/$defs/PaidActionRulesV1"
+    },
+    "path_rules": {
+      "items": {
+        "$ref": "#/$defs/PermissionPathRuleV1"
+      },
+      "type": "array"
+    },
+    "permission_plan_id": {
+      "pattern": "^ppl_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "policy_profile_ref": {
+      "$ref": "#/$defs/CatalogRef"
+    },
+    "process_rules": {
+      "items": {
+        "$ref": "#/$defs/PermissionProcessRuleV1"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.permission-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "stage_id": {
+      "pattern": "^stg_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "stage_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "stage_scope_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "permission_plan_id",
+    "revision",
+    "goal_id",
+    "run_id",
+    "stage_id",
+    "stage_revision",
+    "stage_scope_hash",
+    "policy_profile_ref",
+    "default_action",
+    "action_policies",
+    "path_rules",
+    "process_rules",
+    "network_rules",
+    "environment_rules",
+    "paid_action_rules",
+    "external_constraints",
+    "effective_config_ref",
+    "created_at",
+    "expires_at",
+    "scope_hash",
+    "plan_fingerprint"
+  ],
+  "title": "PermissionPlanV1",
+  "type": "object"
+}

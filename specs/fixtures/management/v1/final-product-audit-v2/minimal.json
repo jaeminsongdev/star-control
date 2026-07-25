@@ -1,0 +1,33 @@
+{
+  "artifact_set_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "audit_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "internal_conformance": false,
+  "lifecycle_statuses": [],
+  "m11_profile_conformant": false,
+  "profile_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "profile_statuses": [],
+  "release_manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "release_manifest_id": "rel_00000000000000000000000000",
+  "release_status": "draft",
+  "schema_id": "star.final-product-audit-v2",
+  "schema_version": 2,
+  "source_evidence": {
+    "evidence_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "feature_count": 0,
+    "features": [],
+    "generated_schema_count": 0,
+    "generated_schema_manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "inventory_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "mcp_matrix_count": 0,
+    "mcp_matrix_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "profile_count": 0,
+    "profiles": [],
+    "runtime_executables": [],
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "stable_error_catalog_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "stable_error_count": 0
+  },
+  "status": "conformant"
+}

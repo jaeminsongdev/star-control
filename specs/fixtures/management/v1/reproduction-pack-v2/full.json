@@ -33,6 +33,7 @@
   "expected_result": "fixture",
   "failure_record_ref": "fixture",
   "family_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "input_refs": [
     "fixture"
   ],

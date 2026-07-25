@@ -98,6 +98,8 @@ Star-Control은 다른 AI 제공자를 선택하지 않는다. 실행자는 Code
 - 배정 이유와 대체 이유를 사람이 읽을 수 있게 표시
 - 사용자의 수동 배정이 자동 선택보다 우선
 
+P-0058 current source는 Codex executable version과 version-specific App Server JSON Schema bundle을 직접 관찰하고, `model/list`·provider capability·지원 reasoning effort의 광고 순서를 보존한 `CapabilitySnapshotV1`을 만든다. `codex capability inspect|show`와 `route decide|show`는 snapshot 만료·Schema fingerprint·Stage revision·model/effort support를 검증하며 stale snapshot이나 지원되지 않은 mode를 추측으로 대체하지 않는다. 동명 `max`·`ultra` reasoning effort를 execution mode로 승격하지 않으며, 현재 A06 executor가 구현한 `single/native`만 광고한다. 관리형 Ultra 요청은 owning fan-out·통합 handler가 생기기 전까지 `ROUTE_MODE_UNAVAILABLE`로 닫힌다. `--version`과 Schema 생성 subprocess도 30초 안에 끝나지 않으면 강제 종료하고 `CODEX_NOT_READY`로 닫힌다.
+
 ## A06. Codex 실행 제어와 터미널 조작
 
 Codex의 공식 통합 지점을 사용해 계획된 단계를 실제 작업으로 연결한다.
@@ -112,6 +114,8 @@ Codex의 공식 통합 지점을 사용해 계획된 단계를 실제 작업으�
 - Plugin·Hook·MCP가 꺼졌거나 신뢰되지 않을 때 닫힌 상태로 중단
 
 Controller는 계획된 작업을 이어주는 역할만 한다. 반복 시간표와 예약 실행은 Codex가 제공하는 기능을 사용한다.
+
+P-0058 current source의 `codex task start|resume|fork|status|interrupt`는 공식 App Server JSONL의 initialize, thread start/resume/fork, turn start/interrupt와 notification을 사용한다. 실행 전 exact RouteDecision·CapabilitySnapshot·Stage·ContextPack·GateDecision·executable digest를 approval scope에 묶고, 승인 전에는 subprocess를 시작하지 않는다. Controller restart나 App Server 손실 뒤 비종결 실행은 성공으로 합성하지 않고 `outcome_unknown`과 reconcile action을 보존하며, terminal state에는 exact approval·operation·tool descriptor·argument·executable digest가 들어간 effect receipt가 필요하다. CLI-only core는 이 adapter가 없어도 deterministic local 기능을 계속 수행한다.
 
 ## A07. 상태·Checkpoint·이어하기·자체 복구
 

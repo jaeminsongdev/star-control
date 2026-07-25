@@ -1,0 +1,157 @@
+{
+  "$defs": {
+    "LifecycleEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "active_artifact_set_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_ref": {
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/LifecyclePhase"
+        },
+        "sequence": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sequence",
+        "phase",
+        "evidence_ref"
+      ],
+      "type": "object"
+    },
+    "LifecycleExecutionMode": {
+      "enum": [
+        "native_isolated",
+        "fake_model"
+      ],
+      "type": "string"
+    },
+    "LifecyclePhase": {
+      "enum": [
+        "not_installed",
+        "installed",
+        "first_run_verified",
+        "update_staged",
+        "rollback_required",
+        "rolled_back",
+        "repaired",
+        "uninstalled"
+      ],
+      "type": "string"
+    },
+    "ReleaseArchitecture": {
+      "enum": [
+        "x64",
+        "arm64"
+      ],
+      "type": "string"
+    },
+    "RuntimeVerificationState": {
+      "enum": [
+        "native_verified",
+        "native_unverified",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.release-lifecycle-evidence:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active_artifact_set_digest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "architecture": {
+      "$ref": "#/$defs/ReleaseArchitecture"
+    },
+    "candidate_artifact_set_digest": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/LifecycleEvent"
+      },
+      "type": "array"
+    },
+    "execution_mode": {
+      "$ref": "#/$defs/LifecycleExecutionMode"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "phase": {
+      "$ref": "#/$defs/LifecyclePhase"
+    },
+    "previous_artifact_set_digest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "runtime_verification": {
+      "$ref": "#/$defs/RuntimeVerificationState"
+    },
+    "schema_id": {
+      "const": "star.release-lifecycle-evidence",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "user_data_digest_after": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "user_data_digest_before": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "architecture",
+    "execution_mode",
+    "runtime_verification",
+    "phase",
+    "candidate_artifact_set_digest",
+    "user_data_digest_before",
+    "user_data_digest_after",
+    "events",
+    "limitations"
+  ],
+  "title": "ReleaseLifecycleEvidence",
+  "type": "object"
+}

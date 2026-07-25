@@ -2,7 +2,9 @@ use schemars::JsonSchema;
 use serde_json::{Map, Value};
 
 use crate::{
+    codex_execution::{CODEX_EXECUTION_RECORD_SCHEMA_ID, CodexExecutionRecordV1},
     config_v1::{EFFECTIVE_CONFIG_V1_SCHEMA_ID, EffectiveConfigV1},
+    context_pack::{CONTEXT_PACK_SCHEMA_ID, ContextPackV1},
     coordination_v2::{
         CHANGE_BUNDLE_PARTICIPANT_V2_SCHEMA_ID, CHANGE_BUNDLE_RELEASE_HANDOFF_SCHEMA_ID,
         CROSS_REPO_CHANGE_BUNDLE_SCHEMA_ID, ChangeBundleParticipantV2, ChangeBundleReleaseHandoff,
@@ -105,6 +107,7 @@ use crate::{
         PatchV1ToV2MigrationResult, RECIPE_EXECUTION_SCHEMA_ID, RecipeExecution,
         WORKTREE_DECISION_SCHEMA_ID, WorktreeDecision,
     },
+    permission_plan::{PERMISSION_PLAN_SCHEMA_ID, PermissionPlanV1},
     planning::{
         CHANGE_PLAN_V1_TO_V2_MIGRATION_PLAN_SCHEMA_ID,
         CHANGE_PLAN_V1_TO_V2_MIGRATION_RESULT_SCHEMA_ID, CHANGE_PLAN_V2_SCHEMA_ID,
@@ -135,8 +138,15 @@ use crate::{
         EVALUATION_CASE_DEFINITION_V1_SCHEMA_ID, EVALUATION_CATALOG_ITEM_SCHEMA_ID,
         EVALUATION_POLICY_V1_SCHEMA_ID, EVALUATION_RUN_V2_SCHEMA_ID, EvaluationCaseDefinitionV1,
         EvaluationCatalogItem, EvaluationPolicyV1, EvaluationRunV2,
-        FINAL_PRODUCT_AUDIT_V1_SCHEMA_ID, FinalProductAuditV1, RELEASE_ASSET_BINDING_V1_SCHEMA_ID,
-        RELEASE_MANIFEST_V2_SCHEMA_ID, ReleaseAssetBindingV1, ReleaseManifestV2,
+        FINAL_PRODUCT_AUDIT_V1_SCHEMA_ID, FINAL_PRODUCT_AUDIT_V2_SCHEMA_ID, FinalProductAuditV1,
+        FinalProductAuditV2, PRODUCT_SOURCE_EVIDENCE_V1_SCHEMA_ID, ProductSourceEvidenceV1,
+        RELEASE_ASSET_BINDING_V1_SCHEMA_ID, RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID,
+        RELEASE_MANIFEST_V2_SCHEMA_ID, ReleaseAssetBindingV1, ReleaseLifecycleEvidence,
+        ReleaseManifestV2,
+    },
+    routing::{
+        CAPABILITY_SNAPSHOT_SCHEMA_ID, CapabilitySnapshotV1, ROUTE_DECISION_SCHEMA_ID,
+        RouteDecisionV1,
     },
     runtime::{
         ExecutableIdentity, ExternalToolCancel, ExternalToolCancelAck, ExternalToolProbeRequest,
@@ -148,6 +158,10 @@ use crate::{
         RUST_STYLE_STEP_EXECUTION_SCHEMA_ID, RUST_TOOLCHAIN_BINDING_SCHEMA_ID,
         RustStyleCoverageMatrix, RustStylePolicyApprovalDecision, RustStylePolicyApprovalRequest,
         RustStylePolicySnapshot, RustStyleStepExecution, RustToolchainBinding,
+    },
+    stage::{
+        STAGE_GRAPH_SCHEMA_ID, STAGE_RESULT_SCHEMA_ID, STAGE_SPEC_SCHEMA_ID, StageGraphV1,
+        StageResultV1, StageSpecV1,
     },
     trust::ToolTrustRecord,
     validator_guard::{
@@ -302,6 +316,20 @@ fn management_id_prefix(name: &str) -> Option<&'static str> {
         Some("gol_")
     } else if name == "run_id" {
         Some("run_")
+    } else if name.contains("stage_graph_id") {
+        Some("sgr_")
+    } else if name == "stage_id" {
+        Some("stg_")
+    } else if name.contains("route_decision_id") {
+        Some("rte_")
+    } else if name.contains("capability_snapshot_id") {
+        Some("cap_")
+    } else if name.contains("codex_execution_id") {
+        Some("cdx_")
+    } else if name.contains("context_pack_id") {
+        Some("ctx_")
+    } else if name.contains("permission_plan_id") {
+        Some("ppl_")
     } else if name.contains("project_catalog_snapshot") {
         Some("pcs_")
     } else if name.contains("code_index_snapshot") {
@@ -435,6 +463,38 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "goal-record.schema.json",
             management_schema_document::<GoalRecord>(GOAL_RECORD_SCHEMA_ID),
+        ),
+        (
+            "stage-spec.schema.json",
+            management_schema_document::<StageSpecV1>(STAGE_SPEC_SCHEMA_ID),
+        ),
+        (
+            "stage-graph.schema.json",
+            management_schema_document::<StageGraphV1>(STAGE_GRAPH_SCHEMA_ID),
+        ),
+        (
+            "stage-result.schema.json",
+            management_schema_document::<StageResultV1>(STAGE_RESULT_SCHEMA_ID),
+        ),
+        (
+            "capability-snapshot.schema.json",
+            management_schema_document::<CapabilitySnapshotV1>(CAPABILITY_SNAPSHOT_SCHEMA_ID),
+        ),
+        (
+            "route-decision.schema.json",
+            management_schema_document::<RouteDecisionV1>(ROUTE_DECISION_SCHEMA_ID),
+        ),
+        (
+            "codex-execution-record.schema.json",
+            management_schema_document::<CodexExecutionRecordV1>(CODEX_EXECUTION_RECORD_SCHEMA_ID),
+        ),
+        (
+            "context-pack.schema.json",
+            management_schema_document::<ContextPackV1>(CONTEXT_PACK_SCHEMA_ID),
+        ),
+        (
+            "permission-plan.schema.json",
+            management_schema_document::<PermissionPlanV1>(PERMISSION_PLAN_SCHEMA_ID),
         ),
         (
             "managed-registry-snapshot.schema.json",
@@ -765,6 +825,25 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "final-product-audit-v1.schema.json",
             management_schema_document::<FinalProductAuditV1>(FINAL_PRODUCT_AUDIT_V1_SCHEMA_ID),
+        ),
+        (
+            "product-source-evidence-v1.schema.json",
+            management_schema_document::<ProductSourceEvidenceV1>(
+                PRODUCT_SOURCE_EVIDENCE_V1_SCHEMA_ID,
+            ),
+        ),
+        (
+            "final-product-audit-v2.schema.json",
+            management_schema_document_version::<FinalProductAuditV2>(
+                FINAL_PRODUCT_AUDIT_V2_SCHEMA_ID,
+                2,
+            ),
+        ),
+        (
+            "release-lifecycle-evidence.schema.json",
+            management_schema_document::<ReleaseLifecycleEvidence>(
+                RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID,
+            ),
         ),
         (
             "rust-toolchain-binding.schema.json",

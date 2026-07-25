@@ -1,0 +1,512 @@
+{
+  "$defs": {
+    "ContextDeliveryV1": {
+      "enum": [
+        "reference_only",
+        "inline",
+        "inline_redacted"
+      ],
+      "type": "string"
+    },
+    "ContextFreshnessPolicyV1": {
+      "enum": [
+        "require_current",
+        "allow_stale_with_warning",
+        "pinned_snapshot"
+      ],
+      "type": "string"
+    },
+    "ContextIndexSnapshotRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "code_index_snapshot_id": {
+          "pattern": "^cix_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "freshness_states": {
+          "items": {
+            "$ref": "#/$defs/IndexFreshnessState"
+          },
+          "type": "array"
+        },
+        "partition_fingerprints": {
+          "items": {
+            "$ref": "#/$defs/Sha256Hash"
+          },
+          "type": "array"
+        },
+        "project_catalog_snapshot_id": {
+          "pattern": "^pcs_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "required_tier": {
+          "$ref": "#/$defs/IndexTier"
+        },
+        "used_tier": {
+          "$ref": "#/$defs/IndexTier"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "code_index_snapshot_id",
+        "project_catalog_snapshot_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "required_tier",
+        "used_tier",
+        "freshness_states",
+        "partition_fingerprints",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ContextItemKindV1": {
+      "enum": [
+        "source",
+        "test",
+        "docs",
+        "config",
+        "schema",
+        "migration",
+        "symbol",
+        "contract",
+        "guidance"
+      ],
+      "type": "string"
+    },
+    "ContextItemV1": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "delivery": {
+          "$ref": "#/$defs/ContextDeliveryV1"
+        },
+        "freshness": {
+          "$ref": "#/$defs/ContextQualityStateV1"
+        },
+        "inclusion_reason": {
+          "type": "string"
+        },
+        "index_entity_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/ContextItemKindV1"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "relative_path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "requested_tier": {
+          "$ref": "#/$defs/IndexTier"
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/ContextSensitivityV1"
+        },
+        "source_authority": {
+          "$ref": "#/$defs/ContextSourceAuthorityV1"
+        },
+        "used_tier": {
+          "$ref": "#/$defs/IndexTier"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "project_id",
+        "checkout_id",
+        "relative_path",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "content_sha256",
+        "requested_tier",
+        "used_tier",
+        "inclusion_reason",
+        "source_authority",
+        "freshness",
+        "sensitivity",
+        "delivery",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "ContextOmissionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "relative_path": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "project_id",
+        "reason_code",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "ContextProjectInputV1": {
+      "additionalProperties": false,
+      "properties": {
+        "checkout_id": {
+          "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "checkout_observation_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "project_revision_id": {
+          "pattern": "^prv_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "workspace_entries_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "workspace_snapshot_id": {
+          "pattern": "^wsp_[a-z2-7]{52}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "checkout_id",
+        "project_revision_id",
+        "workspace_snapshot_id",
+        "checkout_observation_fingerprint",
+        "workspace_entries_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ContextQualityStateV1": {
+      "enum": [
+        "current",
+        "stale",
+        "partial",
+        "unsupported",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ContextQualitySummaryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "current_items": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "partial_items": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stale_items": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/$defs/ContextQualityStateV1"
+        },
+        "tier_coverage": {
+          "additionalProperties": false,
+          "properties": {
+            "semantic": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "syntax": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "text": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "unsupported_items": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "state",
+        "current_items",
+        "stale_items",
+        "partial_items",
+        "unsupported_items",
+        "tier_coverage",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "ContextSensitivityV1": {
+      "enum": [
+        "public",
+        "internal",
+        "sensitive",
+        "secret"
+      ],
+      "type": "string"
+    },
+    "ContextSourceAuthorityV1": {
+      "enum": [
+        "canonical_source",
+        "project_policy",
+        "generated_projection",
+        "external_reference"
+      ],
+      "type": "string"
+    },
+    "DocumentRef": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        }
+      },
+      "required": [
+        "schema_id",
+        "document_id",
+        "revision",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "IndexFreshnessState": {
+      "enum": [
+        "current",
+        "stale_catalog",
+        "stale_source",
+        "stale_config",
+        "stale_adapter",
+        "partial",
+        "unverified",
+        "unavailable"
+      ],
+      "type": "string"
+    },
+    "IndexTier": {
+      "enum": [
+        "text",
+        "syntax",
+        "semantic"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.context-pack:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "code_index_snapshot_refs": {
+      "items": {
+        "$ref": "#/$defs/ContextIndexSnapshotRefV1",
+        "pattern": "^cix_[a-z2-7]{52}$"
+      },
+      "type": "array"
+    },
+    "context_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "context_pack_id": {
+      "pattern": "^ctx_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "estimated_tokens": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "freshness_policy": {
+      "$ref": "#/$defs/ContextFreshnessPolicyV1"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/ContextItemV1"
+      },
+      "type": "array"
+    },
+    "omissions": {
+      "items": {
+        "$ref": "#/$defs/ContextOmissionV1"
+      },
+      "type": "array"
+    },
+    "project_catalog_snapshot_ref": {
+      "$ref": "#/$defs/DocumentRef",
+      "pattern": "^pcs_[a-z2-7]{52}$"
+    },
+    "project_inputs": {
+      "items": {
+        "$ref": "#/$defs/ContextProjectInputV1"
+      },
+      "type": "array"
+    },
+    "quality_summary": {
+      "$ref": "#/$defs/ContextQualitySummaryV1"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.context-pack",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scope_revision_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "stage_graph_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "stage_id": {
+      "pattern": "^stg_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "stage_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "task_spec_ref": {
+      "$ref": "#/$defs/DocumentRef"
+    },
+    "token_budget": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "context_pack_id",
+    "revision",
+    "stage_graph_ref",
+    "stage_id",
+    "stage_revision",
+    "task_spec_ref",
+    "scope_revision_ref",
+    "project_inputs",
+    "project_catalog_snapshot_ref",
+    "code_index_snapshot_refs",
+    "items",
+    "token_budget",
+    "estimated_tokens",
+    "omissions",
+    "quality_summary",
+    "freshness_policy",
+    "generated_at",
+    "expires_at",
+    "context_fingerprint"
+  ],
+  "title": "ContextPackV1",
+  "type": "object"
+}

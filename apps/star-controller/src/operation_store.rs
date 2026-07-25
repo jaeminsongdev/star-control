@@ -712,7 +712,7 @@ fn valid_transition(from: &str, to: &str) -> bool {
             | ("resolving", "approval_wait" | "queued" | "failed")
             | ("approval_wait", "queued" | "denied" | "expired")
             | ("queued", "starting")
-            | ("starting", "running")
+            | ("starting", "running" | "outcome_unknown")
             | (
                 "running",
                 "succeeded" | "failed" | "cancelling" | "outcome_unknown"

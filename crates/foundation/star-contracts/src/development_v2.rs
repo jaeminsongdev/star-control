@@ -286,11 +286,19 @@ pub struct DocumentationSnapshot {
     pub snapshot_id: String,
     pub project_id: ProjectId,
     pub subject_revision: String,
+    #[serde(default)]
+    pub registry_snapshot_ref: String,
+    #[serde(default = "legacy_missing_documentation_fingerprint")]
+    pub registry_snapshot_fingerprint: Sha256Hash,
     pub observations: Vec<DocumentationObservation>,
     pub completeness: CoverageState,
     #[serde(default)]
     pub limitations: Vec<String>,
     pub content_fingerprint: Sha256Hash,
+}
+
+fn legacy_missing_documentation_fingerprint() -> Sha256Hash {
+    Sha256Hash::digest(b"legacy-missing-documentation-registry")
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

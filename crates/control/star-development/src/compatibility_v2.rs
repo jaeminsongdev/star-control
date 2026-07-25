@@ -493,15 +493,24 @@ pub fn compare_surface_snapshots(
     Ok(report)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the source and managed Registry bindings stay explicit at this contract boundary"
+)]
 pub fn build_documentation_snapshot(
     snapshot_id: String,
     project_id: ProjectId,
     subject_revision: String,
+    registry_snapshot_ref: String,
+    registry_snapshot_fingerprint: Sha256Hash,
     mut sources: Vec<DocumentationSourceInput>,
     registered_commands: &BTreeSet<String>,
     registered_config_keys: &BTreeSet<String>,
 ) -> Result<DocumentationSnapshot, DevelopmentError> {
-    if !token(&snapshot_id, 192) || subject_revision.trim().is_empty() {
+    if !token(&snapshot_id, 192)
+        || subject_revision.trim().is_empty()
+        || !token(&registry_snapshot_ref, 192)
+    {
         return Err(DevelopmentError::Invalid);
     }
     sources.sort_by(|left, right| left.target.target_id.cmp(&right.target.target_id));
@@ -655,6 +664,8 @@ pub fn build_documentation_snapshot(
         snapshot_id,
         project_id,
         subject_revision,
+        registry_snapshot_ref,
+        registry_snapshot_fingerprint,
         observations,
         completeness,
         limitations,
@@ -666,12 +677,47 @@ pub fn build_documentation_snapshot(
             "snapshot_id": snapshot.snapshot_id,
             "project_id": snapshot.project_id,
             "subject_revision": snapshot.subject_revision,
+            "registry_snapshot_ref": snapshot.registry_snapshot_ref,
+            "registry_snapshot_fingerprint": snapshot.registry_snapshot_fingerprint,
             "observations": snapshot.observations,
             "completeness": snapshot.completeness,
             "limitations": snapshot.limitations,
         }),
     )?;
+    verify_documentation_snapshot(&snapshot)?;
     Ok(snapshot)
+}
+
+pub fn verify_documentation_snapshot(
+    snapshot: &DocumentationSnapshot,
+) -> Result<(), DevelopmentError> {
+    if snapshot.schema_id != DOCUMENTATION_SNAPSHOT_SCHEMA_ID
+        || snapshot.schema_version != 1
+        || !token(&snapshot.snapshot_id, 192)
+        || snapshot.subject_revision.trim().is_empty()
+        || !token(&snapshot.registry_snapshot_ref, 192)
+        || snapshot.registry_snapshot_fingerprint
+            == Sha256Hash::digest(b"legacy-missing-documentation-registry")
+    {
+        return Err(DevelopmentError::Invalid);
+    }
+    let expected = fingerprint(
+        DOCUMENTATION_SNAPSHOT_SCHEMA_ID,
+        &serde_json::json!({
+            "snapshot_id": snapshot.snapshot_id,
+            "project_id": snapshot.project_id,
+            "subject_revision": snapshot.subject_revision,
+            "registry_snapshot_ref": snapshot.registry_snapshot_ref,
+            "registry_snapshot_fingerprint": snapshot.registry_snapshot_fingerprint,
+            "observations": snapshot.observations,
+            "completeness": snapshot.completeness,
+            "limitations": snapshot.limitations,
+        }),
+    )?;
+    if snapshot.content_fingerprint != expected {
+        return Err(DevelopmentError::Fingerprint);
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1439,7 +1485,9 @@ fn resolve_git_commit(project_root: &Path, revision: &str) -> Result<String, Dev
 #[cfg(test)]
 mod tests {
     use super::*;
-    use star_contracts::development_v2::{BaselinePolicy, ContractSurfaceDescriptor};
+    use star_contracts::development_v2::{
+        BaselinePolicy, ContractSurfaceDescriptor, DocumentationTarget,
+    };
 
     fn manifest(project_id: ProjectId) -> ProjectContractManifest {
         ProjectContractManifest {
@@ -1546,5 +1594,90 @@ mod tests {
         .unwrap();
         assert_eq!(first.schema_id, ENVIRONMENT_SNAPSHOT_SCHEMA_ID);
         assert!(!serde_json::to_string(&first).unwrap().contains("C:\\\\"));
+    }
+
+    #[test]
+    fn documentation_snapshot_is_bound_to_the_current_managed_registry() {
+        let project_id = ProjectId::new();
+        let source = DocumentationSourceInput {
+            target: DocumentationTarget {
+                target_id: "cli-guide".to_owned(),
+                source_path: "docs/cli.md".to_owned(),
+                required_commands: vec!["star validation run".to_owned()],
+                required_config_keys: vec!["validation.default_profile".to_owned()],
+                required_references: vec!["docs/contracts/validation.md".to_owned()],
+            },
+            bytes: Some(
+                b"`star validation run` uses `validation.default_profile`. See docs/contracts/validation.md."
+                    .to_vec(),
+            ),
+        };
+        let commands = BTreeSet::from(["star validation run".to_owned()]);
+        let config_keys = BTreeSet::from(["validation.default_profile".to_owned()]);
+        let registry_fingerprint = Sha256Hash::digest(b"current-registry");
+        let current = build_documentation_snapshot(
+            "docs-current".to_owned(),
+            project_id.clone(),
+            "revision-current".to_owned(),
+            "mrs_current".to_owned(),
+            registry_fingerprint.clone(),
+            vec![source.clone()],
+            &commands,
+            &config_keys,
+        )
+        .unwrap();
+        assert!(
+            current
+                .observations
+                .iter()
+                .all(|observation| observation.state != EvaluationState::Block)
+        );
+        assert_eq!(current.registry_snapshot_fingerprint, registry_fingerprint);
+
+        let missing_registration = build_documentation_snapshot(
+            "docs-missing-command".to_owned(),
+            project_id,
+            "revision-current".to_owned(),
+            "mrs_current".to_owned(),
+            Sha256Hash::digest(b"current-registry"),
+            vec![source],
+            &BTreeSet::new(),
+            &config_keys,
+        )
+        .unwrap();
+        assert!(missing_registration.observations.iter().any(|observation| {
+            observation.kind == DocumentationObservationKind::Command
+                && observation.state == EvaluationState::Block
+        }));
+        assert_ne!(
+            current.content_fingerprint,
+            missing_registration.content_fingerprint
+        );
+    }
+
+    #[test]
+    fn legacy_documentation_snapshot_remains_readable_but_not_current_evidence() {
+        let current = build_documentation_snapshot(
+            "docs-current".to_owned(),
+            ProjectId::new(),
+            "revision-current".to_owned(),
+            "mrs_current".to_owned(),
+            Sha256Hash::digest(b"current-registry"),
+            Vec::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+        let mut legacy = serde_json::to_value(current).unwrap();
+        let object = legacy.as_object_mut().unwrap();
+        object.remove("registry_snapshot_ref");
+        object.remove("registry_snapshot_fingerprint");
+        let legacy: DocumentationSnapshot = serde_json::from_value(legacy).unwrap();
+
+        assert!(legacy.registry_snapshot_ref.is_empty());
+        assert_eq!(
+            verify_documentation_snapshot(&legacy),
+            Err(DevelopmentError::Invalid)
+        );
     }
 }

@@ -228,6 +228,7 @@ pub fn build_failure_record(input: FailureRecordInput) -> Result<FailureRecord, 
         invocation: input.invocation,
         environment_compatibility_class: input.environment_compatibility_class,
         environment_fingerprint: input.environment_fingerprint,
+        input_fingerprint: Some(input.input_fingerprint),
         input_refs: input.input_refs,
         seed: input.seed,
         stdout_ref: input.stdout_ref,
@@ -256,6 +257,7 @@ pub fn build_failure_record(input: FailureRecordInput) -> Result<FailureRecord, 
             "invocation": record.invocation,
             "environment_compatibility_class": record.environment_compatibility_class,
             "environment_fingerprint": record.environment_fingerprint,
+            "input_fingerprint": record.input_fingerprint,
             "input_refs": record.input_refs,
             "seed": record.seed,
             "stdout_ref": record.stdout_ref,
@@ -383,6 +385,7 @@ pub fn build_reproduction_pack_v2(
         invocation: failure.invocation.clone(),
         environment_compatibility_class: failure.environment_compatibility_class.clone(),
         environment_fingerprint: failure.environment_fingerprint.clone(),
+        input_fingerprint: failure.input_fingerprint.clone(),
         manifest_refs: input.manifest_refs,
         input_refs: failure.input_refs.clone(),
         seed: failure.seed.clone(),
@@ -426,6 +429,7 @@ fn reproduction_pack_fingerprint(
             "invocation": pack.invocation,
             "environment_compatibility_class": pack.environment_compatibility_class,
             "environment_fingerprint": pack.environment_fingerprint,
+            "input_fingerprint": pack.input_fingerprint,
             "manifest_refs": pack.manifest_refs,
             "input_refs": pack.input_refs,
             "seed": pack.seed,
@@ -570,41 +574,139 @@ pub fn scan_dependency_snapshot(
 #[serde(deny_unknown_fields)]
 pub struct ExternalDataSnapshotInput {
     pub source: ExternalDataSourceDescriptor,
+    pub published_at: Option<String>,
+    pub modified_at: Option<String>,
     pub retrieved_at: String,
     pub valid_until: String,
     pub evaluation_time: String,
     pub source_artifact_ref: String,
     pub source_sha256: Sha256Hash,
+    pub normalized_artifact_ref: String,
+    pub normalized_sha256: Sha256Hash,
     #[serde(default)]
     pub observations: Vec<ExternalDataObservation>,
     pub available: bool,
 }
 
+pub fn external_data_request_fingerprint(
+    source: &ExternalDataSourceDescriptor,
+) -> Result<Sha256Hash, DevelopmentError> {
+    fingerprint("star.external-data-request", source)
+}
+
+pub fn external_data_normalized_fingerprint(
+    input: &ExternalDataSnapshotInput,
+) -> Result<Sha256Hash, DevelopmentError> {
+    let mut observations = input.observations.clone();
+    normalize_external_observations(&mut observations)?;
+    fingerprint(
+        "star.external-data-normalized-artifact",
+        &serde_json::json!({
+            "source":input.source,
+            "published_at":input.published_at,
+            "modified_at":input.modified_at,
+            "retrieved_at":input.retrieved_at,
+            "valid_until":input.valid_until,
+            "source_artifact_ref":input.source_artifact_ref,
+            "source_sha256":input.source_sha256,
+            "normalized_artifact_ref":input.normalized_artifact_ref,
+            "observations":observations,
+            "available":input.available,
+        }),
+    )
+}
+
+fn bounded_external_text(value: &str, max: usize) -> bool {
+    !value.trim().is_empty() && value.len() <= max && !value.contains('\0')
+}
+
+fn normalize_external_observations(
+    observations: &mut [ExternalDataObservation],
+) -> Result<(), DevelopmentError> {
+    for observation in observations.iter_mut() {
+        observation.advisory_refs.sort();
+        observation.license_refs.sort();
+        if !bounded_external_text(&observation.subject, 1_024)
+            || !token(&observation.status, 96)
+            || !bounded_external_text(&observation.source_evidence_ref, 1_024)
+            || observation
+                .advisory_refs
+                .iter()
+                .chain(&observation.license_refs)
+                .any(|value| !bounded_external_text(value, 1_024))
+            || observation
+                .advisory_refs
+                .windows(2)
+                .any(|pair| pair[0] == pair[1])
+            || observation
+                .license_refs
+                .windows(2)
+                .any(|pair| pair[0] == pair[1])
+        {
+            return Err(DevelopmentError::Invalid);
+        }
+    }
+    observations.sort_by(|left, right| left.subject.cmp(&right.subject));
+    if observations
+        .windows(2)
+        .any(|pair| pair[0].subject == pair[1].subject)
+    {
+        return Err(DevelopmentError::Conflict);
+    }
+    Ok(())
+}
+
 pub fn build_external_data_snapshot(
+    project_id: ProjectId,
     snapshot_id: String,
     input: ExternalDataSnapshotInput,
 ) -> Result<ExternalDataSnapshot, DevelopmentError> {
     let ExternalDataSnapshotInput {
         source,
+        published_at,
+        modified_at,
         retrieved_at,
         valid_until,
         evaluation_time,
         source_artifact_ref,
         source_sha256,
+        normalized_artifact_ref,
+        normalized_sha256,
         mut observations,
         available,
     } = input;
     if !token(&snapshot_id, 192)
         || !token(&source.source_id, 160)
-        || source.source_kind.trim().is_empty()
-        || source.provider.trim().is_empty()
-        || source.retrieval_mode.trim().is_empty()
-        || source.integrity_policy.trim().is_empty()
+        || !token(&source.source_kind, 96)
+        || !bounded_external_text(&source.provider, 256)
+        || !bounded_external_text(&source.source_uri, 2_048)
+        || !bounded_external_text(&source.dataset_or_query, 2_048)
+        || !bounded_external_text(&source.source_schema_version, 128)
+        || !bounded_external_text(&source.tool_identity_ref, 512)
+        || !token(&source.retrieval_mode, 96)
+        || !matches!(
+            source.network_mode.as_str(),
+            "offline_cache" | "approved_online"
+        )
+        || !bounded_external_text(&source.integrity_policy, 512)
         || source.maximum_age_seconds == 0
+        || source
+            .license_ref
+            .as_deref()
+            .is_some_and(|value| !bounded_external_text(value, 1_024))
+        || published_at
+            .as_deref()
+            .is_some_and(|value| !timestamp_shape(value))
+        || modified_at
+            .as_deref()
+            .is_some_and(|value| !timestamp_shape(value))
         || !timestamp_shape(&retrieved_at)
         || !timestamp_shape(&valid_until)
         || !timestamp_shape(&evaluation_time)
-        || source_artifact_ref.trim().is_empty()
+        || !bounded_external_text(&source_artifact_ref, 1_024)
+        || !bounded_external_text(&normalized_artifact_ref, 1_024)
+        || source_artifact_ref == normalized_artifact_ref
+        || (!available && !observations.is_empty())
     {
         return Err(DevelopmentError::Invalid);
     }
@@ -614,47 +716,94 @@ pub fn build_external_data_snapshot(
         DateTime::parse_from_rfc3339(&valid_until).map_err(|_| DevelopmentError::Invalid)?;
     let evaluated =
         DateTime::parse_from_rfc3339(&evaluation_time).map_err(|_| DevelopmentError::Invalid)?;
+    let published = published_at
+        .as_deref()
+        .map(DateTime::parse_from_rfc3339)
+        .transpose()
+        .map_err(|_| DevelopmentError::Invalid)?;
+    let modified = modified_at
+        .as_deref()
+        .map(DateTime::parse_from_rfc3339)
+        .transpose()
+        .map_err(|_| DevelopmentError::Invalid)?;
     let maximum_age = chrono::Duration::seconds(
         i64::try_from(source.maximum_age_seconds).map_err(|_| DevelopmentError::Invalid)?,
     );
-    if valid < retrieved || valid - retrieved > maximum_age || evaluated < retrieved {
+    if valid < retrieved
+        || valid - retrieved > maximum_age
+        || evaluated < retrieved
+        || published.as_ref().is_some_and(|value| value > &retrieved)
+        || modified.as_ref().is_some_and(|value| value > &retrieved)
+        || published
+            .as_ref()
+            .zip(modified.as_ref())
+            .is_some_and(|(published, modified)| modified < published)
+    {
         return Err(DevelopmentError::Invalid);
     }
-    observations.sort_by(|left, right| left.subject.cmp(&right.subject));
-    if observations
-        .windows(2)
-        .any(|pair| pair[0].subject == pair[1].subject)
-    {
-        return Err(DevelopmentError::Conflict);
+    normalize_external_observations(&mut observations)?;
+    if observations.iter().any(|observation| {
+        observation.source_evidence_ref != source_artifact_ref
+            && observation.source_evidence_ref != normalized_artifact_ref
+    }) {
+        return Err(DevelopmentError::Invalid);
+    }
+    let normalized_input = ExternalDataSnapshotInput {
+        source: source.clone(),
+        published_at: published_at.clone(),
+        modified_at: modified_at.clone(),
+        retrieved_at: retrieved_at.clone(),
+        valid_until: valid_until.clone(),
+        evaluation_time: evaluation_time.clone(),
+        source_artifact_ref: source_artifact_ref.clone(),
+        source_sha256: source_sha256.clone(),
+        normalized_artifact_ref: normalized_artifact_ref.clone(),
+        normalized_sha256: normalized_sha256.clone(),
+        observations: observations.clone(),
+        available,
+    };
+    if external_data_normalized_fingerprint(&normalized_input)? != normalized_sha256 {
+        return Err(DevelopmentError::Fingerprint);
     }
     let freshness = if !available {
         ExternalFreshness::Unavailable
     } else if evaluated > valid {
         ExternalFreshness::Expired
+    } else if published_at.is_none() && modified_at.is_none() {
+        ExternalFreshness::Unknown
     } else {
         ExternalFreshness::Current
     };
-    let completeness = if freshness == ExternalFreshness::Current {
-        CoverageState::Complete
-    } else {
-        CoverageState::Partial
-    };
-    let limitations = match freshness {
+    let completeness =
+        if freshness == ExternalFreshness::Current && source.coverage == CoverageState::Complete {
+            CoverageState::Complete
+        } else {
+            CoverageState::Partial
+        };
+    let mut limitations = match freshness {
         ExternalFreshness::Current => Vec::new(),
         ExternalFreshness::Expired => vec!["external data passed valid_until".to_owned()],
         ExternalFreshness::Unavailable => vec!["external data source unavailable".to_owned()],
         _ => vec!["external data freshness is not current".to_owned()],
     };
+    if source.coverage != CoverageState::Complete {
+        limitations.push("external data coverage is not complete".to_owned());
+    }
     let mut snapshot = ExternalDataSnapshot {
         schema_id: EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID.to_owned(),
         schema_version: 1,
         snapshot_id,
+        project_id: Some(project_id),
         source,
+        published_at,
+        modified_at,
         retrieved_at,
         valid_until,
         evaluation_time,
         source_artifact_ref,
         source_sha256,
+        normalized_artifact_ref,
+        normalized_sha256,
         observations,
         freshness,
         completeness,
@@ -665,12 +814,17 @@ pub fn build_external_data_snapshot(
         EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID,
         &serde_json::json!({
             "snapshot_id": snapshot.snapshot_id,
+            "project_id": snapshot.project_id,
             "source": snapshot.source,
+            "published_at": snapshot.published_at,
+            "modified_at": snapshot.modified_at,
             "retrieved_at": snapshot.retrieved_at,
             "valid_until": snapshot.valid_until,
             "evaluation_time": snapshot.evaluation_time,
             "source_artifact_ref": snapshot.source_artifact_ref,
             "source_sha256": snapshot.source_sha256,
+            "normalized_artifact_ref": snapshot.normalized_artifact_ref,
+            "normalized_sha256": snapshot.normalized_sha256,
             "observations": snapshot.observations,
             "freshness": snapshot.freshness,
             "completeness": snapshot.completeness,
@@ -678,6 +832,37 @@ pub fn build_external_data_snapshot(
         }),
     )?;
     Ok(snapshot)
+}
+
+pub fn verify_external_data_snapshot(
+    snapshot: &ExternalDataSnapshot,
+) -> Result<(), DevelopmentError> {
+    let project_id = snapshot
+        .project_id
+        .clone()
+        .ok_or(DevelopmentError::Invalid)?;
+    let rebuilt = build_external_data_snapshot(
+        project_id,
+        snapshot.snapshot_id.clone(),
+        ExternalDataSnapshotInput {
+            source: snapshot.source.clone(),
+            published_at: snapshot.published_at.clone(),
+            modified_at: snapshot.modified_at.clone(),
+            retrieved_at: snapshot.retrieved_at.clone(),
+            valid_until: snapshot.valid_until.clone(),
+            evaluation_time: snapshot.evaluation_time.clone(),
+            source_artifact_ref: snapshot.source_artifact_ref.clone(),
+            source_sha256: snapshot.source_sha256.clone(),
+            normalized_artifact_ref: snapshot.normalized_artifact_ref.clone(),
+            normalized_sha256: snapshot.normalized_sha256.clone(),
+            observations: snapshot.observations.clone(),
+            available: snapshot.freshness != ExternalFreshness::Unavailable,
+        },
+    )?;
+    if &rebuilt != snapshot {
+        return Err(DevelopmentError::Fingerprint);
+    }
+    Ok(())
 }
 
 pub fn build_supply_chain_snapshot(
@@ -688,11 +873,20 @@ pub fn build_supply_chain_snapshot(
 ) -> Result<SupplyChainSnapshot, DevelopmentError> {
     if !token(&snapshot_id, 192)
         || dependency.schema_id != DEPENDENCY_SNAPSHOT_SCHEMA_ID
-        || external
-            .iter()
-            .any(|item| item.schema_id != EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID)
+        || external.iter().any(|item| {
+            item.schema_id != EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID
+                || item.project_id.as_ref() != Some(&dependency.project_id)
+                || verify_external_data_snapshot(item).is_err()
+        })
     {
         return Err(DevelopmentError::Invalid);
+    }
+    let external_ids = external
+        .iter()
+        .map(|item| item.snapshot_id.as_str())
+        .collect::<BTreeSet<_>>();
+    if external_ids.len() != external.len() {
+        return Err(DevelopmentError::Conflict);
     }
     observations.sort_by(|left, right| left.observation_id.cmp(&right.observation_id));
     if observations
@@ -700,6 +894,27 @@ pub fn build_supply_chain_snapshot(
         .any(|pair| pair[0].observation_id == pair[1].observation_id)
     {
         return Err(DevelopmentError::Conflict);
+    }
+    let mut allowed_sources = BTreeSet::from([(
+        dependency.snapshot_id.clone(),
+        dependency.content_fingerprint.clone(),
+    )]);
+    allowed_sources.extend(
+        external
+            .iter()
+            .map(|item| (item.snapshot_id.clone(), item.content_fingerprint.clone())),
+    );
+    if observations.iter().any(|observation| {
+        !token(&observation.observation_id, 192)
+            || !token(&observation.kind, 96)
+            || !bounded_external_text(&observation.subject, 1_024)
+            || !token(&observation.state, 96)
+            || !allowed_sources.contains(&(
+                observation.source_ref.clone(),
+                observation.source_sha256.clone(),
+            ))
+    }) {
+        return Err(DevelopmentError::Invalid);
     }
     let freshness = external
         .iter()
@@ -1446,7 +1661,10 @@ fn radar_key(item: &MaintenanceRadarItem) -> (u8, u8, u8, u8, u8, &str, &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use star_contracts::maintenance_v2::{FailureCausalityRole, FailureSubjectBinding};
+    use star_contracts::maintenance_v2::{
+        ExternalDataSourceDescriptor, FailureCausalityRole, FailureSubjectBinding,
+        SupplyChainObservation,
+    };
 
     fn failure_input(project_id: ProjectId, message: &str) -> FailureRecordInput {
         FailureRecordInput {
@@ -1490,6 +1708,45 @@ mod tests {
             attempt_id: "attempt-one".to_owned(),
             verification_state: VerificationState::Verified,
         }
+    }
+
+    fn external_input(coverage: CoverageState) -> ExternalDataSnapshotInput {
+        let mut input = ExternalDataSnapshotInput {
+            source: ExternalDataSourceDescriptor {
+                source_id: "osv-rust-query".to_owned(),
+                source_kind: "vulnerability_advisory".to_owned(),
+                provider: "OSV".to_owned(),
+                source_uri: "https://api.osv.dev/v1/querybatch".to_owned(),
+                dataset_or_query: "ecosystem=crates.io;packages=exact-lock".to_owned(),
+                source_schema_version: "v1".to_owned(),
+                tool_identity_ref: "tool:osv-adapter@1".to_owned(),
+                retrieval_mode: "exact_query".to_owned(),
+                network_mode: "approved_online".to_owned(),
+                integrity_policy: "https_and_response_digest".to_owned(),
+                coverage,
+                maximum_age_seconds: 86_400,
+                license_ref: Some("CC0-1.0".to_owned()),
+            },
+            published_at: Some("2026-07-24T23:00:00Z".to_owned()),
+            modified_at: Some("2026-07-24T23:30:00Z".to_owned()),
+            retrieved_at: "2026-07-25T00:00:00Z".to_owned(),
+            valid_until: "2026-07-26T00:00:00Z".to_owned(),
+            evaluation_time: "2026-07-25T01:00:00Z".to_owned(),
+            source_artifact_ref: "artifact:osv-raw".to_owned(),
+            source_sha256: Sha256Hash::digest(b"osv-raw"),
+            normalized_artifact_ref: "artifact:osv-normalized".to_owned(),
+            normalized_sha256: Sha256Hash::digest(b"unsealed-normalized"),
+            observations: vec![ExternalDataObservation {
+                subject: "crate:serde@1.0.0".to_owned(),
+                status: "no_known_advisory".to_owned(),
+                advisory_refs: Vec::new(),
+                license_refs: vec!["MIT".to_owned()],
+                source_evidence_ref: "artifact:osv-raw".to_owned(),
+            }],
+            available: true,
+        };
+        input.normalized_sha256 = external_data_normalized_fingerprint(&input).unwrap();
+        input
     }
 
     #[test]
@@ -1580,5 +1837,159 @@ mod tests {
         assert_eq!(snapshot.completeness, CoverageState::Partial);
         assert_eq!(snapshot.dependencies.len(), 1);
         assert_eq!(snapshot.dependencies[0].package_identity, "serde");
+    }
+
+    #[test]
+    fn external_security_snapshot_binds_query_raw_and_normalized_artifacts_and_coverage() {
+        let project_id = ProjectId::new();
+        let complete = build_external_data_snapshot(
+            project_id.clone(),
+            "external-complete".to_owned(),
+            external_input(CoverageState::Complete),
+        )
+        .unwrap();
+        assert_eq!(complete.completeness, CoverageState::Complete);
+        verify_external_data_snapshot(&complete).unwrap();
+
+        let mut tampered = external_input(CoverageState::Complete);
+        tampered.observations[0].status = "clean_without_adapter_evidence".to_owned();
+        assert_eq!(
+            build_external_data_snapshot(
+                project_id.clone(),
+                "external-tampered".to_owned(),
+                tampered
+            ),
+            Err(DevelopmentError::Fingerprint)
+        );
+
+        let partial = build_external_data_snapshot(
+            project_id,
+            "external-partial".to_owned(),
+            external_input(CoverageState::Partial),
+        )
+        .unwrap();
+        assert_eq!(partial.completeness, CoverageState::Partial);
+        assert!(!partial.limitations.is_empty());
+
+        let mut unknown_time = external_input(CoverageState::Complete);
+        unknown_time.published_at = None;
+        unknown_time.modified_at = None;
+        unknown_time.normalized_sha256 =
+            external_data_normalized_fingerprint(&unknown_time).unwrap();
+        let unknown = build_external_data_snapshot(
+            ProjectId::new(),
+            "external-unknown-time".to_owned(),
+            unknown_time,
+        )
+        .unwrap();
+        assert_eq!(unknown.freshness, ExternalFreshness::Unknown);
+        assert_eq!(unknown.completeness, CoverageState::Partial);
+    }
+
+    #[test]
+    fn legacy_external_data_remains_readable_but_not_current_evidence() {
+        let current = build_external_data_snapshot(
+            ProjectId::new(),
+            "external-current".to_owned(),
+            external_input(CoverageState::Complete),
+        )
+        .unwrap();
+        let mut legacy = serde_json::to_value(current).unwrap();
+        let object = legacy.as_object_mut().unwrap();
+        object.remove("project_id");
+        object.remove("published_at");
+        object.remove("modified_at");
+        object.remove("normalized_artifact_ref");
+        object.remove("normalized_sha256");
+        let source = object.get_mut("source").unwrap().as_object_mut().unwrap();
+        for field in [
+            "source_uri",
+            "dataset_or_query",
+            "source_schema_version",
+            "tool_identity_ref",
+            "network_mode",
+            "coverage",
+        ] {
+            source.remove(field);
+        }
+        let legacy: ExternalDataSnapshot = serde_json::from_value(legacy).unwrap();
+
+        assert!(legacy.project_id.is_none());
+        assert_eq!(
+            verify_external_data_snapshot(&legacy),
+            Err(DevelopmentError::Invalid)
+        );
+    }
+
+    #[test]
+    fn supply_chain_rejects_cross_project_or_unbound_observation_sources() {
+        let root = std::env::temp_dir().join(format!(
+            "star-supply-chain-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("Cargo.toml"),
+            b"[package]\nname='sample'\nversion='0.1.0'\n[dependencies]\nserde='1'\n",
+        )
+        .unwrap();
+        let project_id = ProjectId::new();
+        let dependency = scan_dependency_snapshot(
+            &root,
+            project_id.clone(),
+            "dependency-supply".to_owned(),
+            "revision:supply".to_owned(),
+        )
+        .unwrap();
+        let external = build_external_data_snapshot(
+            project_id.clone(),
+            "external-supply".to_owned(),
+            external_input(CoverageState::Complete),
+        )
+        .unwrap();
+        let observation = SupplyChainObservation {
+            observation_id: "supply-observation".to_owned(),
+            kind: "advisory".to_owned(),
+            subject: "crate:serde@1.0.0".to_owned(),
+            state: "clear".to_owned(),
+            source_ref: external.snapshot_id.clone(),
+            source_sha256: external.content_fingerprint.clone(),
+        };
+        build_supply_chain_snapshot(
+            "supply-valid".to_owned(),
+            &dependency,
+            std::slice::from_ref(&external),
+            vec![observation.clone()],
+        )
+        .unwrap();
+
+        let mut unbound = observation;
+        unbound.source_sha256 = Sha256Hash::digest(b"unbound");
+        assert_eq!(
+            build_supply_chain_snapshot(
+                "supply-unbound".to_owned(),
+                &dependency,
+                std::slice::from_ref(&external),
+                vec![unbound],
+            ),
+            Err(DevelopmentError::Invalid)
+        );
+
+        let cross_project = build_external_data_snapshot(
+            ProjectId::new(),
+            "external-other-project".to_owned(),
+            external_input(CoverageState::Complete),
+        )
+        .unwrap();
+        assert_eq!(
+            build_supply_chain_snapshot(
+                "supply-cross-project".to_owned(),
+                &dependency,
+                &[cross_project],
+                Vec::new(),
+            ),
+            Err(DevelopmentError::Invalid)
+        );
     }
 }

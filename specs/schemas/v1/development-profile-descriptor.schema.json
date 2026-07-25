@@ -201,6 +201,15 @@
       ],
       "type": "object"
     },
+    "ProfileRollbackPolicyV1": {
+      "enum": [
+        "not_applicable",
+        "recovery_plan_required",
+        "backup_and_restore_required",
+        "compensation_plan_required"
+      ],
+      "type": "string"
+    },
     "ProfileStabilityPolicyV1": {
       "enum": [
         "report_flaky",
@@ -214,6 +223,13 @@
         "exact",
         "bounded_expiring",
         "approved_expiring"
+      ],
+      "type": "string"
+    },
+    "ProfileUnknownOutcomePolicyV1": {
+      "enum": [
+        "preserve_and_stop",
+        "preserve_and_reconcile"
       ],
       "type": "string"
     },
@@ -458,6 +474,10 @@
     "review_policy": {
       "$ref": "#/$defs/ProfileReviewPolicyV1"
     },
+    "rollback_policy": {
+      "$ref": "#/$defs/ProfileRollbackPolicyV1",
+      "default": "recovery_plan_required"
+    },
     "route_hints": {
       "items": {
         "type": "string"
@@ -492,6 +512,10 @@
         "type": "string"
       },
       "type": "array"
+    },
+    "unknown_outcome_policy": {
+      "$ref": "#/$defs/ProfileUnknownOutcomePolicyV1",
+      "default": "preserve_and_stop"
     }
   },
   "required": [

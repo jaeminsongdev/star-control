@@ -234,6 +234,16 @@
     "family_fingerprint": {
       "$ref": "#/$defs/Sha256Hash"
     },
+    "input_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "input_refs": {
       "default": [],
       "items": {

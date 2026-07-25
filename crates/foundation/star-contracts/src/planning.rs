@@ -1419,6 +1419,91 @@ fn non_empty(values: &[String]) -> bool {
     values.iter().all(|value| !value.trim().is_empty())
 }
 
+fn bounded_text(value: &str, max: usize) -> bool {
+    !value.trim().is_empty() && value.len() <= max && !value.contains('\0')
+}
+
+fn bounded_token(value: &str, max: usize) -> bool {
+    bounded_text(value, max)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
+
+fn valid_planning_selector(selector: &PlanningSelector) -> bool {
+    bounded_text(&selector.value, 1_024)
+        && (selector.kind != SelectorKind::Path
+            || ProjectPathRef::parse(selector.value.clone()).is_ok())
+}
+
+fn valid_planning_document_ref(reference: &DocumentRef, schema_id: &str) -> bool {
+    reference.schema_id == schema_id
+        && bounded_token(&reference.document_id, 192)
+        && reference.revision > 0
+        && reference.sha256 != Sha256Hash::digest(b"")
+}
+
+fn valid_excluded_scope(excluded: &ExcludedScope) -> bool {
+    valid_planning_selector(&excluded.selector) && bounded_text(&excluded.reason, 2_048)
+}
+
+fn valid_scope_set(scope: &ScopeSet) -> bool {
+    !scope.project_ids.is_empty()
+        && scope.project_ids.len() <= 64
+        && sorted_unique(&scope.project_ids)
+        && !scope.selectors.is_empty()
+        && scope.selectors.len() <= 512
+        && scope.exclusions.len() <= 512
+        && scope.selectors.iter().all(|item| {
+            valid_planning_selector(&item.selector)
+                && bounded_token(&item.reason_code, 128)
+                && item.evidence_refs.len() <= 128
+                && sorted_unique(&item.evidence_refs)
+                && item
+                    .evidence_refs
+                    .iter()
+                    .all(|reference| bounded_text(reference, 1_024))
+        })
+        && scope.selectors.windows(2).all(|pair| {
+            (&pair[0].selector, pair[0].source, &pair[0].reason_code)
+                < (&pair[1].selector, pair[1].source, &pair[1].reason_code)
+        })
+        && scope.exclusions.iter().all(valid_excluded_scope)
+        && scope.exclusions.windows(2).all(|pair| {
+            (&pair[0].selector, pair[0].applies_to) < (&pair[1].selector, pair[1].applies_to)
+        })
+}
+
+fn normalize_scope_set(scope: &mut ScopeSet) -> Result<(), PlanningContractError> {
+    scope.project_ids.sort();
+    scope.project_ids.dedup();
+    for selector in &mut scope.selectors {
+        selector.evidence_refs.sort();
+        selector.evidence_refs.dedup();
+    }
+    scope.selectors.sort_by(|left, right| {
+        (&left.selector, left.source, &left.reason_code).cmp(&(
+            &right.selector,
+            right.source,
+            &right.reason_code,
+        ))
+    });
+    scope.exclusions.sort_by(|left, right| {
+        (&left.selector, left.applies_to, &left.reason).cmp(&(
+            &right.selector,
+            right.applies_to,
+            &right.reason,
+        ))
+    });
+    if scope.exclusions.windows(2).any(|pair| {
+        pair[0].selector == pair[1].selector && pair[0].applies_to == pair[1].applies_to
+    }) || !valid_scope_set(scope)
+    {
+        return Err(PlanningContractError::Ordering);
+    }
+    Ok(())
+}
+
 fn normalize_nonempty_strings(values: &mut Vec<String>) -> Result<(), PlanningContractError> {
     if values.iter().any(|value| value.trim().is_empty()) {
         return Err(PlanningContractError::Empty);
@@ -1514,28 +1599,119 @@ impl TaskSpec {
         if self.schema_id != TASK_SPEC_SCHEMA_ID || self.schema_version != 1 || self.revision == 0 {
             return Err(PlanningContractError::Schema);
         }
-        if self.title.trim().is_empty()
-            || self.objective.trim().is_empty()
+        if !bounded_text(&self.title, 256)
+            || !bounded_text(&self.objective, 4_096)
             || self.project_targets.is_empty()
+            || self.project_targets.len() > 64
             || !self
                 .project_targets
                 .iter()
                 .any(|target| target.role == ProjectTargetRole::PlannedChange)
             || self.included_scope.is_empty()
+            || self.included_scope.len() > 512
+            || self.excluded_scope.len() > 512
             || self.intended_changes.is_empty()
+            || self.intended_changes.len() > 512
+            || self.success_criteria.is_empty()
+            || self.success_criteria.len() > 256
             || !self
                 .success_criteria
                 .iter()
                 .any(|criterion| criterion.required)
+            || self.constraints.len() > 256
+            || self.forbidden_actions.len() > 256
+            || self.profile_ids.len() > 16
+            || self.requested_checks.len() > 256
+            || self.check_overrides.len() > 256
+            || self.assumptions.len() > 256
         {
             return Err(PlanningContractError::Empty);
         }
-        if !sorted_unique(&self.included_scope)
+        if !self.project_targets.iter().all(|target| {
+            bounded_token(target.project_id.as_str(), 192)
+                && bounded_token(target.checkout_id.as_str(), 192)
+                && bounded_text(&target.reason, 2_048)
+        }) || !self.project_targets.windows(2).all(|pair| {
+            (&pair[0].project_id, &pair[0].checkout_id, pair[0].role)
+                < (&pair[1].project_id, &pair[1].checkout_id, pair[1].role)
+        }) || self.project_targets.windows(2).any(|pair| {
+            pair[0].project_id == pair[1].project_id && pair[0].checkout_id == pair[1].checkout_id
+        }) || !self.included_scope.iter().all(valid_planning_selector)
+            || !sorted_unique(&self.included_scope)
+            || !self.excluded_scope.iter().all(valid_excluded_scope)
+            || !self.excluded_scope.windows(2).all(|pair| {
+                (&pair[0].selector, pair[0].applies_to) < (&pair[1].selector, pair[1].applies_to)
+            })
+            || self
+                .excluded_scope
+                .iter()
+                .any(|excluded| self.included_scope.contains(&excluded.selector))
+            || !self.intended_changes.iter().all(|change| {
+                bounded_token(&change.change_id, 128)
+                    && valid_planning_selector(&change.selector)
+                    && bounded_text(&change.intended_postcondition, 4_096)
+            })
+            || !self
+                .intended_changes
+                .windows(2)
+                .all(|pair| pair[0].change_id < pair[1].change_id)
+            || !self.success_criteria.iter().all(|criterion| {
+                bounded_token(&criterion.criterion_id, 128)
+                    && bounded_text(&criterion.description, 4_096)
+                    && bounded_text(&criterion.verification, 4_096)
+            })
+            || !self
+                .success_criteria
+                .windows(2)
+                .all(|pair| pair[0].criterion_id < pair[1].criterion_id)
+            || !sorted_unique(&self.constraints)
+            || !sorted_unique(&self.forbidden_actions)
             || !sorted_unique(&self.requested_checks)
             || !sorted_unique(&self.profile_ids)
+            || !sorted_unique(&self.assumptions)
             || !non_empty(&self.constraints)
             || !non_empty(&self.forbidden_actions)
             || !non_empty(&self.assumptions)
+            || self
+                .constraints
+                .iter()
+                .any(|value| !bounded_text(value, 4_096))
+            || self
+                .forbidden_actions
+                .iter()
+                .any(|value| !bounded_text(value, 4_096))
+            || self
+                .requested_checks
+                .iter()
+                .any(|value| !bounded_token(value, 128))
+            || self
+                .profile_ids
+                .iter()
+                .any(|value| !bounded_token(value, 96))
+            || self
+                .assumptions
+                .iter()
+                .any(|value| !bounded_text(value, 4_096))
+            || !self.check_overrides.iter().all(|override_item| {
+                bounded_token(&override_item.family, 128)
+                    && bounded_text(&override_item.reason, 2_048)
+            })
+            || !self.check_overrides.windows(2).all(|pair| {
+                (&pair[0].family, pair[0].kind, &pair[0].reason)
+                    < (&pair[1].family, pair[1].kind, &pair[1].reason)
+                    && pair[0].family != pair[1].family
+            })
+            || match self.baseline_policy.kind {
+                BaselinePolicyKind::CurrentWorkspace => self.baseline_policy.reference.is_some(),
+                BaselinePolicyKind::ExplicitRevision | BaselinePolicyKind::PreviousSuccess => self
+                    .baseline_policy
+                    .reference
+                    .as_deref()
+                    .is_none_or(|reference| !bounded_text(reference, 1_024)),
+            }
+            || !bounded_token(&self.created_by.actor_id, 192)
+            || !bounded_text(&self.created_by.display_name, 256)
+            || !bounded_token(&self.created_by.auth_source, 192)
         {
             return Err(PlanningContractError::Ordering);
         }
@@ -1545,6 +1721,24 @@ impl TaskSpec {
 
 impl ScopeRevision {
     pub fn seal(mut self) -> Result<Self, PlanningContractError> {
+        normalize_scope_set(&mut self.requested_scope)?;
+        normalize_scope_set(&mut self.analysis_scope)?;
+        normalize_scope_set(&mut self.planned_change_scope)?;
+        normalize_scope_set(&mut self.validation_scope)?;
+        self.source_snapshot_refs.sort_by(|left, right| {
+            (&left.project_id, &left.checkout_id).cmp(&(&right.project_id, &right.checkout_id))
+        });
+        self.derived_additions.sort_by(|left, right| {
+            (left.axis, &left.selector, left.source, &left.reason_code).cmp(&(
+                right.axis,
+                &right.selector,
+                right.source,
+                &right.reason_code,
+            ))
+        });
+        self.user_decisions
+            .sort_by(|left, right| left.decision_id.cmp(&right.decision_id));
+        normalize_nonempty_strings(&mut self.changed_fields)?;
         self.scope_hash = fingerprint(
             "star.scope-revision",
             1,
@@ -1554,6 +1748,7 @@ impl ScopeRevision {
                 "task_spec_ref":self.task_spec_ref,
                 "previous_scope_revision_ref":self.previous_scope_revision_ref,
                 "reason_code":self.reason_code,
+                "reason":self.reason,
                 "requested_scope":self.requested_scope,
                 "analysis_scope":self.analysis_scope,
                 "planned_change_scope":self.planned_change_scope,
@@ -1563,16 +1758,93 @@ impl ScopeRevision {
                 "user_decisions":self.user_decisions,
                 "changed_fields":self.changed_fields,
                 "approval_state":self.approval_state,
+                "created_by":self.created_by,
             }),
         )?;
         if self.schema_id != SCOPE_REVISION_SCHEMA_ID
             || self.schema_version != 1
             || self.revision == 0
-            || self.reason.trim().is_empty()
+            || !bounded_text(&self.reason, 4_096)
+            || !valid_planning_document_ref(&self.task_spec_ref, TASK_SPEC_SCHEMA_ID)
+            || self.task_spec_ref.revision != self.revision
             || self.source_snapshot_refs.is_empty()
+            || self.source_snapshot_refs.len() > 64
             || self.approval_state != ScopeApprovalState::Accepted
         {
             return Err(PlanningContractError::Schema);
+        }
+        let initial = self.reason_code == ScopeReasonCode::Initial;
+        if initial != (self.revision == 1 && self.previous_scope_revision_ref.is_none()) {
+            return Err(PlanningContractError::Identity);
+        }
+        if let Some(previous) = &self.previous_scope_revision_ref
+            && (!valid_planning_document_ref(previous, SCOPE_REVISION_SCHEMA_ID)
+                || previous.document_id != self.scope_revision_id.as_str()
+                || previous.revision.checked_add(1) != Some(self.revision))
+        {
+            return Err(PlanningContractError::Identity);
+        }
+        if self.source_snapshot_refs.windows(2).any(|pair| {
+            pair[0].project_id == pair[1].project_id && pair[0].checkout_id == pair[1].checkout_id
+        }) || self.source_snapshot_refs.iter().any(|source| {
+            !bounded_token(source.project_id.as_str(), 192)
+                || !bounded_token(source.checkout_id.as_str(), 192)
+                || source.freshness != IndexFreshnessState::Current
+        }) {
+            return Err(PlanningContractError::Ordering);
+        }
+        let expected_projects = self
+            .source_snapshot_refs
+            .iter()
+            .map(|source| source.project_id.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        if [
+            &self.requested_scope,
+            &self.analysis_scope,
+            &self.planned_change_scope,
+            &self.validation_scope,
+        ]
+        .iter()
+        .any(|scope| scope.project_ids != expected_projects)
+        {
+            return Err(PlanningContractError::Identity);
+        }
+        if self.derived_additions.len() > 512
+            || self.derived_additions.iter().any(|addition| {
+                !valid_planning_selector(&addition.selector)
+                    || !bounded_token(&addition.reason_code, 128)
+                    || addition.evidence_refs.len() > 128
+                    || !sorted_unique(&addition.evidence_refs)
+                    || addition
+                        .evidence_refs
+                        .iter()
+                        .any(|reference| !bounded_text(reference, 1_024))
+            })
+            || self
+                .derived_additions
+                .windows(2)
+                .any(|pair| pair[0].axis == pair[1].axis && pair[0].selector == pair[1].selector)
+            || self.user_decisions.len() > 512
+            || self.user_decisions.iter().any(|decision| {
+                !bounded_token(&decision.decision_id, 128)
+                    || !valid_planning_selector(&decision.selector)
+                    || !bounded_text(&decision.reason, 2_048)
+                    || !bounded_token(&decision.actor.actor_id, 192)
+                    || !bounded_text(&decision.actor.display_name, 256)
+                    || !bounded_token(&decision.actor.auth_source, 192)
+            })
+            || self
+                .user_decisions
+                .windows(2)
+                .any(|pair| pair[0].decision_id >= pair[1].decision_id)
+            || self.changed_fields.len() > 128
+            || !bounded_token(&self.created_by.actor_id, 192)
+            || !bounded_text(&self.created_by.display_name, 256)
+            || !bounded_token(&self.created_by.auth_source, 192)
+        {
+            return Err(PlanningContractError::Ordering);
         }
         Ok(self)
     }

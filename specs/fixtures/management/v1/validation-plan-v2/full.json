@@ -203,6 +203,9 @@
       "cli_only": "none",
       "codex_managed": "none"
     },
+    "rollback_policies": [
+      "not_applicable"
+    ],
     "route_hints": [
       "fixture"
     ],
@@ -221,6 +224,9 @@
     "suppression_policy": "exact",
     "triggers": [
       "fixture"
+    ],
+    "unknown_outcome_policies": [
+      "preserve_and_stop"
     ]
   },
   "readiness": "draft",

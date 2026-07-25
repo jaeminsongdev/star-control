@@ -302,6 +302,7 @@
               "type": "string"
             },
             "stage_id": {
+              "pattern": "^stg_[0-9A-HJKMNP-TV-Z]{26}$",
               "type": "string"
             }
           },
