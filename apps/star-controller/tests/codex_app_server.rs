@@ -1,6 +1,9 @@
 #![cfg(windows)]
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 use chrono::{Duration as ChronoDuration, Utc};
 use star_adapter_codex::app_server::{
@@ -22,6 +25,113 @@ fn schema_directory(label: &str) -> PathBuf {
         "star-codex-schema-{label}-{}",
         star_contracts::RequestId::new()
     ))
+}
+
+#[test]
+#[ignore = "requires an approved signed live Codex executable and provider turn"]
+fn codex_app_server_signed_live_provider_and_thread_lifecycle() {
+    let executable = std::env::var_os("STAR_LIVE_CODEX_EXE")
+        .map(PathBuf::from)
+        .expect("STAR_LIVE_CODEX_EXE points to the approved signed Codex executable");
+    assert!(executable.is_absolute());
+    assert!(executable.is_file());
+
+    let schema_root = schema_directory("signed-live");
+    generate_protocol_schema_bundle(&executable, &schema_root).unwrap();
+    let protocol = inspect_protocol_schema_bundle(&schema_root).unwrap();
+    for method in [
+        "initialize",
+        "model/list",
+        "thread/start",
+        "thread/resume",
+        "thread/delete",
+    ] {
+        assert!(
+            protocol.methods.contains(method),
+            "missing method: {method}"
+        );
+    }
+    assert!(protocol.fields.contains("ephemeral"));
+
+    let version = probe_codex_version(&executable).unwrap();
+    let mut process = CodexAppServerProcess::spawn(&executable).unwrap();
+    let evidence = process
+        .probe_capabilities(version, protocol, Utc::now(), Duration::from_secs(20))
+        .unwrap();
+    let model = evidence
+        .models
+        .iter()
+        .find(|model| model.is_default)
+        .or_else(|| evidence.models.first())
+        .expect("the live App Server advertises at least one model");
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("controller crate belongs to the workspace")
+        .to_path_buf();
+    let ephemeral_thread = process
+        .thread_start_ephemeral(&model.model_id, Some(&workspace), Duration::from_secs(20))
+        .unwrap();
+    assert!(!ephemeral_thread.is_empty());
+
+    let live_thread = process
+        .thread_start_with_policy(
+            &model.model_id,
+            Some(&workspace),
+            Some("never"),
+            Some("read-only"),
+            std::slice::from_ref(&workspace),
+            Duration::from_secs(20),
+        )
+        .unwrap();
+    let lifecycle = (|| -> Result<_, CodexAppServerError> {
+        let turn_id = process.turn_start_with_policy(
+            &live_thread,
+            "Reply with exactly STAR_LIVE_OK. Do not call tools, read files, or modify anything.",
+            Some(&model.model_id),
+            Some(model.default_reasoning_effort),
+            Some("never"),
+            Some("read-only"),
+            std::slice::from_ref(&workspace),
+            &[],
+            Duration::from_secs(20),
+        )?;
+        let deadline = Instant::now() + Duration::from_secs(120);
+        let mut saw_agent_message = false;
+        let completion = loop {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .ok_or(CodexAppServerError::Timeout)?;
+            let notification = process.next_notification(remaining)?;
+            if matches!(
+                notification["method"].as_str(),
+                Some("item/started" | "item/completed")
+            ) {
+                match notification["params"]["item"]["type"].as_str() {
+                    Some("agentMessage") => saw_agent_message = true,
+                    Some("userMessage" | "reasoning") => {}
+                    _ => return Err(CodexAppServerError::Protocol),
+                }
+            }
+            if notification["method"] == "turn/completed"
+                && notification["params"]["threadId"] == live_thread
+                && notification["params"]["turn"]["id"] == turn_id
+            {
+                break notification;
+            }
+        };
+        if !saw_agent_message {
+            return Err(CodexAppServerError::Protocol);
+        }
+        let resumed = process.thread_resume(&live_thread, Duration::from_secs(20))?;
+        Ok((turn_id, completion, resumed))
+    })();
+    let cleanup = process.thread_delete(&live_thread, Duration::from_secs(20));
+    let (turn_id, completion, resumed) = lifecycle.unwrap();
+    cleanup.unwrap();
+    assert_eq!(resumed, live_thread);
+    assert_eq!(completion["params"]["turn"]["id"], turn_id);
+    assert_eq!(completion["params"]["turn"]["status"], "completed");
 }
 
 #[test]
@@ -117,4 +227,7 @@ fn codex_app_server_real_process_recovery_resumes_forks_and_interrupts() {
     let completed = process.next_notification(Duration::from_secs(5)).unwrap();
     assert_eq!(started["method"], "turn/started");
     assert_eq!(completed["method"], "turn/completed");
+    process
+        .thread_delete(&thread, Duration::from_secs(5))
+        .unwrap();
 }

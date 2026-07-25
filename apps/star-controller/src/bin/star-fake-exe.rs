@@ -51,6 +51,7 @@ fn run_fake_codex_app_server() {
             }),
             "thread/start" => serde_json::json!({"thread":{"id":"fake-thread-start"}}),
             "thread/resume" => serde_json::json!({"thread":{"id":request["params"]["threadId"]}}),
+            "thread/delete" => serde_json::json!({}),
             "thread/fork" => serde_json::json!({"thread":{"id":"fake-thread-fork"}}),
             "turn/start" => serde_json::json!({"turn":{"id":"fake-turn"}}),
             "turn/interrupt" => serde_json::json!({}),
@@ -106,13 +107,14 @@ fn main() {
                         {"properties":{"method":{"const":"modelProvider/capabilities/read"}}},
                         {"properties":{"method":{"const":"thread/start"}}},
                         {"properties":{"method":{"const":"thread/resume"}}},
+                        {"properties":{"method":{"const":"thread/delete"}}},
                         {"properties":{"method":{"const":"thread/fork"}}},
                         {"properties":{"method":{"const":"turn/start"}}},
                         {"properties":{"method":{"const":"turn/steer"}}},
                         {"properties":{"method":{"const":"turn/interrupt"}}}
                     ],
                     "properties":{
-                        "approvalPolicy":{},"sandbox":{},"sandboxPolicy":{},
+                        "approvalPolicy":{},"ephemeral":{},"sandbox":{},"sandboxPolicy":{},
                         "networkAccess":{},"serviceTier":{}
                     }
                 }))

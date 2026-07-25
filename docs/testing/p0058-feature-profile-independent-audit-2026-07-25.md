@@ -26,6 +26,8 @@
 | A05 real-process positive fixture가 parser 보강 뒤에도 비표준 최상위 `methods` 배열을 생성했음 | 좁은 adapter test는 통과하지만 workspace TARGET의 실제 child-process capability probe가 실패 | fake App Server Schema도 실제 generated Schema와 같은 `properties.method.const` 구조로 변경하고 real-process positive·negative·failure·recovery 4종을 재실행 |
 | A06은 terminal 명령 표면만 있고 공식 App Server thread/turn lifecycle과 approval/effect binding이 없었음 | `ready`처럼 보이나 실제 start/resume/fork/interrupt가 증명되지 않음 | `CodexExecutionRecordV1`, App Server JSONL start/resume/fork/turn/interrupt, exact approval scope, terminal effect receipt, restart `outcome_unknown`, CLI/Controller 명령 추가 |
 | capability probe가 reasoning effort `max`·`ultra`를 동명 execution mode로 승격하고 미구현 managed Ultra도 광고했음 | Router가 생성한 `ready` RouteDecision을 A06 owning executor가 실행 시 거부하는 false-ready | effort/mode 분리, 현재 구현된 `single/native`만 광고, managed Ultra 기본값 `false`, 명시적 활성화 요청은 `ROUTE_MODE_UNAVAILABLE`로 fail-closed |
+| signed live App Server 대조에서 thread-level `sandbox`에 turn-level camel-case 값을 보내고, 현재 request Schema에 없는 `runtimeWorkspaceRoots`도 삽입했음 | fixture는 unknown field를 허용해 통과하지만 실제 A06 launch는 `-32600`으로 거부될 수 있음 | thread `SandboxMode`는 kebab-case, turn `SandboxPolicy.type`은 camel-case로 분리하고 미지원 extension field를 제거. exact serializer unit test와 signed live provider lifecycle로 회귀 검증 |
+| turn이 한 번도 시작되지 않은 새 thread를 즉시 resume할 수 있다고 fixture가 가정했음 | 실제 Codex에는 아직 rollout이 없어 `no rollout found`가 되며 recovery 증거를 과장 | `ephemeral start`는 임시 수명주기로만 확인하고, 승인된 최소 provider turn을 완료해 rollout을 만든 뒤 `resume`, 마지막에 공식 `thread/delete`로 정리하는 live test로 분리 |
 | C01 descriptor가 activation/check merge는 했지만 unknown outcome·rollback 정책을 exact resolution에 넣지 않았음 | 실패·복구 정책이 Profile 밖에서 달라질 수 있음 | exact 16개를 schema v2/profile 1.1.0으로 올리고 두 정책과 parent version을 fingerprint에 포함 |
 | C01 final audit가 Profile ID·version·resolution hash만 보고 current source/config/toolchain·required Check coverage·승인/복구/rollback 경로를 확인하지 않았음 | exact resolution이 성공해도 실제 환경과 공통 engine 경로가 stale이거나 우회된 false-ready 가능 | raw definition·activation/policy fingerprint, current Project/Workspace/Index/config/toolchain binding, 공통 경로 10개와 required Check exact coverage를 `ProductSourceEvidenceV1`/runtime status에 추가하고 incomplete status를 강제 downgrade |
 | `FinalProductAuditV1`은 정적 owner/command 문자열과 runtime profile 결과만 확인했음 | 실제 Schema·handler·4종 test byte가 없거나 stale이어도 false-ready 가능 | fail-closed source inventory checker, `ProductSourceEvidenceV1`, embedded 재검증과 `FinalProductAuditV2`로 live `release.audit` 교체 |
@@ -47,7 +49,7 @@
 | 2 | A07·A08·A10 | recovery/approval/registry owner와 fixed MCP 12·core action 17, descriptor/LKG failure tests | source Gate pass |
 | 3 | A03 | multi-root·Git/non-Git·linked worktree identity, dirty-byte scan/index, Context Pack freshness tests | source Gate pass |
 | 4 | A01·A02·A04 | Goal/Task CAS, Stage DAG/replan, evidence-bound `StageResultV1`·Goal completion, ChangeSet·impact·affected Check와 scope 확대 차단 | 수정·source Gate pass |
-| 5 | A05·A06 | real child-process fake-Codex capability/thread lifecycle, exact route, approval, terminal receipt와 timeout/restart recovery; 공식 App Server Schema에 의한 runtime probe | source Gate pass, live installed Codex CLI evidence 없음 |
+| 5 | A05·A06 | fake-Codex 4종 회귀와 별도로 signed installed-package byte의 fresh Schema·capability probe, read-only provider turn, persisted resume와 official delete; exact route, approval, terminal receipt와 timeout/restart recovery | 수정·source Gate pass, signed live App Server pass |
 | 6 | B01·B02·B03 | actual diff/claim/evidence, test weakening, negative corpus, validator guard와 cache fingerprint | source Gate pass |
 | 7 | B04·B07 | immutable PatchSet, dirty-overlap/rollback, managed registry, contract/config/docs/toolchain drift | 수정·source Gate pass |
 | 8 | B05·B06 | ReproductionPack, effect receipt, recovery, security/dependency freshness와 Radar | 수정·source Gate pass |
@@ -72,15 +74,18 @@ Schema count는 generator가 열거한 public contract 수를 그대로 사용�
 
 local source conformance와 실제 Stable publication은 별개다. Authenticode certificate/timestamp, public GitHub Release publish/readback과 ARM64 native verification이 실행되지 않았다면 `FinalProductAuditV2.status`는 이를 `blocked_external` 또는 limitation으로 보존해야 한다. Preview simulation을 ARM64 Stable native evidence로 승격하지 않는다.
 
-현재 셸의 `Get-Command codex.exe`는 Codex Desktop WindowsApps package 내부 EXE를 반환하지만 `codex.exe --version`과 `app-server generate-json-schema` process 생성은 Windows `Access is denied`로 실패했다. 별도 실행 가능한 Codex CLI는 발견되지 않았고 package 설치는 수행하지 않았다. 따라서 fake child-process E2E는 source protocol/handler 검증으로만 사용하며, 현재 설치본에 대한 live capability·thread/turn 성공 증거로 승격하지 않는다. 해당 path는 접근 가능한 공식 Codex CLI가 제공된 뒤 새 capability fingerprint로 다시 검증해야 한다.
+현재 셸의 WindowsApps package 경로는 ACL 때문에 직접 process 생성이 `Access is denied`였고 package 설치·수정은 하지 않았다. 대신 설치된 원본 `codex.exe`를 workspace 밖 격리 위치로 byte-for-byte 복사하고 원본·복사본의 SHA-256 `39E9E041EA33AC34AAD9578ADFE660C5C7A6DC8F82620B77623960F9352A6EF3`, 크기 `353628464`, Authenticode `Valid`, signer `OpenAI OpCo, LLC`가 같음을 먼저 확인했다. 이 복사본은 `codex-cli 0.146.0-alpha.3.1`이며 fresh stable App Server Schema `273`개·`2831440` bytes를 생성했다.
+
+`codex_app_server_signed_live_provider_and_thread_lifecycle`는 위 signed byte에 대해서만 명시적으로 opt-in되는 ignored test다. 실제 `--version`·Schema·`initialize`·`model/list`·provider capability를 관찰하고, `ephemeral thread/start`, `approvalPolicy=never`·`sandbox=read-only`의 durable `thread/start`, 도구·파일 접근을 금지한 최소 provider `turn/start` 완료, persisted `thread/resume`, `thread/delete`를 순서대로 통과했다. turn notification도 `userMessage | reasoning | agentMessage`만 허용해 command/file/MCP/web 등 tool item을 fail-closed로 거부한다. 최초 진단에서 turn 전 새 thread의 resume가 `no rollout found`로 거부된 사실은 별도 실패 경계로 보존했으며 fixture 성공으로 덮지 않았다. 이 증거는 동일한 signed package byte의 App Server wire 실행 증거이지 WindowsApps ACL 경로 자체의 직접 launch, 일반 사용자 turn 내용, Desktop UI lifecycle 또는 Stable publication 증거는 아니다.
 
 Codex adapter의 method와 effort 값은 실행 시점 App Server generated Schema와 `model/list` 관찰값만 사용한다. 구현 기준은 OpenAI의 공식 [App Server README](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)와 [v2 protocol model](https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/model.rs)이다.
 
 ## 최종 검증 기록
 
-- inventory default read: `pass`, 기능 `23/23`, Profile `16/16`, Runtime `4/4`, generated Schema `213`, stable error `528`, MCP matrix `170/170`.
-- TARGET: `requested=target`, `required=full`, `effective=full`, 11개 check `pass`, 137.6초, `target/validation/20260725T142744343Z-14668/report.json`.
-- FULL: `requested=full`, `required=full`, `effective=full`, 11개 check `pass`, 127.7초, `target/validation/20260725T143017384Z-16272/report.json`.
-- RELEASE pre-commit: 16개 중 local build/cross-build/lifecycle을 포함한 14개 `pass`; 외부 signing/publication은 `unverified/not_run`, clean-worktree는 commit 전 변경 때문에 `fail`, `target/validation/20260725T143235093Z-5772/report.json`.
+- inventory default read: `pass`, 기능 `23/23`, Profile `16/16`, Runtime `4/4`, generated Schema `213`, stable error `528`, MCP matrix `170/170`. 현재 source/evidence fingerprint 값은 자기참조를 피하기 위해 `catalog/product-source-evidence.json`만 소유한다.
+- signed live Codex: tool-item fail-closed opt-in provider/thread lifecycle `1/1 pass`, 8.02초. default fixture suite는 `4 pass / 1 ignored`이며 두 결과를 서로 대체하지 않는다.
+- TARGET implementation pass: `requested=target`, `required=full`, `effective=full`, 11개 check `pass`, 140.626초, `target/validation/20260725T152310744Z-30108/report.json`.
+- FULL implementation pass: `requested=full`, `required=full`, `effective=full`, 11개 check `pass`, 110.709초, `target/validation/20260725T152537488Z-24724/report.json`.
+- 이 bounded 문서 갱신 뒤 current fingerprint TARGET/FULL을 다시 실행하고, clean-worktree RELEASE·report·push SHA는 자기참조를 피하도록 commit 외부 최종 handoff evidence로 고정한다.
 
-외부 signing/publication과 ARM64 native, 접근 가능한 installed Codex CLI가 없다는 사실을 source pass로 대체하지 않는다. clean-worktree RELEASE 재검증과 push SHA는 commit 이후 handoff evidence로 남긴다.
+외부 release signing/publication과 ARM64 native는 source pass나 signed Codex App Server probe로 대체하지 않는다. clean-worktree RELEASE 재검증과 최종 push SHA는 commit 이후 handoff evidence로 남긴다.

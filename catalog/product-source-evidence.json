@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:b6a8d6537dbfe7cfad6e8e20cc78760af021c1f8656d5fdca173c79416eca85b",
+  "evidence_fingerprint": "sha256:033f907c8bd8e7aa61a1beaf6befa8f34d4b9669b920e75de1e9651fe8665459",
   "feature_count": 23,
   "features": [
     {
@@ -350,11 +350,16 @@
         {
           "marker": "pub struct CodexAppServerProcess",
           "path": "crates/adapters/star-adapter-codex/src/app_server.rs",
-          "source_sha256": "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+          "source_sha256": "sha256:4a3a9e670d6976bcf7b86f1d1673e48813be2a88d8adb5359248852307b2c9cd"
+        },
+        {
+          "marker": "codex_app_server_signed_live_provider_and_thread_lifecycle",
+          "path": "apps/star-controller/tests/codex_app_server.rs",
+          "source_sha256": "sha256:f8d009f303932bde13ba8edb2157f23d0012217e78e627650f37ad19ab4800ef"
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:bb784385bb532313768b43ddb62c050f0fcc925578c504d5d4eb32433085616a",
+      "feature_fingerprint": "sha256:50b1343ec307789522d8787bf26e2568a51ccf4dec972123f7ced5f68d5b32bb",
       "feature_id": "A05",
       "generated_schemas": [
         {
@@ -375,7 +380,7 @@
         {
           "marker": "probe_capabilities",
           "path": "crates/adapters/star-adapter-codex/src/app_server.rs",
-          "source_sha256": "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+          "source_sha256": "sha256:4a3a9e670d6976bcf7b86f1d1673e48813be2a88d8adb5359248852307b2c9cd"
         },
         {
           "marker": "codex.capability.inspect",
@@ -396,14 +401,15 @@
       },
       "product_surface_fingerprints": [
         "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
+        "sha256:4a3a9e670d6976bcf7b86f1d1673e48813be2a88d8adb5359248852307b2c9cd",
         "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5",
-        "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+        "sha256:f8d009f303932bde13ba8edb2157f23d0012217e78e627650f37ad19ab4800ef"
       ],
       "test_refs": {
         "failure": {
           "marker": "codex_app_server_real_process_failure_rejects_missing_executable",
           "path": "apps/star-controller/tests/codex_app_server.rs",
-          "source_sha256": "sha256:c1c644e99f2476d62ff676b1ca182f019921c9b97730c8bf459132440f5a6e9f"
+          "source_sha256": "sha256:f8d009f303932bde13ba8edb2157f23d0012217e78e627650f37ad19ab4800ef"
         },
         "negative": {
           "marker": "capability_selection_rejects_stale_and_ambiguous_latest_snapshots",
@@ -413,7 +419,7 @@
         "positive": {
           "marker": "codex_app_server_real_process_positive_capability_probe",
           "path": "apps/star-controller/tests/codex_app_server.rs",
-          "source_sha256": "sha256:c1c644e99f2476d62ff676b1ca182f019921c9b97730c8bf459132440f5a6e9f"
+          "source_sha256": "sha256:f8d009f303932bde13ba8edb2157f23d0012217e78e627650f37ad19ab4800ef"
         },
         "recovery": {
           "marker": "routing_recovery_falls_back_from_unavailable_max_to_single",
@@ -440,10 +446,15 @@
           "marker": "pub fn launch",
           "path": "apps/star-controller/src/codex_product.rs",
           "source_sha256": "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        },
+        {
+          "marker": "codex_app_server_signed_live_provider_and_thread_lifecycle",
+          "path": "apps/star-controller/tests/codex_app_server.rs",
+          "source_sha256": "sha256:f8d009f303932bde13ba8edb2157f23d0012217e78e627650f37ad19ab4800ef"
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:e930574059855a5c268dced76faa7a8b42eac8d27bdf67b723761b4abe6e7a5d",
+      "feature_fingerprint": "sha256:494cdd5bd5a3ebe0e82aab598b36fb43c9a3c3984cfe49eb14a172405a8d6238",
       "feature_id": "A06",
       "generated_schemas": [
         {
@@ -467,7 +478,7 @@
         {
           "marker": "pub struct CodexAppServerProcess",
           "path": "crates/adapters/star-adapter-codex/src/app_server.rs",
-          "source_sha256": "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+          "source_sha256": "sha256:4a3a9e670d6976bcf7b86f1d1673e48813be2a88d8adb5359248852307b2c9cd"
         },
         {
           "marker": "pub fn launch",
@@ -496,7 +507,7 @@
       "mcp_required": true,
       "owner_document": {
         "path": "docs/features/core-control.md",
-        "source_sha256": "sha256:c5b8d45bfb7e1172e74babd4e4e493828687c3492322283455ecc9b84dccb6af"
+        "source_sha256": "sha256:6330d8231cfcc21269bb5cce730f40ad3feaaebb3de913c8ea6bcd0f61563bc0"
       },
       "product_surface_fingerprints": [
         "sha256:0dfd9c39747c95af04109eb04ca40d488b446ef2b0eae6f6aa97d48c456574fc",
@@ -504,13 +515,14 @@
         "sha256:79c35aec9057ded909a1e2c7a46b0906ea8a7f12e7159b4dcdc161f6af10f1e2",
         "sha256:9be535de3b9dd5cab90325ad2716bd503d175399b23e536e3bc56925a84ea267",
         "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767",
-        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5"
+        "sha256:f18867d38a58022d499b2bf376fe6011678356e54619e11a8ea756414e896eb5",
+        "sha256:f8d009f303932bde13ba8edb2157f23d0012217e78e627650f37ad19ab4800ef"
       ],
       "test_refs": {
         "failure": {
           "marker": "app_server_failure_kills_a_hung_probe_at_the_deadline",
           "path": "crates/adapters/star-adapter-codex/src/app_server.rs",
-          "source_sha256": "sha256:ff5123f766e399335e0cb2b787e367dc9faae00116cb5e28c35ac471c7046ef6"
+          "source_sha256": "sha256:4a3a9e670d6976bcf7b86f1d1673e48813be2a88d8adb5359248852307b2c9cd"
         },
         "negative": {
           "marker": "launch_capability_rejects_missing_operation_or_permission_override",
@@ -525,7 +537,7 @@
         "recovery": {
           "marker": "codex_app_server_real_process_recovery_resumes_forks_and_interrupts",
           "path": "apps/star-controller/tests/codex_app_server.rs",
-          "source_sha256": "sha256:c1c644e99f2476d62ff676b1ca182f019921c9b97730c8bf459132440f5a6e9f"
+          "source_sha256": "sha256:f8d009f303932bde13ba8edb2157f23d0012217e78e627650f37ad19ab4800ef"
         }
       }
     },
@@ -1853,7 +1865,7 @@
   ],
   "generated_schema_count": 213,
   "generated_schema_manifest_fingerprint": "sha256:fcf16f0f0cc189340c78c570b8ae1794fabbd513ac880b2c475902e7210f47de",
-  "inventory_fingerprint": "sha256:1cc405ff111278e1e70e8cb8d19821e6e356b20f4e2bfc08f017317825cd5d44",
+  "inventory_fingerprint": "sha256:c47eaa8dc56b2f92b9982ea9ec72cc0ba5c7462ccf994ca307ce3b7d5a7f8972",
   "mcp_matrix_count": 170,
   "mcp_matrix_fingerprint": "sha256:dbe4791f29fdef3e791c72875aed70e68825ef874b35fe664e288cda66d934dc",
   "profile_count": 16,
@@ -3348,7 +3360,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:ea79304774503a2a466b2e1bd4fcd1f7711edaca4125869536225534d58f6f96",
+  "source_fingerprint": "sha256:f1357f104c6527dd8eca4db892f9070f17f195cded21adea46d2f7d33d9a34f9",
   "stable_error_catalog_fingerprint": "sha256:dd069e4e80bf54af35e4d52434ac9a87208047d146f395eb0736de768cd2f5b8",
   "stable_error_count": 528
 }

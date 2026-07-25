@@ -117,6 +117,8 @@ Controller는 계획된 작업을 이어주는 역할만 한다. 반복 시간�
 
 P-0058 current source의 `codex task start|resume|fork|status|interrupt`는 공식 App Server JSONL의 initialize, thread start/resume/fork, turn start/interrupt와 notification을 사용한다. 실행 전 exact RouteDecision·CapabilitySnapshot·Stage·ContextPack·GateDecision·executable digest를 approval scope에 묶고, 승인 전에는 subprocess를 시작하지 않는다. Controller restart나 App Server 손실 뒤 비종결 실행은 성공으로 합성하지 않고 `outcome_unknown`과 reconcile action을 보존하며, terminal state에는 exact approval·operation·tool descriptor·argument·executable digest가 들어간 effect receipt가 필요하다. CLI-only core는 이 adapter가 없어도 deterministic local 기능을 계속 수행한다.
 
+App Server wire shape는 생성된 version-specific Schema를 그대로 따른다. thread start/resume/fork의 `sandbox`는 `read-only | workspace-write`를 보내고, turn의 `sandboxPolicy.type`만 `readOnly | workspaceWrite`를 사용한다. 현재 request Schema에 없는 `runtimeWorkspaceRoots`를 임의 extension으로 전송하지 않으며, 승인된 root는 Context Pack에 고정하고 execute turn의 `writableRoots`로만 materialize한다. `ephemeral` thread는 첫 turn 전 resume 증거로 사용하지 않는다. signed live 회귀는 read-only provider turn을 완료해 rollout이 생긴 뒤 resume하고 공식 `thread/delete`로 정리한다.
+
 ## A07. 상태·Checkpoint·이어하기·자체 복구
 
 Star-Control 자신의 장시간 작업 상태는 로컬 파일에 안전하게 보존한다.

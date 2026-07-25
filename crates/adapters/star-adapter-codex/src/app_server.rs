@@ -98,6 +98,7 @@ const OBSERVED_METHODS: &[(&str, &str)] = &[
         "modelProvider/capabilities/read",
     ),
     ("thread_start", "thread/start"),
+    ("thread_delete", "thread/delete"),
     ("thread_resume", "thread/resume"),
     ("thread_fork", "thread/fork"),
     ("turn_start", "turn/start"),
@@ -107,6 +108,7 @@ const OBSERVED_METHODS: &[(&str, &str)] = &[
 
 const OBSERVED_FIELDS: &[&str] = &[
     "approvalPolicy",
+    "ephemeral",
     "sandbox",
     "sandboxPolicy",
     "networkAccess",
@@ -582,7 +584,7 @@ fn insert_permission_overrides(
         );
     }
     if let Some(mode) = sandbox_mode {
-        let wire_mode = match mode {
+        let turn_wire_mode = match mode {
             "read-only" => "readOnly",
             "workspace-write" => "workspaceWrite",
             _ => return Err(CodexAppServerError::Protocol),
@@ -590,7 +592,7 @@ fn insert_permission_overrides(
         if turn_shape {
             let mut sandbox = serde_json::Map::from_iter([(
                 "type".to_owned(),
-                Value::String(wire_mode.to_owned()),
+                Value::String(turn_wire_mode.to_owned()),
             )]);
             if mode == "workspace-write" {
                 sandbox.insert("networkAccess".to_owned(), Value::Bool(false));
@@ -607,20 +609,15 @@ fn insert_permission_overrides(
             }
             params.insert("sandboxPolicy".to_owned(), Value::Object(sandbox));
         } else {
-            params.insert("sandbox".to_owned(), Value::String(wire_mode.to_owned()));
+            // ThreadStart/Resume/ForkParams use SandboxMode's kebab-case enum;
+            // TurnStartParams uses the tagged camel-case SandboxPolicy above.
+            params.insert("sandbox".to_owned(), Value::String(mode.to_owned()));
         }
     }
-    if !runtime_workspace_roots.is_empty() {
-        params.insert(
-            "runtimeWorkspaceRoots".to_owned(),
-            Value::Array(
-                runtime_workspace_roots
-                    .iter()
-                    .map(|root| Value::String(root.to_string_lossy().into_owned()))
-                    .collect(),
-            ),
-        );
-    }
+    // Current official request schemas do not define a
+    // `runtimeWorkspaceRoots` parameter. Keep validating these roots and use
+    // them to derive `writableRoots`, but never invent an extension field that
+    // a version-specific App Server must reject.
     Ok(())
 }
 
@@ -765,6 +762,40 @@ impl CodexAppServerProcess {
         runtime_workspace_roots: &[PathBuf],
         timeout: Duration,
     ) -> Result<String, CodexAppServerError> {
+        self.thread_start_with_policy_and_lifetime(
+            model,
+            cwd,
+            approval_policy,
+            sandbox_mode,
+            runtime_workspace_roots,
+            false,
+            timeout,
+        )
+    }
+
+    pub fn thread_start_ephemeral(
+        &mut self,
+        model: &str,
+        cwd: Option<&Path>,
+        timeout: Duration,
+    ) -> Result<String, CodexAppServerError> {
+        self.thread_start_with_policy_and_lifetime(model, cwd, None, None, &[], true, timeout)
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "wire-level thread policy and persistence stay explicit"
+    )]
+    fn thread_start_with_policy_and_lifetime(
+        &mut self,
+        model: &str,
+        cwd: Option<&Path>,
+        approval_policy: Option<&str>,
+        sandbox_mode: Option<&str>,
+        runtime_workspace_roots: &[PathBuf],
+        ephemeral: bool,
+        timeout: Duration,
+    ) -> Result<String, CodexAppServerError> {
         let mut params =
             serde_json::Map::from_iter([("model".to_owned(), Value::String(model.to_owned()))]);
         if let Some(cwd) = cwd {
@@ -775,6 +806,9 @@ impl CodexAppServerProcess {
                 "cwd".to_owned(),
                 Value::String(cwd.to_string_lossy().into_owned()),
             );
+        }
+        if ephemeral {
+            params.insert("ephemeral".to_owned(), Value::Bool(true));
         }
         insert_permission_overrides(
             &mut params,
@@ -818,6 +852,15 @@ impl CodexAppServerProcess {
         )?;
         let result = self.request("thread/resume", Value::Object(params), timeout)?;
         nested_required_string(&result, &["thread", "id"], 512)
+    }
+
+    pub fn thread_delete(
+        &mut self,
+        thread_id: &str,
+        timeout: Duration,
+    ) -> Result<(), CodexAppServerError> {
+        self.request("thread/delete", json!({"threadId":thread_id}), timeout)?;
+        Ok(())
     }
 
     pub fn thread_fork(
@@ -1326,8 +1369,29 @@ mod tests {
                     "type":"workspaceWrite",
                     "networkAccess":false,
                     "writableRoots":[writable.to_string_lossy()]
-                },
-                "runtimeWorkspaceRoots":[workspace.to_string_lossy()]
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn app_server_positive_serializes_exact_thread_permission_policy() {
+        let workspace = PathBuf::from(r"C:\workspace");
+        let mut params = serde_json::Map::new();
+        insert_permission_overrides(
+            &mut params,
+            Some("never"),
+            Some("read-only"),
+            std::slice::from_ref(&workspace),
+            None,
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            Value::Object(params),
+            json!({
+                "approvalPolicy":"never",
+                "sandbox":"read-only"
             })
         );
     }
