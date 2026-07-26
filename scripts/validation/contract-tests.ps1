@@ -216,7 +216,10 @@ foreach ($requiredCodexAsset in @(
 }
 
 $updaterRestartSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "crates/control/star-updater-core/src/integration_restart.rs") -Raw -Encoding UTF8
-Assert-ValidationContract -Condition ($updaterRestartSource.Contains('const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);')) -Message "forced Codex termination has a bounded exit-observation window"
+Assert-ValidationContract -Condition ($updaterRestartSource.Contains('const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(12);')) -Message "forced Codex termination has a bounded exit-observation window"
+Assert-ValidationContract -Condition ($updaterRestartSource.Contains('terminate_until_process_exit(')) -Message "forced Codex termination repeats exact bounded passes"
+Assert-ValidationContract -Condition ($updaterRestartSource.Contains('terminate_verified_tree_best_effort_excluding(')) -Message "one inaccessible helper cannot prevent later exact-root termination"
+Assert-ValidationContract -Condition ($updaterRestartSource.Contains('|| Ok(exact_image_instances(&snapshot()?, desktop).is_empty())')) -Message "forced Codex termination uses a fresh exact-image census as completion proof"
 Assert-ValidationContract -Condition (([regex]::Matches($updaterRestartSource, 'close_codex_desktop\(&desktop\)\.await')).Count -eq 2) -Message "offline installer and integration restart share the exact close contract"
 Assert-ValidationContract -Condition ($updaterRestartSource.Contains('abort_and_relaunch(&mut transaction, &receipt_request, &desktop);')) -Message "offline close failure relaunches the same Desktop"
 

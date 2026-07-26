@@ -56,8 +56,10 @@ pub enum CensusError {
 /// have attempted an official graceful application close and waited its grace
 /// period.  Each PID is re-proven against a new snapshot immediately before
 /// termination, which prevents PID reuse from widening the target set.
+/// `TerminateProcess` completion is asynchronous, so callers must use a fresh
+/// bounded census before treating the target as gone.
 pub fn terminate_verified_tree(target_image: &Path) -> Result<Vec<u32>, CensusError> {
-    terminate_verified_tree_excluding(target_image, None)
+    terminate_verified_tree_impl(target_image, None, false)
 }
 
 /// Same exact-image fallback termination with one protected process root and
@@ -68,6 +70,24 @@ pub fn terminate_verified_tree(target_image: &Path) -> Result<Vec<u32>, CensusEr
 pub fn terminate_verified_tree_excluding(
     target_image: &Path,
     protected_root_pid: Option<u32>,
+) -> Result<Vec<u32>, CensusError> {
+    terminate_verified_tree_impl(target_image, protected_root_pid, false)
+}
+
+/// Best-effort variant for a caller that performs its own bounded fresh
+/// census. One inaccessible or already-closing helper must not prevent a
+/// later exact desktop root from receiving the fallback request.
+pub fn terminate_verified_tree_best_effort_excluding(
+    target_image: &Path,
+    protected_root_pid: Option<u32>,
+) -> Result<Vec<u32>, CensusError> {
+    terminate_verified_tree_impl(target_image, protected_root_pid, true)
+}
+
+fn terminate_verified_tree_impl(
+    target_image: &Path,
+    protected_root_pid: Option<u32>,
+    best_effort: bool,
 ) -> Result<Vec<u32>, CensusError> {
     let initial = snapshot()?;
     let mut targets = owned_process_tree(&initial, target_image);
@@ -99,12 +119,18 @@ pub fn terminate_verified_tree_excluding(
         {
             continue;
         }
-        let handle = unsafe { OpenProcess(PROCESS_TERMINATE, false, target.pid) }
-            .map_err(|_| CensusError::Terminate)?;
+        let handle = match unsafe { OpenProcess(PROCESS_TERMINATE, false, target.pid) } {
+            Ok(handle) => handle,
+            Err(_) if best_effort => continue,
+            Err(_) => return Err(CensusError::Terminate),
+        };
         let result = unsafe { TerminateProcess(handle, 1) };
         if result.is_err() {
             unsafe {
                 let _ = CloseHandle(handle);
+            }
+            if best_effort {
+                continue;
             }
             return Err(CensusError::Terminate);
         }

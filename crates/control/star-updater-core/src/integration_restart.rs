@@ -32,13 +32,13 @@ use crate::{
     UpdateLeaseError, acquire_update_lease,
     process_census::{
         ProcessIdentity, exact_image_instances, request_graceful_close, snapshot,
-        terminate_verified_tree, terminate_verified_tree_excluding,
+        terminate_verified_tree, terminate_verified_tree_best_effort_excluding,
     },
     restart::{RestartState, RestartTransaction},
 };
 
 const GRACEFUL_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
-const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
+const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(12);
 const PROCESS_EXIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const CONTROLLER_DRAIN_TIMEOUT: Duration = Duration::from_secs(12);
 const REGISTRY_POSTCHECK_TIMEOUT: Duration = Duration::from_secs(12);
@@ -1042,15 +1042,56 @@ async fn close_codex_desktop(desktop: &Path) -> Result<CodexCloseOutcome, Integr
         });
     }
 
-    let fallback_terminated_pids =
-        terminate_verified_tree_excluding(desktop, Some(std::process::id()))?;
-    if !wait_for_codex_exit(desktop, FORCED_CLOSE_TIMEOUT).await? {
+    let (fallback_terminated_pids, exited) = terminate_until_process_exit(
+        FORCED_CLOSE_TIMEOUT,
+        PROCESS_EXIT_POLL_INTERVAL,
+        || {
+            Ok(terminate_verified_tree_best_effort_excluding(
+                desktop,
+                Some(std::process::id()),
+            )?)
+        },
+        || Ok(exact_image_instances(&snapshot()?, desktop).is_empty()),
+    )
+    .await?;
+    if !exited {
         return Err(IntegrationRestartError::CloseTimeout);
     }
     Ok(CodexCloseOutcome {
         graceful_close_pids,
         fallback_terminated_pids,
     })
+}
+
+/// Runs fresh exact-image termination passes until the caller's authoritative
+/// exit census succeeds or the bounded deadline expires. This separates an
+/// accepted asynchronous `TerminateProcess` request from process-exit proof
+/// and also catches helpers that respawn during Chromium shutdown.
+async fn terminate_until_process_exit<T, E>(
+    timeout: Duration,
+    poll_interval: Duration,
+    mut terminate: T,
+    mut is_exited: E,
+) -> Result<(Vec<u32>, bool), IntegrationRestartError>
+where
+    T: FnMut() -> Result<Vec<u32>, IntegrationRestartError>,
+    E: FnMut() -> Result<bool, IntegrationRestartError>,
+{
+    let deadline = tokio::time::Instant::now() + timeout;
+    let mut terminated = BTreeSet::new();
+    loop {
+        if is_exited()? {
+            return Ok((terminated.into_iter().collect(), true));
+        }
+        terminated.extend(terminate()?);
+        if is_exited()? {
+            return Ok((terminated.into_iter().collect(), true));
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Ok((terminated.into_iter().collect(), false));
+        }
+        tokio::time::sleep(poll_interval).await;
+    }
 }
 
 async fn wait_for_codex_exit(
@@ -1465,6 +1506,31 @@ mod tests {
                 .await
                 .unwrap()
         );
+    }
+
+    #[tokio::test]
+    async fn forced_termination_retries_until_a_fresh_census_proves_exit() {
+        let mut passes = 0;
+        let mut observations = 0;
+        let (terminated, exited) = terminate_until_process_exit(
+            Duration::from_secs(1),
+            Duration::ZERO,
+            || -> Result<Vec<u32>, IntegrationRestartError> {
+                passes += 1;
+                Ok(vec![10 + passes])
+            },
+            || -> Result<bool, IntegrationRestartError> {
+                observations += 1;
+                Ok(observations >= 4)
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(exited);
+        assert_eq!(passes, 2);
+        assert_eq!(observations, 4);
+        assert_eq!(terminated, vec![11, 12]);
     }
 
     #[test]
