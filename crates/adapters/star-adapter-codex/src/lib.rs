@@ -48,6 +48,15 @@ const SKILL_AGENT_RELATIVE: &str =
     "plugins/star-control/skills/star-control-operations/agents/openai.yaml";
 const SKILL_ROUTING_RELATIVE: &str =
     "plugins/star-control/skills/star-control-operations/references/routing-matrix.md";
+const INTEGRATION_COMPONENT_RELATIVES: [&str; 7] = [
+    MARKETPLACE_RELATIVE,
+    PLUGIN_MANIFEST_RELATIVE,
+    MCP_RELATIVE,
+    HOOKS_RELATIVE,
+    SKILL_RELATIVE,
+    SKILL_AGENT_RELATIVE,
+    SKILL_ROUTING_RELATIVE,
+];
 const SKILL_NAME: &str = "star-control-operations";
 const ROUTED_FEATURE_IDS: &[&str] = &[
     "A01", "A02", "A03", "A04", "A05", "A06", "A07", "A08", "A09", "A10", "B01", "B02", "B03",
@@ -466,15 +475,7 @@ fn registered_target_matches(
 
 fn read_source_files(source_root: &Path) -> Result<BTreeMap<String, Vec<u8>>, CodexAdapterError> {
     let mut files = BTreeMap::new();
-    for relative in [
-        MARKETPLACE_RELATIVE,
-        PLUGIN_MANIFEST_RELATIVE,
-        MCP_RELATIVE,
-        HOOKS_RELATIVE,
-        SKILL_RELATIVE,
-        SKILL_AGENT_RELATIVE,
-        SKILL_ROUTING_RELATIVE,
-    ] {
+    for relative in INTEGRATION_COMPONENT_RELATIVES {
         files.insert(
             relative.to_owned(),
             read_regular_bounded(&source_root.join(relative.replace('/', "\\")))?,
@@ -711,13 +712,7 @@ fn read_rendered_files(
     marketplace_root: &Path,
 ) -> Result<BTreeMap<String, Vec<u8>>, CodexAdapterError> {
     let mut files = BTreeMap::new();
-    for relative in [
-        MARKETPLACE_RELATIVE,
-        PLUGIN_MANIFEST_RELATIVE,
-        MCP_RELATIVE,
-        HOOKS_RELATIVE,
-        SKILL_RELATIVE,
-    ] {
+    for relative in INTEGRATION_COMPONENT_RELATIVES {
         files.insert(
             relative.to_owned(),
             read_regular_bounded(&marketplace_root.join(relative.replace('/', "\\")))?,
@@ -1170,6 +1165,10 @@ mod tests {
         let install = Path::new(r"D:\도구\Star-Control 시험");
         let rendered = render_files(&source, install, "0.1.0+codex.0123456789ab").unwrap();
         validate_rendered(&rendered, install, "0.1.0+codex.0123456789ab").unwrap();
+        assert_eq!(rendered.len(), INTEGRATION_COMPONENT_RELATIVES.len());
+        for relative in INTEGRATION_COMPONENT_RELATIVES {
+            assert!(rendered.contains_key(relative));
+        }
         assert_eq!(
             source.get(MARKETPLACE_RELATIVE),
             rendered.get(MARKETPLACE_RELATIVE)
@@ -1185,6 +1184,32 @@ mod tests {
         );
         assert_ne!(source.get(MCP_RELATIVE), rendered.get(MCP_RELATIVE));
         assert_ne!(source.get(HOOKS_RELATIVE), rendered.get(HOOKS_RELATIVE));
+    }
+
+    #[test]
+    fn rendered_component_round_trip_preserves_the_full_contract_hash() {
+        let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../integrations/codex-plugin-template/marketplace-root");
+        let source = read_source_files(&source_root).unwrap();
+        let install = Path::new(r"D:\도구\Star-Control 시험");
+        let rendered = render_files(&source, install, "0.1.0+codex.0123456789ab").unwrap();
+        let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../target/test-state")
+            .join(format!(
+                "codex-render-roundtrip-{}-{}",
+                std::process::id(),
+                Utc::now().timestamp_micros()
+            ));
+
+        fs::create_dir_all(&scratch).unwrap();
+        write_rendered_files(&scratch, &rendered).unwrap();
+        let reread = read_rendered_files(&scratch).unwrap();
+        assert_eq!(reread, rendered);
+        assert_eq!(
+            rendered_hash(&reread).unwrap(),
+            rendered_hash(&rendered).unwrap()
+        );
+        fs::remove_dir_all(&scratch).unwrap();
     }
 
     #[test]

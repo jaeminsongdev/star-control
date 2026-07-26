@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:0d36d96de2ff739750b8b1b2461dcd39cf095f9a2422777ea7d060f9c53e98ec",
+  "evidence_fingerprint": "sha256:b9a3a9035c4d1044faad76c09f0f3b6d192b03c25187603a0e869c7a33972701",
   "feature_count": 23,
   "features": [
     {
@@ -3360,7 +3360,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:f95df51a1d43ea617d69753172193bd0c015973fd10089bd66435270385794f5",
+  "source_fingerprint": "sha256:6dba79a80c2f6df8bab22dba96d11507995291788309cfc550b1e53da5ef6f70",
   "stable_error_catalog_fingerprint": "sha256:dd069e4e80bf54af35e4d52434ac9a87208047d146f395eb0736de768cd2f5b8",
   "stable_error_count": 528
 }
