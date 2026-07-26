@@ -1,20 +1,20 @@
 {
   "name": "star-control",
   "version": "0.0.0+codex.template",
-  "description": "Expose ready Star-Control operations to Codex with a native project-tool fallback.",
+  "description": "Route Codex development work through Star-Control MCP actions, CLI-only features, Profiles, and an explicit native fallback.",
   "author": {
     "name": "Star-Control contributors"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Star Control",
-    "shortDescription": "Use ready Star-Control operations with native fallback.",
-    "longDescription": "Connects Codex to the installed Star-Control MCP gateway, invokes only ready actions, and keeps normal development work available through native project tools when Star-Control cannot act.",
+    "shortDescription": "Use Star-Control MCP, CLI, and Profiles.",
+    "longDescription": "Connects Codex to the installed Star-Control gateway, resolves declarative Profiles, invokes only ready MCP actions, uses the installed CLI only for Catalog-declared CLI-only features, and records native fallback without promoting uncertain states.",
     "developerName": "Star-Control contributors",
     "category": "Productivity",
     "capabilities": ["Local MCP", "Development operations"],
     "defaultPrompt": [
-      "Use ready Star-Control operations for this task; otherwise continue with native project tools."
+      "Use $star-control-operations to route this task through Star-Control MCP actions or CLI Profiles while preserving approvals, evidence, and fallback status."
     ]
   },
   "mcpServers": "./.mcp.json"

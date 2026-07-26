@@ -23,6 +23,13 @@ SCHEMA_MANIFEST = ROOT / "specs/schemas/manifest.json"
 SOURCE_EVIDENCE_PATH = ROOT / "catalog/product-source-evidence.json"
 CORE_TOOL_PACKAGE_PATH = ROOT / "catalog/tool-packages/star-control-core.toml"
 FIXED_MCP_PATH = ROOT / "crates/foundation/star-contracts/src/fixed_mcp.rs"
+CODEX_SKILL_ROOT = (
+    ROOT
+    / "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations"
+)
+CODEX_SKILL_PATH = CODEX_SKILL_ROOT / "SKILL.md"
+CODEX_SKILL_AGENT_PATH = CODEX_SKILL_ROOT / "agents/openai.yaml"
+CODEX_ROUTING_MATRIX_PATH = CODEX_SKILL_ROOT / "references/routing-matrix.md"
 
 FEATURE_IDS = [
     *(f"A{index:02d}" for index in range(1, 11)),
@@ -328,7 +335,6 @@ def main() -> int:
     }
     fixed_mcp_source = FIXED_MCP_PATH.read_text(encoding="utf-8")
     fixed_mcp_tools = set(re.findall(r'\bname:\s*"(star_[a-z_]+)"', fixed_mcp_source))
-    codex_skill = ROOT / "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md"
     feature_index = ROOT / "docs/features/README.md"
     for fixed in (
         ROOT / "apps/star-cli/src/main.rs",
@@ -336,7 +342,9 @@ def main() -> int:
         ROOT / "apps/star-mcp/src/lib.rs",
         FIXED_MCP_PATH,
         CORE_TOOL_PACKAGE_PATH,
-        codex_skill,
+        CODEX_SKILL_PATH,
+        CODEX_SKILL_AGENT_PATH,
+        CODEX_ROUTING_MATRIX_PATH,
         ROOT / "Cargo.lock",
         ROOT / "rust-toolchain.toml",
         feature_index,
@@ -447,6 +455,84 @@ def main() -> int:
         or len(profile_ids) != len(PROFILE_IDS)
     ):
         errors.append(f"profile IDs must resolve exactly 16/16: observed={sorted(profile_ids)}")
+
+    skill_agent = (
+        CODEX_SKILL_AGENT_PATH.read_text(encoding="utf-8")
+        if CODEX_SKILL_AGENT_PATH.is_file()
+        else ""
+    )
+    if not skill_agent:
+        errors.append("Codex Skill agent metadata is missing")
+    for required in (
+        'display_name: "Star-Control Operations"',
+        'short_description: "Route development work through Star-Control"',
+        'default_prompt: "Use $star-control-operations',
+        'type: "mcp"',
+        'value: "star-control"',
+        "allow_implicit_invocation: true",
+    ):
+        if required not in skill_agent:
+            errors.append(f"Codex Skill agent metadata is missing: {required}")
+    dependency_types = re.findall(
+        r'^\s*-\s+type:\s*"([^"]+)"\s*$', skill_agent, flags=re.MULTILINE
+    )
+    dependency_values = re.findall(
+        r'^\s+value:\s*"([^"]+)"\s*$', skill_agent, flags=re.MULTILINE
+    )
+    if dependency_types != ["mcp"] or dependency_values != ["star-control"]:
+        errors.append("Codex Skill metadata must declare exactly the star-control MCP dependency")
+
+    routing_matrix = (
+        CODEX_ROUTING_MATRIX_PATH.read_text(encoding="utf-8")
+        if CODEX_ROUTING_MATRIX_PATH.is_file()
+        else ""
+    )
+    if not routing_matrix:
+        errors.append("Codex routing matrix is missing")
+    feature_matches = list(
+        re.finditer(r"^\|\s*([A-D]\d{2})\s*\|(.*)$", routing_matrix, flags=re.MULTILINE)
+    )
+    feature_rows = {
+        match.group(1): match.group(2)
+        for match in feature_matches
+    }
+    observed_feature_ids = [match.group(1) for match in feature_matches]
+    if observed_feature_ids != FEATURE_IDS:
+        errors.append(
+            f"Codex routing matrix must cover exact ordered 23/23 features: observed={observed_feature_ids}"
+        )
+    for feature in features:
+        feature_id = str(feature.get("id"))
+        row = feature_rows.get(feature_id, "")
+        mcp_actions = [str(value) for value in feature.get("mcp_actions", [])]
+        expected_route = "MCP-first" if mcp_actions else "CLI-only"
+        if expected_route not in row:
+            errors.append(f"{feature_id} Codex route must be {expected_route}")
+        surfaces = mcp_actions or [str(value) for value in feature.get("cli_commands", [])]
+        for surface in surfaces:
+            if f"`{surface}`" not in row:
+                errors.append(f"{feature_id} Codex routing surface missing: {surface}")
+
+    profile_matches = list(
+        re.finditer(r"^\|\s*`([^`]+)`\s*\|(.*)$", routing_matrix, flags=re.MULTILINE)
+    )
+    profile_rows = {
+        match.group(1): match.group(2)
+        for match in profile_matches
+    }
+    observed_profile_ids = [match.group(1) for match in profile_matches]
+    if observed_profile_ids != PROFILE_IDS:
+        errors.append(
+            f"Codex routing matrix must cover exact ordered 16/16 Profiles: observed={observed_profile_ids}"
+        )
+    for descriptor in profiles:
+        profile_id = str(descriptor.get("profile_id"))
+        default_stop_state = str(descriptor.get("default_stop_state"))
+        if f"`{default_stop_state}`" not in profile_rows.get(profile_id, ""):
+            errors.append(
+                f"{profile_id} Codex routing default stop is stale: {default_stop_state}"
+            )
+
     for descriptor in profiles:
         parent = descriptor.get("parent_profile")
         if parent and profile_versions.get(parent.get("profile_id")) != parent.get("profile_version"):

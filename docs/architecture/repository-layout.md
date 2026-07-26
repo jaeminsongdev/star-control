@@ -670,7 +670,11 @@ integrations/
             │  └─ plugin.json       # 필수 Plugin manifest
             ├─ skills/
             │  └─ star-control-operations/
-            │     └─ SKILL.md        # ready action 실행과 native fallback 절차
+            │     ├─ SKILL.md        # MCP·CLI-only·Profile·native fallback orchestration
+            │     ├─ agents/
+            │     │  └─ openai.yaml  # UI metadata, implicit invocation, bundled MCP dependency
+            │     └─ references/
+            │        └─ routing-matrix.md # 23개 기능·16개 Profile derived route
             ├─ hooks/
             │  └─ hooks.json         # SessionStart와 star hook 명령 연결
             └─ .mcp.json             # 설치 때 실제 star-mcp 절대 경로로 렌더링

@@ -1,0 +1,13 @@
+interface:
+  display_name: "Star-Control Operations"
+  short_description: "Route development work through Star-Control"
+  default_prompt: "Use $star-control-operations to plan, execute, and verify this development task."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "star-control"
+      description: "Installed Star-Control fixed MCP gateway"
+
+policy:
+  allow_implicit_invocation: true

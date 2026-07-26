@@ -24,6 +24,16 @@ star-package-release reseal --architecture x64|arm64 --stage <dist-stage-dir> --
 star-package-release seal-signed --architecture x64|arm64 --stage <dist-stage-dir> --source-revision <value>\n\
 star-package-release verify --architecture x64|arm64 --stage <dir>";
 
+const REQUIRED_CODEX_INTEGRATION_ASSETS: [&str; 7] = [
+    "integrations/codex-plugin-template/marketplace-root/.agents/plugins/marketplace.json",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/.codex-plugin/plugin.json",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/.mcp.json",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/hooks/hooks.json",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/agents/openai.yaml",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/references/routing-matrix.md",
+];
+
 #[derive(Debug)]
 enum Action {
     Stage {
@@ -542,6 +552,16 @@ fn verify_inventory_matches_manifest(
         }
         verify_pe_architecture(&stage.join(name), expected_architecture)?;
     }
+    verify_required_codex_integration_assets(&expected)?;
+    Ok(())
+}
+
+fn verify_required_codex_integration_assets(inventory: &BTreeSet<String>) -> DynResult<()> {
+    for path in REQUIRED_CODEX_INTEGRATION_ASSETS {
+        if !inventory.contains(path) {
+            return Err(format!("required Codex integration asset is missing: {path}").into());
+        }
+    }
     Ok(())
 }
 
@@ -709,6 +729,7 @@ fn verify_stage(
     if actual_paths != expected_paths {
         return Err("stage contains missing or unmanifested files".into());
     }
+    verify_required_codex_integration_assets(&expected_paths)?;
     let set_sha256 = canonical_sha256(&serde_json::to_value(&manifest.files)?)?;
     if set_sha256 != manifest.set_sha256 {
         return Err("release file set digest mismatch".into());
@@ -1070,6 +1091,23 @@ mod tests {
             assert!(!valid_relative_path(value), "{value}");
         }
         assert!(valid_relative_path("schemas/v1/example.schema.json"));
+    }
+
+    #[test]
+    fn release_inventory_requires_the_complete_codex_integration_contract() {
+        let mut inventory = REQUIRED_CODEX_INTEGRATION_ASSETS
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>();
+        verify_required_codex_integration_assets(&inventory).unwrap();
+
+        inventory.remove(
+            "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/agents/openai.yaml",
+        );
+        let error = verify_required_codex_integration_assets(&inventory)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("agents/openai.yaml"));
     }
 
     #[test]

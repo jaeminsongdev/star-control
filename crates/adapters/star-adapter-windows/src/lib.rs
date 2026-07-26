@@ -1829,6 +1829,29 @@ mod tests {
         atomic_write_json(&root.join(RELEASE_MANIFEST_FILE), &manifest).unwrap();
     }
 
+    fn add_release_fixture_file(
+        root: &Path,
+        mut manifest: ReleaseFileManifest,
+        relative: &str,
+        bytes: &[u8],
+    ) -> ReleaseFileManifest {
+        let path = root.join(relative.replace('/', "\\"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, bytes).unwrap();
+        manifest.files.push(ReleaseFileEntry {
+            path: relative.to_owned(),
+            size: bytes.len() as u64,
+            sha256: Sha256Hash::digest(bytes),
+        });
+        manifest
+            .files
+            .sort_by(|left, right| left.path.cmp(&right.path));
+        manifest.set_sha256 =
+            canonical_sha256(&serde_json::to_value(&manifest.files).unwrap()).unwrap();
+        atomic_write_json(&root.join(RELEASE_MANIFEST_FILE), &manifest).unwrap();
+        manifest
+    }
+
     fn bind_runtime_generations_to_release_fixture(
         root: &Path,
         mut manifest: ReleaseFileManifest,
@@ -2024,21 +2047,38 @@ mod tests {
     }
 
     #[test]
-    fn integration_candidate_apply_is_manifest_committed_and_rolls_back() {
+    fn integration_candidate_adds_skill_assets_and_rolls_back() {
         let installed = fixture_root("integration-apply-installed");
         let candidate = fixture_root("integration-apply-candidate");
         let data = fixture_root("integration-apply-data");
         write_release_fixture(&installed);
         let candidate_manifest = write_release_fixture(&candidate);
+        let skill_agent = "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/agents/openai.yaml";
+        let routing = "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/references/routing-matrix.md";
+        let candidate_manifest = add_release_fixture_file(
+            &candidate,
+            candidate_manifest,
+            skill_agent,
+            b"interface: {}\n",
+        );
+        let _candidate_manifest = add_release_fixture_file(
+            &candidate,
+            candidate_manifest,
+            routing,
+            b"# routing matrix\n",
+        );
         let manager = InstallationManager::new(data);
         manager
             .finalize(&installed, compiled_architecture().unwrap(), false)
             .unwrap();
-        std::fs::write(candidate.join("star-mcp.exe"), b"candidate-mcp").unwrap();
-        refresh_release_fixture(&candidate, candidate_manifest);
         let review = manager
             .inspect_integration_candidate(&installed, &candidate)
             .unwrap();
+        assert_eq!(
+            review.candidate_class,
+            IntegrationCandidateClass::CodexIntegrationUpdate
+        );
+        assert_eq!(review.changed_files, vec![skill_agent, routing]);
         let backup = manager
             .apply_codex_integration_candidate(
                 &installed,
@@ -2047,6 +2087,14 @@ mod tests {
                 "upd_test_apply",
             )
             .unwrap();
+        assert_eq!(
+            std::fs::read(installed.join(skill_agent)).unwrap(),
+            b"interface: {}\n"
+        );
+        assert_eq!(
+            std::fs::read(installed.join(routing)).unwrap(),
+            b"# routing matrix\n"
+        );
         assert!(manager.status(&installed).unwrap().verified);
         assert_eq!(
             manager
@@ -2058,6 +2106,8 @@ mod tests {
         manager
             .rollback_codex_integration_candidate(&installed, &backup)
             .unwrap();
+        assert!(!installed.join(skill_agent).exists());
+        assert!(!installed.join(routing).exists());
         assert!(manager.status(&installed).unwrap().verified);
         assert_eq!(
             manager

@@ -1057,6 +1057,9 @@ mod tests {
         assert_eq!(info.instructions.as_deref(), Some(SERVER_INSTRUCTIONS));
         assert!(!SERVER_INSTRUCTIONS.contains("ignore previous instructions"));
         assert!(SERVER_INSTRUCTIONS.contains("required_call_tool"));
+        assert!(SERVER_INSTRUCTIONS.contains("CLI-only"));
+        assert!(SERVER_INSTRUCTIONS.contains("profile show|resolve"));
+        assert!(SERVER_INSTRUCTIONS.contains("CLI로 우회하지 않는다"));
         assert!(SERVER_INSTRUCTIONS.contains("프로젝트 native 도구"));
         assert!(SERVER_INSTRUCTIONS.contains("fallback 사실과 이유"));
         assert!(unknown_fixed_tool_references(SERVER_INSTRUCTIONS).is_empty());

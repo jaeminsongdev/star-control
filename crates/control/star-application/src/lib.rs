@@ -11003,6 +11003,45 @@ mod tests {
     }
 
     #[test]
+    fn empty_project_recovery_rebuilds_a_global_generation() {
+        let root = std::env::temp_dir().join(format!(
+            "star-empty-rebuild-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        let management_root = root.join("management");
+        let repositories = Arc::new(
+            SqliteManagementRepositorySet::open(&management_root, "empty-rebuild-source").unwrap(),
+        );
+        assert_eq!(repositories.active_set().unwrap().entries.len(), 1);
+        drop(repositories);
+
+        let bindings =
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("root-bindings")).unwrap());
+        let recovery =
+            SqliteManagementRecovery::open(&management_root, "empty-rebuild-recovery").unwrap();
+        let service = ManagementRecoveryApplicationService::new(
+            &recovery,
+            bindings,
+            Arc::new(LocalArtifactStore::default()),
+        );
+        let plan = service.plan_source_rebuild().unwrap();
+        assert!(plan.projects.is_empty());
+        let applied = service
+            .apply_source_rebuild(&plan, plan.plan_fingerprint.as_str())
+            .unwrap();
+        assert!(applied.rebuilt_projects.is_empty());
+        assert_eq!(applied.activated_set.entries.len(), 1);
+        assert!(matches!(
+            applied.activated_set.entries[0].scope,
+            star_contracts::management::StoreScope::Global
+        ));
+        drop(service);
+        drop(recovery);
+        SqliteManagementRepositorySet::open(&management_root, "empty-rebuild-verified").unwrap();
+    }
+
+    #[test]
     fn explicit_roots_attach_linked_worktrees_to_one_project_with_distinct_checkouts() {
         let root = std::env::temp_dir().join(format!(
             "star-multi-root-{}-{}",

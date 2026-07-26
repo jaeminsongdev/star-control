@@ -200,6 +200,20 @@ $packagingSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "packagin
 Assert-ValidationContract -Condition ($packagingSource.Contains('$startInfo.CreateNoWindow = $true')) -Message "packaging child processes must not allocate console windows"
 Assert-ValidationContract -Condition ($packagingSource.Contains('$startInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden')) -Message "packaging child windows must stay hidden"
 Assert-ValidationContract -Condition (-not [regex]::IsMatch($packagingSource, '(?m)^\s*&\s+(cargo|git|\$IsccPath)\b')) -Message "packaging must not bypass the hidden process runner"
+Assert-ValidationContract -Condition ($packagingSource.Contains("'-p', 'star-updater', '--bin', 'star-updater'")) -Message "installer generation rebuilds star-updater.exe"
+
+$packageReleaseSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "tools/package-release/src/main.rs") -Raw -Encoding UTF8
+foreach ($requiredCodexAsset in @(
+    'marketplace-root/.agents/plugins/marketplace.json',
+    'plugins/star-control/.codex-plugin/plugin.json',
+    'plugins/star-control/.mcp.json',
+    'plugins/star-control/hooks/hooks.json',
+    'skills/star-control-operations/SKILL.md',
+    'skills/star-control-operations/agents/openai.yaml',
+    'skills/star-control-operations/references/routing-matrix.md'
+)) {
+    Assert-ValidationContract -Condition ($packageReleaseSource.Contains($requiredCodexAsset)) -Message "release package requires Codex asset: $requiredCodexAsset"
+}
 
 $installerSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "packaging/windows/star-control.iss") -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($installerSource.Contains('CloseApplications=no')) -Message "installer must not terminate active Codex"

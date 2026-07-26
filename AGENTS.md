@@ -25,7 +25,8 @@
 
 - Star-Control action은 `star_tool_search`로 찾고 `star_tool_describe`로 현재 Schema, 위험 lane, `descriptor_hash`와 readiness를 확인한다.
 - action이 `ready`이고 현재 작업 범위와 호출 조건이 맞을 때만 반환된 `required_call_tool`로 실행한다.
-- 검색 결과가 없거나 action이 `unavailable`, `untrusted`, `incompatible`, `degraded`이면 native Git·프로젝트 도구를 사용한다.
+- `catalog/product-features.toml`에 MCP action이 없는 CLI-only 기능과 C01 Profile은 설치된 `star` CLI의 선언된 command로 실행한다. MCP action이 non-ready인 기능을 CLI로 우회하지 않는다.
+- ready MCP action도, Catalog-declared CLI-only command도 사용할 수 없으면 native Git·프로젝트 도구를 사용하고 fallback 이유와 Star-Control evidence 부재를 결과에 기록한다.
 - package 또는 manifest의 `ready` 상태를 내부 action의 실행 가능 상태로 해석하지 않는다.
 - `approval_required`, `question_required`와 장기 operation 시작을 작업 완료로 간주하지 않는다.
 

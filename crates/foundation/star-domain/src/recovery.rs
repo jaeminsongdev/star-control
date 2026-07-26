@@ -40,7 +40,7 @@ pub enum RecoveryDomainError {
     BackupSourceMismatch,
     #[error("restore plan does not match the verified backup set")]
     RestoreSourceMismatch,
-    #[error("rebuild plan is not project-bound, unique, or canonically sealed")]
+    #[error("rebuild plan is not uniquely bound or canonically sealed")]
     InvalidRebuildPlan,
     #[error("local state bundle is not project-bound, active-only, or redaction-safe")]
     InvalidLocalStateBundle,
@@ -758,7 +758,7 @@ fn validate_backup_sources(
 }
 
 fn validate_rebuild_shape(plan: &RebuildPlan) -> Result<(), RecoveryDomainError> {
-    if plan.candidate_generation == 0 || plan.projects.is_empty() {
+    if plan.candidate_generation == 0 {
         return Err(RecoveryDomainError::InvalidRebuildPlan);
     }
     let mut projects = BTreeSet::new();
@@ -1052,6 +1052,28 @@ mod tests {
         assert_eq!(
             require_exact_approval(&expected, "not-a-fingerprint"),
             Err(RecoveryDomainError::ApprovalMismatch)
+        );
+    }
+
+    #[test]
+    fn global_only_rebuild_plan_is_valid_for_an_empty_project_set() {
+        let plan = seal_rebuild_plan(
+            star_contracts::RecoveryPlanId::new(),
+            Utc::now(),
+            Some(hash("active-set")),
+            2,
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        assert!(plan.projects.is_empty());
+        validate_rebuild_plan(&plan).unwrap();
+
+        let mut invalid = plan;
+        invalid.candidate_generation = 0;
+        assert_eq!(
+            validate_rebuild_plan(&invalid),
+            Err(RecoveryDomainError::InvalidRebuildPlan)
         );
     }
 

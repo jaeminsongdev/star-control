@@ -44,7 +44,33 @@ const PLUGIN_MANIFEST_RELATIVE: &str = "plugins/star-control/.codex-plugin/plugi
 const MCP_RELATIVE: &str = "plugins/star-control/.mcp.json";
 const HOOKS_RELATIVE: &str = "plugins/star-control/hooks/hooks.json";
 const SKILL_RELATIVE: &str = "plugins/star-control/skills/star-control-operations/SKILL.md";
+const SKILL_AGENT_RELATIVE: &str =
+    "plugins/star-control/skills/star-control-operations/agents/openai.yaml";
+const SKILL_ROUTING_RELATIVE: &str =
+    "plugins/star-control/skills/star-control-operations/references/routing-matrix.md";
 const SKILL_NAME: &str = "star-control-operations";
+const ROUTED_FEATURE_IDS: &[&str] = &[
+    "A01", "A02", "A03", "A04", "A05", "A06", "A07", "A08", "A09", "A10", "B01", "B02", "B03",
+    "B04", "B05", "B06", "B07", "B08", "B09", "C01", "D01", "D02", "D03",
+];
+const ROUTED_PROFILE_IDS: &[&str] = &[
+    "project_understanding",
+    "docs_config_environment",
+    "change_planning",
+    "test_correctness",
+    "architecture_quality",
+    "ai_development_validation",
+    "refactor_codemod",
+    "api_contract_change",
+    "rust_style_auto_fix",
+    "debug_recovery",
+    "security_supply_chain",
+    "dependency_upgrade",
+    "data_config_db_migration",
+    "performance_build",
+    "language_platform_migration",
+    "ci_release_deploy",
+];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RegistrationMode {
@@ -52,11 +78,10 @@ enum RegistrationMode {
     Register,
     ManualActionRequired,
 }
-const PLUGIN_DESCRIPTION: &str =
-    "Expose ready Star-Control operations to Codex with a native project-tool fallback.";
-const PLUGIN_SHORT_DESCRIPTION: &str = "Use ready Star-Control operations with native fallback.";
-const PLUGIN_LONG_DESCRIPTION: &str = "Connects Codex to the installed Star-Control MCP gateway, invokes only ready actions, and keeps normal development work available through native project tools when Star-Control cannot act.";
-const PLUGIN_DEFAULT_PROMPT: &str = "Use ready Star-Control operations for this task; otherwise continue with native project tools.";
+const PLUGIN_DESCRIPTION: &str = "Route Codex development work through Star-Control MCP actions, CLI-only features, Profiles, and an explicit native fallback.";
+const PLUGIN_SHORT_DESCRIPTION: &str = "Use Star-Control MCP, CLI, and Profiles.";
+const PLUGIN_LONG_DESCRIPTION: &str = "Connects Codex to the installed Star-Control gateway, resolves declarative Profiles, invokes only ready MCP actions, uses the installed CLI only for Catalog-declared CLI-only features, and records native fallback without promoting uncertain states.";
+const PLUGIN_DEFAULT_PROMPT: &str = "Use $star-control-operations to route this task through Star-Control MCP actions or CLI Profiles while preserving approvals, evidence, and fallback status.";
 const HOOK_STATUS_MESSAGE: &str = "Loading Star-Control operations";
 const LIFECYCLE_HOOK_EVENTS: &[&str] = &[
     "SessionStart",
@@ -447,6 +472,8 @@ fn read_source_files(source_root: &Path) -> Result<BTreeMap<String, Vec<u8>>, Co
         MCP_RELATIVE,
         HOOKS_RELATIVE,
         SKILL_RELATIVE,
+        SKILL_AGENT_RELATIVE,
+        SKILL_ROUTING_RELATIVE,
     ] {
         files.insert(
             relative.to_owned(),
@@ -557,6 +584,18 @@ fn validate_rendered(
         .get(SKILL_RELATIVE)
         .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
     if !skill_content_valid(skill) {
+        return Err(CodexAdapterError::InvalidRenderedPlugin);
+    }
+    let skill_agent = rendered
+        .get(SKILL_AGENT_RELATIVE)
+        .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+    if !skill_agent_content_valid(skill_agent) {
+        return Err(CodexAdapterError::InvalidRenderedPlugin);
+    }
+    let routing = rendered
+        .get(SKILL_ROUTING_RELATIVE)
+        .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+    if !skill_routing_content_valid(routing) {
         return Err(CodexAdapterError::InvalidRenderedPlugin);
     }
     Ok(())
@@ -756,12 +795,61 @@ fn skill_content_valid(bytes: &[u8]) -> bool {
         && lines.next() == Some("---");
     frontmatter_valid
         && text.contains("프로젝트 native 도구")
+        && text.contains("Catalog-declared CLI-only")
+        && text.contains("profile show")
         && text.contains("fallback")
         && !text.contains(concat!("star-control-", "workflow"))
         && text
             .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
             .filter(|token| token.starts_with("star_"))
             .all(|token| FIXED_TOOLS.iter().any(|tool| tool.name == token))
+}
+
+fn skill_agent_content_valid(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    text.contains("display_name: \"Star-Control Operations\"")
+        && text.contains("short_description: \"Route development work through Star-Control\"")
+        && text.contains("default_prompt: \"Use $star-control-operations")
+        && text.matches("type: \"mcp\"").count() == 1
+        && text.matches("value: \"star-control\"").count() == 1
+        && !text.contains("type: \"cli\"")
+        && text.contains("allow_implicit_invocation: true")
+}
+
+fn skill_routing_content_valid(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let feature_ids = text
+        .lines()
+        .filter_map(markdown_feature_id)
+        .collect::<Vec<_>>();
+    let profile_ids = text
+        .lines()
+        .filter_map(markdown_profile_id)
+        .collect::<Vec<_>>();
+    text.contains("live Registry/Catalog")
+        && text.contains("MCP-first")
+        && text.contains("CLI-only")
+        && feature_ids == ROUTED_FEATURE_IDS
+        && profile_ids == ROUTED_PROFILE_IDS
+}
+
+fn markdown_feature_id(line: &str) -> Option<&str> {
+    let value = line.split('|').nth(1)?.trim();
+    let bytes = value.as_bytes();
+    (bytes.len() == 3
+        && matches!(bytes[0], b'A'..=b'D')
+        && bytes[1].is_ascii_digit()
+        && bytes[2].is_ascii_digit())
+    .then_some(value)
+}
+
+fn markdown_profile_id(line: &str) -> Option<&str> {
+    let value = line.split('|').nth(1)?.trim();
+    value.strip_prefix('`')?.strip_suffix('`')
 }
 
 fn pretty_json_object(
@@ -1087,6 +1175,14 @@ mod tests {
             rendered.get(MARKETPLACE_RELATIVE)
         );
         assert_eq!(source.get(SKILL_RELATIVE), rendered.get(SKILL_RELATIVE));
+        assert_eq!(
+            source.get(SKILL_AGENT_RELATIVE),
+            rendered.get(SKILL_AGENT_RELATIVE)
+        );
+        assert_eq!(
+            source.get(SKILL_ROUTING_RELATIVE),
+            rendered.get(SKILL_ROUTING_RELATIVE)
+        );
         assert_ne!(source.get(MCP_RELATIVE), rendered.get(MCP_RELATIVE));
         assert_ne!(source.get(HOOKS_RELATIVE), rendered.get(HOOKS_RELATIVE));
     }
@@ -1096,7 +1192,7 @@ mod tests {
         let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../integrations/codex-plugin-template/marketplace-root");
         let source = read_source_files(&source_root).unwrap();
-        assert_eq!(source.len(), 5);
+        assert_eq!(source.len(), 7);
         let marketplace = strict_object(&source, MARKETPLACE_RELATIVE).unwrap();
         let source_path = marketplace
             .get("plugins")
@@ -1121,10 +1217,37 @@ mod tests {
         assert!(plugin_metadata_valid(&plugin));
         let skill = source.get(SKILL_RELATIVE).unwrap();
         assert!(skill_content_valid(skill));
+        assert!(skill_agent_content_valid(
+            source.get(SKILL_AGENT_RELATIVE).unwrap()
+        ));
+        assert!(skill_routing_content_valid(
+            source.get(SKILL_ROUTING_RELATIVE).unwrap()
+        ));
         let invalid = std::str::from_utf8(skill)
             .unwrap()
             .replace("star_tool_search", concat!("star_", "goal_start"));
         assert!(!skill_content_valid(invalid.as_bytes()));
+        let invalid_agent = std::str::from_utf8(source.get(SKILL_AGENT_RELATIVE).unwrap())
+            .unwrap()
+            .replace(
+                "allow_implicit_invocation: true",
+                "allow_implicit_invocation: false",
+            );
+        assert!(!skill_agent_content_valid(invalid_agent.as_bytes()));
+        let invalid_agent = format!(
+            "{}\n  - type: \"cli\"\n    value: \"star\"\n",
+            std::str::from_utf8(source.get(SKILL_AGENT_RELATIVE).unwrap()).unwrap()
+        );
+        assert!(!skill_agent_content_valid(invalid_agent.as_bytes()));
+        let invalid_routing = std::str::from_utf8(source.get(SKILL_ROUTING_RELATIVE).unwrap())
+            .unwrap()
+            .replace("| C01 |", "| CXX |");
+        assert!(!skill_routing_content_valid(invalid_routing.as_bytes()));
+        let invalid_routing = format!(
+            "{}\n| A01 | MCP-first | `goal.start` |\n",
+            std::str::from_utf8(source.get(SKILL_ROUTING_RELATIVE).unwrap()).unwrap()
+        );
+        assert!(!skill_routing_content_valid(invalid_routing.as_bytes()));
         let invalid = format!(
             "{}\n{}",
             std::str::from_utf8(skill).unwrap(),
