@@ -26,7 +26,7 @@
 | P-0058 feature/Profile independent audit | historical `SOURCE_PASS / SIGNED_LIVE_PASS / pushed` | 독립 감사와 발견 결함 수정은 `02f815a`, signed Codex App Server lifecycle 보강은 `728c662`로 `origin/main`에 반영. 23/23·16/16·Runtime 4/4·Schema 213·error 528·MCP 170/170 당시 evidence이며 current source 판정으로 자동 상속하지 않음 |
 | P-0059 current feature implementation audit | `SOURCE_PASS / FULL_PASS / STRICT_APPROVE_WITH_NOTES` | current `728c662`에서 공통 기반, A01~D03 23개 기능과 C01 16개 Profile을 여섯 층으로 재감사해 23/23·16/16·Runtime 4/4·Schema 213·error 528·MCP 170/170 PASS. pre-seal FULL 11/11 PASS, BLOCKER·MAJOR 없음. 설치 `b20d234` recovery-only와 외부 Gate는 분리하며 final current-byte FULL·commit/push identity는 handoff가 소유 |
 | installed P-0057 update | `DONE / verified` | 설치 source `f496f6e732cb9692da7716807b724a75c6ca4d05`, `D:\도구\Star-Control` installation verified, Codex integration registered. management는 별도 `recovery_only` 상태로 보존 |
-| P-0060 Codex 전체 기능 routing·delivery | `SOURCE_PASS / FULL_PASS / ARTIFACT_PENDING` | 중앙 Skill의 ready MCP → Catalog 기반 `star` CLI/Profile → native fallback과 installer/updater 7-file delivery를 구현. current dirty source FULL 11/11 PASS이며 exact commit 기반 x64·ARM64 artifact 생성·installed update는 후속 Gate |
+| P-0060 Codex 전체 기능 routing·delivery | `SOURCE_PASS / FULL_PASS / PACKAGE_PASS / INSTALL_PENDING` | `9789f0e`에서 중앙 Skill의 ready MCP → Catalog 기반 `star` CLI/Profile → native fallback과 installer/updater 7-file delivery를 구현. FULL 11/11 및 x64·ARM64 531-file package verify PASS; installed restart update는 후속 Gate |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish 필요 |
 
 ## P-0056 현재 구현 범위
@@ -73,6 +73,7 @@
 - current source: `main`/`origin/main` `f496f6e732cb9692da7716807b724a75c6ca4d05`, 시작 worktree clean.
 - live blocker: `management status`는 `recovery_only`; `management rebuild plan --json`도 `MANAGEMENT_IDENTITY_CONFLICT`로 fail-closed. 빈 Project set의 global-only rebuild를 domain이 거부하는 source 결함을 회귀 test와 함께 수정한다.
 - 검증: 영향 package TARGET → Skill validation·23/16 routing coverage·installer/updater stage 검증 → workspace FULL → x64·ARM64 installer/update candidate 생성·설치본 검증 순서. `target/validation/20260726T014807136Z-8720/report.json`은 requested TARGET이 required/effective FULL로 승격되어 11/11 PASS, 304255ms.
+- package evidence: `dist/release-evidence/p0060-9789f0e/`; x64 stage set `sha256:3221ff8162fd98a0e73ba46e56554612033295194b8360f2de1e1bf80f59b44b`, installer `sha256:3bb272d3432df1ef03cc28f3e455496f09d350ffaa59fa7cc7c590f96982733d`, updater `sha256:61e4fe0504472aeb1deded58e4b70160484dcc40cf16755b916fdb0ad40e9134`; ARM64 stage set `sha256:d85b3831c2527d0d684267360e8ac8821d02b1809445d479fdef97145857efc9`, installer `sha256:997241228565e550794d5ab352e415ceb4e238f22816ea782005a6f312375dbe`, updater `sha256:6a2e553a587c57e4e1086bd3a3b3bb2bf3c9cd5e99886207085f7a146167cc21`. 두 package 모두 `unsigned_local`/`NotSigned`, source revision `9789f0edd0b8256cf04f270890efa367c3c7f8be`, 필수 Codex 자산 7/7.
 - 외부 Gate: Authenticode/trusted timestamp/publication은 `blocked_external`; unsigned local artifact를 Stable 또는 published로 승격하지 않는다.
 
 ## 현재 Gate
@@ -85,4 +86,4 @@
 6. Authenticode·trusted timestamp, signed-byte lifecycle·provenance와 public Stable publish/readback: **`blocked_external`**. 별도 승인과 외부 signer 없이는 실행하지 않고 unsigned Stable로 우회하지 않는다.
 7. P-0059 23개 기능·16개 Profile current source surface와 pre-seal FULL: **`PASS`**. STRICT review는 `APPROVE_WITH_NOTES`; 최종 current-byte FULL identity는 handoff가 소유한다.
 8. installed `f496f6e` management recovery-only 상태: **`blocked_operational`**. rebuild dry-run이 `MANAGEMENT_IDENTITY_CONFLICT`로 닫혔으며 exact plan fingerprint가 생성되기 전 apply하지 않는다.
-9. P-0060 source·installer·updater 구현과 current-byte FULL: **`SOURCE_PASS / FULL_PASS`**. exact commit 기반 x64·ARM64 package와 installed integration 검증은 **`IN_PROGRESS`**.
+9. P-0060 source·installer·updater 구현, current-byte FULL, exact commit 기반 x64·ARM64 package: **`PASS`**. installed x64 offline installer restart와 새 작업/Hook trust 확인은 **`IN_PROGRESS`**.
