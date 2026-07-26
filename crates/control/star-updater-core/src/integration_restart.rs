@@ -38,6 +38,8 @@ use crate::{
 };
 
 const GRACEFUL_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
+const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
+const PROCESS_EXIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const CONTROLLER_DRAIN_TIMEOUT: Duration = Duration::from_secs(12);
 const REGISTRY_POSTCHECK_TIMEOUT: Duration = Duration::from_secs(12);
 
@@ -64,6 +66,12 @@ pub struct OfflineInstallerRestartRequest {
     pub install_root: PathBuf,
     pub installer_executable: PathBuf,
     pub codex_desktop_executable: PathBuf,
+}
+
+#[derive(Debug)]
+struct CodexCloseOutcome {
+    graceful_close_pids: Vec<u32>,
+    fallback_terminated_pids: Vec<u32>,
 }
 
 /// Reconciles a stale Runtime selector with the generation owned by the
@@ -229,23 +237,17 @@ pub async fn run_offline_installer_and_restart(
     tokio::time::sleep((deadline - Utc::now()).to_std().unwrap_or_default()).await;
     transition_or_error(transaction.begin_draining(Utc::now()))?;
     persist_receipt(&transaction, &receipt_request)?;
-    let graceful_close_pids = request_graceful_close(&desktop)?;
-    let grace_deadline = tokio::time::Instant::now() + GRACEFUL_CLOSE_TIMEOUT;
-    while tokio::time::Instant::now() < grace_deadline {
-        if exact_image_instances(&snapshot()?, &desktop).is_empty() {
-            break;
+    let closed = match close_codex_desktop(&desktop).await {
+        Ok(closed) => closed,
+        Err(error) => {
+            abort_and_relaunch(&mut transaction, &receipt_request, &desktop);
+            return Err(error);
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    let fallback_terminated_pids = if exact_image_instances(&snapshot()?, &desktop).is_empty() {
-        Vec::new()
-    } else {
-        terminate_verified_tree_excluding(&desktop, Some(std::process::id()))?
     };
-    if !exact_image_instances(&snapshot()?, &desktop).is_empty() {
-        persist_aborted(&mut transaction, &receipt_request);
-        return Err(IntegrationRestartError::CloseTimeout);
-    }
+    let CodexCloseOutcome {
+        graceful_close_pids,
+        fallback_terminated_pids,
+    } = closed;
     transition_or_error(
         transaction.transition(RestartState::Draining, RestartState::CodexStopped),
     )?;
@@ -807,23 +809,17 @@ async fn restart_codex_integration(
     transition_or_error(transaction.begin_draining(Utc::now()))?;
     persist_receipt(&transaction, &request)?;
 
-    let graceful_close_pids = request_graceful_close(&desktop)?;
-    let grace_deadline = tokio::time::Instant::now() + GRACEFUL_CLOSE_TIMEOUT;
-    while tokio::time::Instant::now() < grace_deadline {
-        if exact_image_instances(&snapshot()?, &desktop).is_empty() {
-            break;
+    let closed = match close_codex_desktop(&desktop).await {
+        Ok(closed) => closed,
+        Err(error) => {
+            abort_and_relaunch(&mut transaction, &request, &desktop);
+            return Err(error);
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-    let fallback_terminated_pids = if exact_image_instances(&snapshot()?, &desktop).is_empty() {
-        Vec::new()
-    } else {
-        terminate_verified_tree_excluding(&desktop, Some(std::process::id()))?
     };
-    if !exact_image_instances(&snapshot()?, &desktop).is_empty() {
-        persist_aborted(&mut transaction, &request);
-        return Err(IntegrationRestartError::CloseTimeout);
-    }
+    let CodexCloseOutcome {
+        graceful_close_pids,
+        fallback_terminated_pids,
+    } = closed;
     transition_or_error(
         transaction.transition(RestartState::Draining, RestartState::CodexStopped),
     )?;
@@ -1025,9 +1021,9 @@ fn persist_aborted(
     let _ = persist_receipt(transaction, request);
 }
 
-/// Once Codex has been closed for an approved restart transaction, every
-/// abort path restores the same Desktop executable best-effort.  The durable
-/// receipt remains `aborted`; relaunch is interaction recovery, not success.
+/// Once an approved restart transaction has begun closing Codex, every abort
+/// path restores the same Desktop executable best-effort.  The durable receipt
+/// remains `aborted`; relaunch is interaction recovery, not success.
 fn abort_and_relaunch(
     transaction: &mut RestartTransaction,
     request: &IntegrationRepairRestartRequest,
@@ -1035,6 +1031,57 @@ fn abort_and_relaunch(
 ) {
     persist_aborted(transaction, request);
     relaunch_after_failure(desktop);
+}
+
+async fn close_codex_desktop(desktop: &Path) -> Result<CodexCloseOutcome, IntegrationRestartError> {
+    let graceful_close_pids = request_graceful_close(desktop)?;
+    if wait_for_codex_exit(desktop, GRACEFUL_CLOSE_TIMEOUT).await? {
+        return Ok(CodexCloseOutcome {
+            graceful_close_pids,
+            fallback_terminated_pids: Vec::new(),
+        });
+    }
+
+    let fallback_terminated_pids =
+        terminate_verified_tree_excluding(desktop, Some(std::process::id()))?;
+    if !wait_for_codex_exit(desktop, FORCED_CLOSE_TIMEOUT).await? {
+        return Err(IntegrationRestartError::CloseTimeout);
+    }
+    Ok(CodexCloseOutcome {
+        graceful_close_pids,
+        fallback_terminated_pids,
+    })
+}
+
+async fn wait_for_codex_exit(
+    desktop: &Path,
+    timeout: Duration,
+) -> Result<bool, IntegrationRestartError> {
+    wait_for_process_exit(timeout, PROCESS_EXIT_POLL_INTERVAL, || {
+        Ok(exact_image_instances(&snapshot()?, desktop).is_empty())
+    })
+    .await
+}
+
+async fn wait_for_process_exit<F>(
+    timeout: Duration,
+    poll_interval: Duration,
+    mut is_exited: F,
+) -> Result<bool, IntegrationRestartError>
+where
+    F: FnMut() -> Result<bool, IntegrationRestartError>,
+{
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        if is_exited()? {
+            return Ok(true);
+        }
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
+            return Ok(false);
+        }
+        tokio::time::sleep(poll_interval.min(deadline - now)).await;
+    }
 }
 
 fn persist_rollback_required(
@@ -1395,6 +1442,29 @@ mod tests {
         assert!(!is_preapply_restart_state(RestartState::RollbackRequired));
         assert!(!is_preapply_restart_state(RestartState::PartiallyApplied));
         assert!(!is_preapply_restart_state(RestartState::Exited));
+    }
+
+    #[tokio::test]
+    async fn forced_close_wait_rechecks_process_exit_before_declaring_timeout() {
+        let mut observations = 0;
+        let exited = wait_for_process_exit(
+            Duration::from_secs(1),
+            Duration::ZERO,
+            || -> Result<bool, IntegrationRestartError> {
+                observations += 1;
+                Ok(observations >= 2)
+            },
+        )
+        .await
+        .unwrap();
+        assert!(exited);
+        assert_eq!(observations, 2);
+
+        assert!(
+            !wait_for_process_exit(Duration::ZERO, Duration::ZERO, || Ok(false))
+                .await
+                .unwrap()
+        );
     }
 
     #[test]

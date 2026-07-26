@@ -186,7 +186,9 @@ request는 같은 operation으로 idempotent하게 반환한다.
 
 1. countdown 종료 뒤 Updater는 target Codex instance에 graceful stop을 요청한다.
 2. bounded grace 뒤에도 남은 process는 exact identity가 일치할 때만 종료한다.
-   updater의 own PID와 descendant는 이 fallback에서 제외한다.
+   updater의 own PID와 descendant는 이 fallback에서 제외한다. 강제 종료 요청은 process
+   exit 완료가 아니므로 Updater는 별도 bounded window에서 exact image가 실제로 사라질
+   때까지 재관측하며, 요청 직후 한 번의 census로 `CloseTimeout`을 결정하지 않는다.
 3. 소유 MCP가 EOF로 종료되고 Controller가 update lease를 handoff한 것을 확인한다.
 4. Updater는 current-user backup을 만든 뒤 integration-only file set을 교체하고
    release manifest를 마지막 commit marker로 원자 교체하며 official Plugin registration
@@ -198,6 +200,10 @@ request는 같은 operation으로 idempotent하게 반환한다.
    Plugin/Hook version을 확인한다.
 8. online signal이 없으면 `applied_validation_pending` receipt만 남기고
    Updater는 종료한다. 다음 실제 `SessionStart`가 후속 검증을 수행한다.
+
+`draining` 이후 census·graceful close·fallback termination·exit wait가 실패하면 receipt를
+`aborted`로 보존하고 같은 Desktop executable을 best-effort로 재실행한다. 이는 update
+성공 승격이 아니라 사용자가 닫힌 Codex를 수동 복구하지 않게 하는 interaction recovery다.
 
 offline installer는 process-local `TEMP`/`TMP`를 fixed local
 `Star-Control/installer-temp`로만 바꾼다. 이는 reparse-point 기반 사용자 TEMP가

@@ -215,6 +215,11 @@ foreach ($requiredCodexAsset in @(
     Assert-ValidationContract -Condition ($packageReleaseSource.Contains($requiredCodexAsset)) -Message "release package requires Codex asset: $requiredCodexAsset"
 }
 
+$updaterRestartSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "crates/control/star-updater-core/src/integration_restart.rs") -Raw -Encoding UTF8
+Assert-ValidationContract -Condition ($updaterRestartSource.Contains('const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);')) -Message "forced Codex termination has a bounded exit-observation window"
+Assert-ValidationContract -Condition (([regex]::Matches($updaterRestartSource, 'close_codex_desktop\(&desktop\)\.await')).Count -eq 2) -Message "offline installer and integration restart share the exact close contract"
+Assert-ValidationContract -Condition ($updaterRestartSource.Contains('abort_and_relaunch(&mut transaction, &receipt_request, &desktop);')) -Message "offline close failure relaunches the same Desktop"
+
 $installerSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "packaging/windows/star-control.iss") -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($installerSource.Contains('CloseApplications=no')) -Message "installer must not terminate active Codex"
 Assert-ValidationContract -Condition (-not $installerSource.Contains('CloseApplications=force')) -Message "forced application termination must stay disabled"
