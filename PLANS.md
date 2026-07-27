@@ -27,6 +27,7 @@
 | P-0059 current feature implementation audit | `SOURCE_PASS / FULL_PASS / STRICT_APPROVE_WITH_NOTES` | current `728c662`에서 공통 기반, A01~D03 23개 기능과 C01 16개 Profile을 여섯 층으로 재감사해 23/23·16/16·Runtime 4/4·Schema 213·error 528·MCP 170/170 PASS. pre-seal FULL 11/11 PASS, BLOCKER·MAJOR 없음. 설치 `b20d234` recovery-only와 외부 Gate는 분리하며 final current-byte FULL·commit/push identity는 handoff가 소유 |
 | installed P-0057 update | `DONE / verified` | 설치 source `f496f6e732cb9692da7716807b724a75c6ca4d05`, `D:\도구\Star-Control` installation verified, Codex integration registered. management는 별도 `recovery_only` 상태로 보존 |
 | P-0060 Codex 전체 기능 routing·delivery | `LIVE_RESTART_PASS / FINAL_INSTALL_PENDING` | 중앙 Skill·23/16 routing·7-file installer/updater delivery, 공통 component closure와 disk round-trip 검증을 구현. 비동기 forced-close를 fresh census 반복으로 판정한 `upd_WHA...`가 `exited`하고 Codex 자동 재기동까지 실측됐으며, exact final installer 재생성·설치와 Runtime/management 후검증이 남음 |
+| P-0061 PR0~31 final lock | `SOURCE_PASS / FULL_PASS / AGGREGATE_HELD` | 15-project Catalog에 Server/Deployment 추가, PR0~31 CrossRepoChangeBundle source descriptor와 project별 validation/evidence/approval/rollback/signing/publication 상태 보존. source FULL과 bundle aggregate는 별개이며 partial/unverified와 외부 signing/publication 미실행 때문에 전체 PASS 금지 |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish 필요 |
 
 ## P-0056 현재 구현 범위
@@ -77,6 +78,14 @@
 - restart evidence: `upd_frw...`는 forced-close exit wait 누락으로 `aborted`; `upd_cQi...`는 installer post-step 전 수동 Codex 기동으로 `ActiveCodexDesktop`(exit 7)·`rollback_required`; `upd_xHB...`는 5/7 hash mismatch로 `partially_applied`; `upd_iEb...`는 inaccessible helper에서 종료 pass가 중단돼 `aborted`; `upd_BAb...`는 비동기 종료 직후 census를 terminal failure로 오판해 `aborted`. 이를 분리한 bounded 반복 pass의 `upd_WHAje3cdPeS--gZo2uFg3qvOkgEwJ3ox4McLpjUmTYc`는 8개 instance를 닫고 `2026-07-26T04:20:42.661184300Z`에 `exited`, updater-parent Codex 자동 재기동을 완료했다.
 - 외부 Gate: Authenticode/trusted timestamp/publication은 `blocked_external`; unsigned local artifact를 Stable 또는 published로 승격하지 않는다.
 
+## P-0061 현재 Context Pack
+
+- 목표: Server/Deployment source 등록과 PR0~31 CrossRepoChangeBundle 최종 잠금.
+- 범위: `catalog/projects.toml`, `catalog/cross-repo-change-bundles/pr0-pr31-final-lock.toml`, source validator, current audit와 exact-count tests.
+- 상태: catalog participant 15개, Graphics external evidence root 1개, source FULL PASS, bundle aggregate `held`.
+- 금지: Star-Workflow 전송, installed Runtime/package 갱신, 외부 signing/publication, partial/unverified의 전체 PASS 승격.
+- 자기참조 경계: PR31 cutoff SHA는 descriptor가 소유하고 PR32 final commit/push SHA는 handoff가 소유한다.
+
 ## 현재 Gate
 
 1. live source·P-0056 artifact·installed Runtime exact subject 분리: **DONE**.
@@ -88,3 +97,4 @@
 7. P-0059 23개 기능·16개 Profile current source surface와 pre-seal FULL: **`PASS`**. STRICT review는 `APPROVE_WITH_NOTES`; 최종 current-byte FULL identity는 handoff가 소유한다.
 8. installed file tree `6430219`, 이전 active Runtime generation의 management recovery-only 상태: **`blocked_operational`**. 최종 installer update와 exact read-only rebuild plan 전에는 apply하지 않는다.
 9. P-0060 source·installer·updater와 Codex 자동 재기동: **`SOURCE_PASS / LIVE_RESTART_PASS / FINAL_INSTALL_PENDING`**. `upd_WHA...` receipt는 `exited`; final-byte FULL·commit, x64/ARM64 package 재생성·설치, live integration/Runtime/management 검증과 push는 **`IN_PROGRESS`**.
+10. P-0061 Server/Deployment 등록과 PR0~31 CrossRepoChangeBundle: **`SOURCE_PASS / FULL_PASS / AGGREGATE_HELD`**. project별 상태와 외부 Gate를 보존하며 final source evidence/commit/push identity는 handoff가 소유한다.

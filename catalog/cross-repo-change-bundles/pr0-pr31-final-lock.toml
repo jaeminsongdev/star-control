@@ -1,0 +1,262 @@
+schema_version = 1
+descriptor_kind = "cross_repo_change_bundle_source"
+descriptor_id = "ecosystem-pr0-pr31-final-lock"
+wire_schema_id = "star.cross-repo-change-bundle"
+wire_schema_version = 1
+participant_wire_schema_id = "star.change-bundle-participant"
+participant_wire_schema_version = 2
+catalog_source = "catalog/projects.toml"
+active_control_canonical = "star-control"
+forbidden_control_targets = ["Star-Workflow"]
+cutoff = "remote refs/heads/main observed 2026-07-27 before PR32 seal commits"
+coverage_prs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+aggregate_state = "held"
+completion_target = "release_handoff_ready"
+completion_level_reached = "none"
+remote_policy = "observe_only"
+partial_promotion_forbidden = true
+unverified_promotion_forbidden = true
+external_signing_promotion_forbidden = true
+hold_reasons = [
+  "required participants retain partial or unverified validation/evidence",
+  "Danpung and Deployment production signing is not provided and publication is not run",
+  "Star-Control external signing/publication remains outside this source-only bundle",
+]
+
+[[participants]]
+project_key = "star-control"
+base_commit_oid = "36f8dc1e4c7cbdbf6607cace456f181654589372"
+required = true
+roles = ["tooling", "validation_only"]
+participant_state = "held"
+validation_state = "pass"
+evidence_state = "current"
+approval_state = "approved"
+rollback_state = "partial"
+release_signing_state = "not_run"
+release_publication_state = "not_run"
+checkout_observation = "clean_main_at_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "devtools"
+base_commit_oid = "f9b25576c41c47810c80898070c9a0e43293cc90"
+required = true
+roles = ["provider"]
+participant_state = "completed"
+validation_state = "pass"
+evidence_state = "current"
+approval_state = "approved"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "clean_main_at_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "content"
+base_commit_oid = "1c6187a01266bfbc3b2cf09ecec07bc921460b94"
+required = true
+roles = ["provider"]
+participant_state = "held"
+validation_state = "unverified"
+evidence_state = "missing"
+approval_state = "pending"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "dirty_non_main_worktree_with_local_main_behind_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "server"
+base_commit_oid = "aa94f037b3d8eaa2c083bb53275645223e1cc0d3"
+required = true
+roles = ["provider"]
+participant_state = "held"
+validation_state = "pass"
+evidence_state = "current"
+approval_state = "approved"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "clean_main_at_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "deployment"
+base_commit_oid = "a15d8426e9f873fc2cadb04ef5117ab24e817b53"
+required = true
+roles = ["provider"]
+participant_state = "held"
+validation_state = "pass"
+evidence_state = "current"
+approval_state = "approved"
+rollback_state = "partial"
+release_signing_state = "not_provided"
+release_publication_state = "not_run"
+checkout_observation = "clean_main_at_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "danpung"
+base_commit_oid = "eb01ea33209b2f67761ae7652dda8917fb00c11e"
+required = true
+roles = ["consumer", "data_owner"]
+participant_state = "held"
+validation_state = "partial"
+evidence_state = "partial"
+approval_state = "approved"
+rollback_state = "partial"
+release_signing_state = "not_provided"
+release_publication_state = "not_run"
+checkout_observation = "clean_non_main_worktree_behind_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "emulink"
+base_commit_oid = "f4324596131ef0c3bc10a4253eb6d185cfab4f5b"
+required = true
+roles = ["consumer"]
+participant_state = "held"
+validation_state = "unverified"
+evidence_state = "missing"
+approval_state = "pending"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "main_at_remote_main_with_preexisting_dirty_entries"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "format"
+base_commit_oid = "b2a5e130109bb25549ce710f8fdd293126b99e67"
+required = true
+roles = ["provider"]
+participant_state = "completed"
+validation_state = "pass"
+evidence_state = "current"
+approval_state = "approved"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "clean_main_at_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "adapter"
+base_commit_oid = "415877cc3f1b22b8b49d617246f6c2e9dbedb914"
+required = true
+roles = ["provider", "consumer"]
+participant_state = "held"
+validation_state = "partial"
+evidence_state = "partial"
+approval_state = "approved"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "clean_main_at_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "mod-foundry"
+base_commit_oid = "5729d70bb7d71a9343593c9853eac8494f6cd66c"
+required = true
+roles = ["consumer"]
+participant_state = "held"
+validation_state = "unverified"
+evidence_state = "missing"
+approval_state = "pending"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "main_at_remote_main_with_preexisting_dirty_entries"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "language"
+base_commit_oid = "09aaf6d23249ec5a43a85a5247837e56fc7f51a8"
+required = true
+roles = ["provider"]
+participant_state = "held"
+validation_state = "unverified"
+evidence_state = "missing"
+approval_state = "pending"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "clean_non_main_worktree_with_local_main_at_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "storage"
+base_commit_oid = "4d39477429b09354097def95e638ef78c18c30dd"
+required = true
+roles = ["provider", "data_owner"]
+participant_state = "held"
+validation_state = "partial"
+evidence_state = "partial"
+approval_state = "approved"
+rollback_state = "partial"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "main_at_remote_main_with_preexisting_dirty_entries"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "ecosystem-canonical"
+base_commit_oid = "a5bc4ec0049d92520a6b8440e65d77d399525edd"
+required = true
+roles = ["tooling", "validation_only"]
+participant_state = "completed"
+validation_state = "pass"
+evidence_state = "current"
+approval_state = "approved"
+rollback_state = "not_applicable"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "clean_main_at_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "knowledge"
+base_commit_oid = "2075c5e827922feaa295d8bf29488a955f1b1e11"
+required = true
+roles = ["provider", "data_owner"]
+participant_state = "held"
+validation_state = "pass"
+evidence_state = "current"
+approval_state = "approved"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "local_main_behind_remote_main_with_preexisting_dirty_entries"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[participants]]
+project_key = "core"
+base_commit_oid = "95573fd5c1ae0f477c45ed4e85dbc22ed18c3eb2"
+required = true
+roles = ["provider"]
+participant_state = "completed"
+validation_state = "pass"
+evidence_state = "current"
+approval_state = "approved"
+rollback_state = "not_run"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+checkout_observation = "clean_main_at_remote_main"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]
+
+[[external_evidence_roots]]
+project_key = "graphics"
+base_commit_oid = "8fab0c98d2239ae30c085c619ae8efe1ed8657fd"
+catalog_registration_state = "not_registered"
+validation_state = "pass"
+evidence_state = "current"
+approval_state = "approved"
+rollback_state = "partial"
+release_signing_state = "not_applicable"
+release_publication_state = "not_applicable"
+reason = "PR22-26 evidence is preserved without expanding PR32 project registration scope beyond Server and Deployment"
+evidence_refs = ["docs/testing/p0061-pr0-pr31-cross-repo-final-lock-2026-07-27.md"]

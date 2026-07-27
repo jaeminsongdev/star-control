@@ -557,7 +557,7 @@ mod tests {
     const LIVE_CATALOG: &str = include_str!("../../../../catalog/projects.toml");
 
     #[test]
-    fn tracked_catalog_has_exactly_thirteen_active_projects_and_registration_is_enabled() {
+    fn tracked_catalog_has_exactly_fifteen_active_projects_and_registration_is_enabled() {
         let manifest = parse_project_catalog(LIVE_CATALOG).unwrap();
         assert!(manifest.registration_enabled);
         assert_eq!(
@@ -566,9 +566,9 @@ mod tests {
                 .iter()
                 .filter(|project| project.role == CatalogProjectRole::ActiveCanonical)
                 .count(),
-            13
+            15
         );
-        assert_eq!(manifest.projects.len(), 13);
+        assert_eq!(manifest.projects.len(), 15);
         assert!(
             manifest
                 .projects

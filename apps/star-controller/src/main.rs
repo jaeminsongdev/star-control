@@ -1770,7 +1770,7 @@ fn run_evidence_get_command(
 fn run_doctor_command(_arguments: &serde_json::Value) -> Result<serde_json::Value, RuntimeFailure> {
     let catalog = load_project_catalog_view()?;
     let handlers_consistent = controller_command_registry_consistent();
-    let active_count_valid = catalog.summary.active_canonical_projects == 13;
+    let active_count_valid = catalog.summary.active_canonical_projects == 15;
     let catalog_clean = catalog.summary.unavailable_projects == 0
         && catalog.summary.identity_mismatches == 0
         && catalog.summary.identity_unverified == 0;
@@ -24706,7 +24706,7 @@ mod tests {
                 .iter()
                 .filter(|project| project.role == CatalogProjectRole::ActiveCanonical)
                 .count(),
-            13
+            15
         );
         assert!(tracked_manifest.registration_enabled);
         let manifest_directory = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));

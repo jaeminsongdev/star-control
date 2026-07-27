@@ -22,6 +22,10 @@ SCHEMA_ROOT = ROOT / "specs/schemas/v1"
 SCHEMA_MANIFEST = ROOT / "specs/schemas/manifest.json"
 SOURCE_EVIDENCE_PATH = ROOT / "catalog/product-source-evidence.json"
 CORE_TOOL_PACKAGE_PATH = ROOT / "catalog/tool-packages/star-control-core.toml"
+PROJECT_CATALOG_PATH = ROOT / "catalog/projects.toml"
+CROSS_REPO_FINAL_LOCK_PATH = (
+    ROOT / "catalog/cross-repo-change-bundles/pr0-pr31-final-lock.toml"
+)
 FIXED_MCP_PATH = ROOT / "crates/foundation/star-contracts/src/fixed_mcp.rs"
 CODEX_SKILL_ROOT = (
     ROOT
@@ -295,6 +299,159 @@ def git_product_source_files(errors: list[str]) -> set[pathlib.Path]:
     return observed
 
 
+def validate_cross_repo_final_lock(
+    errors: list[str], fingerprint_files: set[pathlib.Path]
+) -> None:
+    for path in (PROJECT_CATALOG_PATH, CROSS_REPO_FINAL_LOCK_PATH):
+        if not path.is_file():
+            errors.append(f"required cross-repo source manifest is missing: {path.relative_to(ROOT)}")
+            return
+        fingerprint_files.add(path)
+
+    project_catalog = tomllib.loads(PROJECT_CATALOG_PATH.read_text(encoding="utf-8"))
+    projects = project_catalog.get("projects", [])
+    project_keys = [str(project.get("project_key")) for project in projects]
+    if project_catalog.get("registration_enabled") is not True:
+        errors.append("project catalog registration must remain enabled")
+    if len(project_keys) != 15 or len(set(project_keys)) != 15:
+        errors.append(f"project catalog must contain exactly 15 unique projects: {project_keys}")
+    expected_new_projects = {
+        "server": ("서버", "https://github.com/jaeminsongdev/server.git"),
+        "deployment": ("배포", "https://github.com/jaeminsongdev/release.git"),
+    }
+    projects_by_key = {str(project.get("project_key")): project for project in projects}
+    for project_key, (relative_path, expected_origin) in expected_new_projects.items():
+        project = projects_by_key.get(project_key, {})
+        if (
+            project.get("relative_path") != relative_path
+            or project.get("role") != "active_canonical"
+            or project.get("repository_kind") != "git"
+            or project.get("expected_origin") != expected_origin
+        ):
+            errors.append(f"{project_key} project catalog registration is incomplete")
+
+    bundle = tomllib.loads(CROSS_REPO_FINAL_LOCK_PATH.read_text(encoding="utf-8"))
+    if (
+        bundle.get("wire_schema_id") != "star.cross-repo-change-bundle"
+        or bundle.get("wire_schema_version") != 1
+        or bundle.get("participant_wire_schema_id") != "star.change-bundle-participant"
+        or bundle.get("participant_wire_schema_version") != 2
+    ):
+        errors.append("PR0-31 source descriptor does not bind the CrossRepoChangeBundle contracts")
+    if bundle.get("coverage_prs") != list(range(32)):
+        errors.append("CrossRepoChangeBundle coverage must contain PR0 through PR31 exactly once")
+    if bundle.get("active_control_canonical") != "star-control":
+        errors.append("active control canonical must be Star-Control")
+    if bundle.get("forbidden_control_targets") != ["Star-Workflow"]:
+        errors.append("Star-Workflow must remain the only explicit forbidden control target")
+    if bundle.get("aggregate_state") != "held":
+        errors.append("PR0-31 aggregate must remain held")
+    for policy in (
+        "partial_promotion_forbidden",
+        "unverified_promotion_forbidden",
+        "external_signing_promotion_forbidden",
+    ):
+        if bundle.get(policy) is not True:
+            errors.append(f"CrossRepoChangeBundle must enforce {policy}")
+
+    participants = bundle.get("participants", [])
+    participant_keys = [str(participant.get("project_key")) for participant in participants]
+    expected_pr31_pins = {
+        "star-control": "36f8dc1e4c7cbdbf6607cace456f181654589372",
+        "devtools": "f9b25576c41c47810c80898070c9a0e43293cc90",
+        "content": "1c6187a01266bfbc3b2cf09ecec07bc921460b94",
+        "server": "aa94f037b3d8eaa2c083bb53275645223e1cc0d3",
+        "deployment": "a15d8426e9f873fc2cadb04ef5117ab24e817b53",
+        "danpung": "eb01ea33209b2f67761ae7652dda8917fb00c11e",
+        "emulink": "f4324596131ef0c3bc10a4253eb6d185cfab4f5b",
+        "format": "b2a5e130109bb25549ce710f8fdd293126b99e67",
+        "adapter": "415877cc3f1b22b8b49d617246f6c2e9dbedb914",
+        "mod-foundry": "5729d70bb7d71a9343593c9853eac8494f6cd66c",
+        "language": "09aaf6d23249ec5a43a85a5247837e56fc7f51a8",
+        "storage": "4d39477429b09354097def95e638ef78c18c30dd",
+        "ecosystem-canonical": "a5bc4ec0049d92520a6b8440e65d77d399525edd",
+        "knowledge": "2075c5e827922feaa295d8bf29488a955f1b1e11",
+        "core": "95573fd5c1ae0f477c45ed4e85dbc22ed18c3eb2",
+    }
+    if len(participant_keys) != len(set(participant_keys)):
+        errors.append("CrossRepoChangeBundle participant keys contain duplicates")
+    if set(participant_keys) != set(project_keys):
+        errors.append(
+            "CrossRepoChangeBundle participants must match the active project catalog: "
+            f"missing={sorted(set(project_keys) - set(participant_keys))} "
+            f"extra={sorted(set(participant_keys) - set(project_keys))}"
+        )
+
+    sha_pattern = re.compile(r"^[0-9a-f]{40}$")
+    validation_states = {"pass", "partial", "unverified", "not_run"}
+    evidence_states = {"current", "partial", "missing", "stale"}
+    approval_states = {"approved", "pending", "not_required"}
+    rollback_states = {"passed", "partial", "not_run", "not_applicable", "required"}
+    release_states = {"not_applicable", "not_run", "not_provided", "passed", "published"}
+    participant_states = {"completed", "held", "rollback_required", "outcome_unknown"}
+    has_non_pass = False
+    has_external_release_hold = False
+    for participant in participants:
+        project_key = str(participant.get("project_key"))
+        base_commit_oid = str(participant.get("base_commit_oid", ""))
+        if sha_pattern.fullmatch(base_commit_oid) is None:
+            errors.append(f"{project_key} participant exact commit is invalid")
+        elif base_commit_oid != expected_pr31_pins.get(project_key):
+            errors.append(f"{project_key} participant exact commit is stale or unexpected")
+        if participant.get("required") is not True:
+            errors.append(f"{project_key} participant must remain required")
+        if participant.get("participant_state") not in participant_states:
+            errors.append(f"{project_key} participant state is invalid")
+        if participant.get("validation_state") not in validation_states:
+            errors.append(f"{project_key} validation state is invalid")
+        if participant.get("evidence_state") not in evidence_states:
+            errors.append(f"{project_key} evidence state is invalid")
+        if participant.get("approval_state") not in approval_states:
+            errors.append(f"{project_key} approval state is invalid")
+        if participant.get("rollback_state") not in rollback_states:
+            errors.append(f"{project_key} rollback state is invalid")
+        if participant.get("release_signing_state") not in release_states:
+            errors.append(f"{project_key} release signing state is invalid")
+        if participant.get("release_publication_state") not in release_states:
+            errors.append(f"{project_key} release publication state is invalid")
+        if participant.get("validation_state") != "pass" or participant.get("evidence_state") != "current":
+            has_non_pass = True
+            if participant.get("participant_state") == "completed":
+                errors.append(f"{project_key} incomplete evidence cannot be completed")
+        if participant.get("release_signing_state") in {"not_run", "not_provided"} or participant.get(
+            "release_publication_state"
+        ) in {"not_run", "not_provided"}:
+            has_external_release_hold = True
+        evidence_refs = participant.get("evidence_refs", [])
+        if not evidence_refs:
+            errors.append(f"{project_key} participant has no evidence reference")
+        for evidence_ref in evidence_refs:
+            evidence_path = relative_file(str(evidence_ref), errors)
+            if evidence_path is not None:
+                fingerprint_files.add(evidence_path)
+
+    if not has_non_pass:
+        errors.append("PR0-31 bundle must preserve at least one partial or unverified participant")
+    if not has_external_release_hold:
+        errors.append("PR0-31 bundle must preserve external signing/publication hold state")
+
+    external_roots = bundle.get("external_evidence_roots", [])
+    if len(external_roots) != 1 or external_roots[0].get("project_key") != "graphics":
+        errors.append("Graphics PR22-26 evidence must remain one explicit external evidence root")
+    else:
+        graphics = external_roots[0]
+        if (
+            graphics.get("catalog_registration_state") != "not_registered"
+            or graphics.get("base_commit_oid")
+            != "8fab0c98d2239ae30c085c619ae8efe1ed8657fd"
+        ):
+            errors.append("Graphics external evidence registration boundary is invalid")
+        for evidence_ref in graphics.get("evidence_refs", []):
+            evidence_path = relative_file(str(evidence_ref), errors)
+            if evidence_path is not None:
+                fingerprint_files.add(evidence_path)
+
+
 def main() -> int:
     errors: list[str] = []
     fingerprint_files: set[pathlib.Path] = set()
@@ -352,6 +509,7 @@ def main() -> int:
         if fixed.is_file():
             fingerprint_files.add(fixed)
     fingerprint_files.update(git_product_source_files(errors))
+    validate_cross_repo_final_lock(errors, fingerprint_files)
 
     for feature in features:
         feature_id = str(feature.get("id", "?"))

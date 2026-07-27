@@ -17,7 +17,7 @@
 
 ### P-0030 추적 allowlist precursor 경계
 
-- `catalog/projects.toml`은 현재 운영 대상의 Git 추적 정본이다. 정확히 13개 `active_canonical` 프로젝트만 명시하며 P-0041부터 `registration_enabled=true`다.
+- `catalog/projects.toml`은 현재 운영 대상의 Git 추적 정본이다. PR32에서 Server와 Deployment를 더해 정확히 15개 `active_canonical` 프로젝트를 명시하며 `registration_enabled=true`다.
 - P-0011에서 폐기한 구 관제 저장소·로컬 AI 실험, 하나_프로젝트의 nested Git, `임시문서`, `legacy/`·`래거시/`, backup·sandbox·bootstrap checkout, linked worktree와 Git 정본이 아닌 LAWOS는 명시적 제외 대상이다. 제외 대상은 인접 경로 탐색으로 다시 등록하지 않는다.
 - `star.core.project.list`, `star.core.project.status`, `star.core.doctor`는 이 파일에 선언된 정확한 경로만 읽는다. discovery root 재귀 탐색, 인접 checkout 자동 등록, 관리 DB write는 수행하지 않는다.
 - probe는 root 존재, Git top-level, checkout kind, origin, `git-common-dir`를 독립 상태로 보고한다. role schema는 `active_canonical`, `linked_worktree`, `read_only_migration_source`, `backup`, `sandbox`, `bootstrap_checkout`을 구분할 수 있지만 현재 운영 allowlist에는 `active_canonical`만 존재하며 unavailable·identity mismatch를 성공으로 숨기지 않는다.

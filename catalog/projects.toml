@@ -29,6 +29,22 @@ repository_kind = "git"
 expected_origin = "https://github.com/jaeminsongdev/content.git"
 
 [[projects]]
+project_key = "server"
+display_name = "서버"
+relative_path = "서버"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/server.git"
+
+[[projects]]
+project_key = "deployment"
+display_name = "배포"
+relative_path = "배포"
+role = "active_canonical"
+repository_kind = "git"
+expected_origin = "https://github.com/jaeminsongdev/release.git"
+
+[[projects]]
 project_key = "danpung"
 display_name = "단풍"
 relative_path = "게임/단풍"
