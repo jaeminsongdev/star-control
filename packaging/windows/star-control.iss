@@ -54,11 +54,11 @@ Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 [CustomMessages]
 english.CodexNoticeCaption=Codex integration
 english.CodexNoticeDescription=Review the required follow-up after installation.
-english.CodexNoticeMessage=Star-Control uses an installed local Marketplace. After setup, run star integration status. If manual_commands are present, complete them in the official Codex CLI or Plugin screen, open a new task, and review and trust the SessionStart Hook. Setup never edits Codex config, cache, or Hook trust files directly.
+english.CodexNoticeMessage=Star-Control uses an installed local Marketplace. After setup, run star integration status. If manual_commands are present, complete them in the official Codex CLI or Plugin screen, open a new task, and review and trust the Star-Control Hooks, including SessionStart and SessionEnd. Setup never edits Codex config, cache, or Hook trust files directly.
 english.OfflineInstallRequired=Close Codex and all Star-Control processes, then retry from a separate PowerShell. Setup stopped before changing any files.
 korean.CodexNoticeCaption=Codex 연동
 korean.CodexNoticeDescription=설치 뒤 필요한 후속 조치를 확인하세요.
-korean.CodexNoticeMessage=Star-Control은 설치된 로컬 Marketplace를 사용합니다. 설치 뒤 star integration status를 실행하세요. manual_commands가 있으면 공식 Codex CLI나 Plugin 화면에서 완료하고 새 작업을 연 뒤 SessionStart Hook을 검토하고 신뢰해야 합니다. 설치 파일은 Codex 설정, cache 또는 Hook 신뢰 파일을 직접 수정하지 않습니다.
+korean.CodexNoticeMessage=Star-Control은 설치된 로컬 Marketplace를 사용합니다. 설치 뒤 star integration status를 실행하세요. manual_commands가 있으면 공식 Codex CLI나 Plugin 화면에서 완료하고 새 작업을 연 뒤 SessionStart와 SessionEnd를 포함한 Star-Control Hook을 검토하고 신뢰해야 합니다. 설치 파일은 Codex 설정, cache 또는 Hook 신뢰 파일을 직접 수정하지 않습니다.
 korean.OfflineInstallRequired=Codex 앱과 모든 Star-Control 프로세스를 종료한 뒤 별도 PowerShell에서 다시 실행하세요. 설치는 파일을 변경하기 전에 중단되었습니다.
 
 [Tasks]
