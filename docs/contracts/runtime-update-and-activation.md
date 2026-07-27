@@ -42,6 +42,14 @@ writer는 임시 파일을 flush한 뒤 원자적으로 교체한다. 손상·�
 
 `star update apply <generation-id> --state-generation <id> --approve <sha256>`는 bridge compatible, handler ready, rollback available, candidate verification pass, approval scope 일치를 모두 요구한다. action 제거, breaking schema, risk lane/permission widening 또는 hook/new-task/Codex restart가 필요한 review는 runtime apply로 통과시키지 않는다. Stable root `star.exe`는 설치 manifest 전체 검증 뒤 `star-updater.exe runtime-apply`에 요청만 위임한다. Updater는 install/runtime root에 정확히 bind된 `star-updater.exe`를 `Cli` peer로 인증해 Controller shutdown을 요청하고, generation manifest와 Controller hash가 검증된 Runtime image 전부의 bounded quiescence를 확인한 뒤 selector를 원자 교체한다. 새 Runtime과 rollback Runtime은 update lease 중 허용된 manifest-verified installed CLI `doctor.run`의 IPC `status=ok`와 Doctor `status=pass` postcheck를 모두 통과해야 각각 `committed`와 `rolled_back`이 된다. fixed CLI/MCP와 Codex는 Runtime quiesce 대상이 아니다. Codex와 고정 MCP를 포함하는 통합 변경은 이 경로가 아니라 ADR-0014의 10초 restart-armed updater transaction을 사용한다.
 
+### Codex integration-only candidate 봉인
+
+fixed `star.exe`/`star-mcp.exe` 또는 `integrations/codex-plugin-template/`만 바꾸는 후보는 verified installed root의 별도 `dist/stage` copy에서 `star-package-release reseal-integration --source-revision <new-revision>`으로 봉인한다. 이 명령은 기존 file inventory와 Runtime nested manifest/source identity를 보존하고, 실제 hash delta가 integration allowlist 밖이거나 비어 있으면 실패한다. `star-updater.exe`, Controller, Runtime Generation, catalog 또는 schema가 달라진 stage를 integration-only로 재분류하지 않는다.
+
+integration-only outer manifest의 `source_revision`은 새 fixed integration payload의 source를 기록하고, nested Runtime release manifest는 기존 Runtime source revision을 그대로 유지한다. candidate release-manifest SHA-256, changed-file digest와 `approval_scope_sha256`가 이 비대칭 assembly를 exact candidate로 결합한다. `star update inspect <absolute-stage>`가 `codex_integration_update`, rollback available과 `requires_codex_restart=true`를 반환한 exact candidate만 absolute-stage `update apply`로 넘긴다. `restart_armed`는 완료가 아니며 Updater의 terminal receipt, integration repair, rendered/cache identity와 새 `SessionStart` postcheck가 필요하다.
+
+설치된 Updater의 renderer allowlist나 Hook event contract 자체를 넓히는 최초 전환은 그 구 Updater가 새 bundle을 완전하게 렌더링할 수 없으므로 integration-only apply로 bootstrap하지 않는다. complete x64 stage와 installer를 만들고 설치된 Updater의 `offline-installer-restart` transaction으로 fixed Updater·Bridge·Plugin·Runtime을 함께 교체한다. 새 renderer가 검증된 뒤의 동일 계약 내 Plugin/Bridge 변경부터 integration-only reseal/apply를 사용할 수 있다.
+
 ### Replacement installer의 generation reconcile
 
 `star update offline-installer-restart`는 setup 성공만으로 완료되지 않는다. 기존 activation record가 있으면 Inno Setup의 `installation bridge initialize`는 그 selector를 보존하고, detached updater가 setup 종료 뒤 다음을 모두 수행한다.

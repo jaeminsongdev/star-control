@@ -24,15 +24,13 @@ Plugin 설치만으로 검사 코드를 자동 신뢰하지는 않는다. 사용
 
 ## 시작 흐름
 
-1. 사용자 입력 검사가 요청을 확인한다.
-2. 단순 대화인지 실제 개발 동작인지 구분한다.
-3. 개발 동작이면 Star-Control 목표 기록을 만들거나 기존 목표를 찾는다.
-4. Codex에 Star-Control MCP를 사용하라는 작업 지침을 추가한다.
-5. 계획이 승인되기 전에는 읽기와 설계만 허용한다.
-6. 파일 수정이나 명령 실행 직전에 활성 단계와 실행 허가를 확인한다.
-7. 허가가 없으면 동작을 거부하고 계획 흐름으로 돌아간다.
+1. `SessionStart` Hook이 fixed MCP/CLI 경계와 `star-control-operations` Skill 사용 지침을 추가하고 session lifecycle을 관찰한다.
+2. Skill이 요청을 MCP-first, Catalog-declared CLI-only, installed local lifecycle 또는 명시적 native fallback으로 분류한다.
+3. 실제 product action은 live Registry의 readiness·Schema·risk lane·descriptor hash를 확인한 뒤 Controller의 같은 application command로 실행한다.
+4. Codex 권한과 Star-Control 승인·PermissionPlan은 서로를 대신하지 않는다. 각 경계에서 요구한 승인을 모두 보존한다.
+5. Hook lifecycle evidence, operation terminal result와 실제 ChangeSet·Gate를 결합해 완료를 판정한다.
 
-요청 분류가 틀릴 수 있으므로 단순 대화를 막지 않는 것을 우선한다. 대신 실제 변경 도구를 사용하려는 시점에 반드시 실행 허가를 확인한다.
+Hook은 일부 local tool path가 opt-out할 수 있는 보조 guardrail이다. 현재 Plugin Hook은 lifecycle과 context를 관찰하며 product action을 독자적으로 허용·거부하지 않는다. 실제 실행 통제는 fixed MCP lane, Controller admission, Codex permission과 exact approval가 소유한다.
 
 ## MCP가 제공할 기능
 
@@ -60,36 +58,21 @@ Controller는 watcher와 호출 직전 demand scan으로 TOML·Schema·EXE 변�
 
 `star-mcp.exe`와 Hook의 `star.exe`는 설치 루트에 남는 Bootstrap Bridge다. Bridge는 `%LOCALAPPDATA%\\Star-Control\\installation\\active-runtime.v1.json`이 가리키는 Runtime Generation의 Controller만 선택한다. Runtime Generation 교체는 Controller를 drain하고 다시 연결할 수 있지만 Codex·MCP stdio process의 재시작이나 Plugin/MCP 설정 변경을 요구하지 않는다. Bridge/Plugin 자체를 바꾸는 통합 변경은 [ADR-0014](../decisions/ADR-0014-전용-Star-Updater와-Codex-생명주기.md)의 전용 Updater restart transaction·Hook 검토 경계다. persisted shape와 후보 검토는 [Runtime update와 activation 계약](../contracts/runtime-update-and-activation.md)을 따른다.
 
-## 실행 전후 검사
+## Hook lifecycle과 통제 경계
 
-### 사용자 입력 시
+| Hook | 현재 역할 | decision output |
+|---|---|---|
+| `SessionStart` | `startup|resume|clear|compact`에서 Skill/MCP route context 주입, session 시작 관찰 | `continue=true`, `additionalContext` |
+| `UserPromptSubmit` | turn 시작과 updater activity lease 관찰 | 없음 |
+| `PreToolUse` / `PostToolUse` | local tool 실행 depth 시작·종료 관찰 | 없음 |
+| `SubagentStart` / `SubagentStop` | subagent depth 시작·종료 관찰 | 없음 |
+| `Stop` | root turn stop과 bounded drain lease 관찰 | 없음 |
+| `SessionEnd` | main session 종료를 기존 bounded `root_stop` lifecycle로 관찰 | 없음 |
 
-- 개발 작업 후보를 감지한다.
-- 프로젝트와 기존 목표를 찾는다.
-- 필요한 Star-Control 안내를 Codex에 전달한다.
-
-### 도구 실행 전
-
-- 활성 목표와 단계가 있는지 확인한다.
-- 현재 도구와 대상이 단계에서 허용되는지 확인한다.
-- 유료 동작인지 확인한다.
-- 거부, 허용, 경고 중 정책에 맞는 결과를 반환한다.
-
-### 권한 요청 시
-
-- Star-Control 승인 설정과 Codex 권한 요청을 함께 판단한다.
-- Star-Control은 Codex나 관리자가 요구한 승인을 없애지 않는다.
-
-### 도구 실행 후
-
-- 명령 결과와 변경 파일을 실행 기록에 연결한다.
-- 실패와 범위 변화를 기록한다.
-
-### 작업 종료 시
-
-- 완료 조건과 필요한 검사를 확인한다.
-- 미완료면 이어서 해야 할 일을 Codex에 전달한다.
-- 완료면 증거와 이어하기 기록을 닫는다.
+- `SessionStart(source=compact)`가 compaction 뒤 context를 다시 주입하므로 `PreCompact`와 `PostCompact`를 중복 등록하지 않는다.
+- `PermissionRequest`는 tool name과 permission request를 Star-Control의 exact PermissionPlan·Approval scope에 결합하는 별도 계약이 생기기 전에는 등록하지 않는다. observation-only Hook을 권한 강제로 표현하지 않는다.
+- Hook definition이 바뀌면 Codex의 신뢰 검토가 다시 필요하다. Plugin/Bridge 변경은 candidate review가 `requires_codex_restart=true`를 반환한 경우에만 전용 Updater restart transaction으로 적용한다.
+- lifecycle observation 중 Controller가 unavailable이면 Hook은 Codex 작업을 실패시키지 않고 evidence 누락을 남긴다. 누락 evidence를 idle·pass·approval로 승격하지 않는다.
 
 ## App Server 사용
 

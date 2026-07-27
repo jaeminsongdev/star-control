@@ -32,36 +32,39 @@
 | P-0069 EvaluationRun·Profile 결정 | **DONE / local commit** | `fbbf30ea14df34fc06582c22e30ab22c42ef341a`; Code Health trial/reject evidence를 고정했고, external cost/actual workload cohort 부재로 `trial_candidate`만 기록하며 16개 built-in 유지·17번째 accept hold를 FULL 11/11 complete/stable/pass로 확인했다. |
 | P-0070 제품 전수 봉인 | **DONE / local commit** | final audit/ReviewPack, inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, release source closure와 FULL 11/11 complete/stable/pass를 확인했고 signing/publish를 blocked_external로 분리했다. |
 | P-0071 전체 STRICT 리뷰·main 전달 | **DONE / PUSHED** | `9ab88e0e069540800a4701d4516ae9692837bc77`; final FULL 11/11과 STRICT review 뒤 `origin/main` readback까지 완료했다. |
-| P-0072 Windows x64 Runtime closure | **RUNTIME COMMITTED / DELIVERY PENDING** | process-tree source closure는 `2457b0949a167a6aa5d546669c39b141ceac4cbe`, updater repair는 `4914a9b890b4e784b26527d5e951684cd2b556ca`, lease-safe postcheck는 `4b0d27965466c4d3dcab6a71363070aa289b758a`다. x64 Runtime apply revision 12와 installed TARGET 8/8이 통과했다. |
+| P-0072 Windows x64 Runtime closure | **DONE / PUSHED / INSTALLED** | `f13533922fa68a906494e97cea4087578697d49c`; Runtime generation `rt_9582adc516129569`, source FULL 11/11·installed TARGET 8/8·Doctor 4/4, `origin/main` readback까지 완료했다. |
+| P-0073 Codex Plugin·Skill·Hook 재설계 | **SOURCE VALIDATED / APPLY PENDING** | operations Skill/metadata의 Code Health·updater route와 `SessionEnd` lifecycle을 구현했다. source FULL 11/11이 통과했고, 최초 Hook renderer 계약 확장은 complete x64 replacement를 installed Updater로 적용한다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0072 활성 Slice
+## P-0073 활성 Slice
 
-- 범위: Windows x64 registered process containment, current source seal, Runtime-only updater apply, Codex/fixed integration 무재시작 증거, local/remote `main` 일치다.
-- 제외: Authenticode/timestamp/public publish와 non-x64 build·package·native evidence. Scorecard/OpenRewrite 등 absent executable은 설치하지 않는다.
-- preflight: `main`/clean, `HEAD == origin/main == 9ab88e0`; installed `D:\도구\Star-Control` x64 verified, integration registered, management normal/read_write다.
-- Profile closure: `project_understanding`, `ai_development_validation`, `architecture_quality`, `test_correctness`, `security_supply_chain`, `ci_release_deploy`; fingerprint `sha256:a9cf179b2d5b26fdfd22d1b010e7271277fba9865eb85a7229e02d3366e708d8`.
+- 범위: 설치형 Star-Control Plugin의 metadata·Skill·Hook·renderer/package allowlist와 Windows x64 적용 경로다.
+- 설계: 기존 `star-control-operations`와 7-component renderer 계약은 유지하고, 필요할 때만 읽는 `routing-matrix.md`에 Code Health·Runtime update 절차를 추가한다. 별도 Skill의 중복 implicit invocation을 피한다. 최신 Codex Hook 중 `SessionEnd`만 `root_stop` lifecycle로 연결한다. 구 Updater의 Hook renderer allowlist로는 이 최초 전환을 안전하게 bootstrap할 수 없어 complete x64 replacement를 installed Updater의 offline transaction으로 적용하며, 새 renderer 이후에는 integration-only reseal/apply를 사용한다.
+- 제외: 의미 없는 `PreCompact/PostCompact` 중복 Hook, exact PermissionPlan/Approval 결정을 구현하지 않은 `PermissionRequest`, public signing/publish, non-x64 build·native evidence, Codex cache/runtime DB 직접 수정이다.
+- preflight: `main`/clean, `HEAD == origin/main == f135339`; installed `D:\도구\Star-Control` x64 verified, integration registered, management normal/read_write다.
+- Profile closure: `project_understanding`, `docs_config_environment`, `architecture_quality`, `ai_development_validation`, `api_contract_change`, `test_correctness`, `security_supply_chain`, `ci_release_deploy`; fingerprint `sha256:23d783bff3df3ac39684ca52bad60cf870d2af606886f33ab8543459548fef43`.
 
 | 파일 | 상태 | 변경 요약 | 검증 상태 |
 |---|---|---|---|
-| `star-validation/process_executor` | 검토 완료 | suspended start → Job assign → primary-thread resume; bounded tree termination | package 49/49 pass |
-| Windows dependency/lock | 구현됨 | existing workspace `windows 0.62.2` target-only 연결 | offline check pass, version/download 변화 없음 |
-| validation evidence | 봉인됨 | inventory 23/23·Schema 217·MCP 170/170·Profile 16/16·Runtime executable 4/4 | `target/validation/20260727T172403972Z-36576/report.json`, FULL 11/11 complete/stable/pass |
-| updater transaction | 수정됨 | Updater를 installed `Cli` peer로 bind, selector와 다른 hash-verified Runtime Controller도 exact-image quiesce, installed CLI IPC postcheck, rollback 전 candidate drain | updater-core 17/17, peer/kind regression, affected clippy `-D warnings` pass |
-| runtime evidence | committed | `rt_341794d49b368dfa`, source `4b0d27965466c4d3dcab6a71363070aa289b758a`, activation rev 12 | updater exit 0/committed, protected process 35개 누락 0, fixed/integration hash 변화 0, management normal/read_write, Doctor 4/4 pass |
-| installed validation | 통과 | installed Controller → `star.core.validation.run` → tracked TARGET | `target/validation/20260727T181409930Z-42220/report.json`, 8/8 complete/stable/pass, 137,283ms |
+| Codex Plugin template | 구현됨 | metadata·operations Skill/routing 확장, `SessionEnd` Hook | plugin/skill validator pass |
+| `star-adapter-codex` | 구현됨 | 7-component inventory와 closed Hook event set render 검증 | package 22/22 pass |
+| `star.exe` Hook bridge | 구현됨 | `session-end` parse·lifecycle 관찰·help·회귀 테스트 | package 23/23 + doc test pass |
+| integration candidate seal | 검증됨 | fixed Bridge/Plugin-only delta와 outer/nested source identity 분리 | package 8/8 pass; 실제 별도 stage가 `codex_integration_update`, restart/rollback true |
+| source validation | 통과 | tracked MCP action `star.core.validation.run`, current inventory 23/23·Schema 217·MCP 170/170·Profile 16/16 | FULL 11/11 complete/stable/pass |
+| install/update evidence | 진행 중 | clean complete candidate inspect → installed Updater offline replacement → installed/render/cache hash·Doctor | apply pending |
 
-- 완료 조건: current inventory, FULL complete/stable/pass, STRICT review, updater-only apply committed, Codex PID/creation time과 fixed integration 불변, installed generation current, commit/push/readback, clean worktree다.
+- 완료 조건: STRICT review, source FULL complete/stable/pass, x64 candidate 검증, Updater 적용 terminal 상태, 필요한 경우에만 Codex 재시작, installed bundle/cache 일치와 post-update Doctor다.
 
 ## 열린 위험과 보류
 
 - R-0062: executable 존재만으로 registered provider가 되지 않는다. `cargo-mutants`와 pinned `rust-analyzer`는 관찰됐지만 mutation/semantic-refactor port의 exact descriptor·protocol·artifact binding이 없으므로 real result는 `unavailable|unverified`다. Scorecard/OpenRewrite는 설치하지 않는다.
 - R-0063: `code_health_maintenance` 17번째 Profile은 EvaluationRun evidence와 제품 결정 전까지 추가하지 않는다. 기본은 기존 16 Profile 조합이다.
 - R-0064: raw source, author name/email, secret 및 개인 absolute path는 ArtifactRef·fingerprint·Radar에 저장하지 않는다.
+- R-0065: Codex Hook은 보조 guardrail이다. `PermissionRequest`를 실제 Star-Control PermissionPlan/Approval 판정 없이 추가해 강제 통제로 표현하지 않는다.
 
 ## Context Pack
 
-- 현재 목표: P-0072 source seal과 x64 Runtime-only updater apply를 Codex 재시작 없이 완료하고 `main`을 원격 readback까지 일치시킨다.
-- 다음 명령: live evidence 문서 seal → inventory/FULL → closure commit → final-HEAD x64 stage/inspect/staged-updater apply → no-restart readback → push/readback.
-- 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache, fixed Plugin/Hook, signing/publication, non-x64 output.
-- 다음 완료 기준: installed Runtime generation과 final source closure가 일치하고 Codex/fixed integration identity가 유지된 채 `HEAD == origin/main == remote/main`, clean이다.
+- 현재 목표: P-0073 Plugin·Skill·Hook source를 current Runtime 기능에 맞추고 Updater 경로로 실제 Codex integration에 적용한다.
+- 다음 명령: clean source commit → complete x64 stage·installer inspect → installed Updater offline replacement → installed/cache/Hook postcheck → 최종 evidence/FULL·closure commit.
+- 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache 직접 수정, signing/publication, non-x64 output.
+- 다음 완료 기준: 확장된 operations Skill/routing과 `SessionEnd`가 source·rendered bundle·installed cache에서 일치하고, inspect가 요구한 경우에만 Updater restart가 수행되며 post-update Doctor와 management가 정상이다.

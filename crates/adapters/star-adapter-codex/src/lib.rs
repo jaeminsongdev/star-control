@@ -87,13 +87,14 @@ enum RegistrationMode {
     Register,
     ManualActionRequired,
 }
-const PLUGIN_DESCRIPTION: &str = "Route Codex development work through Star-Control MCP actions, CLI-only features, Profiles, and an explicit native fallback.";
-const PLUGIN_SHORT_DESCRIPTION: &str = "Use Star-Control MCP, CLI, and Profiles.";
-const PLUGIN_LONG_DESCRIPTION: &str = "Connects Codex to the installed Star-Control gateway, resolves declarative Profiles, invokes only ready MCP actions, uses the installed CLI only for Catalog-declared CLI-only features, and records native fallback without promoting uncertain states.";
-const PLUGIN_DEFAULT_PROMPT: &str = "Use $star-control-operations to route this task through Star-Control MCP actions or CLI Profiles while preserving approvals, evidence, and fallback status.";
+const PLUGIN_DESCRIPTION: &str = "Route Codex development, code-health, validation, and Runtime lifecycle work through Star-Control with explicit evidence and fallback boundaries.";
+const PLUGIN_SHORT_DESCRIPTION: &str = "Use Star-Control actions, Profiles, and lifecycle routes.";
+const PLUGIN_LONG_DESCRIPTION: &str = "Connects Codex to the installed Star-Control gateway, resolves declarative Profiles, routes code-health and validation work through ready MCP actions or Catalog-declared CLI-only features, and keeps Runtime updates, approvals, evidence, and native fallback explicit.";
+const PLUGIN_DEFAULT_PROMPT: &str = "Use $star-control-operations to route this task through Star-Control actions, Profiles, code-health checks, or installed lifecycle commands while preserving approvals, evidence, and fallback status.";
 const HOOK_STATUS_MESSAGE: &str = "Loading Star-Control operations";
 const LIFECYCLE_HOOK_EVENTS: &[&str] = &[
     "SessionStart",
+    "SessionEnd",
     "UserPromptSubmit",
     "Stop",
     "PreToolUse",
@@ -610,6 +611,9 @@ fn render_hook_commands(
         .get_mut("hooks")
         .and_then(serde_json::Value::as_object_mut)
         .ok_or(CodexAdapterError::InvalidTemplate)?;
+    if !lifecycle_hook_event_set_valid(events) {
+        return Err(CodexAdapterError::InvalidTemplate);
+    }
     for event_name in LIFECYCLE_HOOK_EVENTS {
         let handler = lifecycle_hook_handler_mut(events, event_name)
             .ok_or(CodexAdapterError::InvalidTemplate)?;
@@ -635,6 +639,9 @@ fn validate_rendered_hook_commands(
         .get("hooks")
         .and_then(serde_json::Value::as_object)
         .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+    if !lifecycle_hook_event_set_valid(events) {
+        return Err(CodexAdapterError::InvalidRenderedPlugin);
+    }
     for event_name in LIFECYCLE_HOOK_EVENTS {
         let handler = lifecycle_hook_handler(events, event_name)
             .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
@@ -665,6 +672,13 @@ fn validate_rendered_hook_commands(
         }
     }
     Ok(())
+}
+
+fn lifecycle_hook_event_set_valid(events: &serde_json::Map<String, serde_json::Value>) -> bool {
+    events.len() == LIFECYCLE_HOOK_EVENTS.len()
+        && LIFECYCLE_HOOK_EVENTS
+            .iter()
+            .all(|event_name| events.contains_key(*event_name))
 }
 
 fn lifecycle_hook_handler_mut<'a>(
@@ -805,7 +819,9 @@ fn skill_agent_content_valid(bytes: &[u8]) -> bool {
         return false;
     };
     text.contains("display_name: \"Star-Control Operations\"")
-        && text.contains("short_description: \"Route development work through Star-Control\"")
+        && text.contains(
+            "short_description: \"Route development and code health through Star-Control\"",
+        )
         && text.contains("default_prompt: \"Use $star-control-operations")
         && text.matches("type: \"mcp\"").count() == 1
         && text.matches("value: \"star-control\"").count() == 1
@@ -1279,6 +1295,27 @@ mod tests {
             concat!("star-control-", "workflow")
         );
         assert!(!skill_content_valid(invalid.as_bytes()));
+    }
+
+    #[test]
+    fn hook_event_set_is_closed_and_requires_session_end() {
+        let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../integrations/codex-plugin-template/marketplace-root");
+        let source = read_source_files(&source_root).unwrap();
+        let hooks = strict_object(&source, HOOKS_RELATIVE).unwrap();
+        let events = hooks
+            .get("hooks")
+            .and_then(serde_json::Value::as_object)
+            .unwrap();
+        assert!(lifecycle_hook_event_set_valid(events));
+
+        let mut missing = events.clone();
+        missing.remove("SessionEnd");
+        assert!(!lifecycle_hook_event_set_valid(&missing));
+
+        let mut widened = events.clone();
+        widened.insert("PermissionRequest".to_owned(), serde_json::json!([]));
+        assert!(!lifecycle_hook_event_set_valid(&widened));
     }
 
     #[test]

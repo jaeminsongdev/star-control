@@ -215,6 +215,22 @@ foreach ($requiredCodexAsset in @(
     Assert-ValidationContract -Condition ($packageReleaseSource.Contains($requiredCodexAsset)) -Message "release package requires Codex asset: $requiredCodexAsset"
 }
 
+$codexHookTemplate = Get-Content -LiteralPath (Join-Path $repositoryRoot 'integrations/codex-plugin-template/marketplace-root/plugins/star-control/hooks/hooks.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$codexHookNames = @($codexHookTemplate.hooks.PSObject.Properties.Name)
+Assert-ValidationContract -Condition ('SessionEnd' -in $codexHookNames) -Message 'Codex integration observes the main session end lifecycle'
+Assert-ValidationContract -Condition ($codexHookTemplate.hooks.SessionEnd[0].hooks[0].command -eq 'star hook session-end') -Message 'SessionEnd uses the installed Hook bridge'
+foreach ($unboundHook in @('PermissionRequest', 'PreCompact', 'PostCompact')) {
+    Assert-ValidationContract -Condition ($unboundHook -notin $codexHookNames) -Message "Codex integration must not overstate an unbound Hook contract: $unboundHook"
+}
+
+$codexOperationsSkill = Get-Content -LiteralPath (Join-Path $repositoryRoot 'integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md') -Raw -Encoding UTF8
+Assert-ValidationContract -Condition ($codexOperationsSkill.Contains('## 4. Code Health')) -Message 'Codex operations Skill routes current Code Health features'
+Assert-ValidationContract -Condition ($codexOperationsSkill.Contains('## 5. Runtime and Codex integration updates')) -Message 'Codex operations Skill distinguishes Runtime and integration update lifecycles'
+$codexPluginManifest = Get-Content -LiteralPath (Join-Path $repositoryRoot 'integrations/codex-plugin-template/marketplace-root/plugins/star-control/.codex-plugin/plugin.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+Assert-ValidationContract -Condition ($codexPluginManifest.description.Contains('code-health')) -Message 'Codex Plugin metadata exposes the current Code Health route'
+$codexSkillAgent = Get-Content -LiteralPath (Join-Path $repositoryRoot 'integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/agents/openai.yaml') -Raw -Encoding UTF8
+Assert-ValidationContract -Condition ($codexSkillAgent.Contains('code health')) -Message 'Codex Skill UI metadata exposes the current Code Health route'
+
 $updaterRestartSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "crates/control/star-updater-core/src/integration_restart.rs") -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($updaterRestartSource.Contains('const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(12);')) -Message "forced Codex termination has a bounded exit-observation window"
 Assert-ValidationContract -Condition ($updaterRestartSource.Contains('terminate_until_process_exit(')) -Message "forced Codex termination repeats exact bounded passes"

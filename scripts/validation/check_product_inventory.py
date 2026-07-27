@@ -623,7 +623,7 @@ def main() -> int:
         errors.append("Codex Skill agent metadata is missing")
     for required in (
         'display_name: "Star-Control Operations"',
-        'short_description: "Route development work through Star-Control"',
+        'short_description: "Route development and code health through Star-Control"',
         'default_prompt: "Use $star-control-operations',
         'type: "mcp"',
         'value: "star-control"',

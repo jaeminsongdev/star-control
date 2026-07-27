@@ -83,6 +83,7 @@ enum LocalCommand {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum HookEvent {
     SessionStart,
+    SessionEnd,
     UserPromptSubmit,
     Stop,
     PreToolUse,
@@ -95,6 +96,7 @@ impl HookEvent {
     fn hook_event_name(self) -> &'static str {
         match self {
             Self::SessionStart => "SessionStart",
+            Self::SessionEnd => "SessionEnd",
             Self::UserPromptSubmit => "UserPromptSubmit",
             Self::Stop => "Stop",
             Self::PreToolUse => "PreToolUse",
@@ -107,6 +109,7 @@ impl HookEvent {
     fn lifecycle_event(self) -> &'static str {
         match self {
             Self::SessionStart => "session_start",
+            Self::SessionEnd => "root_stop",
             Self::UserPromptSubmit => "user_prompt_submit",
             Self::Stop => "root_stop",
             Self::PreToolUse => "tool_started",
@@ -321,6 +324,7 @@ fn parse(args: &[String]) -> Result<Option<ParsedLocal>, String> {
         [first, second] if first == "hook" && !json => {
             let event = match second.as_str() {
                 "session-start" => HookEvent::SessionStart,
+                "session-end" => HookEvent::SessionEnd,
                 "user-prompt-submit" => HookEvent::UserPromptSubmit,
                 "stop" => HookEvent::Stop,
                 "pre-tool-use" => HookEvent::PreToolUse,
@@ -1244,6 +1248,15 @@ mod tests {
             }
         ));
         assert!(matches!(
+            parse(&args(&["hook", "session-end"]))
+                .unwrap()
+                .unwrap()
+                .command,
+            LocalCommand::Hook {
+                event: HookEvent::SessionEnd
+            }
+        ));
+        assert!(matches!(
             parse(&args(&[
                 "integration",
                 "repair",
@@ -1366,6 +1379,12 @@ mod tests {
             .command,
             LocalCommand::UpdateReconcileInstalledRuntime { .. }
         ));
+    }
+
+    #[test]
+    fn session_end_uses_the_existing_bounded_root_stop_lifecycle() {
+        assert_eq!(HookEvent::SessionEnd.hook_event_name(), "SessionEnd");
+        assert_eq!(HookEvent::SessionEnd.lifecycle_event(), "root_stop");
     }
 
     #[test]

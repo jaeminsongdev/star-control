@@ -1,7 +1,7 @@
 interface:
   display_name: "Star-Control Operations"
-  short_description: "Route development work through Star-Control"
-  default_prompt: "Use $star-control-operations to plan, execute, and verify this development task."
+  short_description: "Route development and code health through Star-Control"
+  default_prompt: "Use $star-control-operations to plan, execute, verify, or update this development task through the correct Star-Control route."
 
 dependencies:
   tools:

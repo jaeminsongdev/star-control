@@ -55,6 +55,31 @@
 | `language_platform_migration` | language/runtime/SDK/OS/architecture cutover | `awaiting_cutover_approval` |
 | `ci_release_deploy` | CI·artifact·install·publish readiness | `ready` |
 
+## Code Health route
+
+| 작업 | route | 필수 경계 |
+|---|---|---|
+| SARIF·clone·complexity·unused surface | current scan/index/validation action을 MCP-first로 검색 | current Project·checkout·index와 source-bound evidence가 없으면 `unverified` |
+| Code Health Radar | CLI-only `maintenance radar code-health` | read-only projection이며 source 수정 완료가 아님 |
+| Git history·ownership·debt | CLI-only `maintenance radar git-history` | bounded revision range와 redacted author identity 필요 |
+| Rule Pack·mutation evidence | CLI-only `maintenance rule-pack`; mutation provider는 registered adapter only | exact pack/provider/tool/config/artifact digest가 없으면 `unavailable|unverified` |
+| semantic refactor | registered provider preview → isolated typed PatchSet → existing Gate·approval | provider 부재 시 native rewrite나 text patch로 결과를 합성하지 않음 |
+| Profile evaluation | CLI-only `evaluation run`, `evaluation compare`, `evaluation profile-decision` | 기존 16 Profile 유지; EvaluationRun과 별도 제품 결정 전에는 새 built-in을 추가하지 않음 |
+
+## Runtime update route
+
+설치·integration·update command는 product action이 아니라 installed Bootstrap의 local lifecycle surface다. `star --help`에 현재 선언된 command만 사용한다.
+
+| candidate | apply route | Codex restart |
+|---|---|---|
+| Runtime-only generation | `update stage` → `update inspect` → generation `update apply` | inspect가 `false`이면 금지 |
+| Codex integration/Bridge | complete release stage `update inspect` → absolute-stage `update apply` | inspect가 `true`이고 exact approval이 있을 때만 전용 Updater가 수행 |
+| Updater-only·mixed·offline install | online integration apply로 우회하지 않음 | declared offline Updater transaction과 별도 승인 필요 |
+
+- `restart_armed`, `approval_required`, process spawn과 candidate copy는 terminal success가 아니다.
+- source revision, active Runtime, fixed Bridge, rendered marketplace, Codex cache와 management state를 각각 검증한다.
+- Runtime selector, Codex cache·Plugin cache와 Runtime/management DB를 직접 수정하지 않는다.
+
 ## 공통 중단 규칙
 
 - `approval_required`, `question_required`, Operation ID, `ready` manifest는 완료가 아니다.

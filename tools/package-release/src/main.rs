@@ -21,6 +21,7 @@ type DynResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 const HELP: &str = "star-package-release stage --architecture x64|arm64 --binary-dir <dir> --output <dir> --source-revision <value>\n\
 star-package-release reseal --architecture x64|arm64 --stage <dist-stage-dir> --source-revision <value>\n\
+star-package-release reseal-integration --architecture x64|arm64 --stage <dist-stage-dir> --source-revision <value>\n\
 star-package-release seal-signed --architecture x64|arm64 --stage <dist-stage-dir> --source-revision <value>\n\
 star-package-release verify --architecture x64|arm64 --stage <dir>";
 
@@ -43,6 +44,11 @@ enum Action {
         source_revision: String,
     },
     Reseal {
+        architecture: TargetArchitecture,
+        stage: PathBuf,
+        source_revision: String,
+    },
+    ResealIntegration {
         architecture: TargetArchitecture,
         stage: PathBuf,
         source_revision: String,
@@ -114,6 +120,27 @@ fn run() -> DynResult<()> {
                     "file_count": manifest.files.len(),
                     "set_sha256": manifest.set_sha256,
                     "resealed": true,
+                }))?
+            );
+        }
+        Action::ResealIntegration {
+            architecture,
+            stage,
+            source_revision,
+        } => {
+            let (manifest, changed_files) =
+                reseal_integration_stage(&stage, architecture, &source_revision)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "stage": stage,
+                    "product_version": manifest.product_version,
+                    "target_architecture": manifest.target_architecture,
+                    "file_count": manifest.files.len(),
+                    "set_sha256": manifest.set_sha256,
+                    "source_revision": manifest.source_revision,
+                    "changed_files": changed_files,
+                    "resealed_integration": true,
                 }))?
             );
         }
@@ -241,6 +268,21 @@ fn parse(args: Vec<String>) -> DynResult<Action> {
                     source_revision,
                 })
             }
+        }
+        "reseal-integration" => {
+            reject_unknown(
+                &options,
+                &["--architecture", "--stage", "--source-revision"],
+            )?;
+            let source_revision = value("--source-revision")?;
+            if source_revision.trim().is_empty() || source_revision.len() > 256 {
+                return Err("--source-revision must be 1..256 characters".into());
+            }
+            Ok(Action::ResealIntegration {
+                architecture,
+                stage: value("--stage")?.into(),
+                source_revision,
+            })
         }
         "verify" => {
             reject_unknown(&options, &["--architecture", "--stage"])?;
@@ -402,6 +444,88 @@ fn reseal_release_stage(
     Ok(manifest)
 }
 
+/// Re-seals a complete installed-tree copy after changing only the fixed
+/// Codex Bridge or Plugin template. Runtime and updater bytes, their nested
+/// manifests and their prior Runtime source revision remain untouched. The
+/// outer source revision and manifest hash bind the exact integration payload
+/// reviewed by the installed updater.
+fn reseal_integration_stage(
+    stage: &Path,
+    expected_architecture: TargetArchitecture,
+    source_revision: &str,
+) -> DynResult<(ReleaseFileManifest, Vec<String>)> {
+    let stage = stage.canonicalize()?;
+    let allowed_root = workspace_root().join("dist").join("stage").canonicalize()?;
+    if !stage.starts_with(&allowed_root) || stage == allowed_root {
+        return Err(format!(
+            "integration reseal stage must be a descendant of the package dist/stage root: {}",
+            stage.display()
+        )
+        .into());
+    }
+    let manifest_path = stage.join("release-manifest.json");
+    let current_text = fs::read_to_string(&manifest_path)?;
+    let current: ReleaseFileManifest =
+        serde_json::from_value(parse_no_duplicate_keys(&current_text)?)?;
+    if current.schema_id != RELEASE_FILE_MANIFEST_SCHEMA_ID
+        || current.schema_version != INSTALLATION_SCHEMA_VERSION
+        || current.product_version != env!("CARGO_PKG_VERSION")
+        || current.target_architecture != expected_architecture
+        || current.generated_files != ["star-control-install.v1.json"]
+        || current.signing != PackageSigningState::UnsignedLocal
+        || current.source_revision.trim().is_empty()
+        || current.source_revision.len() > 256
+    {
+        return Err("integration reseal stage has an incompatible release manifest".into());
+    }
+    verify_inventory_matches_manifest(&stage, &current, expected_architecture)?;
+
+    let files = collect_release_entries(&stage)?;
+    let current_by_path = current
+        .files
+        .iter()
+        .map(|entry| (entry.path.as_str(), entry))
+        .collect::<BTreeMap<_, _>>();
+    let changed_files = files
+        .iter()
+        .filter(|entry| current_by_path.get(entry.path.as_str()) != Some(entry))
+        .map(|entry| entry.path.clone())
+        .collect::<Vec<_>>();
+    if changed_files.is_empty()
+        || changed_files
+            .iter()
+            .any(|path| !is_codex_integration_path(path))
+    {
+        return Err(
+            "integration reseal detected no change or a non-integration file change".into(),
+        );
+    }
+
+    let set_sha256 = canonical_sha256(&serde_json::to_value(&files)?)?;
+    let manifest = ReleaseFileManifest {
+        schema_id: RELEASE_FILE_MANIFEST_SCHEMA_ID.to_owned(),
+        schema_version: INSTALLATION_SCHEMA_VERSION,
+        product_version: current.product_version,
+        target_architecture: expected_architecture,
+        created_at: Utc::now(),
+        source_revision: source_revision.to_owned(),
+        files,
+        generated_files: vec!["star-control-install.v1.json".to_owned()],
+        set_sha256,
+        signing: PackageSigningState::UnsignedLocal,
+    };
+    let mut bytes = serde_json::to_vec_pretty(&manifest)?;
+    bytes.push(b'\n');
+    fs::write(&manifest_path, bytes)?;
+    verify_stage_with_runtime_source_policy(&stage, expected_architecture, false)?;
+    Ok((manifest, changed_files))
+}
+
+fn is_codex_integration_path(path: &str) -> bool {
+    matches!(path, "star.exe" | "star-mcp.exe")
+        || path.starts_with("integrations/codex-plugin-template/")
+}
+
 fn reseal_runtime_generation(
     stage: &Path,
     expected_architecture: TargetArchitecture,
@@ -539,7 +663,7 @@ fn verify_inventory_matches_manifest(
         .filter(|path| path != "release-manifest.json")
         .collect::<BTreeSet<_>>();
     if actual != expected {
-        return Err("signed reseal cannot add or remove staged files".into());
+        return Err("reseal cannot add or remove staged files".into());
     }
     for name in [
         "star.exe",
@@ -548,7 +672,7 @@ fn verify_inventory_matches_manifest(
         "star-updater.exe",
     ] {
         if !expected.contains(name) {
-            return Err(format!("signed reseal is missing required runtime: {name}").into());
+            return Err(format!("reseal is missing required runtime: {name}").into());
         }
         verify_pe_architecture(&stage.join(name), expected_architecture)?;
     }
@@ -679,6 +803,14 @@ fn verify_stage(
     stage: &Path,
     expected_architecture: TargetArchitecture,
 ) -> DynResult<ReleaseFileManifest> {
+    verify_stage_with_runtime_source_policy(stage, expected_architecture, true)
+}
+
+fn verify_stage_with_runtime_source_policy(
+    stage: &Path,
+    expected_architecture: TargetArchitecture,
+    require_matching_runtime_source: bool,
+) -> DynResult<ReleaseFileManifest> {
     let stage = stage.canonicalize()?;
     let bytes = fs::read(stage.join("release-manifest.json"))?;
     if bytes.is_empty() || bytes.len() > 4 * 1024 * 1024 {
@@ -752,7 +884,7 @@ fn verify_stage(
         &stage,
         expected_architecture,
         manifest.signing,
-        &manifest.source_revision,
+        require_matching_runtime_source.then_some(manifest.source_revision.as_str()),
     )?;
     Ok(manifest)
 }
@@ -761,7 +893,7 @@ fn verify_runtime_generation(
     stage: &Path,
     expected_architecture: TargetArchitecture,
     expected_signing: PackageSigningState,
-    expected_source_revision: &str,
+    expected_source_revision: Option<&str>,
 ) -> DynResult<()> {
     let generations = stage.join("runtime").join("generations");
     let directories = fs::read_dir(&generations)?
@@ -803,7 +935,8 @@ fn verify_runtime_generation(
         || runtime_release.product_version != env!("CARGO_PKG_VERSION")
         || runtime_release.target_architecture != expected_architecture
         || runtime_release.signing != expected_signing
-        || runtime_release.source_revision != expected_source_revision
+        || expected_source_revision
+            .is_some_and(|expected| runtime_release.source_revision != expected)
         || runtime_release.generated_files != ["runtime-generation.v1.json"]
     {
         return Err("Runtime Generation release contract mismatch".into());
@@ -1066,6 +1199,39 @@ mod tests {
             .unwrap(),
             Action::SealSigned { .. }
         ));
+        assert!(matches!(
+            parse(
+                [
+                    "reseal-integration",
+                    "--architecture",
+                    "x64",
+                    "--stage",
+                    r"D:\dist\stage\0.1.0\integration",
+                    "--source-revision",
+                    "89abcdef0123456789abcdef0123456789abcdef",
+                ]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            )
+            .unwrap(),
+            Action::ResealIntegration { .. }
+        ));
+        assert!(
+            parse(
+                [
+                    "reseal-integration",
+                    "--architecture",
+                    "x64",
+                    "--stage",
+                    r"D:\dist\stage\0.1.0\integration",
+                ]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            )
+            .is_err()
+        );
         assert!(
             parse(
                 [
@@ -1091,6 +1257,21 @@ mod tests {
             assert!(!valid_relative_path(value), "{value}");
         }
         assert!(valid_relative_path("schemas/v1/example.schema.json"));
+    }
+
+    #[test]
+    fn integration_reseal_path_allowlist_is_closed() {
+        assert!(is_codex_integration_path("star.exe"));
+        assert!(is_codex_integration_path("star-mcp.exe"));
+        assert!(is_codex_integration_path(
+            "integrations/codex-plugin-template/marketplace-root/plugins/star-control/hooks/hooks.json"
+        ));
+        assert!(!is_codex_integration_path("star-updater.exe"));
+        assert!(!is_codex_integration_path("star-controller.exe"));
+        assert!(!is_codex_integration_path(
+            "runtime/generations/rt_fixture/star-controller.exe"
+        ));
+        assert!(!is_codex_integration_path("catalog/product-features.toml"));
     }
 
     #[test]
@@ -1177,7 +1358,7 @@ mod tests {
             &first,
             architecture,
             PackageSigningState::UnsignedLocal,
-            source_revision,
+            Some(source_revision),
         )
         .unwrap();
         let resealed_generation = fs::read_dir(first.join("runtime/generations"))
