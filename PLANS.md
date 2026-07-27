@@ -28,26 +28,25 @@
 | P-0065 Gate·Radar | **DONE / local commit** | `db3cb92b3ae9c9dbf332ebf8c1dfdafb50dcf75e`; code-health shadow planning과 read-only Radar projection, current schema/evidence, FULL 11/11 complete/stable/pass. |
 | P-0066 Git history·ownership·debt | **DONE / local commit** | `a84d4f298a2a9e4a9b252da10abb1ffda8b13b60`; read-only Git/CODEOWNERS/debt snapshot, advisory Impact/Radar, privacy corpus, FULL 11/11 complete/stable/pass. |
 | P-0067 semantic refactor provider | **DONE / local commit** | registered provider capability의 isolated preview를 typed PatchSetV2·existing pre/post Gate·exact approval path로만 정규화했고, absent provider fail-closed 및 Git worktree replay fixture를 FULL 11/11 complete/stable/pass로 검증했다. |
-| P-0068 mutation·Rule Pack·repository posture | **VALIDATED / local commit pending** | changed-code-only mutation budget·strict schema, versioned Rule Pack과 exact-tool SARIF digest binding, read-only posture snapshot/advisory Radar·fail-closed adapter 경계를 구현했고 FULL 11/11 complete/stable/pass를 확인했다. |
-| P-0069~P-0070 | pending | evaluation/Profile 결정 → final audit 순서다. |
+| P-0068 mutation·Rule Pack·repository posture | **DONE / local commit** | `937a9ac7898f6d30d1353b11429da52fca9b2199`; changed-code-only mutation budget·strict schema, versioned Rule Pack과 exact-tool SARIF digest binding, read-only posture snapshot/advisory Radar·fail-closed adapter 경계를 FULL 11/11 complete/stable/pass로 고정했다. |
+| P-0069 EvaluationRun·Profile 결정 | **VALIDATED / local commit pending** | existing EvaluationRunV2/Catalog path로 Code Health trial/reject evidence를 고정했고, external cost/actual workload cohort 부재로 `trial_candidate`만 기록하며 16개 built-in 유지·17번째 accept hold를 FULL 11/11 complete/stable/pass로 확인했다. |
+| P-0070 | pending | final audit 순서다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0068 검증 완료 Slice
+## P-0069 활성 Slice
 
-- 목표: changed-code-only mutation, versioned Rule Pack, external repository posture snapshot을 source-bound Finding/Diagnostic/Planning/Radar에 추가하되 aggregate score는 Gate로 사용하지 않는다.
-- 불변식: external mutation engine·CodeQL pack·Scorecard는 registered adapter만 사용한다. 설치·network·token 없이 fixture/conformance로 경계를 검증하고 real provider는 unavailable/unverified로 보존한다.
-- corpus: mutation scope/budget/timeout/flaky/partial, Rule Pack digest/trust/freshness/lifecycle/SARIF mapping, posture source/query/schema/tool/fetched/valid-until/coverage와 privacy redaction을 고정한다.
-- 선택 Profile: `security_supply_chain`, `test_correctness`, `architecture_quality`, `ai_development_validation`; 새 Profile은 추가하지 않는다.
-- 검증: affected package TARGET 후 contract/schema/core 영향이므로 FULL, strict self-review, intended files만 local commit. push/PR/publish/install은 금지다.
+- 목표: 기존 `EvaluationRunV2`/`EvaluationCatalogItem`으로 Code Health candidate의 replay/shadow 결과를 `trial` 또는 `reject`로 evidence-bound 결정하고 16 built-in Profile을 보존한다.
+- 불변식: `accept`는 자동으로 17번째 built-in Profile을 만들지 않는다. complete external cost/actual workload evidence와 사용자 제품 결정, descriptor·fixture·inventory·package closure가 같은 Slice에 없으면 `accept`는 fail-closed한다.
+- 현재 source corpus: external provider 비용 evidence가 없는 shadow run은 `NeedsReview`→active `trial_candidate`; `Keep|Reject`는 rejected tombstone; `Accept`는 `Blocked`다. raw workload/provider data를 만들거나 network를 사용하지 않는다.
+- 검증: `star-release` evaluation corpus, CLI/controller route와 inventory를 먼저 확인한 뒤 release/core 영향이므로 FULL, strict self-review, intended files만 local commit. push/PR/publish/install은 금지다.
 
 | 파일 | 상태 | 변경 요약 | 검증 상태 |
 |---|---|---|---|
-| `crates/foundation/star-contracts/src/{maintenance_v2.rs,schema.rs}` | 수정됨 | mutation snapshot·Rule Pack manifest strict schema | contracts 대상 통과 |
-| `crates/foundation/star-ports/src/lib.rs` | 수정됨 | mutation/Rule Pack/posture registered observation ports | package check 통과 |
-| `crates/control/star-application/src/lib.rs` | 수정됨 | changed-only mutation 및 advisory Radar, Rule Pack/posture fail-closed boundary와 trusted exact-tool SARIF digest binding | focused app·clippy 통과 |
-| `specs/schemas`, `specs/fixtures/management/v1` | 추가/수정됨 | generated schema와 strict current/invalid/future corpus | schema-gen check 통과 |
+| `crates/control/star-release/src/evaluation.rs` | 수정됨 | Code Health profile→trial/reject catalog item, accept hold, 16-profile guard | evaluation 16/16 통과 |
+| `apps/star-{cli,controller}/src/main.rs` | 수정됨 | `evaluation.profile.decision` management route와 valid development-record key | focused route tests·check 통과 |
+| `catalog`, `routing-matrix`, owner docs | 수정됨 | D02 product surface와 16 유지/trial evidence 정본화 | inventory source evidence 재생성 |
 
-- 외부 경계: provider-backed mutation/posture는 adapter 등록 전까지 fail-closed로 유지한다. Rule Pack CLI/controller development-record route와 SARIF digest binding의 corpus, generated source evidence, FULL 11/11 complete/stable/pass를 확인했다. 로컬 커밋만 남았다.
+- 열린 구현: full corpus·source evidence·FULL은 통과했다. strict review와 intended-only local commit만 남았다.
 
 ## 열린 위험과 보류
 
@@ -57,8 +56,8 @@
 
 ## Context Pack
 
-- 현재 목표: P-0068의 검증 완료 변경을 strict review·intended-only local commit으로 고정한 뒤 P-0069 EvaluationRun/Profile 결정 Slice로 이동한다.
-- 먼저 확인할 파일: `docs/contracts/code-health-and-maintainability.md`, `crates/foundation/star-contracts/src/maintenance_v2.rs`, `crates/foundation/star-ports/src/lib.rs`, `crates/control/star-application/src/lib.rs`, SARIF/Radar/Profile routing.
-- 먼저 실행할 명령: `git status --short --branch`; `rg -n -i 'Mutation|RulePack|Scorecard|posture|Sarif|Radar' crates apps specs`; focused tests; final `pwsh ./scripts/validate.ps1 -Profile full -OutputFormat json`.
+- 현재 목표: P-0069 검증 완료 변경을 strict review·intended-only local commit으로 고정한 뒤 P-0070 final audit으로 이동한다.
+- 먼저 확인할 파일: `docs/contracts/code-health-and-maintainability.md`, `crates/control/star-release/src/evaluation.rs`, `apps/star-{cli,controller}/src/main.rs`, D02 inventory/routing.
+- 먼저 실행할 명령: `git status --short --branch`; `rg -n -i 'EvaluationRun|code_health_maintenance|profile.decision' crates apps catalog`; focused tests; final `pwsh ./scripts/validate.ps1 -Profile full -OutputFormat json`.
 - 건드리면 안 되는 것: existing dirty/user changes, `target/`, `legacy/`, installed Runtime/cache, external account/remote state.
-- 다음 완료 기준: P-0069에서 16개 built-in Profile 조합의 EvaluationRun evidence를 수집하고 `code_health_maintenance` 17번째 Profile을 accept/trial/reject 중 하나로 evidence-bound 결정한다.
+- 다음 완료 기준: P-0069는 offline/shadow evidence가 `trial`로 고정되고 16개 built-in 유지, accept hold, source inventory/FULL/review/local commit이 모두 확인되면 완료다.

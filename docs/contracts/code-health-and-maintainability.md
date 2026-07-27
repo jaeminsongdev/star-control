@@ -152,6 +152,8 @@ OpenSSF Scorecard 같은 repository posture는 source URL/query/schema/tool vers
 
 `code_health_maintenance@1.0.0`의 17번째 Profile은 shadow/offline/replay `EvaluationRunV2`이 fingerprint stability, false-positive/suppression/flaky/partial rate, bounded duration and per-1,000-file cost, replan/retry/manual review time, PatchSet accept/reject/rollback, 그리고 기존 조합 대비 utility를 증명한 뒤에만 `accept`한다. 증거가 부족하면 `trial` 또는 `reject`가 정상 결과다. recommendation은 Catalog를 자동 변경하지 않는다.
 
+P-0069의 현재 source corpus는 external provider 비용 또는 실사용 cohort가 없으면 `NeedsReview`를 `trial` catalog candidate로만 기록하며 built-in Profile 16개를 바꾸지 않는다. `Keep`/`Reject`는 rejected tombstone으로 남고, `Accept`는 `evaluation.profile.decision`에서 fail-closed한다. 17번째 built-in 승격은 사용자가 소유한 제품 결정과 descriptor·fixture·inventory·package closure를 같은 Slice에서 모두 갖춘 경우에만 별도로 수행한다.
+
 17번째 Profile을 accept하면 built-in ID count, catalog descriptor/loader, resolution/schema fixtures, product inventory, Codex reference/package closed asset set, docs와 Profile conformance를 같은 bounded Slice에서 모두 갱신한다.
 
 ## implementation 순서와 최소 Corpus

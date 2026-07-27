@@ -236,10 +236,11 @@ use star_release::{
         verify_artifact_bytes, verify_release_manifest,
     },
     evaluation::{
-        BudgetSnapshotInput, EvaluationInput, build_budget_snapshot, evaluate, seal_catalog_item,
-        seal_cost_record, seal_evaluation_case_definition, seal_evaluation_policy,
-        transition_catalog_item, verify_budget_snapshot, verify_cost_record,
-        verify_evaluation_case_definition, verify_evaluation_policy, verify_evaluation_run,
+        BudgetSnapshotInput, EvaluationInput, build_budget_snapshot,
+        code_health_profile_catalog_item, evaluate, seal_catalog_item, seal_cost_record,
+        seal_evaluation_case_definition, seal_evaluation_policy, transition_catalog_item,
+        verify_budget_snapshot, verify_cost_record, verify_evaluation_case_definition,
+        verify_evaluation_policy, verify_evaluation_run,
     },
     lifecycle::{
         RELEASE_LIFECYCLE_EVIDENCE_SCHEMA_ID, ReleaseLifecycleEvidence, ReleaseLifecycleEvidenceExt,
@@ -9372,6 +9373,7 @@ fn is_management_command(command: &str) -> bool {
             | "evaluation.policy.show"
             | "evaluation.compare"
             | "evaluation.recommend"
+            | "evaluation.profile.decision"
             | "evaluation.radar"
             | "evaluation.catalog.publish"
             | "evaluation.catalog.transition"
@@ -13824,6 +13826,7 @@ fn is_m10_development_command(command: &str) -> bool {
             | "evaluation.policy.show"
             | "evaluation.compare"
             | "evaluation.recommend"
+            | "evaluation.profile.decision"
             | "evaluation.radar"
             | "evaluation.catalog.publish"
             | "evaluation.catalog.transition"
@@ -18855,6 +18858,47 @@ fn handle_m10_development_command(
             m10_verify_evaluation_cost_records(service, project_id, &run)?;
             serialize_management_result(record)
         }
+        "evaluation.profile.decision"
+            if payload_has_exact_keys(payload, &["evaluation_run_id", "record_revision"]) =>
+        {
+            let evaluation_run_id = m6_required_string(payload, "evaluation_run_id", 192)?;
+            let record = service
+                .get_development_record("evaluation_run_v2", &evaluation_run_id, None)?
+                .ok_or(ApplicationError::NotFound)?;
+            let project_id = record
+                .project_id
+                .as_ref()
+                .ok_or(ApplicationError::Invalid)?;
+            let run: EvaluationRunV2 =
+                serde_json::from_value(record.document).map_err(|_| ApplicationError::Invalid)?;
+            verify_evaluation_run(&run).map_err(m10_release_error)?;
+            m10_verify_evaluation_source_records(service, project_id, &run)?;
+            m10_verify_evaluation_cost_records(service, project_id, &run)?;
+            let item = code_health_profile_catalog_item(&run).map_err(m10_release_error)?;
+            let record_id = m10_catalog_record_id(&item);
+            let record_revision = m8_record_revision(payload)?;
+            if service
+                .get_development_record("evaluation_catalog_item", &record_id, None)?
+                .is_some()
+                || record_revision != 1
+            {
+                return Err(ApplicationError::Apply(
+                    "EVALUATION_CATALOG_EVIDENCE_MISMATCH".to_owned(),
+                ));
+            }
+            service
+                .publish_development_document(
+                    "evaluation_catalog_item",
+                    &record_id,
+                    record_revision,
+                    None,
+                    m10_catalog_lifecycle(item.lifecycle),
+                    EVALUATION_CATALOG_ITEM_SCHEMA_ID,
+                    1,
+                    &item,
+                )
+                .and_then(serialize_management_result)
+        }
         command @ ("evaluation.compare" | "evaluation.recommend")
             if payload_has_exact_keys(payload, &["evaluation_run_id"]) =>
         {
@@ -18962,7 +19006,7 @@ fn handle_m10_development_command(
                 ));
             }
             m10_validate_catalog_evaluation_ref(service, &item)?;
-            let record_id = format!("{}@{}", item.item_id, item.item_version);
+            let record_id = m10_catalog_record_id(&item);
             let record_revision = m8_record_revision(payload)?;
             if let Some(existing) =
                 service.get_development_record("evaluation_catalog_item", &record_id, None)?
@@ -21658,6 +21702,15 @@ fn m10_catalog_lifecycle(lifecycle: EvaluationCatalogLifecycle) -> &'static str 
         EvaluationCatalogLifecycle::Retired => "retired",
         EvaluationCatalogLifecycle::Rejected => "rejected",
     }
+}
+
+fn m10_catalog_record_id(item: &EvaluationCatalogItem) -> String {
+    // DevelopmentRecord keys exclude `@`; use a bounded, collision-resistant
+    // identity over the versioned catalog coordinate instead of a display key.
+    format!(
+        "evaluation-catalog:{}",
+        Sha256Hash::digest(format!("{}\n{}", item.item_id, item.item_version).as_bytes())
+    )
 }
 
 fn read_m8_project_migration_manifest(
@@ -27394,6 +27447,7 @@ mod tests {
             "release.publish.apply",
             "evaluation.run",
             "evaluation.show",
+            "evaluation.profile.decision",
             "evaluation.catalog.publish",
             "evaluation.catalog.transition",
         ] {

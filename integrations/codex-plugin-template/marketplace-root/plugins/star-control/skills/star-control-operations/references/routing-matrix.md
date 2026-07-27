@@ -29,7 +29,7 @@
 | B09 | CLI-only | `release.candidate.create`, `release.verification.record`, `release.promote`, `release.status` |
 | C01 | CLI-only | `profile.list`, `profile.show`, `profile.resolve` |
 | D01 | MCP-first | `merge.status`, `handoff.get` |
-| D02 | CLI-only | `evaluation.run`, `evaluation.compare`, `cost.record`, `budget.snapshot` |
+| D02 | CLI-only | `evaluation.run`, `evaluation.compare`, `evaluation.profile.decision`, `cost.record`, `budget.snapshot` |
 | D03 | CLI-only | `release.lifecycle.publish`, `release.publish.prepare`, `release.status`, `release.audit` |
 
 ## Profile 선택

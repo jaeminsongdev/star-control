@@ -325,16 +325,16 @@ recovery_test = "crates/adapters/star-adapter-github/src/lib.rs#timeout_reconcil
 id = "D02"
 owner_doc = "docs/contracts/ci-release-evaluation-and-product-completion.md"
 schema_files = ["evaluation-run-v2.schema.json", "evaluation-case-definition-v1.schema.json", "cost-record-v1.schema.json", "budget-snapshot-v1.schema.json"]
-handler_refs = ["crates/control/star-release/src/evaluation.rs#pub fn evaluate", "apps/star-controller/src/main.rs#evaluation.run"]
-cli_commands = ["evaluation.run", "evaluation.compare", "cost.record", "budget.snapshot"]
+handler_refs = ["crates/control/star-release/src/evaluation.rs#pub fn evaluate", "crates/control/star-release/src/evaluation.rs#pub fn code_health_profile_catalog_item", "apps/star-controller/src/main.rs#evaluation.run", "apps/star-controller/src/main.rs#evaluation.profile.decision"]
+cli_commands = ["evaluation.run", "evaluation.compare", "evaluation.profile.decision", "cost.record", "budget.snapshot"]
 mcp_required = false
 mcp_actions = []
 codex_required = false
 codex_refs = []
-positive_test = "crates/control/star-release/src/evaluation.rs#comparable_candidate_with_more_detected_defects_and_less_rework_is_accepted"
-negative_test = "crates/control/star-release/src/evaluation.rs#faster_candidate_with_worsened_false_positive_is_rejected"
-failure_test = "crates/control/star-release/src/evaluation.rs#worsened_failure_or_unknown_outcome_is_never_accepted"
-recovery_test = "crates/control/star-release/src/evaluation.rs#catalog_lifecycle_is_closed_and_preserves_tombstone"
+positive_test = "crates/control/star-release/src/evaluation.rs#code_health_profile_trial_keeps_the_sixteen_builtin_profiles_unchanged"
+negative_test = "crates/control/star-release/src/evaluation.rs#code_health_profile_worsened_false_positive_is_rejected"
+failure_test = "crates/control/star-release/src/evaluation.rs#code_health_profile_accept_requires_a_separate_product_decision"
+recovery_test = "crates/control/star-release/src/evaluation.rs#code_health_profile_trial_is_replay_deterministic"
 
 [[features]]
 id = "D03"

@@ -20,6 +20,9 @@ use star_domain::versioned_fingerprint;
 
 use crate::ReleaseError;
 
+pub const CODE_HEALTH_MAINTENANCE_PROFILE_ID: &str = "code_health_maintenance";
+pub const CODE_HEALTH_MAINTENANCE_PROFILE_VERSION: &str = "1.0.0";
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvaluationInput {
     pub evaluation_policy_ref: EvaluationPolicyRefV1,
@@ -298,6 +301,52 @@ pub fn transition_catalog_item(
     }
     item.lifecycle = next;
     seal_catalog_item(item)
+}
+
+/// Turns a verified Code Health profile evaluation into a catalog-only result.
+/// This never mutates the built-in Profile set: an accepted candidate requires
+/// the separately owned product decision and its complete catalog/doc package.
+pub fn code_health_profile_catalog_item(
+    run: &EvaluationRunV2,
+) -> Result<EvaluationCatalogItem, ReleaseError> {
+    verify_evaluation_run(run)?;
+    if run.subject_kind != star_contracts::release_v2::EvaluationSubjectKind::Profile
+        || run.candidate.subject.item_id != CODE_HEALTH_MAINTENANCE_PROFILE_ID
+        || run.candidate.subject.version != CODE_HEALTH_MAINTENANCE_PROFILE_VERSION
+        || !matches!(
+            run.mode,
+            EvaluationMode::Offline | EvaluationMode::Replay | EvaluationMode::Shadow
+        )
+    {
+        return Err(ReleaseError::Invalid);
+    }
+    let (lifecycle, tombstone_ref) = match run.recommendation {
+        EvaluationRecommendation::Trial | EvaluationRecommendation::NeedsReview => {
+            (EvaluationCatalogLifecycle::Active, None)
+        }
+        EvaluationRecommendation::Keep | EvaluationRecommendation::Reject => (
+            EvaluationCatalogLifecycle::Rejected,
+            Some(format!("evaluation-run:{}", run.evaluation_run_id)),
+        ),
+        EvaluationRecommendation::Accept => return Err(ReleaseError::Blocked),
+    };
+    seal_catalog_item(EvaluationCatalogItem {
+        schema_id: EVALUATION_CATALOG_ITEM_SCHEMA_ID.to_owned(),
+        schema_version: 1,
+        item_id: CODE_HEALTH_MAINTENANCE_PROFILE_ID.to_owned(),
+        item_version: CODE_HEALTH_MAINTENANCE_PROFILE_VERSION.to_owned(),
+        definition_fingerprint: run.candidate.subject.definition_fingerprint.clone(),
+        trial_candidate: true,
+        lifecycle,
+        owner: "docs/contracts/code-health-and-maintainability.md".to_owned(),
+        corpus_ref: run.corpus_ref.clone(),
+        replacement_ref: None,
+        migration_guide_ref: None,
+        compatibility_deadline: None,
+        last_evaluation_run_ref: Some(run.evaluation_run_id.clone()),
+        tombstone_ref,
+        item_fingerprint: Sha256Hash::digest(b"unsealed-code-health-profile-catalog-item"),
+    })
 }
 
 pub fn seal_catalog_item(
@@ -1273,8 +1322,9 @@ fn canonical_source_ref(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use star_contracts::release_v2::{
-        EvaluationCatalogLifecycle, EvaluationSubject, EvaluationSubjectKind,
+    use star_contracts::{
+        profile::BUILTIN_DEVELOPMENT_PROFILE_IDS,
+        release_v2::{EvaluationCatalogLifecycle, EvaluationSubject, EvaluationSubjectKind},
     };
 
     fn definition(version: &str) -> EvaluationDefinition {
@@ -1289,6 +1339,23 @@ mod tests {
                 format!("closure-{version}").as_bytes(),
             ),
             policy_fingerprint: Sha256Hash::digest(b"policy"),
+        }
+    }
+
+    fn code_health_profile_definition(version: &str) -> EvaluationDefinition {
+        EvaluationDefinition {
+            subject: EvaluationSubject {
+                kind: EvaluationSubjectKind::Profile,
+                item_id: CODE_HEALTH_MAINTENANCE_PROFILE_ID.to_owned(),
+                version: version.to_owned(),
+                definition_fingerprint: Sha256Hash::digest(
+                    format!("code-health-profile-{version}").as_bytes(),
+                ),
+            },
+            resolved_closure_fingerprint: Sha256Hash::digest(
+                format!("code-health-closure-{version}").as_bytes(),
+            ),
+            policy_fingerprint: Sha256Hash::digest(b"code-health-profile-policy"),
         }
     }
 
@@ -1397,6 +1464,78 @@ mod tests {
             minimum_sample_count: 3,
             radar_item_refs: vec![],
         }
+    }
+
+    #[test]
+    fn code_health_profile_trial_keeps_the_sixteen_builtin_profiles_unchanged() {
+        let mut input = input();
+        input.mode = EvaluationMode::Shadow;
+        input.baseline = code_health_profile_definition("0.9.0");
+        input.candidate = code_health_profile_definition(CODE_HEALTH_MAINTENANCE_PROFILE_VERSION);
+        for case in &mut input.case_results {
+            case.baseline_cost_refs.clear();
+            case.candidate_cost_refs.clear();
+            case.baseline_usage_and_cost.clear();
+            case.candidate_usage_and_cost.clear();
+            case.limitations = vec!["external_provider_cost_unavailable".to_owned()];
+        }
+        let run = evaluate(input).unwrap();
+        assert_eq!(run.recommendation, EvaluationRecommendation::NeedsReview);
+        let item = code_health_profile_catalog_item(&run).unwrap();
+        assert_eq!(item.lifecycle, EvaluationCatalogLifecycle::Active);
+        assert!(item.trial_candidate);
+        assert_eq!(item.last_evaluation_run_ref, Some(run.evaluation_run_id));
+        assert_eq!(BUILTIN_DEVELOPMENT_PROFILE_IDS.len(), 16);
+        assert!(!BUILTIN_DEVELOPMENT_PROFILE_IDS.contains(&CODE_HEALTH_MAINTENANCE_PROFILE_ID));
+    }
+
+    #[test]
+    fn code_health_profile_accept_requires_a_separate_product_decision() {
+        let mut input = input();
+        input.baseline = code_health_profile_definition("0.9.0");
+        input.candidate = code_health_profile_definition(CODE_HEALTH_MAINTENANCE_PROFILE_VERSION);
+        let run = evaluate(input).unwrap();
+        assert_eq!(run.recommendation, EvaluationRecommendation::Accept);
+        assert_eq!(
+            code_health_profile_catalog_item(&run),
+            Err(ReleaseError::Blocked)
+        );
+    }
+
+    #[test]
+    fn code_health_profile_worsened_false_positive_is_rejected() {
+        let mut input = input();
+        input.baseline = code_health_profile_definition("0.9.0");
+        input.candidate = code_health_profile_definition(CODE_HEALTH_MAINTENANCE_PROFILE_VERSION);
+        input.case_results[0].adjudication = CaseAdjudication::FalsePositive;
+        let run = evaluate(input).unwrap();
+        assert_eq!(run.recommendation, EvaluationRecommendation::Reject);
+        let item = code_health_profile_catalog_item(&run).unwrap();
+        assert_eq!(item.lifecycle, EvaluationCatalogLifecycle::Rejected);
+        assert_eq!(
+            item.tombstone_ref,
+            Some(format!("evaluation-run:{}", run.evaluation_run_id))
+        );
+    }
+
+    #[test]
+    fn code_health_profile_trial_is_replay_deterministic() {
+        let mut input = input();
+        input.mode = EvaluationMode::Replay;
+        input.baseline = code_health_profile_definition("0.9.0");
+        input.candidate = code_health_profile_definition(CODE_HEALTH_MAINTENANCE_PROFILE_VERSION);
+        for case in &mut input.case_results {
+            case.baseline_cost_refs.clear();
+            case.candidate_cost_refs.clear();
+            case.baseline_usage_and_cost.clear();
+            case.candidate_usage_and_cost.clear();
+        }
+        let run = evaluate(input).unwrap();
+        let first = code_health_profile_catalog_item(&run).unwrap();
+        let second = code_health_profile_catalog_item(&run).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(first.lifecycle, EvaluationCatalogLifecycle::Active);
+        assert!(first.trial_candidate);
     }
 
     #[test]

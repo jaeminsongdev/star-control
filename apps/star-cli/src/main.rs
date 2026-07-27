@@ -177,6 +177,7 @@ star evaluation case show <project-id> <case-id> <case-version> [--json]\n\
 star evaluation policy publish <project-id> <source-ref> [--json]\n\
 star evaluation policy show <project-id> <policy-id> <policy-version> [--json]\n\
 star evaluation compare|recommend <evaluation-run-id> [--json]\n\
+star evaluation profile-decision <evaluation-run-id> [--revision <n>] [--json]\n\
 star evaluation radar <project-id> <evaluation-run-id> <snapshot-id> --input <json-file> [--revision <n>] [--json]\n\
 star evaluation catalog publish <item-json> [--revision <n>] [--json]\n\
 star evaluation catalog transition <record-id> <deprecated|retired|rejected> [--trial-candidate] [--revision <n>] [--json]\n\
@@ -3314,6 +3315,19 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                 json,
             })
         }
+        [first, second, tail @ ..] if first == "evaluation" && second == "profile-decision" => {
+            let (positionals, options) = parse_tail(tail, &["--revision"], &[])?;
+            require_positionals(&positionals, 1, "evaluation profile-decision")?;
+            validate_development_id(&positionals[0], "evaluation-run-id")?;
+            Ok(Parsed {
+                command: "evaluation.profile.decision".to_owned(),
+                payload: serde_json::json!({
+                    "evaluation_run_id":positionals[0],
+                    "record_revision":development_revision(&options)?,
+                }),
+                json,
+            })
+        }
         [first, second, tail @ ..] if first == "evaluation" && second == "radar" => {
             let (positionals, options) = parse_tail(tail, &["--input", "--revision"], &[])?;
             require_positionals(&positionals, 3, "evaluation radar")?;
@@ -6157,6 +6171,15 @@ mod tests {
         assert_eq!(transition.command, "evaluation.catalog.transition");
         assert_eq!(transition.payload["trial_candidate"], true);
         assert_eq!(transition.payload["record_revision"], 2);
+
+        let profile_decision = parse(&[
+            "evaluation".into(),
+            "profile-decision".into(),
+            "evl_01KY0000000000000000000000".into(),
+        ])
+        .unwrap();
+        assert_eq!(profile_decision.command, "evaluation.profile.decision");
+        assert_eq!(profile_decision.payload["record_revision"], 1);
 
         let publish = parse(&[
             "release".into(),
