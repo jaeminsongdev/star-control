@@ -37,7 +37,10 @@ use star_contracts::{
         IndexPartitionKind, IndexPartitionState, IndexScanMode, IndexTier, ProjectCatalogSnapshot,
         SourceClass, SourceEntry, StructuralCloneCandidate, ToolchainCommandKind,
     },
-    maintenance_v2::{STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID, StaticAnalysisImportReport},
+    maintenance_v2::{
+        ExternalFreshness, MaintenanceRadarItem, RadarCategory, RadarPriority,
+        STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID, StaticAnalysisImportReport,
+    },
     managed_registry::{
         ManagedDeclarationChangeIntent, ManagedRegistrySnapshot, RegistryConsistencyRecord,
     },
@@ -580,6 +583,15 @@ pub struct ScanProjectResult {
     pub scan_run: ScanRun,
     pub code_index_snapshot: Option<CodeIndexSnapshot>,
     pub finding_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct CodeHealthRadarProjection {
+    pub project_id: ProjectId,
+    pub scan_run_id: ScanRunId,
+    pub items: Vec<MaintenanceRadarItem>,
+    pub complete: bool,
+    pub limitations: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -3017,6 +3029,84 @@ impl ManagementApplicationService {
         Ok(self.repositories.project(project_id)?.list_findings()?)
     }
 
+    pub fn code_health_radar_projection(
+        &self,
+        project_id: &ProjectId,
+        evaluation_time: &str,
+    ) -> Result<CodeHealthRadarProjection, ApplicationError> {
+        let repository = self.repositories.project(project_id)?;
+        let scan = repository
+            .latest_scan()?
+            .ok_or(ApplicationError::NotFound)?;
+        let complete = scan.limitations.is_empty();
+        let mut items = repository
+            .list_findings()?
+            .into_iter()
+            .filter(|finding| {
+                matches!(
+                    finding.rule_id.as_str(),
+                    "star.rule.structural-clone-candidate"
+                        | "star.rule.complexity-regression"
+                        | "star.rule.unused-surface-candidate"
+                )
+            })
+            .map(|finding| {
+                let item_id = format!("code-health.{}", finding.finding_id.as_str());
+                let risk_rank = match finding.severity {
+                    star_contracts::management::Severity::Info => 1,
+                    star_contracts::management::Severity::Warning => 2,
+                    star_contracts::management::Severity::Error => 3,
+                    star_contracts::management::Severity::Critical => 4,
+                };
+                MaintenanceRadarItem {
+                    item_id: item_id.clone(),
+                    project_id: project_id.clone(),
+                    category: RadarCategory::CodeQuality,
+                    subject: finding.rule_id.clone(),
+                    priority: RadarPriority {
+                        blocking_rank: 0,
+                        risk_rank,
+                        freshness_rank: 0,
+                        regression_rank: u8::from(
+                            finding.rule_id == "star.rule.complexity-regression"
+                                && finding.severity
+                                    == star_contracts::management::Severity::Warning,
+                        ) * 3,
+                        evidence_rank: if complete { 0 } else { 2 },
+                        time_rank: evaluation_time.to_owned(),
+                        stable_identity: item_id,
+                    },
+                    finding_refs: vec![format!("finding:{}", finding.finding_id.as_str())],
+                    diagnostic_refs: Vec::new(),
+                    dependency_refs: Vec::new(),
+                    regression_refs: Vec::new(),
+                    suppression_refs: finding
+                        .active_suppression_ids
+                        .iter()
+                        .map(|id| format!("suppression:{}", id.as_str()))
+                        .collect(),
+                    evidence_refs: vec![format!("scan:{}", scan.scan_run_id.as_str())],
+                    evaluation_run_refs: Vec::new(),
+                    blocking: false,
+                    freshness: ExternalFreshness::Current,
+                    completeness: if complete {
+                        CoverageState::Complete
+                    } else {
+                        CoverageState::Partial
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+        items.sort_by(|left, right| left.item_id.cmp(&right.item_id));
+        Ok(CodeHealthRadarProjection {
+            project_id: project_id.clone(),
+            scan_run_id: scan.scan_run_id,
+            items,
+            complete,
+            limitations: scan.limitations,
+        })
+    }
+
     fn collect_planning_inputs(
         &self,
         task: &TaskSpecDraft,
@@ -3384,6 +3474,7 @@ impl ManagementApplicationService {
                 "generation",
                 "architecture",
                 "hardcoding",
+                "code_health",
                 "security",
                 "dependency",
                 "regression",
@@ -3428,6 +3519,11 @@ impl ManagementApplicationService {
                         vec!["check", "--workspace", "--all-targets", "--locked"],
                     ),
                     "test" => (
+                        "star.tool.cargo",
+                        "cargo",
+                        vec!["test", "--workspace", "--locked"],
+                    ),
+                    "code_health" => (
                         "star.tool.cargo",
                         "cargo",
                         vec!["test", "--workspace", "--locked"],
@@ -13077,6 +13173,17 @@ mod tests {
                 .iter()
                 .any(|limitation| limitation == "INDEX_SEMANTIC_UNAVAILABLE")
         );
+        let radar = service
+            .code_health_radar_projection(
+                &project_id,
+                &Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            )
+            .unwrap();
+        assert!(radar.items.iter().all(|item| {
+            item.category == RadarCategory::CodeQuality
+                && !item.blocking
+                && item.completeness == CoverageState::Partial
+        }));
         let result = service
             .auto_apply_rust_style(&project_id, scope.clone(), |request| {
                 rust_style::seal_rust_style_policy_approval_decision(

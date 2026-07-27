@@ -129,6 +129,7 @@
     "RadarCategory": {
       "enum": [
         "failure",
+        "code_quality",
         "suppression",
         "dependency",
         "security",

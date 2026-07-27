@@ -1895,6 +1895,13 @@ fn select_validation_plan(
                 .cloned(),
         );
     }
+    // Code-health remains a read-only, during-stage shadow signal.  Patch
+    // post-apply plans are constrained to the patch's explicit evidence
+    // families and must not become unresolved merely because a scan observed
+    // an advisory candidate.
+    if validation_phase == "patch_post_apply" {
+        required_families.remove("code_health");
+    }
     if required_families.is_empty() {
         let target_projects = task
             .project_targets
@@ -2566,6 +2573,14 @@ pub fn builtin_risk_descriptors() -> Result<Vec<RiskPathDescriptor>, PlanningErr
             ValidationScopeLevel::Workspace,
         ),
         risk_descriptor(
+            "star.risk.code-health",
+            vec![],
+            vec![SourceClass::Source, SourceClass::Test, SourceClass::Config],
+            vec!["code_health", "test", "architecture"],
+            RiskSeverityFloor::Warning,
+            ValidationScopeLevel::ProjectFull,
+        ),
+        risk_descriptor(
             "star.risk.migration",
             vec![],
             vec![SourceClass::Migration],
@@ -2990,6 +3005,53 @@ mod tests {
             invalid.seal(),
             Err(PlanningContractError::Identity)
         ));
+    }
+
+    #[test]
+    fn code_health_risk_materializes_during_stage_but_not_patch_post_apply() {
+        let (catalog, index, task) = fixture();
+        let test = descriptor(
+            "star.check.test",
+            "test",
+            vec![ValidationScopeLevel::ProjectFull],
+            vec![SourceClass::Source],
+            vec!["test".to_owned()],
+        )
+        .unwrap();
+        let code_health = descriptor(
+            "star.check.code-health",
+            "code_health",
+            vec![ValidationScopeLevel::ProjectFull],
+            vec![SourceClass::Source, SourceClass::Test, SourceClass::Config],
+            vec!["test".to_owned()],
+        )
+        .unwrap();
+        let request = || PlanningRequest {
+            task: task.clone(),
+            actor: actor(),
+            catalog: catalog.clone(),
+            projects: vec![index.clone()],
+            risk_descriptors: builtin_risk_descriptors().unwrap(),
+            check_descriptors: vec![test.clone(), code_health.clone()],
+            previous_success_evidence: vec![],
+            profile_resolution: None,
+            policy: PlanningPolicy::default(),
+        };
+        let during = build_planning_bundle_for_phase(request(), "during_stage").unwrap();
+        assert!(
+            during
+                .validation_plan
+                .required_checks
+                .iter()
+                .any(|check| check.family == "code_health")
+        );
+        let post = build_planning_bundle_for_phase(request(), "patch_post_apply").unwrap();
+        assert!(
+            post.validation_plan
+                .required_checks
+                .iter()
+                .all(|check| check.family != "code_health")
+        );
     }
 
     #[test]

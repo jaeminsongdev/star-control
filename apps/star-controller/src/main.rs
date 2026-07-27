@@ -9301,6 +9301,7 @@ fn is_management_command(command: &str) -> bool {
             | "deps.status"
             | "deps.rollback-plan"
             | "maintenance.radar"
+            | "maintenance.radar.code-health"
             | "migration.inspect"
             | "migration.plan"
             | "migration.checkpoint"
@@ -13732,6 +13733,7 @@ fn is_m7_development_command(command: &str) -> bool {
             | "deps.status"
             | "deps.rollback-plan"
             | "maintenance.radar"
+            | "maintenance.radar.code-health"
     )
 }
 
@@ -14752,6 +14754,47 @@ fn handle_m7_development_command(
             serialize_management_result(
                 serde_json::json!({"plan":record,"effect_receipts":effect_receipts}),
             )
+        }
+        "maintenance.radar.code-health"
+            if payload_has_exact_keys(
+                payload,
+                &[
+                    "project_id",
+                    "snapshot_id",
+                    "evaluation_time",
+                    "valid_until",
+                    "revision",
+                ],
+            ) =>
+        {
+            let project_id = management_project_id(payload)?;
+            let snapshot_id = m6_required_string(payload, "snapshot_id", 192)?;
+            let evaluation_time = m6_required_string(payload, "evaluation_time", 64)?;
+            let valid_until = m6_optional_string(payload, "valid_until", 64)?;
+            let projection = service.code_health_radar_projection(&project_id, &evaluation_time)?;
+            if projection.items.is_empty() {
+                return Err(ApplicationError::NotFound);
+            }
+            let snapshot = build_maintenance_radar_snapshot(
+                snapshot_id.clone(),
+                evaluation_time,
+                valid_until,
+                projection.items,
+            )
+            .map_err(m6_development_error)?;
+            let state = m6_coverage_state(snapshot.completeness);
+            service
+                .publish_development_document(
+                    "maintenance_radar_snapshot",
+                    &snapshot_id,
+                    m6_revision(payload)?,
+                    Some(project_id),
+                    state,
+                    MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
+                    1,
+                    &snapshot,
+                )
+                .and_then(serialize_management_result)
         }
         "maintenance.radar"
             if payload_has_exact_keys(
@@ -26857,6 +26900,7 @@ mod tests {
             "deps.status",
             "deps.rollback-plan",
             "maintenance.radar",
+            "maintenance.radar.code-health",
         ] {
             assert!(is_management_command(command), "{command}");
         }
@@ -26870,6 +26914,7 @@ mod tests {
             "deps.prepare",
             "deps.rollback-plan",
             "maintenance.radar",
+            "maintenance.radar.code-health",
         ] {
             assert!(
                 !update_restart_pending_command_allowed(command),

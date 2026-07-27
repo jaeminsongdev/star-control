@@ -24,15 +24,16 @@
 | P-0063 SARIF 2.1.0 normalizer | **DONE / local commit** | `eed833af5387c9d6367199829839419511ba6000`; registered `SarifV210` parser→raw/normalized ArtifactRef→`ValidationRunV2`/`DiagnosticV2`→current Scan generation Finding/Occurrence→immutable import report. FULL 11/11 complete/stable/pass. |
 | P-0064A structural clone | **DONE / local commit** | `d04cb2d7b664d52dd6228dddae57fb6a525ce458`; Rust exact token clone, production/test cohort, source-bound Finding/Occurrence, incremental reuse, macro·fixture exclusion과 FULL 11/11 complete/stable/pass. |
 | P-0064B complexity regression | **DONE / local commit** | `c59c3a8789c582d8a43d0884855e799a39613588`; Rust AST complexity metric, compatible previous-index baseline의 new/worsened/improved relation, source-bound Finding과 FULL 11/11 complete/stable/pass. |
-| P-0064C unused surface | **IN_PROGRESS** | Rust function/type/file/export/dependency의 read-only unused candidate를 bounded Slice로 구현한다. |
-| P-0065~P-0070 | pending | Gate/Radar → history/ownership/debt → semantic provider → mutation/rule-pack/posture → evaluation/Profile → final audit 순서다. |
+| P-0064C unused surface | **DONE / local commit** | `17f56418d27ea6fd5738090cefb38fe5fcddc329`; Rust function/type/file/export/dependency candidate, read-only dependency snapshot과 manifest/lockfile disagreement, build-script frontier, FULL 11/11 complete/stable/pass. |
+| P-0065 Gate·Radar | **IN_PROGRESS** | scan→finding→planning→validation→baseline/suppression→Gate/Radar의 shadow/read-only close loop을 구현한다. |
+| P-0066~P-0070 | pending | history/ownership/debt → semantic provider → mutation/rule-pack/posture → evaluation/Profile → final audit 순서다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0064C 활성 Slice
+## P-0065 활성 Slice
 
-- 목표: Rust function/type/file/export/dependency의 unused candidate를 syntax/reference·manifest evidence와 source-class boundary로 관찰하고 current Scan generation Finding/Occurrence로 투영한다.
-- 불변식: raw source는 candidate/Finding/Occurrence/fingerprint에 저장하지 않는다. public/exported API, test/build/config, macro/dynamic/reference frontier, generated/vendor/cache/output/fixture와 dependency lockfile disagreement는 confirmed deletion이 아니라 candidate 또는 limitation이다. 자동 BLOCK/PatchSet은 만들지 않는다.
-- corpus: private unused function/type/file, public/test/build/config/macro/dynamic frontier, reference/lockfile disagreement, moved/renamed symbol, source class/language cohort, resource limit, raw-source exclusion을 positive/negative/failure로 고정한다.
+- 목표: P-0064 결과를 기존 planning/validation/baseline/suppression/Gate/Radar read-only workflow로 materialize한다.
+- 불변식: 신규 Rule은 shadow/report-only이며 existing required family를 줄이지 않는다. partial/unverified은 clean pass가 아니고 automatic PatchSet/BLOCK을 만들지 않는다.
+- corpus: deterministic selection/order, baseline compatibility, suppression expiry, new/worsened ratchet, incomplete evidence와 external import limitation을 고정한다.
 - 선택 Profile: `project_understanding`, `architecture_quality`, `test_correctness`, `ai_development_validation`; 새 Profile은 추가하지 않는다.
 - 검증: affected package TARGET 후 common core/Finding contract 영향이므로 FULL, strict self-review, intended files만 local commit. push/PR/publish/install은 금지다.
 
@@ -48,4 +49,4 @@
 - 먼저 확인할 파일: `crates/control/star-project/src/index.rs`, `crates/adapters/star-adapter-rust-index/src/lib.rs`, `crates/control/star-validation/src/lib.rs`, `crates/foundation/star-contracts/src/index.rs`, `crates/foundation/star-contracts/src/management.rs`.
 - 먼저 실행할 명령: `git status --short --branch`; `rg -n 'SyntaxAnalysis|SourceClass|FindingProjection|Token' crates`; focused test; final `pwsh ./scripts/validate.ps1 -Profile full -OutputFormat json`.
 - 건드리면 안 되는 것: existing dirty/user changes, `target/`, `legacy/`, installed Runtime/cache, external account/remote state.
-- 다음 완료 기준: P-0064C는 private candidate와 public/dynamic frontier 분리, source/class limitation 및 raw-source 비영속을 corpus로 증명하고 FULL·strict review·local commit이 필요하다.
+- 다음 완료 기준: P-0065는 existing validation workflow에서 code-health Finding의 plan/Gate/Radar close loop을 source-bound evidence와 corpus로 증명하고 FULL·strict review·local commit이 필요하다.

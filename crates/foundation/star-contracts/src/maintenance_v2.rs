@@ -593,6 +593,7 @@ pub struct DependencyUpdatePlan {
 #[serde(rename_all = "snake_case")]
 pub enum RadarCategory {
     Failure,
+    CodeQuality,
     Suppression,
     Dependency,
     Security,

@@ -194,7 +194,7 @@
     },
     {
       "file": "maintenance-radar-snapshot.schema.json",
-      "hash": "sha256:030f3399e1f6564cc98048a9b0081929c7024b3ba5b7bb4ecfb2a91edebd1f9c"
+      "hash": "sha256:9ae7a627db80bc2fb6ab1cdeb9c4abf1527e43b61ad91bb131b72e60ad812c17"
     },
     {
       "file": "project-migration-manifest.schema.json",
