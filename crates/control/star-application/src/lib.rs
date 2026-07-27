@@ -97,7 +97,7 @@ use star_execution::{
     ReversePatchMaterialV2, apply_patch, exact_reverse_recipe_v2, managed_declaration_recipe_v2,
     observe_patch_set_v2, prepare_exact_materialized_patch, prepare_trailing_whitespace_patch,
     prepare_trailing_whitespace_paths, recover_patch_set_v2, rollback_applied,
-    rust_style_recipe_v2, trailing_whitespace_recipe_v2,
+    rust_style_recipe_v2, semantic_provider_recipe_v2, trailing_whitespace_recipe_v2,
 };
 use star_planning::{
     ObservedWorkspaceChange, PlanningError, PlanningPolicy, PlanningProjectIndex, PlanningRequest,
@@ -112,9 +112,10 @@ use star_ports::{
     GlobalManagementRepository, ManagementRecovery, ManagementRepositorySet, PatchPortError,
     ProjectRootAttachment, ProjectRootBindingStore, RepositoryError, RepositoryErrorCategory,
     RetentionApplyResult, RetentionPlan, RetentionPolicy, RewriteTransformRequest,
-    RewriteTransformerPort, ScanCommit, SourceBoundFindingImport, SourceMutationPort,
-    SourceMutationRequest, SourceMutationState, StoredCodeIndexProjection, WorktreeMaterialization,
-    WorktreePort,
+    RewriteTransformerPort, ScanCommit, SemanticProviderAvailability,
+    SemanticRefactorPreviewRequest, SemanticRefactorProviderPort, SourceBoundFindingImport,
+    SourceMutationPort, SourceMutationRequest, SourceMutationState, StoredCodeIndexProjection,
+    WorktreeMaterialization, WorktreePort,
 };
 pub use star_ports::{
     DevelopmentRecord, ManagedRegistryConsumerProjectInput, ManagedRegistryResolveRequest,
@@ -810,6 +811,7 @@ pub struct ManagementApplicationService {
     index_cache: Option<Arc<dyn CodeIndexCache>>,
     syntax_adapters: Vec<Arc<dyn SyntaxAdapter>>,
     semantic_adapters: Vec<Arc<dyn SemanticAdapter>>,
+    semantic_refactor_provider: Option<Arc<dyn SemanticRefactorProviderPort>>,
     git_history_adapter: Option<Arc<dyn GitHistoryPort>>,
     managed_registry_resolver: Option<Arc<dyn ManagedRegistryResolverPort>>,
     managed_registry_rewriter: Option<Arc<dyn ManagedRegistryRewritePort>>,
@@ -961,6 +963,7 @@ impl ManagementApplicationService {
             index_cache: None,
             syntax_adapters: Vec::new(),
             semantic_adapters: Vec::new(),
+            semantic_refactor_provider: None,
             git_history_adapter: None,
             managed_registry_resolver: None,
             managed_registry_rewriter: None,
@@ -1106,6 +1109,14 @@ impl ManagementApplicationService {
 
     pub fn with_semantic_adapter(mut self, adapter: Arc<dyn SemanticAdapter>) -> Self {
         self.semantic_adapters.push(adapter);
+        self
+    }
+
+    pub fn with_semantic_refactor_provider(
+        mut self,
+        provider: Arc<dyn SemanticRefactorProviderPort>,
+    ) -> Self {
+        self.semantic_refactor_provider = Some(provider);
         self
     }
 
@@ -6056,6 +6067,7 @@ impl ManagementApplicationService {
             managed_declaration_recipe_v2()?,
             exact_reverse_recipe_v2()?,
             rust_style_recipe_v2()?,
+            semantic_provider_recipe_v2()?,
         ];
         items.retain(|recipe| {
             language.is_none_or(|language| recipe.language.as_deref() == Some(language))
@@ -6080,6 +6092,7 @@ impl ManagementApplicationService {
             managed_declaration_recipe_v2()?,
             exact_reverse_recipe_v2()?,
             rust_style_recipe_v2()?,
+            semantic_provider_recipe_v2()?,
         ]
         .into_iter()
         .find(|recipe| recipe_spec == format!("{}@{}", recipe.recipe_id, recipe.recipe_version))
@@ -6137,7 +6150,8 @@ impl ManagementApplicationService {
     ) -> Result<PreparedChangeV2Result, ApplicationError> {
         let trailing_recipe = trailing_whitespace_recipe_v2()?;
         let managed_recipe = managed_declaration_recipe_v2()?;
-        let (recipe, managed_intent) = if recipe_spec
+        let semantic_recipe = semantic_provider_recipe_v2()?;
+        let (recipe, managed_intent, semantic_request) = if recipe_spec
             == format!(
                 "{}@{}",
                 trailing_recipe.recipe_id, trailing_recipe.recipe_version
@@ -6148,7 +6162,7 @@ impl ManagementApplicationService {
             {
                 return Err(ApplicationError::Invalid);
             }
-            (trailing_recipe, None)
+            (trailing_recipe, None, None)
         } else if recipe_spec
             == format!(
                 "{}@{}",
@@ -6169,7 +6183,71 @@ impl ManagementApplicationService {
             if intent.clone().seal().as_ref() != Ok(&intent) {
                 return Err(ApplicationError::Invalid);
             }
-            (managed_recipe, Some(intent))
+            (managed_recipe, Some(intent), None)
+        } else if recipe_spec
+            == format!(
+                "{}@{}",
+                semantic_recipe.recipe_id, semantic_recipe.recipe_version
+            )
+        {
+            if worktree_strategy != WorktreeStrategyV1::Isolated {
+                return Err(ApplicationError::Apply(
+                    "SEMANTIC_PROVIDER_REQUIRES_ISOLATED_WORKTREE".to_owned(),
+                ));
+            }
+            let object = parameters
+                .as_object()
+                .filter(|object| {
+                    object.len() == 2
+                        && object.contains_key("capability")
+                        && object.contains_key("provider_parameters")
+                })
+                .ok_or(ApplicationError::Invalid)?;
+            let capability: star_ports::SemanticProviderCapability = serde_json::from_value(
+                object
+                    .get("capability")
+                    .cloned()
+                    .ok_or(ApplicationError::Invalid)?,
+            )
+            .map_err(|_| ApplicationError::Invalid)?;
+            if capability.provider_id.trim().is_empty()
+                || capability.availability != SemanticProviderAvailability::Available
+                || capability.executable_identity.is_none()
+                || !object
+                    .get("provider_parameters")
+                    .is_some_and(serde_json::Value::is_object)
+            {
+                return Err(ApplicationError::Apply(
+                    "SEMANTIC_PROVIDER_UNAVAILABLE_OR_UNVERIFIED".to_owned(),
+                ));
+            }
+            let provider_parameters = object
+                .get("provider_parameters")
+                .cloned()
+                .ok_or(ApplicationError::Invalid)?;
+            let persisted_provider_input = serde_json::to_vec(&serde_json::json!({
+                "capability":capability.clone(),
+                "provider_parameters":provider_parameters.clone(),
+            }))
+            .map_err(|_| ApplicationError::Invalid)?;
+            if patch_source_bytes_are_sensitive(&persisted_provider_input) {
+                return Err(ApplicationError::Apply(
+                    "PATCH_PREVIEW_REDACTION_REQUIRED".to_owned(),
+                ));
+            }
+            let transform = RewriteTransformRequest {
+                recipe: semantic_recipe.clone(),
+                target_selector: target_selector.clone(),
+                parameters: provider_parameters,
+            };
+            (
+                semantic_recipe,
+                None,
+                Some(SemanticRefactorPreviewRequest {
+                    capability,
+                    transform,
+                }),
+            )
         } else {
             return Err(ApplicationError::NotFound);
         };
@@ -6293,6 +6371,114 @@ impl ManagementApplicationService {
                 )]),
             )?;
             (prepared, materialized, Some((registry.snapshot, intent)))
+        } else if let Some(request) = semantic_request.as_ref() {
+            // The provider boundary is intentionally preview-only.  Give it a
+            // fresh isolated worktree and discard that worktree before the
+            // normalized PatchSet enters planning or approval.
+            let provider = self.semantic_refactor_provider.as_ref().ok_or_else(|| {
+                ApplicationError::Apply("SEMANTIC_PROVIDER_UNAVAILABLE_OR_UNVERIFIED".to_owned())
+            })?;
+            let now = Utc::now();
+            let preview_decision = WorktreeDecision {
+                schema_id: star_contracts::patch_v2::WORKTREE_DECISION_SCHEMA_ID.to_owned(),
+                schema_version: 1,
+                worktree_decision_id: WorktreeDecisionId::new(),
+                revision: 1,
+                project_id: project_id.clone(),
+                checkout_id: checkout_id.clone(),
+                base_workspace_snapshot_id: snapshot.workspace_snapshot_id.clone(),
+                strategy: WorktreeStrategyV1::Isolated,
+                reason_codes: vec!["SEMANTIC_PROVIDER_ISOLATED_PREVIEW".to_owned()],
+                isolated_locator_fingerprint: None,
+                materialization_artifact_refs: vec![],
+                state: WorktreeDecisionStateV1::Selected,
+                created_at: now,
+                updated_at: now,
+                decision_fingerprint: Sha256Hash::digest(b""),
+            }
+            .seal()
+            .map_err(|_| ApplicationError::Invalid)?;
+            let adapter = GitWorktreeAdapter::new(
+                std::env::temp_dir()
+                    .join("Star-Control")
+                    .join("isolated-worktrees"),
+            )
+            .map_err(|_| ApplicationError::Apply("PATCH_WORKTREE_UNAVAILABLE".to_owned()))?;
+            let materialization = adapter
+                .materialize(&root, &preview_decision)
+                .map_err(|_| ApplicationError::Apply("PATCH_WORKTREE_UNAVAILABLE".to_owned()))?;
+            let preview_result = provider.preview(&materialization.root, request);
+            let discard_result = adapter.discard(&root, &materialization);
+            let preview = match (preview_result, discard_result) {
+                (_, Err(_)) => {
+                    return Err(ApplicationError::Apply(
+                        "SEMANTIC_PROVIDER_ISOLATED_PREVIEW_DISCARD_FAILED".to_owned(),
+                    ));
+                }
+                (Err(_), Ok(())) => {
+                    return Err(ApplicationError::Apply(
+                        "SEMANTIC_PROVIDER_ISOLATED_PREVIEW_REJECTED".to_owned(),
+                    ));
+                }
+                (Ok(preview), Ok(())) => preview,
+            };
+            if preview.capability != request.capability
+                || !preview.idempotence_proved
+                || preview.replay_operation_count != 0
+            {
+                return Err(ApplicationError::Apply(
+                    "SEMANTIC_PROVIDER_ISOLATED_PREVIEW_MISMATCH".to_owned(),
+                ));
+            }
+            let mut materialized = preview
+                .files
+                .into_iter()
+                .map(|file| MaterializedPatchFile {
+                    path: file.path,
+                    before_sha256: file.before_sha256,
+                    after_sha256: file.after_sha256,
+                    before_bytes: file.before_bytes,
+                    after_bytes: file.after_bytes,
+                })
+                .collect::<Vec<_>>();
+            materialized.sort_by(|left, right| left.path.cmp(&right.path));
+            match &target_selector {
+                TargetSelector::Path {
+                    paths,
+                    expected_content_fingerprints,
+                    ..
+                } if paths
+                    == &materialized
+                        .iter()
+                        .map(|file| file.path.clone())
+                        .collect::<Vec<_>>()
+                    && materialized.iter().all(|file| {
+                        expected_content_fingerprints.get(&file.path) == Some(&file.before_sha256)
+                    }) => {}
+                _ => return Err(ApplicationError::Invalid),
+            }
+            let prepared = prepare_exact_materialized_patch(
+                project_id,
+                &snapshot,
+                &recipe,
+                &materialized,
+                BTreeMap::from([
+                    (
+                        "semantic_provider_id".to_owned(),
+                        request.capability.provider_id.clone(),
+                    ),
+                    (
+                        "semantic_provider_executable_identity".to_owned(),
+                        request
+                            .capability
+                            .executable_identity
+                            .as_ref()
+                            .ok_or(ApplicationError::Invalid)?
+                            .to_string(),
+                    ),
+                ]),
+            )?;
+            (prepared, materialized, None)
         } else {
             let prepared = match &target_selector {
                 TargetSelector::Finding {
@@ -6490,13 +6676,52 @@ impl ManagementApplicationService {
                     after_bytes: file.after_bytes.clone(),
                 })
                 .collect::<Vec<_>>();
-            adapter
-                .synchronize_preview_inputs(&materialization, &preview_inputs)
-                .map_err(|_| {
-                    ApplicationError::Apply("PATCH_WORKTREE_SYNCHRONIZE_FAILED".to_owned())
-                })?;
+            // A semantic provider must inspect the unmodified isolated checkout.
+            // Other built-in previews keep the historical synchronization order.
+            if semantic_request.is_none() {
+                adapter
+                    .synchronize_preview_inputs(&materialization, &preview_inputs)
+                    .map_err(|_| {
+                        ApplicationError::Apply("PATCH_WORKTREE_SYNCHRONIZE_FAILED".to_owned())
+                    })?;
+            }
             let (isolated_files, isolated_replay_count, isolated_idempotence) =
-                if let Some((registry_snapshot, intent)) = registry_preview.as_ref() {
+                if let Some(request) = semantic_request.as_ref() {
+                    let provider = self.semantic_refactor_provider.as_ref().ok_or_else(|| {
+                        ApplicationError::Apply(
+                            "SEMANTIC_PROVIDER_UNAVAILABLE_OR_UNVERIFIED".to_owned(),
+                        )
+                    })?;
+                    let preview = match provider.preview(&materialization.root, request) {
+                        Ok(preview) => preview,
+                        Err(_) => {
+                            return match adapter.discard(&root, &materialization) {
+                                Ok(()) => Err(ApplicationError::Apply(
+                                    "SEMANTIC_PROVIDER_ISOLATED_REPLAY_REJECTED".to_owned(),
+                                )),
+                                Err(_) => Err(ApplicationError::Apply(
+                                    "SEMANTIC_PROVIDER_ISOLATED_REPLAY_DISCARD_FAILED".to_owned(),
+                                )),
+                            };
+                        }
+                    };
+                    if preview.capability != request.capability {
+                        return match adapter.discard(&root, &materialization) {
+                            Ok(()) => Err(ApplicationError::Apply(
+                                "SEMANTIC_PROVIDER_ISOLATED_REPLAY_MISMATCH".to_owned(),
+                            )),
+                            Err(_) => Err(ApplicationError::Apply(
+                                "SEMANTIC_PROVIDER_ISOLATED_REPLAY_DISCARD_FAILED".to_owned(),
+                            )),
+                        };
+                    }
+                    (
+                        preview.files,
+                        u64::try_from(preview.replay_operation_count)
+                            .map_err(|_| ApplicationError::Invalid)?,
+                        preview.idempotence_proved,
+                    )
+                } else if let Some((registry_snapshot, intent)) = registry_preview.as_ref() {
                     let rewriter = self.managed_registry_rewriter.as_ref().ok_or_else(|| {
                         ApplicationError::Apply("MANAGED_REGISTRY_REWRITER_UNAVAILABLE".to_owned())
                     })?;
@@ -6538,9 +6763,33 @@ impl ManagementApplicationService {
                 || isolated_replay_count != 0
                 || isolated_files != preview_inputs
             {
+                if semantic_request.is_some() {
+                    return match adapter.discard(&root, &materialization) {
+                        Ok(()) => Err(ApplicationError::Apply(
+                            "PATCH_ISOLATED_PREVIEW_MISMATCH".to_owned(),
+                        )),
+                        Err(_) => Err(ApplicationError::Apply(
+                            "SEMANTIC_PROVIDER_ISOLATED_REPLAY_DISCARD_FAILED".to_owned(),
+                        )),
+                    };
+                }
                 return Err(ApplicationError::Apply(
                     "PATCH_ISOLATED_PREVIEW_MISMATCH".to_owned(),
                 ));
+            }
+            if semantic_request.is_some()
+                && adapter
+                    .synchronize_preview_inputs(&materialization, &preview_inputs)
+                    .is_err()
+            {
+                return match adapter.discard(&root, &materialization) {
+                    Ok(()) => Err(ApplicationError::Apply(
+                        "PATCH_WORKTREE_SYNCHRONIZE_FAILED".to_owned(),
+                    )),
+                    Err(_) => Err(ApplicationError::Apply(
+                        "SEMANTIC_PROVIDER_ISOLATED_REPLAY_DISCARD_FAILED".to_owned(),
+                    )),
+                };
             }
             let materialization_ref =
                 self.artifacts.put_json_with_policy(ArtifactWriteRequest {
@@ -11282,10 +11531,51 @@ mod tests {
     use star_state::{
         SqliteManagementRecovery, SqliteManagementRepositorySet, WindowsProjectRootBindingStore,
     };
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct FailingIndexCache;
 
     struct FixtureRustSyntaxAdapter;
+
+    struct FixtureSemanticProvider {
+        capability: star_ports::SemanticProviderCapability,
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl SemanticRefactorProviderPort for FixtureSemanticProvider {
+        fn preview(
+            &self,
+            isolated_project_root: &Path,
+            request: &SemanticRefactorPreviewRequest,
+        ) -> Result<
+            star_ports::SemanticRefactorPreviewResult,
+            star_ports::SemanticRefactorProviderError,
+        > {
+            if request.capability != self.capability
+                || !isolated_project_root.join(".git").is_file()
+            {
+                return Err(star_ports::SemanticRefactorProviderError::Invalid);
+            }
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let path = ProjectPathRef::parse("src/lib.rs".to_owned())
+                .map_err(|_| star_ports::SemanticRefactorProviderError::Malformed)?;
+            let before_bytes = std::fs::read(isolated_project_root.join(path.as_str()))
+                .map_err(|_| star_ports::SemanticRefactorProviderError::Unavailable)?;
+            let after_bytes = b"pub fn semantic_fixture() {}\n".to_vec();
+            Ok(star_ports::SemanticRefactorPreviewResult {
+                capability: self.capability.clone(),
+                files: vec![MaterializedRewrite {
+                    path,
+                    before_sha256: Sha256Hash::digest(&before_bytes),
+                    after_sha256: Sha256Hash::digest(&after_bytes),
+                    before_bytes,
+                    after_bytes,
+                }],
+                replay_operation_count: 0,
+                idempotence_proved: true,
+            })
+        }
+    }
 
     impl SyntaxAdapter for FixtureRustSyntaxAdapter {
         fn language_id(&self) -> &'static str {
@@ -11693,6 +11983,163 @@ mod tests {
             .unwrap();
         assert_eq!(applied.rebuilt_projects.len(), 1);
         assert_eq!(applied.rebuilt_projects[0].project_id, project_id);
+    }
+
+    #[test]
+    fn semantic_provider_preview_requires_isolated_replay_and_preserves_current_checkout() {
+        let root = std::env::temp_dir().join(format!(
+            "star-semantic-provider-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        let source = root.join("source");
+        std::fs::create_dir_all(source.join("src")).unwrap();
+        std::fs::create_dir_all(source.join(".star-control")).unwrap();
+        let declared_project_id = ProjectId::new();
+        std::fs::write(
+            source.join(".star-control/project.toml"),
+            format!(
+                "schema_version = 1\nproject_id = \"{}\"\ndisplay_name = \"semantic fixture\"\nrepository_kind = \"none\"\nsource_of_truth = [\"source\"]\n",
+                declared_project_id.as_str()
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            source.join("Cargo.toml"),
+            "[package]\nname = \"semantic-fixture\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(source.join("src/lib.rs"), b"pub fn fixture() {}\n").unwrap();
+        for arguments in [
+            vec!["init", "--quiet"],
+            vec!["config", "user.email", "fixture@example.invalid"],
+            vec!["config", "user.name", "Fixture"],
+            vec!["add", "."],
+            vec!["commit", "--quiet", "-m", "fixture"],
+        ] {
+            assert!(
+                std::process::Command::new("git")
+                    .args(arguments)
+                    .current_dir(&source)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+        }
+        let capability = star_ports::SemanticProviderCapability {
+            provider_id: "fixture-semantic-provider".to_owned(),
+            executable_identity: Some(Sha256Hash::digest(b"fixture-semantic-provider")),
+            operation: star_ports::SemanticRefactorOperation::Rename,
+            availability: SemanticProviderAvailability::Available,
+            limitations: vec![],
+        };
+        let calls = Arc::new(AtomicUsize::new(0));
+        let provider = Arc::new(FixtureSemanticProvider {
+            capability: capability.clone(),
+            calls: calls.clone(),
+        });
+        let repositories =
+            Arc::new(SqliteManagementRepositorySet::open(root.join("management"), "test").unwrap());
+        let bindings =
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("root-bindings")).unwrap());
+        let unavailable_service = ManagementApplicationService::new(
+            repositories.clone(),
+            bindings.clone(),
+            Arc::new(LocalArtifactStore::default()),
+        );
+        let registration = unavailable_service
+            .register_project(&source.canonicalize().unwrap(), "semantic-register")
+            .unwrap();
+        let project_id = registration.project.project_id;
+        let scan = unavailable_service
+            .scan_project(&project_id, "semantic-scan")
+            .unwrap();
+        assert_eq!(scan.scan_run.status, ScanStatus::Succeeded);
+        let before = std::fs::read(source.join("src/lib.rs")).unwrap();
+        let path = ProjectPathRef::parse("src/lib.rs".to_owned()).unwrap();
+        let selector = TargetSelector::Path {
+            project_id: project_id.clone(),
+            paths: vec![path.clone()],
+            expected_content_fingerprints: BTreeMap::from([(path, Sha256Hash::digest(&before))]),
+        };
+        let parameters = serde_json::json!({
+            "capability": capability.clone(),
+            "provider_parameters": {"new_name":"semantic_fixture"}
+        });
+        assert!(matches!(
+            unavailable_service.prepare_change_v2(
+                &project_id,
+                &registration.checkout.checkout_id,
+                "semantic_provider_preview@1.0.0",
+                selector.clone(),
+                parameters.clone(),
+                WorktreeStrategyV1::Isolated,
+                ActorRef {
+                    actor_type: ActorType::User,
+                    actor_id: "fixture-user".to_owned(),
+                    display_name: "Fixture User".to_owned(),
+                    auth_source: "fixture".to_owned(),
+                },
+            ),
+            Err(ApplicationError::Apply(code)) if code == "SEMANTIC_PROVIDER_UNAVAILABLE_OR_UNVERIFIED"
+        ));
+        drop(unavailable_service);
+        let service = ManagementApplicationService::new(
+            repositories,
+            bindings,
+            Arc::new(LocalArtifactStore::default()),
+        )
+        .with_semantic_refactor_provider(provider);
+        let prepared = service
+            .prepare_change_v2(
+                &project_id,
+                &registration.checkout.checkout_id,
+                "semantic_provider_preview@1.0.0",
+                selector,
+                parameters,
+                WorktreeStrategyV1::Isolated,
+                ActorRef {
+                    actor_type: ActorType::User,
+                    actor_id: "fixture-user".to_owned(),
+                    display_name: "Fixture User".to_owned(),
+                    auth_source: "fixture".to_owned(),
+                },
+            )
+            .unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            prepared.worktree_decision.state,
+            WorktreeDecisionStateV1::RetainedForRecovery
+        );
+        assert_eq!(std::fs::read(source.join("src/lib.rs")).unwrap(), before);
+        let adapter = GitWorktreeAdapter::new(
+            std::env::temp_dir()
+                .join("Star-Control")
+                .join("isolated-worktrees"),
+        )
+        .unwrap();
+        adapter
+            .discard(
+                &source,
+                &WorktreeMaterialization {
+                    root: std::env::temp_dir()
+                        .join("Star-Control")
+                        .join("isolated-worktrees")
+                        .join(prepared.worktree_decision.worktree_decision_id.as_str()),
+                    locator_fingerprint: prepared
+                        .worktree_decision
+                        .isolated_locator_fingerprint
+                        .clone()
+                        .unwrap(),
+                    evidence_refs: prepared
+                        .worktree_decision
+                        .materialization_artifact_refs
+                        .clone(),
+                },
+            )
+            .unwrap();
+        drop(service);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

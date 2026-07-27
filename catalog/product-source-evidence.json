@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:1e1fda4292dbeacb7bc9ec3ba62182ebf95f4e957307cf31fe2fa429e921967f",
+  "evidence_fingerprint": "sha256:89c5a9dda3668b9bf0ce45d8bd6fec50b641b647d18d8941872ac2ccf16e3340",
   "feature_count": 23,
   "features": [
     {
@@ -177,7 +177,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:35e9baa4f8b3820f583865f4ec6992b5dd06e9392d11f56a515a15967788602c",
+      "feature_fingerprint": "sha256:722ec51b13d7eb5594164e7231f19c35e61a383283c2b29736acefcf134e8bb4",
       "feature_id": "A03",
       "generated_schemas": [
         {
@@ -211,7 +211,7 @@
         {
           "marker": "pub fn verify_context_pack_current",
           "path": "crates/control/star-application/src/lib.rs",
-          "source_sha256": "sha256:1cd74c138ed9cb26af4a13bc064970e8ff1941a464b72ec38c7e1d2fa6c499c7"
+          "source_sha256": "sha256:3ee996ed466866cec1064f07d1c733ab461e646416a994898301e162aaf1478f"
         },
         {
           "marker": "fn build_context_pack",
@@ -633,7 +633,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:193f40530cf862e29136c7bc0124735af23a52e5f6503aa13a040d3437c9270c",
+      "feature_fingerprint": "sha256:9525bc9bfb46cee847a823e0db7dead27bc3673cb229eacb3111bcf469dd6920",
       "feature_id": "A08",
       "generated_schemas": [
         {
@@ -653,7 +653,7 @@
         {
           "marker": "RegisteredDevelopmentEffectAdapter",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "action_permission_decision",
@@ -1019,7 +1019,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:dd694d393cf72218f1a34f81aaebf892ee9dc3c37c186bfca7a9a6ca5eabf40d",
+      "feature_fingerprint": "sha256:ef793b931c06420634455b5897bb3b6ff0692fac80e3ce8a0b97eb43338a8e45",
       "feature_id": "B03",
       "generated_schemas": [
         {
@@ -1045,7 +1045,7 @@
         {
           "marker": "fn collect_m3_rule_diagnostics",
           "path": "crates/control/star-application/src/lib.rs",
-          "source_sha256": "sha256:1cd74c138ed9cb26af4a13bc064970e8ff1941a464b72ec38c7e1d2fa6c499c7"
+          "source_sha256": "sha256:3ee996ed466866cec1064f07d1c733ab461e646416a994898301e162aaf1478f"
         }
       ],
       "mcp_actions": [
@@ -1162,7 +1162,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:0261c7c4ef53a9efa7a4df738d1eddf1d69fc2a817d6d59be32e7a26a3c7c2b5",
+      "feature_fingerprint": "sha256:5f11ca99c806f8dcac854d43758e2b87f81ebcae429837fabe428a92ddf406a3",
       "feature_id": "B05",
       "generated_schemas": [
         {
@@ -1233,7 +1233,7 @@
         "recovery": {
           "marker": "registered_effect_adapter_covers_m7_m8_m9_permissions_and_preserves_unknown",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       }
     },
@@ -1547,7 +1547,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:32de5e68ee07cffe5edbf369f0f0b726272b4bcba58da8f000864daf6447c86f",
+      "feature_fingerprint": "sha256:23dea1d601d346f97a621c89482dec06f3a030e4167236b96ee67e89595127dd",
       "feature_id": "C01",
       "generated_schemas": [
         {
@@ -1577,7 +1577,7 @@
         {
           "marker": "pub fn verify_stage_profile_current",
           "path": "crates/control/star-application/src/lib.rs",
-          "source_sha256": "sha256:1cd74c138ed9cb26af4a13bc064970e8ff1941a464b72ec38c7e1d2fa6c499c7"
+          "source_sha256": "sha256:3ee996ed466866cec1064f07d1c733ab461e646416a994898301e162aaf1478f"
         },
         {
           "marker": "fn bind_stage_plan_profiles",
@@ -1938,12 +1938,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:d16df2e5e3aa9212eb71ba2083a2be2b648846f24cd9716fcba992de322b394f",
@@ -2023,12 +2023,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:38bc286893509604cf7af534cbb160e85c847ddc5111e3db36d2a08f1d3df242",
@@ -2110,12 +2110,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:07c885f59697a11de4985c23db9b8b27183f1b6b92ced5563403d3d95cfd7643",
@@ -2195,12 +2195,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:baf30b7674adbdba3d489c36dcba1ec43336b769a3f6ff80040a8197a70f0551",
@@ -2282,12 +2282,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:548f4e066cd462ee35b0d0efb602079f52148c53999e7728497fb41767fe8f73",
@@ -2369,12 +2369,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:ad21f1e3b09d390846b288efb8a5a924a0acd2af924271fee3eefa80fa205da8",
@@ -2462,12 +2462,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:49883a47f11e9468ac1765a3dd5fa26ad1b01ba1c4ee6b65401599f1e055f2db",
@@ -2552,12 +2552,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:2fefa3cfb972b6e7b4970aa26b6244221b09003ccc52767b76eb1dbe4f519afa",
@@ -2644,12 +2644,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:01580862b804b854069fe97122eae710a59caf9adb7417f5d86bad74dac63f72",
@@ -2744,12 +2744,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:d15f9d6e75ba3badda3415a3eb473ef6c1971c4fff5a1f3fa9b74e778f515bc2",
@@ -2839,12 +2839,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:1c5974d47c9f1d3f9eab1a769165de0a092b244810c5da1eaac2a88ddd6d67f3",
@@ -2939,12 +2939,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:e1b3b6a55630227bba2c71548dcb0a9832cde3ebf64a5a7257ff568765365a9c",
@@ -3039,12 +3039,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:4523b0fb62d606474bc6554a3bcf69dff12a2ccb6424a3c2081e76e6c6059cef",
@@ -3130,12 +3130,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:d4df2b614fe4eae9558aa3ea0eb0ed945d3e2dfabf862b6eb19243ad5b3588e7",
@@ -3224,12 +3224,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:179927fcc7e6a8dbdf5c117559fdb0a85297e0acaef8882ebe7bb2b8c0158851",
@@ -3322,12 +3322,12 @@
         {
           "marker": "pub fn rollback_applied",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         },
         {
           "marker": "exact_hash_apply_preserves_unrelated_dirty_file_and_safe_rollback_restores_target",
           "path": "crates/control/star-execution/src/lib.rs",
-          "source_sha256": "sha256:21838997928ffd413990019a8a32150bb44854bb3099c2d6994e96d3715c91a9"
+          "source_sha256": "sha256:1b46e4da97a699303a50dc8966c79b8c7b3c4453c54be51af65d3d3f087955e8"
         }
       ],
       "definition_fingerprint": "sha256:643ee6dedb38b47fdfc39ed2aef3263dd005d57fa25070618511587b9e8da750",
@@ -3376,7 +3376,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:20bb5de8f731ce042db01db161084c00272143b9cf395932b5cf8a3cbc0e29c7",
+  "source_fingerprint": "sha256:cde01bfae6b9950d361d3dce5829e2a645048897c9fd7fd2bb1e5ff0c39e988b",
   "stable_error_catalog_fingerprint": "sha256:dd069e4e80bf54af35e4d52434ac9a87208047d146f395eb0736de768cd2f5b8",
   "stable_error_count": 528
 }

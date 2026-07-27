@@ -743,6 +743,72 @@ pub trait RewriteTransformerPort: Send + Sync {
     ) -> Result<RewriteTransformResult, PatchPortError>;
 }
 
+/// The operation claimed by a registered semantic refactor provider.  Provider
+/// output is still only a preview; it must be normalized through the existing
+/// PatchSetV2 and Gate path before any source mutation is possible.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticRefactorOperation {
+    Rename,
+    CodeAction,
+    AnalyzerFix,
+    OpenRewriteRecipe,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticProviderAvailability {
+    Available,
+    Unavailable,
+    Unverified,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SemanticProviderCapability {
+    pub provider_id: String,
+    pub executable_identity: Option<Sha256Hash>,
+    pub operation: SemanticRefactorOperation,
+    pub availability: SemanticProviderAvailability,
+    pub limitations: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SemanticRefactorPreviewRequest {
+    pub capability: SemanticProviderCapability,
+    pub transform: RewriteTransformRequest,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SemanticRefactorPreviewResult {
+    pub capability: SemanticProviderCapability,
+    pub files: Vec<MaterializedRewrite>,
+    pub replay_operation_count: usize,
+    pub idempotence_proved: bool,
+}
+
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+pub enum SemanticRefactorProviderError {
+    #[error("semantic refactor input is invalid")]
+    Invalid,
+    #[error("semantic refactor provider is unavailable")]
+    Unavailable,
+    #[error("semantic refactor provider is unverified or partial")]
+    Unverified,
+    #[error("semantic refactor preview is malformed")]
+    Malformed,
+}
+
+/// A registered provider may materialize an isolated preview only. It has no
+/// source-mutation method and is deliberately distinct from ToolExecutorPort.
+pub trait SemanticRefactorProviderPort: Send + Sync {
+    fn preview(
+        &self,
+        isolated_project_root: &Path,
+        request: &SemanticRefactorPreviewRequest,
+    ) -> Result<SemanticRefactorPreviewResult, SemanticRefactorProviderError>;
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceMutationRequest {
     pub patch_set: PatchSetV2,

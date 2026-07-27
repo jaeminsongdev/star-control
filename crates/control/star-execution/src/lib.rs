@@ -156,6 +156,49 @@ pub fn rust_style_recipe_v2() -> Result<ChangeRecipeV2, ExecutionError> {
     .map_err(|_| ExecutionError::InvalidArtifact)
 }
 
+/// Registered semantic-provider preview.  The provider is invoked only from an
+/// isolated worktree by the application service; this recipe never authorizes
+/// a provider to mutate the current checkout.
+pub fn semantic_provider_recipe_v2() -> Result<ChangeRecipeV2, ExecutionError> {
+    ChangeRecipeV2 {
+        schema_id: CHANGE_RECIPE_V2_SCHEMA_ID.to_owned(),
+        schema_version: 2,
+        recipe_id: "semantic_provider_preview".to_owned(),
+        recipe_version: "1.0.0".to_owned(),
+        display_name: "Preview a registered semantic refactor provider".to_owned(),
+        language: None,
+        selector_kinds: vec![TargetSelectorKindV2::Path],
+        rewrite_assurance: RewriteAssuranceV2::SymbolAware,
+        parameter_schema: serde_json::json!({
+            "type":"object",
+            "required":["capability","provider_parameters"],
+            "properties":{
+                "capability":{"type":"object"},
+                "provider_parameters":{"type":"object"}
+            },
+            "additionalProperties":false
+        }),
+        transformer_ref: "registered.semantic-refactor-provider.v1".to_owned(),
+        allowed_path_patterns: vec!["**/*".to_owned()],
+        intended_postconditions: vec![
+            "isolated_provider_replay_produces_zero_operations".to_owned(),
+            "provider_preview_is_normalized_to_exact_patch_bytes".to_owned(),
+        ],
+        validation_families: vec![
+            "build".to_owned(),
+            "test".to_owned(),
+            "architecture".to_owned(),
+        ],
+        permission_actions: vec!["local_write".to_owned()],
+        idempotence_contract:
+            "provider_replay_on_isolated_preview_after_bytes_produces_zero_operations".to_owned(),
+        rollback_contract: "exact_after_sha256_then_restore_reverse_artifact".to_owned(),
+        definition_fingerprint: Sha256Hash::digest(b""),
+    }
+    .seal()
+    .map_err(|_| ExecutionError::InvalidArtifact)
+}
+
 /// Internal recovery recipe used only for an already-materialized reverse
 /// PatchSet. It never performs discovery or an unbounded text replacement.
 pub fn exact_reverse_recipe_v2() -> Result<ChangeRecipeV2, ExecutionError> {
