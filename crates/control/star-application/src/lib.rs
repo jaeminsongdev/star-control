@@ -2009,6 +2009,10 @@ impl ManagementApplicationService {
             &symbols,
             &code_index.snapshot.hardcoding_candidates,
             &code_index.snapshot.structural_clone_candidates,
+            &code_index.snapshot.complexity_metric_candidates,
+            previous
+                .as_ref()
+                .map(|projection| projection.snapshot.complexity_metric_candidates.as_slice()),
         )?;
         let shared_decisions = match load_shared_decisions(&project, &root) {
             Ok(declarations) => declarations,

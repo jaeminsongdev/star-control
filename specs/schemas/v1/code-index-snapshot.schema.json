@@ -142,6 +142,107 @@
       ],
       "type": "object"
     },
+    "ComplexityMetricCandidate": {
+      "additionalProperties": false,
+      "description": "A source-bound, redacted complexity measurement for one indexed symbol.",
+      "properties": {
+        "branch_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "candidate_key": {
+          "type": "string"
+        },
+        "canonical_source_id": {
+          "pattern": "^src_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "cyclomatic_complexity": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "language_id": {
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "$ref": "#/$defs/IndexLimitation"
+          },
+          "type": "array"
+        },
+        "line_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "match_arm_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maximum_nesting": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "metric_contract_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owning_symbol_identity": {
+          "type": "string"
+        },
+        "redaction_state": {
+          "$ref": "#/$defs/HardcodingRedactionState"
+        },
+        "source_class": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "source_content_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_range": {
+          "$ref": "#/$defs/SourceRange"
+        },
+        "source_ref": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "token_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "candidate_key",
+        "metric_contract_version",
+        "canonical_source_id",
+        "source_ref",
+        "source_content_sha256",
+        "source_range",
+        "source_class",
+        "language_id",
+        "owning_symbol_identity",
+        "cyclomatic_complexity",
+        "maximum_nesting",
+        "token_count",
+        "line_count",
+        "branch_count",
+        "match_arm_count",
+        "redaction_state",
+        "limitations",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
     "DiscoveryProvenance": {
       "enum": [
         "declared",
@@ -1031,6 +1132,13 @@
     "code_index_snapshot_id": {
       "pattern": "^cix_[a-z2-7]{52}$",
       "type": "string"
+    },
+    "complexity_metric_candidates": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ComplexityMetricCandidate"
+      },
+      "type": "array"
     },
     "content_fingerprint": {
       "$ref": "#/$defs/Sha256Hash"

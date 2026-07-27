@@ -119,6 +119,12 @@ candidate는 `Source`와 `Test`를 서로 다른 cohort로만 grouping한다. ge
 
 이 Finding의 severity는 `Info`, confidence는 `Medium`이고 자동 Gate block, PatchSet, 자동 extract-method를 만들지 않는다. identifier/literal normalization near clone, complexity와 semantic remediation은 P-0064B 이후의 별도 Slice다.
 
+## P-0064B complexity regression 경계
+
+P-0064B는 Rust function body에서 `rust-ast-v1` metric을 계산한다. cyclomatic base는 1이고 control-flow, match arm, `&&`/`||`가 증가분을 만들며 maximum nesting, token/line, branch와 match-arm count는 원문 없는 정수로만 저장한다. macro body, fixture, generated/vendor/cache/output 및 지원하지 않는 language는 metric 후보가 아니며 resource/parse limit은 clean 결과를 의미하지 않는다.
+
+비교는 current CodeIndex와 이전 incremental CodeIndex의 metric contract version, language, source-class cohort 및 owning symbol identity가 모두 일치할 때만 한다. baseline 부재·version/cohort 불일치·같거나 개선된 cyclomatic은 regression Finding을 만들지 않는다. 증가 후보는 `Warning`/`Medium`이고 baseline/current 값만 redacted parameter로 남긴다. Finding은 자동 Gate block, ReviewPack priority 변경 또는 PatchSet을 만들지 않는다.
+
 ## mutation·Rule Pack·repository posture
 
 Mutation은 changed code 중 parser/protocol/public contract/core calculation trigger에만 한정하고 mutation/time/survivor budget을 execution 전에 fix한다. line coverage와 별도 evidence이며 timeout/flaky/partial은 pass가 아니다.

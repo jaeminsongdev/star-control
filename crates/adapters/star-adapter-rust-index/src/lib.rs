@@ -22,7 +22,8 @@ use star_project::{
     FileObservation, ProjectObservation,
     index::{
         AdapterFailure, SemanticAdapter, SemanticAnalysis, SyntaxAdapter, SyntaxAnalysis,
-        SyntaxDefinition, SyntaxReference, SyntaxStructuralCloneCandidate,
+        SyntaxComplexityMetricCandidate, SyntaxDefinition, SyntaxReference,
+        SyntaxStructuralCloneCandidate,
     },
 };
 use thiserror::Error;
@@ -50,7 +51,7 @@ impl SyntaxAdapter for RustSyntaxAdapter {
 
     fn fingerprint(&self) -> Sha256Hash {
         Sha256Hash::digest(
-            b"star.rust-syntax-adapter.v2;tree-sitter=0.26.11;tree-sitter-rust=0.24.2;structural-clone=exact-token-v1",
+            b"star.rust-syntax-adapter.v3;tree-sitter=0.26.11;tree-sitter-rust=0.24.2;structural-clone=exact-token-v1;complexity=rust-ast-v1",
         )
     }
 
@@ -97,6 +98,14 @@ impl SyntaxAdapter for RustSyntaxAdapter {
             &mut analysis.structural_clone_candidates,
             &mut analysis.limitations,
             &mut structural_visited,
+            0,
+        )?;
+        let mut metric_visited = 0_usize;
+        collect_complexity_metrics(
+            tree.root_node(),
+            text.as_bytes(),
+            &mut analysis.complexity_metric_candidates,
+            &mut metric_visited,
             0,
         )?;
         Ok(analysis)
@@ -1125,6 +1134,99 @@ fn collect_structural_clone_candidates(
     Ok(())
 }
 
+fn collect_complexity_metrics(
+    node: Node<'_>,
+    source: &[u8],
+    metrics: &mut Vec<SyntaxComplexityMetricCandidate>,
+    visited: &mut usize,
+    depth: usize,
+) -> Result<(), AdapterFailure> {
+    enforce_limits(node, visited, depth)?;
+    if node.kind() == "function_item"
+        && let Some(body) = node.child_by_field_name("body")
+        && let Some(owning_symbol_identity) = enclosing_function_identity(body, source)
+    {
+        let mut summary = ComplexitySummary {
+            cyclomatic: 1,
+            ..Default::default()
+        };
+        summarize_complexity(body, source, 0, &mut summary)?;
+        let range = source_range(body, source);
+        metrics.push(SyntaxComplexityMetricCandidate {
+            metric_contract_version: 1,
+            range: range.clone(),
+            owning_symbol_identity,
+            cyclomatic_complexity: summary.cyclomatic,
+            maximum_nesting: summary.maximum_nesting,
+            token_count: summary.token_count,
+            line_count: range
+                .end_line
+                .saturating_sub(range.start_line)
+                .saturating_add(1),
+            branch_count: summary.branch_count,
+            match_arm_count: summary.match_arm_count,
+        });
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_complexity_metrics(child, source, metrics, visited, depth + 1)?;
+    }
+    Ok(())
+}
+
+#[derive(Default)]
+struct ComplexitySummary {
+    cyclomatic: u32,
+    maximum_nesting: u32,
+    token_count: u32,
+    branch_count: u32,
+    match_arm_count: u32,
+}
+
+fn summarize_complexity(
+    node: Node<'_>,
+    source: &[u8],
+    nesting: u32,
+    summary: &mut ComplexitySummary,
+) -> Result<(), AdapterFailure> {
+    if node.kind().contains("comment") {
+        return Ok(());
+    }
+    if node.child_count() == 0 {
+        summary.token_count = summary.token_count.saturating_add(1);
+        return Ok(());
+    }
+    let control = matches!(
+        node.kind(),
+        "if_expression"
+            | "while_expression"
+            | "for_expression"
+            | "loop_expression"
+            | "match_expression"
+    );
+    if control {
+        summary.branch_count = summary.branch_count.saturating_add(1);
+        summary.cyclomatic = summary.cyclomatic.saturating_add(1);
+        summary.maximum_nesting = summary.maximum_nesting.max(nesting.saturating_add(1));
+    }
+    if node.kind() == "match_arm" {
+        summary.match_arm_count = summary.match_arm_count.saturating_add(1);
+        summary.cyclomatic = summary.cyclomatic.saturating_add(1);
+    }
+    if node.kind() == "binary_expression"
+        && let Some(text) = node_text(node, source)
+    {
+        let operators = text.matches("&&").count() + text.matches("||").count();
+        summary.cyclomatic = summary.cyclomatic.saturating_add(operators as u32);
+    }
+    let child_nesting = nesting.saturating_add(u32::from(control));
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        summarize_complexity(child, source, child_nesting, summary)?;
+    }
+    Ok(())
+}
+
 fn enclosing_function_identity(node: Node<'_>, source: &[u8]) -> Option<String> {
     let mut scopes = Vec::new();
     let mut function_name = None;
@@ -1431,6 +1533,36 @@ mod tests {
             ))
             .unwrap();
         assert!(analysis.structural_clone_candidates.is_empty());
+    }
+
+    #[test]
+    fn complexity_metrics_track_control_flow_without_source_persistence() {
+        let analysis = RustSyntaxAdapter
+            .analyze(&source(
+                r#"
+                fn simple(value: i32) -> i32 { value + 1 }
+                fn nested(value: i32) -> i32 {
+                    if value > 0 { match value { 1 => 1, _ => if value > 3 { 4 } else { 2 } } } else { 0 }
+                }
+                macro_rules! ignored { () => { if true { 1 } else { 0 } }; }
+                "#,
+            ))
+            .unwrap();
+        let simple = analysis
+            .complexity_metric_candidates
+            .iter()
+            .find(|item| item.owning_symbol_identity == "simple")
+            .unwrap();
+        let nested = analysis
+            .complexity_metric_candidates
+            .iter()
+            .find(|item| item.owning_symbol_identity == "nested")
+            .unwrap();
+        assert_eq!(simple.cyclomatic_complexity, 1);
+        assert!(nested.cyclomatic_complexity > simple.cyclomatic_complexity);
+        assert!(nested.maximum_nesting > 0);
+        assert!(nested.match_arm_count >= 2);
+        assert_eq!(analysis.complexity_metric_candidates.len(), 2);
     }
 
     #[test]

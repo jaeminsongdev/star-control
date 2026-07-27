@@ -558,7 +558,7 @@
     },
     {
       "file": "code-index-snapshot.schema.json",
-      "hash": "sha256:328ea22c5a74e81f2b73fe3750d54bf5d3be8fca6ed8c5344df12a5a6cb1a21c"
+      "hash": "sha256:6bec53950cb628f3e53d735ce8adafb81e43ccc898913836087ab6a63e5044ff"
     },
     {
       "file": "project-v1-to-v2-migration-plan.schema.json",

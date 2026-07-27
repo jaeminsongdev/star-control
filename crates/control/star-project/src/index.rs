@@ -14,10 +14,10 @@ use star_contracts::{
         SymbolReferenceId,
     },
     index::{
-        CodeIndexCounts, CodeIndexSnapshot, DiscoveryProvenance, FreshnessProof, GuidanceKind,
-        GuidanceRecord, HardcodingAssessment, HardcodingCandidate, HardcodingCategory,
-        HardcodingRedactionState, IndexCoverage, IndexEdge, IndexEntity, IndexEntityKind,
-        IndexFreshnessState, IndexLimitation, IndexPartition, IndexPartitionKind,
+        CodeIndexCounts, CodeIndexSnapshot, ComplexityMetricCandidate, DiscoveryProvenance,
+        FreshnessProof, GuidanceKind, GuidanceRecord, HardcodingAssessment, HardcodingCandidate,
+        HardcodingCategory, HardcodingRedactionState, IndexCoverage, IndexEdge, IndexEntity,
+        IndexEntityKind, IndexFreshnessState, IndexLimitation, IndexPartition, IndexPartitionKind,
         IndexPartitionState, IndexRelation, IndexScanMode, IndexTier, ProjectCatalogSnapshot,
         SourceClass, SourceEntry, StructuralCloneCandidate, ToolchainCommandDeclaration,
         ToolchainCommandKind, ToolchainRecord,
@@ -99,11 +99,25 @@ pub struct SyntaxStructuralCloneCandidate {
     pub owning_symbol_identity: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyntaxComplexityMetricCandidate {
+    pub metric_contract_version: u32,
+    pub range: SourceRange,
+    pub owning_symbol_identity: String,
+    pub cyclomatic_complexity: u32,
+    pub maximum_nesting: u32,
+    pub token_count: u32,
+    pub line_count: u32,
+    pub branch_count: u32,
+    pub match_arm_count: u32,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct SyntaxAnalysis {
     pub definitions: Vec<SyntaxDefinition>,
     pub references: Vec<SyntaxReference>,
     pub structural_clone_candidates: Vec<SyntaxStructuralCloneCandidate>,
+    pub complexity_metric_candidates: Vec<SyntaxComplexityMetricCandidate>,
     pub limitations: Vec<IndexLimitation>,
 }
 
@@ -414,6 +428,20 @@ pub fn build_code_index(
                     &right.candidate_key,
                 ))
         });
+    projection
+        .complexity_metric_candidates
+        .sort_by(|left, right| {
+            (
+                &left.owning_symbol_identity,
+                left.metric_contract_version,
+                &left.candidate_key,
+            )
+                .cmp(&(
+                    &right.owning_symbol_identity,
+                    right.metric_contract_version,
+                    &right.candidate_key,
+                ))
+        });
 
     let hardcoding_candidates = if request.policy.hardcoding_rules_enabled {
         detect_hardcoding_candidates(request, &projection.source_entries, &projection.entities)?
@@ -539,6 +567,7 @@ pub fn build_code_index(
             "guidance":guidance.iter().map(|item| (&item.record_key,&item.content_fingerprint)).collect::<Vec<_>>(),
             "hardcoding_candidates":hardcoding_candidates.iter().map(|item| (&item.candidate_key,&item.content_fingerprint)).collect::<Vec<_>>(),
             "structural_clone_candidates":projection.structural_clone_candidates.iter().map(|item| (&item.candidate_key,&item.content_fingerprint)).collect::<Vec<_>>(),
+            "complexity_metric_candidates":projection.complexity_metric_candidates.iter().map(|item| (&item.candidate_key,&item.content_fingerprint)).collect::<Vec<_>>(),
         }),
     )
     .map_err(|_| ProjectError::Fingerprint)?;
@@ -575,6 +604,7 @@ pub fn build_code_index(
             "guidance":guidance,
             "hardcoding_candidates":hardcoding_candidates,
             "structural_clone_candidates":projection.structural_clone_candidates,
+            "complexity_metric_candidates":projection.complexity_metric_candidates,
             "limitations":projection.limitations,
         }),
     )
@@ -650,6 +680,7 @@ pub fn build_code_index(
         guidance,
         hardcoding_candidates,
         structural_clone_candidates: projection.structural_clone_candidates,
+        complexity_metric_candidates: projection.complexity_metric_candidates,
         limitations: projection.limitations,
         artifact_refs: Vec::new(),
         content_fingerprint,
@@ -1733,6 +1764,7 @@ struct ProjectionAccumulator {
     symbols: Vec<Symbol>,
     references: Vec<SymbolReference>,
     structural_clone_candidates: Vec<StructuralCloneCandidate>,
+    complexity_metric_candidates: Vec<ComplexityMetricCandidate>,
     partitions: Vec<IndexPartition>,
     limitations: Vec<IndexLimitation>,
 }
@@ -2477,6 +2509,7 @@ fn index_syntax_partition(
                 definitions,
                 references,
                 structural_clone_candidates,
+                complexity_metric_candidates,
                 limitations,
             } = analysis;
             let before_symbols = output.symbols.len();
@@ -2490,6 +2523,7 @@ fn index_syntax_partition(
                 output,
             )?;
             append_structural_clone_candidates(source, structural_clone_candidates, output)?;
+            append_complexity_metric_candidates(source, complexity_metric_candidates, output)?;
             output.limitations.extend(limitations.clone());
             let fingerprint = versioned_fingerprint(
                 "star.index-partition-output.syntax",
@@ -2886,6 +2920,81 @@ fn append_structural_clone_candidates(
                 normalized_token_fingerprint: candidate.normalized_token_fingerprint,
                 normalized_token_count: candidate.normalized_token_count,
                 owning_symbol_identity,
+                redaction_state: HardcodingRedactionState::ShapeOnly,
+                limitations: Vec::new(),
+                content_fingerprint,
+            });
+    }
+    Ok(())
+}
+
+fn append_complexity_metric_candidates(
+    source: &SourceEntry,
+    mut candidates: Vec<SyntaxComplexityMetricCandidate>,
+    output: &mut ProjectionAccumulator,
+) -> Result<(), ProjectError> {
+    if !matches!(source.source_class, SourceClass::Source | SourceClass::Test)
+        || source.facets.iter().any(|facet| facet == "fixture")
+    {
+        return Ok(());
+    }
+    candidates.sort_by(|left, right| {
+        left.owning_symbol_identity
+            .cmp(&right.owning_symbol_identity)
+    });
+    candidates.dedup_by(|left, right| {
+        left.metric_contract_version == right.metric_contract_version
+            && left.owning_symbol_identity == right.owning_symbol_identity
+    });
+    for candidate in candidates {
+        let candidate_fingerprint = versioned_fingerprint(
+            "star.complexity-metric-candidate",
+            1,
+            &serde_json::json!({
+                "metric_contract_version":candidate.metric_contract_version,
+                "canonical_source_id":source.canonical_source_id,
+                "source_content_sha256":source.content_sha256,
+                "source_range":candidate.range,
+                "owning_symbol_identity":candidate.owning_symbol_identity,
+            }),
+        )
+        .map_err(|_| ProjectError::Fingerprint)?;
+        let content_fingerprint = versioned_fingerprint(
+            "star.complexity-metric-candidate-content",
+            1,
+            &serde_json::json!({
+                "candidate_key":candidate_fingerprint,
+                "source_class":source.source_class,
+                "language_id":source.language_id,
+                "owning_symbol_identity":candidate.owning_symbol_identity,
+                "cyclomatic_complexity":candidate.cyclomatic_complexity,
+                "maximum_nesting":candidate.maximum_nesting,
+                "token_count":candidate.token_count,
+                "line_count":candidate.line_count,
+                "branch_count":candidate.branch_count,
+                "match_arm_count":candidate.match_arm_count,
+                "redaction_state":HardcodingRedactionState::ShapeOnly,
+            }),
+        )
+        .map_err(|_| ProjectError::Fingerprint)?;
+        output
+            .complexity_metric_candidates
+            .push(ComplexityMetricCandidate {
+                candidate_key: candidate_fingerprint.to_string(),
+                metric_contract_version: candidate.metric_contract_version,
+                canonical_source_id: source.canonical_source_id.clone(),
+                source_ref: source.path.clone(),
+                source_content_sha256: source.content_sha256.clone(),
+                source_range: candidate.range,
+                source_class: source.source_class,
+                language_id: source.language_id.clone(),
+                owning_symbol_identity: candidate.owning_symbol_identity,
+                cyclomatic_complexity: candidate.cyclomatic_complexity,
+                maximum_nesting: candidate.maximum_nesting,
+                token_count: candidate.token_count,
+                line_count: candidate.line_count,
+                branch_count: candidate.branch_count,
+                match_arm_count: candidate.match_arm_count,
                 redaction_state: HardcodingRedactionState::ShapeOnly,
                 limitations: Vec::new(),
                 content_fingerprint,
@@ -3392,6 +3501,7 @@ mod tests {
                     structural_kind: "function_body".to_owned(),
                     owning_symbol_identity: Some("alpha".to_owned()),
                 }],
+                complexity_metric_candidates: Vec::new(),
                 limitations: Vec::new(),
             })
         }

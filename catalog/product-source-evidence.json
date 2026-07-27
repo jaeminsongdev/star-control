@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:420a81bf0b6f0cc7c691b798ddd2a08f82f65a06356d84e66c78477eb89e3f6a",
+  "evidence_fingerprint": "sha256:30d3c624b295a7641555383c88837ef8756e51a9c071b4a1c5c8550692411a08",
   "feature_count": 23,
   "features": [
     {
@@ -177,7 +177,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:ffbbd4a40321a69d0416c0d1c58333ca31bc1162fbca195741e04adadedbe091",
+      "feature_fingerprint": "sha256:a644f5b9f5c9ee71711d5f597776c5e019d0523a534dab53844c6238626ff1a3",
       "feature_id": "A03",
       "generated_schemas": [
         {
@@ -186,7 +186,7 @@
         },
         {
           "path": "specs/schemas/v1/code-index-snapshot.schema.json",
-          "source_sha256": "sha256:328ea22c5a74e81f2b73fe3750d54bf5d3be8fca6ed8c5344df12a5a6cb1a21c"
+          "source_sha256": "sha256:6bec53950cb628f3e53d735ce8adafb81e43ccc898913836087ab6a63e5044ff"
         },
         {
           "path": "specs/schemas/v1/workspace-snapshot.schema.json",
@@ -206,12 +206,12 @@
         {
           "marker": "pub fn build_code_index",
           "path": "crates/control/star-project/src/index.rs",
-          "source_sha256": "sha256:c5ebf6676421e7d16e03773b36745540615f3ad1d59d32cb78056db51b4bb272"
+          "source_sha256": "sha256:b539ce9ed7c449a01cb0cc236bf41a845f90cd4f0fe60a5e86462c44a411cbec"
         },
         {
           "marker": "pub fn verify_context_pack_current",
           "path": "crates/control/star-application/src/lib.rs",
-          "source_sha256": "sha256:b991fc370a6bf76efca4f2aa5dd6b63091ab96a3f70c37f07e6020f10990a918"
+          "source_sha256": "sha256:08de409a5185103cd0fb7d924887ee16ced8a84342e3858b30d6a517266dd4d2"
         },
         {
           "marker": "fn build_context_pack",
@@ -273,7 +273,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:c6d681d33a1a487b8f8cf992c4edbceb63f5d02b4b689396bc859918ce8ebe7a",
+      "feature_fingerprint": "sha256:4f09c109f3f4ff23a87affd62a03ce952fd20fe85a8a8f89fc615c1777169530",
       "feature_id": "A04",
       "generated_schemas": [
         {
@@ -293,7 +293,7 @@
         {
           "marker": "pub fn build_planning_bundle",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "planning.impact.inspect",
@@ -321,22 +321,22 @@
         "failure": {
           "marker": "graph_limit_never_becomes_complete_or_confirmed_empty",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         "negative": {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         "positive": {
           "marker": "task_to_impact_to_ready_validation_plan_is_deterministic_and_typed",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         "recovery": {
           "marker": "scope_revision_replan_preserves_document_identity_and_records_lineage",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         }
       }
     },
@@ -1019,7 +1019,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:ac9d58f6069aebbf3b74ef69def79584c2d3af7bbe602938083d88c4c68b42f7",
+      "feature_fingerprint": "sha256:e31a81e38bc6941e08a93376bab8c9357057c4bcdb79362bb18a4f6a1b568966",
       "feature_id": "B03",
       "generated_schemas": [
         {
@@ -1045,7 +1045,7 @@
         {
           "marker": "fn collect_m3_rule_diagnostics",
           "path": "crates/control/star-application/src/lib.rs",
-          "source_sha256": "sha256:b991fc370a6bf76efca4f2aa5dd6b63091ab96a3f70c37f07e6020f10990a918"
+          "source_sha256": "sha256:08de409a5185103cd0fb7d924887ee16ced8a84342e3858b30d6a517266dd4d2"
         }
       ],
       "mcp_actions": [
@@ -1531,7 +1531,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:5cda2a7cef8346c2bd7b7788daf28731064c08548ef19bffc643674cc08d4609",
+      "feature_fingerprint": "sha256:4d2cf390bce41c3549e2240ab9459e77f9e29db8b00655121a9826e5daa61196",
       "feature_id": "C01",
       "generated_schemas": [
         {
@@ -1561,7 +1561,7 @@
         {
           "marker": "pub fn verify_stage_profile_current",
           "path": "crates/control/star-application/src/lib.rs",
-          "source_sha256": "sha256:b991fc370a6bf76efca4f2aa5dd6b63091ab96a3f70c37f07e6020f10990a918"
+          "source_sha256": "sha256:08de409a5185103cd0fb7d924887ee16ced8a84342e3858b30d6a517266dd4d2"
         },
         {
           "marker": "fn bind_stage_plan_profiles",
@@ -1864,7 +1864,7 @@
     }
   ],
   "generated_schema_count": 214,
-  "generated_schema_manifest_fingerprint": "sha256:fbce300cdb161bab92e1765e2a7e36921dbbad3cc90b11dd5bda07c4bf99be6e",
+  "generated_schema_manifest_fingerprint": "sha256:94bd09a50c72e34b10d939b8de3ea8715d44b5b831a5c6a685c646d2ba7b774b",
   "inventory_fingerprint": "sha256:3896b3c7cc2d335f1639a56976329074e8953866e907c989cc930dfd5c1cf281",
   "mcp_matrix_count": 170,
   "mcp_matrix_fingerprint": "sha256:dbe4791f29fdef3e791c72875aed70e68825ef874b35fe664e288cda66d934dc",
@@ -1892,12 +1892,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -1977,12 +1977,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2064,12 +2064,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2149,12 +2149,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2236,12 +2236,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2323,12 +2323,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2416,12 +2416,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2506,12 +2506,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2598,12 +2598,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2698,12 +2698,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2793,12 +2793,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2893,12 +2893,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -2993,12 +2993,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -3084,12 +3084,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -3178,12 +3178,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -3276,12 +3276,12 @@
         {
           "marker": "fn select_validation_plan",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "missing_required_check_is_blocked_not_not_applicable",
           "path": "crates/control/star-planning/src/lib.rs",
-          "source_sha256": "sha256:4729b6a4968651eaa1056ef9f3f6876a76a07dd954c98e2795e6cc59a6af82eb"
+          "source_sha256": "sha256:eac33dc52eee7f758f72bda2546ea1fd1189d6d4a23a92a8e99ac2636cd1d208"
         },
         {
           "marker": "fn create_permission_plan",
@@ -3360,7 +3360,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:5a5f33e6dd27efe9583d111066a9e97501aa0ed6b3a082db5282342250acb691",
+  "source_fingerprint": "sha256:58881aada35c286ec579e62431a307743e797da114c40acf2c661aca318c36d2",
   "stable_error_catalog_fingerprint": "sha256:dd069e4e80bf54af35e4d52434ac9a87208047d146f395eb0736de768cd2f5b8",
   "stable_error_count": 528
 }

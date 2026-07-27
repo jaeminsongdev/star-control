@@ -26,6 +26,41 @@
   "checkout_observation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "classification_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "code_index_snapshot_id": "cix_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "complexity_metric_candidates": [
+    {
+      "branch_count": 0,
+      "candidate_key": "fixture",
+      "canonical_source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "cyclomatic_complexity": 0,
+      "language_id": "fixture",
+      "limitations": [
+        {
+          "code": "fixture",
+          "parameters": {
+            "fixture": "fixture"
+          },
+          "scope": "fixture"
+        }
+      ],
+      "line_count": 0,
+      "match_arm_count": 0,
+      "maximum_nesting": 0,
+      "metric_contract_version": 0,
+      "owning_symbol_identity": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "redaction_state": "not_needed",
+      "source_class": "source",
+      "source_content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "source_range": {
+        "end_column": 0,
+        "end_line": 0,
+        "start_column": 0,
+        "start_line": 0
+      },
+      "source_ref": "fixture",
+      "token_count": 0
+    }
+  ],
   "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "counts": {
     "definitions": 0,

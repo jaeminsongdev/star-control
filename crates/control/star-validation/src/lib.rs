@@ -22,8 +22,8 @@ use star_contracts::{
         SuppressionId, ValidationResultId,
     },
     index::{
-        HardcodingAssessment, HardcodingCandidate, SourceClass, SourceEntry,
-        StructuralCloneCandidate,
+        ComplexityMetricCandidate, HardcodingAssessment, HardcodingCandidate, SourceClass,
+        SourceEntry, StructuralCloneCandidate,
     },
     management::{
         Baseline, BaselineStatus, CanonicalSource, Completeness, Confidence, Disposition,
@@ -43,6 +43,7 @@ pub const TRAILING_WHITESPACE_RULE_ID: &str = "star.rule.trailing-whitespace";
 pub const TRAILING_WHITESPACE_RECIPE_ID: &str = "star.recipe.remove-trailing-whitespace";
 pub const HARDCODING_CANDIDATE_RULE_ID: &str = "star.rule.hardcoding-candidate";
 pub const STRUCTURAL_CLONE_CANDIDATE_RULE_ID: &str = "star.rule.structural-clone-candidate";
+pub const COMPLEXITY_REGRESSION_RULE_ID: &str = "star.rule.complexity-regression";
 
 #[derive(Debug, Error)]
 pub enum ValidationError {
@@ -150,6 +151,30 @@ pub fn structural_clone_candidate_rule() -> Result<Rule, ValidationError> {
         parameter_schema_ref: "star.rule.structural-clone-candidate.parameters.v1".to_owned(),
         identity_contract_version: 1,
         identity_anchor: "normalized-token-fingerprint-and-owner-set".to_owned(),
+        redaction_contract_version: 1,
+        remediation_recipe_refs: Vec::new(),
+        lifecycle: RuleLifecycle::Active,
+    })
+}
+
+pub fn complexity_regression_rule() -> Result<Rule, ValidationError> {
+    let definition_fingerprint = versioned_fingerprint("star.rule-definition", 1, &serde_json::json!({"rule_id":COMPLEXITY_REGRESSION_RULE_ID,"rule_version":"1.0.0","identity_anchor":"metric-version-language-cohort-symbol","message_code":"COMPLEXITY_REGRESSION","automatic_confirmed_defect":false})).map_err(|_| ValidationError::Fingerprint)?;
+    Ok(Rule {
+        schema_id: "star.rule".to_owned(),
+        schema_version: 1,
+        rule_id: COMPLEXITY_REGRESSION_RULE_ID.to_owned(),
+        rule_version: "1.0.0".to_owned(),
+        definition_fingerprint,
+        title: "Complexity regression candidate".to_owned(),
+        category: "code-quality".to_owned(),
+        default_severity: Severity::Warning,
+        default_confidence: Confidence::Medium,
+        supported_languages: vec!["rust".to_owned()],
+        source_kinds: vec![SourceKind::File],
+        analyzer_ref: "builtin.complexity.rust-ast.v1".to_owned(),
+        parameter_schema_ref: "star.rule.complexity-regression.parameters.v1".to_owned(),
+        identity_contract_version: 1,
+        identity_anchor: "metric-version-language-cohort-symbol".to_owned(),
         redaction_contract_version: 1,
         remediation_recipe_refs: Vec::new(),
         lifecycle: RuleLifecycle::Active,
@@ -322,6 +347,8 @@ pub fn analyze_builtin_findings(
     symbols: &[Symbol],
     hardcoding_candidates: &[HardcodingCandidate],
     structural_clone_candidates: &[StructuralCloneCandidate],
+    complexity_metric_candidates: &[ComplexityMetricCandidate],
+    previous_complexity_metrics: Option<&[ComplexityMetricCandidate]>,
 ) -> Result<FindingProjection, ValidationError> {
     let mut projection = analyze_trailing_whitespace(
         project_id,
@@ -334,6 +361,7 @@ pub fn analyze_builtin_findings(
     )?;
     let hardcoding_rule = hardcoding_candidate_rule()?;
     let structural_clone_rule = structural_clone_candidate_rule()?;
+    let complexity_rule = complexity_regression_rule()?;
     let trailing_rule = trailing_whitespace_rule()?;
     let symbol_by_source: BTreeMap<_, _> = symbols
         .iter()
@@ -459,6 +487,16 @@ pub fn analyze_builtin_findings(
         symbols,
         structural_clone_candidates,
     )?;
+    append_complexity_regression_findings(
+        &mut projection,
+        project_id,
+        revision,
+        workspace_snapshot_id,
+        scan_run_id,
+        symbols,
+        complexity_metric_candidates,
+        previous_complexity_metrics,
+    )?;
     projection
         .findings
         .sort_by(|left, right| left.finding_id.cmp(&right.finding_id));
@@ -483,6 +521,11 @@ pub fn analyze_builtin_findings(
                 "rule_id":structural_clone_rule.rule_id,
                 "rule_version":structural_clone_rule.rule_version,
                 "definition_fingerprint":structural_clone_rule.definition_fingerprint,
+            },
+            {
+                "rule_id":complexity_rule.rule_id,
+                "rule_version":complexity_rule.rule_version,
+                "definition_fingerprint":complexity_rule.definition_fingerprint,
             }
         ]),
     )
@@ -633,6 +676,131 @@ fn append_structural_clone_findings(
             first_observed_scan_id: scan_run_id.clone(),
             last_observed_scan_id: scan_run_id.clone(),
             current_occurrence_ids: occurrence_ids,
+            active_disposition_id: None,
+            active_suppression_ids: Vec::new(),
+            content_fingerprint,
+        });
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_complexity_regression_findings(
+    projection: &mut FindingProjection,
+    project_id: &ProjectId,
+    revision: &ProjectRevision,
+    workspace_snapshot_id: &star_contracts::ids::WorkspaceSnapshotId,
+    scan_run_id: &ScanRunId,
+    symbols: &[Symbol],
+    current: &[ComplexityMetricCandidate],
+    previous: Option<&[ComplexityMetricCandidate]>,
+) -> Result<(), ValidationError> {
+    let Some(previous) = previous else {
+        return Ok(());
+    };
+    if previous.is_empty() {
+        return Ok(());
+    }
+    for candidate in current {
+        if candidate.language_id != "rust"
+            || !matches!(
+                candidate.source_class,
+                SourceClass::Source | SourceClass::Test
+            )
+            || candidate.redaction_state
+                != star_contracts::index::HardcodingRedactionState::ShapeOnly
+        {
+            return Err(ValidationError::InconsistentGraph);
+        }
+        let baseline = previous.iter().find(|item| {
+            item.metric_contract_version == candidate.metric_contract_version
+                && item.language_id == candidate.language_id
+                && item.source_class == candidate.source_class
+                && item.owning_symbol_identity == candidate.owning_symbol_identity
+        });
+        let (relation, severity, baseline_cyclomatic, baseline_fingerprint) = match baseline {
+            None => ("new", Severity::Info, None, None),
+            Some(item) if candidate.cyclomatic_complexity > item.cyclomatic_complexity => (
+                "worsened",
+                Severity::Warning,
+                Some(item.cyclomatic_complexity),
+                Some(item.content_fingerprint.clone()),
+            ),
+            Some(item) if candidate.cyclomatic_complexity < item.cyclomatic_complexity => (
+                "improved",
+                Severity::Info,
+                Some(item.cyclomatic_complexity),
+                Some(item.content_fingerprint.clone()),
+            ),
+            Some(_) => continue,
+        };
+        let identity_tokens = vec![
+            candidate.metric_contract_version.to_string(),
+            candidate.language_id.clone(),
+            enum_label(&candidate.source_class)?,
+            candidate.owning_symbol_identity.clone(),
+        ];
+        let finding_fingerprint = versioned_fingerprint("star.identity.finding", 1, &serde_json::json!({"project_id":project_id,"rule_id":COMPLEXITY_REGRESSION_RULE_ID,"identity_contract_version":1,"identity_anchor":"metric-version-language-cohort-symbol","identity_tokens":identity_tokens}))
+            .map_err(|_| ValidationError::Fingerprint)?;
+        let finding_id = FindingId::from_fingerprint(&finding_fingerprint);
+        let occurrence_fingerprint = versioned_fingerprint("star.identity.occurrence", 1, &serde_json::json!({"finding_id":finding_id,"workspace_snapshot_id":workspace_snapshot_id,"source_content_sha256":candidate.source_content_sha256,"location_range":candidate.source_range,"evidence_key":candidate.candidate_key}))
+            .map_err(|_| ValidationError::Fingerprint)?;
+        let occurrence_id = OccurrenceId::from_fingerprint(&occurrence_fingerprint);
+        projection.occurrences.push(Occurrence {
+            schema_id: "star.occurrence".to_owned(),
+            schema_version: 1,
+            occurrence_id: occurrence_id.clone(),
+            occurrence_fingerprint,
+            finding_id: finding_id.clone(),
+            scan_run_id: scan_run_id.clone(),
+            project_revision_id: revision.project_revision_id.clone(),
+            workspace_snapshot_id: workspace_snapshot_id.clone(),
+            canonical_source_id: candidate.canonical_source_id.clone(),
+            source_content_sha256: candidate.source_content_sha256.clone(),
+            location_path: candidate.source_ref.clone(),
+            location_range: candidate.source_range.clone(),
+            symbol_id: symbols
+                .iter()
+                .find(|symbol| {
+                    symbol.canonical_source_id == candidate.canonical_source_id
+                        && symbol.qualified_name == candidate.owning_symbol_identity
+                })
+                .map(|symbol| symbol.symbol_id.clone()),
+            message_parameters: BTreeMap::from([
+                (
+                    "baseline_cyclomatic".to_owned(),
+                    baseline_cyclomatic
+                        .map_or_else(|| "none".to_owned(), |value| value.to_string()),
+                ),
+                (
+                    "current_cyclomatic".to_owned(),
+                    candidate.cyclomatic_complexity.to_string(),
+                ),
+                ("baseline_relation".to_owned(), relation.to_owned()),
+            ]),
+            evidence_refs: Vec::new(),
+            observed_at: Utc::now(),
+            redaction_state: RedactionState::Redacted,
+        });
+        let content_fingerprint = versioned_fingerprint("star.finding-content",1,&serde_json::json!({"finding_fingerprint":finding_fingerprint,"occurrence_ids":[occurrence_id.clone()],"severity":severity,"confidence":Confidence::Medium,"baseline_candidate":baseline_fingerprint,"current_candidate":candidate.content_fingerprint,"baseline_relation":relation})).map_err(|_| ValidationError::Fingerprint)?;
+        projection.findings.push(Finding {
+            schema_id: "star.finding".to_owned(),
+            schema_version: 1,
+            finding_id,
+            finding_fingerprint,
+            project_id: project_id.clone(),
+            rule_id: COMPLEXITY_REGRESSION_RULE_ID.to_owned(),
+            rule_version: "1.0.0".to_owned(),
+            identity_anchor: "metric-version-language-cohort-symbol".to_owned(),
+            identity_tokens,
+            title_code: "COMPLEXITY_REGRESSION_TITLE".to_owned(),
+            message_code: "COMPLEXITY_REGRESSION".to_owned(),
+            severity,
+            confidence: Confidence::Medium,
+            lifecycle: FindingLifecycle::Open,
+            first_observed_scan_id: scan_run_id.clone(),
+            last_observed_scan_id: scan_run_id.clone(),
+            current_occurrence_ids: vec![occurrence_id],
             active_disposition_id: None,
             active_suppression_ids: Vec::new(),
             content_fingerprint,
@@ -1393,6 +1561,8 @@ mod tests {
             &[],
             &[],
             &production,
+            &[],
+            None,
         )
         .unwrap();
         let production_finding = first
@@ -1427,6 +1597,8 @@ mod tests {
             &[],
             &[],
             &moved,
+            &[],
+            None,
         )
         .unwrap();
         let moved_finding = moved_projection
@@ -1450,6 +1622,8 @@ mod tests {
             &[],
             &[],
             &mixed,
+            &[],
+            None,
         )
         .unwrap();
         assert!(

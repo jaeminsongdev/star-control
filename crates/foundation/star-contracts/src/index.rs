@@ -419,6 +419,30 @@ pub struct StructuralCloneCandidate {
     pub content_fingerprint: Sha256Hash,
 }
 
+/// A source-bound, redacted complexity measurement for one indexed symbol.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ComplexityMetricCandidate {
+    pub candidate_key: String,
+    pub metric_contract_version: u32,
+    pub canonical_source_id: CanonicalSourceId,
+    pub source_ref: ProjectPathRef,
+    pub source_content_sha256: Sha256Hash,
+    pub source_range: SourceRange,
+    pub source_class: SourceClass,
+    pub language_id: String,
+    pub owning_symbol_identity: String,
+    pub cyclomatic_complexity: u32,
+    pub maximum_nesting: u32,
+    pub token_count: u32,
+    pub line_count: u32,
+    pub branch_count: u32,
+    pub match_arm_count: u32,
+    pub redaction_state: HardcodingRedactionState,
+    pub limitations: Vec<IndexLimitation>,
+    pub content_fingerprint: Sha256Hash,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IndexEntity {
@@ -484,6 +508,8 @@ pub struct CodeIndexSnapshot {
     pub hardcoding_candidates: Vec<HardcodingCandidate>,
     #[serde(default)]
     pub structural_clone_candidates: Vec<StructuralCloneCandidate>,
+    #[serde(default)]
+    pub complexity_metric_candidates: Vec<ComplexityMetricCandidate>,
     pub limitations: Vec<IndexLimitation>,
     pub artifact_refs: Vec<ArtifactRef>,
     pub content_fingerprint: Sha256Hash,
