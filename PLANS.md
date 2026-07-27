@@ -29,24 +29,22 @@
 | P-0066 Git history·ownership·debt | **DONE / local commit** | `a84d4f298a2a9e4a9b252da10abb1ffda8b13b60`; read-only Git/CODEOWNERS/debt snapshot, advisory Impact/Radar, privacy corpus, FULL 11/11 complete/stable/pass. |
 | P-0067 semantic refactor provider | **DONE / local commit** | registered provider capability의 isolated preview를 typed PatchSetV2·existing pre/post Gate·exact approval path로만 정규화했고, absent provider fail-closed 및 Git worktree replay fixture를 FULL 11/11 complete/stable/pass로 검증했다. |
 | P-0068 mutation·Rule Pack·repository posture | **DONE / local commit** | `937a9ac7898f6d30d1353b11429da52fca9b2199`; changed-code-only mutation budget·strict schema, versioned Rule Pack과 exact-tool SARIF digest binding, read-only posture snapshot/advisory Radar·fail-closed adapter 경계를 FULL 11/11 complete/stable/pass로 고정했다. |
-| P-0069 EvaluationRun·Profile 결정 | **VALIDATED / local commit pending** | existing EvaluationRunV2/Catalog path로 Code Health trial/reject evidence를 고정했고, external cost/actual workload cohort 부재로 `trial_candidate`만 기록하며 16개 built-in 유지·17번째 accept hold를 FULL 11/11 complete/stable/pass로 확인했다. |
-| P-0070 | pending | final audit 순서다. |
+| P-0069 EvaluationRun·Profile 결정 | **DONE / local commit** | `fbbf30ea14df34fc06582c22e30ab22c42ef341a`; Code Health trial/reject evidence를 고정했고, external cost/actual workload cohort 부재로 `trial_candidate`만 기록하며 16개 built-in 유지·17번째 accept hold를 FULL 11/11 complete/stable/pass로 확인했다. |
+| P-0070 제품 전수 봉인 | **DONE / local commit** | final audit/ReviewPack, inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, release source closure와 FULL 11/11 complete/stable/pass를 확인했고 signing/publish를 blocked_external로 분리했다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0069 활성 Slice
+## P-0070 검증 완료 Slice
 
-- 목표: 기존 `EvaluationRunV2`/`EvaluationCatalogItem`으로 Code Health candidate의 replay/shadow 결과를 `trial` 또는 `reject`로 evidence-bound 결정하고 16 built-in Profile을 보존한다.
-- 불변식: `accept`는 자동으로 17번째 built-in Profile을 만들지 않는다. complete external cost/actual workload evidence와 사용자 제품 결정, descriptor·fixture·inventory·package closure가 같은 Slice에 없으면 `accept`는 fail-closed한다.
-- 현재 source corpus: external provider 비용 evidence가 없는 shadow run은 `NeedsReview`→active `trial_candidate`; `Keep|Reject`는 rejected tombstone; `Accept`는 `Blocked`다. raw workload/provider data를 만들거나 network를 사용하지 않는다.
-- 검증: `star-release` evaluation corpus, CLI/controller route와 inventory를 먼저 확인한 뒤 release/core 영향이므로 FULL, strict self-review, intended files만 local commit. push/PR/publish/install은 금지다.
+- 판정: P-0062~P-0069의 source contract/fixture/route/inventory, P-0069 trial(16 built-in 유지), release source closure와 final audit을 current fingerprint에서 확인했다.
+- 로컬 evidence: final FULL은 current source fingerprint에서 11/11 `complete/stable/pass`로 확인하며, 비추적 `target/validation/` report는 최종 handoff에서만 참조한다. release source closure는 x64 release build·ARM64 cross-build·lifecycle simulation pass를 확인했다.
+- 외부 Gate: signed Runtime/installer, Authenticode/trusted timestamp, clean installer lifecycle, SBOM/provenance, GitHub approval/publish/readback은 `blocked_external`; 설치 Runtime·remote state는 변경하지 않았다.
 
 | 파일 | 상태 | 변경 요약 | 검증 상태 |
 |---|---|---|---|
-| `crates/control/star-release/src/evaluation.rs` | 수정됨 | Code Health profile→trial/reject catalog item, accept hold, 16-profile guard | evaluation 16/16 통과 |
-| `apps/star-{cli,controller}/src/main.rs` | 수정됨 | `evaluation.profile.decision` management route와 valid development-record key | focused route tests·check 통과 |
-| `catalog`, `routing-matrix`, owner docs | 수정됨 | D02 product surface와 16 유지/trial evidence 정본화 | inventory source evidence 재생성 |
+| `docs/testing/p0070-code-health-final-audit-2026-07-28.md` | 추가됨 | final ReviewPack/audit, release source closure와 external Gate 분리 | final FULL 전수 통과 |
+| `catalog/product-source-evidence.json` | 재생성됨 | current inventory fingerprint | 23/23·217·170/170·16/16 |
 
-- 열린 구현: full corpus·source evidence·FULL은 통과했다. strict review와 intended-only local commit만 남았다.
+- 열린 구현: 없다. 현재 Slice는 intended-only local commit으로 봉인한다.
 
 ## 열린 위험과 보류
 
@@ -56,8 +54,8 @@
 
 ## Context Pack
 
-- 현재 목표: P-0069 검증 완료 변경을 strict review·intended-only local commit으로 고정한 뒤 P-0070 final audit으로 이동한다.
-- 먼저 확인할 파일: `docs/contracts/code-health-and-maintainability.md`, `crates/control/star-release/src/evaluation.rs`, `apps/star-{cli,controller}/src/main.rs`, D02 inventory/routing.
-- 먼저 실행할 명령: `git status --short --branch`; `rg -n -i 'EvaluationRun|code_health_maintenance|profile.decision' crates apps catalog`; focused tests; final `pwsh ./scripts/validate.ps1 -Profile full -OutputFormat json`.
+- 현재 목표: P-0070 검증 완료 문서와 generated source evidence를 strict review·intended-only local commit으로 고정한다.
+- 먼저 확인할 파일: `docs/testing/p0070-code-health-final-audit-2026-07-28.md`, `PLANS.md`, `catalog/product-source-evidence.json`, final validation reports.
+- 먼저 실행할 명령: `git status --short --branch`; `git diff --check`; inventory check; final FULL report 확인.
 - 건드리면 안 되는 것: existing dirty/user changes, `target/`, `legacy/`, installed Runtime/cache, external account/remote state.
-- 다음 완료 기준: P-0069는 offline/shadow evidence가 `trial`로 고정되고 16개 built-in 유지, accept hold, source inventory/FULL/review/local commit이 모두 확인되면 완료다.
+- 다음 완료 기준: P-0070은 final audit/ReviewPack, current inventory, FULL, external Gate 분리, strict review와 local commit을 확인하면 완료다.
