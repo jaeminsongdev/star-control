@@ -36,12 +36,22 @@ Focused evidence:
 - postcheck는 update lease allowlist에 명시된 manifest-verified installed `star.exe doctor --json`으로 교정한다. top-level `star.ipc.response/status=ok`와 nested Doctor `status=pass`를 모두 요구하며 duplicate key·error·fail·invalid output은 fail-closed다. 새 Controller와 rollback Controller에 같은 Gate를 적용한다. Updater가 없는 pre-P-0039 CLI fallback도 같은 core engine을 호출해 동작 분기를 제거했다.
 - 회귀: `star-updater-core` 17/17, IPC peer allowlist 1/1, Controller kind binding 1/1, `star-cli` 23/23, affected clippy `-D warnings` pass.
 
-## 남은 Gate
+## Runtime Gate 결과
 
-- clean x64 Runtime generation 생성·stage·inspect
-- staged and package-verified Updater가 잔존 candidate를 복구한 뒤 runtime apply committed 확인
-- updater-owned runtime apply 후 Codex UI/child PID·creation time과 fixed MCP/integration hash 불변 확인
-- installed generation/source revision readback
-- local commit, `main` push, remote SHA readback
+- 완료: clean x64 Runtime generation 생성·stage·inspect.
+- 완료: staged and package-verified Updater의 stale candidate 복구와 runtime apply committed.
+- 완료: Codex UI/child PID·creation time과 fixed MCP/integration hash 불변.
+- 완료: installed generation/source revision·management·Doctor·installed TARGET readback.
+- 남음: live evidence closure commit의 generation 재봉인·apply와 `main` push/remote SHA readback.
 
-이 문서는 위 live Gate가 실제 통과하기 전에는 설치 또는 배포 완료를 주장하지 않는다.
+## Runtime apply 성공
+
+- final-code stage `rt_341794d49b368dfa`는 source revision `4b0d27965466c4d3dcab6a71363070aa289b758a`, package set hash `sha256:2e60f1a99a3801e5a16d9b4d5f6c22bf80a86b0853ecacff5c867e44c4a67f01`로 x64 verifier를 통과했다.
+- inspect는 `handler_ready=true`, bridge compatible, rollback available이고 action/schema/risk/permission widening, hook review, new task, Codex restart가 모두 없었다.
+- package-verified staged Updater 결과는 exit 0, `state=committed`, activation revision 12, active `rt_341794d49b368dfa`, `requires_codex_restart=false`다. installed Runtime manifest의 source revision과 architecture도 각각 `4b0d27965466c4d3dcab6a71363070aa289b758a`, `x64`로 readback했다.
+- apply 직전 Codex/ChatGPT/fixed MCP 35개 process identity 중 apply 뒤 누락은 0이다. `codex.exe` PID 28028·creation `2026-07-26T05:52:59.4289020Z`를 포함한 Desktop identity가 유지됐다.
+- fixed `star.exe`·`star-mcp.exe`·`star-updater.exe`와 Codex integration 8개 파일의 SHA-256 변화는 0이다. Runtime-only Slice이므로 fixed Updater 교체나 integration repair/restart를 수행하지 않았다.
+- post-apply는 installation x64 verified, integration registered/verified, management normal/read_write, Doctor 4/4 pass, `star.control.core` ready/trusted다.
+- installed `star validation run star-control --profile target --timeout-ms 600000 --json`은 `target/validation/20260727T181409930Z-42220/report.json`에서 8/8 complete/stable/pass, 137,283ms로 통과했다. report revision은 `4b0d27965466c4d3dcab6a71363070aa289b758a`다.
+
+남은 동작은 이 live evidence를 포함한 closure commit의 source revision으로 generation을 재봉인·updater 적용한 뒤 `main` remote readback을 확인하는 것이다. signed/public Stable과 non-x64는 계속 제외한다.
