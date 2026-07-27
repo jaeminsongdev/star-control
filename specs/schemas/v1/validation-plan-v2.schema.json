@@ -172,6 +172,13 @@
       ],
       "type": "object"
     },
+    "CheckOutputNormalizer": {
+      "enum": [
+        "safe_exit_v1",
+        "sarif_v210"
+      ],
+      "type": "string"
+    },
     "CheckPlanV2": {
       "additionalProperties": false,
       "properties": {
@@ -204,6 +211,10 @@
         },
         "outcome": {
           "$ref": "#/$defs/CheckResolutionOutcome"
+        },
+        "output_normalizer": {
+          "$ref": "#/$defs/CheckOutputNormalizer",
+          "default": "safe_exit_v1"
         },
         "plan_item_id": {
           "type": "string"

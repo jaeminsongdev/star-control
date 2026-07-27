@@ -45,6 +45,7 @@ use thiserror::Error;
 use crate::rules::{
     RuleDecisionFloorV2, RuleDiagnosticInputV2, RuleFamilyV2, builtin_rule_for_diagnostic,
 };
+use crate::sarif::{SarifCompleteness, SarifFindingCandidate};
 
 #[derive(Clone, Debug)]
 pub struct ExecutableBinding {
@@ -84,6 +85,29 @@ pub struct CheckExecutionObservation {
     pub artifact_refs: Vec<star_contracts::evidence::ArtifactRef>,
     pub observed_tool: Option<ObservedTool>,
     pub diagnostics: Vec<RawDiagnostic>,
+    pub static_analysis_import: Option<StaticAnalysisImportObservation>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StaticAnalysisImportObservation {
+    pub executable_binding_fingerprint: Sha256Hash,
+    pub candidates: Vec<SarifFindingCandidate>,
+    pub imported_count: usize,
+    pub rejected_count: usize,
+    pub completeness: SarifCompleteness,
+    pub artifact_refs: Vec<star_contracts::evidence::ArtifactRef>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BoundStaticAnalysisImportObservation {
+    pub validation_run_id: ValidationRunId,
+    pub check_id: String,
+    pub executable_binding_fingerprint: Sha256Hash,
+    pub candidates: Vec<SarifFindingCandidate>,
+    pub imported_count: usize,
+    pub rejected_count: usize,
+    pub completeness: SarifCompleteness,
+    pub artifact_refs: Vec<star_contracts::evidence::ArtifactRef>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -141,6 +165,7 @@ pub struct CheckGraphRunResult {
     pub evidence_bundle: EvidenceBundleV2,
     pub review_pack: ReviewPackV1,
     pub rework_directive: Option<ReworkDirectiveV1>,
+    pub static_analysis_imports: Vec<BoundStaticAnalysisImportObservation>,
 }
 
 #[derive(Debug, Error)]
@@ -246,6 +271,7 @@ fn run_check_graph_inner(
     }
     let (order, predecessors) = topological_order(plan, &checks)?;
     let mut runs = Vec::with_capacity(order.len() * context.max_attempts_per_check as usize);
+    let mut static_analysis_imports = Vec::new();
     let mut diagnostics = Vec::new();
     let mut satisfied_items = BTreeSet::new();
     let mut diagnostic_sequence = 0_u64;
@@ -312,7 +338,7 @@ fn run_check_graph_inner(
         }
         let mut attempt_runs = Vec::new();
         for attempt in 1..=context.max_attempts_per_check {
-            let run = execute_check_attempt(
+            let (run, import) = execute_check_attempt(
                 plan,
                 &plan_ref,
                 check,
@@ -322,6 +348,9 @@ fn run_check_graph_inner(
                 &mut diagnostics,
                 executor,
             )?;
+            if let Some(import) = import {
+                static_analysis_imports.push(import);
+            }
             let retry = attempt < context.max_attempts_per_check && retryable_attempt(&run);
             attempt_runs.push(run);
             if !retry {
@@ -591,6 +620,7 @@ fn run_check_graph_inner(
         evidence_bundle: bundle,
         review_pack,
         rework_directive,
+        static_analysis_imports,
     })
 }
 
@@ -604,13 +634,19 @@ fn execute_check_attempt(
     diagnostic_sequence: &mut u64,
     diagnostics: &mut Vec<DiagnosticV2>,
     executor: &mut dyn CheckExecutor,
-) -> Result<ValidationRunV2, CheckGraphRunnerError> {
+) -> Result<
+    (
+        ValidationRunV2,
+        Option<BoundStaticAnalysisImportObservation>,
+    ),
+    CheckGraphRunnerError,
+> {
     let run_id = ValidationRunId::new();
     let invocation = invocation_for(check, binding, plan_ref, attempt)?.seal()?;
     let execution = executor.execute(&invocation);
     let mut diagnostic_ids = Vec::new();
     match execution {
-        Ok(observation) => {
+        Ok(mut observation) => {
             if observation.finished_at < observation.started_at {
                 return Err(CheckGraphRunnerError::Evidence(EvidenceV2Error::Run));
             }
@@ -678,7 +714,19 @@ fn execute_check_attempt(
                 diagnostic_ids.push(diagnostic.diagnostic_id.clone());
                 diagnostics.push(diagnostic);
             }
-            ValidationRunV2 {
+            let import = observation.static_analysis_import.take().map(|import| {
+                BoundStaticAnalysisImportObservation {
+                    validation_run_id: run_id.clone(),
+                    check_id: check.check_id.clone(),
+                    executable_binding_fingerprint: import.executable_binding_fingerprint,
+                    candidates: import.candidates,
+                    imported_count: import.imported_count,
+                    rejected_count: import.rejected_count,
+                    completeness: import.completeness,
+                    artifact_refs: import.artifact_refs,
+                }
+            });
+            let run = ValidationRunV2 {
                 schema_id: VALIDATION_RUN_V2_SCHEMA_ID.to_owned(),
                 schema_version: 2,
                 validation_run_id: run_id,
@@ -705,8 +753,8 @@ fn execute_check_attempt(
                 observed_tool: observation.observed_tool,
                 result_fingerprint: empty_fingerprint(),
             }
-            .seal()
-            .map_err(CheckGraphRunnerError::from)
+            .seal()?;
+            Ok((run, import))
         }
         Err(error) => {
             *diagnostic_sequence += 1;
@@ -728,7 +776,7 @@ fn execute_check_attempt(
             diagnostic_ids.push(diagnostic.diagnostic_id.clone());
             diagnostics.push(diagnostic);
             let not_started = error.termination_reason == TerminationReason::LaunchError;
-            ValidationRunV2 {
+            let run = ValidationRunV2 {
                 schema_id: VALIDATION_RUN_V2_SCHEMA_ID.to_owned(),
                 schema_version: 2,
                 validation_run_id: run_id,
@@ -764,8 +812,8 @@ fn execute_check_attempt(
                 observed_tool: None,
                 result_fingerprint: empty_fingerprint(),
             }
-            .seal()
-            .map_err(CheckGraphRunnerError::from)
+            .seal()?;
+            Ok((run, None))
         }
     }
 }
@@ -2577,6 +2625,7 @@ mod tests {
                     timeout_ms: 60_000,
                     expected_exit_codes: vec![0],
                 },
+                output_normalizer: star_contracts::planning::CheckOutputNormalizer::SafeExitV1,
                 fallback_floor: ValidationScopeLevel::ProjectFull,
                 evidence_kinds: vec!["validation_result".to_owned()],
             })
@@ -2806,6 +2855,7 @@ mod tests {
                 sha256: Sha256Hash::digest(b"fixture-validator"),
             }),
             diagnostics: vec![],
+            static_analysis_import: None,
         }
     }
 

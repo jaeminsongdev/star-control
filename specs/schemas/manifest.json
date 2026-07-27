@@ -10,7 +10,7 @@
     },
     {
       "file": "validation-plan-v2.schema.json",
-      "hash": "sha256:673f33f23db38ef626e27559424e13f64de5de87cb2301d50094f102440f5acc"
+      "hash": "sha256:fa78770e7810fd841eabc73a45a16157ccbe530a1de3dce067cf145b7463c116"
     },
     {
       "file": "task-spec.schema.json",
@@ -34,7 +34,7 @@
     },
     {
       "file": "planning-bundle.schema.json",
-      "hash": "sha256:ca7f3b813364bada9e3c6e079d78dcc73f72ecd83ab7de25c5e00215d973fe99"
+      "hash": "sha256:93f9d889dc9d847ec374ac56b4a6cd4d417d211157619b2d0241cef533c3a5c0"
     },
     {
       "file": "change-plan-v2.schema.json",
@@ -183,6 +183,10 @@
     {
       "file": "external-data-snapshot.schema.json",
       "hash": "sha256:0ba11892ae52cff500b1716e71340c9589bdbf6073a08e137638afb42d9c1af6"
+    },
+    {
+      "file": "static-analysis-import-report.schema.json",
+      "hash": "sha256:28f4325cb5a7737ba2c5e069857658f6a5e36a69ccaf90646ccdeff23e13ffa3"
     },
     {
       "file": "dependency-update-plan.schema.json",

@@ -124,6 +124,7 @@
         "timeout_ms": 0
       },
       "outcome": "selected_required",
+      "output_normalizer": "safe_exit_v1",
       "plan_item_id": "fixture",
       "project_id": "prj_00000000000000000000000000",
       "reason_codes": [
@@ -258,6 +259,7 @@
         "timeout_ms": 0
       },
       "outcome": "selected_required",
+      "output_normalizer": "safe_exit_v1",
       "plan_item_id": "fixture",
       "project_id": "prj_00000000000000000000000000",
       "reason_codes": [

@@ -25,6 +25,7 @@ use star_contracts::{
         WorkspaceSnapshotId,
     },
     index::{CodeIndexSnapshot, IndexEdge, IndexEntity, ProjectCatalogSnapshot, SourceEntry},
+    maintenance_v2::StaticAnalysisImportReport,
     managed_registry::{
         ManagedDeclarationChangeIntent, ManagedRegistrySnapshot, RegistryConsistencyRecord,
     },
@@ -337,6 +338,21 @@ pub struct CheckGraphEvidenceTransaction<'a> {
     pub bundle: &'a EvidenceBundleV2,
     pub review_pack: &'a ReviewPackV1,
     pub rework_directive: Option<&'a ReworkDirectiveV1>,
+    pub source_bound_findings: Option<SourceBoundFindingImport<'a>>,
+}
+
+/// Additional findings attached to the current successful source generation.
+/// This is deliberately not a second scanner database: the repository checks
+/// the exact scan, revision, workspace, and CodeIndex generation before the
+/// M3 evidence and projections are committed together.
+pub struct SourceBoundFindingImport<'a> {
+    pub scan_run_id: &'a ScanRunId,
+    pub project_revision_id: &'a ProjectRevisionId,
+    pub workspace_snapshot_id: &'a star_contracts::ids::WorkspaceSnapshotId,
+    pub code_index_snapshot_id: &'a CodeIndexSnapshotId,
+    pub findings: &'a [Finding],
+    pub occurrences: &'a [Occurrence],
+    pub reports: &'a [StaticAnalysisImportReport],
 }
 
 pub trait ProjectManagementRepository: Send + Sync {
@@ -431,6 +447,9 @@ pub trait ProjectManagementRepository: Send + Sync {
         diagnostic_id: &DiagnosticId,
     ) -> Result<Option<DiagnosticV2>, RepositoryError>;
     fn list_diagnostics_v2(&self) -> Result<Vec<DiagnosticV2>, RepositoryError>;
+    fn list_static_analysis_import_reports(
+        &self,
+    ) -> Result<Vec<StaticAnalysisImportReport>, RepositoryError>;
     fn get_gate_decision_v2(
         &self,
         gate_id: &GateId,

@@ -581,8 +581,18 @@ pub struct CheckDescriptor {
     pub applicable_source_classes: Vec<SourceClass>,
     pub trusted: bool,
     pub available: bool,
+    #[serde(default)]
+    pub output_normalizer: CheckOutputNormalizer,
     pub required_evidence: Vec<String>,
     pub content_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckOutputNormalizer {
+    #[default]
+    SafeExitV1,
+    SarifV210,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -631,6 +641,8 @@ pub struct CheckPlanV2 {
     pub impact_edge_ids: Vec<String>,
     pub risk_path_ids: Vec<String>,
     pub invocation: CheckInvocationTemplate,
+    #[serde(default)]
+    pub output_normalizer: CheckOutputNormalizer,
     pub fallback_floor: ValidationScopeLevel,
     pub evidence_kinds: Vec<String>,
 }

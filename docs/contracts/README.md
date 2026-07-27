@@ -139,7 +139,7 @@ DocumentRef가 가리키는 내용이 바뀌면 같은 revision을 재사용하�
 
 ## 계약 Inventory
 
-역사적 설계 Inventory의 122개 논리 항목 수는 계약 누락을 추적하기 위한 분류이며 구현 완료 수나 generated Schema 파일 수가 아니다. P-0058 current source는 Recovery·M1~M11·Profile·Stage/Route/ContextPack/PermissionPlan/Codex execution·release lifecycle·source/final audit 계약을 `star-contracts` 공개 type과 checked-in Schema/fixture로 materialize했고 `specs/schemas/manifest.json`이 213개 generated Schema 파일을 열거한다. 논리 항목이나 nested type 수로 완료를 부풀리지 않으며, 실제 완료 판정은 Schema 존재만이 아니라 Controller 경유 경로·persistence·negative Corpus·E2E와 [P-0058 독립 감사](../testing/p0058-feature-profile-independent-audit-2026-07-25.md)를 함께 사용한다.
+역사적 설계 Inventory의 122개 논리 항목 수는 계약 누락을 추적하기 위한 분류이며 구현 완료 수나 generated Schema 파일 수가 아니다. P-0058 current source는 Recovery·M1~M11·Profile·Stage/Route/ContextPack/PermissionPlan/Codex execution·release lifecycle·source/final audit 계약을 `star-contracts` 공개 type과 checked-in Schema/fixture로 materialize했고 `specs/schemas/manifest.json`이 214개 generated Schema 파일을 열거한다. 논리 항목이나 nested type 수로 완료를 부풀리지 않으며, 실제 완료 판정은 Schema 존재만이 아니라 Controller 경유 경로·persistence·negative Corpus·E2E와 [P-0058 독립 감사](../testing/p0058-feature-profile-independent-audit-2026-07-25.md)를 함께 사용한다.
 
 | 계약 | Schema ID | 소유 문서 | 저장·전달 위치 |
 |---|---|---|---|

@@ -22,6 +22,7 @@ use star_contracts::{
         ObservedTool, TerminationReason,
     },
     evidence_v2::{InvocationWorkingDirectoryV2, TaskInvocationV2, ValidationStabilityV2},
+    planning::CheckOutputNormalizer,
 };
 use thiserror::Error;
 
@@ -116,6 +117,7 @@ impl ResolvedExecutableV2 {
 
 #[derive(Clone, Debug)]
 pub struct NormalizerInput<'a> {
+    pub executable_binding_fingerprint: &'a Sha256Hash,
     pub exit_code: Option<i32>,
     pub expected_exit: bool,
     pub termination_reason: TerminationReason,
@@ -126,8 +128,15 @@ pub struct NormalizerInput<'a> {
     pub output_read_failed: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct NormalizerOutput {
+    pub diagnostics: Vec<RawDiagnostic>,
+    pub completeness: Option<Completeness>,
+    pub sarif: Option<crate::sarif::SarifNormalization>,
+}
+
 pub trait ExternalDiagnosticNormalizer: Send {
-    fn normalize(&mut self, input: NormalizerInput<'_>) -> Vec<RawDiagnostic>;
+    fn normalize(&mut self, input: NormalizerInput<'_>) -> NormalizerOutput;
 }
 
 pub struct CheckOutputArtifactInput<'a> {
@@ -139,6 +148,14 @@ pub struct CheckOutputArtifactInput<'a> {
     pub stdout_truncated: bool,
     pub stderr_truncated: bool,
     pub output_read_failed: bool,
+    pub static_analysis: Option<StaticAnalysisArtifactInput<'a>>,
+}
+
+pub struct StaticAnalysisArtifactInput<'a> {
+    pub candidates: &'a [crate::sarif::SarifFindingCandidate],
+    pub imported_count: usize,
+    pub rejected_count: usize,
+    pub completeness: crate::sarif::SarifCompleteness,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -158,7 +175,7 @@ pub trait CheckOutputArtifactSink: Send {
 pub struct SafeExitDiagnosticNormalizer;
 
 impl ExternalDiagnosticNormalizer for SafeExitDiagnosticNormalizer {
-    fn normalize(&mut self, input: NormalizerInput<'_>) -> Vec<RawDiagnostic> {
+    fn normalize(&mut self, input: NormalizerInput<'_>) -> NormalizerOutput {
         let mut diagnostics = Vec::new();
         if input.stdout_truncated || input.stderr_truncated {
             diagnostics.push(RawDiagnostic {
@@ -248,7 +265,75 @@ impl ExternalDiagnosticNormalizer for SafeExitDiagnosticNormalizer {
             TerminationReason::Exited | TerminationReason::LaunchError => {}
         }
         let _ = (input.stdout, input.stderr);
-        diagnostics
+        NormalizerOutput {
+            diagnostics,
+            completeness: None,
+            sarif: None,
+        }
+    }
+}
+
+/// Selects a parser only from the bound CheckDescriptor output contract. The
+/// executable bytes or content cannot select a parser by themselves.
+pub struct RegisteredOutputNormalizer {
+    project_id: star_contracts::ids::ProjectId,
+    project_root: PathBuf,
+    kinds: BTreeMap<Sha256Hash, CheckOutputNormalizer>,
+    safe_exit: SafeExitDiagnosticNormalizer,
+}
+
+impl RegisteredOutputNormalizer {
+    pub fn new(
+        project_id: star_contracts::ids::ProjectId,
+        project_root: PathBuf,
+        kinds: BTreeMap<Sha256Hash, CheckOutputNormalizer>,
+    ) -> Self {
+        Self {
+            project_id,
+            project_root,
+            kinds,
+            safe_exit: SafeExitDiagnosticNormalizer,
+        }
+    }
+}
+
+impl ExternalDiagnosticNormalizer for RegisteredOutputNormalizer {
+    fn normalize(&mut self, input: NormalizerInput<'_>) -> NormalizerOutput {
+        let mut output = self.safe_exit.normalize(NormalizerInput {
+            executable_binding_fingerprint: input.executable_binding_fingerprint,
+            exit_code: input.exit_code,
+            expected_exit: input.expected_exit,
+            termination_reason: input.termination_reason,
+            stdout: input.stdout,
+            stderr: input.stderr,
+            stdout_truncated: input.stdout_truncated,
+            stderr_truncated: input.stderr_truncated,
+            output_read_failed: input.output_read_failed,
+        });
+        if self
+            .kinds
+            .get(input.executable_binding_fingerprint)
+            .copied()
+            == Some(CheckOutputNormalizer::SarifV210)
+            && input.termination_reason == TerminationReason::Exited
+            && input.expected_exit
+            && !input.stdout_truncated
+            && !input.output_read_failed
+        {
+            let sarif = crate::sarif::normalize_sarif_2_1(
+                input.stdout,
+                &self.project_id,
+                &self.project_root,
+            );
+            output.diagnostics.extend(sarif.diagnostics.clone());
+            output.completeness = Some(match sarif.completeness {
+                crate::sarif::SarifCompleteness::Complete => Completeness::Complete,
+                crate::sarif::SarifCompleteness::Partial => Completeness::Partial,
+                crate::sarif::SarifCompleteness::Unverified => Completeness::Unverified,
+            });
+            output.sarif = Some(sarif);
+        }
+        output
     }
 }
 
@@ -400,7 +485,8 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
         let expected_exit =
             exit_code.is_some_and(|code| invocation.expected_exit_codes.contains(&code));
         let output_read_failed = stdout_read_failed || stderr_read_failed;
-        let mut diagnostics = self.normalizer.normalize(NormalizerInput {
+        let normalized = self.normalizer.normalize(NormalizerInput {
+            executable_binding_fingerprint: &invocation.executable_binding_fingerprint,
             exit_code,
             expected_exit,
             termination_reason,
@@ -410,6 +496,7 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
             stderr_truncated,
             output_read_failed,
         });
+        let mut diagnostics = normalized.diagnostics;
         let truncated = stdout_truncated || stderr_truncated;
         let mut artifact_write_failed = false;
         let artifact_refs = if let Some(output_sink) = self.output_sink.as_mut() {
@@ -422,6 +509,14 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
                 stdout_truncated,
                 stderr_truncated,
                 output_read_failed,
+                static_analysis: normalized.sarif.as_ref().map(|sarif| {
+                    StaticAnalysisArtifactInput {
+                        candidates: &sarif.candidates,
+                        imported_count: sarif.imported_count,
+                        rejected_count: sarif.rejected_count,
+                        completeness: sarif.completeness,
+                    }
+                }),
             }) {
                 Ok(artifact_refs) if artifact_refs.len() >= 2 => artifact_refs,
                 Ok(_) => {
@@ -460,6 +555,8 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
                 Completeness::Unverified
             } else if truncated {
                 Completeness::Partial
+            } else if let Some(completeness) = normalized.completeness {
+                completeness
             } else if termination_reason == TerminationReason::Exited {
                 Completeness::Complete
             } else {
@@ -470,9 +567,21 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
             } else {
                 ValidationStabilityV2::NotEvaluated
             },
-            artifact_refs,
+            artifact_refs: artifact_refs.clone(),
             observed_tool: Some(binding.observed_tool.clone()),
             diagnostics,
+            static_analysis_import: normalized.sarif.map(|sarif| {
+                crate::runner::StaticAnalysisImportObservation {
+                    executable_binding_fingerprint: invocation
+                        .executable_binding_fingerprint
+                        .clone(),
+                    candidates: sarif.candidates,
+                    imported_count: sarif.imported_count,
+                    rejected_count: sarif.rejected_count,
+                    completeness: sarif.completeness,
+                    artifact_refs: artifact_refs.clone(),
+                }
+            }),
         })
     }
 }
@@ -643,7 +752,9 @@ mod tests {
     #[test]
     fn normalizer_uses_the_typed_expected_exit_set_and_fails_closed_on_read_error() {
         let mut normalizer = SafeExitDiagnosticNormalizer;
+        let binding_fingerprint = Sha256Hash::digest(b"fixture-normalizer");
         let expected_nonzero = normalizer.normalize(NormalizerInput {
+            executable_binding_fingerprint: &binding_fingerprint,
             exit_code: Some(7),
             expected_exit: true,
             termination_reason: TerminationReason::Exited,
@@ -653,9 +764,10 @@ mod tests {
             stderr_truncated: false,
             output_read_failed: false,
         });
-        assert!(expected_nonzero.is_empty());
+        assert!(expected_nonzero.diagnostics.is_empty());
 
         let read_failure = normalizer.normalize(NormalizerInput {
+            executable_binding_fingerprint: &binding_fingerprint,
             exit_code: Some(0),
             expected_exit: true,
             termination_reason: TerminationReason::Exited,
@@ -665,8 +777,84 @@ mod tests {
             stderr_truncated: false,
             output_read_failed: true,
         });
-        assert_eq!(read_failure.len(), 1);
-        assert_eq!(read_failure[0].code, "CHECK_OUTPUT_READ_FAILED");
-        assert!(read_failure[0].blocking);
+        assert_eq!(read_failure.diagnostics.len(), 1);
+        assert_eq!(read_failure.diagnostics[0].code, "CHECK_OUTPUT_READ_FAILED");
+        assert!(read_failure.diagnostics[0].blocking);
+    }
+
+    #[test]
+    fn registered_sarif_normalizer_is_selected_by_bound_output_contract() {
+        let fingerprint = Sha256Hash::digest(b"fixture-sarif-binding");
+        let mut kinds = BTreeMap::new();
+        kinds.insert(fingerprint.clone(), CheckOutputNormalizer::SarifV210);
+        let project_id = star_contracts::ids::ProjectId::new();
+        let mut normalizer = RegisteredOutputNormalizer::new(
+            project_id.clone(),
+            PathBuf::from("C:/workspace/project"),
+            kinds,
+        );
+        let output = normalizer.normalize(NormalizerInput {
+            executable_binding_fingerprint: &fingerprint,
+            exit_code: Some(0),
+            expected_exit: true,
+            termination_reason: TerminationReason::Exited,
+            stdout: br#"{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"fixture"}},"results":[{"ruleId":"fixture.rule","message":{"text":"secret=never-persist"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/lib.rs"}}}]}]}]}"#,
+            stderr: &[],
+            stdout_truncated: false,
+            stderr_truncated: false,
+            output_read_failed: false,
+        });
+        assert_eq!(output.completeness, Some(Completeness::Complete));
+        assert_eq!(output.diagnostics.len(), 1);
+        assert_eq!(output.diagnostics[0].code, "SARIF:fixture.rule");
+        assert_eq!(
+            output.diagnostics[0].locations[0].path.project_id,
+            project_id
+        );
+        assert!(!output.diagnostics[0].message.contains("never-persist"));
+    }
+
+    #[test]
+    fn sarif_is_never_imported_from_truncated_or_unknown_process_output() {
+        let fingerprint = Sha256Hash::digest(b"fixture-sarif-fail-closed");
+        let mut kinds = BTreeMap::new();
+        kinds.insert(fingerprint.clone(), CheckOutputNormalizer::SarifV210);
+        let mut normalizer = RegisteredOutputNormalizer::new(
+            star_contracts::ids::ProjectId::new(),
+            PathBuf::from("C:/workspace/project"),
+            kinds,
+        );
+        for (termination_reason, truncated, expected_code) in [
+            (
+                TerminationReason::Exited,
+                true,
+                "CHECK_OUTPUT_LIMIT_EXCEEDED",
+            ),
+            (TerminationReason::Timeout, false, "CHECK_TIMEOUT"),
+            (
+                TerminationReason::OutcomeUnknown,
+                false,
+                "CHECK_OUTCOME_UNKNOWN",
+            ),
+        ] {
+            let output = normalizer.normalize(NormalizerInput {
+                executable_binding_fingerprint: &fingerprint,
+                exit_code: Some(0),
+                expected_exit: true,
+                termination_reason,
+                stdout: br#"{"version":"2.1.0","runs":[]}"#,
+                stderr: &[],
+                stdout_truncated: truncated,
+                stderr_truncated: false,
+                output_read_failed: false,
+            });
+            assert!(output.sarif.is_none());
+            assert!(
+                output
+                    .diagnostics
+                    .iter()
+                    .any(|item| item.code == expected_code)
+            );
+        }
     }
 }

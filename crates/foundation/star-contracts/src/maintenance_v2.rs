@@ -15,6 +15,7 @@ pub const RECOVERY_PLAN_V2_SCHEMA_ID: &str = "star.recovery-plan";
 pub const DEPENDENCY_SNAPSHOT_SCHEMA_ID: &str = "star.dependency-snapshot";
 pub const SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID: &str = "star.supply-chain-snapshot";
 pub const EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID: &str = "star.external-data-snapshot";
+pub const STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID: &str = "star.static-analysis-import-report";
 pub const DEPENDENCY_UPDATE_PLAN_SCHEMA_ID: &str = "star.dependency-update-plan";
 pub const MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID: &str = "star.maintenance-radar-snapshot";
 
@@ -379,6 +380,46 @@ pub struct ExternalDataSnapshot {
     pub content_fingerprint: Sha256Hash,
 }
 
+/// Immutable, source-bound receipt for a static-analysis import. The raw
+/// provider document is referenced as an ArtifactRef outside this contract;
+/// source text, absolute paths, and provider messages are never embedded.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StaticAnalysisImportReport {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub report_id: String,
+    pub project_id: ProjectId,
+    pub project_revision_ref: String,
+    pub workspace_snapshot_ref: String,
+    pub code_index_snapshot_ref: String,
+    pub tool_descriptor_ref: String,
+    pub tool_descriptor_sha256: Sha256Hash,
+    pub tool_identity_sha256: Sha256Hash,
+    pub sarif_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_pack_digest: Option<Sha256Hash>,
+    pub uri_mapping_policy: String,
+    pub raw_artifact_ref: String,
+    pub normalized_artifact_ref: String,
+    pub imported_count: u64,
+    pub rejected_count: u64,
+    pub truncated_count: u64,
+    pub completeness: CoverageState,
+    #[serde(default)]
+    pub limitations: Vec<String>,
+    pub content_fingerprint: Sha256Hash,
+}
+
+impl StaticAnalysisImportReport {
+    /// Accept only the current immutable report shape at an ingestion boundary.
+    /// Serde's structural decoder intentionally remains able to read a future
+    /// document, but product paths must never treat it as current evidence.
+    pub fn is_current_schema(&self) -> bool {
+        self.schema_id == STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID && self.schema_version == 1
+    }
+}
+
 fn legacy_external_coverage() -> CoverageState {
     CoverageState::Partial
 }
@@ -619,4 +660,25 @@ pub struct MaintenanceRadarSnapshot {
     #[serde(default)]
     pub limitations: Vec<String>,
     pub content_fingerprint: Sha256Hash,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StaticAnalysisImportReport;
+
+    #[test]
+    fn static_analysis_import_report_fixtures_are_strict_and_versioned() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../specs/fixtures/management/v1/static-analysis-import-report");
+        for name in ["minimal.json", "full.json"] {
+            let value = std::fs::read_to_string(root.join(name)).unwrap();
+            let report: StaticAnalysisImportReport = serde_json::from_str(&value).unwrap();
+            assert!(report.is_current_schema());
+        }
+        let invalid = std::fs::read_to_string(root.join("invalid.json")).unwrap();
+        assert!(serde_json::from_str::<StaticAnalysisImportReport>(&invalid).is_err());
+        let future = std::fs::read_to_string(root.join("future.json")).unwrap();
+        let future: StaticAnalysisImportReport = serde_json::from_str(&future).unwrap();
+        assert!(!future.is_current_schema());
+    }
 }

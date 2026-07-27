@@ -6,6 +6,7 @@ pub mod process_executor;
 pub mod rules;
 pub mod runner;
 pub mod rust_style;
+pub mod sarif;
 
 use std::collections::BTreeMap;
 
@@ -20,7 +21,7 @@ use star_contracts::{
         BaselineId, DispositionId, FindingId, GateId, OccurrenceId, ProjectId, ScanRunId,
         SuppressionId, ValidationResultId,
     },
-    index::{HardcodingAssessment, HardcodingCandidate},
+    index::{HardcodingAssessment, HardcodingCandidate, SourceEntry},
     management::{
         Baseline, BaselineStatus, CanonicalSource, Completeness, Confidence, Disposition,
         DispositionStatus, Finding, FindingLifecycle, Occurrence, PatchSet, ProjectRevision,
@@ -120,6 +121,155 @@ pub struct FindingProjection {
     pub findings: Vec<Finding>,
     pub occurrences: Vec<Occurrence>,
     pub rule_set_fingerprint: Sha256Hash,
+}
+
+/// Projects safe SARIF candidates into the existing source-derived Finding
+/// model. A caller must supply the current source-entry generation; paths are
+/// matched only within that generation and provider correlation text is never
+/// persisted directly.
+pub fn project_sarif_findings(
+    project_id: &ProjectId,
+    project_revision_id: &star_contracts::ids::ProjectRevisionId,
+    workspace_snapshot_id: &star_contracts::ids::WorkspaceSnapshotId,
+    scan_run_id: &ScanRunId,
+    source_entries: &[SourceEntry],
+    candidates: &[sarif::SarifFindingCandidate],
+    evidence_refs: &[star_contracts::evidence::ArtifactRef],
+) -> Result<FindingProjection, ValidationError> {
+    let sources_by_path = source_entries
+        .iter()
+        .filter(|source| source.owner_project_id == *project_id && source.analysis_eligible)
+        .map(|source| (source.path.as_str(), source))
+        .collect::<BTreeMap<_, _>>();
+    let mut projection = FindingProjection {
+        findings: Vec::new(),
+        occurrences: Vec::new(),
+        rule_set_fingerprint: Sha256Hash::digest(b"star.sarif-2.1.0-projection.v1"),
+    };
+    for candidate in candidates {
+        if candidate.locations.is_empty() {
+            continue;
+        }
+        let correlation_hash = Sha256Hash::digest(candidate.correlation_key.as_bytes());
+        let finding_fingerprint = versioned_fingerprint(
+            "star.identity.finding",
+            1,
+            &serde_json::json!({
+                "project_id":project_id,
+                "rule_id":candidate.rule_id,
+                "rule_version":"sarif-2.1.0",
+                "identity_contract_version":1,
+                "identity_anchor":"sarif-correlation",
+                "identity_tokens":[correlation_hash],
+            }),
+        )
+        .map_err(|_| ValidationError::Fingerprint)?;
+        let finding_id = FindingId::from_fingerprint(&finding_fingerprint);
+        let mut occurrence_ids = Vec::new();
+        for location in &candidate.locations {
+            if location.path.project_id != *project_id {
+                return Err(ValidationError::InconsistentGraph);
+            }
+            let source = sources_by_path
+                .get(location.path.path.as_str())
+                .copied()
+                .ok_or(ValidationError::InconsistentGraph)?;
+            let range = SourceRange {
+                start_line: location.start.line,
+                start_column: location.start.column,
+                end_line: location
+                    .end
+                    .as_ref()
+                    .map_or(location.start.line, |end| end.line),
+                end_column: location
+                    .end
+                    .as_ref()
+                    .map_or(location.start.column, |end| end.column),
+            };
+            let occurrence_fingerprint = versioned_fingerprint(
+                "star.identity.occurrence",
+                1,
+                &serde_json::json!({
+                    "finding_id":finding_id,
+                    "workspace_snapshot_id":workspace_snapshot_id,
+                    "source_content_sha256":source.content_sha256,
+                    "location_range":range,
+                    "evidence_key":correlation_hash,
+                }),
+            )
+            .map_err(|_| ValidationError::Fingerprint)?;
+            let occurrence_id = OccurrenceId::from_fingerprint(&occurrence_fingerprint);
+            occurrence_ids.push(occurrence_id.clone());
+            projection.occurrences.push(Occurrence {
+                schema_id: "star.occurrence".to_owned(),
+                schema_version: 1,
+                occurrence_id,
+                occurrence_fingerprint,
+                finding_id: finding_id.clone(),
+                scan_run_id: scan_run_id.clone(),
+                project_revision_id: project_revision_id.clone(),
+                workspace_snapshot_id: workspace_snapshot_id.clone(),
+                canonical_source_id: source.canonical_source_id.clone(),
+                source_content_sha256: source.content_sha256.clone(),
+                location_path: source.path.clone(),
+                location_range: range,
+                symbol_id: None,
+                message_parameters: BTreeMap::new(),
+                evidence_refs: evidence_refs.to_vec(),
+                observed_at: Utc::now(),
+                redaction_state: RedactionState::Redacted,
+            });
+        }
+        occurrence_ids.sort();
+        occurrence_ids.dedup();
+        let severity = match candidate.severity {
+            star_contracts::evidence::DiagnosticSeverity::Info => Severity::Info,
+            star_contracts::evidence::DiagnosticSeverity::Warning => Severity::Warning,
+            star_contracts::evidence::DiagnosticSeverity::Error => Severity::Error,
+            star_contracts::evidence::DiagnosticSeverity::Critical => Severity::Critical,
+        };
+        let content_fingerprint = versioned_fingerprint(
+            "star.finding-content",
+            1,
+            &serde_json::json!({
+                "finding_fingerprint":finding_fingerprint,
+                "occurrence_ids":occurrence_ids,
+                "severity":severity,
+                "confidence":Confidence::Medium,
+                "provider":"sarif-2.1.0",
+            }),
+        )
+        .map_err(|_| ValidationError::Fingerprint)?;
+        projection.findings.push(Finding {
+            schema_id: "star.finding".to_owned(),
+            schema_version: 1,
+            finding_id,
+            finding_fingerprint,
+            project_id: project_id.clone(),
+            rule_id: candidate.rule_id.clone(),
+            rule_version: "sarif-2.1.0".to_owned(),
+            identity_anchor: "sarif-correlation".to_owned(),
+            identity_tokens: vec![correlation_hash.to_string()],
+            title_code: "EXTERNAL_STATIC_ANALYSIS_TITLE".to_owned(),
+            message_code: "EXTERNAL_STATIC_ANALYSIS".to_owned(),
+            severity,
+            confidence: Confidence::Medium,
+            lifecycle: FindingLifecycle::Open,
+            first_observed_scan_id: scan_run_id.clone(),
+            last_observed_scan_id: scan_run_id.clone(),
+            current_occurrence_ids: occurrence_ids,
+            active_disposition_id: None,
+            active_suppression_ids: Vec::new(),
+            content_fingerprint,
+        });
+    }
+    projection
+        .findings
+        .sort_by(|left, right| left.finding_id.cmp(&right.finding_id));
+    projection
+        .occurrences
+        .sort_by(|left, right| left.occurrence_id.cmp(&right.occurrence_id));
+    Ok(projection)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -851,8 +1001,12 @@ pub fn validate_patch_result_with_plan(
 mod tests {
     use super::*;
     use star_contracts::{
-        evidence::{ArtifactKind, ArtifactRef, ProducerRef, RedactionStatus, RetentionClass},
-        ids::{CanonicalSourceId, ProjectRevisionId, SymbolId, WorkspaceSnapshotId},
+        evidence::{
+            ArtifactKind, ArtifactRef, DiagnosticSeverity, LocationRef, ProducerRef,
+            ProjectPathKind, RedactionStatus, RetentionClass, TextPosition,
+        },
+        ids::{CanonicalSourceId, CheckoutId, ProjectRevisionId, SymbolId, WorkspaceSnapshotId},
+        index::SourceClass,
         management::{ProjectPathRef, Sensitivity},
     };
 
@@ -976,5 +1130,78 @@ mod tests {
             serde_json::to_string(&(projection.findings, projection.occurrences)).unwrap();
         assert!(persisted.contains("trailing_byte_count"));
         assert!(!persisted.contains("do-not-persist"));
+    }
+
+    #[test]
+    fn sarif_projection_binds_only_current_source_entries_and_redacts_correlation() {
+        let project_id = ProjectId::new();
+        let revision_id = ProjectRevisionId::new();
+        let workspace_id = WorkspaceSnapshotId::new();
+        let scan_id = ScanRunId::new();
+        let source = SourceEntry {
+            canonical_source_id: CanonicalSourceId::new(),
+            path: ProjectPathRef::parse("src/lib.rs").unwrap(),
+            content_sha256: Sha256Hash::digest(b"current-source"),
+            size_bytes: 10,
+            source_class: SourceClass::Source,
+            facets: vec![],
+            language_id: "rust".to_owned(),
+            encoding: "utf-8".to_owned(),
+            owner_project_id: project_id.clone(),
+            owner_checkout_id: CheckoutId::new(),
+            analysis_eligible: true,
+            content_fingerprint: Sha256Hash::digest(b"entry"),
+        };
+        let candidate = sarif::SarifFindingCandidate {
+            rule_id: "fixture.rule".to_owned(),
+            correlation_key: "provider-token=must-not-persist".to_owned(),
+            severity: DiagnosticSeverity::Warning,
+            locations: vec![LocationRef {
+                path: star_contracts::evidence::ProjectPathRef {
+                    project_id: project_id.clone(),
+                    path: "src/lib.rs".to_owned(),
+                    path_kind: ProjectPathKind::File,
+                },
+                start: TextPosition { line: 2, column: 3 },
+                end: None,
+                symbol: None,
+            }],
+        };
+        let projection = project_sarif_findings(
+            &project_id,
+            &revision_id,
+            &workspace_id,
+            &scan_id,
+            std::slice::from_ref(&source),
+            std::slice::from_ref(&candidate),
+            &[],
+        )
+        .unwrap();
+        assert_eq!(projection.findings.len(), 1);
+        assert_eq!(projection.occurrences.len(), 1);
+        assert!(
+            !serde_json::to_string(&projection.findings)
+                .unwrap()
+                .contains("must-not-persist")
+        );
+        assert!(
+            !serde_json::to_string(&projection.occurrences)
+                .unwrap()
+                .contains("must-not-persist")
+        );
+        let mut stale = candidate;
+        stale.locations[0].path.path = "src/stale.rs".to_owned();
+        assert!(
+            project_sarif_findings(
+                &project_id,
+                &revision_id,
+                &workspace_id,
+                &scan_id,
+                &[source],
+                &[stale],
+                &[],
+            )
+            .is_err()
+        );
     }
 }

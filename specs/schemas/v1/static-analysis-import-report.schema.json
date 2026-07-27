@@ -1,0 +1,132 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.static-analysis-import-report:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Immutable, source-bound receipt for a static-analysis import. The raw\nprovider document is referenced as an ArtifactRef outside this contract;\nsource text, absolute paths, and provider messages are never embedded.",
+  "properties": {
+    "code_index_snapshot_ref": {
+      "pattern": "^cix_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "imported_count": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "normalized_artifact_ref": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "project_revision_ref": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "raw_artifact_ref": {
+      "type": "string"
+    },
+    "rejected_count": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "report_id": {
+      "type": "string"
+    },
+    "rule_pack_digest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sarif_version": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.static-analysis-import-report",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "tool_descriptor_ref": {
+      "type": "string"
+    },
+    "tool_descriptor_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "tool_identity_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "truncated_count": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "uri_mapping_policy": {
+      "type": "string"
+    },
+    "workspace_snapshot_ref": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "report_id",
+    "project_id",
+    "project_revision_ref",
+    "workspace_snapshot_ref",
+    "code_index_snapshot_ref",
+    "tool_descriptor_ref",
+    "tool_descriptor_sha256",
+    "tool_identity_sha256",
+    "sarif_version",
+    "uri_mapping_policy",
+    "raw_artifact_ref",
+    "normalized_artifact_ref",
+    "imported_count",
+    "rejected_count",
+    "truncated_count",
+    "completeness",
+    "content_fingerprint"
+  ],
+  "title": "StaticAnalysisImportReport",
+  "type": "object"
+}

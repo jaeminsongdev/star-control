@@ -2175,6 +2175,7 @@ fn select_validation_plan(
                     timeout_ms: policy.command_timeout_ms,
                     expected_exit_codes: vec![0],
                 },
+                output_normalizer: descriptor.output_normalizer,
                 fallback_floor: selected_level,
                 evidence_kinds: descriptor.required_evidence.clone(),
             };
@@ -2662,6 +2663,7 @@ pub fn process_descriptor(
         applicable_source_classes,
         trusted: true,
         available: true,
+        output_normalizer: star_contracts::planning::CheckOutputNormalizer::SafeExitV1,
         required_evidence: vec!["validation_result".to_owned()],
         content_fingerprint,
     })

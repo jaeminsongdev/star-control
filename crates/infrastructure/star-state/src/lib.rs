@@ -33,6 +33,7 @@ use star_contracts::{
         ValidationRunId, WorkspaceSnapshotId,
     },
     index::{CodeIndexSnapshot, IndexEdge, IndexEntity, ProjectCatalogSnapshot, SourceEntry},
+    maintenance_v2::StaticAnalysisImportReport,
     managed_registry::{ManagedRegistrySnapshot, RegistryConsistencyRecord},
     management::{
         Baseline, CanonicalSource, ChangePlan, CheckoutAttachmentState, CheckoutHeadState,
@@ -7153,6 +7154,7 @@ impl ProjectManagementRepository for SqliteProjectRepository {
             bundle,
             review_pack,
             rework_directive,
+            source_bound_findings,
         } = evidence;
         if runs.is_empty()
             || runs.iter().any(|run| {
@@ -7190,6 +7192,101 @@ impl ProjectManagementRepository for SqliteProjectRepository {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(map_sql)?;
+        if let Some(import) = source_bound_findings {
+            let generation = get_meta_optional(&transaction, "current_generation")
+                .map_err(map_sql)?
+                .ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "source-bound finding import has no current generation",
+                    )
+                })?;
+            let scan: Option<ScanRun> = query_documents(
+                &transaction,
+                "SELECT document_json FROM scan_runs WHERE entity_id=?1 AND generation_id=?2",
+                params![import.scan_run_id.as_str(), generation],
+            )?
+            .into_iter()
+            .next();
+            let Some(scan) = scan else {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "source-bound finding import scan is stale",
+                ));
+            };
+            let index: Option<CodeIndexSnapshot> = query_documents(
+                &transaction,
+                "SELECT document_json FROM code_index_snapshots WHERE entity_id=?1 AND generation_id=?2",
+                params![import.code_index_snapshot_id.as_str(), generation],
+            )?.into_iter().next();
+            let Some(index) = index else {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "source-bound finding import CodeIndex is stale",
+                ));
+            };
+            if scan.project_id != self.project_id
+                || scan.project_revision_id != *import.project_revision_id
+                || scan.workspace_snapshot_id != *import.workspace_snapshot_id
+                || index.project_id != self.project_id
+                || index.scan_run_id != *import.scan_run_id
+                || index.project_revision_id != *import.project_revision_id
+                || index.workspace_snapshot_id != *import.workspace_snapshot_id
+                || import.findings.iter().any(|finding| {
+                    finding.project_id != self.project_id
+                        || finding.last_observed_scan_id != *import.scan_run_id
+                })
+                || import.occurrences.iter().any(|occurrence| {
+                    occurrence.scan_run_id != *import.scan_run_id
+                        || occurrence.project_revision_id != *import.project_revision_id
+                        || occurrence.workspace_snapshot_id != *import.workspace_snapshot_id
+                })
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "source-bound finding import does not match current source generation",
+                ));
+            }
+            for finding in import.findings {
+                insert_generation_document(
+                    &transaction,
+                    "findings",
+                    "finding_id",
+                    finding.finding_id.as_str(),
+                    &generation,
+                    finding,
+                )?;
+            }
+            for occurrence in import.occurrences {
+                insert_generation_document(
+                    &transaction,
+                    "occurrences",
+                    "occurrence_id",
+                    occurrence.occurrence_id.as_str(),
+                    &generation,
+                    occurrence,
+                )?;
+            }
+            for report in import.reports {
+                if !report.is_current_schema()
+                    || report.project_id != self.project_id
+                    || report.project_revision_ref != import.project_revision_id.as_str()
+                    || report.workspace_snapshot_ref != import.workspace_snapshot_id.as_str()
+                    || report.code_index_snapshot_ref != import.code_index_snapshot_id.as_str()
+                {
+                    return Err(repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "static-analysis import report is not source-bound",
+                    ));
+                }
+                insert_immutable_document(
+                    &transaction,
+                    "static_analysis_import_reports",
+                    &report.report_id,
+                    report,
+                )?;
+            }
+        }
         for run in runs {
             insert_immutable_document(
                 &transaction,
@@ -7316,6 +7413,14 @@ impl ProjectManagementRepository for SqliteProjectRepository {
     fn list_diagnostics_v2(&self) -> Result<Vec<DiagnosticV2>, RepositoryError> {
         self.list_m3_documents(
             "SELECT document_json FROM diagnostics_v2 ORDER BY json_extract(document_json, '$.sequence') ASC, entity_id ASC",
+        )
+    }
+
+    fn list_static_analysis_import_reports(
+        &self,
+    ) -> Result<Vec<StaticAnalysisImportReport>, RepositoryError> {
+        self.list_m3_documents(
+            "SELECT document_json FROM static_analysis_import_reports ORDER BY entity_id",
         )
     }
 
@@ -8005,6 +8110,10 @@ fn ensure_current_store_shape(
                     document_json TEXT NOT NULL CHECK(json_valid(document_json))
                  ) STRICT;
                  CREATE TABLE IF NOT EXISTS registry_consistency_records_v1(
+                    entity_id TEXT PRIMARY KEY,
+                    document_json TEXT NOT NULL CHECK(json_valid(document_json))
+                 ) STRICT;
+                 CREATE TABLE IF NOT EXISTS static_analysis_import_reports(
                     entity_id TEXT PRIMARY KEY,
                     document_json TEXT NOT NULL CHECK(json_valid(document_json))
                  ) STRICT;",
@@ -9127,6 +9236,7 @@ CREATE TABLE suppressions_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT 
 CREATE TABLE dispositions_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
 CREATE TABLE managed_registry_snapshots_v2(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
 CREATE TABLE registry_consistency_records_v1(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
+CREATE TABLE static_analysis_import_reports(entity_id TEXT PRIMARY KEY, document_json TEXT NOT NULL CHECK(json_valid(document_json))) STRICT;
 CREATE TABLE participant_receipts(
     operation_id TEXT PRIMARY KEY,
     payload_fingerprint TEXT NOT NULL,

@@ -13,6 +13,7 @@ use star_contracts::{
     Sha256Hash, canonical_sha256,
     config_v1::EffectiveConfigV1,
     context_pack::ContextPackV1,
+    development_v2::CoverageState,
     evidence::{
         ActorRef, ActorType, ArtifactKind, ArtifactManifest, ArtifactManifestEntry, ArtifactRef,
         AuthoritativeGateState, CatalogRef, DocumentRef, GateDecision, GateDecisionKind, GateScope,
@@ -36,6 +37,7 @@ use star_contracts::{
         IndexPartitionKind, IndexPartitionState, IndexScanMode, IndexTier, ProjectCatalogSnapshot,
         SourceClass, SourceEntry, ToolchainCommandKind,
     },
+    maintenance_v2::{STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID, StaticAnalysisImportReport},
     managed_registry::{
         ManagedDeclarationChangeIntent, ManagedRegistrySnapshot, RegistryConsistencyRecord,
     },
@@ -105,9 +107,9 @@ use star_ports::{
     CheckGraphEvidenceTransaction, CodeIndexCache, GlobalManagementRepository, ManagementRecovery,
     ManagementRepositorySet, PatchPortError, ProjectRootAttachment, ProjectRootBindingStore,
     RepositoryError, RepositoryErrorCategory, RetentionApplyResult, RetentionPlan, RetentionPolicy,
-    RewriteTransformRequest, RewriteTransformerPort, ScanCommit, SourceMutationPort,
-    SourceMutationRequest, SourceMutationState, StoredCodeIndexProjection, WorktreeMaterialization,
-    WorktreePort,
+    RewriteTransformRequest, RewriteTransformerPort, ScanCommit, SourceBoundFindingImport,
+    SourceMutationPort, SourceMutationRequest, SourceMutationState, StoredCodeIndexProjection,
+    WorktreeMaterialization, WorktreePort,
 };
 pub use star_ports::{
     DevelopmentRecord, ManagedRegistryConsumerProjectInput, ManagedRegistryResolveRequest,
@@ -138,8 +140,8 @@ pub use star_validation::planning::{
 };
 pub use star_validation::process_executor::{
     CheckOutputArtifactError, CheckOutputArtifactInput, CheckOutputArtifactSink,
-    ProcessExecutorError, RegisteredProcessCheckExecutor, ResolvedExecutableV2,
-    SafeExitDiagnosticNormalizer,
+    ProcessExecutorError, RegisteredOutputNormalizer, RegisteredProcessCheckExecutor,
+    ResolvedExecutableV2, SafeExitDiagnosticNormalizer,
 };
 pub use star_validation::rules::{
     RuleDecisionFloorV2, RuleDiagnosticInputV2, RuleFactV2, RuleFamilyV2, RuleFixtureResultV2,
@@ -153,7 +155,7 @@ pub use star_validation::runner::{
 use star_validation::rust_style::RustFileChange;
 use star_validation::{
     ValidationError, analyze_builtin_findings, apply_decision_projection, evaluate_decisions,
-    validate_patch_result_with_plan,
+    project_sarif_findings, validate_patch_result_with_plan,
 };
 use thiserror::Error;
 
@@ -265,6 +267,7 @@ struct PreparedValidationExecution {
     preflight: ValidationExecutionPreflight,
     bindings: Vec<ExecutableBinding>,
     resolved_executables: Vec<ResolvedExecutableV2>,
+    normalizer_kinds: BTreeMap<Sha256Hash, star_contracts::planning::CheckOutputNormalizer>,
     change_sets: Vec<star_contracts::planning::ChangeSet>,
     completion_claims: Vec<CompletionClaimV2>,
     validator_guard_evidence: Option<ValidatorGuardEvidenceV2>,
@@ -382,7 +385,53 @@ impl CheckOutputArtifactSink for ValidationOutputArtifactSink {
             exit_code: input.exit_code,
             termination_reason: input.termination_reason,
         })?;
-        Ok(vec![stdout, stderr])
+        let mut artifacts = vec![stdout, stderr];
+        if let Some(static_analysis) = input.static_analysis {
+            let candidates = static_analysis
+                .candidates
+                .iter()
+                .map(|candidate| serde_json::json!({
+                    "rule_id":candidate.rule_id,
+                    "correlation_sha256":Sha256Hash::digest(candidate.correlation_key.as_bytes()),
+                    "severity":candidate.severity,
+                    "locations":candidate.locations,
+                }))
+                .collect::<Vec<_>>();
+            let artifact = self
+                .artifacts
+                .put_json_with_policy(ArtifactWriteRequest {
+                    project_id: &self.project_id,
+                    project_root: &self.project_root,
+                    relative_path: &format!(
+                        "validation/m3/{}/{}/attempts/{}/static-analysis-normalized.json",
+                        self.task_spec_id.as_str(),
+                        self.artifact_set_id.as_str(),
+                        invocation_id,
+                    ),
+                    subject_kind: "static_analysis_normalization",
+                    subject_id: invocation_id,
+                    policy: ArtifactWritePolicy {
+                        kind: ArtifactKind::Report,
+                        redaction_status: RedactionStatus::NotNeeded,
+                        retention_class: RetentionClass::Evidence,
+                    },
+                    value: &serde_json::json!({
+                        "schema_id":"star.static-analysis-normalization-artifact",
+                        "schema_version":1,
+                        "sarif_version":"2.1.0",
+                        "imported_count":static_analysis.imported_count,
+                        "rejected_count":static_analysis.rejected_count,
+                        "completeness":static_analysis.completeness,
+                        "candidates":candidates,
+                    }),
+                })
+                .map_err(|error| CheckOutputArtifactError {
+                    code: format!("CHECK_OUTPUT_ARTIFACT_STORE_FAILED_{:?}", error.category)
+                        .to_ascii_uppercase(),
+                })?;
+            artifacts.push(artifact);
+        }
+        Ok(artifacts)
     }
 }
 
@@ -3222,6 +3271,8 @@ impl ManagementApplicationService {
                                 ToolchainCommandKind::Declared | ToolchainCommandKind::Suggested
                             ),
                             available: logical_executable_available(&command.executable_hint),
+                            output_normalizer:
+                                star_contracts::planning::CheckOutputNormalizer::SafeExitV1,
                             required_evidence: vec![
                                 "validation_result".to_owned(),
                                 "observed_tool_identity".to_owned(),
@@ -3386,6 +3437,8 @@ impl ManagementApplicationService {
                         applicable_source_classes: source_classes.clone(),
                         trusted: true,
                         available: logical_executable_available(logical_executable),
+                        output_normalizer:
+                            star_contracts::planning::CheckOutputNormalizer::SafeExitV1,
                         required_evidence: vec![
                             "validation_result".to_owned(),
                             "observed_tool_identity".to_owned(),
@@ -4119,8 +4172,16 @@ impl ManagementApplicationService {
             artifact_set_id: artifact_set_id.clone(),
             redactor: PersistenceRedactor::for_current_user(),
         };
-        let mut executor = RegisteredProcessCheckExecutor::new(prepared.resolved_executables)?
-            .with_output_sink(Box::new(output_sink));
+        let normalizer = RegisteredOutputNormalizer::new(
+            project_id.clone(),
+            project_root.to_path_buf(),
+            prepared.normalizer_kinds.clone(),
+        );
+        let mut executor = RegisteredProcessCheckExecutor::with_normalizer(
+            prepared.resolved_executables,
+            normalizer,
+        )?
+        .with_output_sink(Box::new(output_sink));
         let mut artifact_finalizer = ValidationArtifactManifestFinalizer {
             artifacts: Arc::clone(&self.artifacts),
             project_id,
@@ -4293,6 +4354,7 @@ impl ManagementApplicationService {
         .map_err(|_| ApplicationError::Invalid)?;
         let mut bindings = Vec::new();
         let mut resolved_by_fingerprint = BTreeMap::new();
+        let mut normalizer_kinds = BTreeMap::new();
         let mut items = Vec::new();
         for check in &bundle.validation_plan.required_checks {
             let executable_path =
@@ -4390,6 +4452,17 @@ impl ManagementApplicationService {
             resolved_by_fingerprint
                 .entry(resolved.executable_binding_fingerprint.clone())
                 .or_insert(resolved);
+            match normalizer_kinds.entry(check.invocation.logical_executable.clone()) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(check.output_normalizer);
+                }
+                std::collections::btree_map::Entry::Occupied(entry)
+                    if *entry.get() != check.output_normalizer =>
+                {
+                    return Err(ApplicationError::Invalid);
+                }
+                std::collections::btree_map::Entry::Occupied(_) => {}
+            }
         }
         bindings.sort_by(|left, right| left.check_id.cmp(&right.check_id));
         items.sort_by(|left, right| left.plan_item_id.cmp(&right.plan_item_id));
@@ -4482,6 +4555,19 @@ impl ManagementApplicationService {
             .map(ValidatorGuardEvidenceV2::reference)
             .transpose()
             .map_err(|_| ApplicationError::Invalid)?;
+        let normalizer_kinds = resolved_by_fingerprint
+            .keys()
+            .map(|fingerprint| {
+                let resolved = resolved_by_fingerprint
+                    .get(fingerprint)
+                    .ok_or(ApplicationError::Invalid)?;
+                let kind = normalizer_kinds
+                    .get(&resolved.logical_executable)
+                    .copied()
+                    .ok_or(ApplicationError::Invalid)?;
+                Ok((fingerprint.clone(), kind))
+            })
+            .collect::<Result<BTreeMap<_, _>, ApplicationError>>()?;
         Ok(PreparedValidationExecution {
             preflight: ValidationExecutionPreflight {
                 task_spec_id: task_spec_id.clone(),
@@ -4499,6 +4585,7 @@ impl ManagementApplicationService {
             },
             bindings,
             resolved_executables: resolved_by_fingerprint.into_values().collect(),
+            normalizer_kinds,
             change_sets: bundle.change_sets,
             completion_claims,
             validator_guard_evidence,
@@ -4570,6 +4657,7 @@ impl ManagementApplicationService {
             pinned.push((
                 source.project_id.clone(),
                 source.code_index_snapshot_id.clone(),
+                projection,
             ));
         }
         let result = if let Some(artifact_finalizer) = artifact_finalizer {
@@ -4583,7 +4671,7 @@ impl ManagementApplicationService {
         } else {
             run_check_graph(&bundle.validation_plan, bindings, context, executor)?
         };
-        for (project_id, snapshot_id) in &pinned {
+        for (project_id, snapshot_id, _) in &pinned {
             let (projection, current) = self.load_index_projection_with_freshness(project_id)?;
             if !current || projection.snapshot.code_index_snapshot_id != *snapshot_id {
                 return Err(ApplicationError::IndexNotCurrent);
@@ -4593,17 +4681,126 @@ impl ManagementApplicationService {
             .into_iter()
             .next()
             .ok_or(ApplicationError::Invalid)?;
-        self.repositories
-            .project(&project_id)?
-            .save_check_graph_evidence(CheckGraphEvidenceTransaction {
-                runs: &result.validation_runs,
-                results: &result.validation_results,
-                diagnostics: &result.diagnostics,
-                decision: &result.gate_decision,
-                bundle: &result.evidence_bundle,
-                review_pack: &result.review_pack,
-                rework_directive: result.rework_directive.as_ref(),
-            })?;
+        let repository = self.repositories.project(&project_id)?;
+        let mut imported_findings = Vec::new();
+        let mut imported_occurrences = Vec::new();
+        let mut import_reports = Vec::new();
+        let current_scan = (!result.static_analysis_imports.is_empty())
+            .then(|| repository.latest_scan())
+            .transpose()?
+            .flatten();
+        let source_bound_findings = if result.static_analysis_imports.is_empty() {
+            None
+        } else {
+            let (_, _, current_projection) = pinned
+                .iter()
+                .find(|(pinned_project_id, _, _)| pinned_project_id == &project_id)
+                .ok_or(ApplicationError::IndexNotCurrent)?;
+            let scan = current_scan
+                .as_ref()
+                .ok_or(ApplicationError::IndexNotCurrent)?;
+            if scan.project_id != project_id
+                || scan.project_revision_id != current_projection.snapshot.project_revision_id
+                || scan.workspace_snapshot_id != current_projection.snapshot.workspace_snapshot_id
+                || scan.scan_run_id != current_projection.snapshot.scan_run_id
+            {
+                return Err(ApplicationError::IndexNotCurrent);
+            }
+            for import in &result.static_analysis_imports {
+                if import.artifact_refs.len() < 3 {
+                    return Err(ApplicationError::Invalid);
+                }
+                let projection = project_sarif_findings(
+                    &project_id,
+                    &scan.project_revision_id,
+                    &scan.workspace_snapshot_id,
+                    &scan.scan_run_id,
+                    &current_projection.source_entries,
+                    &import.candidates,
+                    &import.artifact_refs,
+                )?;
+                imported_findings.extend(projection.findings);
+                imported_occurrences.extend(projection.occurrences);
+                let run = result
+                    .validation_runs
+                    .iter()
+                    .find(|run| run.validation_run_id == import.validation_run_id)
+                    .ok_or(ApplicationError::Invalid)?;
+                let observed_tool = run
+                    .observed_tool
+                    .as_ref()
+                    .ok_or(ApplicationError::Invalid)?;
+                let completeness = match import.completeness {
+                    star_validation::sarif::SarifCompleteness::Complete => CoverageState::Complete,
+                    star_validation::sarif::SarifCompleteness::Partial => CoverageState::Partial,
+                    star_validation::sarif::SarifCompleteness::Unverified => {
+                        CoverageState::Unverified
+                    }
+                };
+                let content_fingerprint = canonical_sha256(&serde_json::json!({
+                    "project_id":project_id,
+                    "scan_run_id":scan.scan_run_id,
+                    "validation_run_id":import.validation_run_id,
+                    "check_ref":run.check_ref,
+                    "tool_identity_sha256":observed_tool.sha256,
+                    "raw_artifact_ref":import.artifact_refs[0].artifact_id,
+                    "normalized_artifact_ref":import.artifact_refs[2].artifact_id,
+                    "imported_count":import.imported_count,
+                    "rejected_count":import.rejected_count,
+                    "completeness":completeness,
+                }))
+                .map_err(|_| ApplicationError::Invalid)?;
+                import_reports.push(StaticAnalysisImportReport {
+                    schema_id: STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID.to_owned(),
+                    schema_version: 1,
+                    report_id: format!("sarif-import-{}", import.validation_run_id.as_str()),
+                    project_id: project_id.clone(),
+                    project_revision_ref: scan.project_revision_id.as_str().to_owned(),
+                    workspace_snapshot_ref: scan.workspace_snapshot_id.as_str().to_owned(),
+                    code_index_snapshot_ref: current_projection
+                        .snapshot
+                        .code_index_snapshot_id
+                        .as_str()
+                        .to_owned(),
+                    tool_descriptor_ref: run.check_ref.document_id.clone(),
+                    tool_descriptor_sha256: run.check_ref.sha256.clone(),
+                    tool_identity_sha256: observed_tool.sha256.clone(),
+                    sarif_version: "2.1.0".to_owned(),
+                    rule_pack_digest: None,
+                    uri_mapping_policy: "project-relative-v1".to_owned(),
+                    raw_artifact_ref: import.artifact_refs[0].artifact_id.as_str().to_owned(),
+                    normalized_artifact_ref: import.artifact_refs[2]
+                        .artifact_id
+                        .as_str()
+                        .to_owned(),
+                    imported_count: import.imported_count as u64,
+                    rejected_count: import.rejected_count as u64,
+                    truncated_count: 0,
+                    completeness,
+                    limitations: Vec::new(),
+                    content_fingerprint,
+                });
+            }
+            Some(SourceBoundFindingImport {
+                scan_run_id: &scan.scan_run_id,
+                project_revision_id: &scan.project_revision_id,
+                workspace_snapshot_id: &scan.workspace_snapshot_id,
+                code_index_snapshot_id: &current_projection.snapshot.code_index_snapshot_id,
+                findings: &imported_findings,
+                occurrences: &imported_occurrences,
+                reports: &import_reports,
+            })
+        };
+        repository.save_check_graph_evidence(CheckGraphEvidenceTransaction {
+            runs: &result.validation_runs,
+            results: &result.validation_results,
+            diagnostics: &result.diagnostics,
+            decision: &result.gate_decision,
+            bundle: &result.evidence_bundle,
+            review_pack: &result.review_pack,
+            rework_directive: result.rework_directive.as_ref(),
+            source_bound_findings,
+        })?;
         Ok(result)
     }
 
@@ -4641,6 +4838,17 @@ impl ManagementApplicationService {
             .repositories
             .project(project_id)?
             .list_validation_runs_v2()?)
+    }
+
+    pub fn list_static_analysis_import_reports(
+        &self,
+        project_id: &ProjectId,
+    ) -> Result<Vec<StaticAnalysisImportReport>, ApplicationError> {
+        let _guard = self.command_guard()?;
+        Ok(self
+            .repositories
+            .project(project_id)?
+            .list_static_analysis_import_reports()?)
     }
 
     pub fn list_validation_results_v2(
@@ -9906,6 +10114,7 @@ fn rust_style_gate_check_descriptors(
             ],
             trusted: true,
             available: logical_executable_available("cargo"),
+            output_normalizer: star_contracts::planning::CheckOutputNormalizer::SafeExitV1,
             required_evidence: vec![
                 "validation_result".to_owned(),
                 "observed_tool_identity".to_owned(),
@@ -10816,6 +11025,7 @@ mod tests {
                     sha256: Sha256Hash::digest(b"fixture-validator"),
                 }),
                 diagnostics: vec![],
+                static_analysis_import: None,
             })
         }
     }
@@ -10976,6 +11186,7 @@ mod tests {
                 stdout_truncated: false,
                 stderr_truncated: false,
                 output_read_failed: false,
+                static_analysis: None,
             })
             .unwrap();
         assert_eq!(refs.len(), 2);

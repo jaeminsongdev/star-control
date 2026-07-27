@@ -70,7 +70,8 @@ use crate::{
         MaintenanceRadarSnapshot, RECOVERY_PLAN_V2_SCHEMA_ID, REGRESSION_RECORD_SCHEMA_ID,
         REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID, REPRODUCTION_PACK_V2_SCHEMA_ID,
         RecoveryPlanV2, RegressionRecord, ReproductionAttemptObservationV1, ReproductionPackV2,
-        SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID, SupplyChainSnapshot,
+        STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID, SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID,
+        StaticAnalysisImportReport, SupplyChainSnapshot,
     },
     managed_registry::{
         MANAGED_DECLARATION_CHANGE_INTENT_SCHEMA_ID, MANAGED_REGISTRY_FRAGMENT_SCHEMA_ID,
@@ -626,6 +627,12 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "external-data-snapshot.schema.json",
             management_schema_document::<ExternalDataSnapshot>(EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID),
+        ),
+        (
+            "static-analysis-import-report.schema.json",
+            management_schema_document::<StaticAnalysisImportReport>(
+                STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID,
+            ),
         ),
         (
             "dependency-update-plan.schema.json",
