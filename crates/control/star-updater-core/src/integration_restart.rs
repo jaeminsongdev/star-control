@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use star_adapter_codex::{CodexIntegrationManager, IntegrationOptions};
 use star_adapter_windows::{
     InstallationManager, WindowsAdapterError, atomic_write_json, canonical_fixed_directory,
-    ensure_fixed_directory,
+    ensure_fixed_directory, load_runtime_generation_manifest,
 };
 use star_contracts::{
     Sha256Hash,
@@ -1242,7 +1242,7 @@ async fn shutdown_controller_for_update(
     }
 }
 
-async fn shutdown_controller_image_and_wait(
+pub(crate) async fn shutdown_controller_image_and_wait(
     controller: &Path,
 ) -> Result<Vec<u32>, IntegrationRestartError> {
     if exact_image_instances(&snapshot()?, controller).is_empty() {
@@ -1279,6 +1279,81 @@ async fn shutdown_controller_image_and_wait(
             Err(IntegrationRestartError::ControllerDrainTimeout)
         }
     }
+}
+
+/// Quiesces every hash-verified Runtime Controller under the selected install
+/// root. This closes a recovery gap where a failed selector rollback could
+/// leave the candidate image alive while the activation record already points
+/// back to the prior generation. Fixed MCP/CLI processes are never selected.
+pub(crate) async fn shutdown_installed_runtime_controllers(
+    install_root: &Path,
+) -> Result<Vec<u32>, IntegrationRestartError> {
+    let controllers = verified_runtime_controller_images(&snapshot()?, install_root);
+    let mut terminated = Vec::new();
+    for controller in controllers {
+        terminated.extend(shutdown_controller_image_and_wait(&controller).await?);
+    }
+    Ok(terminated)
+}
+
+fn verified_runtime_controller_images(
+    observed: &[ProcessIdentity],
+    install_root: &Path,
+) -> Vec<PathBuf> {
+    let Ok(generations_root) = install_root
+        .join("runtime")
+        .join("generations")
+        .canonicalize()
+    else {
+        return Vec::new();
+    };
+    let mut controllers = BTreeSet::new();
+    for process in observed {
+        let Some(image) = process.image.as_ref() else {
+            continue;
+        };
+        if image
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_none_or(|name| !name.eq_ignore_ascii_case("star-controller.exe"))
+        {
+            continue;
+        }
+        let Ok(image) = image.canonicalize() else {
+            continue;
+        };
+        let Some(generation_root) = image.parent() else {
+            continue;
+        };
+        if generation_root.parent().is_none_or(|parent| {
+            !parent
+                .as_os_str()
+                .eq_ignore_ascii_case(generations_root.as_os_str())
+        }) {
+            continue;
+        }
+        let Ok(manifest) = load_runtime_generation_manifest(generation_root) else {
+            continue;
+        };
+        if generation_root.file_name().and_then(|name| name.to_str())
+            != Some(manifest.generation.generation_id.as_str())
+        {
+            continue;
+        }
+        let supplied = PathBuf::from(&manifest.controller_path);
+        let expected = if supplied.is_absolute() {
+            supplied
+        } else {
+            generation_root.join(supplied)
+        };
+        if expected.canonicalize().ok().as_ref() != Some(&image)
+            || VerifiedControllerImage::open(&image, &manifest.controller_sha256).is_err()
+        {
+            continue;
+        }
+        controllers.insert(image);
+    }
+    controllers.into_iter().collect()
 }
 
 async fn restore_runtime_selector(

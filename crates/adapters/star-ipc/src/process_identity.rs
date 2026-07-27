@@ -83,9 +83,9 @@ pub fn verify_pipe_server_image(
 }
 
 /// Controller-side peer validation.  The PID in Hello must be the PID Win32
-/// reports for this connection, and the image must be one of the two installed
-/// command clients next to the Controller.  This is intentionally a name/path
-/// allowlist, not PATH lookup.
+/// reports for this connection, and the image must be an installed CLI, MCP,
+/// or dedicated Updater next to the Controller/bootstrap root.  This is
+/// intentionally a name/path allowlist, not PATH lookup.
 pub fn verify_pipe_client_image(
     pipe: &tokio::net::windows::named_pipe::NamedPipeServer,
     declared_pid: u32,
@@ -107,12 +107,7 @@ pub fn verify_pipe_client_image(
                 .map_err(|_| windows::core::Error::from_thread())
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let allowed_name = image
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| {
-            name.eq_ignore_ascii_case("star-mcp.exe") || name.eq_ignore_ascii_case("star.exe")
-        });
+    let allowed_name = installed_client_image_name(&image);
     if !allowed_name
         || !allowed_install_directories
             .iter()
@@ -123,6 +118,17 @@ pub fn verify_pipe_client_image(
     Ok(image)
 }
 
+fn installed_client_image_name(image: &Path) -> bool {
+    image
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            name.eq_ignore_ascii_case("star-mcp.exe")
+                || name.eq_ignore_ascii_case("star.exe")
+                || name.eq_ignore_ascii_case("star-updater.exe")
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +137,18 @@ mod tests {
         let image = process_image(std::process::id()).expect("current process image is queryable");
         assert!(image.is_absolute());
         assert!(image.exists());
+    }
+
+    #[test]
+    fn installed_peer_name_allowlist_includes_only_declared_clients() {
+        assert!(installed_client_image_name(Path::new("star.exe")));
+        assert!(installed_client_image_name(Path::new("STAR-MCP.EXE")));
+        assert!(installed_client_image_name(Path::new("star-updater.exe")));
+        assert!(!installed_client_image_name(Path::new(
+            "star-controller.exe"
+        )));
+        assert!(!installed_client_image_name(Path::new(
+            "star-updater.exe.bak"
+        )));
     }
 }

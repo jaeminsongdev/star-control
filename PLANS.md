@@ -32,7 +32,7 @@
 | P-0069 EvaluationRun·Profile 결정 | **DONE / local commit** | `fbbf30ea14df34fc06582c22e30ab22c42ef341a`; Code Health trial/reject evidence를 고정했고, external cost/actual workload cohort 부재로 `trial_candidate`만 기록하며 16개 built-in 유지·17번째 accept hold를 FULL 11/11 complete/stable/pass로 확인했다. |
 | P-0070 제품 전수 봉인 | **DONE / local commit** | final audit/ReviewPack, inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, release source closure와 FULL 11/11 complete/stable/pass를 확인했고 signing/publish를 blocked_external로 분리했다. |
 | P-0071 전체 STRICT 리뷰·main 전달 | **DONE / PUSHED** | `9ab88e0e069540800a4701d4516ae9692837bc77`; final FULL 11/11과 STRICT review 뒤 `origin/main` readback까지 완료했다. |
-| P-0072 Windows x64 Runtime closure | **SOURCE REVIEWED / FULL PASS** | registered validation process를 suspended Job Object에 넣어 descendant escape를 닫았고 실제 `pwsh → pwsh` timeout/early-exit corpus 포함 `star-validation` 49/49와 FULL 11/11이 통과했다. x64 updater-only apply·commit/push는 진행 중이다. |
+| P-0072 Windows x64 Runtime closure | **UPDATER DEFECT FIXED / RETRY PENDING** | process-tree source closure는 `2457b0949a167a6aa5d546669c39b141ceac4cbe`다. 첫 Runtime apply가 실제 updater IPC/quiesce 결함을 드러내 rollback됐으며, installed Updater peer binding·hash-verified Runtime Controller 전수 quiesce·post-rollback Gate를 보강했다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
 ## P-0072 활성 Slice
@@ -47,7 +47,8 @@
 | `star-validation/process_executor` | 검토 완료 | suspended start → Job assign → primary-thread resume; bounded tree termination | package 49/49 pass |
 | Windows dependency/lock | 구현됨 | existing workspace `windows 0.62.2` target-only 연결 | offline check pass, version/download 변화 없음 |
 | validation evidence | 봉인됨 | inventory 23/23·Schema 217·MCP 170/170·Profile 16/16·Runtime executable 4/4 | `target/validation/20260727T172403972Z-36576/report.json`, FULL 11/11 complete/stable/pass |
-| runtime evidence | 진행 중 | x64 generation·updater apply·PID/hash readback | Runtime-only Gate pending |
+| updater transaction | 수정됨 | Updater를 installed `Cli` peer로 bind, selector와 다른 hash-verified Runtime Controller도 exact-image quiesce, installed CLI IPC postcheck, rollback 전 candidate drain | updater-core 17/17, peer/kind regression, affected clippy `-D warnings` pass |
+| runtime evidence | 진행 중 | `rt_ce5ae225b7b4618f` 첫 apply는 `new controller postcheck failed`로 rollback; activation은 prior `rt_59b4659ab61700d4`, candidate PID 24892 잔존을 확인 | 수정 generation의 updater-owned recovery/apply pending |
 
 - 완료 조건: current inventory, FULL complete/stable/pass, STRICT review, updater-only apply committed, Codex PID/creation time과 fixed integration 불변, installed generation current, commit/push/readback, clean worktree다.
 
@@ -60,6 +61,6 @@
 ## Context Pack
 
 - 현재 목표: P-0072 source seal과 x64 Runtime-only updater apply를 Codex 재시작 없이 완료하고 `main`을 원격 readback까지 일치시킨다.
-- 다음 명령: source evidence 재봉인 → final FULL → source commit → x64 stage/inspect/updater apply → no-restart readback → final seal/commit/push.
+- 다음 명령: updater fix evidence 재봉인 → FULL → recovery commit → x64 stage/inspect/staged-updater apply → no-restart readback → final seal/commit/push.
 - 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache, fixed Plugin/Hook, signing/publication, non-x64 output.
 - 다음 완료 기준: installed Runtime generation과 final source closure가 일치하고 Codex/fixed integration identity가 유지된 채 `HEAD == origin/main == remote/main`, clean이다.

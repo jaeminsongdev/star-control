@@ -25,9 +25,20 @@ Focused evidence:
 - `target/validation/20260727T172403972Z-36576/report.json`: FULL 11/11 complete/stable/pass, 209,390ms.
 - STRICT/HIGH review는 Windows handle 수명, fail-closed launch/cleanup, 정상 parent 종료 뒤 descendant 잔존, 실제 PID fixture를 확인했다.
 
+## Runtime apply 1차 실패와 source 복구
+
+- verified x64 generation `rt_ce5ae225b7b4618f`은 source revision `2457b0949a167a6aa5d546669c39b141ceac4cbe`와 set hash `sha256:9f400fda79ce4ec4386a68021969a1c7a18992d14b2ce872cda9bfd5d2c45281`를 가졌다.
+- inspect는 `handler_ready=true`, bridge compatible, rollback available, widening·restart·new-task·hook review 없음으로 통과했다.
+- updater-only apply의 실제 결과는 `state=rolled_back`, `failure=new controller postcheck failed`였다. activation revision 9는 prior `rt_59b4659ab61700d4`를 active로 복원했지만 candidate Controller PID 24892가 계속 pipe를 소유해 installed CLI는 identity mismatch를 반환했다. 이를 설치 성공으로 승격하지 않는다.
+- 원인은 `star-updater.exe`가 `Cli` handshake를 사용하면서 Controller peer image/kind allowlist에는 `star.exe`만 있던 불일치다. Updater가 거부를 unavailable로 관찰해 quiescence로 오인했고 기존 rollback은 candidate를 먼저 종료하지 않았다.
+- 수정은 install/runtime root의 exact path 조건을 유지한 채 `star-updater.exe`를 `Cli` peer로 추가한다. apply는 activation selector 하나만 믿지 않고 generation manifest·Controller hash가 맞는 실행 중 Runtime Controller를 전수 quiesce하며 fixed CLI/MCP는 제외한다.
+- 새 Controller와 rollback Controller 모두 manifest-verified installed `star.exe management status --json`의 단일 `star.ipc.response/status=ok`를 bounded postcheck로 요구한다. duplicate key·error·invalid output은 fail-closed다. Updater가 없는 pre-P-0039 CLI fallback도 같은 core engine을 호출해 동작 분기를 제거했다.
+- 회귀: `star-updater-core` 17/17, IPC peer allowlist 1/1, Controller kind binding 1/1, `star-cli` 23/23, affected clippy `-D warnings` pass.
+
 ## 남은 Gate
 
 - clean x64 Runtime generation 생성·stage·inspect
+- staged and package-verified Updater가 잔존 candidate를 복구한 뒤 runtime apply committed 확인
 - updater-owned runtime apply 후 Codex UI/child PID·creation time과 fixed MCP/integration hash 불변 확인
 - installed generation/source revision readback
 - local commit, `main` push, remote SHA readback

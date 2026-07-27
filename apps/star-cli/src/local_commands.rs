@@ -1,24 +1,23 @@
-use std::{io::Read, path::PathBuf, str::FromStr, time::Duration};
+use std::{io::Read, path::PathBuf, str::FromStr};
 
 use star_adapter_codex::{CodexAdapterError, CodexIntegrationManager, IntegrationOptions};
 use star_adapter_windows::autostart::{self, AutostartError, AutostartState};
 #[cfg(test)]
 use star_adapter_windows::compiled_architecture;
-use star_adapter_windows::{
-    InstallationManager, WindowsAdapterError, load_runtime_generation_manifest,
-};
+use star_adapter_windows::{InstallationManager, WindowsAdapterError};
 use star_contracts::{
     Sha256Hash,
     fixed_mcp::SERVER_INSTRUCTIONS,
     ids::RequestId,
-    installation::{RuntimeActivationRecord, RuntimeGenerationRef, TargetArchitecture},
+    installation::{RuntimeActivationRecord, TargetArchitecture},
     parse_no_duplicate_keys,
 };
 use star_ipc::{
-    client::{ControllerClient, ControllerClientError, cli_client_config},
+    client::{ControllerClient, cli_client_config},
     controller_start::VerifiedControllerImage,
 };
 use star_updater_core::{
+    RuntimeApplyError, RuntimeApplyOutcome, RuntimeApplyRequest,
     integration_restart::latest_integration_restart_receipt, spawn_background_updater,
 };
 
@@ -967,221 +966,35 @@ async fn apply_runtime_generation_legacy(
     approval_scope_sha256: Sha256Hash,
     json: bool,
 ) -> i32 {
-    let manager = match InstallationManager::for_current_user() {
-        Ok(manager) => manager,
-        Err(error) => return print_windows_error(error),
-    };
-    let review = match manager.inspect_runtime_candidate(install_root, &generation_id) {
-        Ok(review) => review,
-        Err(error) => return print_windows_error(error),
-    };
-    if review.approval_scope_sha256 != approval_scope_sha256
-        || !review.handler_ready
-        || !review.bridge_compatible
-        || !review.rollback_available
-        || review.breaking_schema
-        || review.risk_lane_widened
-        || review.permission_widened
-        || review.requires_codex_restart
-        || review.requires_new_task
-        || review.hook_review_required
-    {
-        eprintln!("runtime candidate does not satisfy the approved apply gate");
-        return 3;
-    }
-    let prior = match manager.load_runtime_activation_record(install_root) {
-        Ok(record) => record,
-        Err(error) => return print_windows_error(error),
-    };
-    let candidate_root = install_root
-        .join("runtime")
-        .join("generations")
-        .join(&generation_id);
-    let candidate_manifest = match load_runtime_generation_manifest(&candidate_root) {
-        Ok(manifest) => manifest,
-        Err(error) => return print_windows_error(error),
-    };
-    let candidate = RuntimeGenerationRef {
-        generation_id: candidate_manifest.generation.generation_id,
-        runtime_root: candidate_root
-            .canonicalize()
-            .unwrap_or(candidate_root)
-            .display()
-            .to_string(),
-        release_manifest_sha256: candidate_manifest.generation.release_manifest_sha256,
-    };
-    let old_bootstrap = match VerifiedControllerImage::from_install_directory(install_root) {
-        Ok(image) => image,
-        Err(error) => {
-            eprintln!("{error}");
-            return 4;
-        }
-    };
-    let old_client = match cli_client_config(old_bootstrap.path().to_path_buf()) {
-        Ok(config) => ControllerClient::new(config),
-        Err(error) => {
-            eprintln!("{error}");
-            return 4;
-        }
-    };
-    match old_client
-        .call(
-            "controller.shutdown",
-            serde_json::json!({}),
-            RequestId::new(),
-        )
-        .await
-    {
-        Ok(response) if response.status == star_contracts::ipc::IpcStatus::Ok => {}
-        Ok(_) => {
-            eprintln!("controller refused the supervised shutdown request");
-            return 4;
-        }
-        Err(ControllerClientError::Unavailable) => {}
-        Err(error) => {
-            eprintln!("{error}");
-            return 4;
-        }
-    }
-    let mut stopped = false;
-    for _ in 0..60 {
-        tokio::time::sleep(Duration::from_millis(250)).await;
-        if matches!(
-            old_client
-                .call("controller.start", serde_json::json!({}), RequestId::new())
-                .await,
-            Err(ControllerClientError::Unavailable)
-        ) {
-            stopped = true;
-            break;
-        }
-    }
-    if !stopped {
-        eprintln!("controller did not quiesce within the bounded update window");
-        return 4;
-    }
-    let next = RuntimeActivationRecord {
-        schema_id: "star.runtime-activation-record".to_owned(),
-        schema_version: 1,
-        activation_revision: prior.activation_revision.saturating_add(1),
-        active: candidate.clone(),
-        previous: Some(prior.active.clone()),
+    let request = RuntimeApplyRequest {
+        install_root: install_root.to_path_buf(),
+        generation_id,
         state_generation_id,
-        bridge_contract_version: prior.bridge_contract_version,
-        activated_at: chrono::Utc::now(),
+        approval_scope_sha256,
     };
-    if let Err(error) =
-        manager.activate_runtime_bridge(install_root, &next, prior.bridge_contract_version)
-    {
-        let _ = old_bootstrap.start_background();
-        return print_windows_error(error);
-    }
-    let new_bootstrap = match VerifiedControllerImage::from_install_directory(install_root) {
-        Ok(image) => image,
-        Err(error) => {
-            return rollback_runtime_generation(
-                &manager,
-                install_root,
-                &prior,
-                candidate,
-                error.to_string(),
-                json,
-            );
-        }
-    };
-    if let Err(error) = new_bootstrap.start_background() {
-        return rollback_runtime_generation(
-            &manager,
-            install_root,
-            &prior,
-            candidate,
-            error.to_string(),
+    match star_updater_core::apply_runtime_generation(request).await {
+        Ok(outcome @ RuntimeApplyOutcome::Committed { .. }) => print_value(
+            &serde_json::to_value(outcome).expect("serializable outcome"),
             json,
-        );
-    }
-    let new_client = match cli_client_config(new_bootstrap.path().to_path_buf()) {
-        Ok(config) => ControllerClient::new(config),
-        Err(error) => {
-            return rollback_runtime_generation(
-                &manager,
-                install_root,
-                &prior,
-                candidate,
-                error.to_string(),
-                json,
-            );
-        }
-    };
-    let mut postcheck_ok = false;
-    for _ in 0..40 {
-        match new_client
-            .call("controller.start", serde_json::json!({}), RequestId::new())
-            .await
-        {
-            Ok(response) if response.status == star_contracts::ipc::IpcStatus::Ok => {
-                postcheck_ok = true;
-                break;
-            }
-            Ok(_) => break,
-            Err(ControllerClientError::Unavailable) => {
-                tokio::time::sleep(Duration::from_millis(250)).await;
-            }
-            Err(_) => break,
-        }
-    }
-    if !postcheck_ok {
-        return rollback_runtime_generation(
-            &manager,
-            install_root,
-            &prior,
-            candidate,
-            "new controller postcheck failed".to_owned(),
-            json,
-        );
-    }
-    print_value(
-        &serde_json::json!({
-            "state":"committed",
-            "activation_revision":next.activation_revision,
-            "active":next.active,
-            "candidate_review":review,
-            "requires_codex_restart":false,
-        }),
-        json,
-    )
-}
-
-fn rollback_runtime_generation(
-    manager: &InstallationManager,
-    install_root: &std::path::Path,
-    prior: &RuntimeActivationRecord,
-    candidate: RuntimeGenerationRef,
-    failure: String,
-    json: bool,
-) -> i32 {
-    let rollback = RuntimeActivationRecord {
-        schema_id: "star.runtime-activation-record".to_owned(),
-        schema_version: 1,
-        activation_revision: prior.activation_revision.saturating_add(2),
-        active: prior.active.clone(),
-        previous: Some(candidate),
-        state_generation_id: prior.state_generation_id.clone(),
-        bridge_contract_version: prior.bridge_contract_version,
-        activated_at: chrono::Utc::now(),
-    };
-    match manager.activate_runtime_bridge(install_root, &rollback, prior.bridge_contract_version) {
-        Ok(()) => {
-            let _ = VerifiedControllerImage::from_install_directory(install_root)
-                .and_then(|image| image.start_background());
+        ),
+        Ok(outcome @ RuntimeApplyOutcome::RolledBack { .. }) => {
             print_value(
-                &serde_json::json!({"state":"rolled_back","failure":failure}),
+                &serde_json::to_value(outcome).expect("serializable outcome"),
                 json,
             );
             4
         }
-        Err(error) => {
-            eprintln!("runtime update failed ({failure}); rollback also failed: {error}");
+        Err(RuntimeApplyError::CandidateRejected) => {
+            eprintln!("runtime candidate does not satisfy the approved apply gate");
+            3
+        }
+        Err(error @ RuntimeApplyError::RollbackFailed { .. }) => {
+            eprintln!("{error}");
             5
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            4
         }
     }
 }

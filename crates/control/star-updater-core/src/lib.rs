@@ -20,13 +20,9 @@ use star_adapter_windows::{
 };
 use star_contracts::{
     Sha256Hash,
-    ids::RequestId,
     installation::{RuntimeActivationRecord, RuntimeCandidateReview, RuntimeGenerationRef},
 };
-use star_ipc::{
-    client::{ControllerClient, ControllerClientError, cli_client_config},
-    controller_start::{ControllerStartError, VerifiedControllerImage},
-};
+use star_ipc::controller_start::{ControllerStartError, VerifiedControllerImage};
 use thiserror::Error;
 
 #[cfg(windows)]
@@ -279,14 +275,12 @@ pub enum RuntimeApplyError {
     Windows(#[from] WindowsAdapterError),
     #[error("Controller bootstrap failed: {0}")]
     ControllerStart(#[from] ControllerStartError),
-    #[error("Controller IPC failed: {0}")]
-    Controller(#[from] ControllerClientError),
     #[error("runtime candidate manifest is invalid: {0}")]
     CandidateManifest(String),
-    #[error("controller refused the supervised shutdown request")]
-    ShutdownRefused,
-    #[error("controller did not quiesce within the bounded update window")]
-    QuiesceTimeout,
+    #[error("controller did not quiesce through the verified updater path: {0}")]
+    ControllerQuiesce(String),
+    #[error("active Runtime Controller did not pass the installed CLI postcheck")]
+    ControllerPostcheck,
     #[error("runtime update failed ({apply_failure}); rollback also failed: {rollback_failure}")]
     RollbackFailed {
         apply_failure: String,
@@ -299,6 +293,7 @@ pub async fn apply_runtime_generation(
 ) -> Result<RuntimeApplyOutcome, RuntimeApplyError> {
     let _update_lease = acquire_update_lease()?;
     let manager = InstallationManager::for_current_user()?;
+    manager.status(&request.install_root)?;
     let review =
         manager.inspect_runtime_candidate(&request.install_root, &request.generation_id)?;
     if review.approval_scope_sha256 != request.approval_scope_sha256
@@ -331,36 +326,9 @@ pub async fn apply_runtime_generation(
         release_manifest_sha256: candidate_manifest.generation.release_manifest_sha256,
     };
     let old_bootstrap = VerifiedControllerImage::from_install_directory(&request.install_root)?;
-    let old_client = ControllerClient::new(cli_client_config(old_bootstrap.path().to_path_buf())?);
-    match old_client
-        .call(
-            "controller.shutdown",
-            serde_json::json!({}),
-            RequestId::new(),
-        )
+    integration_restart::shutdown_installed_runtime_controllers(&request.install_root)
         .await
-    {
-        Ok(response) if response.status == star_contracts::ipc::IpcStatus::Ok => {}
-        Ok(_) => return Err(RuntimeApplyError::ShutdownRefused),
-        Err(ControllerClientError::Unavailable) => {}
-        Err(error) => return Err(RuntimeApplyError::Controller(error)),
-    }
-    let mut stopped = false;
-    for _ in 0..60 {
-        tokio::time::sleep(Duration::from_millis(250)).await;
-        if matches!(
-            old_client
-                .call("controller.start", serde_json::json!({}), RequestId::new())
-                .await,
-            Err(ControllerClientError::Unavailable)
-        ) {
-            stopped = true;
-            break;
-        }
-    }
-    if !stopped {
-        return Err(RuntimeApplyError::QuiesceTimeout);
-    }
+        .map_err(|error| RuntimeApplyError::ControllerQuiesce(error.to_string()))?;
     let next = RuntimeActivationRecord {
         schema_id: "star.runtime-activation-record".to_owned(),
         schema_version: 1,
@@ -386,56 +354,34 @@ pub async fn apply_runtime_generation(
                 &request.install_root,
                 &prior,
                 candidate,
+                None,
                 error.to_string(),
-            );
+            )
+            .await;
         }
     };
+    let candidate_controller = new_bootstrap.path().to_path_buf();
     if let Err(error) = new_bootstrap.start_background() {
         return rollback_runtime_generation(
             &manager,
             &request.install_root,
             &prior,
             candidate,
+            Some(&candidate_controller),
             error.to_string(),
-        );
+        )
+        .await;
     }
-    let new_client = match cli_client_config(new_bootstrap.path().to_path_buf()) {
-        Ok(config) => ControllerClient::new(config),
-        Err(error) => {
-            return rollback_runtime_generation(
-                &manager,
-                &request.install_root,
-                &prior,
-                candidate,
-                error.to_string(),
-            );
-        }
-    };
-    let mut postcheck_ok = false;
-    for _ in 0..40 {
-        match new_client
-            .call("controller.start", serde_json::json!({}), RequestId::new())
-            .await
-        {
-            Ok(response) if response.status == star_contracts::ipc::IpcStatus::Ok => {
-                postcheck_ok = true;
-                break;
-            }
-            Ok(_) => break,
-            Err(ControllerClientError::Unavailable) => {
-                tokio::time::sleep(Duration::from_millis(250)).await;
-            }
-            Err(_) => break,
-        }
-    }
-    if !postcheck_ok {
+    if !installed_cli_controller_postcheck(&request.install_root).await {
         return rollback_runtime_generation(
             &manager,
             &request.install_root,
             &prior,
             candidate,
+            Some(&candidate_controller),
             "new controller postcheck failed".to_owned(),
-        );
+        )
+        .await;
     }
     Ok(RuntimeApplyOutcome::Committed {
         activation_revision: next.activation_revision,
@@ -445,13 +391,23 @@ pub async fn apply_runtime_generation(
     })
 }
 
-fn rollback_runtime_generation(
+async fn rollback_runtime_generation(
     manager: &InstallationManager,
     install_root: &std::path::Path,
     prior: &RuntimeActivationRecord,
     candidate: RuntimeGenerationRef,
+    candidate_controller: Option<&Path>,
     failure: String,
 ) -> Result<RuntimeApplyOutcome, RuntimeApplyError> {
+    if candidate_controller.is_some()
+        && let Err(error) =
+            integration_restart::shutdown_installed_runtime_controllers(install_root).await
+    {
+        return Err(RuntimeApplyError::RollbackFailed {
+            apply_failure: failure,
+            rollback_failure: error.to_string(),
+        });
+    }
     let rollback = RuntimeActivationRecord {
         schema_id: "star.runtime-activation-record".to_owned(),
         schema_version: 1,
@@ -462,17 +418,71 @@ fn rollback_runtime_generation(
         bridge_contract_version: prior.bridge_contract_version,
         activated_at: chrono::Utc::now(),
     };
-    match manager.activate_runtime_bridge(install_root, &rollback, prior.bridge_contract_version) {
-        Ok(()) => {
-            let _ = VerifiedControllerImage::from_install_directory(install_root)
-                .and_then(|image| image.start_background());
-            Ok(RuntimeApplyOutcome::RolledBack { failure })
-        }
-        Err(error) => Err(RuntimeApplyError::RollbackFailed {
+    if let Err(error) =
+        manager.activate_runtime_bridge(install_root, &rollback, prior.bridge_contract_version)
+    {
+        return Err(RuntimeApplyError::RollbackFailed {
             apply_failure: failure,
             rollback_failure: error.to_string(),
-        }),
+        });
     }
+    let rollback_start = VerifiedControllerImage::from_install_directory(install_root)
+        .and_then(|image| image.start_background());
+    if let Err(error) = rollback_start {
+        return Err(RuntimeApplyError::RollbackFailed {
+            apply_failure: failure,
+            rollback_failure: error.to_string(),
+        });
+    }
+    if !installed_cli_controller_postcheck(install_root).await {
+        return Err(RuntimeApplyError::RollbackFailed {
+            apply_failure: failure,
+            rollback_failure: RuntimeApplyError::ControllerPostcheck.to_string(),
+        });
+    }
+    Ok(RuntimeApplyOutcome::RolledBack { failure })
+}
+
+async fn installed_cli_controller_postcheck(install_root: &Path) -> bool {
+    const POSTCHECK_WINDOW: Duration = Duration::from_secs(15);
+    const SINGLE_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(5);
+    const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
+
+    let cli = install_root.join("star.exe");
+    let deadline = tokio::time::Instant::now() + POSTCHECK_WINDOW;
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return false;
+        }
+        let output = tokio::time::timeout(
+            remaining.min(SINGLE_ATTEMPT_TIMEOUT),
+            tokio::process::Command::new(&cli)
+                .args(["management", "status", "--json"])
+                .stdin(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .output(),
+        )
+        .await;
+        if let Ok(Ok(output)) = output
+            && output.status.success()
+            && output.stdout.len() <= MAX_OUTPUT_BYTES
+            && installed_cli_postcheck_json(&output.stdout)
+        {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+fn installed_cli_postcheck_json(stdout: &[u8]) -> bool {
+    std::str::from_utf8(stdout)
+        .ok()
+        .and_then(|text| star_contracts::parse_no_duplicate_keys(text.trim()).ok())
+        .is_some_and(|value| {
+            value.get("schema_id").and_then(serde_json::Value::as_str) == Some("star.ipc.response")
+                && value.get("status").and_then(serde_json::Value::as_str) == Some("ok")
+        })
 }
 
 #[cfg(test)]
@@ -492,6 +502,20 @@ mod tests {
         assert!(!update_lease_active().unwrap());
         let second = acquire_update_lease().expect("released updater lease is reusable");
         drop(second);
+    }
+
+    #[test]
+    fn installed_cli_postcheck_requires_one_successful_ipc_response() {
+        assert!(installed_cli_postcheck_json(
+            br#"{"schema_id":"star.ipc.response","schema_version":1,"status":"ok"}"#
+        ));
+        assert!(!installed_cli_postcheck_json(
+            br#"{"schema_id":"star.ipc.response","schema_version":1,"status":"error"}"#
+        ));
+        assert!(!installed_cli_postcheck_json(
+            br#"{"schema_id":"star.ipc.response","status":"ok","status":"error"}"#
+        ));
+        assert!(!installed_cli_postcheck_json(b"not-json"));
     }
 
     #[cfg(windows)]

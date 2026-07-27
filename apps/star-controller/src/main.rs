@@ -500,7 +500,10 @@ fn installed_client_kind_matches(kind: &IpcClientKind, image: &std::path::Path) 
         .and_then(|name| name.to_str())
         .is_some_and(|name| match kind {
             IpcClientKind::Mcp => name.eq_ignore_ascii_case("star-mcp.exe"),
-            IpcClientKind::Cli => name.eq_ignore_ascii_case("star.exe"),
+            IpcClientKind::Cli => {
+                name.eq_ignore_ascii_case("star.exe")
+                    || name.eq_ignore_ascii_case("star-updater.exe")
+            }
             IpcClientKind::Hook | IpcClientKind::InternalTest => false,
         })
 }
@@ -25505,6 +25508,16 @@ mod tests {
         assert!(!installed_client_kind_matches(
             &IpcClientKind::Cli,
             selected_install_mcp
+        ));
+        let selected_install_updater =
+            std::path::Path::new(r"X:\selected-install\Star-Control\star-updater.exe");
+        assert!(installed_client_kind_matches(
+            &IpcClientKind::Cli,
+            selected_install_updater
+        ));
+        assert!(!installed_client_kind_matches(
+            &IpcClientKind::Mcp,
+            selected_install_updater
         ));
 
         let correlation = RequestId::new().to_string();
