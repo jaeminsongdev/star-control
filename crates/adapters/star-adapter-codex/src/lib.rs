@@ -1011,7 +1011,8 @@ fn result_from_record(
         manual_steps: if record.registration_state == CodexRegistrationState::Registered {
             vec![
                 "Codex에서 새 작업을 연다.".to_owned(),
-                "Codex /hooks에서 Star-Control SessionStart Hook을 검토하고 신뢰한다.".to_owned(),
+                "Codex /hooks에서 SessionStart와 SessionEnd를 포함한 Star-Control Hook을 검토하고 신뢰한다."
+                    .to_owned(),
             ]
         } else if removal_pending {
             vec![
@@ -1023,7 +1024,8 @@ fn result_from_record(
             vec![
                 "manual_commands를 실행하거나 Codex Plugin 화면에서 star-control을 설치한다."
                     .to_owned(),
-                "새 작업을 열고 /hooks에서 SessionStart Hook을 검토하고 신뢰한다.".to_owned(),
+                "새 작업을 열고 /hooks에서 SessionStart와 SessionEnd를 포함한 Star-Control Hook을 검토하고 신뢰한다."
+                    .to_owned(),
             ]
         },
     }
@@ -1345,5 +1347,27 @@ mod tests {
         );
         assert!(result.manual_steps[0].contains("제거"));
         assert!(!result.manual_steps[0].contains("설치"));
+    }
+
+    #[test]
+    fn registered_integration_reports_the_complete_hook_trust_set() {
+        let record = CodexIntegrationRecord {
+            schema_id: CODEX_INTEGRATION_RECORD_SCHEMA_ID.to_owned(),
+            schema_version: INSTALLATION_SCHEMA_VERSION,
+            product_version: "0.1.0".to_owned(),
+            install_root: r"D:\도구\Star-Control".to_owned(),
+            integration_root: r"D:\state\integrations\codex\0.1.0".to_owned(),
+            marketplace_root: r"D:\state\integrations\codex\0.1.0\marketplace-root".to_owned(),
+            marketplace_name: MARKETPLACE_NAME.to_owned(),
+            plugin_name: PLUGIN_NAME.to_owned(),
+            plugin_version: "0.1.0+codex.0123456789ab".to_owned(),
+            render_sha256: Sha256Hash::digest(b"rendered"),
+            registration_state: CodexRegistrationState::Registered,
+            manual_commands: Vec::new(),
+            updated_at: Utc::now(),
+        };
+        let result = result_from_record("status", "verified", &record, Vec::new());
+        assert!(result.manual_steps[1].contains("SessionStart"));
+        assert!(result.manual_steps[1].contains("SessionEnd"));
     }
 }
