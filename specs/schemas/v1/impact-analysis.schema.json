@@ -546,6 +546,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "advisory_evidence_refs": {
+      "default": [],
+      "description": "Read-only advisory evidence (for example Git history observations).\nUnlike `limitations`, this never changes the Impact/Gate readiness.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
     "affected_projects": {
       "items": {
         "$ref": "#/$defs/AffectedProject"

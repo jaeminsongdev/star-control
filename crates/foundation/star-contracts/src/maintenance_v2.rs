@@ -16,6 +16,7 @@ pub const DEPENDENCY_SNAPSHOT_SCHEMA_ID: &str = "star.dependency-snapshot";
 pub const SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID: &str = "star.supply-chain-snapshot";
 pub const EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID: &str = "star.external-data-snapshot";
 pub const STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID: &str = "star.static-analysis-import-report";
+pub const GIT_HISTORY_RISK_SNAPSHOT_SCHEMA_ID: &str = "star.git-history-risk-snapshot";
 pub const DEPENDENCY_UPDATE_PLAN_SCHEMA_ID: &str = "star.dependency-update-plan";
 pub const MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID: &str = "star.maintenance-radar-snapshot";
 
@@ -585,6 +586,73 @@ pub struct DependencyUpdatePlan {
     #[serde(default)]
     pub blockers: Vec<String>,
     pub plan_fingerprint: Sha256Hash,
+}
+
+/// Completeness of a read-only Git history observation.  A missing or
+/// rewritten predecessor is never silently promoted to a complete history.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GitHistoryCompleteness {
+    Complete,
+    Partial,
+    Unverified,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GitHistoryComponentRisk {
+    /// Project-relative component key, never a native or absolute path.
+    pub component: String,
+    pub changed_file_count: u32,
+    pub relative_churn: u32,
+    pub change_burst: u32,
+    /// Opaque contributor buckets, rather than author names or email hashes.
+    #[serde(default)]
+    pub opaque_owner_buckets: Vec<String>,
+    #[serde(default)]
+    pub declared_owner_count: u32,
+    #[serde(default)]
+    pub limitations: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DebtMarkerObservation {
+    pub marker_id: String,
+    pub project_relative_path: String,
+    pub marker_kind: String,
+    pub line: u32,
+    pub structured: bool,
+    pub owner_declared: bool,
+    pub issue_declared: bool,
+    pub replacement_declared: bool,
+    pub expiry: Option<String>,
+    pub stale: bool,
+    #[serde(default)]
+    pub limitations: Vec<String>,
+}
+
+/// Rebuildable and privacy-preserving Git/source observation.  This is an
+/// advisory input for Radar and Impact analysis, not a person-performance
+/// record and not a standalone Gate blocker.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GitHistoryRiskSnapshot {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub project_id: ProjectId,
+    pub repository_identity: String,
+    pub range_start: String,
+    pub range_end: String,
+    pub history_completeness: GitHistoryCompleteness,
+    pub codeowners_fingerprint: Option<Sha256Hash>,
+    #[serde(default)]
+    pub components: Vec<GitHistoryComponentRisk>,
+    #[serde(default)]
+    pub debt_markers: Vec<DebtMarkerObservation>,
+    #[serde(default)]
+    pub limitations: Vec<String>,
+    pub content_fingerprint: Sha256Hash,
 }
 
 #[derive(

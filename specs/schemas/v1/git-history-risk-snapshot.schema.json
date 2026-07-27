@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "DebtMarkerObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "expiry": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "issue_declared": {
+          "type": "boolean"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "marker_id": {
+          "type": "string"
+        },
+        "marker_kind": {
+          "type": "string"
+        },
+        "owner_declared": {
+          "type": "boolean"
+        },
+        "project_relative_path": {
+          "type": "string"
+        },
+        "replacement_declared": {
+          "type": "boolean"
+        },
+        "stale": {
+          "type": "boolean"
+        },
+        "structured": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "marker_id",
+        "project_relative_path",
+        "marker_kind",
+        "line",
+        "structured",
+        "owner_declared",
+        "issue_declared",
+        "replacement_declared",
+        "stale"
+      ],
+      "type": "object"
+    },
+    "GitHistoryCompleteness": {
+      "description": "Completeness of a read-only Git history observation.  A missing or\nrewritten predecessor is never silently promoted to a complete history.",
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "GitHistoryComponentRisk": {
+      "additionalProperties": false,
+      "properties": {
+        "change_burst": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changed_file_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "component": {
+          "description": "Project-relative component key, never a native or absolute path.",
+          "type": "string"
+        },
+        "declared_owner_count": {
+          "default": 0,
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "opaque_owner_buckets": {
+          "default": [],
+          "description": "Opaque contributor buckets, rather than author names or email hashes.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "relative_churn": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "component",
+        "changed_file_count",
+        "relative_churn",
+        "change_burst"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.git-history-risk-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Rebuildable and privacy-preserving Git/source observation.  This is an\nadvisory input for Radar and Impact analysis, not a person-performance\nrecord and not a standalone Gate blocker.",
+  "properties": {
+    "codeowners_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "components": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/GitHistoryComponentRisk"
+      },
+      "type": "array"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "debt_markers": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DebtMarkerObservation"
+      },
+      "type": "array"
+    },
+    "history_completeness": {
+      "$ref": "#/$defs/GitHistoryCompleteness"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "range_end": {
+      "type": "string"
+    },
+    "range_start": {
+      "type": "string"
+    },
+    "repository_identity": {
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.git-history-risk-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "project_id",
+    "repository_identity",
+    "range_start",
+    "range_end",
+    "history_completeness",
+    "content_fingerprint"
+  ],
+  "title": "GitHistoryRiskSnapshot",
+  "type": "object"
+}

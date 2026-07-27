@@ -22,7 +22,7 @@
 | B02 | MCP-first | `validation.run` |
 | B03 | MCP-first | `validation.run` |
 | B04 | CLI-only | `contract.snapshot`, `contract.compare`, `registry.declaration.plan` |
-| B05 | CLI-only | `security.inspect`, `deps.scan`, `deps.prepare`, `maintenance.radar`, `maintenance.radar.code-health` |
+| B05 | CLI-only | `security.inspect`, `deps.scan`, `deps.prepare`, `maintenance.radar`, `maintenance.radar.code-health`, `maintenance.radar.git-history` |
 | B06 | CLI-only | `failures.inspect`, `failures.reproduce`, `failures.recovery-plan` |
 | B07 | MCP-first | `doctor.run` |
 | B08 | CLI-only | `migration.execute`, `migration.resume`, `migration.rollback`, `performance.run`, `performance.compare`, `language-migration.cutover` |

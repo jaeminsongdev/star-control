@@ -72,6 +72,7 @@ const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "dependency-snapshot.schema.json",
     "supply-chain-snapshot.schema.json",
     "external-data-snapshot.schema.json",
+    "git-history-risk-snapshot.schema.json",
     "dependency-update-plan.schema.json",
     "maintenance-radar-snapshot.schema.json",
     "project-migration-manifest.schema.json",

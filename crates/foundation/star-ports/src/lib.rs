@@ -25,7 +25,7 @@ use star_contracts::{
         WorkspaceSnapshotId,
     },
     index::{CodeIndexSnapshot, IndexEdge, IndexEntity, ProjectCatalogSnapshot, SourceEntry},
-    maintenance_v2::StaticAnalysisImportReport,
+    maintenance_v2::{GitHistoryRiskSnapshot, StaticAnalysisImportReport},
     managed_registry::{
         ManagedDeclarationChangeIntent, ManagedRegistrySnapshot, RegistryConsistencyRecord,
     },
@@ -130,6 +130,39 @@ pub trait CodeIndexCache: Send + Sync {
         cache_key: &Sha256Hash,
         projection: &StoredCodeIndexProjection,
     ) -> Result<(), RepositoryError>;
+}
+
+/// Bounded, read-only input for Git-derived maintenance observations.  The
+/// caller supplies only revisions and a commit cap; adapters must never alter
+/// the checked-out repository while collecting the snapshot.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitHistoryObservationRequest {
+    pub project_id: ProjectId,
+    pub range_start: Option<String>,
+    pub range_end: String,
+    pub commit_limit: u32,
+}
+
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+pub enum GitHistoryPortError {
+    #[error("Git history input is invalid")]
+    Invalid,
+    #[error("Git history adapter is unavailable")]
+    Unavailable,
+    #[error("Git history observation is incomplete or unverified")]
+    Unverified,
+    #[error("Git history output could not be parsed safely")]
+    Malformed,
+}
+
+/// Adapter boundary for Git history and source debt observations.  The output
+/// contains only project-relative paths and opaque owner buckets.
+pub trait GitHistoryPort: Send + Sync {
+    fn observe(
+        &self,
+        project_root: &Path,
+        request: &GitHistoryObservationRequest,
+    ) -> Result<GitHistoryRiskSnapshot, GitHistoryPortError>;
 }
 
 #[derive(Clone, Debug)]

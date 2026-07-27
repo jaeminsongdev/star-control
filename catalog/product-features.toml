@@ -2,7 +2,7 @@ schema_version = 1
 expected_feature_count = 23
 expected_profile_count = 16
 expected_runtime_executable_count = 4
-expected_generated_schema_count = 214
+expected_generated_schema_count = 215
 expected_stable_error_count = 528
 expected_mcp_matrix_count = 170
 
@@ -219,9 +219,9 @@ recovery_test = "crates/control/star-application/src/rust_style.rs#fixed_pipelin
 [[features]]
 id = "B05"
 owner_doc = "docs/contracts/failure-security-and-dependency-maintenance.md"
-schema_files = ["dependency-snapshot.schema.json", "supply-chain-snapshot.schema.json", "maintenance-radar-snapshot.schema.json"]
-handler_refs = ["crates/control/star-development/src/maintenance_v2.rs#pub fn scan_dependency_snapshot", "apps/star-controller/src/main.rs#security.inspect"]
-cli_commands = ["security.inspect", "deps.scan", "deps.prepare", "maintenance.radar", "maintenance.radar.code-health"]
+schema_files = ["dependency-snapshot.schema.json", "supply-chain-snapshot.schema.json", "git-history-risk-snapshot.schema.json", "maintenance-radar-snapshot.schema.json"]
+handler_refs = ["crates/control/star-development/src/maintenance_v2.rs#pub fn scan_dependency_snapshot", "crates/control/star-project/src/git_history.rs#CommandGitHistoryAdapter", "apps/star-controller/src/main.rs#maintenance.radar.git-history", "apps/star-controller/src/main.rs#security.inspect"]
+cli_commands = ["security.inspect", "deps.scan", "deps.prepare", "maintenance.radar", "maintenance.radar.code-health", "maintenance.radar.git-history"]
 mcp_required = false
 mcp_actions = []
 codex_required = false

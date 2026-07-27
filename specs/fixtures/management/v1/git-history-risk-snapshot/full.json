@@ -1,0 +1,46 @@
+{
+  "codeowners_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "components": [
+    {
+      "change_burst": 0,
+      "changed_file_count": 0,
+      "component": "fixture",
+      "declared_owner_count": 0,
+      "limitations": [
+        "fixture"
+      ],
+      "opaque_owner_buckets": [
+        "fixture"
+      ],
+      "relative_churn": 0
+    }
+  ],
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "debt_markers": [
+    {
+      "expiry": "fixture",
+      "issue_declared": false,
+      "limitations": [
+        "fixture"
+      ],
+      "line": 0,
+      "marker_id": "fixture",
+      "marker_kind": "fixture",
+      "owner_declared": false,
+      "project_relative_path": "src/lib.rs",
+      "replacement_declared": false,
+      "stale": false,
+      "structured": false
+    }
+  ],
+  "history_completeness": "complete",
+  "limitations": [
+    "fixture"
+  ],
+  "project_id": "prj_00000000000000000000000000",
+  "range_end": "fixture",
+  "range_start": "fixture",
+  "repository_identity": "fixture",
+  "schema_id": "star.git-history-risk-snapshot",
+  "schema_version": 1
+}

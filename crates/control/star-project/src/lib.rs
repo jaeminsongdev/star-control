@@ -2,6 +2,7 @@
 
 pub mod catalog;
 pub mod catalog_snapshot;
+pub mod git_history;
 pub mod index;
 
 #[cfg(windows)]

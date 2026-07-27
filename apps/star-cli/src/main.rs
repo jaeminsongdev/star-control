@@ -121,6 +121,7 @@ star deps status <project-id> <plan-id> [--json]\n\
 star deps rollback-plan <project-id> <recovery-plan-json> [--revision <n>] [--json]\n\
 star maintenance radar <snapshot-id> --input <json-file> [--revision <n>] [--json]\n\
 star maintenance radar code-health <project-id> <snapshot-id> --evaluation-time <rfc3339> [--valid-until <rfc3339>] [--revision <n>] [--json]\n\
+star maintenance radar git-history <project-id> <snapshot-id> --range-end <git-revision> [--range-start <git-revision>] [--commit-limit <n>] --evaluation-time <rfc3339> [--valid-until <rfc3339>] [--revision <n>] [--json]\n\
 star migration inspect <project-id> <target-id> [--manifest <project-relative-path>] [--json]\n\
 star migration plan <project-id> <input-json> [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
 star migration checkpoint <project-id> <plan-id> <checkpoint-json> [--revision <n>] [--json]\n\
@@ -2366,6 +2367,47 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                 payload: serde_json::json!({
                     "project_id":positionals[0],
                     "snapshot_id":positionals[1],
+                    "evaluation_time":required_option(&options, "--evaluation-time")?,
+                    "valid_until":options.get("--valid-until"),
+                    "revision":development_revision(&options)?,
+                }),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "maintenance" && second == "radar" && third == "git-history" =>
+        {
+            let (positionals, options) = parse_tail(
+                tail,
+                &[
+                    "--range-end",
+                    "--range-start",
+                    "--commit-limit",
+                    "--evaluation-time",
+                    "--valid-until",
+                    "--revision",
+                ],
+                &[],
+            )?;
+            require_positionals(&positionals, 2, "maintenance radar git-history")?;
+            validate_project_id(&positionals[0], "maintenance radar git-history")?;
+            validate_development_id(&positionals[1], "snapshot-id")?;
+            let commit_limit = options
+                .get("--commit-limit")
+                .and_then(|value| value.as_deref())
+                .unwrap_or("100")
+                .parse::<u32>()
+                .map_err(|_| "--commit-limit must be a positive integer".to_owned())?;
+            if commit_limit == 0 {
+                return Err("--commit-limit must be a positive integer".to_owned());
+            }
+            Ok(Parsed {
+                command: "maintenance.radar.git-history".to_owned(),
+                payload: serde_json::json!({
+                    "project_id":positionals[0], "snapshot_id":positionals[1],
+                    "range_start":options.get("--range-start"),
+                    "range_end":required_option(&options, "--range-end")?,
+                    "commit_limit":commit_limit,
                     "evaluation_time":required_option(&options, "--evaluation-time")?,
                     "valid_until":options.get("--valid-until"),
                     "revision":development_revision(&options)?,
@@ -5935,6 +5977,21 @@ mod tests {
         .unwrap();
         assert_eq!(radar.command, "maintenance.radar.code-health");
         assert_eq!(radar.payload["project_id"], project.to_string());
+
+        let history = parse(&[
+            "maintenance".into(),
+            "radar".into(),
+            "git-history".into(),
+            project.to_string(),
+            "radar-history-one".into(),
+            "--range-end".into(),
+            "HEAD".into(),
+            "--evaluation-time".into(),
+            "2026-07-27T12:00:00Z".into(),
+        ])
+        .unwrap();
+        assert_eq!(history.command, "maintenance.radar.git-history");
+        assert_eq!(history.payload["commit_limit"], 100);
 
         assert!(
             parse(&[

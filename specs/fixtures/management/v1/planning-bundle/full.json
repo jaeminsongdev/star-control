@@ -219,6 +219,9 @@
     }
   ],
   "impact_analysis": {
+    "advisory_evidence_refs": [
+      "fixture"
+    ],
     "affected_projects": [
       {
         "certainty": "confirmed",

@@ -38,8 +38,8 @@ use star_contracts::{
         SourceClass, SourceEntry, StructuralCloneCandidate, ToolchainCommandKind,
     },
     maintenance_v2::{
-        ExternalFreshness, MaintenanceRadarItem, RadarCategory, RadarPriority,
-        STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID, StaticAnalysisImportReport,
+        ExternalFreshness, GitHistoryRiskSnapshot, MaintenanceRadarItem, RadarCategory,
+        RadarPriority, STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID, StaticAnalysisImportReport,
     },
     managed_registry::{
         ManagedDeclarationChangeIntent, ManagedRegistrySnapshot, RegistryConsistencyRecord,
@@ -108,12 +108,13 @@ use star_planning::{
 };
 use star_ports::{
     ArtifactDiscovery, ArtifactStore, ArtifactWritePolicy, ArtifactWriteRequest,
-    CheckGraphEvidenceTransaction, CodeIndexCache, GlobalManagementRepository, ManagementRecovery,
-    ManagementRepositorySet, PatchPortError, ProjectRootAttachment, ProjectRootBindingStore,
-    RepositoryError, RepositoryErrorCategory, RetentionApplyResult, RetentionPlan, RetentionPolicy,
-    RewriteTransformRequest, RewriteTransformerPort, ScanCommit, SourceBoundFindingImport,
-    SourceMutationPort, SourceMutationRequest, SourceMutationState, StoredCodeIndexProjection,
-    WorktreeMaterialization, WorktreePort,
+    CheckGraphEvidenceTransaction, CodeIndexCache, GitHistoryObservationRequest, GitHistoryPort,
+    GlobalManagementRepository, ManagementRecovery, ManagementRepositorySet, PatchPortError,
+    ProjectRootAttachment, ProjectRootBindingStore, RepositoryError, RepositoryErrorCategory,
+    RetentionApplyResult, RetentionPlan, RetentionPolicy, RewriteTransformRequest,
+    RewriteTransformerPort, ScanCommit, SourceBoundFindingImport, SourceMutationPort,
+    SourceMutationRequest, SourceMutationState, StoredCodeIndexProjection, WorktreeMaterialization,
+    WorktreePort,
 };
 pub use star_ports::{
     DevelopmentRecord, ManagedRegistryConsumerProjectInput, ManagedRegistryResolveRequest,
@@ -190,6 +191,8 @@ pub enum ApplicationError {
     Project(#[from] ProjectError),
     #[error("code index is not current")]
     IndexNotCurrent,
+    #[error("Git history adapter is unavailable or unverified")]
+    GitHistoryUnavailable,
     #[error("code index analysis input produced conflicting content")]
     IndexIdentityConflict,
     #[error("task planning failed")]
@@ -595,6 +598,12 @@ pub struct CodeHealthRadarProjection {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct GitHistoryRadarProjection {
+    pub snapshot: GitHistoryRiskSnapshot,
+    pub items: Vec<MaintenanceRadarItem>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct MultiRootDiscoveryResult {
     pub registrations: Vec<RegisterProjectResult>,
     pub catalog_snapshot: ProjectCatalogSnapshot,
@@ -801,6 +810,7 @@ pub struct ManagementApplicationService {
     index_cache: Option<Arc<dyn CodeIndexCache>>,
     syntax_adapters: Vec<Arc<dyn SyntaxAdapter>>,
     semantic_adapters: Vec<Arc<dyn SemanticAdapter>>,
+    git_history_adapter: Option<Arc<dyn GitHistoryPort>>,
     managed_registry_resolver: Option<Arc<dyn ManagedRegistryResolverPort>>,
     managed_registry_rewriter: Option<Arc<dyn ManagedRegistryRewritePort>>,
     rust_style_runtime_root: Option<PathBuf>,
@@ -951,6 +961,7 @@ impl ManagementApplicationService {
             index_cache: None,
             syntax_adapters: Vec::new(),
             semantic_adapters: Vec::new(),
+            git_history_adapter: None,
             managed_registry_resolver: None,
             managed_registry_rewriter: None,
             rust_style_runtime_root: None,
@@ -1095,6 +1106,11 @@ impl ManagementApplicationService {
 
     pub fn with_semantic_adapter(mut self, adapter: Arc<dyn SemanticAdapter>) -> Self {
         self.semantic_adapters.push(adapter);
+        self
+    }
+
+    pub fn with_git_history_adapter(mut self, adapter: Arc<dyn GitHistoryPort>) -> Self {
+        self.git_history_adapter = Some(adapter);
         self
     }
 
@@ -2932,6 +2948,117 @@ impl ManagementApplicationService {
         self.primary_project_root(&project)
     }
 
+    pub fn git_history_risk_snapshot(
+        &self,
+        project_id: &ProjectId,
+        range_start: Option<String>,
+        range_end: String,
+        commit_limit: u32,
+    ) -> Result<GitHistoryRiskSnapshot, ApplicationError> {
+        let root = self.development_project_root(project_id)?;
+        let adapter = self
+            .git_history_adapter
+            .as_ref()
+            .ok_or(ApplicationError::GitHistoryUnavailable)?;
+        adapter
+            .observe(
+                &root,
+                &GitHistoryObservationRequest {
+                    project_id: project_id.clone(),
+                    range_start,
+                    range_end,
+                    commit_limit,
+                },
+            )
+            .map_err(|_| ApplicationError::GitHistoryUnavailable)
+    }
+
+    pub fn git_history_radar_projection(
+        &self,
+        project_id: &ProjectId,
+        range_start: Option<String>,
+        range_end: String,
+        commit_limit: u32,
+        evaluation_time: &str,
+    ) -> Result<GitHistoryRadarProjection, ApplicationError> {
+        let snapshot =
+            self.git_history_risk_snapshot(project_id, range_start, range_end, commit_limit)?;
+        let complete = snapshot.history_completeness
+            == star_contracts::maintenance_v2::GitHistoryCompleteness::Complete
+            && snapshot.limitations.is_empty();
+        let evidence = format!("git-history:{}", snapshot.content_fingerprint.as_str());
+        let mut items = snapshot
+            .components
+            .iter()
+            .map(|component| {
+                let item_id = format!("history-component:{}", component.component);
+                MaintenanceRadarItem {
+                    item_id: item_id.clone(),
+                    project_id: project_id.clone(),
+                    category: RadarCategory::CodeQuality,
+                    subject: format!("history_hotspot:{}", component.component),
+                    priority: RadarPriority {
+                        blocking_rank: 0,
+                        risk_rank: u8::from(component.relative_churn > 0) * 2,
+                        freshness_rank: 0,
+                        regression_rank: u8::from(component.change_burst > 1) * 2,
+                        evidence_rank: if complete { 0 } else { 2 },
+                        time_rank: evaluation_time.to_owned(),
+                        stable_identity: item_id,
+                    },
+                    finding_refs: Vec::new(),
+                    diagnostic_refs: Vec::new(),
+                    dependency_refs: Vec::new(),
+                    regression_refs: Vec::new(),
+                    suppression_refs: Vec::new(),
+                    evidence_refs: vec![evidence.clone()],
+                    evaluation_run_refs: Vec::new(),
+                    blocking: false,
+                    freshness: ExternalFreshness::Current,
+                    completeness: if complete {
+                        CoverageState::Complete
+                    } else {
+                        CoverageState::Partial
+                    },
+                }
+            })
+            .chain(snapshot.debt_markers.iter().map(|marker| {
+                let item_id = format!("debt-marker:{}", marker.marker_id);
+                MaintenanceRadarItem {
+                    item_id: item_id.clone(),
+                    project_id: project_id.clone(),
+                    category: RadarCategory::CodeQuality,
+                    subject: format!("debt_marker:{}", marker.marker_kind),
+                    priority: RadarPriority {
+                        blocking_rank: 0,
+                        risk_rank: u8::from(marker.stale) * 3 + u8::from(!marker.structured),
+                        freshness_rank: 0,
+                        regression_rank: 0,
+                        evidence_rank: if complete { 0 } else { 2 },
+                        time_rank: evaluation_time.to_owned(),
+                        stable_identity: item_id,
+                    },
+                    finding_refs: Vec::new(),
+                    diagnostic_refs: Vec::new(),
+                    dependency_refs: Vec::new(),
+                    regression_refs: Vec::new(),
+                    suppression_refs: Vec::new(),
+                    evidence_refs: vec![evidence.clone()],
+                    evaluation_run_refs: Vec::new(),
+                    blocking: false,
+                    freshness: ExternalFreshness::Current,
+                    completeness: if complete {
+                        CoverageState::Complete
+                    } else {
+                        CoverageState::Partial
+                    },
+                }
+            }))
+            .collect::<Vec<_>>();
+        items.sort_by(|left, right| left.item_id.cmp(&right.item_id));
+        Ok(GitHistoryRadarProjection { snapshot, items })
+    }
+
     #[expect(
         clippy::too_many_arguments,
         reason = "single-writer publication keeps identity, revision, state, and schema fields explicit"
@@ -3734,6 +3861,8 @@ impl ManagementApplicationService {
         if !valid_idempotency_key(idempotency_key) || task.project_targets.is_empty() {
             return Err(ApplicationError::Invalid);
         }
+        let mut planning_policy = self.planning_policy.clone();
+        planning_policy.impact_advisory_refs = self.git_history_impact_advisories(&task);
         let input_fingerprint = versioned_fingerprint(
             "star.command.planning-create",
             1,
@@ -3741,7 +3870,7 @@ impl ManagementApplicationService {
                 "task":task,
                 "actor":actor,
                 "check_descriptors":check_descriptors,
-                "policy":&self.planning_policy,
+                "policy":&planning_policy,
                 "validation_phase":validation_phase,
                 "observed_change_override":observed_change_override,
                 "profile_resolution":profile_resolution,
@@ -3784,7 +3913,7 @@ impl ManagementApplicationService {
                 check_descriptors,
                 previous_success_evidence: vec![],
                 profile_resolution,
-                policy: self.planning_policy.clone(),
+                policy: planning_policy,
             },
             validation_phase,
         )?;
@@ -3794,6 +3923,32 @@ impl ManagementApplicationService {
             idempotency_key,
             &input_fingerprint,
         )?)
+    }
+
+    fn git_history_impact_advisories(&self, task: &TaskSpecDraft) -> Vec<String> {
+        let mut advisories = BTreeSet::new();
+        if self.git_history_adapter.is_none() {
+            advisories.insert("GIT_HISTORY_ADVISORY_UNAVAILABLE".to_owned());
+            return advisories.into_iter().collect();
+        }
+        for target in &task.project_targets {
+            match self.git_history_risk_snapshot(&target.project_id, None, "HEAD".to_owned(), 100) {
+                Ok(snapshot) => {
+                    advisories.insert(format!(
+                        "GIT_HISTORY_ADVISORY_REF:{}:{}",
+                        target.project_id.as_str(),
+                        snapshot.content_fingerprint.as_str(),
+                    ));
+                    for limitation in snapshot.limitations {
+                        advisories.insert(format!("GIT_HISTORY_ADVISORY_LIMITATION:{limitation}"));
+                    }
+                }
+                Err(_) => {
+                    advisories.insert("GIT_HISTORY_ADVISORY_UNVERIFIED".to_owned());
+                }
+            }
+        }
+        advisories.into_iter().collect()
     }
 
     pub fn get_planning_bundle(

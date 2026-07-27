@@ -25,17 +25,18 @@
 | P-0064A structural clone | **DONE / local commit** | `d04cb2d7b664d52dd6228dddae57fb6a525ce458`; Rust exact token clone, production/test cohort, source-bound Finding/Occurrence, incremental reuse, macro·fixture exclusion과 FULL 11/11 complete/stable/pass. |
 | P-0064B complexity regression | **DONE / local commit** | `c59c3a8789c582d8a43d0884855e799a39613588`; Rust AST complexity metric, compatible previous-index baseline의 new/worsened/improved relation, source-bound Finding과 FULL 11/11 complete/stable/pass. |
 | P-0064C unused surface | **DONE / local commit** | `17f56418d27ea6fd5738090cefb38fe5fcddc329`; Rust function/type/file/export/dependency candidate, read-only dependency snapshot과 manifest/lockfile disagreement, build-script frontier, FULL 11/11 complete/stable/pass. |
-| P-0065 Gate·Radar | **IN_PROGRESS** | scan→finding→planning→validation→baseline/suppression→Gate/Radar의 shadow/read-only close loop을 구현한다. |
-| P-0066~P-0070 | pending | history/ownership/debt → semantic provider → mutation/rule-pack/posture → evaluation/Profile → final audit 순서다. |
+| P-0065 Gate·Radar | **DONE / local commit** | `db3cb92b3ae9c9dbf332ebf8c1dfdafb50dcf75e`; code-health shadow planning과 read-only Radar projection, current schema/evidence, FULL 11/11 complete/stable/pass. |
+| P-0066 Git history·ownership·debt | **IN_PROGRESS** | read-only Git history adapter/port, exact range·relative churn/burst·component mapping, CODEOWNERS opaque distribution 및 debt-marker 후보를 source-bound observation으로 구현한다. |
+| P-0067~P-0070 | pending | semantic provider → mutation/rule-pack/posture → evaluation/Profile → final audit 순서다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0065 활성 Slice
+## P-0066 활성 Slice
 
-- 목표: P-0064 결과를 기존 planning/validation/baseline/suppression/Gate/Radar read-only workflow로 materialize한다.
-- 불변식: 신규 Rule은 shadow/report-only이며 existing required family를 줄이지 않는다. partial/unverified은 clean pass가 아니고 automatic PatchSet/BLOCK을 만들지 않는다.
-- corpus: deterministic selection/order, baseline compatibility, suppression expiry, new/worsened ratchet, incomplete evidence와 external import limitation을 고정한다.
+- 목표: Git-derived hotspot·ownership·debt marker를 read-only, source-bound observation으로 구현하고 Radar/Impact 입력 경계를 닫는다.
+- 불변식: exact repository/range identity를 먼저 고정한다. raw author name/email, secret, absolute path는 artifact·fingerprint·Radar에 저장하지 않으며, shallow/rewrite/binary/generated/missing CODEOWNERS는 complete 사실로 합성하지 않는다.
+- corpus: full/shallow/rewrite/rename/binary/generated/missing CODEOWNERS, non-UTF8·PII redaction, TODO/FIXME/HACK/deprecation structured metadata, deterministic ordering과 partial limitation을 고정한다.
 - 선택 Profile: `project_understanding`, `architecture_quality`, `test_correctness`, `ai_development_validation`; 새 Profile은 추가하지 않는다.
-- 검증: affected package TARGET 후 common core/Finding contract 영향이므로 FULL, strict self-review, intended files만 local commit. push/PR/publish/install은 금지다.
+- 검증: affected package TARGET 후 contract/schema/core 영향이므로 FULL, strict self-review, intended files만 local commit. push/PR/publish/install은 금지다.
 
 ## 열린 위험과 보류
 
@@ -45,8 +46,8 @@
 
 ## Context Pack
 
-- 현재 목표: P-0064C unused contract→Rust syntax/reference frontier→Finding projection→corpus→FULL→review→local commit.
-- 먼저 확인할 파일: `crates/control/star-project/src/index.rs`, `crates/adapters/star-adapter-rust-index/src/lib.rs`, `crates/control/star-validation/src/lib.rs`, `crates/foundation/star-contracts/src/index.rs`, `crates/foundation/star-contracts/src/management.rs`.
-- 먼저 실행할 명령: `git status --short --branch`; `rg -n 'SyntaxAnalysis|SourceClass|FindingProjection|Token' crates`; focused test; final `pwsh ./scripts/validate.ps1 -Profile full -OutputFormat json`.
+- 현재 목표: P-0066 Git history·CODEOWNERS·debt marker의 privacy-preserving read-only product path→Finding/Radar/Impact projection→corpus→FULL→review→local commit.
+- 먼저 확인할 파일: `docs/contracts/code-health-and-maintainability.md`, `crates/foundation/star-contracts/src/maintenance_v2.rs`, `crates/control/star-application/src/lib.rs`, existing project/index adapter와 controller/CLI routing.
+- 먼저 실행할 명령: `git status --short --branch`; `rg -n -i 'History|CODEOWNERS|Debt|Radar|Impact' crates apps specs`; focused tests; final `pwsh ./scripts/validate.ps1 -Profile full -OutputFormat json`.
 - 건드리면 안 되는 것: existing dirty/user changes, `target/`, `legacy/`, installed Runtime/cache, external account/remote state.
-- 다음 완료 기준: P-0065는 existing validation workflow에서 code-health Finding의 plan/Gate/Radar close loop을 source-bound evidence와 corpus로 증명하고 FULL·strict review·local commit이 필요하다.
+- 다음 완료 기준: P-0066은 exact Git range와 redacted ownership/debt observations를 existing source-bound Finding/Radar/Impact 경계로 materialize하고 corpus·FULL·strict review·local commit이 필요하다.

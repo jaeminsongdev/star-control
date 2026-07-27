@@ -26,7 +26,7 @@
     },
     {
       "file": "impact-analysis.schema.json",
-      "hash": "sha256:80fed6204f37b9d04620784bb832e87d8d3024780908bded66315153b7e9e985"
+      "hash": "sha256:efdf5d8df2a4ba500ad5c49d3aabd434eeb1fe34eb5992efabfeeb40cb76ac06"
     },
     {
       "file": "risk-path-descriptor.schema.json",
@@ -34,7 +34,7 @@
     },
     {
       "file": "planning-bundle.schema.json",
-      "hash": "sha256:93f9d889dc9d847ec374ac56b4a6cd4d417d211157619b2d0241cef533c3a5c0"
+      "hash": "sha256:21029a3a0364905750929172e96aa487f4efff505849d0186fcb720f82d624e8"
     },
     {
       "file": "change-plan-v2.schema.json",
@@ -187,6 +187,10 @@
     {
       "file": "static-analysis-import-report.schema.json",
       "hash": "sha256:28f4325cb5a7737ba2c5e069857658f6a5e36a69ccaf90646ccdeff23e13ffa3"
+    },
+    {
+      "file": "git-history-risk-snapshot.schema.json",
+      "hash": "sha256:1cabefc6ed23bace7ae25f241611d7903b3374d873bff215593f72bc0f5d40cd"
     },
     {
       "file": "dependency-update-plan.schema.json",

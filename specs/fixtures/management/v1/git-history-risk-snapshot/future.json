@@ -1,0 +1,10 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "history_completeness": "complete",
+  "project_id": "prj_00000000000000000000000000",
+  "range_end": "fixture",
+  "range_start": "fixture",
+  "repository_identity": "fixture",
+  "schema_id": "star.git-history-risk-snapshot",
+  "schema_version": 2
+}

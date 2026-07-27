@@ -111,6 +111,9 @@ pub struct PlanningPolicy {
     pub max_artifact_bytes: u64,
     pub allow_cross_project_read: bool,
     pub allow_previous_success_reuse: bool,
+    /// Source-bound advisory observations such as read-only Git history. They
+    /// can make Impact partial but never create a standalone blocking path.
+    pub impact_advisory_refs: Vec<String>,
 }
 
 impl Default for PlanningPolicy {
@@ -130,6 +133,7 @@ impl Default for PlanningPolicy {
             max_artifact_bytes: 1_073_741_824,
             allow_cross_project_read: true,
             allow_previous_success_reuse: true,
+            impact_advisory_refs: Vec::new(),
         }
     }
 }
@@ -1304,6 +1308,7 @@ fn analyze_impact(
         risk_paths,
         affected_projects,
         no_results,
+        advisory_evidence_refs: policy.impact_advisory_refs.clone(),
         limitations: limitations.clone(),
         confidence_summary,
         calculation_fingerprint: empty_fingerprint(),
@@ -3162,6 +3167,9 @@ mod tests {
         let policy = PlanningPolicy {
             effective_config_fingerprint: expected_config.clone(),
             command_timeout_ms: 42_000,
+            impact_advisory_refs: vec![
+                "GIT_HISTORY_ADVISORY_REF:prj_fixture:sha256:test".to_owned(),
+            ],
             ..PlanningPolicy::default()
         };
         let descriptors = [
@@ -3210,6 +3218,13 @@ mod tests {
             expected_config
         );
         assert_eq!(bundle.validation_plan.config_fingerprint, expected_config);
+        assert!(
+            bundle
+                .impact_analysis
+                .advisory_evidence_refs
+                .iter()
+                .any(|value| value == "GIT_HISTORY_ADVISORY_REF:prj_fixture:sha256:test")
+        );
         assert!(
             bundle
                 .validation_plan

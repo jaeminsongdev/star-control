@@ -2534,6 +2534,7 @@ impl UserExecutionConfig {
             max_artifact_bytes: integer("budgets.max_artifact_bytes")?,
             allow_cross_project_read: boolean("change_planning.allow_cross_project_read")?,
             allow_previous_success_reuse: boolean("change_planning.allow_previous_success_reuse")?,
+            impact_advisory_refs: Vec::new(),
         };
         Ok(Self {
             scan_incremental: boolean("scan.incremental")?,
@@ -2748,6 +2749,7 @@ impl UserExecutionConfig {
             max_artifact_bytes: 1_073_741_824,
             allow_cross_project_read: boolean(planning, "allow_cross_project_read", true)?,
             allow_previous_success_reuse: boolean(planning, "allow_previous_success_reuse", true)?,
+            impact_advisory_refs: Vec::new(),
         };
 
         let mut entries =

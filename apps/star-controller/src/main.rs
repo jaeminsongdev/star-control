@@ -91,9 +91,10 @@ use star_contracts::{
         DEPENDENCY_SNAPSHOT_SCHEMA_ID, DEPENDENCY_UPDATE_PLAN_SCHEMA_ID, DependencySnapshot,
         DependencyUpdatePlan, EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID, EvaluationRunEvidenceRef,
         ExternalDataSnapshot, ExternalFreshness, FAILURE_RECORD_SCHEMA_ID, FailureRecord,
-        MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID, MaintenanceRadarItem, RECOVERY_PLAN_V2_SCHEMA_ID,
-        REGRESSION_RECORD_SCHEMA_ID, REPRODUCTION_PACK_V2_SCHEMA_ID, RadarCategory, RadarPriority,
-        RecoveryPlanV2, RegressionRecord, ReproductionAttemptObservationV1, ReproductionAttemptV2,
+        GIT_HISTORY_RISK_SNAPSHOT_SCHEMA_ID, MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
+        MaintenanceRadarItem, RECOVERY_PLAN_V2_SCHEMA_ID, REGRESSION_RECORD_SCHEMA_ID,
+        REPRODUCTION_PACK_V2_SCHEMA_ID, RadarCategory, RadarPriority, RecoveryPlanV2,
+        RegressionRecord, ReproductionAttemptObservationV1, ReproductionAttemptV2,
         ReproductionPackV2, ReproductionResult, SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID,
         SupplyChainObservation, UpdateCandidate, VerificationState,
     },
@@ -225,6 +226,7 @@ use star_project::catalog::{
     ProjectCatalogView, inspect_project_catalog, inspect_project_catalog_entry,
     parse_project_catalog, resolve_project_catalog_root,
 };
+use star_project::git_history::CommandGitHistoryAdapter;
 use star_release::{
     ReleaseError,
     audit::{build_final_product_audit_v2, embedded_product_source_evidence},
@@ -4054,6 +4056,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arc::new(LocalArtifactStore::default()),
         )
         .with_syntax_adapter(Arc::new(RustSyntaxAdapter))
+        .with_git_history_adapter(Arc::new(CommandGitHistoryAdapter))
         .with_managed_registry_resolver(Arc::new(DevelopmentManagedRegistryResolver))
         .with_managed_registry_rewriter(Arc::new(DevelopmentManagedRegistryResolver))
         .with_profile_catalog_root(profile_catalog_root)
@@ -9302,6 +9305,7 @@ fn is_management_command(command: &str) -> bool {
             | "deps.rollback-plan"
             | "maintenance.radar"
             | "maintenance.radar.code-health"
+            | "maintenance.radar.git-history"
             | "migration.inspect"
             | "migration.plan"
             | "migration.checkpoint"
@@ -13734,6 +13738,7 @@ fn is_m7_development_command(command: &str) -> bool {
             | "deps.rollback-plan"
             | "maintenance.radar"
             | "maintenance.radar.code-health"
+            | "maintenance.radar.git-history"
     )
 }
 
@@ -14793,6 +14798,71 @@ fn handle_m7_development_command(
                     MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
                     1,
                     &snapshot,
+                )
+                .and_then(serialize_management_result)
+        }
+        "maintenance.radar.git-history"
+            if payload_has_exact_keys(
+                payload,
+                &[
+                    "project_id",
+                    "snapshot_id",
+                    "range_start",
+                    "range_end",
+                    "commit_limit",
+                    "evaluation_time",
+                    "valid_until",
+                    "revision",
+                ],
+            ) =>
+        {
+            let project_id = management_project_id(payload)?;
+            let snapshot_id = m6_required_string(payload, "snapshot_id", 192)?;
+            let range_start = m6_optional_string(payload, "range_start", 128)?;
+            let range_end = m6_required_string(payload, "range_end", 128)?;
+            let commit_limit = payload
+                .get("commit_limit")
+                .and_then(serde_json::Value::as_u64)
+                .filter(|value| *value > 0 && *value <= 10_000)
+                .ok_or(ApplicationError::Invalid)? as u32;
+            let evaluation_time = m6_required_string(payload, "evaluation_time", 64)?;
+            let valid_until = m6_optional_string(payload, "valid_until", 64)?;
+            let projection = service.git_history_radar_projection(
+                &project_id,
+                range_start,
+                range_end,
+                commit_limit,
+                &evaluation_time,
+            )?;
+            let radar = build_maintenance_radar_snapshot(
+                snapshot_id.clone(),
+                evaluation_time,
+                valid_until,
+                projection.items,
+            )
+            .map_err(m6_development_error)?;
+            let history_id = format!("{snapshot_id}-history");
+            let state = m6_coverage_state(radar.completeness);
+            service.publish_development_document(
+                "git_history_risk_snapshot",
+                &history_id,
+                m6_revision(payload)?,
+                Some(project_id.clone()),
+                state,
+                GIT_HISTORY_RISK_SNAPSHOT_SCHEMA_ID,
+                1,
+                &projection.snapshot,
+            )?;
+            service
+                .publish_development_document(
+                    "maintenance_radar_snapshot",
+                    &snapshot_id,
+                    m6_revision(payload)?,
+                    Some(project_id),
+                    state,
+                    MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
+                    1,
+                    &radar,
                 )
                 .and_then(serialize_management_result)
         }
@@ -23036,6 +23106,10 @@ fn management_command_response(
                     "PLANNING_SNAPSHOT_STALE",
                     "The requested code index is stale or unverified.",
                 ),
+                ApplicationError::GitHistoryUnavailable => (
+                    "SCAN_INCOMPLETE",
+                    "The read-only Git history observation is unavailable or unverified.",
+                ),
                 ApplicationError::IndexIdentityConflict => (
                     "PLANNING_OUTPUT_COHERENCE",
                     "The same code index analysis input produced conflicting content.",
@@ -26901,6 +26975,7 @@ mod tests {
             "deps.rollback-plan",
             "maintenance.radar",
             "maintenance.radar.code-health",
+            "maintenance.radar.git-history",
         ] {
             assert!(is_management_command(command), "{command}");
         }
@@ -26915,6 +26990,7 @@ mod tests {
             "deps.rollback-plan",
             "maintenance.radar",
             "maintenance.radar.code-health",
+            "maintenance.radar.git-history",
         ] {
             assert!(
                 !update_restart_pending_command_allowed(command),

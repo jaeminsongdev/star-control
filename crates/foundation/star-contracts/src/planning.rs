@@ -560,6 +560,10 @@ pub struct ImpactAnalysis {
     pub risk_paths: Vec<RiskPathFinding>,
     pub affected_projects: Vec<AffectedProject>,
     pub no_results: Vec<NoResult>,
+    /// Read-only advisory evidence (for example Git history observations).
+    /// Unlike `limitations`, this never changes the Impact/Gate readiness.
+    #[serde(default)]
+    pub advisory_evidence_refs: Vec<String>,
     pub limitations: Vec<String>,
     pub confidence_summary: ImpactConfidenceSummary,
     pub calculation_fingerprint: Sha256Hash,
@@ -1902,6 +1906,8 @@ impl ImpactAnalysis {
             .sort_by(|left, right| left.edge_id.cmp(&right.edge_id));
         self.risk_paths
             .sort_by(|left, right| left.finding_id.cmp(&right.finding_id));
+        self.advisory_evidence_refs.sort();
+        self.advisory_evidence_refs.dedup();
         self.calculation_fingerprint = fingerprint(
             "star.impact-analysis",
             1,
@@ -1920,6 +1926,7 @@ impl ImpactAnalysis {
                 "risk_paths":self.risk_paths,
                 "affected_projects":self.affected_projects,
                 "no_results":self.no_results,
+                "advisory_evidence_refs":self.advisory_evidence_refs,
                 "limitations":self.limitations,
                 "confidence_summary":self.confidence_summary,
                 "status":self.status,
