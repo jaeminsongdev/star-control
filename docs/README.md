@@ -13,6 +13,7 @@
 7. [설정과 Catalog 계약](contracts/config-and-catalog.md)
 8. [공통 개발 관리와 로컬 관리 DB 계약](contracts/development-management.md) — 0단계 domain·repository·rebuild 정본
 9. [읽기 전용 Project Catalog와 Code Index 계약](contracts/project-catalog-and-code-index.md) — 1단계 discovery·checkout·index·freshness·fallback 정본
+9a. [Code Health·장기 유지보수 계약](contracts/code-health-and-maintainability.md) — CodeIndex/SARIF/clone·complexity·unused/history/ownership/debt 관측을 기존 Finding·Gate·Radar·Patch·Evaluation 흐름에 연결하는 설계 정본
 10. [변경 계획·영향 분석·affected 검사 선택 계약](contracts/change-planning-and-impact.md) — 2단계 TaskSpec·scope revision·impact·risk·fallback·3단계 입력 정본
 11. [이벤트와 상태 계약](contracts/events-and-state.md)
 12. [검사·완료·증거](contracts/validation-and-evidence.md)

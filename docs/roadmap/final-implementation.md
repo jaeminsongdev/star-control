@@ -227,6 +227,21 @@ M1 구현은 다음 gate를 먼저 통과해야 한다.
 - read-only CLI E2E에서 대상 project source·Git metadata before/after manifest가 같고 M1 discover·scan·index graph의 AI·network·자체 scheduler·project watcher dependency가 0이다. 별도 Tool Registry watcher는 이 경로에서 호출하지 않는다.
 - 2단계 영향 분석에 versioned ProjectCatalogSnapshot, CodeIndexSnapshot, graph, source/classification/toolchain/guidance fingerprint와 freshness proof를 제공한다.
 
+## M1 확장. Code Health·장기 유지보수 — P-0062 이후
+
+P-0062는 [Code Health·장기 유지보수 계약](../contracts/code-health-and-maintainability.md)으로 기존 Project Catalog·Code Index, Finding·Diagnostic, ValidationPlan·Gate, Maintenance Radar·ReviewPack, M4 PatchSet과 D02 EvaluationRun의 재사용 경계를 **설계만** 확정했다. 신규 Schema, handler, CLI/MCP route, Catalog entry와 generated manifest는 아직 구현하지 않았으며, source docs만으로 제품 완료를 주장하지 않는다.
+
+구현은 다음 bounded vertical Slice로 진행한다.
+
+1. P-0063: registered ToolDescriptor output의 SARIF 2.1.0 normalizer를 `validation.run` 경로에 연결한다.
+2. P-0064A/B/C: Rust structural duplication, complexity regression, unused-surface candidate를 각각 독립 contract→test→Gate Slice로 닫는다.
+3. P-0065: scan/finding/planning/validation/baseline/suppression/Gate/ReviewPack/Radar의 read-only workflow를 닫는다.
+4. P-0066~P-0068: Git history·CODEOWNERS·debt, semantic provider, changed-code mutation·Rule Pack·repository posture adapter를 연결한다.
+5. P-0069: EvaluationRun evidence로 기존 16 Profile 조합 유지, `trial`, `reject` 또는 17번째 `code_health_maintenance` 승격을 결정한다.
+6. P-0070: owner docs/Schema/handler/CLI/MCP/fixture/catalog/inventory를 current source에서 다시 감사하고 FULL로 봉인한다.
+
+모든 external analyzer 실행은 provider identity, source binding, coverage, raw redacted ArtifactRef와 completeness를 요구한다. 설치·network·account·publish와 provider mutation은 별도 승인 경계이며, partial/unverified external 결과는 clean pass 또는 auto apply로 승격하지 않는다.
+
 ## M2. 변경 계획·영향 분석·affected 검사 선택 — P-0043 + P-0054 제품 확장 구현
 
 M2는 사용자가 지정한 **2단계 개발 관리 확장**이다. 의미 정본은 [변경 계획·영향 분석 계약](../contracts/change-planning-and-impact.md)이다. P-0043은 M1 persisted graph를 소비하는 `star-planning` pure engine, full planning contract·generated Schema·fixture, dirty workspace collector, idempotent global projection과 `planning create/get` Controller·CLI를 구현했다. P-0054는 scope revise·status/history·impact/affected inspect·override/waiver·invalidate/replan, append-only revision repository, project-scoped resolved toolchain Check와 previous-success compatibility 판정을 실제 제품 경로와 E2E로 확장했다. P-0031/P-0035 `ValidationPlan` v1과 validator 실행 cache는 역사적 precursor이며 full plan의 실행은 M3가 소유한다.
