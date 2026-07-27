@@ -763,6 +763,79 @@
       ],
       "type": "object"
     },
+    "StructuralCloneCandidate": {
+      "additionalProperties": false,
+      "description": "A bounded, redacted syntax candidate used to project exact structural clones.\n\nThe normalized token stream is deliberately not persisted.  Consumers receive\nonly its fingerprint, size, source binding, and owner identity.",
+      "properties": {
+        "candidate_key": {
+          "type": "string"
+        },
+        "canonical_source_id": {
+          "pattern": "^src_[a-z2-7]{52}$",
+          "type": "string"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "language_id": {
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "$ref": "#/$defs/IndexLimitation"
+          },
+          "type": "array"
+        },
+        "normalized_token_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "normalized_token_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "owning_symbol_identity": {
+          "type": "string"
+        },
+        "redaction_state": {
+          "$ref": "#/$defs/HardcodingRedactionState"
+        },
+        "source_class": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "source_content_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "source_range": {
+          "$ref": "#/$defs/SourceRange"
+        },
+        "source_ref": {
+          "minLength": 1,
+          "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+          "type": "string"
+        },
+        "structural_kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_key",
+        "canonical_source_id",
+        "source_ref",
+        "source_content_sha256",
+        "source_range",
+        "source_class",
+        "language_id",
+        "structural_kind",
+        "normalized_token_fingerprint",
+        "normalized_token_count",
+        "owning_symbol_identity",
+        "redaction_state",
+        "limitations",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
     "ToolchainCommandDeclaration": {
       "additionalProperties": false,
       "properties": {
@@ -1046,6 +1119,13 @@
     "schema_version": {
       "const": 1,
       "type": "integer"
+    },
+    "structural_clone_candidates": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/StructuralCloneCandidate"
+      },
+      "type": "array"
     },
     "toolchains": {
       "default": [],

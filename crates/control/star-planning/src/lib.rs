@@ -2801,6 +2801,7 @@ mod tests {
             toolchains: Vec::new(),
             guidance: Vec::new(),
             hardcoding_candidates: Vec::new(),
+            structural_clone_candidates: Vec::new(),
             limitations: Vec::<IndexLimitation>::new(),
             artifact_refs: Vec::<ArtifactRef>::new(),
             content_fingerprint: Sha256Hash::digest(b"index-content"),

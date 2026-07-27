@@ -22,7 +22,7 @@ use star_project::{
     FileObservation, ProjectObservation,
     index::{
         AdapterFailure, SemanticAdapter, SemanticAnalysis, SyntaxAdapter, SyntaxAnalysis,
-        SyntaxDefinition, SyntaxReference,
+        SyntaxDefinition, SyntaxReference, SyntaxStructuralCloneCandidate,
     },
 };
 use thiserror::Error;
@@ -31,6 +31,8 @@ use tree_sitter::{Node, Parser};
 const MAX_SOURCE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_TREE_DEPTH: usize = 512;
 const MAX_NAMED_NODES: usize = 1_000_000;
+const MAX_STRUCTURAL_CLONE_TOKENS: usize = 32 * 1024;
+const MIN_STRUCTURAL_CLONE_TOKENS: usize = 12;
 const PINNED_RUST_ANALYZER_VERSION: &str = "rust-analyzer 1.96.0 (ac68faa2 2026-05-25)";
 const PINNED_RUST_ANALYZER_X64_SHA256: &str =
     "sha256:9564c8fe6f9d0c71233a211780c87ebba728f1d8e157c3a67748e4ff5d6840ff";
@@ -48,7 +50,7 @@ impl SyntaxAdapter for RustSyntaxAdapter {
 
     fn fingerprint(&self) -> Sha256Hash {
         Sha256Hash::digest(
-            b"star.rust-syntax-adapter.v1;tree-sitter=0.26.11;tree-sitter-rust=0.24.2",
+            b"star.rust-syntax-adapter.v2;tree-sitter=0.26.11;tree-sitter-rust=0.24.2;structural-clone=exact-token-v1",
         )
     }
 
@@ -86,6 +88,15 @@ impl SyntaxAdapter for RustSyntaxAdapter {
             &definition_ranges,
             &mut analysis.references,
             &mut visited,
+            0,
+        )?;
+        let mut structural_visited = 0_usize;
+        collect_structural_clone_candidates(
+            tree.root_node(),
+            text.as_bytes(),
+            &mut analysis.structural_clone_candidates,
+            &mut analysis.limitations,
+            &mut structural_visited,
             0,
         )?;
         Ok(analysis)
@@ -1060,6 +1071,115 @@ fn collect_references(
     Ok(())
 }
 
+fn collect_structural_clone_candidates(
+    node: Node<'_>,
+    source: &[u8],
+    candidates: &mut Vec<SyntaxStructuralCloneCandidate>,
+    limitations: &mut Vec<IndexLimitation>,
+    visited: &mut usize,
+    depth: usize,
+) -> Result<(), AdapterFailure> {
+    enforce_limits(node, visited, depth)?;
+    if node.kind() == "block" {
+        let owning_symbol_identity = enclosing_function_identity(node, source);
+        let mut normalized = Vec::new();
+        let mut token_count = 0_usize;
+        if owning_symbol_identity.is_some()
+            && append_normalized_leaf_tokens(node, source, &mut normalized, &mut token_count)?
+        {
+            if token_count >= MIN_STRUCTURAL_CLONE_TOKENS {
+                candidates.push(SyntaxStructuralCloneCandidate {
+                    normalized_token_fingerprint: Sha256Hash::digest(&normalized),
+                    normalized_token_count: token_count as u32,
+                    range: source_range(node, source),
+                    structural_kind: if node
+                        .parent()
+                        .is_some_and(|parent| parent.kind() == "function_item")
+                    {
+                        "function_body".to_owned()
+                    } else {
+                        "block".to_owned()
+                    },
+                    owning_symbol_identity,
+                });
+            }
+        } else if owning_symbol_identity.is_some() {
+            limitations.push(IndexLimitation {
+                code: "STRUCTURAL_CLONE_TOKEN_LIMIT".to_owned(),
+                scope: None,
+                parameters: BTreeMap::new(),
+            });
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_structural_clone_candidates(
+            child,
+            source,
+            candidates,
+            limitations,
+            visited,
+            depth + 1,
+        )?;
+    }
+    Ok(())
+}
+
+fn enclosing_function_identity(node: Node<'_>, source: &[u8]) -> Option<String> {
+    let mut scopes = Vec::new();
+    let mut function_name = None;
+    let mut current = node.parent();
+    while let Some(ancestor) = current {
+        if function_name.is_none() && ancestor.kind() == "function_item" {
+            function_name = definition_node(ancestor, source).map(|(_, name, _)| name);
+        }
+        let definition_name = definition_node(ancestor, source).map(|(_, name, _)| name);
+        if let Some(scope) = scope_name(ancestor, source, definition_name.as_deref()) {
+            scopes.push(scope);
+        }
+        current = ancestor.parent();
+    }
+    let function_name = function_name?;
+    scopes.reverse();
+    if scopes.is_empty() {
+        Some(function_name)
+    } else {
+        Some(format!("{}::{function_name}", scopes.join("::")))
+    }
+}
+
+fn append_normalized_leaf_tokens(
+    node: Node<'_>,
+    source: &[u8],
+    normalized: &mut Vec<u8>,
+    token_count: &mut usize,
+) -> Result<bool, AdapterFailure> {
+    if node.kind().contains("comment") {
+        return Ok(true);
+    }
+    if node.child_count() == 0 {
+        *token_count = token_count.saturating_add(1);
+        if *token_count > MAX_STRUCTURAL_CLONE_TOKENS {
+            return Ok(false);
+        }
+        let text = source
+            .get(node.start_byte()..node.end_byte())
+            .ok_or(AdapterFailure::ParseFailed)?;
+        normalized.extend_from_slice(node.kind().as_bytes());
+        normalized.push(0);
+        normalized.extend_from_slice(text);
+        normalized.push(0);
+        return Ok(true);
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if !append_normalized_leaf_tokens(child, source, normalized, token_count)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 fn enforce_limits(node: Node<'_>, visited: &mut usize, depth: usize) -> Result<(), AdapterFailure> {
     if depth > MAX_TREE_DEPTH {
         return Err(AdapterFailure::ResourceLimit);
@@ -1248,6 +1368,83 @@ mod tests {
                 .references
                 .iter()
                 .all(|item| item.target_name != "extra")
+        );
+    }
+
+    #[test]
+    fn exact_structural_clone_candidates_ignore_comments_but_not_identifier_changes() {
+        let exact = RustSyntaxAdapter
+            .analyze(&source(
+                r#"
+                fn first(value: i32) -> i32 { let next = value + 1; if next > 2 { next } else { 2 } }
+                fn second(value: i32) -> i32 { /* moved comment */ let next = value + 1; if next > 2 { next } else { 2 } }
+                "#,
+            ))
+            .unwrap();
+        let function_bodies = exact
+            .structural_clone_candidates
+            .iter()
+            .filter(|candidate| candidate.structural_kind == "function_body")
+            .collect::<Vec<_>>();
+        assert_eq!(function_bodies.len(), 2);
+        assert_eq!(
+            function_bodies[0].normalized_token_fingerprint,
+            function_bodies[1].normalized_token_fingerprint
+        );
+        assert_eq!(
+            function_bodies
+                .iter()
+                .filter_map(|candidate| candidate.owning_symbol_identity.as_deref())
+                .collect::<Vec<_>>(),
+            vec!["first", "second"]
+        );
+
+        let renamed = RustSyntaxAdapter
+            .analyze(&source(
+                r#"
+                fn first(value: i32) -> i32 { let next = value + 1; if next > 2 { next } else { 2 } }
+                fn second(input: i32) -> i32 { let result = input + 1; if result > 2 { result } else { 2 } }
+                "#,
+            ))
+            .unwrap();
+        let renamed_bodies = renamed
+            .structural_clone_candidates
+            .iter()
+            .filter(|candidate| candidate.structural_kind == "function_body")
+            .collect::<Vec<_>>();
+        assert_eq!(renamed_bodies.len(), 2);
+        assert_ne!(
+            renamed_bodies[0].normalized_token_fingerprint,
+            renamed_bodies[1].normalized_token_fingerprint
+        );
+    }
+
+    #[test]
+    fn macro_blocks_are_not_structural_clone_candidates() {
+        let analysis = RustSyntaxAdapter
+            .analyze(&source(
+                r#"
+                macro_rules! build_value {
+                    () => { let value = 1; let next = value + 1; if next > 0 { next } else { 0 } }
+                }
+                "#,
+            ))
+            .unwrap();
+        assert!(analysis.structural_clone_candidates.is_empty());
+    }
+
+    #[test]
+    fn structural_clone_token_cap_is_reported_without_retaining_source() {
+        let body = "let value = 1; ".repeat(super::MAX_STRUCTURAL_CLONE_TOKENS / 2);
+        let analysis = RustSyntaxAdapter
+            .analyze(&source(&format!("fn oversized() {{ {body} }}")))
+            .unwrap();
+        assert!(analysis.structural_clone_candidates.is_empty());
+        assert!(
+            analysis
+                .limitations
+                .iter()
+                .any(|limitation| limitation.code == "STRUCTURAL_CLONE_TOKEN_LIMIT")
         );
     }
 

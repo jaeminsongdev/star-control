@@ -187,6 +187,37 @@
   "scan_run_id": "scn_00000000000000000000000000",
   "schema_id": "star.code-index-snapshot",
   "schema_version": 1,
+  "structural_clone_candidates": [
+    {
+      "candidate_key": "fixture",
+      "canonical_source_id": "src_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "language_id": "fixture",
+      "limitations": [
+        {
+          "code": "fixture",
+          "parameters": {
+            "fixture": "fixture"
+          },
+          "scope": "fixture"
+        }
+      ],
+      "normalized_token_count": 0,
+      "normalized_token_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "owning_symbol_identity": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "redaction_state": "not_needed",
+      "source_class": "source",
+      "source_content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "source_range": {
+        "end_column": 0,
+        "end_line": 0,
+        "start_column": 0,
+        "start_line": 0
+      },
+      "source_ref": "fixture",
+      "structural_kind": "fixture"
+    }
+  ],
   "toolchains": [
     {
       "build_system": "fixture",

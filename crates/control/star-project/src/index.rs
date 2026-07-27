@@ -19,8 +19,8 @@ use star_contracts::{
         HardcodingRedactionState, IndexCoverage, IndexEdge, IndexEntity, IndexEntityKind,
         IndexFreshnessState, IndexLimitation, IndexPartition, IndexPartitionKind,
         IndexPartitionState, IndexRelation, IndexScanMode, IndexTier, ProjectCatalogSnapshot,
-        SourceClass, SourceEntry, ToolchainCommandDeclaration, ToolchainCommandKind,
-        ToolchainRecord,
+        SourceClass, SourceEntry, StructuralCloneCandidate, ToolchainCommandDeclaration,
+        ToolchainCommandKind, ToolchainRecord,
     },
     management::{
         Project, ProjectCheckout, ProjectPathRef, SourceRange, Symbol, SymbolReference,
@@ -90,10 +90,20 @@ pub struct SyntaxReference {
     pub resolution: SymbolResolution,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyntaxStructuralCloneCandidate {
+    pub normalized_token_fingerprint: Sha256Hash,
+    pub normalized_token_count: u32,
+    pub range: SourceRange,
+    pub structural_kind: String,
+    pub owning_symbol_identity: Option<String>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct SyntaxAnalysis {
     pub definitions: Vec<SyntaxDefinition>,
     pub references: Vec<SyntaxReference>,
+    pub structural_clone_candidates: Vec<SyntaxStructuralCloneCandidate>,
     pub limitations: Vec<IndexLimitation>,
 }
 
@@ -390,6 +400,21 @@ pub fn build_code_index(
         .partitions
         .sort_by(|left, right| left.partition_key.cmp(&right.partition_key));
 
+    projection
+        .structural_clone_candidates
+        .sort_by(|left, right| {
+            (
+                &left.normalized_token_fingerprint,
+                &left.owning_symbol_identity,
+                &left.candidate_key,
+            )
+                .cmp(&(
+                    &right.normalized_token_fingerprint,
+                    &right.owning_symbol_identity,
+                    &right.candidate_key,
+                ))
+        });
+
     let hardcoding_candidates = if request.policy.hardcoding_rules_enabled {
         detect_hardcoding_candidates(request, &projection.source_entries, &projection.entities)?
     } else {
@@ -411,6 +436,45 @@ pub fn build_code_index(
         &hardcoding_candidates,
     )
     .map_err(|_| ProjectError::Fingerprint)?;
+    let structural_clone_input = versioned_fingerprint(
+        "star.index-partition-input.structural-clone",
+        1,
+        &serde_json::json!({
+            "entries_fingerprint":request.observation.entries_fingerprint,
+            "classification_fingerprint":classification_fingerprint,
+            "adapter_set_fingerprint":adapter_set_fingerprint,
+            "rule_version":"1.0.0",
+        }),
+    )
+    .map_err(|_| ProjectError::Fingerprint)?;
+    let structural_clone_output = versioned_fingerprint(
+        "star.index-partition-output.structural-clone",
+        1,
+        &projection.structural_clone_candidates,
+    )
+    .map_err(|_| ProjectError::Fingerprint)?;
+    projection.partitions.push(IndexPartition {
+        partition_key: "finding:structural-clone".to_owned(),
+        kind: IndexPartitionKind::Finding,
+        required: false,
+        requested_tier: IndexTier::Syntax,
+        used_tier: Some(IndexTier::Syntax),
+        state: IndexPartitionState::Succeeded,
+        input_fingerprint: structural_clone_input,
+        output_fingerprint: Some(structural_clone_output),
+        target_count: projection.source_entries.len() as u64,
+        indexed_count: projection.source_entries.len() as u64,
+        failed_count: 0,
+        excluded_count: projection
+            .source_entries
+            .iter()
+            .filter(|source| {
+                !matches!(source.source_class, SourceClass::Source | SourceClass::Test)
+            })
+            .count() as u64,
+        cache_hit: false,
+        limitations: Vec::new(),
+    });
     projection.partitions.push(IndexPartition {
         partition_key: "finding:hardcoding".to_owned(),
         kind: IndexPartitionKind::Finding,
@@ -453,7 +517,8 @@ pub fn build_code_index(
         definitions: projection.symbols.len() as u64,
         references: projection.references.len() as u64,
         graph_edges: projection.edges.len() as u64,
-        findings: hardcoding_candidates.len() as u64,
+        findings: (hardcoding_candidates.len() + projection.structural_clone_candidates.len())
+            as u64,
     };
     let analysis_input_fingerprint = versioned_fingerprint(
         "star.code-index-analysis-input",
@@ -473,6 +538,7 @@ pub fn build_code_index(
             "toolchains":toolchains.iter().map(|item| (&item.record_key,&item.content_fingerprint)).collect::<Vec<_>>(),
             "guidance":guidance.iter().map(|item| (&item.record_key,&item.content_fingerprint)).collect::<Vec<_>>(),
             "hardcoding_candidates":hardcoding_candidates.iter().map(|item| (&item.candidate_key,&item.content_fingerprint)).collect::<Vec<_>>(),
+            "structural_clone_candidates":projection.structural_clone_candidates.iter().map(|item| (&item.candidate_key,&item.content_fingerprint)).collect::<Vec<_>>(),
         }),
     )
     .map_err(|_| ProjectError::Fingerprint)?;
@@ -508,6 +574,7 @@ pub fn build_code_index(
             "toolchains":toolchains,
             "guidance":guidance,
             "hardcoding_candidates":hardcoding_candidates,
+            "structural_clone_candidates":projection.structural_clone_candidates,
             "limitations":projection.limitations,
         }),
     )
@@ -582,6 +649,7 @@ pub fn build_code_index(
         toolchains,
         guidance,
         hardcoding_candidates,
+        structural_clone_candidates: projection.structural_clone_candidates,
         limitations: projection.limitations,
         artifact_refs: Vec::new(),
         content_fingerprint,
@@ -1664,6 +1732,7 @@ struct ProjectionAccumulator {
     edges: Vec<IndexEdge>,
     symbols: Vec<Symbol>,
     references: Vec<SymbolReference>,
+    structural_clone_candidates: Vec<StructuralCloneCandidate>,
     partitions: Vec<IndexPartition>,
     limitations: Vec<IndexLimitation>,
 }
@@ -1674,6 +1743,7 @@ struct PreviousProjectionIndex<'a> {
     edges: BTreeMap<String, Vec<&'a IndexEdge>>,
     symbols: BTreeMap<String, Vec<&'a Symbol>>,
     references: BTreeMap<String, Vec<&'a SymbolReference>>,
+    structural_clone_candidates: BTreeMap<String, Vec<&'a StructuralCloneCandidate>>,
     partitions: BTreeMap<String, Vec<&'a IndexPartition>>,
 }
 
@@ -1685,6 +1755,7 @@ impl<'a> PreviousProjectionIndex<'a> {
             edges: BTreeMap::new(),
             symbols: BTreeMap::new(),
             references: BTreeMap::new(),
+            structural_clone_candidates: BTreeMap::new(),
             partitions: BTreeMap::new(),
         };
         for source in &previous.source_entries {
@@ -1721,6 +1792,13 @@ impl<'a> PreviousProjectionIndex<'a> {
                 .entry(reference.from_source_id.as_str().to_owned())
                 .or_default()
                 .push(reference);
+        }
+        for candidate in &previous.snapshot.structural_clone_candidates {
+            index
+                .structural_clone_candidates
+                .entry(candidate.canonical_source_id.as_str().to_owned())
+                .or_default()
+                .push(candidate);
         }
         for partition in &previous.snapshot.partitions {
             if let Some((path, _)) = partition.partition_key.rsplit_once(':') {
@@ -2104,6 +2182,16 @@ fn reuse_source_projection(
                 }),
         );
     }
+    if reusable_kinds.contains(&IndexPartitionKind::Syntax) {
+        output.structural_clone_candidates.extend(
+            previous
+                .structural_clone_candidates
+                .get(source_key)
+                .into_iter()
+                .flatten()
+                .map(|item| (*item).clone()),
+        );
+    }
     for mut partition in source_partitions
         .iter()
         .filter(|partition| reusable_kinds.contains(&partition.kind))
@@ -2385,24 +2473,31 @@ fn index_syntax_partition(
     };
     match adapter.analyze(file) {
         Ok(analysis) => {
+            let SyntaxAnalysis {
+                definitions,
+                references,
+                structural_clone_candidates,
+                limitations,
+            } = analysis;
             let before_symbols = output.symbols.len();
             let before_references = output.references.len();
             append_adapter_analysis(
                 request,
                 source,
                 IndexTier::Syntax,
-                analysis.definitions,
-                analysis.references,
+                definitions,
+                references,
                 output,
             )?;
-            output.limitations.extend(analysis.limitations.clone());
+            append_structural_clone_candidates(source, structural_clone_candidates, output)?;
+            output.limitations.extend(limitations.clone());
             let fingerprint = versioned_fingerprint(
                 "star.index-partition-output.syntax",
                 1,
                 &serde_json::json!({
                     "symbols":output.symbols[before_symbols..].iter().map(|item| (&item.symbol_id,&item.content_fingerprint)).collect::<Vec<_>>(),
                     "references":output.references[before_references..].iter().map(|item| &item.symbol_reference_id).collect::<Vec<_>>(),
-                    "limitations":analysis.limitations,
+                    "limitations":limitations,
                 }),
             )
             .map_err(|_| ProjectError::Fingerprint)?;
@@ -2412,7 +2507,7 @@ fn index_syntax_partition(
                 required: request.policy.required_tier >= IndexTier::Syntax,
                 requested_tier: IndexTier::Syntax,
                 used_tier: Some(IndexTier::Syntax),
-                state: if analysis.limitations.is_empty() {
+                state: if limitations.is_empty() {
                     IndexPartitionState::Succeeded
                 } else {
                     IndexPartitionState::Incomplete
@@ -2424,7 +2519,7 @@ fn index_syntax_partition(
                 failed_count: 0,
                 excluded_count: 0,
                 cache_hit: false,
-                limitations: analysis.limitations,
+                limitations,
             });
         }
         Err(failure) => {
@@ -2713,6 +2808,88 @@ fn append_adapter_analysis(
                 .workspace_snapshot_id(&request.project.project_id)?,
             scan_run_id: request.scan_run_id.clone(),
         });
+    }
+    Ok(())
+}
+
+fn append_structural_clone_candidates(
+    source: &SourceEntry,
+    mut candidates: Vec<SyntaxStructuralCloneCandidate>,
+    output: &mut ProjectionAccumulator,
+) -> Result<(), ProjectError> {
+    // P0064A only compares production Rust with production Rust, and tests with
+    // tests.  Other source classes intentionally remain out of this detector.
+    if !matches!(source.source_class, SourceClass::Source | SourceClass::Test) {
+        return Ok(());
+    }
+    candidates.sort_by(|left, right| {
+        (
+            &left.normalized_token_fingerprint,
+            &left.structural_kind,
+            left.range.start_line,
+            left.range.start_column,
+        )
+            .cmp(&(
+                &right.normalized_token_fingerprint,
+                &right.structural_kind,
+                right.range.start_line,
+                right.range.start_column,
+            ))
+    });
+    candidates.dedup_by(|left, right| {
+        left.normalized_token_fingerprint == right.normalized_token_fingerprint
+            && left.structural_kind == right.structural_kind
+            && left.range == right.range
+    });
+    for candidate in candidates {
+        let Some(owning_symbol_identity) = candidate.owning_symbol_identity else {
+            continue;
+        };
+        let candidate_fingerprint = versioned_fingerprint(
+            "star.structural-clone-candidate",
+            1,
+            &serde_json::json!({
+                "canonical_source_id":source.canonical_source_id,
+                "source_content_sha256":source.content_sha256,
+                "source_range":candidate.range,
+                "structural_kind":candidate.structural_kind,
+                "normalized_token_fingerprint":candidate.normalized_token_fingerprint,
+            }),
+        )
+        .map_err(|_| ProjectError::Fingerprint)?;
+        let content_fingerprint = versioned_fingerprint(
+            "star.structural-clone-candidate-content",
+            1,
+            &serde_json::json!({
+                "candidate_key":candidate_fingerprint,
+                "source_class":source.source_class,
+                "language_id":source.language_id,
+                "structural_kind":candidate.structural_kind,
+                "normalized_token_fingerprint":candidate.normalized_token_fingerprint,
+                "normalized_token_count":candidate.normalized_token_count,
+                "owning_symbol_identity":owning_symbol_identity,
+                "redaction_state":HardcodingRedactionState::ShapeOnly,
+            }),
+        )
+        .map_err(|_| ProjectError::Fingerprint)?;
+        output
+            .structural_clone_candidates
+            .push(StructuralCloneCandidate {
+                candidate_key: candidate_fingerprint.to_string(),
+                canonical_source_id: source.canonical_source_id.clone(),
+                source_ref: source.path.clone(),
+                source_content_sha256: source.content_sha256.clone(),
+                source_range: candidate.range,
+                source_class: source.source_class,
+                language_id: source.language_id.clone(),
+                structural_kind: candidate.structural_kind,
+                normalized_token_fingerprint: candidate.normalized_token_fingerprint,
+                normalized_token_count: candidate.normalized_token_count,
+                owning_symbol_identity,
+                redaction_state: HardcodingRedactionState::ShapeOnly,
+                limitations: Vec::new(),
+                content_fingerprint,
+            });
     }
     Ok(())
 }
@@ -3203,6 +3380,18 @@ mod tests {
                     reference_kind: "call".to_owned(),
                     resolution: SymbolResolution::Resolved,
                 }],
+                structural_clone_candidates: vec![SyntaxStructuralCloneCandidate {
+                    normalized_token_fingerprint: Sha256Hash::digest(b"fixture-structural"),
+                    normalized_token_count: 16,
+                    range: SourceRange {
+                        start_line: 1,
+                        start_column: 15,
+                        end_line: 1,
+                        end_column: 22,
+                    },
+                    structural_kind: "function_body".to_owned(),
+                    owning_symbol_identity: Some("alpha".to_owned()),
+                }],
                 limitations: Vec::new(),
             })
         }
@@ -3279,6 +3468,11 @@ mod tests {
                 .references
                 .iter()
                 .all(|reference| reference.unresolved_target.is_none())
+        );
+        assert_eq!(first.snapshot.structural_clone_candidates.len(), 1);
+        assert_eq!(
+            first.snapshot.structural_clone_candidates,
+            second.snapshot.structural_clone_candidates
         );
     }
 }

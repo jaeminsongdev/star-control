@@ -396,6 +396,29 @@ pub struct HardcodingCandidate {
     pub content_fingerprint: Sha256Hash,
 }
 
+/// A bounded, redacted syntax candidate used to project exact structural clones.
+///
+/// The normalized token stream is deliberately not persisted.  Consumers receive
+/// only its fingerprint, size, source binding, and owner identity.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StructuralCloneCandidate {
+    pub candidate_key: String,
+    pub canonical_source_id: CanonicalSourceId,
+    pub source_ref: ProjectPathRef,
+    pub source_content_sha256: Sha256Hash,
+    pub source_range: SourceRange,
+    pub source_class: SourceClass,
+    pub language_id: String,
+    pub structural_kind: String,
+    pub normalized_token_fingerprint: Sha256Hash,
+    pub normalized_token_count: u32,
+    pub owning_symbol_identity: String,
+    pub redaction_state: HardcodingRedactionState,
+    pub limitations: Vec<IndexLimitation>,
+    pub content_fingerprint: Sha256Hash,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IndexEntity {
@@ -459,6 +482,8 @@ pub struct CodeIndexSnapshot {
     pub guidance: Vec<GuidanceRecord>,
     #[serde(default)]
     pub hardcoding_candidates: Vec<HardcodingCandidate>,
+    #[serde(default)]
+    pub structural_clone_candidates: Vec<StructuralCloneCandidate>,
     pub limitations: Vec<IndexLimitation>,
     pub artifact_refs: Vec<ArtifactRef>,
     pub content_fingerprint: Sha256Hash,

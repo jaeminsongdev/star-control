@@ -35,7 +35,7 @@ use star_contracts::{
     index::{
         CodeIndexSnapshot, HardcodingCandidate, IndexEdge, IndexEntity, IndexFreshnessState,
         IndexPartitionKind, IndexPartitionState, IndexScanMode, IndexTier, ProjectCatalogSnapshot,
-        SourceClass, SourceEntry, ToolchainCommandKind,
+        SourceClass, SourceEntry, StructuralCloneCandidate, ToolchainCommandKind,
     },
     maintenance_v2::{STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID, StaticAnalysisImportReport},
     managed_registry::{
@@ -2008,6 +2008,7 @@ impl ManagementApplicationService {
             &sources,
             &symbols,
             &code_index.snapshot.hardcoding_candidates,
+            &code_index.snapshot.structural_clone_candidates,
         )?;
         let shared_decisions = match load_shared_decisions(&project, &root) {
             Ok(declarations) => declarations,
@@ -2278,6 +2279,31 @@ impl ManagementApplicationService {
         Ok(index_query_result(
             &projection.snapshot,
             IndexTier::Text,
+            current,
+            items,
+            IndexPartitionKind::Finding,
+        ))
+    }
+
+    pub fn index_structural_clone_candidates(
+        &self,
+        project_id: &ProjectId,
+        require_current: bool,
+    ) -> Result<IndexQueryResult<StructuralCloneCandidate>, ApplicationError> {
+        let (projection, current) = self.load_index_projection_with_freshness(project_id)?;
+        if require_current && !current {
+            return Err(ApplicationError::IndexNotCurrent);
+        }
+        let items = projection
+            .snapshot
+            .structural_clone_candidates
+            .iter()
+            .take(256)
+            .cloned()
+            .collect();
+        Ok(index_query_result(
+            &projection.snapshot,
+            IndexTier::Syntax,
             current,
             items,
             IndexPartitionKind::Finding,

@@ -2,7 +2,7 @@
 
 ## 상태와 소유권
 
-이 문서는 P-0062의 **정본 설계**다. 아래 Artifact, Rule, Check, adapter와 제품 경로는 아직 구현 전이며 문서 존재를 구현 완료로 표현하지 않는다. 구현 Slice와 current evidence는 `PLANS.md`, source test 및 생성 validation report가 소유한다.
+이 문서는 P-0062의 **정본 설계**다. 아래 Artifact, Rule, Check, adapter와 제품 경로는 명시적으로 구현 Slice가 닫히기 전까지 구현 전이며 문서 존재를 구현 완료로 표현하지 않는다. P-0064A의 Rust exact structural clone 후보만 이 문서의 계획 중 source 구현 대상이고, current evidence는 `PLANS.md`, source test 및 생성 validation report가 소유한다.
 
 이 계약은 [Project Catalog·Code Index](project-catalog-and-code-index.md), [변경 계획·영향 분석](change-planning-and-impact.md), [검사·완료·증거](validation-and-evidence.md), [공통 Validation Gate](../features/common-validation-gate.md), [안전한 Patch·codemod](safe-patch-and-codemod.md), [실패·보안·의존성 유지보수](failure-security-and-dependency-maintenance.md), [설정·Catalog](config-and-catalog.md), [Profile](../features/profiles.md), [D02 평가](../features/operations.md#d02-비용평가규칙-개선)를 조합한다. 이 문서는 기존 type의 의미를 복제하지 않고 Code Health의 producer·coverage·판정·연결 규칙만 소유한다.
 
@@ -76,7 +76,7 @@ Git source / CodeIndex
 
 | Check family | Rule family | 초기 제품 의미 |
 |---|---|---|
-| duplication | `code_clone` | Rust function/block exact structural clone부터; deterministic token, bounded index/hash, generated/vendor/test exclusion, near clone은 후속 |
+| duplication | `code_clone` | Rust function/block exact structural clone부터; deterministic token, bounded index/hash, generated/vendor/cache/output 제외와 production/test cohort 분리, near clone은 후속 |
 | complexity | `complexity_regression` | cyclomatic, nesting, token/line, branch/match-arm을 symbol-level metric으로 비교; threshold는 project config와 compatible metric version에만 적용 |
 | unused_surface | `unused_symbol`, `unused_file`, `unused_dependency` | private symbol/file 및 dependency candidate; public consumer·macro·reflection·dynamic frontier는 confirmed deletion으로 바꾸지 않음 |
 | history_hotspot | `relative_churn`, `change_burst` | exact commit range/component window의 read-only derived priority; shallow/rewrite history는 unverified |
@@ -110,6 +110,14 @@ LSP rename/codeAction, structured analyzer fix, OpenRewrite는 P-0067에서 exis
 4. exact durable approval과 single-use apply 뒤 actual ChangeSet 재수집, `patch_post_apply` Gate, rollback/recovery evidence로 닫는다.
 
 provider suggestion은 검증 전 `MachineApplicable`가 아니며 Finding은 apply를 숨기지 않는다. live checkout 외부 mutator, raw literal global replacement, clone auto-extract-method, public API automatic deletion은 금지한다.
+
+## P-0064A exact structural clone 경계
+
+P-0064A는 Rust `function` body와 그 안의 nested `block`의 exact token leaf sequence를 즉시 hash하여 후보로 만든다. macro·module top-level block처럼 owning function을 확정할 수 없는 범위는 후보에서 제외한다. whitespace와 comment는 비교에서 제외하지만 identifier·literal·operator·구조가 달라지면 같은 후보로 합치지 않는다. 원문과 normalized token stream은 candidate, Finding, Occurrence, fingerprint 어디에도 저장하지 않는다.
+
+candidate는 `Source`와 `Test`를 서로 다른 cohort로만 grouping한다. generated/vendor/cache/output과 그 밖의 source class는 후보를 만들지 않으며, token cap 또는 parser limit은 empty-clean 결과가 아니라 source-bound limitation이다. Finding identity는 normalized token fingerprint, structural kind, cohort, sorted owning symbol identity로 계산하고 location은 Occurrence에만 남긴다. 따라서 line 이동은 Finding identity를 바꾸지 않지만 one-member change와 cohort 이동은 새 비교 대상이다.
+
+이 Finding의 severity는 `Info`, confidence는 `Medium`이고 자동 Gate block, PatchSet, 자동 extract-method를 만들지 않는다. identifier/literal normalization near clone, complexity와 semantic remediation은 P-0064B 이후의 별도 Slice다.
 
 ## mutation·Rule Pack·repository posture
 

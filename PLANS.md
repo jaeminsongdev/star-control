@@ -21,17 +21,18 @@
 | P-0060 Codex routing·delivery | deferred | 설치/package 후속은 본 Code Health source Slice와 분리하며 Runtime을 변경하지 않는다. |
 | P-0061 PR0~31 final lock | held | CrossRepo bundle aggregate와 external gate를 보존한다. |
 | P-0062 Code Health 정본 설계 | **DONE / local commit** | `5751ab5a269774931ca22afc28cf86b9d98e8039`; FULL 11/11 complete/stable/pass, inventory 23/23·Schema 213·MCP 170/170·Profile 16/16. |
-| P-0063 SARIF 2.1.0 normalizer | **DONE / local commit pending** | registered output contract가 `SarifV210`을 선택하며, parser→raw/normalized ArtifactRef→`ValidationRunV2`/`DiagnosticV2`→current Scan generation Finding/Occurrence→immutable import report 저장·조회 경로를 구현했다. FULL 11/11 complete/stable/pass와 strict self-review를 다시 봉인한 뒤 local commit만 남아 있다. |
-| P-0064~P-0070 | pending | duplication/complexity/unused → Gate/Radar → history/ownership/debt → semantic provider → mutation/rule-pack/posture → evaluation/Profile → final audit 순서다. |
+| P-0063 SARIF 2.1.0 normalizer | **DONE / local commit** | `eed833af5387c9d6367199829839419511ba6000`; registered `SarifV210` parser→raw/normalized ArtifactRef→`ValidationRunV2`/`DiagnosticV2`→current Scan generation Finding/Occurrence→immutable import report. FULL 11/11 complete/stable/pass. |
+| P-0064A structural clone | **IN_PROGRESS** | Rust exact structural clone을 bounded token/hash algorithm과 source-class cohort, Finding/Occurrence projection으로 구현한다. |
+| P-0064B~P-0070 | pending | complexity/unused → Gate/Radar → history/ownership/debt → semantic provider → mutation/rule-pack/posture → evaluation/Profile → final audit 순서다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0063 활성 Slice
+## P-0064A 활성 Slice
 
-- 목표: registered external analyzer의 SARIF 2.1.0 output을 source/revision/tool identity에 bind하고 current `ValidationRunV2`/`DiagnosticV2`/Finding/Occurrence workflow로 fail-closed normalization한다.
-- 구현된 경계: `CheckDescriptor.output_normalizer=SarifV210`만 parser를 선택한다. parser는 provider message·absolute path를 저장하지 않고, raw stdout/stderr와 safe normalized artifact를 별도 보존한다. application은 실행 전후 current CodeIndex를 재확인하고, current `ScanRun`/revision/workspace/source-entry에 맞을 때만 transaction으로 Finding/Occurrence·`StaticAnalysisImportReport`를 기록한다.
-- fail-closed: malformed/future SARIF, result/location cap, traversal/cross-project URI, missing rule/tool/message, duplicate correlation, truncation, timeout/outcome_unknown, source-generation mismatch, artifact 부족은 pass 또는 Finding 생성으로 승격되지 않는다.
-- 선택 Profile: `project_understanding`, `change_planning`, `architecture_quality`, `test_correctness`, `ai_development_validation`; resolution fingerprint `sha256:5eb65d478ea0008d27e38ca788935b2777f78200b25e2c9db67fe5205c1a9e84`.
-- 현재 검증: `star-contracts` 104 tests, `star-validation` 40 tests, `star-application` 15 tests, `star-state` 13 tests 통과. 다음: schema generator→FULL→strict review→product evidence regeneration→FULL 재실행→local commit. push/PR/publish/install은 금지다.
+- 목표: Rust source의 function/block exact structural clone을 deterministic normalized token identity로 관찰하고, source class cohort를 보존해 current Scan generation Finding/Occurrence로 투영한다.
+- 불변식: raw source는 Finding/Occurrence/fingerprint에 저장하지 않는다. generated/vendor/cache/output은 기본 제외하고 test/fixture는 production과 별도 cohort다. candidate는 자동 BLOCK이나 PatchSet을 만들지 않는다.
+- corpus: 동일 함수, identifier/literal만 다른 구조, 짧은 우연 일치, generated/test fixture, macro, moved range, one-member modification, resource cap, redacted source를 positive/negative/failure로 고정한다.
+- 선택 Profile: `project_understanding`, `architecture_quality`, `test_correctness`, `ai_development_validation`; 새 Profile은 추가하지 않는다.
+- 검증: affected package TARGET 후 common core/Finding contract 영향이므로 FULL, strict self-review, intended files만 local commit. push/PR/publish/install은 금지다.
 
 ## 열린 위험과 보류
 
@@ -41,8 +42,8 @@
 
 ## Context Pack
 
-- 현재 목표: P-0063 validated SARIF slice를 intended files만 local commit으로 닫고 P-0064A structural clone Slice로 전환한다.
-- 먼저 확인할 파일: `crates/control/star-validation/src/process_executor.rs`, `crates/control/star-validation/src/runner.rs`, `crates/control/star-application/src/lib.rs`, `crates/foundation/star-contracts/src/registry.rs`, `crates/foundation/star-contracts/src/evidence_v2.rs`, `catalog/tool-packages/star-control-core.toml`.
-- 먼저 실행할 명령: `git status --short --branch`; `rg -n 'ExternalDiagnosticNormalizer|RegisteredProcessCheckExecutor|output_schema' crates apps catalog`; focused test; final `pwsh ./scripts/validate.ps1 -Profile full -OutputFormat json`.
+- 현재 목표: P-0064A clone contract→Rust adapter/token scan→Finding projection→corpus→FULL→review→local commit.
+- 먼저 확인할 파일: `crates/control/star-project/src/index.rs`, `crates/adapters/star-adapter-rust-index/src/lib.rs`, `crates/control/star-validation/src/lib.rs`, `crates/foundation/star-contracts/src/index.rs`, `crates/foundation/star-contracts/src/management.rs`.
+- 먼저 실행할 명령: `git status --short --branch`; `rg -n 'SyntaxAnalysis|SourceClass|FindingProjection|Token' crates`; focused test; final `pwsh ./scripts/validate.ps1 -Profile full -OutputFormat json`.
 - 건드리면 안 되는 것: existing dirty/user changes, `target/`, `legacy/`, installed Runtime/cache, external account/remote state.
-- 다음 완료 기준: P-0063은 generated Schema를 직접 편집하지 않고 declared `star-schema-gen` 경로로 생성하며, SARIF contract/public boundary 변경이므로 FULL·strict review·local commit이 필요하다.
+- 다음 완료 기준: P-0064A는 line move에도 stable identity, cohort 분리, source/class resource limitation 및 raw-source 비영속을 corpus로 증명하고 FULL·strict review·local commit이 필요하다.
