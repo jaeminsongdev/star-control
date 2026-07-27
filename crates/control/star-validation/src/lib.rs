@@ -785,22 +785,16 @@ fn append_complexity_regression_findings(
         {
             continue;
         }
-        let (relation, severity, baseline_cyclomatic, baseline_fingerprint) = match baseline {
-            None => ("new", Severity::Info, None, None),
-            Some(item) if candidate.cyclomatic_complexity > item.cyclomatic_complexity => (
-                "worsened",
-                Severity::Warning,
-                Some(item.cyclomatic_complexity),
-                Some(item.content_fingerprint.clone()),
-            ),
-            Some(item) if candidate.cyclomatic_complexity < item.cyclomatic_complexity => (
-                "improved",
-                Severity::Info,
-                Some(item.cyclomatic_complexity),
-                Some(item.content_fingerprint.clone()),
-            ),
-            Some(_) => continue,
+        let Some(baseline) = baseline else {
+            continue;
         };
+        if candidate.cyclomatic_complexity <= baseline.cyclomatic_complexity {
+            continue;
+        }
+        let relation = "worsened";
+        let severity = Severity::Warning;
+        let baseline_cyclomatic = Some(baseline.cyclomatic_complexity);
+        let baseline_fingerprint = Some(baseline.content_fingerprint.clone());
         let identity_tokens = vec![
             candidate.metric_contract_version.to_string(),
             candidate.language_id.clone(),
@@ -2036,6 +2030,91 @@ mod tests {
                 .findings
                 .iter()
                 .all(|finding| finding.rule_id != STRUCTURAL_CLONE_CANDIDATE_RULE_ID)
+        );
+    }
+
+    #[test]
+    fn complexity_regression_emits_only_for_compatible_worsening() {
+        let project_id = ProjectId::new();
+        let revision = ProjectRevision {
+            schema_id: "star.project-revision".to_owned(),
+            schema_version: 1,
+            project_revision_id: ProjectRevisionId::new(),
+            project_id: project_id.clone(),
+            revision_kind: star_contracts::management::RevisionKind::FilesystemManifest,
+            vcs_object_format: None,
+            commit_id: None,
+            tree_id: None,
+            manifest_fingerprint: Some(Sha256Hash::digest(b"complexity-revision")),
+            captured_at: Utc::now(),
+            completeness: Completeness::Complete,
+            limitations: Vec::new(),
+        };
+        let candidate = |owner: &str, contract: u32, cyclomatic: u32| ComplexityMetricCandidate {
+            candidate_key: format!("{owner}:{contract}:{cyclomatic}"),
+            metric_contract_version: contract,
+            canonical_source_id: CanonicalSourceId::from_stable_bytes(owner.as_bytes()),
+            source_ref: ProjectPathRef::parse(format!("src/{owner}.rs")).unwrap(),
+            source_content_sha256: Sha256Hash::digest(owner.as_bytes()),
+            source_range: SourceRange {
+                start_line: 1,
+                start_column: 1,
+                end_line: 2,
+                end_column: 1,
+            },
+            source_class: SourceClass::Source,
+            language_id: "rust".to_owned(),
+            owning_symbol_identity: owner.to_owned(),
+            cyclomatic_complexity: cyclomatic,
+            maximum_nesting: 1,
+            token_count: 8,
+            line_count: 2,
+            branch_count: cyclomatic.saturating_sub(1),
+            match_arm_count: 0,
+            redaction_state: star_contracts::index::HardcodingRedactionState::ShapeOnly,
+            limitations: Vec::new(),
+            content_fingerprint: Sha256Hash::digest(
+                format!("{owner}:{contract}:{cyclomatic}").as_bytes(),
+            ),
+        };
+        let previous = vec![
+            candidate("worsened", 1, 2),
+            candidate("improved", 1, 2),
+            candidate("equal", 1, 2),
+            candidate("incompatible", 1, 2),
+        ];
+        let current = vec![
+            candidate("worsened", 1, 3),
+            candidate("improved", 1, 1),
+            candidate("equal", 1, 2),
+            candidate("new", 1, 4),
+            candidate("incompatible", 2, 4),
+        ];
+        let mut projection = FindingProjection {
+            findings: Vec::new(),
+            occurrences: Vec::new(),
+            rule_set_fingerprint: Sha256Hash::digest(b"complexity-rule-set"),
+        };
+        append_complexity_regression_findings(
+            &mut projection,
+            &project_id,
+            &revision,
+            &WorkspaceSnapshotId::new(),
+            &ScanRunId::new(),
+            &[],
+            &current,
+            Some(&previous),
+        )
+        .unwrap();
+        assert_eq!(projection.findings.len(), 1);
+        assert_eq!(projection.occurrences.len(), 1);
+        assert_eq!(projection.findings[0].severity, Severity::Warning);
+        assert_eq!(
+            projection.occurrences[0]
+                .message_parameters
+                .get("baseline_relation")
+                .map(String::as_str),
+            Some("worsened")
         );
     }
 

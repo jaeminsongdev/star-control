@@ -6,10 +6,12 @@
 
 use std::{
     collections::BTreeMap,
+    ffi::{OsStr, OsString},
     fs,
     io::Read,
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
@@ -29,7 +31,45 @@ use thiserror::Error;
 use crate::runner::{CheckExecutionObservation, CheckExecutor, CheckExecutorError, RawDiagnostic};
 
 const MAX_EXECUTABLE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_INVOCATION_TIMEOUT_MS: u64 = 86_400_000;
+const MAX_INVOCATION_OUTPUT_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_EXECUTION_ENVIRONMENT_BYTES: usize = 256 * 1024;
+const EXECUTION_ENVIRONMENT_ALLOWLIST: &[&str] = &[
+    "APPDATA",
+    "CARGO_HOME",
+    "CARGO_INCREMENTAL",
+    "CARGO_TARGET_DIR",
+    "CC",
+    "CXX",
+    "HOME",
+    "INCLUDE",
+    "JAVA_HOME",
+    "LIB",
+    "LIBPATH",
+    "LOCALAPPDATA",
+    "NODE_PATH",
+    "NPM_CONFIG_CACHE",
+    "PATH",
+    "PATHEXT",
+    "RUSTC",
+    "RUSTC_WRAPPER",
+    "RUSTDOC",
+    "RUSTFLAGS",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
+    "SystemDrive",
+    "SystemRoot",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "USERPROFILE",
+    "WINDIR",
+];
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
+const OUTPUT_DRAIN_GRACE: Duration = Duration::from_secs(5);
+const TERMINATED_OUTPUT_DRAIN_GRACE: Duration = Duration::from_millis(250);
+type ExecutionEnvironment = BTreeMap<String, OsString>;
+type BoundedExecutionEnvironment = (ExecutionEnvironment, Sha256Hash);
 
 #[derive(Clone, Debug)]
 pub struct ResolvedExecutableV2 {
@@ -37,7 +77,9 @@ pub struct ResolvedExecutableV2 {
     pub absolute_path: PathBuf,
     pub project_root: PathBuf,
     pub executable_binding_fingerprint: Sha256Hash,
+    pub execution_environment_fingerprint: Sha256Hash,
     pub observed_tool: ObservedTool,
+    execution_environment: ExecutionEnvironment,
 }
 
 #[derive(Debug, Error)]
@@ -50,6 +92,8 @@ pub enum ProcessExecutorError {
     ExecutableTooLarge,
     #[error("executable identity could not be calculated")]
     Fingerprint,
+    #[error("bounded execution environment is invalid")]
+    Environment,
 }
 
 impl ResolvedExecutableV2 {
@@ -101,18 +145,75 @@ impl ResolvedExecutableV2 {
             "opaque_locator":opaque_locator,
         }))
         .map_err(|_| ProcessExecutorError::Fingerprint)?;
+        let (execution_environment, execution_environment_fingerprint) =
+            bounded_execution_environment()?;
         Ok(Self {
             logical_executable: logical_executable.to_owned(),
             absolute_path: executable,
             project_root: root,
             executable_binding_fingerprint: binding,
+            execution_environment_fingerprint,
             observed_tool: ObservedTool {
                 executable_path: format!("registered://{}", opaque_locator.as_str()),
                 version: version.to_owned(),
                 sha256: executable_sha256,
             },
+            execution_environment,
         })
     }
+}
+
+fn bounded_execution_environment() -> Result<BoundedExecutionEnvironment, ProcessExecutorError> {
+    let mut environment = BTreeMap::new();
+    let mut fingerprint_entries = BTreeMap::new();
+    let mut total_bytes = 0_usize;
+    for name in EXECUTION_ENVIRONMENT_ALLOWLIST {
+        let Some(value) = std::env::var_os(name) else {
+            continue;
+        };
+        let exact_bytes = environment_value_bytes(&value);
+        total_bytes = total_bytes
+            .checked_add(name.len())
+            .and_then(|total| total.checked_add(exact_bytes.len()))
+            .ok_or(ProcessExecutorError::Environment)?;
+        if total_bytes > MAX_EXECUTION_ENVIRONMENT_BYTES
+            || exact_bytes
+                .chunks_exact(environment_code_unit_bytes())
+                .any(|unit| unit.iter().all(|byte| *byte == 0))
+        {
+            return Err(ProcessExecutorError::Environment);
+        }
+        environment.insert((*name).to_owned(), value);
+        fingerprint_entries.insert((*name).to_owned(), Sha256Hash::digest(&exact_bytes));
+    }
+    let fingerprint = canonical_sha256(&serde_json::json!({
+        "domain":"star.registered-process-environment",
+        "version":1,
+        "variables":fingerprint_entries,
+    }))
+    .map_err(|_| ProcessExecutorError::Fingerprint)?;
+    Ok((environment, fingerprint))
+}
+
+#[cfg(windows)]
+fn environment_value_bytes(value: &OsStr) -> Vec<u8> {
+    use std::os::windows::ffi::OsStrExt;
+
+    value
+        .encode_wide()
+        .flat_map(u16::to_le_bytes)
+        .collect::<Vec<_>>()
+}
+
+#[cfg(not(windows))]
+fn environment_value_bytes(value: &OsStr) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+
+    value.as_bytes().to_vec()
+}
+
+const fn environment_code_unit_bytes() -> usize {
+    if cfg!(windows) { 2 } else { 1 }
 }
 
 #[derive(Clone, Debug)]
@@ -318,6 +419,7 @@ impl ExternalDiagnosticNormalizer for RegisteredOutputNormalizer {
             && input.termination_reason == TerminationReason::Exited
             && input.expected_exit
             && !input.stdout_truncated
+            && !input.stderr_truncated
             && !input.output_read_failed
         {
             let sarif = crate::sarif::normalize_sarif_2_1(
@@ -379,6 +481,28 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
         &mut self,
         invocation: &TaskInvocationV2,
     ) -> Result<CheckExecutionObservation, CheckExecutorError> {
+        let resealed = invocation.clone().seal().map_err(|_| {
+            executor_error(
+                "CHECK_INVOCATION_BINDING_MISMATCH",
+                TerminationReason::LaunchError,
+            )
+        })?;
+        if &resealed != invocation {
+            return Err(executor_error(
+                "CHECK_INVOCATION_BINDING_MISMATCH",
+                TerminationReason::LaunchError,
+            ));
+        }
+        if invocation.timeout_ms > MAX_INVOCATION_TIMEOUT_MS
+            || invocation.output_limits.stdout_bytes > MAX_INVOCATION_OUTPUT_BYTES
+            || invocation.output_limits.stderr_bytes > MAX_INVOCATION_OUTPUT_BYTES
+            || invocation.output_limits.artifact_bytes > MAX_INVOCATION_OUTPUT_BYTES
+        {
+            return Err(executor_error(
+                "CHECK_INVOCATION_RESOURCE_LIMIT_INVALID",
+                TerminationReason::LaunchError,
+            ));
+        }
         let binding = self
             .bindings
             .get(&invocation.executable_binding_fingerprint)
@@ -423,6 +547,8 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
         })?;
         let mut command = Command::new(&binding.absolute_path);
         command
+            .env_clear()
+            .envs(&binding.execution_environment)
             .args(&invocation.args)
             .current_dir(cwd)
             .stdin(Stdio::null())
@@ -449,8 +575,8 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
         })?;
         let stdout_limit = invocation.output_limits.stdout_bytes as usize;
         let stderr_limit = invocation.output_limits.stderr_bytes as usize;
-        let stdout_reader = thread::spawn(move || drain_bounded(stdout, stdout_limit));
-        let stderr_reader = thread::spawn(move || drain_bounded(stderr, stderr_limit));
+        let stdout_reader = drain_bounded_async(stdout, stdout_limit);
+        let stderr_reader = drain_bounded_async(stderr, stderr_limit);
         let deadline = Instant::now() + Duration::from_millis(invocation.timeout_ms);
         let (exit_code, termination_reason) = loop {
             match child.try_wait() {
@@ -468,20 +594,15 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
                 }
             }
         };
+        let drain_grace = if termination_reason == TerminationReason::Exited {
+            OUTPUT_DRAIN_GRACE
+        } else {
+            TERMINATED_OUTPUT_DRAIN_GRACE
+        };
         let (stdout, stdout_truncated, stdout_read_failed) =
-            stdout_reader.join().map_err(|_| {
-                executor_error(
-                    "CHECK_STDOUT_DRAIN_FAILED",
-                    TerminationReason::OutcomeUnknown,
-                )
-            })?;
+            receive_bounded_drain(&stdout_reader, drain_grace);
         let (stderr, stderr_truncated, stderr_read_failed) =
-            stderr_reader.join().map_err(|_| {
-                executor_error(
-                    "CHECK_STDERR_DRAIN_FAILED",
-                    TerminationReason::OutcomeUnknown,
-                )
-            })?;
+            receive_bounded_drain(&stderr_reader, drain_grace);
         let expected_exit =
             exit_code.is_some_and(|code| invocation.expected_exit_codes.contains(&code));
         let output_read_failed = stdout_read_failed || stderr_read_failed;
@@ -620,6 +741,26 @@ fn drain_bounded(mut reader: impl Read, limit: usize) -> (Vec<u8>, bool, bool) {
         }
     }
     (retained, total > limit, read_failed)
+}
+
+fn drain_bounded_async(
+    reader: impl Read + Send + 'static,
+    limit: usize,
+) -> mpsc::Receiver<(Vec<u8>, bool, bool)> {
+    let (sender, receiver) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let _ = sender.send(drain_bounded(reader, limit));
+    });
+    receiver
+}
+
+fn receive_bounded_drain(
+    receiver: &mpsc::Receiver<(Vec<u8>, bool, bool)>,
+    grace: Duration,
+) -> (Vec<u8>, bool, bool) {
+    receiver
+        .recv_timeout(grace)
+        .unwrap_or_else(|_| (Vec::new(), false, true))
 }
 
 fn executor_error(code: &str, termination_reason: TerminationReason) -> CheckExecutorError {
@@ -783,6 +924,18 @@ mod tests {
     }
 
     #[test]
+    fn output_drain_timeout_is_unverified_instead_of_blocking_forever() {
+        let (_sender, receiver) = mpsc::sync_channel(1);
+        let started = Instant::now();
+        let (output, truncated, read_failed) =
+            receive_bounded_drain(&receiver, Duration::from_millis(1));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(output.is_empty());
+        assert!(!truncated);
+        assert!(read_failed);
+    }
+
+    #[test]
     fn registered_sarif_normalizer_is_selected_by_bound_output_contract() {
         let fingerprint = Sha256Hash::digest(b"fixture-sarif-binding");
         let mut kinds = BTreeMap::new();
@@ -824,15 +977,23 @@ mod tests {
             PathBuf::from("C:/workspace/project"),
             kinds,
         );
-        for (termination_reason, truncated, expected_code) in [
+        for (termination_reason, stdout_truncated, stderr_truncated, expected_code) in [
             (
                 TerminationReason::Exited,
                 true,
+                false,
                 "CHECK_OUTPUT_LIMIT_EXCEEDED",
             ),
-            (TerminationReason::Timeout, false, "CHECK_TIMEOUT"),
+            (
+                TerminationReason::Exited,
+                false,
+                true,
+                "CHECK_OUTPUT_LIMIT_EXCEEDED",
+            ),
+            (TerminationReason::Timeout, false, false, "CHECK_TIMEOUT"),
             (
                 TerminationReason::OutcomeUnknown,
+                false,
                 false,
                 "CHECK_OUTCOME_UNKNOWN",
             ),
@@ -844,8 +1005,8 @@ mod tests {
                 termination_reason,
                 stdout: br#"{"version":"2.1.0","runs":[]}"#,
                 stderr: &[],
-                stdout_truncated: truncated,
-                stderr_truncated: false,
+                stdout_truncated,
+                stderr_truncated,
                 output_read_failed: false,
             });
             assert!(output.sarif.is_none());
@@ -856,5 +1017,29 @@ mod tests {
                     .any(|item| item.code == expected_code)
             );
         }
+    }
+
+    #[test]
+    fn executor_rejects_post_seal_mutation_and_excessive_resource_limits() {
+        let root = std::env::current_dir().unwrap();
+        let binding = ResolvedExecutableV2::resolve(
+            "star-validation-test",
+            &current_executable(),
+            &root,
+            env!("CARGO_PKG_VERSION"),
+        )
+        .unwrap();
+        let mut tampered = invocation(&binding);
+        tampered.args.push("--tampered-after-seal".to_owned());
+        let mut executor = RegisteredProcessCheckExecutor::new(vec![binding.clone()]).unwrap();
+        let error = executor.execute(&tampered).unwrap_err();
+        assert_eq!(error.code, "CHECK_INVOCATION_BINDING_MISMATCH");
+
+        let mut oversized = invocation(&binding);
+        oversized.output_limits.stdout_bytes = MAX_INVOCATION_OUTPUT_BYTES + 1;
+        oversized = oversized.seal().unwrap();
+        let mut executor = RegisteredProcessCheckExecutor::new(vec![binding]).unwrap();
+        let error = executor.execute(&oversized).unwrap_err();
+        assert_eq!(error.code, "CHECK_INVOCATION_RESOURCE_LIMIT_INVALID");
     }
 }

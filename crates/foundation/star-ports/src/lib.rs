@@ -145,6 +145,7 @@ pub struct GitHistoryObservationRequest {
     pub range_start: Option<String>,
     pub range_end: String,
     pub commit_limit: u32,
+    pub evaluation_time: String,
 }
 
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]

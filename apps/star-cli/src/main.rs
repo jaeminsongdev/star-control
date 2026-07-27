@@ -2421,9 +2421,9 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                 .and_then(|value| value.as_deref())
                 .unwrap_or("100")
                 .parse::<u32>()
-                .map_err(|_| "--commit-limit must be a positive integer".to_owned())?;
-            if commit_limit == 0 {
-                return Err("--commit-limit must be a positive integer".to_owned());
+                .map_err(|_| "--commit-limit must be between 1 and 10000".to_owned())?;
+            if !(1..=10_000).contains(&commit_limit) {
+                return Err("--commit-limit must be between 1 and 10000".to_owned());
             }
             Ok(Parsed {
                 command: "maintenance.radar.git-history".to_owned(),
@@ -6029,6 +6029,22 @@ mod tests {
         .unwrap();
         assert_eq!(history.command, "maintenance.radar.git-history");
         assert_eq!(history.payload["commit_limit"], 100);
+        assert!(
+            parse(&[
+                "maintenance".into(),
+                "radar".into(),
+                "git-history".into(),
+                project.to_string(),
+                "radar-history-limit".into(),
+                "--range-end".into(),
+                "HEAD".into(),
+                "--commit-limit".into(),
+                "10001".into(),
+                "--evaluation-time".into(),
+                "2026-07-27T12:00:00Z".into(),
+            ])
+            .is_err()
+        );
 
         let rule_pack = parse(&[
             "maintenance".into(),

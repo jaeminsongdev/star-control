@@ -178,6 +178,9 @@ pub use profile_catalog::{
     show_development_profile,
 };
 
+const MAX_MUTATION_TESTING_MUTANTS: u32 = 10_000;
+const MAX_MUTATION_TESTING_DURATION_MS: u64 = 86_400_000;
+
 use rust_style_runtime::{
     RustStyleCheckResult, RustStyleGatePhase, RustStyleInspection, RustStyleRuntimeError,
     RustStyleScope, check_rust_style, inspect_rust_style, materialize_rust_style_gate_preview,
@@ -3000,6 +3003,23 @@ impl ManagementApplicationService {
         range_end: String,
         commit_limit: u32,
     ) -> Result<GitHistoryRiskSnapshot, ApplicationError> {
+        self.git_history_risk_snapshot_at(
+            project_id,
+            range_start,
+            range_end,
+            commit_limit,
+            &Utc::now().to_rfc3339(),
+        )
+    }
+
+    fn git_history_risk_snapshot_at(
+        &self,
+        project_id: &ProjectId,
+        range_start: Option<String>,
+        range_end: String,
+        commit_limit: u32,
+        evaluation_time: &str,
+    ) -> Result<GitHistoryRiskSnapshot, ApplicationError> {
         let root = self.development_project_root(project_id)?;
         let adapter = self
             .git_history_adapter
@@ -3013,6 +3033,7 @@ impl ManagementApplicationService {
                     range_start,
                     range_end,
                     commit_limit,
+                    evaluation_time: evaluation_time.to_owned(),
                 },
             )
             .map_err(|_| ApplicationError::GitHistoryUnavailable)
@@ -3038,8 +3059,9 @@ impl ManagementApplicationService {
             || changed_paths.windows(2).any(|pair| pair[0] >= pair[1])
             || triggers.is_empty()
             || triggers.windows(2).any(|pair| pair[0] >= pair[1])
-            || budget.max_mutants == 0
-            || budget.max_duration_ms == 0
+            || !(1..=MAX_MUTATION_TESTING_MUTANTS).contains(&budget.max_mutants)
+            || !(1..=MAX_MUTATION_TESTING_DURATION_MS).contains(&budget.max_duration_ms)
+            || budget.max_survivors > budget.max_mutants
             || engine_descriptor_ref.trim().is_empty()
         {
             return Err(ApplicationError::Invalid);
@@ -3102,6 +3124,11 @@ impl ManagementApplicationService {
                 },
             )
             .map_err(|_| ApplicationError::MutationTestingUnavailable)?;
+        let classified_mutants = snapshot
+            .killed_mutants
+            .checked_add(snapshot.survivor_count)
+            .and_then(|value| value.checked_add(snapshot.timed_out_count))
+            .and_then(|value| value.checked_add(snapshot.flaky_count));
         if !snapshot.is_current_schema()
             || snapshot.snapshot_id != snapshot_id
             || snapshot.project_id != *project_id
@@ -3113,11 +3140,13 @@ impl ManagementApplicationService {
             || snapshot.budget != budget
             || snapshot.engine_descriptor_ref != engine_descriptor_ref
             || snapshot.engine_identity_sha256 != expected_engine_identity
+            || snapshot.executed_mutants > snapshot.budget.max_mutants
+            || classified_mutants != Some(snapshot.executed_mutants)
             || (snapshot.state == star_contracts::maintenance_v2::MutationTestingState::Complete
                 && (snapshot.completeness != CoverageState::Complete
                     || snapshot.timed_out_count != 0
                     || snapshot.flaky_count != 0
-                    || snapshot.survivor_count > snapshot.budget.max_survivors))
+                    || snapshot.mutation_evidence_refs.is_empty()))
             || (snapshot.state != star_contracts::maintenance_v2::MutationTestingState::Complete
                 && snapshot.completeness == CoverageState::Complete)
         {
@@ -3166,9 +3195,11 @@ impl ManagementApplicationService {
         expected_tool_identity: Sha256Hash,
     ) -> Result<ExternalDataSnapshot, ApplicationError> {
         let _guard = self.command_guard()?;
-        if !source_url.starts_with("https://")
+        if !valid_repository_posture_source_url(&source_url)
             || query.trim().is_empty()
+            || query.len() > 4096
             || source_schema_version.trim().is_empty()
+            || source_schema_version.len() > 128
             || m3_contains_secret_candidate(&format!("{source_url}\n{query}"))
         {
             return Err(ApplicationError::Invalid);
@@ -3224,8 +3255,7 @@ impl ManagementApplicationService {
             == star_contracts::maintenance_v2::MutationTestingState::Complete
             && snapshot.completeness == CoverageState::Complete
             && snapshot.timed_out_count == 0
-            && snapshot.flaky_count == 0
-            && snapshot.survivor_count <= snapshot.budget.max_survivors;
+            && snapshot.flaky_count == 0;
         let item_id = format!("mutation-testing:{}", snapshot.snapshot_id);
         Ok(vec![MaintenanceRadarItem {
             item_id: item_id.clone(),
@@ -3316,8 +3346,13 @@ impl ManagementApplicationService {
         commit_limit: u32,
         evaluation_time: &str,
     ) -> Result<GitHistoryRadarProjection, ApplicationError> {
-        let snapshot =
-            self.git_history_risk_snapshot(project_id, range_start, range_end, commit_limit)?;
+        let snapshot = self.git_history_risk_snapshot_at(
+            project_id,
+            range_start,
+            range_end,
+            commit_limit,
+            evaluation_time,
+        )?;
         let complete = snapshot.history_completeness
             == star_contracts::maintenance_v2::GitHistoryCompleteness::Complete
             && snapshot.limitations.is_empty();
@@ -5029,6 +5064,7 @@ impl ManagementApplicationService {
                     "os":std::env::consts::OS,
                     "arch":std::env::consts::ARCH,
                     "executable_binding":resolved.executable_binding_fingerprint,
+                    "execution_environment":resolved.execution_environment_fingerprint,
                     "execution_root_kind":execution_root_kind,
                     "execution_root_binding_fingerprint":execution_root_binding_fingerprint,
                 }),
@@ -5470,6 +5506,12 @@ impl ManagementApplicationService {
             if !manifest.is_current_schema()
                 || manifest.tool_identity_sha256.as_ref() != Some(tool_identity)
             {
+                continue;
+            }
+            if manifest.lifecycle
+                != star_contracts::maintenance_v2::QualityRulePackLifecycle::Active
+            {
+                limitations.push("RULE_PACK_INACTIVE".to_owned());
                 continue;
             }
             if manifest.trust != star_contracts::maintenance_v2::QualityRulePackTrust::Trusted {
@@ -11610,6 +11652,64 @@ fn m3_task_requests_bug_fix(task: &star_contracts::planning::TaskSpec) -> bool {
             .any(|token| text.contains(token))
 }
 
+fn valid_repository_posture_source_url(value: &str) -> bool {
+    if value.len() > 2048
+        || value
+            .chars()
+            .any(|character| character.is_control() || character.is_whitespace())
+        || value.contains('\\')
+    {
+        return false;
+    }
+    let Some(rest) = value.strip_prefix("https://") else {
+        return false;
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if authority.is_empty() || authority.contains('@') {
+        return false;
+    }
+    let (host, port, ipv6_literal) = if let Some(ipv6) = authority.strip_prefix('[') {
+        let Some((host, suffix)) = ipv6.split_once(']') else {
+            return false;
+        };
+        if host.parse::<std::net::Ipv6Addr>().is_err() {
+            return false;
+        }
+        let port = if suffix.is_empty() {
+            None
+        } else {
+            let Some(port) = suffix.strip_prefix(':') else {
+                return false;
+            };
+            Some(port)
+        };
+        (host, port, true)
+    } else if let Some((host, port)) = authority.split_once(':') {
+        if port.contains(':') {
+            return false;
+        }
+        (host, Some(port), false)
+    } else {
+        (authority, None, false)
+    };
+    if port.is_some_and(|port| {
+        port.parse::<u16>()
+            .map_or(true, |port_number| port_number == 0)
+    }) {
+        return false;
+    }
+    !host.is_empty()
+        && (ipv6_literal
+            || host.split('.').all(|label| {
+                !label.is_empty()
+                    && !label.starts_with('-')
+                    && !label.ends_with('-')
+                    && label
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+            }))
+}
+
 fn resolve_logical_executable_path(executable: &str) -> Option<PathBuf> {
     if executable.trim().is_empty()
         || executable == "unknown"
@@ -11939,7 +12039,9 @@ mod tests {
         }
     }
 
-    struct FixtureMutationTestingProvider;
+    struct FixtureMutationTestingProvider {
+        survivor_count: u32,
+    }
 
     impl MutationTestingPort for FixtureMutationTestingProvider {
         fn observe(
@@ -11962,8 +12064,8 @@ mod tests {
                 triggers: request.triggers.clone(),
                 budget: request.budget.clone(),
                 executed_mutants: 1,
-                killed_mutants: 1,
-                survivor_count: 0,
+                killed_mutants: 1_u32.saturating_sub(self.survivor_count),
+                survivor_count: self.survivor_count,
                 timed_out_count: 0,
                 flaky_count: 0,
                 line_coverage_evidence_ref: Some("fixture:coverage".to_owned()),
@@ -11971,7 +12073,9 @@ mod tests {
                 state: star_contracts::maintenance_v2::MutationTestingState::Complete,
                 completeness: CoverageState::Complete,
                 limitations: vec![],
-                content_fingerprint: Sha256Hash::digest(b"fixture-mutation-snapshot"),
+                content_fingerprint: Sha256Hash::digest(
+                    format!("fixture-mutation-snapshot:{}", self.survivor_count).as_bytes(),
+                ),
             })
         }
     }
@@ -12537,7 +12641,7 @@ mod tests {
         let mut trusted = manifest.clone();
         trusted.tool_identity_sha256 = Some(tool_identity.clone());
         trusted.trust = star_contracts::maintenance_v2::QualityRulePackTrust::Trusted;
-        trusted.valid_until = Some("2030-01-01T00:00:00Z".to_owned());
+        trusted.valid_until = Some((Utc::now() + chrono::Duration::days(1)).to_rfc3339());
         service
             .publish_development_document(
                 "quality_rule_pack_manifest",
@@ -12555,6 +12659,30 @@ mod tests {
                 .trusted_rule_pack_digest_for_tool(&tool_identity)
                 .unwrap(),
             (Some(trusted.source_digest.clone()), Vec::new())
+        );
+
+        let retired_tool_identity = Sha256Hash::digest(b"retired-static-analysis-tool");
+        let mut retired = trusted.clone();
+        retired.pack_id = "retired-fixture-pack".to_owned();
+        retired.tool_identity_sha256 = Some(retired_tool_identity.clone());
+        retired.lifecycle = star_contracts::maintenance_v2::QualityRulePackLifecycle::Retired;
+        service
+            .publish_development_document(
+                "quality_rule_pack_manifest",
+                "retired-fixture-pack-1.0.0",
+                1,
+                None,
+                "retired",
+                star_contracts::maintenance_v2::QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID,
+                1,
+                &retired,
+            )
+            .unwrap();
+        assert_eq!(
+            service
+                .trusted_rule_pack_digest_for_tool(&retired_tool_identity)
+                .unwrap(),
+            (None, vec!["RULE_PACK_INACTIVE".to_owned()])
         );
 
         let untrusted_tool_identity = Sha256Hash::digest(b"untrusted-static-analysis-tool");
@@ -12582,6 +12710,28 @@ mod tests {
         );
         drop(service);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn repository_posture_url_requires_bounded_credential_free_https_authority() {
+        assert!(valid_repository_posture_source_url(
+            "https://github.com/example/repository?view=scorecard"
+        ));
+        assert!(valid_repository_posture_source_url(
+            "https://[2001:db8::1]:443/scorecard"
+        ));
+        for invalid in [
+            "http://github.com/example/repository",
+            "https://",
+            "https://user:secret@example.invalid/repository",
+            "https://bad host.invalid/repository",
+            "https://example.invalid:0/repository",
+            "https://example.invalid:invalid/repository",
+            "https://-invalid.example/repository",
+            "https://example.invalid\\outside",
+        ] {
+            assert!(!valid_repository_posture_source_url(invalid), "{invalid}");
+        }
     }
 
     #[test]
@@ -12634,7 +12784,9 @@ mod tests {
             bindings,
             Arc::new(LocalArtifactStore::default()),
         )
-        .with_mutation_testing_adapter(Arc::new(FixtureMutationTestingProvider))
+        .with_mutation_testing_adapter(Arc::new(FixtureMutationTestingProvider {
+            survivor_count: 1,
+        }))
         .with_repository_posture_adapter(Arc::new(FixtureRepositoryPostureProvider));
         let registration = service
             .register_project(&source.canonicalize().unwrap(), "mutation-register")
@@ -12669,11 +12821,17 @@ mod tests {
             snapshot.state,
             star_contracts::maintenance_v2::MutationTestingState::Complete
         );
+        assert_eq!(snapshot.survivor_count, 1);
         let radar = service
             .mutation_testing_radar_items(&snapshot, "2030-01-01T00:00:00Z")
             .unwrap();
         assert_eq!(radar.len(), 1);
         assert!(!radar[0].blocking);
+        assert_eq!(radar[0].freshness, ExternalFreshness::Current);
+        assert_eq!(radar[0].completeness, CoverageState::Complete);
+        assert_eq!(radar[0].priority.freshness_rank, 0);
+        assert_eq!(radar[0].priority.evidence_rank, 0);
+        assert_eq!(radar[0].priority.regression_rank, 3);
         let posture = service
             .repository_posture_snapshot(
                 &project_id,

@@ -121,7 +121,7 @@ candidate는 `Source`와 `Test`를 서로 다른 cohort로만 grouping한다. ge
 
 ## P-0064B complexity regression 경계
 
-P-0064B는 Rust function body에서 `rust-ast-v1` metric을 계산한다. cyclomatic base는 1이고 control-flow, match arm, `&&`/`||`가 증가분을 만들며 maximum nesting, token/line, branch와 match-arm count는 원문 없는 정수로만 저장한다. macro body, fixture, generated/vendor/cache/output 및 지원하지 않는 language는 metric 후보가 아니며 resource/parse limit은 clean 결과를 의미하지 않는다.
+P-0064B는 Rust function body에서 `rust-ast-v1` metric을 계산한다. cyclomatic base는 1이고 control-flow, match arm, `&&`/`||`가 증가분을 만들며 boolean operator는 해당 AST node에서 한 번만 센다. nested function item은 자체 metric을 가지며 enclosing function의 branch/token count에 합산하지 않는다. maximum nesting, token/line, branch와 match-arm count는 원문 없는 정수로만 저장한다. macro body, fixture, generated/vendor/cache/output 및 지원하지 않는 language는 metric 후보가 아니며 resource/parse limit은 clean 결과를 의미하지 않는다.
 
 비교는 current CodeIndex와 이전 incremental CodeIndex의 metric contract version, language, source-class cohort 및 owning symbol identity가 모두 일치할 때만 한다. baseline 부재·version/cohort 불일치·같거나 개선된 cyclomatic은 regression Finding을 만들지 않는다. 증가 후보는 `Warning`/`Medium`이고 baseline/current 값만 redacted parameter로 남긴다. Finding은 자동 Gate block, ReviewPack priority 변경 또는 PatchSet을 만들지 않는다.
 
@@ -138,13 +138,15 @@ P-0064C는 Rust `function|struct|enum|type|trait`과 비-entrypoint source file,
 
 ## mutation·Rule Pack·repository posture
 
-Mutation은 changed code 중 parser/protocol/public contract/core calculation trigger에만 한정하고 mutation/time/survivor budget을 execution 전에 fix한다. line coverage와 별도 evidence이며 timeout/flaky/partial은 pass가 아니다.
+Git history snapshot은 caller가 고정한 RFC 3339 evaluation time으로 debt expiry를 판단한다. canonical Git common directory를 opaque hash한 repository identity를 사용하고, shallow history는 `unverified`, commit cap에 걸린 이력은 `partial`이다. `.git`, symlink/reparse point와 project 밖 대상은 scan하지 않으며 CODEOWNERS byte는 한 번만 읽어 fingerprint와 owner projection에 함께 사용한다. debt scan은 depth·entry·marker 전체 budget을 넘으면 limitation을 남긴다.
+
+Mutation은 changed code 중 parser/protocol/public contract/core calculation trigger에만 한정하고 mutation/time/survivor budget을 execution 전에 fix한다. line coverage와 별도 evidence이며 timeout/flaky/partial은 pass가 아니다. complete provider evidence에서 survivor가 budget을 넘은 경우 evidence의 freshness/completeness를 훼손하지 않고 Radar의 advisory regression rank로 표현한다. executed count와 killed/survived/timed-out/flaky 분류 합계가 다르면 provider output을 거부한다.
 
 Rule Pack은 versioned manifest, source/digest, language/source-kind, fixture corpus, query metadata, SARIF mapping, lifecycle/deprecation/replacement, signature/trust/freshness를 가진다. custom CodeQL-like output도 SARIF normalizer를 재사용한다.
 
 OpenSSF Scorecard 같은 repository posture는 source URL/query/schema/tool version/fetched time/digest/coverage/validity를 bound한 external snapshot이다. aggregate score는 Gate하지 않으며 individual evidence만 `security_supply_chain` input이 될 수 있다. network/token이 필요하면 별도 승인을 요청한다.
 
-구현은 이 세 evidence를 strict schema와 registered read-only port로 분리한다. mutation snapshot은 current scan/index와 changed path·trigger·고정 budget이 모두 일치할 때만 complete로 취급하며 timeout/flaky/partial은 Radar에서 advisory evidence로도 pass로 승격하지 않는다. Rule Pack은 trusted·현재 freshness·exact analyzer SHA-256이 모두 맞을 때만 기존 SARIF normalizer가 만든 import report에 digest를 결속한다. untrusted, expired 또는 ambiguous pack은 binding하지 않고 limitation을 남긴다. posture snapshot의 aggregate score는 저장하거나 Gate/Radar blocking에 사용하지 않는다.
+구현은 이 세 evidence를 strict schema와 registered read-only port로 분리한다. mutation snapshot은 current scan/index와 changed path·trigger·고정 budget이 모두 일치할 때만 complete로 취급하며 timeout/flaky/partial은 Radar에서 advisory evidence로도 pass로 승격하지 않는다. Rule Pack은 lifecycle이 `active`이고 trusted·현재 freshness·exact analyzer SHA-256이 모두 맞을 때만 기존 SARIF normalizer가 만든 import report에 digest를 결속한다. deprecated/retired, untrusted, expired 또는 ambiguous pack은 binding하지 않고 limitation을 남긴다. posture source는 bounded credential-free HTTPS authority만 허용하고, aggregate score는 저장하거나 Gate/Radar blocking에 사용하지 않는다.
 
 ## EvaluationRun과 Profile 전략
 

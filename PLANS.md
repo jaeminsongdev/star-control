@@ -31,20 +31,25 @@
 | P-0068 mutation·Rule Pack·repository posture | **DONE / local commit** | `937a9ac7898f6d30d1353b11429da52fca9b2199`; changed-code-only mutation budget·strict schema, versioned Rule Pack과 exact-tool SARIF digest binding, read-only posture snapshot/advisory Radar·fail-closed adapter 경계를 FULL 11/11 complete/stable/pass로 고정했다. |
 | P-0069 EvaluationRun·Profile 결정 | **DONE / local commit** | `fbbf30ea14df34fc06582c22e30ab22c42ef341a`; Code Health trial/reject evidence를 고정했고, external cost/actual workload cohort 부재로 `trial_candidate`만 기록하며 16개 built-in 유지·17번째 accept hold를 FULL 11/11 complete/stable/pass로 확인했다. |
 | P-0070 제품 전수 봉인 | **DONE / local commit** | final audit/ReviewPack, inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, release source closure와 FULL 11/11 complete/stable/pass를 확인했고 signing/publish를 blocked_external로 분리했다. |
+| P-0071 전체 STRICT 리뷰·main 전달 | **REVIEWED / FULL PASS / DELIVERY PENDING** | `origin/main..HEAD` 11커밋의 코드·계약·실기능·보안·유지보수성 결함을 수정했고 preliminary FULL 11/11 complete/stable/pass를 확인했다. 문서 seal 뒤 final FULL, intended-only commit, `origin/main` push/readback만 남았다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0070 검증 완료 Slice
+## P-0071 활성 Slice
 
-- 판정: P-0062~P-0069의 source contract/fixture/route/inventory, P-0069 trial(16 built-in 유지), release source closure와 final audit을 current fingerprint에서 확인했다.
-- 로컬 evidence: final FULL은 current source fingerprint에서 11/11 `complete/stable/pass`로 확인하며, 비추적 `target/validation/` report는 최종 handoff에서만 참조한다. release source closure는 x64 release build·ARM64 cross-build·lifecycle simulation pass를 확인했다.
-- 외부 Gate: signed Runtime/installer, Authenticode/trusted timestamp, clean installer lifecycle, SBOM/provenance, GitHub approval/publish/readback은 `blocked_external`; 설치 Runtime·remote state는 변경하지 않았다.
+- 범위: `00bd842..e5efc11`의 65개 파일, 8,663 additions를 canonical owner·contract/Schema·handler·CLI/MCP route·positive/negative/failure/replay corpus·current evidence의 여섯 층으로 검토한다.
+- 현재 preflight: checkout identity match, installed x64 verified, integration registered, management normal/read_write, doctor 4/4 PASS, `origin/main...HEAD=0/11`이다.
+- Profile closure: `project_understanding`, `ai_development_validation`, `api_contract_change`, `architecture_quality`, `test_correctness`, `security_supply_chain`, `ci_release_deploy`; resolution fingerprint `sha256:45f8bcb9191198a92cb42155704ad62bb2a1af5f94e5093f4a41f43a470044d3`.
 
 | 파일 | 상태 | 변경 요약 | 검증 상태 |
 |---|---|---|---|
-| `docs/testing/p0070-code-health-final-audit-2026-07-28.md` | 추가됨 | final ReviewPack/audit, release source closure와 external Gate 분리 | final FULL 전수 통과 |
-| `catalog/product-source-evidence.json` | 재생성됨 | current inventory fingerprint | 23/23·217·170/170·16/16 |
+| `origin/main..HEAD` 변경 파일 | 검토 완료 | STRICT 코드·기능·계약·보안 리뷰와 Blocker/Major 수정 | regression corpus와 전체 workspace test 통과 |
+| P-0071 review patch | 수정됨 | process/SARIF, complexity, Git history, mutation/Rule Pack/posture, registered effect 보강 | preliminary FULL 11/11 complete/stable/pass |
+| `PLANS.md`와 P-0071 audit | 수정됨 | bounded review/delivery snapshot과 residual boundary | 문서 seal 포함 final FULL 예정 |
 
-- 열린 구현: 없다. 현재 Slice는 intended-only local commit으로 봉인한다.
+- preliminary FULL: `target/validation/20260727T163051012Z-25012/report.json`, 174,588ms, 11/11 pass, partial/unverified/flaky 0.
+- current inventory: feature 23/23, Schema 217, MCP 170/170, Profile 16/16, Runtime executable 4/4.
+
+- 완료 조건: Blocker/Major 수정과 회귀 corpus, current inventory evidence, FULL complete/stable/pass, strict self-review, local commit, push, `HEAD == origin/main == remote/main`, clean worktree다.
 
 ## 열린 위험과 보류
 
@@ -54,8 +59,8 @@
 
 ## Context Pack
 
-- 현재 목표: P-0070 검증 완료 문서와 generated source evidence를 strict review·intended-only local commit으로 고정한다.
-- 먼저 확인할 파일: `docs/testing/p0070-code-health-final-audit-2026-07-28.md`, `PLANS.md`, `catalog/product-source-evidence.json`, final validation reports.
-- 먼저 실행할 명령: `git status --short --branch`; `git diff --check`; inventory check; final FULL report 확인.
-- 건드리면 안 되는 것: existing dirty/user changes, `target/`, `legacy/`, installed Runtime/cache, external account/remote state.
-- 다음 완료 기준: P-0070은 final audit/ReviewPack, current inventory, FULL, external Gate 분리, strict review와 local commit을 확인하면 완료다.
+- 현재 목표: P-0062~P-0070의 전체 변경을 STRICT 재검토하고 실제 기능 증거를 재생성한 뒤 `origin/main`에 전달한다.
+- 먼저 확인할 파일: contracts/ports/application/validation/project/release, CLI/controller route, schemas/fixtures, product inventory와 P-0070 audit.
+- 먼저 실행할 명령: 변경 public surface/위험 패턴 scan; commit별 diff review; focused corpus와 CLI/controller smoke; inventory; final FULL.
+- 건드리면 안 되는 것: existing dirty/user changes, `target/`, `legacy/`, installed Runtime/cache, public signing/publish/install state.
+- 다음 완료 기준: review findings가 닫히고 FULL 통과 뒤 P-0071 commit을 push하여 local/remote SHA가 일치한다.

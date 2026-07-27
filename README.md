@@ -4,7 +4,7 @@ Star-Control은 사용자가 CLI 또는 Codex 앱에서 지정한 개발 목표�
 
 결정적 계획·검사·상태·승인 경계는 Codex 없이 동작하는 CLI-only core가 담당한다. Codex 연동은 같은 application command를 사용하는 선택 소비자이며, 이 프로젝트는 Codex를 대체하거나 새로운 AI 실행기를 만들지 않는다.
 
-현재 설계 정본은 [문서 안내](docs/README.md) 아래에만 둔다. 0~11단계 최종 설계와 P-0054~P-0056의 historical seal 위에서 P-0057은 실행 중 설치본, live source와 과거 artifact를 revision·byte별로 다시 분리해 점검했다. 현재 source에서는 empty-v1 migration·active-set reseal, Registry verbatim path 중복 집계와 destructive core action의 EffectiveConfig approval 누락을 수정했다. 실행 중 source `b20d234` Runtime은 설치·Codex 연동·17 action readiness가 verified이지만 이 수정 전 byte이므로 update는 별도 승인 전까지 held다. x64 unsigned candidate와 ARM64 cross-build는 격리 검증했고, 공개 Stable은 Authenticode·trusted timestamp와 signed-byte lifecycle/publish가 없어 계속 fail-closed다. 현재 판정은 [PLANS.md](PLANS.md), [P-0057 현재 시스템 전수 점검](docs/testing/p0057-current-system-audit-2026-07-25.md), 과거 exact seal은 [P-0056 감사](docs/testing/p0056-current-functional-recovery-audit-2026-07-24.md)에서 확인한다.
+현재 설계 정본은 [문서 안내](docs/README.md) 아래에만 둔다. 0~11단계 최종 설계와 P-0054~P-0061의 기능·운영 seal 위에서 P-0062~P-0070은 Code Health/SARIF/clone·complexity·unused/history/debt/semantic provider/mutation·Rule Pack·posture/EvaluationRun을 기존 Finding·Gate·Radar·Patch 경계에 연결했다. P-0071은 이 source 전체를 STRICT 재검토해 invocation/SARIF/complexity/Git/mutation/Rule Pack/registered effect 결함을 회귀 corpus와 함께 닫는다. 설치 Runtime은 verified 상태지만 이 source revision으로 재설치하지 않았고, public Stable은 Authenticode·trusted timestamp와 signed-byte lifecycle/publish가 없어 계속 fail-closed다. 현재 판정은 [PLANS.md](PLANS.md), [P-0070 제품 전수 봉인](docs/testing/p0070-code-health-final-audit-2026-07-28.md), [P-0071 STRICT 리뷰](docs/testing/p0071-strict-code-functional-review-2026-07-28.md)에서 확인한다.
 
 ## 현재 원칙
 

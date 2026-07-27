@@ -14,7 +14,10 @@ pub use star_contracts::development_effect::{DevelopmentEffectKind, DevelopmentE
 use star_contracts::{
     Sha256Hash,
     evidence::{ArtifactRef, CatalogRef},
-    evidence_v2::{InvocationWorkingDirectoryV2, TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2},
+    evidence_v2::{
+        InvocationWorkingDirectoryV2, TASK_INVOCATION_V2_SCHEMA_ID, TaskInvocationV2,
+        empty_fingerprint,
+    },
     ids::{ChangePlanId, PatchSetId, TaskInvocationId},
     management::{
         ChangePlan, ChangePlanStatus, ChangeRecipe, ChangeRecipeRef, FileOperationKind, Finding,
@@ -815,13 +818,10 @@ impl ToolExecutorPort for RegisteredToolExecutorAdapter {
             ),
             expected_exit_codes: request.expected_exit_codes.clone(),
             output_limits: request.output_limits.clone(),
-            input_fingerprint: request.input_fingerprint.clone(),
+            input_fingerprint: empty_fingerprint(),
         }
         .seal()
         .map_err(|_| PatchPortError::Invalid)?;
-        if invocation.input_fingerprint != request.input_fingerprint {
-            return Err(PatchPortError::Invalid);
-        }
         let observation = self
             .executor
             .lock()
@@ -2085,6 +2085,52 @@ mod tests {
             exact_subject_fingerprint: subject,
             approval_ref: kind.requires_approval().then(|| "apr_fixture".to_owned()),
         }
+    }
+
+    #[test]
+    fn registered_tool_executor_binds_subject_without_confusing_invocation_fingerprint() {
+        let root = std::env::current_dir().unwrap();
+        let executable = ResolvedExecutableV2::resolve(
+            "star-execution-test",
+            &std::env::current_exe().unwrap(),
+            &root,
+            env!("CARGO_PKG_VERSION"),
+        )
+        .unwrap();
+        let tool_ref = CatalogRef {
+            catalog_id: "star.test.registered-execution".to_owned(),
+            format_version: 1,
+            item_version: "1.0.0".to_owned(),
+            sha256: Sha256Hash::digest(b"registered-execution-descriptor"),
+        };
+        let request = ToolExecutionRequest {
+            tool_ref: tool_ref.clone(),
+            logical_executable: executable.logical_executable.clone(),
+            executable_binding_fingerprint: executable.executable_binding_fingerprint.clone(),
+            args: vec!["--list".to_owned()],
+            working_directory: root,
+            timeout_ms: 30_000,
+            permission_action: "local_validation".to_owned(),
+            expected_exit_codes: BTreeSet::from([0]),
+            output_limits: star_contracts::evidence::OutputLimits {
+                stdout_bytes: 128 * 1024,
+                stderr_bytes: 128 * 1024,
+                artifact_bytes: 1024,
+            },
+            input_fingerprint: Sha256Hash::digest(b"exact-subject-input"),
+        };
+        let adapter = RegisteredToolExecutorAdapter::new(vec![RegisteredToolBinding {
+            tool_ref,
+            executable,
+            allowed_permission_actions: BTreeSet::from(["local_validation".to_owned()]),
+        }])
+        .unwrap();
+        let result = adapter.execute(&request).unwrap();
+        assert!(result.success);
+        assert_eq!(
+            result.termination_reason,
+            star_contracts::evidence::TerminationReason::Exited
+        );
     }
 
     #[test]

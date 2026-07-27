@@ -1150,7 +1150,7 @@ fn collect_complexity_metrics(
             cyclomatic: 1,
             ..Default::default()
         };
-        summarize_complexity(body, source, 0, &mut summary)?;
+        summarize_complexity(body, 0, &mut summary)?;
         let range = source_range(body, source);
         metrics.push(SyntaxComplexityMetricCandidate {
             metric_contract_version: 1,
@@ -1185,11 +1185,15 @@ struct ComplexitySummary {
 
 fn summarize_complexity(
     node: Node<'_>,
-    source: &[u8],
     nesting: u32,
     summary: &mut ComplexitySummary,
 ) -> Result<(), AdapterFailure> {
     if node.kind().contains("comment") {
+        return Ok(());
+    }
+    // A nested item owns a separate metric. Its branches and tokens must not
+    // inflate the enclosing function's observation.
+    if node.kind() == "function_item" {
         return Ok(());
     }
     if node.child_count() == 0 {
@@ -1214,15 +1218,19 @@ fn summarize_complexity(
         summary.cyclomatic = summary.cyclomatic.saturating_add(1);
     }
     if node.kind() == "binary_expression"
-        && let Some(text) = node_text(node, source)
+        && node
+            .child_by_field_name("operator")
+            .is_some_and(|operator| matches!(operator.kind(), "&&" | "||"))
     {
-        let operators = text.matches("&&").count() + text.matches("||").count();
-        summary.cyclomatic = summary.cyclomatic.saturating_add(operators as u32);
+        // Tree-sitter represents a chained boolean expression as nested binary
+        // nodes. Counting only this node's operator prevents ancestor text from
+        // counting descendant operators again.
+        summary.cyclomatic = summary.cyclomatic.saturating_add(1);
     }
     let child_nesting = nesting.saturating_add(u32::from(control));
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        summarize_complexity(child, source, child_nesting, summary)?;
+        summarize_complexity(child, child_nesting, summary)?;
     }
     Ok(())
 }
@@ -1563,6 +1571,36 @@ mod tests {
         assert!(nested.maximum_nesting > 0);
         assert!(nested.match_arm_count >= 2);
         assert_eq!(analysis.complexity_metric_candidates.len(), 2);
+    }
+
+    #[test]
+    fn complexity_counts_boolean_operators_once_and_isolates_nested_functions() {
+        let analysis = RustSyntaxAdapter
+            .analyze(&source(
+                r#"
+                fn chained(a: bool, b: bool, c: bool, d: bool) -> bool {
+                    a && b && c || d
+                }
+                fn outer(value: i32) -> i32 {
+                    fn inner(value: i32) -> i32 {
+                        if value > 1 { value } else { 1 }
+                    }
+                    if value > 0 { inner(value) } else { 0 }
+                }
+                "#,
+            ))
+            .unwrap();
+        let metric = |owner: &str| {
+            analysis
+                .complexity_metric_candidates
+                .iter()
+                .find(|item| item.owning_symbol_identity == owner)
+                .unwrap()
+        };
+        assert_eq!(metric("chained").cyclomatic_complexity, 4);
+        assert_eq!(metric("outer").cyclomatic_complexity, 2);
+        assert_eq!(metric("inner").cyclomatic_complexity, 2);
+        assert_eq!(analysis.complexity_metric_candidates.len(), 3);
     }
 
     #[test]

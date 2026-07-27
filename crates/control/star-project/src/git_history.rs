@@ -3,10 +3,11 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::Path,
+    path::{Path, PathBuf},
     process::Command,
 };
 
+use chrono::{DateTime, NaiveDate, Utc};
 use star_contracts::{
     Sha256Hash,
     maintenance_v2::{
@@ -16,6 +17,10 @@ use star_contracts::{
 };
 use star_domain::versioned_fingerprint;
 use star_ports::{GitHistoryObservationRequest, GitHistoryPort, GitHistoryPortError};
+
+const MAX_DEBT_SCAN_ENTRIES: usize = 100_000;
+const MAX_DEBT_SCAN_DEPTH: usize = 64;
+const MAX_DEBT_MARKERS: usize = 10_000;
 
 /// Executes only read-only Git queries.  It deliberately accepts no arbitrary
 /// command or native paths from callers.
@@ -33,10 +38,14 @@ impl GitHistoryPort for CommandGitHistoryAdapter {
                 .range_start
                 .as_deref()
                 .is_some_and(|value| !valid_revision(value))
-            || request.commit_limit == 0
+            || !(1..=10_000).contains(&request.commit_limit)
         {
             return Err(GitHistoryPortError::Invalid);
         }
+        let evaluation_date = DateTime::parse_from_rfc3339(&request.evaluation_time)
+            .map_err(|_| GitHistoryPortError::Invalid)?
+            .with_timezone(&Utc)
+            .date_naive();
         let range_end = git(
             project_root,
             [
@@ -63,6 +72,15 @@ impl GitHistoryPort for CommandGitHistoryAdapter {
             .unwrap_or_else(|| range_end.clone());
         let shallow = git(project_root, ["rev-parse", "--is-shallow-repository"])?;
         let repository = git(project_root, ["rev-parse", "--git-common-dir"])?;
+        let count_limit = format!("--max-count={}", request.commit_limit.saturating_add(1));
+        let observed_commit_count = git(
+            project_root,
+            ["rev-list", "--count", count_limit.as_str(), range.as_str()],
+        )?
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| GitHistoryPortError::Malformed)?;
+        let commit_limit_reached = observed_commit_count > request.commit_limit;
         let commits = git(
             project_root,
             [
@@ -97,10 +115,17 @@ impl GitHistoryPort for CommandGitHistoryAdapter {
             }
         }
         let mut limitations = Vec::new();
-        let history_completeness = match shallow.trim() {
-            "false" => GitHistoryCompleteness::Complete,
-            "true" => {
+        let history_completeness = match (shallow.trim(), commit_limit_reached) {
+            ("false", false) => GitHistoryCompleteness::Complete,
+            ("false", true) => {
+                limitations.push("GIT_HISTORY_COMMIT_LIMIT_REACHED".to_owned());
+                GitHistoryCompleteness::Partial
+            }
+            ("true", truncated) => {
                 limitations.push("GIT_HISTORY_SHALLOW".to_owned());
+                if truncated {
+                    limitations.push("GIT_HISTORY_COMMIT_LIMIT_REACHED".to_owned());
+                }
                 GitHistoryCompleteness::Unverified
             }
             _ => return Err(GitHistoryPortError::Malformed),
@@ -108,11 +133,17 @@ impl GitHistoryPort for CommandGitHistoryAdapter {
         if components.is_empty() {
             limitations.push("GIT_HISTORY_EMPTY_OR_BINARY".to_owned());
         }
+        let codeowners = read_codeowners(project_root);
+        let (codeowners_fingerprint, codeowners_limitations) = match codeowners.as_deref() {
+            Some(value) => (Some(Sha256Hash::digest(value.as_bytes())), Vec::new()),
+            None => (None, vec!["CODEOWNERS_MISSING".to_owned()]),
+        };
+        limitations.extend(codeowners_limitations);
         let components = components
             .into_iter()
             .map(
                 |(component, (changed_file_count, relative_churn, commits))| {
-                    let owners = codeowners_for(project_root, &component);
+                    let owners = codeowners_for(codeowners.as_deref(), &component);
                     let codeowners_matched = owners.is_some();
                     GitHistoryComponentRisk {
                         component,
@@ -133,14 +164,11 @@ impl GitHistoryPort for CommandGitHistoryAdapter {
                 },
             )
             .collect::<Vec<_>>();
-        let (codeowners_fingerprint, mut codeowners_limitations) =
-            codeowners_fingerprint(project_root);
-        limitations.append(&mut codeowners_limitations);
-        let (debt_markers, mut debt_limitations) = debt_markers(project_root);
+        let (debt_markers, mut debt_limitations) = debt_markers(project_root, evaluation_date);
         limitations.append(&mut debt_limitations);
         limitations.sort();
         limitations.dedup();
-        let repository_identity = Sha256Hash::digest(repository.trim().as_bytes()).to_string();
+        let repository_identity = repository_identity(project_root, repository.trim())?;
         let content_fingerprint = versioned_fingerprint(
             "star.git-history-risk-snapshot",
             1,
@@ -174,8 +202,8 @@ impl GitHistoryPort for CommandGitHistoryAdapter {
     }
 }
 
-fn codeowners_for(project_root: &Path, component: &str) -> Option<Vec<String>> {
-    let source = read_codeowners(project_root)?;
+fn codeowners_for(source: Option<&str>, component: &str) -> Option<Vec<String>> {
+    let source = source?;
     let mut selected = None;
     for line in source.lines() {
         let line = line.trim();
@@ -192,17 +220,20 @@ fn codeowners_for(project_root: &Path, component: &str) -> Option<Vec<String>> {
     selected
 }
 
-fn codeowners_fingerprint(project_root: &Path) -> (Option<Sha256Hash>, Vec<String>) {
-    match read_codeowners(project_root) {
-        Some(value) => (Some(Sha256Hash::digest(value.as_bytes())), Vec::new()),
-        None => (None, vec!["CODEOWNERS_MISSING".to_owned()]),
-    }
-}
-
 fn read_codeowners(project_root: &Path) -> Option<String> {
     ["CODEOWNERS", ".github/CODEOWNERS"]
         .into_iter()
-        .find_map(|relative| fs::read_to_string(project_root.join(relative)).ok())
+        .find_map(|relative| {
+            let path = project_root.join(relative);
+            let metadata = fs::symlink_metadata(&path).ok()?;
+            if !metadata.is_file()
+                || metadata_is_link_or_reparse(&metadata)
+                || metadata.len() > 1_000_000
+            {
+                return None;
+            }
+            fs::read_to_string(path).ok()
+        })
 }
 
 fn codeowners_matches(pattern: &str, component: &str) -> bool {
@@ -215,13 +246,23 @@ fn codeowners_matches(pattern: &str, component: &str) -> bool {
 
 fn debt_markers(
     project_root: &Path,
+    evaluation_date: NaiveDate,
 ) -> (
     Vec<star_contracts::maintenance_v2::DebtMarkerObservation>,
     Vec<String>,
 ) {
     let mut markers = Vec::new();
     let mut limitations = Vec::new();
-    visit_debt_markers(project_root, project_root, &mut markers, &mut limitations);
+    let mut visited_entries = 0_usize;
+    visit_debt_markers(
+        project_root,
+        project_root,
+        evaluation_date,
+        &mut markers,
+        &mut limitations,
+        &mut visited_entries,
+        0,
+    );
     markers.sort_by(|left, right| left.marker_id.cmp(&right.marker_id));
     (markers, limitations)
 }
@@ -229,32 +270,58 @@ fn debt_markers(
 fn visit_debt_markers(
     root: &Path,
     current: &Path,
+    evaluation_date: NaiveDate,
     markers: &mut Vec<star_contracts::maintenance_v2::DebtMarkerObservation>,
     limitations: &mut Vec<String>,
+    visited_entries: &mut usize,
+    depth: usize,
 ) {
+    if depth > MAX_DEBT_SCAN_DEPTH {
+        limitations.push("DEBT_MARKER_DEPTH_LIMIT".to_owned());
+        return;
+    }
     let Ok(entries) = fs::read_dir(current) else {
         limitations.push("DEBT_MARKER_READ_FAILED".to_owned());
         return;
     };
     for entry in entries.flatten() {
+        *visited_entries = visited_entries.saturating_add(1);
+        if *visited_entries > MAX_DEBT_SCAN_ENTRIES {
+            limitations.push("DEBT_MARKER_ENTRY_LIMIT".to_owned());
+            return;
+        }
         let path = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            limitations.push("DEBT_MARKER_READ_FAILED".to_owned());
+            continue;
+        };
         let relative = path.strip_prefix(root).ok().and_then(|path| path.to_str());
         let Some(relative) = relative.map(|path| path.replace('\\', "/")) else {
             limitations.push("DEBT_MARKER_NON_UTF8_PATH".to_owned());
             continue;
         };
-        if path.is_dir() {
-            if !is_excluded(&relative) && !relative.starts_with(".git/") {
-                visit_debt_markers(root, &path, markers, limitations);
+        if relative == ".git" || relative.starts_with(".git/") {
+            continue;
+        }
+        if metadata_is_link_or_reparse(&metadata) {
+            limitations.push("DEBT_MARKER_LINK_SKIPPED".to_owned());
+            continue;
+        }
+        if metadata.is_dir() {
+            if !is_excluded(&relative) {
+                visit_debt_markers(
+                    root,
+                    &path,
+                    evaluation_date,
+                    markers,
+                    limitations,
+                    visited_entries,
+                    depth + 1,
+                );
             }
             continue;
         }
-        if is_excluded(&relative)
-            || entry
-                .metadata()
-                .map(|metadata| metadata.len() > 1_000_000)
-                .unwrap_or(true)
-        {
+        if is_excluded(&relative) || metadata.len() > 1_000_000 {
             continue;
         }
         let Ok(bytes) = fs::read(&path) else {
@@ -277,16 +344,31 @@ fn visit_debt_markers(
                 if !line.contains(marker_kind) {
                     continue;
                 }
+                if markers.len() >= MAX_DEBT_MARKERS {
+                    limitations.push("DEBT_MARKER_COUNT_LIMIT".to_owned());
+                    return;
+                }
                 let structured =
                     line.contains("owner=") || line.contains("issue=") || line.contains("expires=");
-                let expiry = metadata_value(line, "expires");
+                let raw_expiry = metadata_value(line, "expires");
+                let expiry_date = raw_expiry
+                    .as_deref()
+                    .and_then(|value| NaiveDate::parse_from_str(value, "%Y-%m-%d").ok());
+                let expiry = expiry_date.map(|value| value.format("%Y-%m-%d").to_string());
                 let replacement_declared = line.contains("replacement=");
-                let stale = expiry.as_deref().is_some_and(|value| value < "2026-07-27")
+                let stale = expiry_date.is_some_and(|value| value < evaluation_date)
                     || (marker_kind == "DEPRECATED" && !replacement_declared);
                 let marker_id = Sha256Hash::digest(
                     format!("{relative}:{marker_kind}:{}", index + 1).as_bytes(),
                 )
                 .to_string();
+                let mut marker_limitations = Vec::new();
+                if raw_expiry.is_some() && expiry_date.is_none() {
+                    marker_limitations.push("DEBT_MARKER_EXPIRY_INVALID".to_owned());
+                }
+                if !structured {
+                    marker_limitations.push("DEBT_MARKER_UNSTRUCTURED".to_owned());
+                }
                 markers.push(star_contracts::maintenance_v2::DebtMarkerObservation {
                     marker_id,
                     project_relative_path: relative.clone(),
@@ -298,15 +380,47 @@ fn visit_debt_markers(
                     replacement_declared,
                     expiry,
                     stale,
-                    limitations: if structured {
-                        Vec::new()
-                    } else {
-                        vec!["DEBT_MARKER_UNSTRUCTURED".to_owned()]
-                    },
+                    limitations: marker_limitations,
                 });
             }
         }
     }
+}
+
+fn metadata_is_link_or_reparse(metadata: &fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    false
+}
+
+fn repository_identity(
+    project_root: &Path,
+    git_common_dir: &str,
+) -> Result<String, GitHistoryPortError> {
+    if git_common_dir.is_empty() || git_common_dir.contains('\0') {
+        return Err(GitHistoryPortError::Malformed);
+    }
+    let common_dir = PathBuf::from(git_common_dir);
+    let common_dir = if common_dir.is_absolute() {
+        common_dir
+    } else {
+        project_root.join(common_dir)
+    };
+    let canonical = fs::canonicalize(common_dir).map_err(|_| GitHistoryPortError::Unverified)?;
+    let normalized = canonical.to_string_lossy().replace('\\', "/");
+    #[cfg(windows)]
+    let normalized = normalized.to_ascii_lowercase();
+    Ok(Sha256Hash::digest(normalized.as_bytes()).to_string())
 }
 
 fn metadata_value(line: &str, key: &str) -> Option<String> {
@@ -421,7 +535,10 @@ mod tests {
         );
     }
 
-    fn observe(root: &Path) -> star_contracts::maintenance_v2::GitHistoryRiskSnapshot {
+    fn observe_with_limit(
+        root: &Path,
+        commit_limit: u32,
+    ) -> star_contracts::maintenance_v2::GitHistoryRiskSnapshot {
         CommandGitHistoryAdapter
             .observe(
                 root,
@@ -429,10 +546,15 @@ mod tests {
                     project_id: ProjectId::from_stable_bytes(b"git-history-fixture"),
                     range_start: None,
                     range_end: "HEAD".to_owned(),
-                    commit_limit: 100,
+                    commit_limit,
+                    evaluation_time: "2026-07-28T00:00:00Z".to_owned(),
                 },
             )
             .unwrap()
+    }
+
+    fn observe(root: &Path) -> star_contracts::maintenance_v2::GitHistoryRiskSnapshot {
+        observe_with_limit(root, 100)
     }
 
     #[test]
@@ -478,7 +600,10 @@ mod tests {
         repo.write("generated/out.rs", "// TODO(owner=generated)\n");
         repo.write("asset.bin", [0_u8, 0xff, 4]);
         repo.commit("initial");
-        repo.write("crates/a.rs", "// DEPRECATED\nfn a() {}\n");
+        repo.write(
+            "crates/a.rs",
+            "// DEPRECATED(expires=not-a-date)\nfn a() {}\n",
+        );
         repo.commit("rewrite");
         git(&repo.0, ["mv", "crates/a.rs", "crates/b.rs"]);
         repo.commit("rename");
@@ -504,7 +629,25 @@ mod tests {
             snapshot
                 .debt_markers
                 .iter()
+                .all(|marker| !marker.project_relative_path.starts_with(".git"))
+        );
+        assert!(
+            snapshot
+                .debt_markers
+                .iter()
                 .any(|marker| marker.marker_kind == "DEPRECATED" && marker.stale)
+        );
+        let deprecated = snapshot
+            .debt_markers
+            .iter()
+            .find(|marker| marker.marker_kind == "DEPRECATED")
+            .unwrap();
+        assert!(deprecated.expiry.is_none());
+        assert!(
+            deprecated
+                .limitations
+                .iter()
+                .any(|value| value == "DEBT_MARKER_EXPIRY_INVALID")
         );
         let encoded = serde_json::to_string(&snapshot).unwrap();
         assert!(!encoded.contains("alice@example.test"));
@@ -552,10 +695,83 @@ mod tests {
                     range_start: Some("0000000000000000000000000000000000000000".to_owned()),
                     range_end: "HEAD".to_owned(),
                     commit_limit: 100,
+                    evaluation_time: "2026-07-28T00:00:00Z".to_owned(),
                 },
             )
             .unwrap_err();
         assert_eq!(error, GitHistoryPortError::Unverified);
         let _ = fs::remove_dir_all(clone);
+    }
+
+    #[test]
+    fn repository_identity_and_commit_limit_are_fail_closed() {
+        let first = FixtureRepo::new("identity-first");
+        first.write("src/lib.rs", "fn first() {}\n");
+        first.commit("first");
+        first.write("src/lib.rs", "fn first() { let _ = 1; }\n");
+        first.commit("second");
+
+        let second = FixtureRepo::new("identity-second");
+        second.write("src/lib.rs", "fn second() {}\n");
+        second.commit("first");
+
+        assert_ne!(
+            observe(&first.0).repository_identity,
+            observe(&second.0).repository_identity
+        );
+        let limited = observe_with_limit(&first.0, 1);
+        assert_eq!(
+            limited.history_completeness,
+            star_contracts::maintenance_v2::GitHistoryCompleteness::Partial
+        );
+        assert!(
+            limited
+                .limitations
+                .iter()
+                .any(|value| value == "GIT_HISTORY_COMMIT_LIMIT_REACHED")
+        );
+
+        for request in [
+            GitHistoryObservationRequest {
+                project_id: ProjectId::from_stable_bytes(b"git-history-fixture"),
+                range_start: None,
+                range_end: "HEAD".to_owned(),
+                commit_limit: 10_001,
+                evaluation_time: "2026-07-28T00:00:00Z".to_owned(),
+            },
+            GitHistoryObservationRequest {
+                project_id: ProjectId::from_stable_bytes(b"git-history-fixture"),
+                range_start: None,
+                range_end: "HEAD".to_owned(),
+                commit_limit: 100,
+                evaluation_time: "not-a-time".to_owned(),
+            },
+        ] {
+            assert_eq!(
+                CommandGitHistoryAdapter
+                    .observe(&first.0, &request)
+                    .unwrap_err(),
+                GitHistoryPortError::Invalid
+            );
+        }
+    }
+
+    #[test]
+    fn debt_marker_scan_depth_is_bounded() {
+        let repo = FixtureRepo::new("debt-depth");
+        repo.write("src/lib.rs", "fn fixture() {}\n");
+        repo.commit("initial");
+        let deep = (0..=super::MAX_DEBT_SCAN_DEPTH)
+            .map(|_| "d")
+            .collect::<Vec<_>>()
+            .join("/");
+        fs::create_dir_all(repo.0.join(deep)).unwrap();
+        let snapshot = observe(&repo.0);
+        assert!(
+            snapshot
+                .limitations
+                .iter()
+                .any(|value| value == "DEBT_MARKER_DEPTH_LIMIT")
+        );
     }
 }

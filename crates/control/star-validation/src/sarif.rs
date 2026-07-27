@@ -10,6 +10,7 @@ use std::{collections::BTreeSet, path::Path};
 use serde::{Deserialize, Serialize};
 
 use star_contracts::{
+    Sha256Hash,
     evidence::{
         DiagnosticConfidence, DiagnosticSeverity, DiagnosticStatus, LocationRef, ProjectPathKind,
         ProjectPathRef, TextPosition,
@@ -20,6 +21,7 @@ use star_contracts::{
 use crate::runner::RawDiagnostic;
 
 const SARIF_VERSION: &str = "2.1.0";
+const MAX_SARIF_BYTES: usize = 8 * 1024 * 1024;
 const MAX_RUNS: usize = 32;
 const MAX_RESULTS: usize = 10_000;
 const MAX_LOCATIONS_PER_RESULT: usize = 32;
@@ -61,6 +63,12 @@ pub fn normalize_sarif_2_1(
     project_id: &ProjectId,
     project_root: &Path,
 ) -> SarifNormalization {
+    if bytes.len() > MAX_SARIF_BYTES {
+        return rejected(
+            "SARIF_RESOURCE_LIMIT",
+            "The SARIF document exceeds the byte limit.",
+        );
+    }
     let value = match serde_json::from_slice::<serde_json::Value>(bytes) {
         Ok(value) => value,
         Err(_) => return rejected("SARIF_MALFORMED", "The SARIF document is not valid JSON."),
@@ -157,7 +165,12 @@ pub fn normalize_sarif_2_1(
                 .and_then(|fingerprints| fingerprints.get("primaryLocationLineHash"))
                 .and_then(serde_json::Value::as_str)
                 .filter(|value| !value.is_empty() && value.len() <= 512)
-                .map(|value| format!("{rule_id}:partial:{value}"))
+                .map(|value| {
+                    format!(
+                        "{rule_id}:partial:{}",
+                        Sha256Hash::digest(value.as_bytes()).as_str()
+                    )
+                })
                 .unwrap_or_else(|| {
                     format!(
                         "{rule_id}:location:{}",
@@ -280,12 +293,16 @@ fn normalize_locations(
             .and_then(serde_json::Value::as_u64)
             .filter(|column| *column > 0 && *column <= u32::MAX as u64)
             .unwrap_or(1) as u32;
+        let project_path = ProjectPathRef {
+            project_id: project_id.clone(),
+            path,
+            path_kind: ProjectPathKind::File,
+        };
+        project_path
+            .validate()
+            .map_err(|_| "SARIF_LOCATION_OUTSIDE_PROJECT")?;
         normalized.push(LocationRef {
-            path: ProjectPathRef {
-                project_id: project_id.clone(),
-                path,
-                path_kind: ProjectPathKind::File,
-            },
+            path: project_path,
             start: TextPosition { line, column },
             end: None,
             symbol: None,
@@ -295,7 +312,12 @@ fn normalize_locations(
 }
 
 fn normalize_project_uri(uri: &str, project_root: &Path) -> Option<String> {
-    let uri = uri.strip_prefix("file:///").unwrap_or(uri);
+    let file_uri = uri.strip_prefix("file:///");
+    let uri = match file_uri {
+        Some(value) if has_windows_drive_prefix(value) => value.to_owned(),
+        Some(value) => format!("/{value}"),
+        None => uri.to_owned(),
+    };
     if uri.contains("//") || uri.contains("://") {
         return None;
     }
@@ -305,7 +327,9 @@ fn normalize_project_uri(uri: &str, project_root: &Path) -> Option<String> {
         let root = root.trim_end_matches('/');
         let prefix_matches = if cfg!(windows) {
             uri.len() > root.len()
-                && uri[..root.len()].eq_ignore_ascii_case(root)
+                && uri
+                    .get(..root.len())
+                    .is_some_and(|prefix| prefix.eq_ignore_ascii_case(root))
                 && uri.as_bytes().get(root.len()) == Some(&b'/')
         } else {
             uri.strip_prefix(root)
@@ -393,6 +417,14 @@ mod tests {
         assert_eq!(result.imported_count, 2);
         assert_eq!(result.diagnostics[0].locations[0].path.path, "src/lib.rs");
         assert!(result.diagnostics[1].locations.is_empty());
+
+        let file_uri = normalize_sarif_2_1(
+            br#"{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"fixture"}},"results":[{"ruleId":"fixture.file-uri","message":{"text":"x"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"file:///workspace/project/src/lib.rs"}}}]}]}]}"#,
+            &project,
+            Path::new("/workspace/project"),
+        );
+        assert_eq!(file_uri.completeness, SarifCompleteness::Complete);
+        assert_eq!(file_uri.diagnostics[0].locations[0].path.path, "src/lib.rs");
     }
 
     #[test]
@@ -405,6 +437,14 @@ mod tests {
         assert_eq!(result.imported_count, 1);
         assert_eq!(result.diagnostics.len(), 1);
         assert_eq!(result.completeness, SarifCompleteness::Partial);
+        assert_eq!(
+            result.candidates[0].correlation_key,
+            format!(
+                "fixture.duplicate:partial:{}",
+                Sha256Hash::digest(b"same").as_str()
+            )
+        );
+        assert!(!result.candidates[0].correlation_key.ends_with(":same"));
     }
 
     #[test]
@@ -446,5 +486,25 @@ mod tests {
         );
         assert_eq!(oversized.completeness, SarifCompleteness::Unverified);
         assert_eq!(oversized.diagnostics[0].code, "SARIF_RESOURCE_LIMIT");
+    }
+
+    #[test]
+    fn byte_limit_and_contract_invalid_relative_paths_are_rejected() {
+        let project = project_id();
+        let oversized = vec![b' '; MAX_SARIF_BYTES + 1];
+        let result = normalize_sarif_2_1(&oversized, &project, Path::new("C:/workspace/project"));
+        assert_eq!(result.completeness, SarifCompleteness::Unverified);
+        assert_eq!(result.diagnostics[0].code, "SARIF_RESOURCE_LIMIT");
+
+        let drive_relative = normalize_sarif_2_1(
+            br#"{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"fixture"}},"results":[{"ruleId":"fixture.path","message":{"text":"x"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"C:secret.rs"}}}]}]}]}"#,
+            &project,
+            Path::new("C:/workspace/project"),
+        );
+        assert_eq!(drive_relative.completeness, SarifCompleteness::Unverified);
+        assert_eq!(
+            drive_relative.diagnostics[0].code,
+            "SARIF_LOCATION_OUTSIDE_PROJECT"
+        );
     }
 }

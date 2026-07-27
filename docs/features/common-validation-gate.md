@@ -309,6 +309,8 @@ runner는 M2 CheckGraph를 다음처럼 소비한다.
 - runner는 `executable`과 `args[]`를 process API에 그대로 전달한다.
 - shell/script host만으로 실행되는 검사는 direct script file을 허용하지 않는다. 등록된 native EXE, package-manager EXE의 typed task ID 또는 adapter EXE ToolDescriptor로 표현할 수 없으면 unresolved다.
 - TaskSpec, Profile, CheckDescriptor와 evidence에 동적 `cmd /c <text>`, `powershell -Command <text>` 또는 자유 형식 command line을 저장하지 않는다.
+- process 시작 직전 `TaskInvocationV2`를 다시 seal해 fingerprint를 비교하며, seal 이후 args·cwd·timeout·output limit 변경은 실행하지 않는다. timeout은 최대 86,400,000ms, stdout·stderr·artifact budget은 각각 최대 64MiB다.
+- child environment는 고정 allowlist의 nonsecret build/runtime 변수만 전달하고 그 exact map을 fingerprint한다. host environment 전체 상속, token·credential 계열 변수의 암묵 전달은 금지한다.
 
 ### 외부 도구 Diagnostic 정규화
 
@@ -322,6 +324,8 @@ runner는 M2 CheckGraph를 다음처럼 소비한다.
 6. raw output은 redaction 후 ArtifactRef로 저장하고 Diagnostic message에 복사하지 않는다.
 7. 매핑하지 못한 error severity 결과가 있으면 버리지 않고 `star.validation.external.unmapped-diagnostic`을 `unverified`로 만든다.
 8. parser crash·truncation·unknown schema면 completeness를 `partial|unverified`로 낮추고 `pass`를 금지한다.
+
+SARIF는 stdout과 stderr 중 어느 한쪽이라도 truncated이거나 pipe read가 불완전하면 import하지 않는다. 입력 byte, run/result/location/rule ID를 모두 제한하고, provider partial fingerprint는 즉시 SHA-256으로 축약한다. `file:///` URI와 상대 URI는 current project-relative `ProjectPathRef`로 검증되지 않으면 Finding 후보가 아니다.
 
 외부 scanner 이름·고유 severity를 core enum으로 확장하지 않는다. 원래 tool ID·version·external code는 provenance field로 보존하고 공통 severity·confidence는 descriptor mapping에 따라 결정한다.
 
