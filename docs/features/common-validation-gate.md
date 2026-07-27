@@ -297,7 +297,7 @@ runner는 M2 CheckGraph를 다음처럼 소비한다.
 4. parallel group과 EffectiveConfig 동시성 상한의 교집합만 사용한다.
 5. required predecessor가 `unsatisfied`면 dependent는 `not_run`과 `dependency_unsatisfied`를 가진다.
 6. independent group은 failure policy가 `continue_independent`일 때만 계속한다.
-7. timeout·cancel 뒤 process tree와 side effect 상태를 확인한다. 결과를 모르면 자동 retry하지 않는다.
+7. Windows에서는 provider code가 실행되기 전에 suspended child를 operation-owned Job Object에 배정한다. timeout·cancel·launch failure와 정상 parent 종료 뒤 Job 전체의 종료를 확인하고, 결과를 모르면 자동 retry하지 않는다.
 8. retry는 CheckDescriptor가 idempotent·retryable 조건과 최대 횟수를 선언한 경우만 허용한다.
 
 마지막 retry만 남기지 않는다. 모든 attempt의 invocation, outcome, completeness, Diagnostic, stdout/stderr ArtifactRef와 termination reason을 보존한다.
@@ -309,7 +309,7 @@ runner는 M2 CheckGraph를 다음처럼 소비한다.
 - runner는 `executable`과 `args[]`를 process API에 그대로 전달한다.
 - shell/script host만으로 실행되는 검사는 direct script file을 허용하지 않는다. 등록된 native EXE, package-manager EXE의 typed task ID 또는 adapter EXE ToolDescriptor로 표현할 수 없으면 unresolved다.
 - TaskSpec, Profile, CheckDescriptor와 evidence에 동적 `cmd /c <text>`, `powershell -Command <text>` 또는 자유 형식 command line을 저장하지 않는다.
-- process 시작 직전 `TaskInvocationV2`를 다시 seal해 fingerprint를 비교하며, seal 이후 args·cwd·timeout·output limit 변경은 실행하지 않는다. timeout은 최대 86,400,000ms, stdout·stderr·artifact budget은 각각 최대 64MiB다.
+- process 시작 직전 `TaskInvocationV2`를 다시 seal해 fingerprint를 비교하며, seal 이후 args·cwd·timeout·output limit 변경은 실행하지 않는다. Windows launcher는 `CREATE_SUSPENDED` child를 `KILL_ON_JOB_CLOSE` Job Object에 배정한 뒤에만 primary thread를 resume하므로 descendant escape race를 허용하지 않는다. Job 생성·배정·resume 또는 bounded termination 확인이 실패하거나 primary exit 뒤 bounded accounting settle에도 active descendant가 남아 있으면 결과는 `launch_error|outcome_unknown`이며 pass가 아니다. timeout은 최대 86,400,000ms, stdout·stderr·artifact budget은 각각 최대 64MiB다.
 - child environment는 고정 allowlist의 nonsecret build/runtime 변수만 전달하고 그 exact map을 fingerprint한다. host environment 전체 상속, token·credential 계열 변수의 암묵 전달은 금지한다.
 
 ### 외부 도구 Diagnostic 정규화

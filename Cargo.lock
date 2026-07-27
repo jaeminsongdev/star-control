@@ -1593,6 +1593,7 @@ dependencies = [
  "star-domain",
  "star-project",
  "thiserror",
+ "windows",
 ]
 
 [[package]]

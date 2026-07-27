@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:2610e5b1449b8b383f90276733d698adbb95f41ff66484e20c9bee1fc65b7966",
+  "evidence_fingerprint": "sha256:32f90c8dc6cd2e5357a2790c3d901d1254ae49486aef172c996edcd2ae71c7d1",
   "feature_count": 23,
   "features": [
     {
@@ -1019,7 +1019,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:567b6ab54948b867a0334e019e93a91258326fec3745f2bf175537eed7bd729e",
+      "feature_fingerprint": "sha256:b7516c821e73cb60c179ee58a850afb94678dddc325a86d22bad1d03f0a7e793",
       "feature_id": "B03",
       "generated_schemas": [
         {
@@ -1054,7 +1054,7 @@
       "mcp_required": true,
       "owner_document": {
         "path": "docs/features/common-validation-gate.md",
-        "source_sha256": "sha256:46195d74a2d69811e3e0c0fbb180a429129bee1320524ce01437a3c1f37e7e8e"
+        "source_sha256": "sha256:30333a306e95dea36885da86c1d291e03d7d82fcb13450a4ba013503e879f2bf"
       },
       "product_surface_fingerprints": [
         "sha256:1c224c9cb0d3c994c05f72adc035e19d9646a1bd5f7384b898c02f1b8ac1241e",
@@ -3411,7 +3411,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:71d41f021789ded4b801f5eb46cedde88e33246e1e88a7bf2498e3fd387d07fc",
+  "source_fingerprint": "sha256:1500dc27565b012df558fc7e88c5e28980ed9448e593b2598f0f5269baff9ab5",
   "stable_error_catalog_fingerprint": "sha256:dd069e4e80bf54af35e4d52434ac9a87208047d146f395eb0736de768cd2f5b8",
   "stable_error_count": 528
 }

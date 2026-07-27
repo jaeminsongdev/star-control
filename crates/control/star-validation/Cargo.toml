@@ -13,3 +13,6 @@ star-contracts = { path = "../../foundation/star-contracts" }
 star-domain = { path = "../../foundation/star-domain" }
 star-project = { path = "../star-project" }
 thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true

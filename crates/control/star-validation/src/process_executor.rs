@@ -30,6 +30,9 @@ use thiserror::Error;
 
 use crate::runner::{CheckExecutionObservation, CheckExecutor, CheckExecutorError, RawDiagnostic};
 
+#[cfg(windows)]
+mod windows_job;
+
 const MAX_EXECUTABLE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_INVOCATION_TIMEOUT_MS: u64 = 86_400_000;
 const MAX_INVOCATION_OUTPUT_BYTES: u64 = 64 * 1024 * 1024;
@@ -68,6 +71,8 @@ const EXECUTION_ENVIRONMENT_ALLOWLIST: &[&str] = &[
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 const OUTPUT_DRAIN_GRACE: Duration = Duration::from_secs(5);
 const TERMINATED_OUTPUT_DRAIN_GRACE: Duration = Duration::from_millis(250);
+const PROCESS_TREE_SETTLE_GRACE: Duration = Duration::from_millis(250);
+const PROCESS_TREE_TERMINATION_GRACE: Duration = Duration::from_secs(2);
 type ExecutionEnvironment = BTreeMap<String, OsString>;
 type BoundedExecutionEnvironment = (ExecutionEnvironment, Sha256Hash);
 
@@ -555,6 +560,15 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let started_at = Utc::now();
+        #[cfg(windows)]
+        let (mut child, process_job) =
+            windows_job::spawn_suspended_in_job(&mut command).map_err(|_| {
+                executor_error(
+                    "CHECK_PROCESS_LAUNCH_FAILED",
+                    TerminationReason::LaunchError,
+                )
+            })?;
+        #[cfg(not(windows))]
         let mut child = command.spawn().map_err(|_| {
             executor_error(
                 "CHECK_PROCESS_LAUNCH_FAILED",
@@ -580,16 +594,50 @@ impl<N: ExternalDiagnosticNormalizer> CheckExecutor for RegisteredProcessCheckEx
         let deadline = Instant::now() + Duration::from_millis(invocation.timeout_ms);
         let (exit_code, termination_reason) = loop {
             match child.try_wait() {
-                Ok(Some(status)) => break (status.code(), TerminationReason::Exited),
+                Ok(Some(status)) => {
+                    #[cfg(windows)]
+                    let clean_parent_exit = process_job.wait_for_empty(PROCESS_TREE_SETTLE_GRACE);
+                    #[cfg(windows)]
+                    let tree_terminated =
+                        process_job.terminate_and_wait(&mut child, PROCESS_TREE_TERMINATION_GRACE);
+                    #[cfg(not(windows))]
+                    let clean_parent_exit = true;
+                    #[cfg(not(windows))]
+                    let tree_terminated = true;
+                    break (
+                        status.code(),
+                        if clean_parent_exit && tree_terminated {
+                            TerminationReason::Exited
+                        } else {
+                            TerminationReason::OutcomeUnknown
+                        },
+                    );
+                }
                 Ok(None) if Instant::now() < deadline => thread::sleep(POLL_INTERVAL),
                 Ok(None) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    break (None, TerminationReason::Timeout);
+                    #[cfg(windows)]
+                    let terminated =
+                        process_job.terminate_and_wait(&mut child, PROCESS_TREE_TERMINATION_GRACE);
+                    #[cfg(not(windows))]
+                    let terminated = child.kill().and_then(|_| child.wait()).is_ok();
+                    break (
+                        None,
+                        if terminated {
+                            TerminationReason::Timeout
+                        } else {
+                            TerminationReason::OutcomeUnknown
+                        },
+                    );
                 }
                 Err(_) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
+                    #[cfg(windows)]
+                    let _ =
+                        process_job.terminate_and_wait(&mut child, PROCESS_TREE_TERMINATION_GRACE);
+                    #[cfg(not(windows))]
+                    {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                    }
                     break (None, TerminationReason::OutcomeUnknown);
                 }
             }
@@ -888,6 +936,88 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.code == "CHECK_OUTPUT_ARTIFACT_WRITE_FAILED")
         );
+    }
+
+    #[cfg(windows)]
+    fn run_windows_descendant_fixture(
+        parent_tail: &str,
+        timeout_ms: u64,
+    ) -> (CheckExecutionObservation, PathBuf, u32) {
+        let root = std::env::current_dir().unwrap();
+        let pwsh = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .map(|directory| directory.join("pwsh.exe"))
+            .find(|candidate| candidate.is_file())
+            .expect("pwsh.exe is available for the Windows descendant fixture");
+        let binding =
+            ResolvedExecutableV2::resolve("pwsh", &pwsh, &root, "windows-descendant-fixture")
+                .unwrap();
+        let pid_file = std::env::temp_dir().join(format!(
+            "star-validation-descendant-{}-{}.pid",
+            std::process::id(),
+            TaskInvocationId::new().as_str()
+        ));
+        let escaped_pid_file = pid_file.to_string_lossy().replace('\'', "''");
+        let script = format!(
+            "$childPath=(Get-Process -Id $PID).Path; \
+             $child=Start-Process -FilePath $childPath -ArgumentList @('-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 30') -PassThru; \
+             [IO.File]::WriteAllText('{escaped_pid_file}',[string]$child.Id); \
+             {parent_tail}"
+        );
+        let mut call = invocation(&binding);
+        call.args = vec![
+            "-NoProfile".to_owned(),
+            "-NonInteractive".to_owned(),
+            "-Command".to_owned(),
+            script,
+        ];
+        call.timeout_ms = timeout_ms;
+        call = call.seal().unwrap();
+
+        let mut executor = RegisteredProcessCheckExecutor::new(vec![binding]).unwrap();
+        let observation = executor.execute(&call).unwrap();
+        let child_pid = std::fs::read_to_string(&pid_file)
+            .expect("the parent fixture records its descendant before completion")
+            .trim()
+            .parse::<u32>()
+            .unwrap();
+        (observation, pid_file, child_pid)
+    }
+
+    #[cfg(windows)]
+    fn assert_windows_descendant_stopped(pid_file: &Path, child_pid: u32) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while windows_job::process_is_running(child_pid) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(25));
+        }
+        let _ = std::fs::remove_file(pid_file);
+        assert!(!windows_job::process_is_running(child_pid));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn timeout_terminates_the_registered_windows_descendant_tree() {
+        let (observation, pid_file, child_pid) =
+            run_windows_descendant_fixture("Start-Sleep -Seconds 30", 4_000);
+        assert_eq!(observation.termination_reason, TerminationReason::Timeout);
+        assert_windows_descendant_stopped(&pid_file, child_pid);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn successful_parent_exit_also_terminates_the_registered_windows_descendant_tree() {
+        let (observation, pid_file, child_pid) = run_windows_descendant_fixture("exit 0", 10_000);
+        assert_eq!(
+            observation.termination_reason,
+            TerminationReason::OutcomeUnknown
+        );
+        assert_eq!(observation.completeness, Completeness::Unverified);
+        assert!(
+            observation
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "CHECK_OUTCOME_UNKNOWN")
+        );
+        assert_windows_descendant_stopped(&pid_file, child_pid);
     }
 
     #[test]

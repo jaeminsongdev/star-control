@@ -31,36 +31,35 @@
 | P-0068 mutation·Rule Pack·repository posture | **DONE / local commit** | `937a9ac7898f6d30d1353b11429da52fca9b2199`; changed-code-only mutation budget·strict schema, versioned Rule Pack과 exact-tool SARIF digest binding, read-only posture snapshot/advisory Radar·fail-closed adapter 경계를 FULL 11/11 complete/stable/pass로 고정했다. |
 | P-0069 EvaluationRun·Profile 결정 | **DONE / local commit** | `fbbf30ea14df34fc06582c22e30ab22c42ef341a`; Code Health trial/reject evidence를 고정했고, external cost/actual workload cohort 부재로 `trial_candidate`만 기록하며 16개 built-in 유지·17번째 accept hold를 FULL 11/11 complete/stable/pass로 확인했다. |
 | P-0070 제품 전수 봉인 | **DONE / local commit** | final audit/ReviewPack, inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, release source closure와 FULL 11/11 complete/stable/pass를 확인했고 signing/publish를 blocked_external로 분리했다. |
-| P-0071 전체 STRICT 리뷰·main 전달 | **REVIEWED / FULL PASS / DELIVERY PENDING** | `origin/main..HEAD` 11커밋의 코드·계약·실기능·보안·유지보수성 결함을 수정했고 preliminary FULL 11/11 complete/stable/pass를 확인했다. 문서 seal 뒤 final FULL, intended-only commit, `origin/main` push/readback만 남았다. |
+| P-0071 전체 STRICT 리뷰·main 전달 | **DONE / PUSHED** | `9ab88e0e069540800a4701d4516ae9692837bc77`; final FULL 11/11과 STRICT review 뒤 `origin/main` readback까지 완료했다. |
+| P-0072 Windows x64 Runtime closure | **SOURCE REVIEWED / FULL PASS** | registered validation process를 suspended Job Object에 넣어 descendant escape를 닫았고 실제 `pwsh → pwsh` timeout/early-exit corpus 포함 `star-validation` 49/49와 FULL 11/11이 통과했다. x64 updater-only apply·commit/push는 진행 중이다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0071 활성 Slice
+## P-0072 활성 Slice
 
-- 범위: `00bd842..e5efc11`의 65개 파일, 8,663 additions를 canonical owner·contract/Schema·handler·CLI/MCP route·positive/negative/failure/replay corpus·current evidence의 여섯 층으로 검토한다.
-- 현재 preflight: checkout identity match, installed x64 verified, integration registered, management normal/read_write, doctor 4/4 PASS, `origin/main...HEAD=0/11`이다.
-- Profile closure: `project_understanding`, `ai_development_validation`, `api_contract_change`, `architecture_quality`, `test_correctness`, `security_supply_chain`, `ci_release_deploy`; resolution fingerprint `sha256:45f8bcb9191198a92cb42155704ad62bb2a1af5f94e5093f4a41f43a470044d3`.
+- 범위: Windows x64 registered process containment, current source seal, Runtime-only updater apply, Codex/fixed integration 무재시작 증거, local/remote `main` 일치다.
+- 제외: Authenticode/timestamp/public publish와 non-x64 build·package·native evidence. Scorecard/OpenRewrite 등 absent executable은 설치하지 않는다.
+- preflight: `main`/clean, `HEAD == origin/main == 9ab88e0`; installed `D:\도구\Star-Control` x64 verified, integration registered, management normal/read_write다.
+- Profile closure: `project_understanding`, `ai_development_validation`, `architecture_quality`, `test_correctness`, `security_supply_chain`, `ci_release_deploy`; fingerprint `sha256:a9cf179b2d5b26fdfd22d1b010e7271277fba9865eb85a7229e02d3366e708d8`.
 
 | 파일 | 상태 | 변경 요약 | 검증 상태 |
 |---|---|---|---|
-| `origin/main..HEAD` 변경 파일 | 검토 완료 | STRICT 코드·기능·계약·보안 리뷰와 Blocker/Major 수정 | regression corpus와 전체 workspace test 통과 |
-| P-0071 review patch | 수정됨 | process/SARIF, complexity, Git history, mutation/Rule Pack/posture, registered effect 보강 | preliminary FULL 11/11 complete/stable/pass |
-| `PLANS.md`와 P-0071 audit | 수정됨 | bounded review/delivery snapshot과 residual boundary | 문서 seal 포함 final FULL 예정 |
+| `star-validation/process_executor` | 검토 완료 | suspended start → Job assign → primary-thread resume; bounded tree termination | package 49/49 pass |
+| Windows dependency/lock | 구현됨 | existing workspace `windows 0.62.2` target-only 연결 | offline check pass, version/download 변화 없음 |
+| validation evidence | 봉인됨 | inventory 23/23·Schema 217·MCP 170/170·Profile 16/16·Runtime executable 4/4 | `target/validation/20260727T172403972Z-36576/report.json`, FULL 11/11 complete/stable/pass |
+| runtime evidence | 진행 중 | x64 generation·updater apply·PID/hash readback | Runtime-only Gate pending |
 
-- preliminary FULL: `target/validation/20260727T163051012Z-25012/report.json`, 174,588ms, 11/11 pass, partial/unverified/flaky 0.
-- current inventory: feature 23/23, Schema 217, MCP 170/170, Profile 16/16, Runtime executable 4/4.
-
-- 완료 조건: Blocker/Major 수정과 회귀 corpus, current inventory evidence, FULL complete/stable/pass, strict self-review, local commit, push, `HEAD == origin/main == remote/main`, clean worktree다.
+- 완료 조건: current inventory, FULL complete/stable/pass, STRICT review, updater-only apply committed, Codex PID/creation time과 fixed integration 불변, installed generation current, commit/push/readback, clean worktree다.
 
 ## 열린 위험과 보류
 
-- R-0062: real external analyzer/provider executable과 network snapshot은 설치·승인 없이 실행할 수 없다. adapter fixture만 구현하고 실제 provider 결과는 `unavailable|unverified`로 남긴다.
+- R-0062: executable 존재만으로 registered provider가 되지 않는다. `cargo-mutants`와 pinned `rust-analyzer`는 관찰됐지만 mutation/semantic-refactor port의 exact descriptor·protocol·artifact binding이 없으므로 real result는 `unavailable|unverified`다. Scorecard/OpenRewrite는 설치하지 않는다.
 - R-0063: `code_health_maintenance` 17번째 Profile은 EvaluationRun evidence와 제품 결정 전까지 추가하지 않는다. 기본은 기존 16 Profile 조합이다.
 - R-0064: raw source, author name/email, secret 및 개인 absolute path는 ArtifactRef·fingerprint·Radar에 저장하지 않는다.
 
 ## Context Pack
 
-- 현재 목표: P-0062~P-0070의 전체 변경을 STRICT 재검토하고 실제 기능 증거를 재생성한 뒤 `origin/main`에 전달한다.
-- 먼저 확인할 파일: contracts/ports/application/validation/project/release, CLI/controller route, schemas/fixtures, product inventory와 P-0070 audit.
-- 먼저 실행할 명령: 변경 public surface/위험 패턴 scan; commit별 diff review; focused corpus와 CLI/controller smoke; inventory; final FULL.
-- 건드리면 안 되는 것: existing dirty/user changes, `target/`, `legacy/`, installed Runtime/cache, public signing/publish/install state.
-- 다음 완료 기준: review findings가 닫히고 FULL 통과 뒤 P-0071 commit을 push하여 local/remote SHA가 일치한다.
+- 현재 목표: P-0072 source seal과 x64 Runtime-only updater apply를 Codex 재시작 없이 완료하고 `main`을 원격 readback까지 일치시킨다.
+- 다음 명령: source evidence 재봉인 → final FULL → source commit → x64 stage/inspect/updater apply → no-restart readback → final seal/commit/push.
+- 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache, fixed Plugin/Hook, signing/publication, non-x64 output.
+- 다음 완료 기준: installed Runtime generation과 final source closure가 일치하고 Codex/fixed integration identity가 유지된 채 `HEAD == origin/main == remote/main`, clean이다.
