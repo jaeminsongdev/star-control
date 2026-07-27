@@ -193,6 +193,14 @@
       "hash": "sha256:1cabefc6ed23bace7ae25f241611d7903b3374d873bff215593f72bc0f5d40cd"
     },
     {
+      "file": "mutation-testing-snapshot.schema.json",
+      "hash": "sha256:beeba04ef35256c063fc001d923cc5e4fc398f76b40429ed2579660204557e48"
+    },
+    {
+      "file": "quality-rule-pack-manifest.schema.json",
+      "hash": "sha256:ba159de511ae6c93b3a54e2d585d5dfaab39c005980e837d2a08b2bbc7980a7b"
+    },
+    {
       "file": "dependency-update-plan.schema.json",
       "hash": "sha256:f07dc1f88aa87838133eb636ac55d76b4f25f5fe6f87df928f8d597016fae701"
     },

@@ -38,8 +38,10 @@ use star_contracts::{
         SourceClass, SourceEntry, StructuralCloneCandidate, ToolchainCommandKind,
     },
     maintenance_v2::{
-        ExternalFreshness, GitHistoryRiskSnapshot, MaintenanceRadarItem, RadarCategory,
-        RadarPriority, STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID, StaticAnalysisImportReport,
+        ExternalDataSnapshot, ExternalFreshness, GitHistoryRiskSnapshot, MaintenanceRadarItem,
+        MutationTestingBudget, MutationTestingSnapshot, MutationTrigger, QualityRulePackManifest,
+        RadarCategory, RadarPriority, STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID,
+        StaticAnalysisImportReport,
     },
     managed_registry::{
         ManagedDeclarationChangeIntent, ManagedRegistrySnapshot, RegistryConsistencyRecord,
@@ -109,8 +111,10 @@ use star_planning::{
 use star_ports::{
     ArtifactDiscovery, ArtifactStore, ArtifactWritePolicy, ArtifactWriteRequest,
     CheckGraphEvidenceTransaction, CodeIndexCache, GitHistoryObservationRequest, GitHistoryPort,
-    GlobalManagementRepository, ManagementRecovery, ManagementRepositorySet, PatchPortError,
-    ProjectRootAttachment, ProjectRootBindingStore, RepositoryError, RepositoryErrorCategory,
+    GlobalManagementRepository, ManagementRecovery, ManagementRepositorySet,
+    MutationTestingObservationRequest, MutationTestingPort, PatchPortError, ProjectRootAttachment,
+    ProjectRootBindingStore, QualityRulePackLoadRequest, QualityRulePackPort, RepositoryError,
+    RepositoryErrorCategory, RepositoryPostureObservationRequest, RepositoryPosturePort,
     RetentionApplyResult, RetentionPlan, RetentionPolicy, RewriteTransformRequest,
     RewriteTransformerPort, ScanCommit, SemanticProviderAvailability,
     SemanticRefactorPreviewRequest, SemanticRefactorProviderPort, SourceBoundFindingImport,
@@ -194,6 +198,12 @@ pub enum ApplicationError {
     IndexNotCurrent,
     #[error("Git history adapter is unavailable or unverified")]
     GitHistoryUnavailable,
+    #[error("mutation testing adapter is unavailable or unverified")]
+    MutationTestingUnavailable,
+    #[error("quality Rule Pack adapter is unavailable or unverified")]
+    QualityRulePackUnavailable,
+    #[error("repository posture adapter is unavailable or unverified")]
+    RepositoryPostureUnavailable,
     #[error("code index analysis input produced conflicting content")]
     IndexIdentityConflict,
     #[error("task planning failed")]
@@ -813,6 +823,9 @@ pub struct ManagementApplicationService {
     semantic_adapters: Vec<Arc<dyn SemanticAdapter>>,
     semantic_refactor_provider: Option<Arc<dyn SemanticRefactorProviderPort>>,
     git_history_adapter: Option<Arc<dyn GitHistoryPort>>,
+    mutation_testing_adapter: Option<Arc<dyn MutationTestingPort>>,
+    quality_rule_pack_adapter: Option<Arc<dyn QualityRulePackPort>>,
+    repository_posture_adapter: Option<Arc<dyn RepositoryPosturePort>>,
     managed_registry_resolver: Option<Arc<dyn ManagedRegistryResolverPort>>,
     managed_registry_rewriter: Option<Arc<dyn ManagedRegistryRewritePort>>,
     rust_style_runtime_root: Option<PathBuf>,
@@ -965,6 +978,9 @@ impl ManagementApplicationService {
             semantic_adapters: Vec::new(),
             semantic_refactor_provider: None,
             git_history_adapter: None,
+            mutation_testing_adapter: None,
+            quality_rule_pack_adapter: None,
+            repository_posture_adapter: None,
             managed_registry_resolver: None,
             managed_registry_rewriter: None,
             rust_style_runtime_root: None,
@@ -1122,6 +1138,24 @@ impl ManagementApplicationService {
 
     pub fn with_git_history_adapter(mut self, adapter: Arc<dyn GitHistoryPort>) -> Self {
         self.git_history_adapter = Some(adapter);
+        self
+    }
+
+    pub fn with_mutation_testing_adapter(mut self, adapter: Arc<dyn MutationTestingPort>) -> Self {
+        self.mutation_testing_adapter = Some(adapter);
+        self
+    }
+
+    pub fn with_quality_rule_pack_adapter(mut self, adapter: Arc<dyn QualityRulePackPort>) -> Self {
+        self.quality_rule_pack_adapter = Some(adapter);
+        self
+    }
+
+    pub fn with_repository_posture_adapter(
+        mut self,
+        adapter: Arc<dyn RepositoryPosturePort>,
+    ) -> Self {
+        self.repository_posture_adapter = Some(adapter);
         self
     }
 
@@ -2982,6 +3016,296 @@ impl ManagementApplicationService {
                 },
             )
             .map_err(|_| ApplicationError::GitHistoryUnavailable)
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the external mutation request keeps its source bindings and fixed budgets explicit"
+    )]
+    pub fn mutation_testing_snapshot(
+        &self,
+        project_id: &ProjectId,
+        snapshot_id: String,
+        changed_paths: Vec<ProjectPathRef>,
+        triggers: Vec<MutationTrigger>,
+        budget: MutationTestingBudget,
+        engine_descriptor_ref: String,
+        expected_engine_identity: Sha256Hash,
+    ) -> Result<MutationTestingSnapshot, ApplicationError> {
+        let _guard = self.command_guard()?;
+        if snapshot_id.trim().is_empty()
+            || changed_paths.is_empty()
+            || changed_paths.windows(2).any(|pair| pair[0] >= pair[1])
+            || triggers.is_empty()
+            || triggers.windows(2).any(|pair| pair[0] >= pair[1])
+            || budget.max_mutants == 0
+            || budget.max_duration_ms == 0
+            || engine_descriptor_ref.trim().is_empty()
+        {
+            return Err(ApplicationError::Invalid);
+        }
+        let project = self
+            .repositories
+            .global()
+            .get_project(project_id)?
+            .ok_or(ApplicationError::NotFound)?;
+        let root = self.primary_project_root(&project)?;
+        let (index, index_current) = self.load_index_projection_with_freshness(project_id)?;
+        if !index_current {
+            return Err(ApplicationError::IndexNotCurrent);
+        }
+        let changed = observe_workspace_changes(&project, &root, &index.source_entries)?;
+        // Artifact persistence is intentionally outside user source scope. Its
+        // untracked `.ai-runs/star-control` entries must not turn an otherwise
+        // exact changed-code request into a broad mutation candidate.
+        let source_changes = changed
+            .entries
+            .iter()
+            .filter(|entry| !entry.path.as_str().starts_with(".ai-runs/star-control/"))
+            .collect::<Vec<_>>();
+        if changed_paths.iter().any(|path| {
+            !source_changes
+                .iter()
+                .any(|entry| entry.path == *path && !entry.binary && entry.after_sha256.is_some())
+        }) {
+            return Err(ApplicationError::Apply(
+                "MUTATION_CHANGED_SCOPE_UNVERIFIED".to_owned(),
+            ));
+        }
+        let scan = self
+            .repositories
+            .project(project_id)?
+            .latest_scan()?
+            .ok_or(ApplicationError::NotFound)?;
+        let adapter = self
+            .mutation_testing_adapter
+            .as_ref()
+            .ok_or(ApplicationError::MutationTestingUnavailable)?;
+        let snapshot = adapter
+            .observe(
+                &root,
+                &MutationTestingObservationRequest {
+                    snapshot_id: snapshot_id.clone(),
+                    project_id: project_id.clone(),
+                    project_revision_ref: scan.project_revision_id.as_str().to_owned(),
+                    workspace_snapshot_ref: scan.workspace_snapshot_id.as_str().to_owned(),
+                    code_index_snapshot_ref: index
+                        .snapshot
+                        .code_index_snapshot_id
+                        .as_str()
+                        .to_owned(),
+                    changed_paths: changed_paths.clone(),
+                    triggers: triggers.clone(),
+                    budget: budget.clone(),
+                    engine_descriptor_ref: engine_descriptor_ref.clone(),
+                    expected_engine_identity: expected_engine_identity.clone(),
+                },
+            )
+            .map_err(|_| ApplicationError::MutationTestingUnavailable)?;
+        if !snapshot.is_current_schema()
+            || snapshot.snapshot_id != snapshot_id
+            || snapshot.project_id != *project_id
+            || snapshot.project_revision_ref != scan.project_revision_id.as_str()
+            || snapshot.workspace_snapshot_ref != scan.workspace_snapshot_id.as_str()
+            || snapshot.code_index_snapshot_ref != index.snapshot.code_index_snapshot_id.as_str()
+            || snapshot.changed_paths != changed_paths
+            || snapshot.triggers != triggers
+            || snapshot.budget != budget
+            || snapshot.engine_descriptor_ref != engine_descriptor_ref
+            || snapshot.engine_identity_sha256 != expected_engine_identity
+            || (snapshot.state == star_contracts::maintenance_v2::MutationTestingState::Complete
+                && (snapshot.completeness != CoverageState::Complete
+                    || snapshot.timed_out_count != 0
+                    || snapshot.flaky_count != 0
+                    || snapshot.survivor_count > snapshot.budget.max_survivors))
+            || (snapshot.state != star_contracts::maintenance_v2::MutationTestingState::Complete
+                && snapshot.completeness == CoverageState::Complete)
+        {
+            return Err(ApplicationError::Invalid);
+        }
+        Ok(snapshot)
+    }
+
+    pub fn quality_rule_pack_manifest(
+        &self,
+        pack_id: String,
+        pack_version: String,
+        expected_source_digest: Sha256Hash,
+    ) -> Result<QualityRulePackManifest, ApplicationError> {
+        let _guard = self.command_guard()?;
+        if pack_id.trim().is_empty() || pack_version.trim().is_empty() {
+            return Err(ApplicationError::Invalid);
+        }
+        let adapter = self
+            .quality_rule_pack_adapter
+            .as_ref()
+            .ok_or(ApplicationError::QualityRulePackUnavailable)?;
+        let manifest = adapter
+            .load(&QualityRulePackLoadRequest {
+                pack_id: pack_id.clone(),
+                pack_version: pack_version.clone(),
+                expected_source_digest: expected_source_digest.clone(),
+            })
+            .map_err(|_| ApplicationError::QualityRulePackUnavailable)?;
+        if !manifest.is_current_schema()
+            || manifest.pack_id != pack_id
+            || manifest.pack_version != pack_version
+            || manifest.source_digest != expected_source_digest
+        {
+            return Err(ApplicationError::Invalid);
+        }
+        Ok(manifest)
+    }
+
+    pub fn repository_posture_snapshot(
+        &self,
+        project_id: &ProjectId,
+        source_url: String,
+        query: String,
+        source_schema_version: String,
+        expected_tool_identity: Sha256Hash,
+    ) -> Result<ExternalDataSnapshot, ApplicationError> {
+        let _guard = self.command_guard()?;
+        if !source_url.starts_with("https://")
+            || query.trim().is_empty()
+            || source_schema_version.trim().is_empty()
+            || m3_contains_secret_candidate(&format!("{source_url}\n{query}"))
+        {
+            return Err(ApplicationError::Invalid);
+        }
+        let project = self
+            .repositories
+            .global()
+            .get_project(project_id)?
+            .ok_or(ApplicationError::NotFound)?;
+        let scan = self
+            .repositories
+            .project(project_id)?
+            .latest_scan()?
+            .ok_or(ApplicationError::NotFound)?;
+        let adapter = self
+            .repository_posture_adapter
+            .as_ref()
+            .ok_or(ApplicationError::RepositoryPostureUnavailable)?;
+        let snapshot = adapter
+            .observe(&RepositoryPostureObservationRequest {
+                project_id: project_id.clone(),
+                project_revision_ref: scan.project_revision_id.as_str().to_owned(),
+                source_url: source_url.clone(),
+                query: query.clone(),
+                source_schema_version: source_schema_version.clone(),
+                expected_tool_identity: expected_tool_identity.clone(),
+            })
+            .map_err(|_| ApplicationError::RepositoryPostureUnavailable)?;
+        if snapshot.schema_id != star_contracts::maintenance_v2::EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID
+            || snapshot.schema_version != 1
+            || snapshot.project_id.as_ref() != Some(project_id)
+            || snapshot.source.source_uri != source_url
+            || snapshot.source.dataset_or_query != query
+            || snapshot.source.source_schema_version != source_schema_version
+            || snapshot.source.tool_identity_ref != expected_tool_identity.as_str()
+            || snapshot.source.source_id.trim().is_empty()
+            || project.project_id != *project_id
+        {
+            return Err(ApplicationError::Invalid);
+        }
+        Ok(snapshot)
+    }
+
+    pub fn mutation_testing_radar_items(
+        &self,
+        snapshot: &MutationTestingSnapshot,
+        evaluation_time: &str,
+    ) -> Result<Vec<MaintenanceRadarItem>, ApplicationError> {
+        if !snapshot.is_current_schema() || evaluation_time.trim().is_empty() {
+            return Err(ApplicationError::Invalid);
+        }
+        let complete = snapshot.state
+            == star_contracts::maintenance_v2::MutationTestingState::Complete
+            && snapshot.completeness == CoverageState::Complete
+            && snapshot.timed_out_count == 0
+            && snapshot.flaky_count == 0
+            && snapshot.survivor_count <= snapshot.budget.max_survivors;
+        let item_id = format!("mutation-testing:{}", snapshot.snapshot_id);
+        Ok(vec![MaintenanceRadarItem {
+            item_id: item_id.clone(),
+            project_id: snapshot.project_id.clone(),
+            category: RadarCategory::CodeQuality,
+            subject: "changed_code_mutation_testing".to_owned(),
+            priority: RadarPriority {
+                blocking_rank: 0,
+                risk_rank: u8::from(snapshot.survivor_count > 0) * 2,
+                freshness_rank: u8::from(!complete) * 2,
+                regression_rank: u8::from(snapshot.survivor_count > snapshot.budget.max_survivors)
+                    * 3,
+                evidence_rank: if complete { 0 } else { 2 },
+                time_rank: evaluation_time.to_owned(),
+                stable_identity: item_id,
+            },
+            finding_refs: Vec::new(),
+            diagnostic_refs: Vec::new(),
+            dependency_refs: Vec::new(),
+            regression_refs: Vec::new(),
+            suppression_refs: Vec::new(),
+            evidence_refs: snapshot.mutation_evidence_refs.clone(),
+            evaluation_run_refs: Vec::new(),
+            blocking: false,
+            freshness: if complete {
+                ExternalFreshness::Current
+            } else {
+                ExternalFreshness::Unknown
+            },
+            completeness: snapshot.completeness,
+        }])
+    }
+
+    pub fn repository_posture_radar_items(
+        &self,
+        snapshot: &ExternalDataSnapshot,
+        evaluation_time: &str,
+    ) -> Result<Vec<MaintenanceRadarItem>, ApplicationError> {
+        let project_id = snapshot
+            .project_id
+            .clone()
+            .ok_or(ApplicationError::Invalid)?;
+        if snapshot.schema_id != star_contracts::maintenance_v2::EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID
+            || snapshot.schema_version != 1
+            || evaluation_time.trim().is_empty()
+        {
+            return Err(ApplicationError::Invalid);
+        }
+        let item_id = format!("repository-posture:{}", snapshot.snapshot_id);
+        Ok(vec![MaintenanceRadarItem {
+            item_id: item_id.clone(),
+            project_id,
+            category: RadarCategory::Security,
+            subject: format!("repository_posture:{}", snapshot.source.provider),
+            priority: RadarPriority {
+                blocking_rank: 0,
+                risk_rank: 0,
+                freshness_rank: u8::from(snapshot.freshness != ExternalFreshness::Current) * 2,
+                regression_rank: 0,
+                evidence_rank: if snapshot.completeness == CoverageState::Complete {
+                    0
+                } else {
+                    2
+                },
+                time_rank: evaluation_time.to_owned(),
+                stable_identity: item_id,
+            },
+            finding_refs: Vec::new(),
+            diagnostic_refs: Vec::new(),
+            dependency_refs: Vec::new(),
+            regression_refs: Vec::new(),
+            suppression_refs: Vec::new(),
+            evidence_refs: vec![snapshot.normalized_artifact_ref.clone()],
+            evaluation_run_refs: Vec::new(),
+            // External aggregate scores are advisory posture evidence, never
+            // a direct Gate blocker.
+            blocking: false,
+            freshness: snapshot.freshness,
+            completeness: snapshot.completeness,
+        }])
     }
 
     pub fn git_history_radar_projection(
@@ -5050,6 +5374,8 @@ impl ManagementApplicationService {
                     .observed_tool
                     .as_ref()
                     .ok_or(ApplicationError::Invalid)?;
+                let (rule_pack_digest, rule_pack_limitations) =
+                    self.trusted_rule_pack_digest_for_tool(&observed_tool.sha256)?;
                 let completeness = match import.completeness {
                     star_validation::sarif::SarifCompleteness::Complete => CoverageState::Complete,
                     star_validation::sarif::SarifCompleteness::Partial => CoverageState::Partial,
@@ -5065,9 +5391,11 @@ impl ManagementApplicationService {
                     "tool_identity_sha256":observed_tool.sha256,
                     "raw_artifact_ref":import.artifact_refs[0].artifact_id,
                     "normalized_artifact_ref":import.artifact_refs[2].artifact_id,
+                    "rule_pack_digest":rule_pack_digest,
                     "imported_count":import.imported_count,
                     "rejected_count":import.rejected_count,
                     "completeness":completeness,
+                    "limitations":rule_pack_limitations.clone(),
                 }))
                 .map_err(|_| ApplicationError::Invalid)?;
                 import_reports.push(StaticAnalysisImportReport {
@@ -5086,7 +5414,7 @@ impl ManagementApplicationService {
                     tool_descriptor_sha256: run.check_ref.sha256.clone(),
                     tool_identity_sha256: observed_tool.sha256.clone(),
                     sarif_version: "2.1.0".to_owned(),
-                    rule_pack_digest: None,
+                    rule_pack_digest,
                     uri_mapping_policy: "project-relative-v1".to_owned(),
                     raw_artifact_ref: import.artifact_refs[0].artifact_id.as_str().to_owned(),
                     normalized_artifact_ref: import.artifact_refs[2]
@@ -5097,7 +5425,7 @@ impl ManagementApplicationService {
                     rejected_count: import.rejected_count as u64,
                     truncated_count: 0,
                     completeness,
-                    limitations: Vec::new(),
+                    limitations: rule_pack_limitations,
                     content_fingerprint,
                 });
             }
@@ -5122,6 +5450,56 @@ impl ManagementApplicationService {
             source_bound_findings,
         })?;
         Ok(result)
+    }
+
+    fn trusted_rule_pack_digest_for_tool(
+        &self,
+        tool_identity: &Sha256Hash,
+    ) -> Result<(Option<Sha256Hash>, Vec<String>), ApplicationError> {
+        let records = self
+            .repositories
+            .global()
+            .list_development_records("quality_rule_pack_manifest", None)?;
+        let mut trusted = Vec::new();
+        let mut limitations = Vec::new();
+        for record in records {
+            let Ok(manifest) = serde_json::from_value::<QualityRulePackManifest>(record.document)
+            else {
+                continue;
+            };
+            if !manifest.is_current_schema()
+                || manifest.tool_identity_sha256.as_ref() != Some(tool_identity)
+            {
+                continue;
+            }
+            if manifest.trust != star_contracts::maintenance_v2::QualityRulePackTrust::Trusted {
+                limitations.push("RULE_PACK_UNTRUSTED".to_owned());
+                continue;
+            }
+            let current = manifest.valid_until.as_deref().is_none_or(|value| {
+                chrono::DateTime::parse_from_rfc3339(value)
+                    .map(|value| value.with_timezone(&Utc) > Utc::now())
+                    .unwrap_or(false)
+            });
+            if !current {
+                limitations.push("RULE_PACK_STALE_OR_EXPIRED".to_owned());
+                continue;
+            }
+            trusted.push(manifest.source_digest);
+        }
+        trusted.sort();
+        trusted.dedup();
+        let digest = match trusted.len() {
+            0 => None,
+            1 => trusted.into_iter().next(),
+            _ => {
+                limitations.push("RULE_PACK_AMBIGUOUS".to_owned());
+                None
+            }
+        };
+        limitations.sort();
+        limitations.dedup();
+        Ok((digest, limitations))
     }
 
     pub fn validation_execution_status(
@@ -11542,6 +11920,114 @@ mod tests {
         calls: Arc<AtomicUsize>,
     }
 
+    struct FixtureQualityRulePackProvider {
+        manifest: QualityRulePackManifest,
+    }
+
+    impl QualityRulePackPort for FixtureQualityRulePackProvider {
+        fn load(
+            &self,
+            request: &QualityRulePackLoadRequest,
+        ) -> Result<QualityRulePackManifest, star_ports::QualityRulePackPortError> {
+            if request.pack_id != self.manifest.pack_id
+                || request.pack_version != self.manifest.pack_version
+                || request.expected_source_digest != self.manifest.source_digest
+            {
+                return Err(star_ports::QualityRulePackPortError::Invalid);
+            }
+            Ok(self.manifest.clone())
+        }
+    }
+
+    struct FixtureMutationTestingProvider;
+
+    impl MutationTestingPort for FixtureMutationTestingProvider {
+        fn observe(
+            &self,
+            _project_root: &Path,
+            request: &MutationTestingObservationRequest,
+        ) -> Result<MutationTestingSnapshot, star_ports::MutationTestingPortError> {
+            Ok(MutationTestingSnapshot {
+                schema_id: star_contracts::maintenance_v2::MUTATION_TESTING_SNAPSHOT_SCHEMA_ID
+                    .to_owned(),
+                schema_version: 1,
+                snapshot_id: request.snapshot_id.clone(),
+                project_id: request.project_id.clone(),
+                project_revision_ref: request.project_revision_ref.clone(),
+                workspace_snapshot_ref: request.workspace_snapshot_ref.clone(),
+                code_index_snapshot_ref: request.code_index_snapshot_ref.clone(),
+                engine_descriptor_ref: request.engine_descriptor_ref.clone(),
+                engine_identity_sha256: request.expected_engine_identity.clone(),
+                changed_paths: request.changed_paths.clone(),
+                triggers: request.triggers.clone(),
+                budget: request.budget.clone(),
+                executed_mutants: 1,
+                killed_mutants: 1,
+                survivor_count: 0,
+                timed_out_count: 0,
+                flaky_count: 0,
+                line_coverage_evidence_ref: Some("fixture:coverage".to_owned()),
+                mutation_evidence_refs: vec!["fixture:mutation".to_owned()],
+                state: star_contracts::maintenance_v2::MutationTestingState::Complete,
+                completeness: CoverageState::Complete,
+                limitations: vec![],
+                content_fingerprint: Sha256Hash::digest(b"fixture-mutation-snapshot"),
+            })
+        }
+    }
+
+    struct FixtureRepositoryPostureProvider;
+
+    impl RepositoryPosturePort for FixtureRepositoryPostureProvider {
+        fn observe(
+            &self,
+            request: &RepositoryPostureObservationRequest,
+        ) -> Result<ExternalDataSnapshot, star_ports::RepositoryPosturePortError> {
+            Ok(ExternalDataSnapshot {
+                schema_id: star_contracts::maintenance_v2::EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID
+                    .to_owned(),
+                schema_version: 1,
+                snapshot_id: "fixture-posture".to_owned(),
+                project_id: Some(request.project_id.clone()),
+                source: star_contracts::maintenance_v2::ExternalDataSourceDescriptor {
+                    source_id: "fixture-scorecard".to_owned(),
+                    source_kind: "repository_posture".to_owned(),
+                    provider: "fixture-scorecard".to_owned(),
+                    source_uri: request.source_url.clone(),
+                    dataset_or_query: request.query.clone(),
+                    source_schema_version: request.source_schema_version.clone(),
+                    tool_identity_ref: request.expected_tool_identity.as_str().to_owned(),
+                    retrieval_mode: "fixture".to_owned(),
+                    network_mode: "offline".to_owned(),
+                    integrity_policy: "sha256".to_owned(),
+                    coverage: CoverageState::Complete,
+                    maximum_age_seconds: 60,
+                    license_ref: None,
+                },
+                published_at: None,
+                modified_at: None,
+                retrieved_at: "2030-01-01T00:00:00Z".to_owned(),
+                valid_until: "2030-01-01T00:01:00Z".to_owned(),
+                evaluation_time: "2030-01-01T00:00:00Z".to_owned(),
+                source_artifact_ref: "fixture:posture-source".to_owned(),
+                source_sha256: Sha256Hash::digest(b"fixture-posture-source"),
+                normalized_artifact_ref: "fixture:posture-normalized".to_owned(),
+                normalized_sha256: Sha256Hash::digest(b"fixture-posture-normalized"),
+                observations: vec![star_contracts::maintenance_v2::ExternalDataObservation {
+                    subject: "repository".to_owned(),
+                    status: "observed".to_owned(),
+                    advisory_refs: vec![],
+                    license_refs: vec![],
+                    source_evidence_ref: "fixture:posture-source".to_owned(),
+                }],
+                freshness: ExternalFreshness::Current,
+                completeness: CoverageState::Complete,
+                limitations: vec![],
+                content_fingerprint: Sha256Hash::digest(b"fixture-posture-snapshot"),
+            })
+        }
+    }
+
     impl SemanticRefactorProviderPort for FixtureSemanticProvider {
         fn preview(
             &self,
@@ -11983,6 +12469,231 @@ mod tests {
             .unwrap();
         assert_eq!(applied.rebuilt_projects.len(), 1);
         assert_eq!(applied.rebuilt_projects[0].project_id, project_id);
+    }
+
+    #[test]
+    fn quality_rule_pack_requires_registered_digest_bound_provider() {
+        let root = std::env::temp_dir().join(format!(
+            "star-rule-pack-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let repositories =
+            Arc::new(SqliteManagementRepositorySet::open(root.join("management"), "test").unwrap());
+        let bindings =
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("root-bindings")).unwrap());
+        let digest = Sha256Hash::digest(b"fixture-rule-pack");
+        let unavailable = ManagementApplicationService::new(
+            repositories.clone(),
+            bindings.clone(),
+            Arc::new(LocalArtifactStore::default()),
+        );
+        assert!(matches!(
+            unavailable.quality_rule_pack_manifest(
+                "fixture-pack".to_owned(),
+                "1.0.0".to_owned(),
+                digest.clone(),
+            ),
+            Err(ApplicationError::QualityRulePackUnavailable)
+        ));
+        drop(unavailable);
+        let manifest = QualityRulePackManifest {
+            schema_id: star_contracts::maintenance_v2::QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID
+                .to_owned(),
+            schema_version: 1,
+            pack_id: "fixture-pack".to_owned(),
+            pack_version: "1.0.0".to_owned(),
+            source_ref: "fixture://rule-pack".to_owned(),
+            source_digest: digest.clone(),
+            tool_identity_sha256: None,
+            supported_languages: vec!["rust".to_owned()],
+            supported_source_classes: vec!["source".to_owned()],
+            fixture_corpus_refs: vec!["fixture:rule-pack".to_owned()],
+            rules: vec![],
+            lifecycle: star_contracts::maintenance_v2::QualityRulePackLifecycle::Active,
+            replacement_pack_ref: None,
+            signature_ref: None,
+            trust: star_contracts::maintenance_v2::QualityRulePackTrust::Unverified,
+            valid_until: None,
+            limitations: vec!["OFFLINE_FIXTURE".to_owned()],
+            content_fingerprint: Sha256Hash::digest(b"fixture-rule-pack-manifest"),
+        };
+        let service = ManagementApplicationService::new(
+            repositories,
+            bindings,
+            Arc::new(LocalArtifactStore::default()),
+        )
+        .with_quality_rule_pack_adapter(Arc::new(FixtureQualityRulePackProvider {
+            manifest: manifest.clone(),
+        }));
+        assert_eq!(
+            service
+                .quality_rule_pack_manifest("fixture-pack".to_owned(), "1.0.0".to_owned(), digest,)
+                .unwrap(),
+            manifest
+        );
+        let tool_identity = Sha256Hash::digest(b"fixture-static-analysis-tool");
+        let mut trusted = manifest.clone();
+        trusted.tool_identity_sha256 = Some(tool_identity.clone());
+        trusted.trust = star_contracts::maintenance_v2::QualityRulePackTrust::Trusted;
+        trusted.valid_until = Some("2030-01-01T00:00:00Z".to_owned());
+        service
+            .publish_development_document(
+                "quality_rule_pack_manifest",
+                "fixture-pack-1.0.0",
+                1,
+                None,
+                "trusted",
+                star_contracts::maintenance_v2::QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID,
+                1,
+                &trusted,
+            )
+            .unwrap();
+        assert_eq!(
+            service
+                .trusted_rule_pack_digest_for_tool(&tool_identity)
+                .unwrap(),
+            (Some(trusted.source_digest.clone()), Vec::new())
+        );
+
+        let untrusted_tool_identity = Sha256Hash::digest(b"untrusted-static-analysis-tool");
+        let mut untrusted = trusted;
+        untrusted.pack_id = "untrusted-fixture-pack".to_owned();
+        untrusted.tool_identity_sha256 = Some(untrusted_tool_identity.clone());
+        untrusted.trust = star_contracts::maintenance_v2::QualityRulePackTrust::Untrusted;
+        service
+            .publish_development_document(
+                "quality_rule_pack_manifest",
+                "untrusted-fixture-pack-1.0.0",
+                1,
+                None,
+                "untrusted",
+                star_contracts::maintenance_v2::QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID,
+                1,
+                &untrusted,
+            )
+            .unwrap();
+        assert_eq!(
+            service
+                .trusted_rule_pack_digest_for_tool(&untrusted_tool_identity)
+                .unwrap(),
+            (None, vec!["RULE_PACK_UNTRUSTED".to_owned()])
+        );
+        drop(service);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn mutation_testing_is_changed_code_only_and_advisory_in_radar() {
+        let root = std::env::temp_dir().join(format!(
+            "star-mutation-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        let source = root.join("source");
+        std::fs::create_dir_all(source.join("src")).unwrap();
+        std::fs::create_dir_all(source.join(".star-control")).unwrap();
+        let declared_project_id = ProjectId::new();
+        std::fs::write(
+            source.join(".star-control/project.toml"),
+            format!(
+                "schema_version = 1\nproject_id = \"{}\"\ndisplay_name = \"mutation fixture\"\nrepository_kind = \"git\"\nsource_of_truth = [\"source\"]\n",
+                declared_project_id.as_str()
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            source.join("Cargo.toml"),
+            "[package]\nname = \"mutation-fixture\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        std::fs::write(source.join("src/lib.rs"), b"pub fn fixture() {}\n").unwrap();
+        for arguments in [
+            vec!["init", "--quiet"],
+            vec!["config", "user.email", "fixture@example.invalid"],
+            vec!["config", "user.name", "Fixture"],
+            vec!["add", "."],
+            vec!["commit", "--quiet", "-m", "fixture"],
+        ] {
+            assert!(
+                std::process::Command::new("git")
+                    .args(arguments)
+                    .current_dir(&source)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+        }
+        let repositories =
+            Arc::new(SqliteManagementRepositorySet::open(root.join("management"), "test").unwrap());
+        let bindings =
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("root-bindings")).unwrap());
+        let service = ManagementApplicationService::new(
+            repositories,
+            bindings,
+            Arc::new(LocalArtifactStore::default()),
+        )
+        .with_mutation_testing_adapter(Arc::new(FixtureMutationTestingProvider))
+        .with_repository_posture_adapter(Arc::new(FixtureRepositoryPostureProvider));
+        let registration = service
+            .register_project(&source.canonicalize().unwrap(), "mutation-register")
+            .unwrap();
+        std::fs::write(source.join("src/lib.rs"), b"pub fn fixture() { 1; }\n").unwrap();
+        let project_id = registration.project.project_id;
+        assert_eq!(
+            service
+                .scan_project(&project_id, "mutation-scan")
+                .unwrap()
+                .scan_run
+                .status,
+            ScanStatus::Succeeded
+        );
+        let changed_path = ProjectPathRef::parse("src/lib.rs".to_owned()).unwrap();
+        let snapshot = service
+            .mutation_testing_snapshot(
+                &project_id,
+                "fixture-mutation".to_owned(),
+                vec![changed_path],
+                vec![MutationTrigger::CoreCalculation],
+                MutationTestingBudget {
+                    max_mutants: 1,
+                    max_duration_ms: 1_000,
+                    max_survivors: 0,
+                },
+                "tool:fixture-mutation".to_owned(),
+                Sha256Hash::digest(b"fixture-mutation-engine"),
+            )
+            .unwrap();
+        assert_eq!(
+            snapshot.state,
+            star_contracts::maintenance_v2::MutationTestingState::Complete
+        );
+        let radar = service
+            .mutation_testing_radar_items(&snapshot, "2030-01-01T00:00:00Z")
+            .unwrap();
+        assert_eq!(radar.len(), 1);
+        assert!(!radar[0].blocking);
+        let posture = service
+            .repository_posture_snapshot(
+                &project_id,
+                "https://fixture.invalid/repository".to_owned(),
+                "fixture-query".to_owned(),
+                "scorecard-v1".to_owned(),
+                Sha256Hash::digest(b"fixture-scorecard"),
+            )
+            .unwrap();
+        let posture_radar = service
+            .repository_posture_radar_items(&posture, "2030-01-01T00:00:00Z")
+            .unwrap();
+        assert_eq!(posture_radar.len(), 1);
+        assert!(!posture_radar[0].blocking);
+        assert_eq!(
+            std::fs::read(source.join("src/lib.rs")).unwrap(),
+            b"pub fn fixture() { 1; }\n"
+        );
+        drop(service);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

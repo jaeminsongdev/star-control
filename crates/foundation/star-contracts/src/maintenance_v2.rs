@@ -4,6 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::development_v2::CoverageState;
+use crate::management::ProjectPathRef;
 use crate::{EvaluationRunId, ProjectId, Sha256Hash};
 
 pub const FAILURE_RECORD_SCHEMA_ID: &str = "star.failure-record";
@@ -17,10 +18,14 @@ pub const SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID: &str = "star.supply-chain-snapshot";
 pub const EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID: &str = "star.external-data-snapshot";
 pub const STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID: &str = "star.static-analysis-import-report";
 pub const GIT_HISTORY_RISK_SNAPSHOT_SCHEMA_ID: &str = "star.git-history-risk-snapshot";
+pub const MUTATION_TESTING_SNAPSHOT_SCHEMA_ID: &str = "star.mutation-testing-snapshot";
+pub const QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID: &str = "star.quality-rule-pack-manifest";
 pub const DEPENDENCY_UPDATE_PLAN_SCHEMA_ID: &str = "star.dependency-update-plan";
 pub const MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID: &str = "star.maintenance-radar-snapshot";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureKind {
     Compile,
@@ -421,6 +426,157 @@ impl StaticAnalysisImportReport {
     }
 }
 
+/// Why changed code is eligible for a bounded mutation run. The scope is
+/// deliberately narrower than line coverage and never authorizes a whole-tree
+/// mutation sweep.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum MutationTrigger {
+    Parser,
+    Protocol,
+    PublicContract,
+    CoreCalculation,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MutationTestingBudget {
+    pub max_mutants: u32,
+    pub max_duration_ms: u64,
+    pub max_survivors: u32,
+}
+
+/// A mutation run can be useful evidence without being a passing check. In
+/// particular, timeout, flakiness, partial coverage, and provider absence are
+/// never represented as `Complete`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MutationTestingState {
+    Complete,
+    TimedOut,
+    Flaky,
+    Partial,
+    Unavailable,
+    Unverified,
+}
+
+/// Immutable normalized result of a registered mutation engine. Source text,
+/// raw engine output, and line-coverage contents remain in bounded artifacts.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MutationTestingSnapshot {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub snapshot_id: String,
+    pub project_id: ProjectId,
+    pub project_revision_ref: String,
+    pub workspace_snapshot_ref: String,
+    pub code_index_snapshot_ref: String,
+    pub engine_descriptor_ref: String,
+    pub engine_identity_sha256: Sha256Hash,
+    pub changed_paths: Vec<ProjectPathRef>,
+    pub triggers: Vec<MutationTrigger>,
+    pub budget: MutationTestingBudget,
+    pub executed_mutants: u32,
+    pub killed_mutants: u32,
+    pub survivor_count: u32,
+    pub timed_out_count: u32,
+    pub flaky_count: u32,
+    pub line_coverage_evidence_ref: Option<String>,
+    #[serde(default)]
+    pub mutation_evidence_refs: Vec<String>,
+    pub state: MutationTestingState,
+    pub completeness: CoverageState,
+    #[serde(default)]
+    pub limitations: Vec<String>,
+    pub content_fingerprint: Sha256Hash,
+}
+
+impl MutationTestingSnapshot {
+    pub fn is_current_schema(&self) -> bool {
+        self.schema_id == MUTATION_TESTING_SNAPSHOT_SCHEMA_ID && self.schema_version == 1
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QualityRulePackLifecycle {
+    Active,
+    Deprecated,
+    Retired,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QualityRulePackTrust {
+    Trusted,
+    Untrusted,
+    Unverified,
+    Expired,
+}
+
+/// Query metadata is descriptive and digest-bound. The query body itself is
+/// retained only by its bounded artifact so it cannot be confused with source
+/// text or execute through this public manifest.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct QualityRuleQueryMetadata {
+    pub query_id: String,
+    pub query_digest: Sha256Hash,
+    pub query_metadata_ref: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct QualityRuleDefinition {
+    pub rule_id: String,
+    pub rule_version: String,
+    pub default_severity: String,
+    pub query: QualityRuleQueryMetadata,
+    pub sarif_rule_id: Option<String>,
+    pub lifecycle: QualityRulePackLifecycle,
+    pub replacement_rule_id: Option<String>,
+}
+
+/// Versioned, digest-bound Rule Pack metadata. Custom analyzers may emit
+/// SARIF, but this contract does not execute queries or promote a trust claim
+/// to a Gate decision.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct QualityRulePackManifest {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub pack_id: String,
+    pub pack_version: String,
+    pub source_ref: String,
+    pub source_digest: Sha256Hash,
+    pub tool_identity_sha256: Option<Sha256Hash>,
+    #[serde(default)]
+    pub supported_languages: Vec<String>,
+    #[serde(default)]
+    pub supported_source_classes: Vec<String>,
+    #[serde(default)]
+    pub fixture_corpus_refs: Vec<String>,
+    #[serde(default)]
+    pub rules: Vec<QualityRuleDefinition>,
+    pub lifecycle: QualityRulePackLifecycle,
+    pub replacement_pack_ref: Option<String>,
+    pub signature_ref: Option<String>,
+    pub trust: QualityRulePackTrust,
+    pub valid_until: Option<String>,
+    #[serde(default)]
+    pub limitations: Vec<String>,
+    pub content_fingerprint: Sha256Hash,
+}
+
+impl QualityRulePackManifest {
+    pub fn is_current_schema(&self) -> bool {
+        self.schema_id == QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID && self.schema_version == 1
+    }
+}
+
 fn legacy_external_coverage() -> CoverageState {
     CoverageState::Partial
 }
@@ -733,7 +889,7 @@ pub struct MaintenanceRadarSnapshot {
 
 #[cfg(test)]
 mod tests {
-    use super::StaticAnalysisImportReport;
+    use super::{MutationTestingSnapshot, QualityRulePackManifest, StaticAnalysisImportReport};
 
     #[test]
     fn static_analysis_import_report_fixtures_are_strict_and_versioned() {
@@ -748,6 +904,38 @@ mod tests {
         assert!(serde_json::from_str::<StaticAnalysisImportReport>(&invalid).is_err());
         let future = std::fs::read_to_string(root.join("future.json")).unwrap();
         let future: StaticAnalysisImportReport = serde_json::from_str(&future).unwrap();
+        assert!(!future.is_current_schema());
+    }
+
+    #[test]
+    fn mutation_testing_snapshot_fixtures_are_strict_and_versioned() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../specs/fixtures/management/v1/mutation-testing-snapshot");
+        for name in ["minimal.json", "full.json"] {
+            let value = std::fs::read_to_string(root.join(name)).unwrap();
+            let snapshot: MutationTestingSnapshot = serde_json::from_str(&value).unwrap();
+            assert!(snapshot.is_current_schema());
+        }
+        let invalid = std::fs::read_to_string(root.join("invalid.json")).unwrap();
+        assert!(serde_json::from_str::<MutationTestingSnapshot>(&invalid).is_err());
+        let future = std::fs::read_to_string(root.join("future.json")).unwrap();
+        let future: MutationTestingSnapshot = serde_json::from_str(&future).unwrap();
+        assert!(!future.is_current_schema());
+    }
+
+    #[test]
+    fn quality_rule_pack_manifest_fixtures_are_strict_and_versioned() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../specs/fixtures/management/v1/quality-rule-pack-manifest");
+        for name in ["minimal.json", "full.json"] {
+            let value = std::fs::read_to_string(root.join(name)).unwrap();
+            let manifest: QualityRulePackManifest = serde_json::from_str(&value).unwrap();
+            assert!(manifest.is_current_schema());
+        }
+        let invalid = std::fs::read_to_string(root.join("invalid.json")).unwrap();
+        assert!(serde_json::from_str::<QualityRulePackManifest>(&invalid).is_err());
+        let future = std::fs::read_to_string(root.join("future.json")).unwrap();
+        let future: QualityRulePackManifest = serde_json::from_str(&future).unwrap();
         assert!(!future.is_current_schema());
     }
 }

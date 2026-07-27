@@ -1,0 +1,198 @@
+{
+  "$defs": {
+    "QualityRuleDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "default_severity": {
+          "type": "string"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/QualityRulePackLifecycle"
+        },
+        "query": {
+          "$ref": "#/$defs/QualityRuleQueryMetadata"
+        },
+        "replacement_rule_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "rule_version": {
+          "type": "string"
+        },
+        "sarif_rule_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "rule_id",
+        "rule_version",
+        "default_severity",
+        "query",
+        "lifecycle"
+      ],
+      "type": "object"
+    },
+    "QualityRulePackLifecycle": {
+      "enum": [
+        "active",
+        "deprecated",
+        "retired"
+      ],
+      "type": "string"
+    },
+    "QualityRulePackTrust": {
+      "enum": [
+        "trusted",
+        "untrusted",
+        "unverified",
+        "expired"
+      ],
+      "type": "string"
+    },
+    "QualityRuleQueryMetadata": {
+      "additionalProperties": false,
+      "description": "Query metadata is descriptive and digest-bound. The query body itself is\nretained only by its bounded artifact so it cannot be confused with source\ntext or execute through this public manifest.",
+      "properties": {
+        "query_digest": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "query_id": {
+          "type": "string"
+        },
+        "query_metadata_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query_id",
+        "query_digest",
+        "query_metadata_ref"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.quality-rule-pack-manifest:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Versioned, digest-bound Rule Pack metadata. Custom analyzers may emit\nSARIF, but this contract does not execute queries or promote a trust claim\nto a Gate decision.",
+  "properties": {
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "fixture_corpus_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/QualityRulePackLifecycle"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "pack_id": {
+      "type": "string"
+    },
+    "pack_version": {
+      "type": "string"
+    },
+    "replacement_pack_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rules": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/QualityRuleDefinition"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.quality-rule-pack-manifest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "signature_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_digest": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "source_ref": {
+      "type": "string"
+    },
+    "supported_languages": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "supported_source_classes": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "tool_identity_sha256": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "trust": {
+      "$ref": "#/$defs/QualityRulePackTrust"
+    },
+    "valid_until": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "pack_id",
+    "pack_version",
+    "source_ref",
+    "source_digest",
+    "lifecycle",
+    "trust",
+    "content_fingerprint"
+  ],
+  "title": "QualityRulePackManifest",
+  "type": "object"
+}

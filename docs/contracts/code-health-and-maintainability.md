@@ -144,6 +144,8 @@ Rule Pack은 versioned manifest, source/digest, language/source-kind, fixture co
 
 OpenSSF Scorecard 같은 repository posture는 source URL/query/schema/tool version/fetched time/digest/coverage/validity를 bound한 external snapshot이다. aggregate score는 Gate하지 않으며 individual evidence만 `security_supply_chain` input이 될 수 있다. network/token이 필요하면 별도 승인을 요청한다.
 
+구현은 이 세 evidence를 strict schema와 registered read-only port로 분리한다. mutation snapshot은 current scan/index와 changed path·trigger·고정 budget이 모두 일치할 때만 complete로 취급하며 timeout/flaky/partial은 Radar에서 advisory evidence로도 pass로 승격하지 않는다. Rule Pack은 trusted·현재 freshness·exact analyzer SHA-256이 모두 맞을 때만 기존 SARIF normalizer가 만든 import report에 digest를 결속한다. untrusted, expired 또는 ambiguous pack은 binding하지 않고 limitation을 남긴다. posture snapshot의 aggregate score는 저장하거나 Gate/Radar blocking에 사용하지 않는다.
+
 ## EvaluationRun과 Profile 전략
 
 처음에는 16 built-in Profile을 유지하고 `project_understanding`, `architecture_quality`, `test_correctness`, `ai_development_validation`을 기본 조합으로 사용한다. 필요할 때만 `docs_config_environment`, `security_supply_chain`, `performance_build`, `refactor_codemod`을 추가한다.

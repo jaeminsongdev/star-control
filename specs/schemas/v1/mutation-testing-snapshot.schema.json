@@ -1,0 +1,199 @@
+{
+  "$defs": {
+    "CoverageState": {
+      "enum": [
+        "complete",
+        "partial",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "MutationTestingBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "max_duration_ms": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_mutants": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_survivors": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_mutants",
+        "max_duration_ms",
+        "max_survivors"
+      ],
+      "type": "object"
+    },
+    "MutationTestingState": {
+      "description": "A mutation run can be useful evidence without being a passing check. In\nparticular, timeout, flakiness, partial coverage, and provider absence are\nnever represented as `Complete`.",
+      "enum": [
+        "complete",
+        "timed_out",
+        "flaky",
+        "partial",
+        "unavailable",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "MutationTrigger": {
+      "description": "Why changed code is eligible for a bounded mutation run. The scope is\ndeliberately narrower than line coverage and never authorizes a whole-tree\nmutation sweep.",
+      "enum": [
+        "parser",
+        "protocol",
+        "public_contract",
+        "core_calculation"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.mutation-testing-snapshot:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Immutable normalized result of a registered mutation engine. Source text,\nraw engine output, and line-coverage contents remain in bounded artifacts.",
+  "properties": {
+    "budget": {
+      "$ref": "#/$defs/MutationTestingBudget"
+    },
+    "changed_paths": {
+      "items": {
+        "minLength": 1,
+        "pattern": "^[^/\\\\:\\u0000]+(?:/[^/\\\\:\\u0000]+)*$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "code_index_snapshot_ref": {
+      "pattern": "^cix_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "completeness": {
+      "$ref": "#/$defs/CoverageState"
+    },
+    "content_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "engine_descriptor_ref": {
+      "type": "string"
+    },
+    "engine_identity_sha256": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "executed_mutants": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "flaky_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "killed_mutants": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "line_coverage_evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mutation_evidence_refs": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "project_revision_ref": {
+      "pattern": "^prv_[a-z2-7]{52}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.mutation-testing-snapshot",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/MutationTestingState"
+    },
+    "survivor_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "timed_out_count": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "triggers": {
+      "items": {
+        "$ref": "#/$defs/MutationTrigger"
+      },
+      "type": "array"
+    },
+    "workspace_snapshot_ref": {
+      "pattern": "^wsp_[a-z2-7]{52}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "snapshot_id",
+    "project_id",
+    "project_revision_ref",
+    "workspace_snapshot_ref",
+    "code_index_snapshot_ref",
+    "engine_descriptor_ref",
+    "engine_identity_sha256",
+    "changed_paths",
+    "triggers",
+    "budget",
+    "executed_mutants",
+    "killed_mutants",
+    "survivor_count",
+    "timed_out_count",
+    "flaky_count",
+    "state",
+    "completeness",
+    "content_fingerprint"
+  ],
+  "title": "MutationTestingSnapshot",
+  "type": "object"
+}

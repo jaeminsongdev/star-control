@@ -1,0 +1,34 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "fixture_corpus_refs": ["artifact:rule-pack-corpus"],
+  "lifecycle": "deprecated",
+  "limitations": ["NETWORK_NOT_USED"],
+  "pack_id": "fixture-pack",
+  "pack_version": "1.2.0",
+  "replacement_pack_ref": "pack:fixture-pack@2.0.0",
+  "rules": [
+    {
+      "default_severity": "warning",
+      "lifecycle": "deprecated",
+      "query": {
+        "query_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "query_id": "fixture-query",
+        "query_metadata_ref": "artifact:fixture-query-metadata"
+      },
+      "replacement_rule_id": "fixture.rule.v2",
+      "rule_id": "fixture.rule",
+      "rule_version": "1.2.0",
+      "sarif_rule_id": "fixture/rule"
+    }
+  ],
+  "schema_id": "star.quality-rule-pack-manifest",
+  "schema_version": 1,
+  "signature_ref": "artifact:signature",
+  "source_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "source_ref": "https://fixture.invalid/rule-pack",
+  "supported_languages": ["rust"],
+  "supported_source_classes": ["source"],
+  "tool_identity_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "trust": "trusted",
+  "valid_until": "2030-01-01T00:00:00Z"
+}

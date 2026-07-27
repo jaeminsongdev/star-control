@@ -28,17 +28,26 @@
 | P-0065 Gate·Radar | **DONE / local commit** | `db3cb92b3ae9c9dbf332ebf8c1dfdafb50dcf75e`; code-health shadow planning과 read-only Radar projection, current schema/evidence, FULL 11/11 complete/stable/pass. |
 | P-0066 Git history·ownership·debt | **DONE / local commit** | `a84d4f298a2a9e4a9b252da10abb1ffda8b13b60`; read-only Git/CODEOWNERS/debt snapshot, advisory Impact/Radar, privacy corpus, FULL 11/11 complete/stable/pass. |
 | P-0067 semantic refactor provider | **DONE / local commit** | registered provider capability의 isolated preview를 typed PatchSetV2·existing pre/post Gate·exact approval path로만 정규화했고, absent provider fail-closed 및 Git worktree replay fixture를 FULL 11/11 complete/stable/pass로 검증했다. |
-| P-0068 mutation·Rule Pack·repository posture | **IN_PROGRESS** | changed-code mutation budget, versioned Rule Pack, read-only external posture snapshot의 registered adapter 경계를 구현한다. |
+| P-0068 mutation·Rule Pack·repository posture | **VALIDATED / local commit pending** | changed-code-only mutation budget·strict schema, versioned Rule Pack과 exact-tool SARIF digest binding, read-only posture snapshot/advisory Radar·fail-closed adapter 경계를 구현했고 FULL 11/11 complete/stable/pass를 확인했다. |
 | P-0069~P-0070 | pending | evaluation/Profile 결정 → final audit 순서다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0068 활성 Slice
+## P-0068 검증 완료 Slice
 
 - 목표: changed-code-only mutation, versioned Rule Pack, external repository posture snapshot을 source-bound Finding/Diagnostic/Planning/Radar에 추가하되 aggregate score는 Gate로 사용하지 않는다.
 - 불변식: external mutation engine·CodeQL pack·Scorecard는 registered adapter만 사용한다. 설치·network·token 없이 fixture/conformance로 경계를 검증하고 real provider는 unavailable/unverified로 보존한다.
 - corpus: mutation scope/budget/timeout/flaky/partial, Rule Pack digest/trust/freshness/lifecycle/SARIF mapping, posture source/query/schema/tool/fetched/valid-until/coverage와 privacy redaction을 고정한다.
 - 선택 Profile: `security_supply_chain`, `test_correctness`, `architecture_quality`, `ai_development_validation`; 새 Profile은 추가하지 않는다.
 - 검증: affected package TARGET 후 contract/schema/core 영향이므로 FULL, strict self-review, intended files만 local commit. push/PR/publish/install은 금지다.
+
+| 파일 | 상태 | 변경 요약 | 검증 상태 |
+|---|---|---|---|
+| `crates/foundation/star-contracts/src/{maintenance_v2.rs,schema.rs}` | 수정됨 | mutation snapshot·Rule Pack manifest strict schema | contracts 대상 통과 |
+| `crates/foundation/star-ports/src/lib.rs` | 수정됨 | mutation/Rule Pack/posture registered observation ports | package check 통과 |
+| `crates/control/star-application/src/lib.rs` | 수정됨 | changed-only mutation 및 advisory Radar, Rule Pack/posture fail-closed boundary와 trusted exact-tool SARIF digest binding | focused app·clippy 통과 |
+| `specs/schemas`, `specs/fixtures/management/v1` | 추가/수정됨 | generated schema와 strict current/invalid/future corpus | schema-gen check 통과 |
+
+- 외부 경계: provider-backed mutation/posture는 adapter 등록 전까지 fail-closed로 유지한다. Rule Pack CLI/controller development-record route와 SARIF digest binding의 corpus, generated source evidence, FULL 11/11 complete/stable/pass를 확인했다. 로컬 커밋만 남았다.
 
 ## 열린 위험과 보류
 
@@ -48,8 +57,8 @@
 
 ## Context Pack
 
-- 현재 목표: P-0068 mutation adapter·Rule Pack·repository posture snapshot→existing source-bound Finding/Diagnostic/Planning/Radar→corpus→FULL→review→local commit.
+- 현재 목표: P-0068의 검증 완료 변경을 strict review·intended-only local commit으로 고정한 뒤 P-0069 EvaluationRun/Profile 결정 Slice로 이동한다.
 - 먼저 확인할 파일: `docs/contracts/code-health-and-maintainability.md`, `crates/foundation/star-contracts/src/maintenance_v2.rs`, `crates/foundation/star-ports/src/lib.rs`, `crates/control/star-application/src/lib.rs`, SARIF/Radar/Profile routing.
 - 먼저 실행할 명령: `git status --short --branch`; `rg -n -i 'Mutation|RulePack|Scorecard|posture|Sarif|Radar' crates apps specs`; focused tests; final `pwsh ./scripts/validate.ps1 -Profile full -OutputFormat json`.
 - 건드리면 안 되는 것: existing dirty/user changes, `target/`, `legacy/`, installed Runtime/cache, external account/remote state.
-- 다음 완료 기준: P-0068은 changed-code mutation budget, versioned Rule Pack, read-only posture snapshot이 external provider 부재 시 fail-closed이고 source-bound result와 advisory Planning/Radar 경계까지 corpus·FULL·strict review·local commit으로 증명된다.
+- 다음 완료 기준: P-0069에서 16개 built-in Profile 조합의 EvaluationRun evidence를 수집하고 `code_health_maintenance` 17번째 Profile을 accept/trial/reject 중 하나로 evidence-bound 결정한다.

@@ -119,6 +119,7 @@ star deps scan <project-id> <snapshot-id> [--revision <n>] [--json]\n\
 star deps candidates|prepare <project-id> <plan-id> <dependency-snapshot-id> --input <json-file> [--revision <n>] [--json]\n\
 star deps status <project-id> <plan-id> [--json]\n\
 star deps rollback-plan <project-id> <recovery-plan-json> [--revision <n>] [--json]\n\
+star maintenance rule-pack <pack-id> <pack-version> --source-digest <sha256> [--revision <n>] [--json]\n\
 star maintenance radar <snapshot-id> --input <json-file> [--revision <n>] [--json]\n\
 star maintenance radar code-health <project-id> <snapshot-id> --evaluation-time <rfc3339> [--valid-until <rfc3339>] [--revision <n>] [--json]\n\
 star maintenance radar git-history <project-id> <snapshot-id> --range-end <git-revision> [--range-start <git-revision>] [--commit-limit <n>] --evaluation-time <rfc3339> [--valid-until <rfc3339>] [--revision <n>] [--json]\n\
@@ -2369,6 +2370,28 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                     "snapshot_id":positionals[1],
                     "evaluation_time":required_option(&options, "--evaluation-time")?,
                     "valid_until":options.get("--valid-until"),
+                    "revision":development_revision(&options)?,
+                }),
+                json,
+            })
+        }
+        [first, second, tail @ ..] if first == "maintenance" && second == "rule-pack" => {
+            let (positionals, options) = parse_tail(tail, &["--source-digest", "--revision"], &[])?;
+            require_positionals(&positionals, 2, "maintenance rule-pack")?;
+            validate_development_id(&positionals[0], "pack-id")?;
+            if positionals[1].is_empty() || positionals[1].len() > 128 {
+                return Err("pack-version must be a bounded non-empty string".to_owned());
+            }
+            let source_digest = required_option(&options, "--source-digest")?;
+            if source_digest.parse::<star_contracts::Sha256Hash>().is_err() {
+                return Err("--source-digest must be a sha256 digest".to_owned());
+            }
+            Ok(Parsed {
+                command: "maintenance.rule-pack".to_owned(),
+                payload: serde_json::json!({
+                    "pack_id":positionals[0],
+                    "pack_version":positionals[1],
+                    "source_digest":source_digest,
                     "revision":development_revision(&options)?,
                 }),
                 json,
@@ -5992,6 +6015,18 @@ mod tests {
         .unwrap();
         assert_eq!(history.command, "maintenance.radar.git-history");
         assert_eq!(history.payload["commit_limit"], 100);
+
+        let rule_pack = parse(&[
+            "maintenance".into(),
+            "rule-pack".into(),
+            "fixture-pack".into(),
+            "1.0.0".into(),
+            "--source-digest".into(),
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000".into(),
+        ])
+        .unwrap();
+        assert_eq!(rule_pack.command, "maintenance.rule-pack");
+        assert_eq!(rule_pack.payload["pack_id"], "fixture-pack");
 
         assert!(
             parse(&[

@@ -25,7 +25,11 @@ use star_contracts::{
         WorkspaceSnapshotId,
     },
     index::{CodeIndexSnapshot, IndexEdge, IndexEntity, ProjectCatalogSnapshot, SourceEntry},
-    maintenance_v2::{GitHistoryRiskSnapshot, StaticAnalysisImportReport},
+    maintenance_v2::{
+        ExternalDataSnapshot, GitHistoryRiskSnapshot, MutationTestingBudget,
+        MutationTestingSnapshot, MutationTrigger, QualityRulePackManifest,
+        StaticAnalysisImportReport,
+    },
     managed_registry::{
         ManagedDeclarationChangeIntent, ManagedRegistrySnapshot, RegistryConsistencyRecord,
     },
@@ -163,6 +167,104 @@ pub trait GitHistoryPort: Send + Sync {
         project_root: &Path,
         request: &GitHistoryObservationRequest,
     ) -> Result<GitHistoryRiskSnapshot, GitHistoryPortError>;
+}
+
+/// Bounded, changed-code-only request for a registered mutation engine. The
+/// engine may not widen the requested paths or replace line coverage evidence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MutationTestingObservationRequest {
+    pub snapshot_id: String,
+    pub project_id: ProjectId,
+    pub project_revision_ref: String,
+    pub workspace_snapshot_ref: String,
+    pub code_index_snapshot_ref: String,
+    pub changed_paths: Vec<ProjectPathRef>,
+    pub triggers: Vec<MutationTrigger>,
+    pub budget: MutationTestingBudget,
+    pub engine_descriptor_ref: String,
+    pub expected_engine_identity: Sha256Hash,
+}
+
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+pub enum MutationTestingPortError {
+    #[error("mutation testing input is invalid")]
+    Invalid,
+    #[error("mutation engine is unavailable")]
+    Unavailable,
+    #[error("mutation result is partial, flaky, or unverified")]
+    Unverified,
+    #[error("mutation engine output is malformed")]
+    Malformed,
+}
+
+/// Registered external mutation-engine boundary. It is observation-only: the
+/// engine returns a normalized snapshot and never receives a source mutation
+/// capability.
+pub trait MutationTestingPort: Send + Sync {
+    fn observe(
+        &self,
+        project_root: &Path,
+        request: &MutationTestingObservationRequest,
+    ) -> Result<MutationTestingSnapshot, MutationTestingPortError>;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QualityRulePackLoadRequest {
+    pub pack_id: String,
+    pub pack_version: String,
+    pub expected_source_digest: Sha256Hash,
+}
+
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+pub enum QualityRulePackPortError {
+    #[error("Rule Pack input is invalid")]
+    Invalid,
+    #[error("Rule Pack provider is unavailable")]
+    Unavailable,
+    #[error("Rule Pack trust or freshness is unverified")]
+    Unverified,
+    #[error("Rule Pack output is malformed")]
+    Malformed,
+}
+
+/// Registered Rule Pack provider boundary. Query execution remains with the
+/// declared external analyzer; Star-Control only accepts digest-bound metadata.
+pub trait QualityRulePackPort: Send + Sync {
+    fn load(
+        &self,
+        request: &QualityRulePackLoadRequest,
+    ) -> Result<QualityRulePackManifest, QualityRulePackPortError>;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RepositoryPostureObservationRequest {
+    pub project_id: ProjectId,
+    pub project_revision_ref: String,
+    pub source_url: String,
+    pub query: String,
+    pub source_schema_version: String,
+    pub expected_tool_identity: Sha256Hash,
+}
+
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+pub enum RepositoryPosturePortError {
+    #[error("repository posture input is invalid")]
+    Invalid,
+    #[error("repository posture provider is unavailable")]
+    Unavailable,
+    #[error("repository posture snapshot is stale or unverified")]
+    Unverified,
+    #[error("repository posture output is malformed")]
+    Malformed,
+}
+
+/// Read-only external repository posture boundary (for example Scorecard).
+/// Aggregate scores remain advisory data and are never a Gate result here.
+pub trait RepositoryPosturePort: Send + Sync {
+    fn observe(
+        &self,
+        request: &RepositoryPostureObservationRequest,
+    ) -> Result<ExternalDataSnapshot, RepositoryPosturePortError>;
 }
 
 #[derive(Clone, Debug)]

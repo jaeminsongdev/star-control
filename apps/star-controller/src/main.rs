@@ -92,9 +92,9 @@ use star_contracts::{
         DependencyUpdatePlan, EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID, EvaluationRunEvidenceRef,
         ExternalDataSnapshot, ExternalFreshness, FAILURE_RECORD_SCHEMA_ID, FailureRecord,
         GIT_HISTORY_RISK_SNAPSHOT_SCHEMA_ID, MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
-        MaintenanceRadarItem, RECOVERY_PLAN_V2_SCHEMA_ID, REGRESSION_RECORD_SCHEMA_ID,
-        REPRODUCTION_PACK_V2_SCHEMA_ID, RadarCategory, RadarPriority, RecoveryPlanV2,
-        RegressionRecord, ReproductionAttemptObservationV1, ReproductionAttemptV2,
+        MaintenanceRadarItem, QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID, RECOVERY_PLAN_V2_SCHEMA_ID,
+        REGRESSION_RECORD_SCHEMA_ID, REPRODUCTION_PACK_V2_SCHEMA_ID, RadarCategory, RadarPriority,
+        RecoveryPlanV2, RegressionRecord, ReproductionAttemptObservationV1, ReproductionAttemptV2,
         ReproductionPackV2, ReproductionResult, SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID,
         SupplyChainObservation, UpdateCandidate, VerificationState,
     },
@@ -9306,6 +9306,7 @@ fn is_management_command(command: &str) -> bool {
             | "maintenance.radar"
             | "maintenance.radar.code-health"
             | "maintenance.radar.git-history"
+            | "maintenance.rule-pack"
             | "migration.inspect"
             | "migration.plan"
             | "migration.checkpoint"
@@ -13739,6 +13740,7 @@ fn is_m7_development_command(command: &str) -> bool {
             | "maintenance.radar"
             | "maintenance.radar.code-health"
             | "maintenance.radar.git-history"
+            | "maintenance.rule-pack"
     )
 }
 
@@ -14759,6 +14761,44 @@ fn handle_m7_development_command(
             serialize_management_result(
                 serde_json::json!({"plan":record,"effect_receipts":effect_receipts}),
             )
+        }
+        "maintenance.rule-pack"
+            if payload_has_exact_keys(
+                payload,
+                &["pack_id", "pack_version", "source_digest", "revision"],
+            ) =>
+        {
+            let pack_id = m6_required_string(payload, "pack_id", 192)?;
+            let pack_version = m6_required_string(payload, "pack_version", 128)?;
+            let source_digest = m6_required_string(payload, "source_digest", 71)?
+                .parse::<Sha256Hash>()
+                .map_err(|_| ApplicationError::Invalid)?;
+            let manifest = service.quality_rule_pack_manifest(
+                pack_id.clone(),
+                pack_version.clone(),
+                source_digest,
+            )?;
+            let state = match manifest.trust {
+                star_contracts::maintenance_v2::QualityRulePackTrust::Trusted => "trusted",
+                star_contracts::maintenance_v2::QualityRulePackTrust::Untrusted => "untrusted",
+                star_contracts::maintenance_v2::QualityRulePackTrust::Unverified => "unverified",
+                star_contracts::maintenance_v2::QualityRulePackTrust::Expired => "expired",
+            };
+            service
+                .publish_development_document(
+                    "quality_rule_pack_manifest",
+                    // The management record key is deliberately the bounded pack id;
+                    // revision carries pack-version progression and stays within the
+                    // development-record identifier grammar.
+                    &pack_id,
+                    m6_revision(payload)?,
+                    None,
+                    state,
+                    QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID,
+                    1,
+                    &manifest,
+                )
+                .and_then(serialize_management_result)
         }
         "maintenance.radar.code-health"
             if payload_has_exact_keys(
@@ -23110,6 +23150,12 @@ fn management_command_response(
                     "SCAN_INCOMPLETE",
                     "The read-only Git history observation is unavailable or unverified.",
                 ),
+                ApplicationError::MutationTestingUnavailable
+                | ApplicationError::QualityRulePackUnavailable
+                | ApplicationError::RepositoryPostureUnavailable => (
+                    "SCAN_INCOMPLETE",
+                    "The registered external maintenance provider is unavailable or unverified.",
+                ),
                 ApplicationError::IndexIdentityConflict => (
                     "PLANNING_OUTPUT_COHERENCE",
                     "The same code index analysis input produced conflicting content.",
@@ -26976,6 +27022,7 @@ mod tests {
             "maintenance.radar",
             "maintenance.radar.code-health",
             "maintenance.radar.git-history",
+            "maintenance.rule-pack",
         ] {
             assert!(is_management_command(command), "{command}");
         }
@@ -26991,6 +27038,7 @@ mod tests {
             "maintenance.radar",
             "maintenance.radar.code-health",
             "maintenance.radar.git-history",
+            "maintenance.rule-pack",
         ] {
             assert!(
                 !update_restart_pending_command_allowed(command),

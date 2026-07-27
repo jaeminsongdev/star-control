@@ -67,10 +67,12 @@ use crate::{
         DEPENDENCY_SNAPSHOT_SCHEMA_ID, DEPENDENCY_UPDATE_PLAN_SCHEMA_ID, DependencySnapshot,
         DependencyUpdatePlan, EXTERNAL_DATA_SNAPSHOT_SCHEMA_ID, ExternalDataSnapshot,
         FAILURE_RECORD_SCHEMA_ID, FailureRecord, GIT_HISTORY_RISK_SNAPSHOT_SCHEMA_ID,
-        GitHistoryRiskSnapshot, MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID, MaintenanceRadarSnapshot,
-        RECOVERY_PLAN_V2_SCHEMA_ID, REGRESSION_RECORD_SCHEMA_ID,
-        REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID, REPRODUCTION_PACK_V2_SCHEMA_ID,
-        RecoveryPlanV2, RegressionRecord, ReproductionAttemptObservationV1, ReproductionPackV2,
+        GitHistoryRiskSnapshot, MAINTENANCE_RADAR_SNAPSHOT_SCHEMA_ID,
+        MUTATION_TESTING_SNAPSHOT_SCHEMA_ID, MaintenanceRadarSnapshot, MutationTestingSnapshot,
+        QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID, QualityRulePackManifest, RECOVERY_PLAN_V2_SCHEMA_ID,
+        REGRESSION_RECORD_SCHEMA_ID, REPRODUCTION_ATTEMPT_OBSERVATION_V1_SCHEMA_ID,
+        REPRODUCTION_PACK_V2_SCHEMA_ID, RecoveryPlanV2, RegressionRecord,
+        ReproductionAttemptObservationV1, ReproductionPackV2,
         STATIC_ANALYSIS_IMPORT_REPORT_SCHEMA_ID, SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID,
         StaticAnalysisImportReport, SupplyChainSnapshot,
     },
@@ -639,6 +641,18 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             "git-history-risk-snapshot.schema.json",
             management_schema_document::<GitHistoryRiskSnapshot>(
                 GIT_HISTORY_RISK_SNAPSHOT_SCHEMA_ID,
+            ),
+        ),
+        (
+            "mutation-testing-snapshot.schema.json",
+            management_schema_document::<MutationTestingSnapshot>(
+                MUTATION_TESTING_SNAPSHOT_SCHEMA_ID,
+            ),
+        ),
+        (
+            "quality-rule-pack-manifest.schema.json",
+            management_schema_document::<QualityRulePackManifest>(
+                QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID,
             ),
         ),
         (

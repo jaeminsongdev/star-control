@@ -1,0 +1,16 @@
+{
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "lifecycle": "active",
+  "pack_id": "fixture-pack",
+  "pack_version": "1.0.0",
+  "replacement_pack_ref": null,
+  "schema_id": "star.quality-rule-pack-manifest",
+  "schema_version": 1,
+  "signature_ref": null,
+  "source_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "source_ref": "fixture://rule-pack",
+  "tool_identity_sha256": null,
+  "trust": "unverified",
+  "unexpected": true,
+  "valid_until": null
+}
