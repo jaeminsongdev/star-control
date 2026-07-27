@@ -125,6 +125,17 @@ P-0064B는 Rust function body에서 `rust-ast-v1` metric을 계산한다. cyclom
 
 비교는 current CodeIndex와 이전 incremental CodeIndex의 metric contract version, language, source-class cohort 및 owning symbol identity가 모두 일치할 때만 한다. baseline 부재·version/cohort 불일치·같거나 개선된 cyclomatic은 regression Finding을 만들지 않는다. 증가 후보는 `Warning`/`Medium`이고 baseline/current 값만 redacted parameter로 남긴다. Finding은 자동 Gate block, ReviewPack priority 변경 또는 PatchSet을 만들지 않는다.
 
+## P-0064C unused surface 경계
+
+P-0064C는 Rust `function|struct|enum|type|trait`과 비-entrypoint source file, 그리고 read-only `DependencySnapshot`의 direct Cargo dependency를 `Info`/`Low` Finding으로만 투영한다. candidate/Occurrence에는 source SHA, relative path, range, symbol 또는 dependency identity만 남기며 manifest/source 원문은 저장하지 않는다.
+
+- private symbol은 confirmed 또는 unresolved reference가 하나라도 있으면 후보가 아니며, test-only reference도 후보를 억제한다. public export는 consumer 관측이 불완전하므로 `public_export_unknown_consumer` 후보로만 남긴다.
+- `lib.rs`, `main.rs`, `mod.rs`, declared module과 symbol/reference가 있는 file은 unused file로 만들지 않는다. fixture, test, build/config, generated/vendor/cache/output 및 macro definition은 private deletion 후보에서 제외한다. macro/reflection/dynamic frontier는 candidate의 `unverified` limitation이며 confirmed deletion으로 승격하지 않는다.
+- complete dependency snapshot에서만 direct dependency의 Rust identifier reference를 비교한다. lockfile 부재·lock/manifest 불일치·snapshot parser 실패는 `dependency_snapshot_partial|unverified` limitation이며, dependency removal이나 자동 PatchSet을 만들지 않는다. dev/build/optional/workspace/shared dependency 및 external analyzer disagreement는 direct text reference만으로 확인하지 못한 frontier로 남긴다.
+- registered SARIF import는 별도 source-bound Finding으로 보존한다. imported analyzer가 unused 후보와 일치하거나 불일치해도 P-0064C가 candidate를 confirmed deletion으로 합치지 않으며, provider completeness/stale binding은 P-0065 Gate의 input이다.
+
+따라서 이 Slice는 deletion advice·BLOCK·automatic suppression을 만들지 않는다. owner/semantic/external confirmation과 allow policy의 결정은 P-0065 이후 existing Finding·ReviewPack·Gate 경로에서만 처리한다.
+
 ## mutation·Rule Pack·repository posture
 
 Mutation은 changed code 중 parser/protocol/public contract/core calculation trigger에만 한정하고 mutation/time/survivor budget을 execution 전에 fix한다. line coverage와 별도 evidence이며 timeout/flaky/partial은 pass가 아니다.

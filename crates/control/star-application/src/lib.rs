@@ -81,6 +81,7 @@ use star_contracts::{
     stage::StageSpecV1,
     validator_guard::{GuardFixtureKindV2, ValidatorGuardEvidenceV2},
 };
+use star_development::maintenance_v2::scan_dependency_snapshot;
 use star_domain::{PersistenceRedactor, versioned_fingerprint};
 use star_execution::rust_style::{
     RustStylePatchBinding, RustStylePatchScope, apply_owned_preview_changes,
@@ -1989,6 +1990,30 @@ impl ManagementApplicationService {
         }) {
             scan_complete = false;
         }
+        // Dependency parsing is read-only and remains an input to a candidate
+        // rule only.  A failed parser is retained as a scan limitation rather
+        // than being treated as evidence that a dependency is unused.
+        let dependency_snapshot = if code_index
+            .snapshot
+            .toolchains
+            .iter()
+            .any(|toolchain| toolchain.package_manager.as_deref() == Some("cargo"))
+        {
+            match scan_dependency_snapshot(
+                &root,
+                project_id.clone(),
+                scan_run_id.as_str().to_owned(),
+                observation.revision.project_revision_id.as_str().to_owned(),
+            ) {
+                Ok(snapshot) => Some(snapshot),
+                Err(_) => {
+                    scan_limitations.push("dependency_snapshot_unverified".to_owned());
+                    None
+                }
+            }
+        } else {
+            None
+        };
         scan_limitations.extend(
             code_index
                 .snapshot
@@ -2006,7 +2031,10 @@ impl ManagementApplicationService {
             &scan_run_id,
             &observation.files,
             &sources,
+            &code_index.source_entries,
             &symbols,
+            &code_index.references,
+            dependency_snapshot.as_ref(),
             &code_index.snapshot.hardcoding_candidates,
             &code_index.snapshot.structural_clone_candidates,
             &code_index.snapshot.complexity_metric_candidates,

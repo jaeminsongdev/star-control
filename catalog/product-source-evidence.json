@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:30d3c624b295a7641555383c88837ef8756e51a9c071b4a1c5c8550692411a08",
+  "evidence_fingerprint": "sha256:6ef4666f1ad26f7f06c16b0932511fba6416c062258026978eaaae8b2313d4ce",
   "feature_count": 23,
   "features": [
     {
@@ -177,7 +177,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:a644f5b9f5c9ee71711d5f597776c5e019d0523a534dab53844c6238626ff1a3",
+      "feature_fingerprint": "sha256:59fc5bea2c0790dc711f5023d28cee538a5e7663e90dfc7068c3d8c67943321e",
       "feature_id": "A03",
       "generated_schemas": [
         {
@@ -206,12 +206,12 @@
         {
           "marker": "pub fn build_code_index",
           "path": "crates/control/star-project/src/index.rs",
-          "source_sha256": "sha256:b539ce9ed7c449a01cb0cc236bf41a845f90cd4f0fe60a5e86462c44a411cbec"
+          "source_sha256": "sha256:517849e6a7b213a9e96a8ae5e79f9f266de37839bd0d7f90d558187b401a4085"
         },
         {
           "marker": "pub fn verify_context_pack_current",
           "path": "crates/control/star-application/src/lib.rs",
-          "source_sha256": "sha256:08de409a5185103cd0fb7d924887ee16ced8a84342e3858b30d6a517266dd4d2"
+          "source_sha256": "sha256:07cf32b8aed204352a5301cd79c96138cd4bddd31b66f268b09839784a8a8a23"
         },
         {
           "marker": "fn build_context_pack",
@@ -1019,7 +1019,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:e31a81e38bc6941e08a93376bab8c9357057c4bcdb79362bb18a4f6a1b568966",
+      "feature_fingerprint": "sha256:73c66b12fc8bc1f348caca3ceefde318b61fb71328987da32608af316776fb0c",
       "feature_id": "B03",
       "generated_schemas": [
         {
@@ -1045,7 +1045,7 @@
         {
           "marker": "fn collect_m3_rule_diagnostics",
           "path": "crates/control/star-application/src/lib.rs",
-          "source_sha256": "sha256:08de409a5185103cd0fb7d924887ee16ced8a84342e3858b30d6a517266dd4d2"
+          "source_sha256": "sha256:07cf32b8aed204352a5301cd79c96138cd4bddd31b66f268b09839784a8a8a23"
         }
       ],
       "mcp_actions": [
@@ -1160,7 +1160,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:829379cb8bf0d2e46a714c80b88beebf31c7f61928a0733f159a885a68aec9ba",
+      "feature_fingerprint": "sha256:81976f2937a5efd5fcc5319f1a097c17f48bcfb0630600ee65f7412a452a7caa",
       "feature_id": "B05",
       "generated_schemas": [
         {
@@ -1180,7 +1180,7 @@
         {
           "marker": "pub fn scan_dependency_snapshot",
           "path": "crates/control/star-development/src/maintenance_v2.rs",
-          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+          "source_sha256": "sha256:527b69139ba9050e35b38a14729ad70e1ffb43b8d263532e8567bf3ffaf45f9b"
         },
         {
           "marker": "security.inspect",
@@ -1202,17 +1202,17 @@
         "failure": {
           "marker": "cargo_dependency_scan_is_source_only_and_marks_missing_lock_partial",
           "path": "crates/control/star-development/src/maintenance_v2.rs",
-          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+          "source_sha256": "sha256:527b69139ba9050e35b38a14729ad70e1ffb43b8d263532e8567bf3ffaf45f9b"
         },
         "negative": {
           "marker": "supply_chain_rejects_cross_project_or_unbound_observation_sources",
           "path": "crates/control/star-development/src/maintenance_v2.rs",
-          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+          "source_sha256": "sha256:527b69139ba9050e35b38a14729ad70e1ffb43b8d263532e8567bf3ffaf45f9b"
         },
         "positive": {
           "marker": "external_security_snapshot_binds_query_raw_and_normalized_artifacts_and_coverage",
           "path": "crates/control/star-development/src/maintenance_v2.rs",
-          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+          "source_sha256": "sha256:527b69139ba9050e35b38a14729ad70e1ffb43b8d263532e8567bf3ffaf45f9b"
         },
         "recovery": {
           "marker": "registered_effect_adapter_covers_m7_m8_m9_permissions_and_preserves_unknown",
@@ -1229,7 +1229,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:4c54fa4fd6c5836a16d7994506a6a76faa63bb8f622102fee40496218ce42718",
+      "feature_fingerprint": "sha256:dc957429d72326b114d60082e8c0046ce3b5acb78c34f9584c71c35f3ecc5a42",
       "feature_id": "B06",
       "generated_schemas": [
         {
@@ -1249,7 +1249,7 @@
         {
           "marker": "pub fn build_failure_record",
           "path": "crates/control/star-development/src/maintenance_v2.rs",
-          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+          "source_sha256": "sha256:527b69139ba9050e35b38a14729ad70e1ffb43b8d263532e8567bf3ffaf45f9b"
         },
         {
           "marker": "fn m7_validate_verified_failure_input",
@@ -1286,7 +1286,7 @@
         "positive": {
           "marker": "failure_family_redacts_path_pid_and_timestamp_but_occurrence_stays_exact",
           "path": "crates/control/star-development/src/maintenance_v2.rs",
-          "source_sha256": "sha256:7f138940e8ae28aeac1fe318b05b8510d302dc0b80755074d0ee52a26d1ff65f"
+          "source_sha256": "sha256:527b69139ba9050e35b38a14729ad70e1ffb43b8d263532e8567bf3ffaf45f9b"
         },
         "recovery": {
           "marker": "reproduction_and_radar_preserve_unverified_external_state",
@@ -1531,7 +1531,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:4d2cf390bce41c3549e2240ab9459e77f9e29db8b00655121a9826e5daa61196",
+      "feature_fingerprint": "sha256:521623c1a9bba9845c410e1d2eeea5bae0532547a9ccced070f5acb5c58e5280",
       "feature_id": "C01",
       "generated_schemas": [
         {
@@ -1561,7 +1561,7 @@
         {
           "marker": "pub fn verify_stage_profile_current",
           "path": "crates/control/star-application/src/lib.rs",
-          "source_sha256": "sha256:08de409a5185103cd0fb7d924887ee16ced8a84342e3858b30d6a517266dd4d2"
+          "source_sha256": "sha256:07cf32b8aed204352a5301cd79c96138cd4bddd31b66f268b09839784a8a8a23"
         },
         {
           "marker": "fn bind_stage_plan_profiles",
@@ -3360,7 +3360,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:58881aada35c286ec579e62431a307743e797da114c40acf2c661aca318c36d2",
+  "source_fingerprint": "sha256:77791fc24e3b43bd30231643fefc835b678363dc331b2f33c0cf8cbfb3cfd33b",
   "stable_error_catalog_fingerprint": "sha256:dd069e4e80bf54af35e4d52434ac9a87208047d146f395eb0736de768cd2f5b8",
   "stable_error_count": 528
 }

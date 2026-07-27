@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use star_contracts::{
     Sha256Hash,
+    development_v2::CoverageState,
     evidence::{
         ActorRef, ActorType, DocumentRef, GateDecision, GateDecisionKind, GateDecisionSchemaId,
         GatePolicySnapshot, GateScope, ProducerRef,
@@ -25,11 +26,13 @@ use star_contracts::{
         ComplexityMetricCandidate, HardcodingAssessment, HardcodingCandidate, SourceClass,
         SourceEntry, StructuralCloneCandidate,
     },
+    maintenance_v2::DependencySnapshot,
     management::{
         Baseline, BaselineStatus, CanonicalSource, Completeness, Confidence, Disposition,
         DispositionStatus, Finding, FindingLifecycle, Occurrence, PatchSet, ProjectRevision,
         RedactionState, Rule, RuleLifecycle, ScanRun, ScanStatus, Severity, SourceKind,
-        SourceRange, Suppression, SuppressionStatus, Symbol, ValidationOutcome, ValidationResult,
+        SourceRange, Suppression, SuppressionStatus, Symbol, SymbolReference, ValidationOutcome,
+        ValidationResult,
     },
 };
 use star_domain::{validate_baseline, validate_suppression, versioned_fingerprint};
@@ -44,6 +47,7 @@ pub const TRAILING_WHITESPACE_RECIPE_ID: &str = "star.recipe.remove-trailing-whi
 pub const HARDCODING_CANDIDATE_RULE_ID: &str = "star.rule.hardcoding-candidate";
 pub const STRUCTURAL_CLONE_CANDIDATE_RULE_ID: &str = "star.rule.structural-clone-candidate";
 pub const COMPLEXITY_REGRESSION_RULE_ID: &str = "star.rule.complexity-regression";
+pub const UNUSED_SURFACE_CANDIDATE_RULE_ID: &str = "star.rule.unused-surface-candidate";
 
 #[derive(Debug, Error)]
 pub enum ValidationError {
@@ -175,6 +179,30 @@ pub fn complexity_regression_rule() -> Result<Rule, ValidationError> {
         parameter_schema_ref: "star.rule.complexity-regression.parameters.v1".to_owned(),
         identity_contract_version: 1,
         identity_anchor: "metric-version-language-cohort-symbol".to_owned(),
+        redaction_contract_version: 1,
+        remediation_recipe_refs: Vec::new(),
+        lifecycle: RuleLifecycle::Active,
+    })
+}
+
+pub fn unused_surface_candidate_rule() -> Result<Rule, ValidationError> {
+    let definition_fingerprint = versioned_fingerprint("star.rule-definition", 1, &serde_json::json!({"rule_id":UNUSED_SURFACE_CANDIDATE_RULE_ID,"rule_version":"1.0.0","identity_anchor":"candidate-kind-language-target","message_code":"UNUSED_SURFACE_CANDIDATE","automatic_confirmed_defect":false})).map_err(|_| ValidationError::Fingerprint)?;
+    Ok(Rule {
+        schema_id: "star.rule".to_owned(),
+        schema_version: 1,
+        rule_id: UNUSED_SURFACE_CANDIDATE_RULE_ID.to_owned(),
+        rule_version: "1.0.0".to_owned(),
+        definition_fingerprint,
+        title: "Unused surface candidate".to_owned(),
+        category: "code-quality".to_owned(),
+        default_severity: Severity::Info,
+        default_confidence: Confidence::Low,
+        supported_languages: vec!["rust".to_owned()],
+        source_kinds: vec![SourceKind::File],
+        analyzer_ref: "builtin.unused-surface.candidate.v1".to_owned(),
+        parameter_schema_ref: "star.rule.unused-surface-candidate.parameters.v1".to_owned(),
+        identity_contract_version: 1,
+        identity_anchor: "candidate-kind-language-target".to_owned(),
         redaction_contract_version: 1,
         remediation_recipe_refs: Vec::new(),
         lifecycle: RuleLifecycle::Active,
@@ -344,7 +372,10 @@ pub fn analyze_builtin_findings(
     scan_run_id: &ScanRunId,
     files: &[FileObservation],
     sources: &[CanonicalSource],
+    source_entries: &[SourceEntry],
     symbols: &[Symbol],
+    references: &[SymbolReference],
+    dependency_snapshot: Option<&DependencySnapshot>,
     hardcoding_candidates: &[HardcodingCandidate],
     structural_clone_candidates: &[StructuralCloneCandidate],
     complexity_metric_candidates: &[ComplexityMetricCandidate],
@@ -362,6 +393,7 @@ pub fn analyze_builtin_findings(
     let hardcoding_rule = hardcoding_candidate_rule()?;
     let structural_clone_rule = structural_clone_candidate_rule()?;
     let complexity_rule = complexity_regression_rule()?;
+    let unused_surface_rule = unused_surface_candidate_rule()?;
     let trailing_rule = trailing_whitespace_rule()?;
     let symbol_by_source: BTreeMap<_, _> = symbols
         .iter()
@@ -497,6 +529,26 @@ pub fn analyze_builtin_findings(
         complexity_metric_candidates,
         previous_complexity_metrics,
     )?;
+    append_unused_surface_findings(
+        &mut projection,
+        project_id,
+        revision,
+        workspace_snapshot_id,
+        scan_run_id,
+        source_entries,
+        symbols,
+        references,
+    )?;
+    append_unused_dependency_findings(
+        &mut projection,
+        project_id,
+        revision,
+        workspace_snapshot_id,
+        scan_run_id,
+        source_entries,
+        references,
+        dependency_snapshot,
+    )?;
     projection
         .findings
         .sort_by(|left, right| left.finding_id.cmp(&right.finding_id));
@@ -526,6 +578,11 @@ pub fn analyze_builtin_findings(
                 "rule_id":complexity_rule.rule_id,
                 "rule_version":complexity_rule.rule_version,
                 "definition_fingerprint":complexity_rule.definition_fingerprint,
+            },
+            {
+                "rule_id":unused_surface_rule.rule_id,
+                "rule_version":unused_surface_rule.rule_version,
+                "definition_fingerprint":unused_surface_rule.definition_fingerprint,
             }
         ]),
     )
@@ -718,6 +775,16 @@ fn append_complexity_regression_findings(
                 && item.source_class == candidate.source_class
                 && item.owning_symbol_identity == candidate.owning_symbol_identity
         });
+        // A prior observation for the same owner with a changed metric
+        // contract, language, or cohort is explicitly incompatible.  It must
+        // not be recast as a newly introduced complexity signal.
+        if baseline.is_none()
+            && previous
+                .iter()
+                .any(|item| item.owning_symbol_identity == candidate.owning_symbol_identity)
+        {
+            continue;
+        }
         let (relation, severity, baseline_cyclomatic, baseline_fingerprint) = match baseline {
             None => ("new", Severity::Info, None, None),
             Some(item) if candidate.cyclomatic_complexity > item.cyclomatic_complexity => (
@@ -806,6 +873,335 @@ fn append_complexity_regression_findings(
             content_fingerprint,
         });
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_unused_surface_findings(
+    projection: &mut FindingProjection,
+    project_id: &ProjectId,
+    revision: &ProjectRevision,
+    workspace_snapshot_id: &star_contracts::ids::WorkspaceSnapshotId,
+    scan_run_id: &ScanRunId,
+    source_entries: &[SourceEntry],
+    symbols: &[Symbol],
+    references: &[SymbolReference],
+) -> Result<(), ValidationError> {
+    let source_by_id = source_entries
+        .iter()
+        .map(|source| (&source.canonical_source_id, source))
+        .collect::<BTreeMap<_, _>>();
+    for symbol in symbols.iter().filter(|symbol| {
+        symbol.language_id == "rust"
+            && matches!(
+                symbol.symbol_kind.as_str(),
+                "function" | "struct" | "enum" | "type" | "trait"
+            )
+    }) {
+        let Some(source) = source_by_id.get(&symbol.canonical_source_id) else {
+            continue;
+        };
+        if source.source_class != SourceClass::Source
+            || !source.analysis_eligible
+            || source.facets.iter().any(|facet| facet == "fixture")
+        {
+            continue;
+        }
+        let terminal = symbol
+            .qualified_name
+            .rsplit("::")
+            .next()
+            .unwrap_or_default();
+        let referenced = references.iter().any(|reference| {
+            reference.to_symbol_id.as_ref() == Some(&symbol.symbol_id)
+                || reference.unresolved_target.as_deref() == Some(terminal)
+        });
+        if referenced {
+            continue;
+        }
+        let candidate_kind = if symbol.visibility.is_some() {
+            "public_export_unknown_consumer"
+        } else {
+            "private_symbol"
+        };
+        let identity_tokens = vec![
+            candidate_kind.to_owned(),
+            symbol.language_id.clone(),
+            symbol.qualified_name.clone(),
+        ];
+        let finding_fingerprint = versioned_fingerprint("star.identity.finding",1,&serde_json::json!({"project_id":project_id,"rule_id":UNUSED_SURFACE_CANDIDATE_RULE_ID,"identity_contract_version":1,"identity_anchor":"candidate-kind-language-target","identity_tokens":identity_tokens})).map_err(|_| ValidationError::Fingerprint)?;
+        let finding_id = FindingId::from_fingerprint(&finding_fingerprint);
+        let occurrence_fingerprint = versioned_fingerprint("star.identity.occurrence",1,&serde_json::json!({"finding_id":finding_id,"workspace_snapshot_id":workspace_snapshot_id,"source_content_sha256":source.content_sha256,"location_range":symbol.declaration_range,"evidence_key":symbol.symbol_id})).map_err(|_| ValidationError::Fingerprint)?;
+        let occurrence_id = OccurrenceId::from_fingerprint(&occurrence_fingerprint);
+        projection.occurrences.push(Occurrence {
+            schema_id: "star.occurrence".to_owned(),
+            schema_version: 1,
+            occurrence_id: occurrence_id.clone(),
+            occurrence_fingerprint,
+            finding_id: finding_id.clone(),
+            scan_run_id: scan_run_id.clone(),
+            project_revision_id: revision.project_revision_id.clone(),
+            workspace_snapshot_id: workspace_snapshot_id.clone(),
+            canonical_source_id: symbol.canonical_source_id.clone(),
+            source_content_sha256: source.content_sha256.clone(),
+            location_path: source.path.clone(),
+            location_range: symbol.declaration_range.clone(),
+            symbol_id: Some(symbol.symbol_id.clone()),
+            message_parameters: BTreeMap::from([
+                ("assessment".to_owned(), "candidate_only".to_owned()),
+                ("candidate_kind".to_owned(), candidate_kind.to_owned()),
+                ("dynamic_frontier".to_owned(), "unverified".to_owned()),
+            ]),
+            evidence_refs: Vec::new(),
+            observed_at: Utc::now(),
+            redaction_state: RedactionState::Redacted,
+        });
+        let content_fingerprint = versioned_fingerprint("star.finding-content",1,&serde_json::json!({"finding_fingerprint":finding_fingerprint,"occurrence_ids":[occurrence_id.clone()],"severity":Severity::Info,"confidence":Confidence::Low,"automatic_confirmed_defect":false})).map_err(|_| ValidationError::Fingerprint)?;
+        projection.findings.push(Finding {
+            schema_id: "star.finding".to_owned(),
+            schema_version: 1,
+            finding_id,
+            finding_fingerprint,
+            project_id: project_id.clone(),
+            rule_id: UNUSED_SURFACE_CANDIDATE_RULE_ID.to_owned(),
+            rule_version: "1.0.0".to_owned(),
+            identity_anchor: "candidate-kind-language-target".to_owned(),
+            identity_tokens,
+            title_code: "UNUSED_SURFACE_CANDIDATE_TITLE".to_owned(),
+            message_code: "UNUSED_SURFACE_CANDIDATE".to_owned(),
+            severity: Severity::Info,
+            confidence: Confidence::Low,
+            lifecycle: FindingLifecycle::Open,
+            first_observed_scan_id: scan_run_id.clone(),
+            last_observed_scan_id: scan_run_id.clone(),
+            current_occurrence_ids: vec![occurrence_id],
+            active_disposition_id: None,
+            active_suppression_ids: Vec::new(),
+            content_fingerprint,
+        });
+    }
+    for source in source_entries.iter().filter(|source| {
+        source.language_id == "rust"
+            && source.source_class == SourceClass::Source
+            && source.analysis_eligible
+            && !source.facets.iter().any(|facet| facet == "fixture")
+    }) {
+        let path = source.path.as_str();
+        let file_name = path.rsplit('/').next().unwrap_or(path);
+        if matches!(file_name, "lib.rs" | "main.rs" | "mod.rs")
+            || symbols
+                .iter()
+                .any(|symbol| symbol.canonical_source_id == source.canonical_source_id)
+            || references
+                .iter()
+                .any(|reference| reference.from_source_id == source.canonical_source_id)
+        {
+            continue;
+        }
+        let stem = file_name.strip_suffix(".rs").unwrap_or(file_name);
+        let declared_module = symbols.iter().any(|symbol| {
+            symbol.symbol_kind == "module"
+                && symbol.qualified_name.rsplit("::").next() == Some(stem)
+        });
+        if declared_module {
+            continue;
+        }
+        let identity_tokens = vec![
+            "private_source_file".to_owned(),
+            "rust".to_owned(),
+            path.to_owned(),
+        ];
+        let finding_fingerprint = versioned_fingerprint("star.identity.finding",1,&serde_json::json!({"project_id":project_id,"rule_id":UNUSED_SURFACE_CANDIDATE_RULE_ID,"identity_contract_version":1,"identity_anchor":"candidate-kind-language-target","identity_tokens":identity_tokens})).map_err(|_| ValidationError::Fingerprint)?;
+        let finding_id = FindingId::from_fingerprint(&finding_fingerprint);
+        let location_range = SourceRange {
+            start_line: 1,
+            start_column: 1,
+            end_line: 1,
+            end_column: 1,
+        };
+        let occurrence_fingerprint = versioned_fingerprint("star.identity.occurrence",1,&serde_json::json!({"finding_id":finding_id,"workspace_snapshot_id":workspace_snapshot_id,"source_content_sha256":source.content_sha256,"location_range":location_range,"evidence_key":source.canonical_source_id})).map_err(|_| ValidationError::Fingerprint)?;
+        let occurrence_id = OccurrenceId::from_fingerprint(&occurrence_fingerprint);
+        projection.occurrences.push(Occurrence {
+            schema_id: "star.occurrence".to_owned(),
+            schema_version: 1,
+            occurrence_id: occurrence_id.clone(),
+            occurrence_fingerprint,
+            finding_id: finding_id.clone(),
+            scan_run_id: scan_run_id.clone(),
+            project_revision_id: revision.project_revision_id.clone(),
+            workspace_snapshot_id: workspace_snapshot_id.clone(),
+            canonical_source_id: source.canonical_source_id.clone(),
+            source_content_sha256: source.content_sha256.clone(),
+            location_path: source.path.clone(),
+            location_range,
+            symbol_id: None,
+            message_parameters: BTreeMap::from([
+                ("assessment".to_owned(), "candidate_only".to_owned()),
+                (
+                    "candidate_kind".to_owned(),
+                    "private_source_file".to_owned(),
+                ),
+                ("entrypoint_graph".to_owned(), "partial".to_owned()),
+            ]),
+            evidence_refs: Vec::new(),
+            observed_at: Utc::now(),
+            redaction_state: RedactionState::Redacted,
+        });
+        let content_fingerprint = versioned_fingerprint("star.finding-content",1,&serde_json::json!({"finding_fingerprint":finding_fingerprint,"occurrence_ids":[occurrence_id.clone()],"severity":Severity::Info,"confidence":Confidence::Low,"automatic_confirmed_defect":false})).map_err(|_| ValidationError::Fingerprint)?;
+        projection.findings.push(Finding {
+            schema_id: "star.finding".to_owned(),
+            schema_version: 1,
+            finding_id,
+            finding_fingerprint,
+            project_id: project_id.clone(),
+            rule_id: UNUSED_SURFACE_CANDIDATE_RULE_ID.to_owned(),
+            rule_version: "1.0.0".to_owned(),
+            identity_anchor: "candidate-kind-language-target".to_owned(),
+            identity_tokens,
+            title_code: "UNUSED_SURFACE_CANDIDATE_TITLE".to_owned(),
+            message_code: "UNUSED_SURFACE_CANDIDATE".to_owned(),
+            severity: Severity::Info,
+            confidence: Confidence::Low,
+            lifecycle: FindingLifecycle::Open,
+            first_observed_scan_id: scan_run_id.clone(),
+            last_observed_scan_id: scan_run_id.clone(),
+            current_occurrence_ids: vec![occurrence_id],
+            active_disposition_id: None,
+            active_suppression_ids: Vec::new(),
+            content_fingerprint,
+        });
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_unused_dependency_findings(
+    projection: &mut FindingProjection,
+    project_id: &ProjectId,
+    revision: &ProjectRevision,
+    workspace_snapshot_id: &star_contracts::ids::WorkspaceSnapshotId,
+    scan_run_id: &ScanRunId,
+    source_entries: &[SourceEntry],
+    references: &[SymbolReference],
+    dependency_snapshot: Option<&DependencySnapshot>,
+) -> Result<(), ValidationError> {
+    let Some(snapshot) = dependency_snapshot else {
+        return Ok(());
+    };
+    let Some(source) = source_entries.iter().find(|source| {
+        source.path.as_str() == snapshot.manifest_path && source.source_class == SourceClass::Config
+    }) else {
+        return Ok(());
+    };
+    if snapshot.completeness != CoverageState::Complete {
+        return append_unused_dependency_candidate(
+            projection,
+            project_id,
+            revision,
+            workspace_snapshot_id,
+            scan_run_id,
+            source,
+            "dependency_snapshot_partial",
+            "lockfile",
+        );
+    }
+    for dependency in snapshot
+        .dependencies
+        .iter()
+        .filter(|dependency| dependency.ecosystem == "rust" && dependency.direct)
+    {
+        let normalized = dependency.package_identity.replace('-', "_");
+        let referenced = references
+            .iter()
+            .any(|reference| reference.unresolved_target.as_deref() == Some(normalized.as_str()));
+        if !referenced {
+            append_unused_dependency_candidate(
+                projection,
+                project_id,
+                revision,
+                workspace_snapshot_id,
+                scan_run_id,
+                source,
+                "unused_direct_dependency",
+                &dependency.package_identity,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_unused_dependency_candidate(
+    projection: &mut FindingProjection,
+    project_id: &ProjectId,
+    revision: &ProjectRevision,
+    workspace_snapshot_id: &star_contracts::ids::WorkspaceSnapshotId,
+    scan_run_id: &ScanRunId,
+    source: &SourceEntry,
+    candidate_kind: &str,
+    target: &str,
+) -> Result<(), ValidationError> {
+    let identity_tokens = vec![
+        candidate_kind.to_owned(),
+        "rust".to_owned(),
+        target.to_owned(),
+    ];
+    let finding_fingerprint = versioned_fingerprint("star.identity.finding", 1, &serde_json::json!({"project_id":project_id,"rule_id":UNUSED_SURFACE_CANDIDATE_RULE_ID,"identity_contract_version":1,"identity_anchor":"candidate-kind-language-target","identity_tokens":identity_tokens})).map_err(|_| ValidationError::Fingerprint)?;
+    let finding_id = FindingId::from_fingerprint(&finding_fingerprint);
+    let location_range = SourceRange {
+        start_line: 1,
+        start_column: 1,
+        end_line: 1,
+        end_column: 1,
+    };
+    let occurrence_fingerprint = versioned_fingerprint("star.identity.occurrence", 1, &serde_json::json!({"finding_id":finding_id,"workspace_snapshot_id":workspace_snapshot_id,"source_content_sha256":source.content_sha256,"location_range":location_range,"evidence_key":target})).map_err(|_| ValidationError::Fingerprint)?;
+    let occurrence_id = OccurrenceId::from_fingerprint(&occurrence_fingerprint);
+    projection.occurrences.push(Occurrence {
+        schema_id: "star.occurrence".to_owned(),
+        schema_version: 1,
+        occurrence_id: occurrence_id.clone(),
+        occurrence_fingerprint,
+        finding_id: finding_id.clone(),
+        scan_run_id: scan_run_id.clone(),
+        project_revision_id: revision.project_revision_id.clone(),
+        workspace_snapshot_id: workspace_snapshot_id.clone(),
+        canonical_source_id: source.canonical_source_id.clone(),
+        source_content_sha256: source.content_sha256.clone(),
+        location_path: source.path.clone(),
+        location_range,
+        symbol_id: None,
+        message_parameters: BTreeMap::from([
+            ("assessment".to_owned(), "candidate_only".to_owned()),
+            ("candidate_kind".to_owned(), candidate_kind.to_owned()),
+            ("dependency_snapshot".to_owned(), "read_only".to_owned()),
+        ]),
+        evidence_refs: Vec::new(),
+        observed_at: Utc::now(),
+        redaction_state: RedactionState::Redacted,
+    });
+    let content_fingerprint = versioned_fingerprint("star.finding-content", 1, &serde_json::json!({"finding_fingerprint":finding_fingerprint,"occurrence_ids":[occurrence_id.clone()],"severity":Severity::Info,"confidence":Confidence::Low,"automatic_confirmed_defect":false})).map_err(|_| ValidationError::Fingerprint)?;
+    projection.findings.push(Finding {
+        schema_id: "star.finding".to_owned(),
+        schema_version: 1,
+        finding_id,
+        finding_fingerprint,
+        project_id: project_id.clone(),
+        rule_id: UNUSED_SURFACE_CANDIDATE_RULE_ID.to_owned(),
+        rule_version: "1.0.0".to_owned(),
+        identity_anchor: "candidate-kind-language-target".to_owned(),
+        identity_tokens,
+        title_code: "UNUSED_SURFACE_CANDIDATE_TITLE".to_owned(),
+        message_code: "UNUSED_SURFACE_CANDIDATE".to_owned(),
+        severity: Severity::Info,
+        confidence: Confidence::Low,
+        lifecycle: FindingLifecycle::Open,
+        first_observed_scan_id: scan_run_id.clone(),
+        last_observed_scan_id: scan_run_id.clone(),
+        current_occurrence_ids: vec![occurrence_id],
+        active_disposition_id: None,
+        active_suppression_ids: Vec::new(),
+        content_fingerprint,
+    });
     Ok(())
 }
 
@@ -1381,7 +1777,7 @@ mod tests {
         },
         ids::{CanonicalSourceId, CheckoutId, ProjectRevisionId, SymbolId, WorkspaceSnapshotId},
         index::SourceClass,
-        management::{ProjectPathRef, Sensitivity},
+        management::{ProjectPathRef, Sensitivity, SymbolResolution},
     };
 
     fn test_producer() -> ProducerRef {
@@ -1560,6 +1956,9 @@ mod tests {
             &[],
             &[],
             &[],
+            &[],
+            None,
+            &[],
             &production,
             &[],
             None,
@@ -1596,6 +1995,9 @@ mod tests {
             &[],
             &[],
             &[],
+            &[],
+            None,
+            &[],
             &moved,
             &[],
             None,
@@ -1621,6 +2023,9 @@ mod tests {
             &[],
             &[],
             &[],
+            &[],
+            None,
+            &[],
             &mixed,
             &[],
             None,
@@ -1631,6 +2036,328 @@ mod tests {
                 .findings
                 .iter()
                 .all(|finding| finding.rule_id != STRUCTURAL_CLONE_CANDIDATE_RULE_ID)
+        );
+    }
+
+    #[test]
+    fn unused_surface_candidates_are_source_bound_and_reference_conservative() {
+        let project_id = ProjectId::new();
+        let source_id = CanonicalSourceId::new();
+        let test_source_id = CanonicalSourceId::new();
+        let orphan_source_id = CanonicalSourceId::new();
+        let revision = ProjectRevision {
+            schema_id: "star.project-revision".to_owned(),
+            schema_version: 1,
+            project_revision_id: ProjectRevisionId::new(),
+            project_id: project_id.clone(),
+            revision_kind: star_contracts::management::RevisionKind::FilesystemManifest,
+            vcs_object_format: None,
+            commit_id: None,
+            tree_id: None,
+            manifest_fingerprint: Some(Sha256Hash::digest(b"unused-revision")),
+            captured_at: Utc::now(),
+            completeness: Completeness::Complete,
+            limitations: Vec::new(),
+        };
+        let source_hash = Sha256Hash::digest(b"source-content-not-symbol-fingerprint");
+        let entries = vec![
+            SourceEntry {
+                canonical_source_id: source_id.clone(),
+                path: ProjectPathRef::parse("src/lib.rs").unwrap(),
+                content_sha256: source_hash.clone(),
+                size_bytes: 1,
+                source_class: SourceClass::Source,
+                facets: Vec::new(),
+                language_id: "rust".to_owned(),
+                encoding: "utf-8".to_owned(),
+                owner_project_id: project_id.clone(),
+                owner_checkout_id: CheckoutId::new(),
+                analysis_eligible: true,
+                content_fingerprint: Sha256Hash::digest(b"source-entry"),
+            },
+            SourceEntry {
+                canonical_source_id: test_source_id.clone(),
+                path: ProjectPathRef::parse("tests/api.rs").unwrap(),
+                content_sha256: Sha256Hash::digest(b"test-source"),
+                size_bytes: 1,
+                source_class: SourceClass::Test,
+                facets: Vec::new(),
+                language_id: "rust".to_owned(),
+                encoding: "utf-8".to_owned(),
+                owner_project_id: project_id.clone(),
+                owner_checkout_id: CheckoutId::new(),
+                analysis_eligible: true,
+                content_fingerprint: Sha256Hash::digest(b"test-entry"),
+            },
+            SourceEntry {
+                canonical_source_id: orphan_source_id,
+                path: ProjectPathRef::parse("src/orphan.rs").unwrap(),
+                content_sha256: Sha256Hash::digest(b"orphan-source"),
+                size_bytes: 1,
+                source_class: SourceClass::Source,
+                facets: Vec::new(),
+                language_id: "rust".to_owned(),
+                encoding: "utf-8".to_owned(),
+                owner_project_id: project_id.clone(),
+                owner_checkout_id: CheckoutId::new(),
+                analysis_eligible: true,
+                content_fingerprint: Sha256Hash::digest(b"orphan-entry"),
+            },
+        ];
+        let symbol = |name: &str, visibility: Option<&str>| Symbol {
+            schema_id: "star.symbol".to_owned(),
+            schema_version: 1,
+            symbol_id: SymbolId::new(),
+            project_id: project_id.clone(),
+            canonical_source_id: source_id.clone(),
+            language_id: "rust".to_owned(),
+            symbol_kind: "function".to_owned(),
+            qualified_name: name.to_owned(),
+            signature_fingerprint: None,
+            declaration_range: SourceRange {
+                start_line: 1,
+                start_column: 1,
+                end_line: 1,
+                end_column: 8,
+            },
+            visibility: visibility.map(str::to_owned),
+            workspace_snapshot_id: WorkspaceSnapshotId::new(),
+            scan_run_id: ScanRunId::new(),
+            content_fingerprint: Sha256Hash::digest(format!("symbol:{name}").as_bytes()),
+        };
+        let unused = symbol("unused_private", None);
+        let mut unused_type = symbol("unused_type", None);
+        unused_type.symbol_kind = "struct".to_owned();
+        let same_file = symbol("same_file", None);
+        let test_only = symbol("test_only", None);
+        let public = symbol("api", Some("pub"));
+        let mut macro_definition = symbol("macro_frontier", None);
+        macro_definition.symbol_kind = "macro".to_owned();
+        let reference = |target: &Symbol, from_source_id: CanonicalSourceId| SymbolReference {
+            schema_id: "star.symbol-reference".to_owned(),
+            schema_version: 1,
+            symbol_reference_id: star_contracts::ids::SymbolReferenceId::new(),
+            project_id: project_id.clone(),
+            from_symbol_id: None,
+            from_source_id,
+            from_range: SourceRange {
+                start_line: 2,
+                start_column: 1,
+                end_line: 2,
+                end_column: 4,
+            },
+            to_symbol_id: Some(target.symbol_id.clone()),
+            unresolved_target: None,
+            reference_kind: "identifier_use".to_owned(),
+            resolution: SymbolResolution::Resolved,
+            workspace_snapshot_id: WorkspaceSnapshotId::new(),
+            scan_run_id: ScanRunId::new(),
+        };
+        let projection = analyze_builtin_findings(
+            &project_id,
+            &revision,
+            &WorkspaceSnapshotId::new(),
+            &ScanRunId::new(),
+            &[],
+            &[],
+            &entries,
+            &[
+                unused.clone(),
+                unused_type.clone(),
+                same_file.clone(),
+                test_only.clone(),
+                public.clone(),
+                macro_definition,
+            ],
+            &[
+                reference(&same_file, source_id),
+                reference(&test_only, test_source_id),
+            ],
+            None,
+            &[],
+            &[],
+            &[],
+            None,
+        )
+        .unwrap();
+        let unused_findings = projection
+            .findings
+            .iter()
+            .filter(|item| item.rule_id == UNUSED_SURFACE_CANDIDATE_RULE_ID)
+            .collect::<Vec<_>>();
+        assert_eq!(unused_findings.len(), 4);
+        assert!(
+            unused_findings
+                .iter()
+                .any(|item| item.identity_tokens.last() == Some(&"unused_private".to_owned()))
+        );
+        assert!(
+            unused_findings
+                .iter()
+                .any(|item| item.identity_tokens.first()
+                    == Some(&"public_export_unknown_consumer".to_owned()))
+        );
+        assert!(unused_findings
+            .iter()
+            .any(|item| item.identity_tokens.first() == Some(&"private_source_file".to_owned())));
+        assert!(
+            unused_findings
+                .iter()
+                .any(|item| item.identity_tokens.last() == Some(&"unused_type".to_owned()))
+        );
+        assert!(
+            projection
+                .occurrences
+                .iter()
+                .filter(|item| item.finding_id
+                    == unused_findings
+                        .iter()
+                        .find(|item| item.identity_tokens.last()
+                            == Some(&"unused_private".to_owned()))
+                        .unwrap()
+                        .finding_id)
+                .all(|item| item.source_content_sha256 == source_hash)
+        );
+        assert!(projection.occurrences.iter().any(|item| {
+            item.message_parameters.get("dynamic_frontier") == Some(&"unverified".to_owned())
+        }));
+    }
+
+    #[test]
+    fn unused_dependency_candidates_require_a_complete_snapshot_and_absent_reference() {
+        let project_id = ProjectId::new();
+        let revision = ProjectRevision {
+            schema_id: "star.project-revision".to_owned(),
+            schema_version: 1,
+            project_revision_id: ProjectRevisionId::new(),
+            project_id: project_id.clone(),
+            revision_kind: star_contracts::management::RevisionKind::FilesystemManifest,
+            vcs_object_format: None,
+            commit_id: None,
+            tree_id: None,
+            manifest_fingerprint: Some(Sha256Hash::digest(b"dependency-revision")),
+            captured_at: Utc::now(),
+            completeness: Completeness::Complete,
+            limitations: Vec::new(),
+        };
+        let source = SourceEntry {
+            canonical_source_id: CanonicalSourceId::new(),
+            path: ProjectPathRef::parse("Cargo.toml").unwrap(),
+            content_sha256: Sha256Hash::digest(b"manifest-source"),
+            size_bytes: 1,
+            source_class: SourceClass::Config,
+            facets: Vec::new(),
+            language_id: "toml".to_owned(),
+            encoding: "utf-8".to_owned(),
+            owner_project_id: project_id.clone(),
+            owner_checkout_id: CheckoutId::new(),
+            analysis_eligible: true,
+            content_fingerprint: Sha256Hash::digest(b"manifest-entry"),
+        };
+        let snapshot = |completeness| DependencySnapshot {
+            schema_id: "star.dependency-snapshot".to_owned(),
+            schema_version: 1,
+            snapshot_id: "dependency-snapshot".to_owned(),
+            project_id: project_id.clone(),
+            subject_revision: revision.project_revision_id.as_str().to_owned(),
+            package_manager_id: "cargo".to_owned(),
+            package_manager_version: None,
+            resolver_mode: "locked-file-read-only".to_owned(),
+            manifest_path: "Cargo.toml".to_owned(),
+            manifest_sha256: source.content_sha256.clone(),
+            lockfile_path: (completeness == CoverageState::Complete)
+                .then_some("Cargo.lock".to_owned()),
+            lockfile_sha256: (completeness == CoverageState::Complete)
+                .then(|| Sha256Hash::digest(b"lock")),
+            dependencies: vec![star_contracts::maintenance_v2::DependencyRecord {
+                dependency_id: "dep-serde".to_owned(),
+                purpose: "declared".to_owned(),
+                ecosystem: "rust".to_owned(),
+                package_identity: "serde".to_owned(),
+                requested_version: Some("1".to_owned()),
+                resolved_version: Some("1.0.0".to_owned()),
+                source: "registry".to_owned(),
+                integrity: None,
+                license_refs: Vec::new(),
+                advisory_refs: Vec::new(),
+                direct: true,
+                affected_project_ids: vec![project_id.clone()],
+            }],
+            completeness,
+            limitations: Vec::new(),
+            content_fingerprint: Sha256Hash::digest(b"dependency-snapshot"),
+        };
+        let empty_projection = || FindingProjection {
+            findings: Vec::new(),
+            occurrences: Vec::new(),
+            rule_set_fingerprint: Sha256Hash::digest(b"rules"),
+        };
+        let mut unused = empty_projection();
+        append_unused_dependency_findings(
+            &mut unused,
+            &project_id,
+            &revision,
+            &WorkspaceSnapshotId::new(),
+            &ScanRunId::new(),
+            std::slice::from_ref(&source),
+            &[],
+            Some(&snapshot(CoverageState::Complete)),
+        )
+        .unwrap();
+        assert!(unused.findings.iter().any(
+            |item| item.identity_tokens.first() == Some(&"unused_direct_dependency".to_owned())
+        ));
+        let reference = SymbolReference {
+            schema_id: "star.symbol-reference".to_owned(),
+            schema_version: 1,
+            symbol_reference_id: star_contracts::ids::SymbolReferenceId::new(),
+            project_id: project_id.clone(),
+            from_symbol_id: None,
+            from_source_id: CanonicalSourceId::new(),
+            from_range: SourceRange {
+                start_line: 1,
+                start_column: 1,
+                end_line: 1,
+                end_column: 2,
+            },
+            to_symbol_id: None,
+            unresolved_target: Some("serde".to_owned()),
+            reference_kind: "identifier_use".to_owned(),
+            resolution: SymbolResolution::Unresolved,
+            workspace_snapshot_id: WorkspaceSnapshotId::new(),
+            scan_run_id: ScanRunId::new(),
+        };
+        let mut referenced = empty_projection();
+        append_unused_dependency_findings(
+            &mut referenced,
+            &project_id,
+            &revision,
+            &WorkspaceSnapshotId::new(),
+            &ScanRunId::new(),
+            std::slice::from_ref(&source),
+            &[reference],
+            Some(&snapshot(CoverageState::Complete)),
+        )
+        .unwrap();
+        assert!(referenced.findings.is_empty());
+        let mut partial = empty_projection();
+        append_unused_dependency_findings(
+            &mut partial,
+            &project_id,
+            &revision,
+            &WorkspaceSnapshotId::new(),
+            &ScanRunId::new(),
+            std::slice::from_ref(&source),
+            &[],
+            Some(&snapshot(CoverageState::Partial)),
+        )
+        .unwrap();
+        assert!(
+            partial
+                .findings
+                .iter()
+                .any(|item| item.identity_tokens.first()
+                    == Some(&"dependency_snapshot_partial".to_owned()))
         );
     }
 

@@ -2041,6 +2041,7 @@ fn classify_source(path: &str) -> SourceClass {
     } else if segments
         .iter()
         .any(|part| matches!(*part, "config" | ".config" | ".github"))
+        || normalized.ends_with("build.rs")
         || normalized.ends_with("cargo.toml")
         || normalized.ends_with("rust-toolchain.toml")
         || normalized.ends_with(".toml")
@@ -3346,6 +3347,7 @@ mod tests {
     fn source_classification_matches_default_analysis_boundaries() {
         let cases = [
             ("src/lib.rs", SourceClass::Source),
+            ("build.rs", SourceClass::Config),
             ("tests/api.rs", SourceClass::Test),
             ("docs/example.rs", SourceClass::Docs),
             ("Cargo.toml", SourceClass::Config),

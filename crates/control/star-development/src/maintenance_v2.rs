@@ -1170,7 +1170,7 @@ fn scan_cargo_dependencies(
         .and_then(|text| toml::from_str(text).map_err(|_| DevelopmentError::Invalid))?;
     let direct = cargo_direct_dependencies(&manifest);
     let lockfile_path = root.join("Cargo.lock");
-    let (lockfile_bytes, packages, completeness, limitations) = if lockfile_path.is_file() {
+    let (lockfile_bytes, packages, mut completeness, mut limitations) = if lockfile_path.is_file() {
         let bytes = read_bounded(root, "Cargo.lock", 32 * 1024 * 1024)?;
         let lock: toml::Value = std::str::from_utf8(&bytes)
             .map_err(|_| DevelopmentError::Invalid)
@@ -1191,6 +1191,7 @@ fn scan_cargo_dependencies(
     };
     let mut dependencies = Vec::new();
     if packages.is_empty() {
+        let direct_count = direct.len();
         for (name, requested) in direct {
             dependencies.push(dependency_record(
                 &project_id,
@@ -1203,7 +1204,14 @@ fn scan_cargo_dependencies(
                 true,
             ));
         }
+        if lockfile_bytes.is_some() && direct_count > 0 {
+            completeness = CoverageState::Partial;
+            limitations.push(
+                "Cargo.lock has no package entry for declared direct dependencies; resolver graph is unverified".to_owned(),
+            );
+        }
     } else {
+        let mut resolved_direct = BTreeSet::new();
         for package in packages {
             let Some(table) = package.as_table() else {
                 continue;
@@ -1233,6 +1241,28 @@ fn scan_cargo_dependencies(
                 source,
                 integrity,
                 direct.contains_key(name),
+            ));
+            if direct.contains_key(name) {
+                resolved_direct.insert(name.to_owned());
+            }
+        }
+        for (name, requested) in direct
+            .iter()
+            .filter(|(name, _)| !resolved_direct.contains(*name))
+        {
+            dependencies.push(dependency_record(
+                &project_id,
+                "rust",
+                name,
+                Some(requested.clone()),
+                None,
+                "registry:lockfile-missing".to_owned(),
+                None,
+                true,
+            ));
+            completeness = CoverageState::Partial;
+            limitations.push(format!(
+                "direct dependency `{name}` is absent from Cargo.lock; resolver graph is unverified"
             ));
         }
     }
@@ -1837,6 +1867,48 @@ mod tests {
         assert_eq!(snapshot.completeness, CoverageState::Partial);
         assert_eq!(snapshot.dependencies.len(), 1);
         assert_eq!(snapshot.dependencies[0].package_identity, "serde");
+    }
+
+    #[test]
+    fn cargo_dependency_scan_marks_manifest_lock_disagreement_partial() {
+        let root = std::env::temp_dir().join(format!(
+            "star-dependency-disagreement-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("Cargo.toml"),
+            b"[package]\nname='sample'\nversion='0.1.0'\n[dependencies]\nserde='1'\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("Cargo.lock"),
+            b"version = 4\n[[package]]\nname='different'\nversion='1.0.0'\n",
+        )
+        .unwrap();
+        let snapshot = scan_dependency_snapshot(
+            &root,
+            ProjectId::new(),
+            "dependency-disagreement".to_owned(),
+            "revision:disagreement".to_owned(),
+        )
+        .unwrap();
+        assert_eq!(snapshot.completeness, CoverageState::Partial);
+        assert!(
+            snapshot
+                .dependencies
+                .iter()
+                .any(|dependency| dependency.package_identity == "serde"
+                    && dependency.direct
+                    && dependency.resolved_version.is_none())
+        );
+        assert!(
+            snapshot
+                .limitations
+                .iter()
+                .any(|item| item.contains("absent from Cargo.lock"))
+        );
     }
 
     #[test]

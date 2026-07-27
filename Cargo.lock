@@ -1294,6 +1294,7 @@ dependencies = [
  "serde",
  "serde_json",
  "star-contracts",
+ "star-development",
  "star-domain",
  "star-evidence",
  "star-execution",
