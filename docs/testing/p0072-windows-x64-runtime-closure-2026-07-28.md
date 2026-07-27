@@ -32,7 +32,8 @@ Focused evidence:
 - updater-only apply의 실제 결과는 `state=rolled_back`, `failure=new controller postcheck failed`였다. activation revision 9는 prior `rt_59b4659ab61700d4`를 active로 복원했지만 candidate Controller PID 24892가 계속 pipe를 소유해 installed CLI는 identity mismatch를 반환했다. 이를 설치 성공으로 승격하지 않는다.
 - 원인은 `star-updater.exe`가 `Cli` handshake를 사용하면서 Controller peer image/kind allowlist에는 `star.exe`만 있던 불일치다. Updater가 거부를 unavailable로 관찰해 quiescence로 오인했고 기존 rollback은 candidate를 먼저 종료하지 않았다.
 - 수정은 install/runtime root의 exact path 조건을 유지한 채 `star-updater.exe`를 `Cli` peer로 추가한다. apply는 activation selector 하나만 믿지 않고 generation manifest·Controller hash가 맞는 실행 중 Runtime Controller를 전수 quiesce하며 fixed CLI/MCP는 제외한다.
-- 새 Controller와 rollback Controller 모두 manifest-verified installed `star.exe management status --json`의 단일 `star.ipc.response/status=ok`를 bounded postcheck로 요구한다. duplicate key·error·invalid output은 fail-closed다. Updater가 없는 pre-P-0039 CLI fallback도 같은 core engine을 호출해 동작 분기를 제거했다.
+- 첫 복구 수정 generation `rt_de684859956d4a80`은 이전 잔존 candidate를 제거하고 새 Controller를 시작했다. 다만 `management.status`가 update lease 중 `UPDATE_RESTART_PENDING`으로 거부돼 apply는 다시 rollback됐다. 보강된 rollback은 새 candidate를 먼저 종료하고 prior `rt_59b4659ab61700d4` 하나만 시작했으며 activation revision 11·management normal/read_write를 확인했다.
+- postcheck는 update lease allowlist에 명시된 manifest-verified installed `star.exe doctor --json`으로 교정한다. top-level `star.ipc.response/status=ok`와 nested Doctor `status=pass`를 모두 요구하며 duplicate key·error·fail·invalid output은 fail-closed다. 새 Controller와 rollback Controller에 같은 Gate를 적용한다. Updater가 없는 pre-P-0039 CLI fallback도 같은 core engine을 호출해 동작 분기를 제거했다.
 - 회귀: `star-updater-core` 17/17, IPC peer allowlist 1/1, Controller kind binding 1/1, `star-cli` 23/23, affected clippy `-D warnings` pass.
 
 ## 남은 Gate

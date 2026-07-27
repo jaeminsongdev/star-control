@@ -458,7 +458,7 @@ async fn installed_cli_controller_postcheck(install_root: &Path) -> bool {
         let output = tokio::time::timeout(
             remaining.min(SINGLE_ATTEMPT_TIMEOUT),
             tokio::process::Command::new(&cli)
-                .args(["management", "status", "--json"])
+                .args(["doctor", "--json"])
                 .stdin(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .output(),
@@ -482,6 +482,10 @@ fn installed_cli_postcheck_json(stdout: &[u8]) -> bool {
         .is_some_and(|value| {
             value.get("schema_id").and_then(serde_json::Value::as_str) == Some("star.ipc.response")
                 && value.get("status").and_then(serde_json::Value::as_str) == Some("ok")
+                && value
+                    .pointer("/data/result/status")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("pass")
         })
 }
 
@@ -507,13 +511,16 @@ mod tests {
     #[test]
     fn installed_cli_postcheck_requires_one_successful_ipc_response() {
         assert!(installed_cli_postcheck_json(
-            br#"{"schema_id":"star.ipc.response","schema_version":1,"status":"ok"}"#
+            br#"{"schema_id":"star.ipc.response","schema_version":1,"status":"ok","data":{"result":{"status":"pass"}}}"#
         ));
         assert!(!installed_cli_postcheck_json(
-            br#"{"schema_id":"star.ipc.response","schema_version":1,"status":"error"}"#
+            br#"{"schema_id":"star.ipc.response","schema_version":1,"status":"error","data":{"result":{"status":"pass"}}}"#
         ));
         assert!(!installed_cli_postcheck_json(
-            br#"{"schema_id":"star.ipc.response","status":"ok","status":"error"}"#
+            br#"{"schema_id":"star.ipc.response","status":"ok","status":"error","data":{"result":{"status":"pass"}}}"#
+        ));
+        assert!(!installed_cli_postcheck_json(
+            br#"{"schema_id":"star.ipc.response","schema_version":1,"status":"ok","data":{"result":{"status":"fail"}}}"#
         ));
         assert!(!installed_cli_postcheck_json(b"not-json"));
     }
