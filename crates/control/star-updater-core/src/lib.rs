@@ -25,6 +25,9 @@ use star_contracts::{
 use star_ipc::controller_start::{ControllerStartError, VerifiedControllerImage};
 use thiserror::Error;
 
+const INSTALLED_CLI_POSTCHECK_WINDOW: Duration = Duration::from_secs(45);
+const INSTALLED_CLI_POSTCHECK_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(15);
+
 #[cfg(windows)]
 use windows::{
     Win32::{
@@ -444,24 +447,24 @@ async fn rollback_runtime_generation(
 }
 
 async fn installed_cli_controller_postcheck(install_root: &Path) -> bool {
-    const POSTCHECK_WINDOW: Duration = Duration::from_secs(15);
-    const SINGLE_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(5);
     const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
 
     let cli = install_root.join("star.exe");
-    let deadline = tokio::time::Instant::now() + POSTCHECK_WINDOW;
+    let deadline = tokio::time::Instant::now() + INSTALLED_CLI_POSTCHECK_WINDOW;
     loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
         if remaining.is_zero() {
             return false;
         }
+        let mut command = tokio::process::Command::new(&cli);
+        command
+            .args(["doctor", "--json"])
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .kill_on_drop(true);
         let output = tokio::time::timeout(
-            remaining.min(SINGLE_ATTEMPT_TIMEOUT),
-            tokio::process::Command::new(&cli)
-                .args(["doctor", "--json"])
-                .stdin(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .output(),
+            remaining.min(INSTALLED_CLI_POSTCHECK_ATTEMPT_TIMEOUT),
+            command.output(),
         )
         .await;
         if let Ok(Ok(output)) = output
@@ -492,6 +495,12 @@ fn installed_cli_postcheck_json(stdout: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn controller_postcheck_budget_covers_cold_start_and_multiple_attempts() {
+        assert!(INSTALLED_CLI_POSTCHECK_ATTEMPT_TIMEOUT >= Duration::from_secs(10));
+        assert!(INSTALLED_CLI_POSTCHECK_WINDOW >= INSTALLED_CLI_POSTCHECK_ATTEMPT_TIMEOUT * 3);
+    }
 
     #[test]
     fn update_lease_excludes_a_second_transaction_until_released() {

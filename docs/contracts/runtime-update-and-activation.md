@@ -40,6 +40,8 @@ writer는 임시 파일을 flush한 뒤 원자적으로 교체한다. 손상·�
 
 `star update stage <runtime-generation-dir>`는 검증된 generation만 `<install-root>\runtime\generations\<id>`로 새 파일 생성 방식으로 복사한다. 기존 generation은 덮어쓰지 않는다. `star update inspect <generation-id>`는 release-owned tool package manifest를 비교해 candidate review와 exact `approval_scope_sha256`를 만든다.
 
+활성화 뒤 installed CLI doctor postcheck는 cold Registry 준비와 bounded demand scan을 포함할 수 있으므로 단일 시도 15초, 전체 45초를 보장한다. timeout된 doctor child는 다음 시도 전에 종료해 중첩 probe가 readiness를 더 늦추지 않게 한다.
+
 `star update apply <generation-id> --state-generation <id> --approve <sha256>`는 bridge compatible, handler ready, rollback available, candidate verification pass, approval scope 일치를 모두 요구한다. action 제거, breaking schema, risk lane/permission widening 또는 hook/new-task/Codex restart가 필요한 review는 runtime apply로 통과시키지 않는다. Stable root `star.exe`는 설치 manifest 전체 검증 뒤 `star-updater.exe runtime-apply`에 요청만 위임한다. Updater는 install/runtime root에 정확히 bind된 `star-updater.exe`를 `Cli` peer로 인증해 Controller shutdown을 요청하고, generation manifest와 Controller hash가 검증된 Runtime image 전부의 bounded quiescence를 확인한 뒤 selector를 원자 교체한다. 새 Runtime과 rollback Runtime은 update lease 중 허용된 manifest-verified installed CLI `doctor.run`의 IPC `status=ok`와 Doctor `status=pass` postcheck를 모두 통과해야 각각 `committed`와 `rolled_back`이 된다. fixed CLI/MCP와 Codex는 Runtime quiesce 대상이 아니다. Codex와 고정 MCP를 포함하는 통합 변경은 이 경로가 아니라 ADR-0014의 10초 restart-armed updater transaction을 사용한다.
 
 ### Codex integration-only candidate 봉인
