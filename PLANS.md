@@ -34,24 +34,15 @@
 | P-0071 전체 STRICT 리뷰·main 전달 | **DONE / PUSHED** | `9ab88e0e069540800a4701d4516ae9692837bc77`; final FULL 11/11과 STRICT review 뒤 `origin/main` readback까지 완료했다. |
 | P-0072 Windows x64 Runtime closure | **DONE / PUSHED / INSTALLED** | `f13533922fa68a906494e97cea4087578697d49c`; Runtime generation `rt_9582adc516129569`, source FULL 11/11·installed TARGET 8/8·Doctor 4/4, `origin/main` readback까지 완료했다. |
 | P-0073 Codex Plugin·Skill·Hook 재설계 | **DONE / INSTALLED / local commits** | operations Skill/metadata의 Code Health·updater route와 `SessionEnd` lifecycle을 x64 installed Updater로 적용했다. source FULL 11/11, installed TARGET 8/8, Doctor 4/4, rendered/cache identity와 terminal integration receipt를 확인했다. |
-| P-0074 SessionEnd 3초 계약 교정 | **ACTIVE** | Codex가 `timeout: 10`을 3초로 clamp하는 source 계약 불일치와 Hook IPC의 3초 초과 가능성을 source·검증기·설치본까지 교정한다. |
+| P-0074 SessionEnd 3초 계약 교정 | **DONE / INSTALLED / local commits** | `d825516b86823793d53b607d6b2a0b6852d459fb`; `SessionEnd.timeout=3`, 2초 내부 deadline, terminal Updater receipt, rendered/cache identity, Hook smoke·Doctor·installed TARGET을 확인했다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0074 active
+## P-0074 closure
 
-- 범위: Plugin template의 `SessionEnd` timeout, rendered Hook validator, `star.exe hook session-end`의 Controller IPC budget, 관련 회귀 테스트·문서·x64 설치 적용이다.
-- 원인: 최신 Codex 계약은 `SessionEnd` 기본 1초·상한 3초인데 source/rendered/cache가 10초를 요청한다. 일반 CLI IPC의 connect 5초·response 10초 budget도 host 상한 안에서 종료된다는 보장이 없다.
-- 설계: `SessionEnd` 선언은 정확히 3초로 검증하고 다른 Hook의 기존 10초 계약은 유지한다. `SessionEnd`의 Controller lifecycle 관찰은 2초 내부 deadline으로 제한해 host 상한 전에 실패를 반환하며, 관찰 실패는 기존 fail-closed/advisory 의미와 exit 0을 유지한다.
-- 제외: Codex cache/runtime DB 직접 수정, `legacy/`·`target/` 정리, signing/publication, non-x64 output, 원격 push다.
-- preflight: `main` clean, `HEAD=cb73a4689374adf887920dea8d68a5146171502c`, `origin/main=f13533922fa68a906494e97cea4087578697d49c`; installed `D:\도구\Star-Control` x64 verified, integration registered, management normal/read_write다.
-- Profile closure: `project_understanding`, `docs_config_environment`, `architecture_quality`, `ai_development_validation`, `api_contract_change`, `test_correctness`, `security_supply_chain`, `ci_release_deploy`; fingerprint `sha256:23d783bff3df3ac39684ca52bad60cf870d2af606886f33ab8543459548fef43`.
-
-| 파일 | 상태 | 변경 요약 | 검증 상태 |
-|---|---|---|---|
-| Plugin Hook template·Codex adapter | 예정 | event별 timeout 계약과 rendered 검증 | 미실행 |
-| CLI lifecycle Hook·IPC client | 예정 | host 상한보다 짧은 Hook 전용 deadline | 미실행 |
-| 테스트·architecture·적용 감사 | 예정 | clamp 회귀와 설치 후 증거 | 미실행 |
-| x64 rendered Plugin/cache | 예정 | source candidate를 Updater로 적용 | 미실행 |
+- 구현·설치 감사는 [P-0074 SessionEnd Hook 3초 계약 교정·설치 감사](docs/testing/p0074-session-end-hook-timeout-2026-07-28.md)가 소유한다.
+- source FULL은 11/11 complete·stable·pass다. closure MCP operations의 Controller idle shutdown은 pass로 합성하지 않고 동일 canonical native entrypoint로 fallback했다. 설치 후 TARGET은 8/8 complete·stable·pass, Doctor는 4/4 pass다.
+- x64 outer source는 `d825516b…`, active Runtime은 `rt_4f5e2b2ea6dbe52d`로 분리되며 candidate 재검사는 `no_change`다.
+- Codex cache/runtime DB 직접 수정, signing/publication, non-x64 output, 원격 push는 수행하지 않았다.
 
 ## 열린 위험과 보류
 
@@ -64,7 +55,7 @@
 
 ## Context Pack
 
-- 현재 목표: P-0074에서 `SessionEnd` 3초 host 계약과 내부 bounded IPC를 source부터 x64 설치본까지 교정한다. P-0073 상세는 `docs/testing/p0073-codex-plugin-skill-hook-update-2026-07-28.md`가 소유한다.
-- 다음 명령: 회귀 테스트를 먼저 추가하고 구현 → TARGET → source evidence 재생성 → FULL → Updater candidate inspect/apply → installed 검증 → closure local commit.
+- 현재 상태: P-0062~P-0070 Code Health 제품 경로와 P-0071 전달, P-0072 x64 Runtime, P-0073 Plugin 재설계, P-0074 `SessionEnd` 3초 교정은 current source·installed evidence로 봉인됐다.
+- 완료 근거: inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, source FULL 11/11, installed TARGET 8/8, Doctor 4/4, terminal Updater receipt, rendered/cache equality와 Hook smoke다.
 - 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache 직접 수정, signing/publication, non-x64 output.
-- 다음 완료 기준: source FULL, `SessionEnd timeout=3`, bounded failure regression, terminal Updater receipt, rendered/cache equality, Hook smoke와 Doctor/TARGET, clean local closure commit이다. Hook trust·signing·non-x64·remote delivery는 별도 Gate로 남긴다.
+- 다음 실행: 없음. 이 snapshot을 포함한 의도된 closure 파일만 local commit하고 clean HEAD를 확인한다. Hook trust·signing·non-x64·remote delivery는 별도 Gate로 남긴다.
