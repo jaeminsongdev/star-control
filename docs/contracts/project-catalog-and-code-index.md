@@ -214,7 +214,7 @@ IndexPartition `kind`은 `inventory|classification|text|syntax:<language-id>|sem
 
 ### ProjectId 우선순위
 
-1. 유효한 `.star-control/project.toml`의 shared ProjectId를 사용한다.
+1. shared identity shape(`project_id`, `display_name`, `repository_kind`, `source_of_truth`)으로 유효한 `.star-control/project.toml`의 ProjectId를 사용한다. `project_key`, `default_profile`, `validation_entrypoint`를 가진 validation-manifest shape는 shared identity 선언이 아니며, management registration은 이를 manifest 부재와 같은 local identity 경계로 처리한다. 두 shape가 섞였거나 어느 쪽에도 완전하지 않으면 자동 보정하지 않고 invalid manifest로 중단한다.
 2. manifest가 없고 Git common repository가 이미 local ProjectId에 연결돼 있으면 그 ProjectId를 같은 repository의 새 checkout에 사용한다.
 3. 처음 보는 Git repository 또는 explicit non-Git root에는 Controller가 local-only ProjectId를 발급한다.
 4. remote URL, directory 이름, default branch, package 이름과 content hash만으로 두 Project를 자동 병합하지 않는다.

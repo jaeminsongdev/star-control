@@ -25392,6 +25392,34 @@ mod tests {
             ),
             Ok(())
         );
+        let management_root = std::env::temp_dir().join(format!(
+            "star-controller-validation-project-registration-{}-{}",
+            std::process::id(),
+            star_ipc::nonce()
+        ));
+        let registration_service = ManagementApplicationService::new(
+            Arc::new(
+                SqliteManagementRepositorySet::open(
+                    management_root.join("management"),
+                    "validation-project-registration",
+                )
+                .unwrap(),
+            ),
+            Arc::new(
+                WindowsProjectRootBindingStore::open(management_root.join("bindings")).unwrap(),
+            ),
+            Arc::new(LocalArtifactStore::default()),
+        );
+        let registration = registration_service
+            .register_project(
+                &repository.canonicalize().unwrap(),
+                "register-validation-project-manifest",
+            )
+            .unwrap();
+        assert_eq!(
+            registration.project.identity_scope,
+            star_contracts::management::IdentityScope::Local
+        );
         assert_eq!(
             validate_project_registration_allowlist_with_catalog(
                 "star-control",

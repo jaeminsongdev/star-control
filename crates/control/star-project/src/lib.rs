@@ -64,6 +64,23 @@ struct ProjectManifest {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ProjectValidationManifestMarker {
+    schema_version: u32,
+    project_key: String,
+    default_profile: String,
+    workspace_unit: String,
+    validation_entrypoint: String,
+    policy_schema_version: u32,
+    evidence_schema_version: u32,
+    cargo_workspaces: Vec<String>,
+    limits: toml::Value,
+    classification: toml::Value,
+    unit_mappings: Vec<toml::Value>,
+    fingerprints: toml::Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SharedSuppressionsFile {
     schema_version: u32,
     suppressions: Vec<Suppression>,
@@ -254,45 +271,47 @@ impl ProjectSeed {
         if manifest_path.exists() {
             let source =
                 fs::read_to_string(manifest_path).map_err(|_| ProjectError::InvalidManifest)?;
-            let manifest: ProjectManifest =
-                toml::from_str(&source).map_err(|_| ProjectError::InvalidManifest)?;
-            if manifest.schema_version != 1
-                || manifest.display_name.trim().is_empty()
-                || manifest.source_of_truth.is_empty()
-                || manifest
-                    .source_of_truth
-                    .iter()
-                    .any(|value| ProjectPathRef::parse(value).is_err())
-            {
-                return Err(ProjectError::InvalidManifest);
-            }
-            PersistenceRedactor::for_current_user()
-                .validate(&manifest.display_name)
-                .map_err(|_| ProjectError::InvalidManifest)?;
-            for source in &manifest.source_of_truth {
+            if !is_project_validation_manifest(&source) {
+                let manifest: ProjectManifest =
+                    toml::from_str(&source).map_err(|_| ProjectError::InvalidManifest)?;
+                if manifest.schema_version != 1
+                    || manifest.display_name.trim().is_empty()
+                    || manifest.source_of_truth.is_empty()
+                    || manifest
+                        .source_of_truth
+                        .iter()
+                        .any(|value| ProjectPathRef::parse(value).is_err())
+                {
+                    return Err(ProjectError::InvalidManifest);
+                }
                 PersistenceRedactor::for_current_user()
-                    .validate(source)
+                    .validate(&manifest.display_name)
                     .map_err(|_| ProjectError::InvalidManifest)?;
+                for source in &manifest.source_of_truth {
+                    PersistenceRedactor::for_current_user()
+                        .validate(source)
+                        .map_err(|_| ProjectError::InvalidManifest)?;
+                }
+                let declaration_fingerprint = versioned_fingerprint(
+                    "star.identity.project-declaration",
+                    1,
+                    &serde_json::json!({
+                        "project_id":manifest.project_id,
+                        "display_name":manifest.display_name,
+                        "repository_kind":manifest.repository_kind,
+                        "source_of_truth":manifest.source_of_truth,
+                    }),
+                )
+                .map_err(|_| ProjectError::Fingerprint)?;
+                return Ok(Self {
+                    project_id: manifest.project_id,
+                    identity_scope: IdentityScope::Shared,
+                    display_name: manifest.display_name,
+                    repository_kind: manifest.repository_kind,
+                    source_of_truth: manifest.source_of_truth,
+                    declaration_fingerprint,
+                });
             }
-            let declaration_fingerprint = versioned_fingerprint(
-                "star.identity.project-declaration",
-                1,
-                &serde_json::json!({
-                    "project_id":manifest.project_id,
-                    "display_name":manifest.display_name,
-                    "repository_kind":manifest.repository_kind,
-                    "source_of_truth":manifest.source_of_truth,
-                }),
-            )
-            .map_err(|_| ProjectError::Fingerprint)?;
-            return Ok(Self {
-                project_id: manifest.project_id,
-                identity_scope: IdentityScope::Shared,
-                display_name: manifest.display_name,
-                repository_kind: manifest.repository_kind,
-                source_of_truth: manifest.source_of_truth,
-                declaration_fingerprint,
-            });
         }
         let project_id = existing_local_project_id.unwrap_or_default();
         let declaration_fingerprint = versioned_fingerprint(
@@ -441,6 +460,37 @@ impl ProjectSeed {
             },
         })
     }
+}
+
+fn is_project_validation_manifest(source: &str) -> bool {
+    let Ok(value) = toml::from_str::<toml::Value>(source) else {
+        return false;
+    };
+    if [
+        "project_id",
+        "display_name",
+        "repository_kind",
+        "source_of_truth",
+    ]
+    .iter()
+    .any(|key| value.get(key).is_some())
+    {
+        return false;
+    }
+    toml::from_str::<ProjectValidationManifestMarker>(source).is_ok_and(|manifest| {
+        manifest.schema_version == 1
+            && !manifest.project_key.trim().is_empty()
+            && manifest.default_profile == "target"
+            && !manifest.workspace_unit.trim().is_empty()
+            && manifest.validation_entrypoint == "scripts/validate.ps1"
+            && manifest.policy_schema_version == 1
+            && manifest.evidence_schema_version == 1
+            && !manifest.cargo_workspaces.is_empty()
+            && manifest.limits.is_table()
+            && manifest.classification.is_table()
+            && !manifest.unit_mappings.is_empty()
+            && manifest.fingerprints.is_table()
+    })
 }
 
 pub fn git_common_directory(root: &Path) -> Result<Option<PathBuf>, ProjectError> {
@@ -1313,6 +1363,51 @@ mod tests {
         assert!(is_excluded_relative_path(
             Path::new("src/generated/out.rs"),
             &policy
+        ));
+    }
+
+    #[test]
+    fn validation_project_manifest_preserves_local_management_identity() {
+        let root = std::env::temp_dir().join(format!(
+            "star-project-validation-manifest-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        fs::create_dir_all(root.join(".star-control")).unwrap();
+        fs::write(
+            root.join(".star-control/project.toml"),
+            include_str!("../../../../.star-control/project.toml"),
+        )
+        .unwrap();
+        let local_project_id = ProjectId::new();
+
+        let seed = ProjectSeed::discover_with_local_project_id(
+            &root.canonicalize().unwrap(),
+            Some(local_project_id.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(seed.identity_scope, IdentityScope::Local);
+        assert_eq!(seed.project_id, local_project_id);
+    }
+
+    #[test]
+    fn incomplete_validation_marker_is_not_accepted_as_local_identity() {
+        let root = std::env::temp_dir().join(format!(
+            "star-project-invalid-validation-manifest-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        fs::create_dir_all(root.join(".star-control")).unwrap();
+        fs::write(
+            root.join(".star-control/project.toml"),
+            "schema_version = 1\nproject_key = \"fixture\"\nvalidation_entrypoint = \"scripts/validate.ps1\"\n",
+        )
+        .unwrap();
+
+        assert!(matches!(
+            ProjectSeed::discover(&root.canonicalize().unwrap()),
+            Err(ProjectError::InvalidManifest)
         ));
     }
 

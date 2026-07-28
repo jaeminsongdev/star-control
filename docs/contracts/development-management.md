@@ -57,7 +57,7 @@ Project의 상세 상태는 project store가 소유하고 global store의 Projec
 
 | 선언 | Git 정본 위치 |
 |---|---|
-| Project | `.star-control/project.toml` |
+| Project | `.star-control/project.toml`의 shared identity shape; validation-manifest shape는 local identity를 유지 |
 | project config·scan scope | `.star-control/config.toml` |
 | project Rule enable·parameter | `.star-control/rules.toml` |
 | shared Suppression | `.star-control/suppressions.toml` |
@@ -278,7 +278,7 @@ Project는 하나의 관리 대상 source 경계다. Goal 안에서만 쓰는 �
 | `latest_revision_id` | 아니요 | 마지막 확인 ProjectRevision |
 | `latest_workspace_snapshot_id` | 아니요 | 마지막 실제 workspace 관찰 |
 
-`project_id`가 없는 폴더는 Controller가 새 local-only ProjectId를 발급해 즉시 local scan을 시작할 수 있다. local-only ID는 다른 PC에서 같은 project라는 보장이 없고 shared Baseline·Suppression 또는 장기 cross-project identity의 대상이 될 수 없다.
+`project_id`가 없는 폴더는 Controller가 새 local-only ProjectId를 발급해 즉시 local scan을 시작할 수 있다. 이 규칙은 같은 경로의 strict validation-manifest shape(`project_key`, `default_profile`, `validation_entrypoint` 등)에도 적용한다. validation manifest를 손상된 shared identity manifest로 오인하지 않지만, partial·mixed·unknown shape를 local로 묵인하지도 않는다. local-only ID는 다른 PC에서 같은 project라는 보장이 없고 shared Baseline·Suppression 또는 장기 cross-project identity의 대상이 될 수 없다.
 
 local-only Project를 공유할 때는 같은 ID를 담은 `.star-control/project.toml` PatchSet을 preview하고 명시적으로 적용·검증한다. 검증된 manifest의 `project_id`가 local ID와 정확히 일치한 뒤에만 `identity_scope=shared`로 바꾼다. 다른 ID가 이미 선언돼 있으면 자동 병합하지 않고 identity conflict로 중단한다.
 
