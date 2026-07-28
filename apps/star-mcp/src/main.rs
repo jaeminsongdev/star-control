@@ -512,9 +512,8 @@ fn ipc_response_semantics_valid(response: &IpcResponse) -> bool {
 fn map_client_error(error: ControllerClientError) -> GatewayError {
     match error {
         ControllerClientError::Unavailable => GatewayError::Controller(error.to_string()),
-        ControllerClientError::Authentication | ControllerClientError::MalformedResponse => {
-            GatewayError::Authentication
-        }
+        ControllerClientError::Authentication => GatewayError::Authentication,
+        ControllerClientError::MalformedResponse => GatewayError::MalformedResponse,
         ControllerClientError::ServerIdentityMismatch => GatewayError::ServerIdentityMismatch,
         ControllerClientError::ProtocolMismatch => GatewayError::ProtocolMismatch,
     }
@@ -621,6 +620,14 @@ async fn wait_for_desktop_owner_exit(owner: star_updater_core::process_census::P
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malformed_ipc_response_is_not_reported_as_authentication_failure() {
+        let error = map_client_error(ControllerClientError::MalformedResponse);
+        assert!(matches!(error, GatewayError::MalformedResponse));
+        assert_eq!(error.ipc_code(), "IPC_FRAME_INVALID");
+        assert!(!error.retryable());
+    }
 
     #[test]
     fn terminal_operation_preserves_the_complete_controller_error_envelope() {

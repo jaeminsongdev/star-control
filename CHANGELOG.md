@@ -9,6 +9,8 @@
 - Code Health 기능과 Runtime update 경로를 Codex operations Skill에 연결하고, main session 종료를 관찰하는 `SessionEnd` Hook 및 integration-only 후보 봉인 절차를 추가했다.
 - required core package 1.5.0에 project register·scan·index·Finding·Diagnostic 6개 action을 additive로 공개하고, Hook review surface를 Codex CLI `/hooks`로 명시했다.
 - validation-manifest shape의 `.star-control/project.toml`을 손상된 shared identity로 오인하지 않고 local ProjectId로 등록하도록 두 manifest 계약의 fail-closed 분기를 추가했다.
+- required core package 1.5.1에서 `scan.run`의 CodeIndexSnapshot을 bounded reference summary로 축약해 8 MiB IPC frame을 넘지 않게 하고, malformed IPC 응답을 인증 실패가 아닌 `IPC_FRAME_INVALID`로 분류한다.
+- Git history Radar item ID를 정본 token 문법에 맞춰 생성해 `maintenance radar git-history`가 실제 snapshot을 publish할 수 있게 했다.
 
 ## 0.1.0-scaffold - 2026-06-28
 

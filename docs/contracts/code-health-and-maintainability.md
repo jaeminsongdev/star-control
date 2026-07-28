@@ -53,6 +53,7 @@ Git source / CodeIndex
 ## identity·fingerprint·artifact·privacy
 
 - stable identity는 Project/revision, source relative location, symbol identity 또는 source-derived structural identity, Rule ID/version, normalized parameter, producer/config fingerprint 및 location contract로 만든다.
+- Git history Radar item ID는 component·debt marker 원문을 직접 이어 붙이지 않고 source identity의 SHA-256을 정본 token 문법으로 인코딩한다.
 - timestamp, run ID, cache hit, ArtifactRef path, raw source, raw author identity, private absolute path는 content fingerprint에 넣지 않는다.
 - line 이동은 identity를 바꾸지 않되 semantic/structural change, Rule version, source-class/cohort change, location contract change는 새 observation 또는 incompatible comparison을 만든다.
 - raw external result와 large metric은 redacted, content-addressed `ArtifactRef`로 보존한다. secret-bearing message, credential, personal path, author name/email는 redacted shape와 bounded code만 보존하며 원문·hash를 저장하지 않는다.

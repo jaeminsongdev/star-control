@@ -1731,6 +1731,27 @@ fn serialize_management_controller_result(
     })
 }
 
+const MAX_SCAN_ACTION_RESULT_BYTES: usize = 64 * 1024;
+
+fn serialize_bounded_scan_controller_result(
+    result: impl serde::Serialize,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let value = serialize_management_controller_result(result)?;
+    let encoded = serde_json::to_vec(&value).map_err(|_| {
+        (
+            "TOOL_PROTOCOL_INVALID",
+            "The management result could not be serialized.",
+        )
+    })?;
+    if encoded.len() > MAX_SCAN_ACTION_RESULT_BYTES {
+        return Err((
+            "TOOL_PROTOCOL_INVALID",
+            "The scan result exceeded its bounded transport contract.",
+        ));
+    }
+    Ok(value)
+}
+
 fn management_controller_project_id(
     arguments: &serde_json::Value,
 ) -> Result<ProjectId, RuntimeFailure> {
@@ -1786,7 +1807,28 @@ fn run_scan_command(
     let result = service
         .scan_project_with_mode(&project_id, idempotency_key, mode)
         .map_err(map_management_controller_error)?;
-    serialize_management_controller_result(result)
+    let code_index_snapshot = result.code_index_snapshot.map(|snapshot| {
+        serde_json::json!({
+            "schema_id": snapshot.schema_id,
+            "schema_version": snapshot.schema_version,
+            "code_index_snapshot_id": snapshot.code_index_snapshot_id,
+            "project_id": snapshot.project_id,
+            "checkout_id": snapshot.checkout_id,
+            "scan_run_id": snapshot.scan_run_id,
+            "generation_id": snapshot.generation_id,
+            "scan_mode": snapshot.scan_mode,
+            "required_tier": snapshot.required_tier,
+            "max_tier": snapshot.max_tier,
+            "counts": snapshot.counts,
+            "limitations": snapshot.limitations,
+            "content_fingerprint": snapshot.content_fingerprint,
+        })
+    });
+    serialize_bounded_scan_controller_result(serde_json::json!({
+        "scan_run": result.scan_run,
+        "code_index_snapshot": code_index_snapshot,
+        "finding_count": result.finding_count,
+    }))
 }
 
 fn run_index_status_command(
@@ -24301,6 +24343,17 @@ fn serialize_management_result(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scan_action_rejects_results_above_its_transport_budget() {
+        let oversized = serde_json::json!({
+            "value": "x".repeat(MAX_SCAN_ACTION_RESULT_BYTES + 1)
+        });
+        assert!(matches!(
+            serialize_bounded_scan_controller_result(oversized),
+            Err(("TOOL_PROTOCOL_INVALID", _))
+        ));
+    }
     use star_project::catalog::CatalogProjectRole;
 
     fn write_release_core_fixture(directory: &std::path::Path) -> &'static str {
@@ -25588,6 +25641,28 @@ mod tests {
         );
         assert_eq!(scan["scan_run"]["project_id"], project_id.as_str());
         assert!(scan["code_index_snapshot"].is_object());
+        assert!(scan["code_index_snapshot"]["counts"].is_object());
+        assert!(scan["code_index_snapshot"]["limitations"].is_array());
+        for unbounded in [
+            "partitions",
+            "coverage",
+            "freshness",
+            "toolchains",
+            "guidance",
+            "hardcoding_candidates",
+            "structural_clone_candidates",
+            "complexity_metric_candidates",
+            "artifact_refs",
+        ] {
+            assert!(
+                scan["code_index_snapshot"].get(unbounded).is_none(),
+                "scan.run must not return the unbounded {unbounded} collection"
+            );
+        }
+        assert!(
+            serde_json::to_vec(&scan).unwrap().len() < 64 * 1024,
+            "scan.run must remain a bounded MCP/IPC result"
+        );
 
         let status = invoke("index.status", serde_json::json!({"project_id":project_id}));
         assert_eq!(status["current"], true);

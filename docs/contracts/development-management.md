@@ -132,7 +132,7 @@ star MCP ───────┘                                 │
 | `project.list`, `project.get` | catalog snapshot, filter, stable cursor | Project·ProjectCheckout view | 아니요 |
 | `project.refresh` | ProjectId, CheckoutId, source precondition | ProjectRevision, WorkspaceSnapshot | 예 |
 | `scan.plan` | ProjectId, CheckoutId, mode, effective config | scope·partition·limit plan | 아니요 |
-| `scan.run` | plan fingerprint, mode, idempotency key | ScanRun·CodeIndexSnapshot ref | 예 |
+| `scan.run` | plan fingerprint, mode, idempotency key | ScanRun·bounded CodeIndexSnapshot ref summary | 예 |
 | `scan.status` | ScanRunId 또는 ProjectId | partition·coverage·limitation | 아니요 |
 | `index.status` | ProjectId, CheckoutId | snapshot·freshness·coverage | 아니요 |
 | `index.search`, `index.definitions`, `index.references` | query/entity, scope, tier, freshness policy, cursor | quality envelope이 있는 match·edge | 아니요 |

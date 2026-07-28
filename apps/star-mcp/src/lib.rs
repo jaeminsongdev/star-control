@@ -76,6 +76,8 @@ pub enum GatewayError {
     Controller(String),
     #[error("Controller IPC authentication failed")]
     Authentication,
+    #[error("Controller IPC response was malformed")]
+    MalformedResponse,
     #[error("Controller IPC server identity mismatch")]
     ServerIdentityMismatch,
     #[error("Controller IPC protocol mismatch")]
@@ -88,6 +90,7 @@ impl GatewayError {
         match self {
             Self::Controller(_) => "IPC_CONTROLLER_UNAVAILABLE",
             Self::Authentication => "IPC_AUTH_FAILED",
+            Self::MalformedResponse => "IPC_FRAME_INVALID",
             Self::ServerIdentityMismatch => "IPC_SERVER_IDENTITY_MISMATCH",
             Self::ProtocolMismatch => "IPC_PROTOCOL_MISMATCH",
             Self::Cancelled => "TOOL_CANCELLED",

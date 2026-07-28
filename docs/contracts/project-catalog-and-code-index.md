@@ -688,7 +688,7 @@ query option은 `require_current`, `allow_stale_with_warning`, `snapshot_id` 중
 | `project.list`, `project.get` | catalog snapshot, filter, cursor | Project·Checkout view + freshness | 없음 |
 | `project.refresh` | ProjectId, CheckoutId, expected observation | ProjectRevision·WorkspaceSnapshot | 없음 |
 | `scan.plan` | ProjectId, CheckoutId, mode, effective config | scope·partition·estimated limit plan | 없음 |
-| `scan.run` | plan fingerprint, mode, idempotency key | ScanRun·CodeIndexSnapshot ref | 없음 |
+| `scan.run` | plan fingerprint, mode, idempotency key | ScanRun·bounded CodeIndexSnapshot ref summary | 없음 |
 | `scan.status` | ScanRunId 또는 ProjectId | state·partition·coverage·limitation | 없음 |
 | `index.status` | ProjectId·CheckoutId | snapshot·freshness·coverage | 없음 |
 | `index.search` | query, scope, tier, freshness policy, cursor | entity·source match + quality envelope | 없음 |

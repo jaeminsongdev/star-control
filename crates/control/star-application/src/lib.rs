@@ -617,6 +617,15 @@ pub struct GitHistoryRadarProjection {
     pub items: Vec<MaintenanceRadarItem>,
 }
 
+fn git_history_radar_item_id(namespace: &str, source_identity: &str) -> String {
+    let digest = Sha256Hash::digest(source_identity.as_bytes());
+    let digest = digest
+        .as_str()
+        .strip_prefix("sha256:")
+        .expect("Sha256Hash has the stable sha256 prefix");
+    format!("{namespace}.{digest}")
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct MultiRootDiscoveryResult {
     pub registrations: Vec<RegisterProjectResult>,
@@ -3361,7 +3370,7 @@ impl ManagementApplicationService {
             .components
             .iter()
             .map(|component| {
-                let item_id = format!("history-component:{}", component.component);
+                let item_id = git_history_radar_item_id("history-component", &component.component);
                 MaintenanceRadarItem {
                     item_id: item_id.clone(),
                     project_id: project_id.clone(),
@@ -3393,7 +3402,7 @@ impl ManagementApplicationService {
                 }
             })
             .chain(snapshot.debt_markers.iter().map(|marker| {
-                let item_id = format!("debt-marker:{}", marker.marker_id);
+                let item_id = git_history_radar_item_id("debt-marker", &marker.marker_id);
                 MaintenanceRadarItem {
                     item_id: item_id.clone(),
                     project_id: project_id.clone(),
@@ -12024,6 +12033,53 @@ mod tests {
         manifest: QualityRulePackManifest,
     }
 
+    struct FixtureGitHistoryProvider;
+
+    impl GitHistoryPort for FixtureGitHistoryProvider {
+        fn observe(
+            &self,
+            _project_root: &Path,
+            request: &GitHistoryObservationRequest,
+        ) -> Result<GitHistoryRiskSnapshot, star_ports::GitHistoryPortError> {
+            Ok(GitHistoryRiskSnapshot {
+                schema_id: star_contracts::maintenance_v2::GIT_HISTORY_RISK_SNAPSHOT_SCHEMA_ID
+                    .to_owned(),
+                schema_version: 1,
+                project_id: request.project_id.clone(),
+                repository_identity: Sha256Hash::digest(b"fixture-repository").to_string(),
+                range_start: "ROOT".to_owned(),
+                range_end: Sha256Hash::digest(b"fixture-revision").as_str()[7..47].to_owned(),
+                history_completeness:
+                    star_contracts::maintenance_v2::GitHistoryCompleteness::Complete,
+                codeowners_fingerprint: None,
+                components: vec![star_contracts::maintenance_v2::GitHistoryComponentRisk {
+                    component: "src".to_owned(),
+                    changed_file_count: 1,
+                    relative_churn: 8,
+                    change_burst: 1,
+                    opaque_owner_buckets: Vec::new(),
+                    declared_owner_count: 0,
+                    limitations: vec!["CODEOWNERS_MISSING_OR_UNMATCHED".to_owned()],
+                }],
+                debt_markers: vec![star_contracts::maintenance_v2::DebtMarkerObservation {
+                    marker_id: Sha256Hash::digest(b"debt-one").to_string(),
+                    project_relative_path: "src/lib.rs".to_owned(),
+                    marker_kind: "todo".to_owned(),
+                    line: 1,
+                    structured: false,
+                    owner_declared: false,
+                    issue_declared: false,
+                    replacement_declared: false,
+                    expiry: None,
+                    stale: false,
+                    limitations: Vec::new(),
+                }],
+                limitations: vec!["CODEOWNERS_MISSING".to_owned()],
+                content_fingerprint: Sha256Hash::digest(b"fixture-history"),
+            })
+        }
+    }
+
     impl QualityRulePackPort for FixtureQualityRulePackProvider {
         fn load(
             &self,
@@ -12242,6 +12298,61 @@ mod tests {
                 "fixture cache is full",
             ))
         }
+    }
+
+    #[test]
+    fn git_history_radar_items_use_publishable_stable_identifiers() {
+        let root = std::env::temp_dir().join(format!(
+            "star-git-radar-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        let source = root.join("source");
+        std::fs::create_dir_all(source.join("src")).unwrap();
+        std::fs::write(source.join("src/lib.rs"), "// TODO: fixture\n").unwrap();
+        let service = ManagementApplicationService::new(
+            Arc::new(SqliteManagementRepositorySet::open(root.join("management"), "test").unwrap()),
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("bindings")).unwrap()),
+            Arc::new(LocalArtifactStore::default()),
+        )
+        .with_git_history_adapter(Arc::new(FixtureGitHistoryProvider));
+        let project_id = service
+            .register_project(&source.canonicalize().unwrap(), "git-radar-register")
+            .unwrap()
+            .project
+            .project_id;
+        let evaluation_time = "2026-07-28T13:20:00Z";
+        let projection = service
+            .git_history_radar_projection(
+                &project_id,
+                None,
+                "HEAD".to_owned(),
+                100,
+                evaluation_time,
+            )
+            .unwrap();
+        assert_eq!(projection.items.len(), 2);
+        assert!(projection.items.iter().any(|item| {
+            item.item_id.starts_with("debt-marker.")
+                && item.item_id.len() == "debt-marker.".len() + 64
+        }));
+        assert!(projection.items.iter().any(|item| {
+            item.item_id.starts_with("history-component.")
+                && item.item_id.len() == "history-component.".len() + 64
+        }));
+        assert!(projection.items.iter().all(|item| {
+            item.item_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        }));
+        let published = star_development::maintenance_v2::build_maintenance_radar_snapshot(
+            "git-history-radar-fixture".to_owned(),
+            evaluation_time.to_owned(),
+            None,
+            projection.items,
+        )
+        .unwrap();
+        assert_eq!(published.items.len(), 2);
     }
 
     #[test]

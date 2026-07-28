@@ -22,13 +22,54 @@
       "oneOf": [
         {
           "type": "object",
-          "required": ["schema_id", "schema_version", "code_index_snapshot_id", "project_id", "scan_run_id", "content_fingerprint"],
+          "additionalProperties": false,
+          "required": [
+            "schema_id", "schema_version", "code_index_snapshot_id", "project_id",
+            "checkout_id", "scan_run_id", "generation_id", "scan_mode",
+            "required_tier", "max_tier", "counts", "limitations", "content_fingerprint"
+          ],
           "properties": {
             "schema_id": { "const": "star.code-index-snapshot" },
             "schema_version": { "const": 1 },
             "code_index_snapshot_id": { "type": "string", "pattern": "^cix_[a-z2-7]{52}$" },
             "project_id": { "type": "string", "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$" },
+            "checkout_id": { "type": "string", "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$" },
             "scan_run_id": { "type": "string", "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$" },
+            "generation_id": { "type": "string", "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$" },
+            "scan_mode": { "enum": ["full", "incremental"] },
+            "required_tier": { "enum": ["text", "syntax", "semantic"] },
+            "max_tier": { "enum": ["text", "syntax", "semantic"] },
+            "counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sources", "packages", "modules", "symbols", "definitions", "references", "graph_edges", "findings"],
+              "properties": {
+                "sources": { "type": "integer", "minimum": 0 },
+                "packages": { "type": "integer", "minimum": 0 },
+                "modules": { "type": "integer", "minimum": 0 },
+                "symbols": { "type": "integer", "minimum": 0 },
+                "definitions": { "type": "integer", "minimum": 0 },
+                "references": { "type": "integer", "minimum": 0 },
+                "graph_edges": { "type": "integer", "minimum": 0 },
+                "findings": { "type": "integer", "minimum": 0 }
+              }
+            },
+            "limitations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["code", "scope", "parameters"],
+                "properties": {
+                  "code": { "type": "string", "minLength": 1 },
+                  "scope": { "type": ["string", "null"] },
+                  "parameters": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                  }
+                }
+              }
+            },
             "content_fingerprint": { "$ref": "#/$defs/sha256" }
           }
         },
