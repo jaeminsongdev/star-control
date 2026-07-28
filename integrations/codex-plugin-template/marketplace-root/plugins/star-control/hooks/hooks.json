@@ -21,7 +21,7 @@
             "type": "command",
             "command": "star hook session-end",
             "commandWindows": "star hook session-end",
-            "timeout": 10
+            "timeout": 3
           }
         ]
       }

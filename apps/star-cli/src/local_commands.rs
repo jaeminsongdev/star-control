@@ -1,4 +1,4 @@
-use std::{io::Read, path::PathBuf, str::FromStr};
+use std::{future::Future, io::Read, path::PathBuf, str::FromStr, time::Duration};
 
 use star_adapter_codex::{CodexAdapterError, CodexIntegrationManager, IntegrationOptions};
 use star_adapter_windows::autostart::{self, AutostartError, AutostartState};
@@ -23,6 +23,9 @@ use star_updater_core::{
 
 const HOOK_INPUT_MAX_BYTES: u64 = 1024 * 1024;
 const SESSION_START_SKILL_NAME: &str = "star-control-operations";
+const SESSION_END_CODEX_HOST_TIMEOUT_SECONDS: u64 = 3;
+const SESSION_END_LIFECYCLE_REPORT_TIMEOUT: Duration =
+    Duration::from_secs(SESSION_END_CODEX_HOST_TIMEOUT_SECONDS - 1);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum LocalCommand {
@@ -116,6 +119,13 @@ impl HookEvent {
             Self::PostToolUse => "tool_finished",
             Self::SubagentStart => "subagent_started",
             Self::SubagentStop => "subagent_finished",
+        }
+    }
+
+    fn lifecycle_report_timeout(self) -> Option<Duration> {
+        match self {
+            Self::SessionEnd => Some(SESSION_END_LIFECYCLE_REPORT_TIMEOUT),
+            _ => None,
         }
     }
 }
@@ -1062,7 +1072,7 @@ async fn run_hook(event: HookEvent) -> i32 {
         );
         return 2;
     }
-    if let Err(error) = report_hook_lifecycle(event, session_id).await {
+    if let Err(error) = report_hook_lifecycle_with_host_budget(event, session_id).await {
         // A Hook must not turn a healthy Codex task into a failure merely
         // because the optional Controller is currently unavailable.  The
         // updater treats missing census evidence as a block, never as proof
@@ -1077,6 +1087,29 @@ async fn run_hook(event: HookEvent) -> i32 {
         );
     }
     0
+}
+
+async fn report_hook_lifecycle_with_host_budget(
+    event: HookEvent,
+    session_id: &str,
+) -> Result<(), String> {
+    enforce_hook_lifecycle_report_timeout(event, report_hook_lifecycle(event, session_id)).await
+}
+
+async fn enforce_hook_lifecycle_report_timeout<F>(event: HookEvent, report: F) -> Result<(), String>
+where
+    F: Future<Output = Result<(), String>>,
+{
+    let Some(timeout) = event.lifecycle_report_timeout() else {
+        return report.await;
+    };
+    tokio::time::timeout(timeout, report).await.map_err(|_| {
+        format!(
+            "{} lifecycle observation exceeded the {} ms internal Hook budget",
+            event.hook_event_name(),
+            timeout.as_millis()
+        )
+    })?
 }
 
 fn lifecycle_identifier_valid(value: &str) -> bool {
@@ -1385,6 +1418,35 @@ mod tests {
     fn session_end_uses_the_existing_bounded_root_stop_lifecycle() {
         assert_eq!(HookEvent::SessionEnd.hook_event_name(), "SessionEnd");
         assert_eq!(HookEvent::SessionEnd.lifecycle_event(), "root_stop");
+    }
+
+    #[test]
+    fn session_end_lifecycle_report_budget_stays_inside_codex_host_timeout() {
+        assert_eq!(
+            HookEvent::SessionEnd.lifecycle_report_timeout(),
+            Some(SESSION_END_LIFECYCLE_REPORT_TIMEOUT)
+        );
+        assert!(
+            SESSION_END_LIFECYCLE_REPORT_TIMEOUT
+                < Duration::from_secs(SESSION_END_CODEX_HOST_TIMEOUT_SECONDS)
+        );
+        assert_eq!(HookEvent::Stop.lifecycle_report_timeout(), None);
+    }
+
+    #[tokio::test]
+    async fn session_end_cancels_a_stalled_lifecycle_report() {
+        let result = enforce_hook_lifecycle_report_timeout(
+            HookEvent::SessionEnd,
+            std::future::pending::<Result<(), String>>(),
+        )
+        .await;
+        assert_eq!(
+            result,
+            Err(
+                "SessionEnd lifecycle observation exceeded the 2000 ms internal Hook budget"
+                    .to_owned()
+            )
+        );
     }
 
     #[test]

@@ -34,27 +34,24 @@
 | P-0071 전체 STRICT 리뷰·main 전달 | **DONE / PUSHED** | `9ab88e0e069540800a4701d4516ae9692837bc77`; final FULL 11/11과 STRICT review 뒤 `origin/main` readback까지 완료했다. |
 | P-0072 Windows x64 Runtime closure | **DONE / PUSHED / INSTALLED** | `f13533922fa68a906494e97cea4087578697d49c`; Runtime generation `rt_9582adc516129569`, source FULL 11/11·installed TARGET 8/8·Doctor 4/4, `origin/main` readback까지 완료했다. |
 | P-0073 Codex Plugin·Skill·Hook 재설계 | **DONE / INSTALLED / local commits** | operations Skill/metadata의 Code Health·updater route와 `SessionEnd` lifecycle을 x64 installed Updater로 적용했다. source FULL 11/11, installed TARGET 8/8, Doctor 4/4, rendered/cache identity와 terminal integration receipt를 확인했다. |
+| P-0074 SessionEnd 3초 계약 교정 | **ACTIVE** | Codex가 `timeout: 10`을 3초로 clamp하는 source 계약 불일치와 Hook IPC의 3초 초과 가능성을 source·검증기·설치본까지 교정한다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
-## P-0073 closure
+## P-0074 active
 
-- 범위: 설치형 Star-Control Plugin의 metadata·Skill·Hook·renderer/package allowlist와 Windows x64 적용 경로다.
-- 설계: 기존 `star-control-operations`와 7-component renderer 계약은 유지하고, 필요할 때만 읽는 `routing-matrix.md`에 Code Health·Runtime update 절차를 추가한다. 별도 Skill의 중복 implicit invocation을 피한다. 최신 Codex Hook 중 `SessionEnd`만 `root_stop` lifecycle로 연결한다. 구 Updater의 Hook renderer allowlist로는 이 최초 전환을 안전하게 bootstrap할 수 없어 complete x64 replacement를 installed Updater의 offline transaction으로 적용하며, 새 renderer 이후에는 integration-only reseal/apply를 사용한다.
-- 제외: 의미 없는 `PreCompact/PostCompact` 중복 Hook, exact PermissionPlan/Approval 결정을 구현하지 않은 `PermissionRequest`, public signing/publish, non-x64 build·native evidence, Codex cache/runtime DB 직접 수정이다.
-- preflight: `main`/clean, `HEAD == origin/main == f135339`; installed `D:\도구\Star-Control` x64 verified, integration registered, management normal/read_write다.
+- 범위: Plugin template의 `SessionEnd` timeout, rendered Hook validator, `star.exe hook session-end`의 Controller IPC budget, 관련 회귀 테스트·문서·x64 설치 적용이다.
+- 원인: 최신 Codex 계약은 `SessionEnd` 기본 1초·상한 3초인데 source/rendered/cache가 10초를 요청한다. 일반 CLI IPC의 connect 5초·response 10초 budget도 host 상한 안에서 종료된다는 보장이 없다.
+- 설계: `SessionEnd` 선언은 정확히 3초로 검증하고 다른 Hook의 기존 10초 계약은 유지한다. `SessionEnd`의 Controller lifecycle 관찰은 2초 내부 deadline으로 제한해 host 상한 전에 실패를 반환하며, 관찰 실패는 기존 fail-closed/advisory 의미와 exit 0을 유지한다.
+- 제외: Codex cache/runtime DB 직접 수정, `legacy/`·`target/` 정리, signing/publication, non-x64 output, 원격 push다.
+- preflight: `main` clean, `HEAD=cb73a4689374adf887920dea8d68a5146171502c`, `origin/main=f13533922fa68a906494e97cea4087578697d49c`; installed `D:\도구\Star-Control` x64 verified, integration registered, management normal/read_write다.
 - Profile closure: `project_understanding`, `docs_config_environment`, `architecture_quality`, `ai_development_validation`, `api_contract_change`, `test_correctness`, `security_supply_chain`, `ci_release_deploy`; fingerprint `sha256:23d783bff3df3ac39684ca52bad60cf870d2af606886f33ab8543459548fef43`.
 
 | 파일 | 상태 | 변경 요약 | 검증 상태 |
 |---|---|---|---|
-| Codex Plugin template | 구현됨 | metadata·operations Skill/routing 확장, `SessionEnd` Hook | plugin/skill validator pass |
-| `star-adapter-codex` | 구현됨 | 7-component inventory와 closed Hook event set render 검증 | package 22/22 pass |
-| `star.exe` Hook bridge | 구현됨 | `session-end` parse·lifecycle 관찰·help·회귀 테스트 | package 23/23 + doc test pass |
-| integration candidate seal | 검증됨 | fixed Bridge/Plugin-only delta와 outer/nested source identity 분리 | package 8/8 pass; 실제 별도 stage가 `codex_integration_update`, restart/rollback true |
-| source validation | 통과 | tracked MCP action `star.core.validation.run`, current inventory 23/23·Schema 217·MCP 170/170·Profile 16/16 | FULL 11/11 complete/stable/pass |
-| install/update evidence | 완료 | complete offline replacement 뒤 selector recovery를 fail-closed로 보존하고 reconcile, 이어 `star.exe` 1-file integration candidate 적용 | final receipt `exited`; active `rt_4f5e2b2ea6dbe52d` |
-| installed Plugin/Hook | 완료 | Plugin `0.1.0+codex.bf4f8319e732`, 7 rendered assets, cache 6/6 byte equality, exact 8 Hook events | Hook paired smoke exit 0, Doctor 4/4, TARGET 8/8 pass |
-
-- 완료 근거: [P-0073 적용 감사](docs/testing/p0073-codex-plugin-skill-hook-update-2026-07-28.md). STRICT review, source FULL, x64 candidate, installed Updater transaction, Runtime reconcile, rendered/cache identity, Hook smoke, Doctor와 installed TARGET을 모두 닫았다.
+| Plugin Hook template·Codex adapter | 예정 | event별 timeout 계약과 rendered 검증 | 미실행 |
+| CLI lifecycle Hook·IPC client | 예정 | host 상한보다 짧은 Hook 전용 deadline | 미실행 |
+| 테스트·architecture·적용 감사 | 예정 | clamp 회귀와 설치 후 증거 | 미실행 |
+| x64 rendered Plugin/cache | 예정 | source candidate를 Updater로 적용 | 미실행 |
 
 ## 열린 위험과 보류
 
@@ -63,10 +60,11 @@
 - R-0064: raw source, author name/email, secret 및 개인 absolute path는 ArtifactRef·fingerprint·Radar에 저장하지 않는다.
 - R-0065: Codex Hook은 보조 guardrail이다. `PermissionRequest`를 실제 Star-Control PermissionPlan/Approval 판정 없이 추가해 강제 통제로 표현하지 않는다.
 - R-0066: Codex Hook trust와 새 작업은 사용자 보안 경계다. `integration status`가 `hook_trust_required=true`, `requires_new_task=true`를 보존하며 제품은 Codex trust DB/cache를 직접 수정하지 않는다.
+- R-0067: `SessionEnd`는 advisory라 timeout이 Codex 작업을 막지는 않지만 `root_stop` 관찰을 잃을 수 있다. 내부 deadline과 updater의 보수적 process census를 함께 유지한다.
 
 ## Context Pack
 
-- 현재 목표: P-0062~P-0073 Code Health와 Codex integration x64 closure는 완료됐다. detailed P-0073 evidence는 `docs/testing/p0073-codex-plugin-skill-hook-update-2026-07-28.md`가 소유한다.
-- 다음 명령: source evidence 재생성 → final FULL → closure local commit. 이후 작업은 사용자 Hook trust, signing/publication 또는 별도 승인된 remote push다.
+- 현재 목표: P-0074에서 `SessionEnd` 3초 host 계약과 내부 bounded IPC를 source부터 x64 설치본까지 교정한다. P-0073 상세는 `docs/testing/p0073-codex-plugin-skill-hook-update-2026-07-28.md`가 소유한다.
+- 다음 명령: 회귀 테스트를 먼저 추가하고 구현 → TARGET → source evidence 재생성 → FULL → Updater candidate inspect/apply → installed 검증 → closure local commit.
 - 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache 직접 수정, signing/publication, non-x64 output.
-- 다음 완료 기준: final current-fingerprint FULL과 clean local closure commit. Hook trust·signing·non-x64·remote delivery는 별도 외부/사용자 Gate로 남긴다.
+- 다음 완료 기준: source FULL, `SessionEnd timeout=3`, bounded failure regression, terminal Updater receipt, rendered/cache equality, Hook smoke와 Doctor/TARGET, clean local closure commit이다. Hook trust·signing·non-x64·remote delivery는 별도 Gate로 남긴다.

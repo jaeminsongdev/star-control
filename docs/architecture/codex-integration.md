@@ -71,6 +71,7 @@ Controller는 watcher와 호출 직전 demand scan으로 TOML·Schema·EXE 변�
 
 - `SessionStart(source=compact)`가 compaction 뒤 context를 다시 주입하므로 `PreCompact`와 `PostCompact`를 중복 등록하지 않는다.
 - `PermissionRequest`는 tool name과 permission request를 Star-Control의 exact PermissionPlan·Approval scope에 결합하는 별도 계약이 생기기 전에는 등록하지 않는다. observation-only Hook을 권한 강제로 표현하지 않는다.
+- Codex의 `SessionEnd` timeout 상한은 3초다. Plugin은 정확히 3초를 선언하고 `star.exe`의 Controller lifecycle 관찰에는 2초 내부 deadline을 적용해 process 시작·입출력·정리 여유를 남긴다. 다른 lifecycle Hook의 기존 10초 선언은 유지한다.
 - Hook definition이 바뀌면 Codex의 신뢰 검토가 다시 필요하다. Plugin/Bridge 변경은 candidate review가 `requires_codex_restart=true`를 반환한 경우에만 전용 Updater restart transaction으로 적용한다.
 - lifecycle observation 중 Controller가 unavailable이면 Hook은 Codex 작업을 실패시키지 않고 evidence 누락을 남긴다. 누락 evidence를 idle·pass·approval로 승격하지 않는다.
 

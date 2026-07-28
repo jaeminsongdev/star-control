@@ -259,7 +259,7 @@ update·repair에서 task를 해제하면 자동 시작은 exact owned value를 
 - 실제 Codex CLI를 실행할 수 없는 환경에서 `manual_action_required`가 되는지 검사
 - rendered Plugin validator와 JSON parse
 - source/rendered 7-file exact set, Skill agent metadata의 MCP dependency, 23개 기능·16개 Profile routing coverage 검사
-- SessionStart exact snapshot, 고정 MCP tool reference, Catalog-declared CLI-only route와 ready action 0건의 native fallback 검사
+- SessionStart exact snapshot, `SessionEnd timeout=3`과 2초 내부 lifecycle deadline, 고정 MCP tool reference, Catalog-declared CLI-only route와 ready action 0건의 native fallback 검사
 - updater 후보의 새 Skill 자산 추가·적용·검증·rollback과 installer의 `star-updater.exe` 재빌드·필수 자산 manifest 검사를 확인
 - `cargo fmt --check`, target crate tests, workspace tests, package script check, `git diff --check`
 - `legacy/` 무변경과 사용자 변경 보존 확인

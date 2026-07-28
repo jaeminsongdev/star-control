@@ -92,6 +92,8 @@ const PLUGIN_SHORT_DESCRIPTION: &str = "Use Star-Control actions, Profiles, and 
 const PLUGIN_LONG_DESCRIPTION: &str = "Connects Codex to the installed Star-Control gateway, resolves declarative Profiles, routes code-health and validation work through ready MCP actions or Catalog-declared CLI-only features, and keeps Runtime updates, approvals, evidence, and native fallback explicit.";
 const PLUGIN_DEFAULT_PROMPT: &str = "Use $star-control-operations to route this task through Star-Control actions, Profiles, code-health checks, or installed lifecycle commands while preserving approvals, evidence, and fallback status.";
 const HOOK_STATUS_MESSAGE: &str = "Loading Star-Control operations";
+const DEFAULT_LIFECYCLE_HOOK_TIMEOUT_SECONDS: u64 = 10;
+const SESSION_END_HOOK_TIMEOUT_SECONDS: u64 = 3;
 const LIFECYCLE_HOOK_EVENTS: &[&str] = &[
     "SessionStart",
     "SessionEnd",
@@ -662,6 +664,11 @@ fn validate_rendered_hook_commands(
         {
             return Err(CodexAdapterError::InvalidRenderedPlugin);
         }
+        if handler.get("timeout").and_then(serde_json::Value::as_u64)
+            != Some(lifecycle_hook_timeout_seconds(event_name))
+        {
+            return Err(CodexAdapterError::InvalidRenderedPlugin);
+        }
         if *event_name == "SessionStart"
             && handler
                 .get("statusMessage")
@@ -672,6 +679,14 @@ fn validate_rendered_hook_commands(
         }
     }
     Ok(())
+}
+
+fn lifecycle_hook_timeout_seconds(event_name: &str) -> u64 {
+    if event_name == "SessionEnd" {
+        SESSION_END_HOOK_TIMEOUT_SECONDS
+    } else {
+        DEFAULT_LIFECYCLE_HOOK_TIMEOUT_SECONDS
+    }
 }
 
 fn lifecycle_hook_event_set_valid(events: &serde_json::Map<String, serde_json::Value>) -> bool {
@@ -1318,6 +1333,55 @@ mod tests {
         let mut widened = events.clone();
         widened.insert("PermissionRequest".to_owned(), serde_json::json!([]));
         assert!(!lifecycle_hook_event_set_valid(&widened));
+    }
+
+    #[test]
+    fn hook_timeout_contract_matches_codex_host_limits() {
+        let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../integrations/codex-plugin-template/marketplace-root");
+        let source = read_source_files(&source_root).unwrap();
+        let hooks = strict_object(&source, HOOKS_RELATIVE).unwrap();
+        let events = hooks
+            .get("hooks")
+            .and_then(serde_json::Value::as_object)
+            .unwrap();
+
+        for event_name in LIFECYCLE_HOOK_EVENTS {
+            let handler = lifecycle_hook_handler(events, event_name).unwrap();
+            assert_eq!(
+                handler.get("timeout").and_then(serde_json::Value::as_u64),
+                Some(lifecycle_hook_timeout_seconds(event_name)),
+                "unexpected timeout for {event_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn rendered_session_end_timeout_drift_is_rejected() {
+        let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../integrations/codex-plugin-template/marketplace-root");
+        let source = read_source_files(&source_root).unwrap();
+        let install = Path::new(r"D:\도구\Star-Control 시험");
+        let mut rendered = render_files(&source, install, "0.1.0+codex.0123456789ab").unwrap();
+        let mut hooks: serde_json::Value =
+            serde_json::from_slice(rendered.get(HOOKS_RELATIVE).expect("rendered hooks exist"))
+                .unwrap();
+        let events = hooks
+            .get_mut("hooks")
+            .and_then(serde_json::Value::as_object_mut)
+            .unwrap();
+        lifecycle_hook_handler_mut(events, "SessionEnd")
+            .unwrap()
+            .insert("timeout".to_owned(), 10.into());
+        rendered.insert(
+            HOOKS_RELATIVE.to_owned(),
+            serde_json::to_vec_pretty(&hooks).unwrap(),
+        );
+
+        assert!(matches!(
+            validate_rendered(&rendered, install, "0.1.0+codex.0123456789ab"),
+            Err(CodexAdapterError::InvalidRenderedPlugin)
+        ));
     }
 
     #[test]

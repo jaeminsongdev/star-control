@@ -219,6 +219,7 @@ $codexHookTemplate = Get-Content -LiteralPath (Join-Path $repositoryRoot 'integr
 $codexHookNames = @($codexHookTemplate.hooks.PSObject.Properties.Name)
 Assert-ValidationContract -Condition ('SessionEnd' -in $codexHookNames) -Message 'Codex integration observes the main session end lifecycle'
 Assert-ValidationContract -Condition ($codexHookTemplate.hooks.SessionEnd[0].hooks[0].command -eq 'star hook session-end') -Message 'SessionEnd uses the installed Hook bridge'
+Assert-ValidationContract -Condition ($codexHookTemplate.hooks.SessionEnd[0].hooks[0].timeout -eq 3) -Message 'SessionEnd stays within the Codex three-second host limit'
 foreach ($unboundHook in @('PermissionRequest', 'PreCompact', 'PostCompact')) {
     Assert-ValidationContract -Condition ($unboundHook -notin $codexHookNames) -Message "Codex integration must not overstate an unbound Hook contract: $unboundHook"
 }
