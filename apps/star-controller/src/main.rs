@@ -1808,6 +1808,14 @@ fn run_scan_command(
         .scan_project_with_mode(&project_id, idempotency_key, mode)
         .map_err(map_management_controller_error)?;
     let code_index_snapshot = result.code_index_snapshot.map(|snapshot| {
+        let limitation_count = snapshot.limitations.len();
+        let mut limitation_codes = snapshot
+            .limitations
+            .into_iter()
+            .map(|limitation| limitation.code)
+            .collect::<Vec<_>>();
+        limitation_codes.sort();
+        limitation_codes.dedup();
         serde_json::json!({
             "schema_id": snapshot.schema_id,
             "schema_version": snapshot.schema_version,
@@ -1820,7 +1828,8 @@ fn run_scan_command(
             "required_tier": snapshot.required_tier,
             "max_tier": snapshot.max_tier,
             "counts": snapshot.counts,
-            "limitations": snapshot.limitations,
+            "limitation_count": limitation_count,
+            "limitation_codes": limitation_codes,
             "content_fingerprint": snapshot.content_fingerprint,
         })
     });
@@ -25642,7 +25651,9 @@ mod tests {
         assert_eq!(scan["scan_run"]["project_id"], project_id.as_str());
         assert!(scan["code_index_snapshot"].is_object());
         assert!(scan["code_index_snapshot"]["counts"].is_object());
-        assert!(scan["code_index_snapshot"]["limitations"].is_array());
+        assert!(scan["code_index_snapshot"]["limitation_count"].is_number());
+        assert!(scan["code_index_snapshot"]["limitation_codes"].is_array());
+        assert!(scan["code_index_snapshot"].get("limitations").is_none());
         for unbounded in [
             "partitions",
             "coverage",
