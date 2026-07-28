@@ -226,6 +226,7 @@ foreach ($unboundHook in @('PermissionRequest', 'PreCompact', 'PostCompact')) {
 $windowsInstallerSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'packaging/windows/star-control.iss') -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($windowsInstallerSource.Contains('including SessionStart and SessionEnd')) -Message 'Windows installer explains the complete trusted Hook set'
 Assert-ValidationContract -Condition ($windowsInstallerSource.Contains('SessionStart와 SessionEnd를 포함한')) -Message 'Windows installer Korean notice explains the complete trusted Hook set'
+Assert-ValidationContract -Condition ($windowsInstallerSource.Contains('Codex CLI /hooks browser')) -Message 'Windows installer names the actual Hook review surface'
 
 $codexOperationsSkill = Get-Content -LiteralPath (Join-Path $repositoryRoot 'integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md') -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($codexOperationsSkill.Contains('## 4. Code Health')) -Message 'Codex operations Skill routes current Code Health features'

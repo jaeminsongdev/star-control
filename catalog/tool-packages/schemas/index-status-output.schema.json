@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/index-status-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["snapshot", "current"],
+  "properties": {
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "schema_id", "schema_version", "code_index_snapshot_id", "project_id",
+        "scan_run_id", "required_tier", "max_tier", "coverage", "counts",
+        "freshness", "limitations", "content_fingerprint"
+      ],
+      "properties": {
+        "schema_id": { "const": "star.code-index-snapshot" },
+        "schema_version": { "const": 1 },
+        "code_index_snapshot_id": { "type": "string", "pattern": "^cix_[a-z2-7]{52}$" },
+        "project_id": { "type": "string", "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "scan_run_id": { "type": "string", "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "required_tier": { "$ref": "#/$defs/tier" },
+        "max_tier": { "$ref": "#/$defs/tier" },
+        "coverage": { "type": "array" },
+        "counts": { "type": "object" },
+        "freshness": { "type": "array" },
+        "limitations": { "type": "array" },
+        "content_fingerprint": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "current": { "type": "boolean" }
+  },
+  "$defs": {
+    "tier": { "enum": ["text", "syntax", "semantic"] },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

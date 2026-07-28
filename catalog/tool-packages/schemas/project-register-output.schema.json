@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/project-register-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project", "checkout", "coordinated_operation"],
+  "properties": {
+    "project": {
+      "type": "object",
+      "required": [
+        "schema_id", "schema_version", "project_id", "identity_scope",
+        "display_name", "repository_kind", "source_of_truth",
+        "declaration_fingerprint", "registration_state", "attached_checkout_ids"
+      ],
+      "properties": {
+        "schema_id": { "const": "star.project" },
+        "schema_version": { "const": 2 },
+        "project_id": { "$ref": "#/$defs/project_id" },
+        "identity_scope": { "enum": ["shared", "local"] },
+        "display_name": { "type": "string", "minLength": 1 },
+        "repository_kind": { "enum": ["git", "none"] },
+        "source_of_truth": { "type": "array", "items": { "type": "string" } },
+        "declaration_fingerprint": { "$ref": "#/$defs/sha256" },
+        "registration_state": { "enum": ["attached", "detached", "invalid"] },
+        "attached_checkout_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/checkout_id" }
+        }
+      }
+    },
+    "checkout": {
+      "type": "object",
+      "required": [
+        "schema_id", "schema_version", "checkout_id", "project_id",
+        "repository_kind", "checkout_kind", "head_state", "attachment_state",
+        "last_observed_at", "limitations", "content_fingerprint"
+      ],
+      "properties": {
+        "schema_id": { "const": "star.project-checkout" },
+        "schema_version": { "const": 1 },
+        "checkout_id": { "$ref": "#/$defs/checkout_id" },
+        "project_id": { "$ref": "#/$defs/project_id" },
+        "repository_kind": { "enum": ["git", "none"] },
+        "checkout_kind": { "enum": ["main_worktree", "linked_worktree", "clone", "filesystem_root"] },
+        "head_state": { "enum": ["branch", "detached", "unborn", "unavailable"] },
+        "attachment_state": { "enum": ["attached", "detached", "missing", "identity_conflict", "unsupported"] },
+        "last_observed_at": { "type": "string", "format": "date-time" },
+        "limitations": { "type": "array", "items": { "type": "string" } },
+        "content_fingerprint": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "coordinated_operation": {
+      "type": "object",
+      "required": [
+        "schema_id", "schema_version", "coordinated_operation_id",
+        "idempotency_key", "command_kind", "input_fingerprint",
+        "permission_scope_fingerprint", "expected_version_vector",
+        "participants", "state", "diagnostic_refs", "artifact_refs",
+        "created_at", "updated_at"
+      ],
+      "properties": {
+        "schema_id": { "const": "star.coordinated-operation" },
+        "schema_version": { "const": 1 },
+        "coordinated_operation_id": { "type": "string", "pattern": "^cop_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "command_kind": { "const": "project.register" },
+        "input_fingerprint": { "$ref": "#/$defs/sha256" },
+        "permission_scope_fingerprint": { "$ref": "#/$defs/sha256" },
+        "expected_version_vector": { "type": "object" },
+        "participants": { "type": "array" },
+        "state": { "enum": ["prepared", "applying", "completed", "blocked", "outcome_unknown"] },
+        "diagnostic_refs": { "type": "array", "items": { "type": "string" } },
+        "artifact_refs": { "type": "array" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "$defs": {
+    "project_id": { "type": "string", "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "checkout_id": { "type": "string", "pattern": "^cko_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

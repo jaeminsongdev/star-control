@@ -834,7 +834,7 @@ Star-Control이 소유하는 것은 이 도구의 **선택 가능한 descriptor,
 
 | 구분 | 현재 상태 |
 |---|---|
-| 구현됨 | P0와 P-0041~P-0056 bounded M1~M11 Slice, required core 17/17 source/current readiness, P-0026 installer transport, P-0039 4-EXE updater lifecycle, manifest-owned recovery·무재시작 reconcile, payload-content Runtime identity, receipt-bound ReleaseManifest/lifecycle, precommitted evaluation case/policy, actual finding/suppression/cost/budget/Radar와 23/16 final audit, exact GitHub publisher·receipt/readback 경로 |
+| 구현됨 | P0와 P-0041~P-0075 bounded Slice, required core source 23/23와 installed `d825516` 17/17의 분리 상태, P-0026 installer transport, P-0039 4-EXE updater lifecycle, manifest-owned recovery·무재시작 reconcile, payload-content Runtime identity, receipt-bound ReleaseManifest/lifecycle, precommitted evaluation case/policy, actual finding/suppression/cost/budget/Radar와 23/16 final audit, exact GitHub publisher·receipt/readback 경로 |
 | 후속 제품 확장 | current bounded Slice의 pass를 임의 provider/language·native ARM64·signed publication에 일반화하지 않음 |
 | 외부/환경 gate | Authenticode certificate·private key·trusted timestamp provider, signed Windows x64 lifecycle, signed provenance와 signed final GitHub publication/readback |
 | 별도 사용자 승인 gate | package/dependency 설치, system setting, paid CI/signing, publish·deploy·withdrawal·remote/account effect |

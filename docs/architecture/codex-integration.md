@@ -25,7 +25,7 @@ Plugin 설치만으로 검사 코드를 자동 신뢰하지는 않는다. 사용
 ## 시작 흐름
 
 1. `SessionStart` Hook이 fixed MCP/CLI 경계와 `star-control-operations` Skill 사용 지침을 추가하고 session lifecycle을 관찰한다.
-2. Skill이 요청을 MCP-first, Catalog-declared CLI-only, installed local lifecycle 또는 명시적 native fallback으로 분류한다.
+2. Skill이 요청을 MCP-first, Catalog-declared CLI-only, installed local lifecycle 또는 명시적 native fallback으로 분류한다. Code Health는 `project.register` → `scan.run` → `index.status|search` → `finding.list|diagnostic.list`의 live action을 우선한다.
 3. 실제 product action은 live Registry의 readiness·Schema·risk lane·descriptor hash를 확인한 뒤 Controller의 같은 application command로 실행한다.
 4. Codex 권한과 Star-Control 승인·PermissionPlan은 서로를 대신하지 않는다. 각 경계에서 요구한 승인을 모두 보존한다.
 5. Hook lifecycle evidence, operation terminal result와 실제 ChangeSet·Gate를 결합해 완료를 판정한다.

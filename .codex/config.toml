@@ -1,0 +1,10 @@
+# Star-Control은 로컬 source, management state와 설치 lifecycle을 다루므로
+# 기본 작업은 workspace 안에 가두고 범위 확장이 필요할 때 사용자 승인을 받는다.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = false
+
+[features]
+hooks = true

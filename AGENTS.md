@@ -62,3 +62,11 @@
 - 검증을 통과시키기 위해 테스트·정책·증거를 약화하거나 실패를 숨기지 않는다.
 - 완료 보고에는 변경 파일, 실행 명령, 종료 코드, 소요시간, 실패 요약과 남은 위험만 간결하게 남긴다.
 - 공식 Codex 기능을 설명할 때는 최신 OpenAI 공식 문서를 근거로 한다.
+
+## Codex 코드 품질 기본 흐름
+
+- 코드 품질 조사는 `star_tool_search`·`star_tool_describe`로 `project.register` → `scan.run` → `index.status|search` → `finding.list|diagnostic.list`의 live readiness를 먼저 확인한다.
+- Code Health Radar, Git history·ownership·debt, Rule Pack과 Evaluation은 Catalog가 선언한 CLI-only command를 사용하고 MCP action이 non-ready인 기능을 CLI로 우회하지 않는다.
+- 외부 semantic·mutation·posture provider는 exact descriptor·executable·protocol·artifact binding이 있을 때만 결과로 인정하며 executable 존재만으로 registered/verified를 주장하지 않는다.
+- 공개 API·Schema·공통 코어·release 변경은 FULL 뒤 STRICT 자체 리뷰를 수행한다. current source fingerprint와 연결되지 않은 과거 report는 현재 완료 증거가 아니다.
+- Hook 검토가 필요하면 Desktop 설정 화면이 아니라 Codex CLI `/hooks` browser를 사용한다. 제품과 AI는 Hook trust 저장소를 직접 수정하지 않는다.

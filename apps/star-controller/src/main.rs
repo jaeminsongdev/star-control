@@ -834,10 +834,16 @@ fn revoked_package_ids(registry: &RegistryRuntime, trust: &TrustStore) -> BTreeS
 
 type SyncControllerCommandHandler =
     fn(&serde_json::Value) -> Result<serde_json::Value, RuntimeFailure>;
+type ManagementControllerCommandHandler = fn(
+    &ManagementApplicationService,
+    &std::path::Path,
+    &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure>;
 
 #[derive(Clone, Copy)]
 enum ControllerCommandHandler {
     Sync(SyncControllerCommandHandler),
+    Management(ManagementControllerCommandHandler),
     ValidationRun,
 }
 
@@ -1021,8 +1027,8 @@ const PRODUCT_FEATURE_RUNTIME_SPECS: &[ProductFeatureRuntimeSpec] = &[
 
 // Readiness requires all three surfaces to agree: this list, the concrete
 // handler registry below, and both resolved action Schemas. Tests fail if any
-// surface drifts. Project registration is intentionally outside the required
-// release-core surface; the M9 merge/handoff readers are now active.
+// surface drifts. Management-backed Code Health actions reuse the existing
+// single-writer application service; the M9 merge/handoff readers remain active.
 const IMPLEMENTED_CONTROLLER_COMMANDS: &[&str] = &[
     "goal.start",
     "goal.answer",
@@ -1039,6 +1045,12 @@ const IMPLEMENTED_CONTROLLER_COMMANDS: &[&str] = &[
     "doctor.run",
     "project.list",
     "project.status",
+    "project.register",
+    "scan.run",
+    "index.status",
+    "index.search",
+    "finding.list",
+    "diagnostic.list",
     "validation.plan",
     "validation.run",
 ];
@@ -1102,6 +1114,30 @@ const CONTROLLER_COMMAND_HANDLERS: &[ControllerCommandRegistration] = &[
     ControllerCommandRegistration {
         backend_ref: "project.status",
         handler: ControllerCommandHandler::Sync(run_project_status_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "project.register",
+        handler: ControllerCommandHandler::Management(run_project_register_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "scan.run",
+        handler: ControllerCommandHandler::Management(run_scan_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "index.status",
+        handler: ControllerCommandHandler::Management(run_index_status_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "index.search",
+        handler: ControllerCommandHandler::Management(run_index_search_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "finding.list",
+        handler: ControllerCommandHandler::Management(run_finding_list_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "diagnostic.list",
+        handler: ControllerCommandHandler::Management(run_diagnostic_list_command),
     },
     ControllerCommandRegistration {
         backend_ref: "validation.plan",
@@ -1588,6 +1624,239 @@ fn run_project_status_command(
             "The project status view could not be serialized.",
         )
     })
+}
+
+fn map_management_controller_error(error: ApplicationError) -> RuntimeFailure {
+    match error {
+        ApplicationError::Invalid => (
+            "TOOL_ARGUMENT_INVALID",
+            "The management command arguments are invalid.",
+        ),
+        ApplicationError::NotFound => (
+            "PROJECT_NOT_ATTACHED",
+            "The requested management object does not exist.",
+        ),
+        ApplicationError::IndexNotCurrent => (
+            "PLANNING_SNAPSHOT_STALE",
+            "The requested code index is stale or unverified.",
+        ),
+        ApplicationError::GitHistoryUnavailable => (
+            "SCAN_INCOMPLETE",
+            "The read-only Git history observation is unavailable or unverified.",
+        ),
+        ApplicationError::MutationTestingUnavailable
+        | ApplicationError::QualityRulePackUnavailable
+        | ApplicationError::RepositoryPostureUnavailable => (
+            "SCAN_INCOMPLETE",
+            "A registered external maintenance provider is unavailable or unverified.",
+        ),
+        ApplicationError::IndexIdentityConflict => (
+            "PLANNING_OUTPUT_COHERENCE",
+            "The same code index analysis input produced conflicting content.",
+        ),
+        ApplicationError::Repository(error) => match error.category {
+            RepositoryErrorCategory::Unavailable => (
+                "MANAGEMENT_STORE_UNAVAILABLE",
+                "The Controller cannot access the management store.",
+            ),
+            RepositoryErrorCategory::Busy | RepositoryErrorCategory::QuotaExceeded => (
+                "MANAGEMENT_STORE_BUSY",
+                "The management store is busy or over its configured quota.",
+            ),
+            RepositoryErrorCategory::RevisionConflict => (
+                "MANAGEMENT_REVISION_CONFLICT",
+                "The management state changed after it was observed.",
+            ),
+            RepositoryErrorCategory::IdempotencyConflict => (
+                "MANAGEMENT_IDEMPOTENCY_CONFLICT",
+                "The idempotency key is already bound to different input.",
+            ),
+            RepositoryErrorCategory::MigrationRequired => (
+                "MANAGEMENT_MIGRATION_REQUIRED",
+                "The management store requires an explicit migration.",
+            ),
+            RepositoryErrorCategory::IncompatibleVersion => (
+                "MANAGEMENT_VERSION_UNSUPPORTED",
+                "The management store version is unsupported.",
+            ),
+            RepositoryErrorCategory::IntegrityFailed | RepositoryErrorCategory::Corrupt => (
+                "MANAGEMENT_INTEGRITY_FAILED",
+                "The management store failed its integrity boundary.",
+            ),
+            RepositoryErrorCategory::ReadOnly => {
+                ("MANAGEMENT_READ_ONLY", "The management store is read-only.")
+            }
+            RepositoryErrorCategory::NotFound | RepositoryErrorCategory::Invalid => (
+                "MANAGEMENT_IDENTITY_CONFLICT",
+                "The management store identity is invalid or unavailable.",
+            ),
+        },
+        ApplicationError::Project(_) => (
+            "SCAN_INCOMPLETE",
+            "The Controller could not safely observe the project.",
+        ),
+        ApplicationError::Planning(_) | ApplicationError::ProfileContract(_) => (
+            "PLANNING_OUTPUT_COHERENCE",
+            "The request could not produce a coherent planning projection.",
+        ),
+        ApplicationError::CheckGraph(_)
+        | ApplicationError::Validation(_)
+        | ApplicationError::ProcessExecutor(_) => (
+            "VALIDATION_EVIDENCE_INCOMPLETE",
+            "The request could not produce complete validation evidence.",
+        ),
+        ApplicationError::Execution(_) | ApplicationError::RustStyle(_) => (
+            "PATCH_PREVIEW_INCOMPLETE",
+            "The request could not produce a complete immutable change preview.",
+        ),
+        ApplicationError::Apply(_) => (
+            "DEVELOPMENT_OPERATION_BLOCKED",
+            "The operation was rejected by its stable safety contract.",
+        ),
+        ApplicationError::ProfileCatalog(_) => (
+            "CATALOG_LIFECYCLE_MIGRATION_REQUIRED",
+            "The installed development profile catalog is incomplete or invalid.",
+        ),
+    }
+}
+
+fn serialize_management_controller_result(
+    result: impl serde::Serialize,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    serde_json::to_value(result).map_err(|_| {
+        (
+            "TOOL_PROTOCOL_INVALID",
+            "The management result could not be serialized.",
+        )
+    })
+}
+
+fn management_controller_project_id(
+    arguments: &serde_json::Value,
+) -> Result<ProjectId, RuntimeFailure> {
+    arguments
+        .get("project_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| ProjectId::parse(value.to_owned()).ok())
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "project_id must be a valid ProjectId.",
+        ))
+}
+
+fn run_project_register_command(
+    service: &ManagementApplicationService,
+    project_directory: &std::path::Path,
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    validate_project_registration_allowlist(arguments, project_directory)?;
+    let idempotency_key = arguments
+        .get("idempotency_key")
+        .and_then(serde_json::Value::as_str)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "idempotency_key is required for project registration.",
+        ))?;
+    let result = service
+        .register_project(project_directory, idempotency_key)
+        .map_err(map_management_controller_error)?;
+    serialize_management_controller_result(result)
+}
+
+fn run_scan_command(
+    service: &ManagementApplicationService,
+    _project_directory: &std::path::Path,
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let project_id = management_controller_project_id(arguments)?;
+    let idempotency_key = arguments
+        .get("idempotency_key")
+        .and_then(serde_json::Value::as_str)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "idempotency_key is required for a managed scan.",
+        ))?;
+    let mode = match arguments.get("mode").and_then(serde_json::Value::as_str) {
+        Some("full") => IndexScanMode::Full,
+        Some("incremental") => IndexScanMode::Incremental,
+        _ => {
+            return Err(("TOOL_ARGUMENT_INVALID", "mode must be full or incremental."));
+        }
+    };
+    let result = service
+        .scan_project_with_mode(&project_id, idempotency_key, mode)
+        .map_err(map_management_controller_error)?;
+    serialize_management_controller_result(result)
+}
+
+fn run_index_status_command(
+    service: &ManagementApplicationService,
+    _project_directory: &std::path::Path,
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let project_id = management_controller_project_id(arguments)?;
+    let result = service
+        .index_status(&project_id)
+        .map_err(map_management_controller_error)?;
+    serialize_management_controller_result(result)
+}
+
+fn run_index_search_command(
+    service: &ManagementApplicationService,
+    _project_directory: &std::path::Path,
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let project_id = management_controller_project_id(arguments)?;
+    let query = arguments
+        .get("query")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(("TOOL_ARGUMENT_INVALID", "query must be a non-empty string."))?;
+    let tier = match arguments.get("tier").and_then(serde_json::Value::as_str) {
+        Some("text") => IndexTier::Text,
+        Some("syntax") => IndexTier::Syntax,
+        Some("semantic") => IndexTier::Semantic,
+        _ => {
+            return Err((
+                "TOOL_ARGUMENT_INVALID",
+                "tier must be text, syntax, or semantic.",
+            ));
+        }
+    };
+    let require_current = arguments
+        .get("require_current")
+        .and_then(serde_json::Value::as_bool)
+        .ok_or((
+            "TOOL_ARGUMENT_INVALID",
+            "require_current must be a boolean.",
+        ))?;
+    let result = service
+        .index_search(&project_id, query, tier, require_current)
+        .map_err(map_management_controller_error)?;
+    serialize_management_controller_result(result)
+}
+
+fn run_finding_list_command(
+    service: &ManagementApplicationService,
+    _project_directory: &std::path::Path,
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let project_id = management_controller_project_id(arguments)?;
+    let items = service
+        .list_findings(&project_id)
+        .map_err(map_management_controller_error)?;
+    Ok(serde_json::json!({"items":items}))
+}
+
+fn run_diagnostic_list_command(
+    service: &ManagementApplicationService,
+    _project_directory: &std::path::Path,
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let project_id = management_controller_project_id(arguments)?;
+    let items = service
+        .list_validation_diagnostics_v2(&project_id)
+        .map_err(map_management_controller_error)?;
+    Ok(serde_json::json!({"items":items}))
 }
 
 fn run_validation_plan_command(
@@ -4053,7 +4322,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         SqliteManagementRepositorySet::open(&management_root, env!("CARGO_PKG_VERSION")).ok()
     };
-    let mut management_service = if let Some(repositories) = repositories {
+    let management_service = if let Some(repositories) = repositories {
         let mut service = ManagementApplicationService::new(
             Arc::new(repositories),
             Arc::new(WindowsProjectRootBindingStore::open(&root_binding_root)?),
@@ -4094,7 +4363,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(service)
     } else {
         None
-    };
+    }
+    .map(|service| Arc::new(Mutex::new(service)));
     let management_recovery = if management_service.is_none() {
         Some(SqliteManagementRecovery::open(
             &management_root,
@@ -4425,7 +4695,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
                 continue;
             }
-            if let Some(service) = management_service.as_mut() {
+            let mut management_service_guard = management_service.as_ref().map(|service| {
+                service
+                    .lock()
+                    .expect("management service mutex is not poisoned")
+            });
+            if let Some(service) = management_service_guard.as_deref_mut() {
                 service.set_scan_incremental(execution_config.scan_incremental);
                 service.set_scan_policy(execution_config.scan_policy.clone());
                 service.set_index_policy(execution_config.index_policy.clone());
@@ -4460,7 +4735,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let response = handle_management_command(
                 ManagementCommandContext {
-                    service: management_service.as_ref(),
+                    service: management_service_guard.as_deref(),
                     recovery: management_recovery.as_ref(),
                     approvals: Some(&approvals),
                     operations: Some(&operations),
@@ -5230,6 +5505,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 let operation_gate = concurrency_gate.clone();
                                                 let operation_gate_request = gate_request.clone();
                                                 let project_directory = project_directory.clone();
+                                                let management_service = management_service.clone();
+                                                let execution_config =
+                                                    live_execution_config.clone();
+                                                let operation_local_appdata = local_appdata.clone();
                                                 tokio::spawn(async move {
                                                     let gate_lease = match operation_gate
                                                         .acquire(
@@ -5301,6 +5580,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             policy_profile,
                                                             runtime_scope: &runtime_scope,
                                                             project_directory: &project_directory,
+                                                            management_service: management_service
+                                                                .as_ref(),
+                                                            execution_config: &execution_config,
+                                                            local_appdata: &operation_local_appdata,
                                                             requested_timeout_ms,
                                                             durable_operation_id: Some(
                                                                 &operation_id,
@@ -5436,6 +5719,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         policy_profile,
                                         runtime_scope: &runtime_scope,
                                         project_directory: &project_directory,
+                                        management_service: management_service.as_ref(),
+                                        execution_config: &live_execution_config,
+                                        local_appdata: &local_appdata,
                                         requested_timeout_ms,
                                         durable_operation_id: None,
                                         process_started: None,
@@ -5910,6 +6196,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 let runtime_scope = RuntimeScopeIds::from_value(
                                                     &approval.runtime_scope,
                                                 );
+                                                let management_service = management_service.clone();
+                                                let execution_config =
+                                                    live_execution_config.clone();
+                                                let operation_local_appdata = local_appdata.clone();
                                                 tokio::spawn(async move {
                                                     let gate_lease = match operation_gate
                                                         .acquire(gate_request, queue_timeout)
@@ -5960,6 +6250,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             policy_profile,
                                                             runtime_scope: &runtime_scope,
                                                             project_directory: &project_directory,
+                                                            management_service: management_service
+                                                                .as_ref(),
+                                                            execution_config: &execution_config,
+                                                            local_appdata:
+                                                                &operation_local_appdata,
                                                             requested_timeout_ms,
                                                             durable_operation_id: Some(
                                                                 &operation_id,
@@ -8152,6 +8447,9 @@ struct AuthorizedProcessRequest<'a> {
     policy_profile: UserPolicyProfile,
     runtime_scope: &'a RuntimeScopeIds,
     project_directory: &'a std::path::Path,
+    management_service: Option<&'a Arc<Mutex<ManagementApplicationService>>>,
+    execution_config: &'a UserExecutionConfig,
+    local_appdata: &'a std::path::Path,
     requested_timeout_ms: Option<u32>,
     durable_operation_id: Option<&'a OperationId>,
     process_started: Option<DurableProcessStartObserver>,
@@ -8159,11 +8457,63 @@ struct AuthorizedProcessRequest<'a> {
     process_end: Option<DurableProcessEndObserver>,
 }
 
+struct ManagementControllerContext<'a> {
+    service: &'a Arc<Mutex<ManagementApplicationService>>,
+    project_directory: &'a std::path::Path,
+    execution_config: &'a UserExecutionConfig,
+    local_appdata: &'a std::path::Path,
+}
+
+fn run_management_controller_command(
+    handler: ManagementControllerCommandHandler,
+    arguments: &serde_json::Value,
+    context: ManagementControllerContext<'_>,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let mut service = context.service.lock().map_err(|_| {
+        (
+            "MANAGEMENT_STORE_UNAVAILABLE",
+            "The management service lock is unavailable.",
+        )
+    })?;
+    service.set_scan_incremental(context.execution_config.scan_incremental);
+    service.set_scan_policy(context.execution_config.scan_policy.clone());
+    service.set_index_policy(context.execution_config.index_policy.clone());
+    service.set_planning_policy(context.execution_config.planning_policy.clone());
+    service.set_effective_config(context.execution_config.effective.clone());
+    let cache = if context.execution_config.index_cache_enabled {
+        Some(Arc::new(
+            FileCodeIndexCache::open_with_policy(
+                context
+                    .local_appdata
+                    .join("Star-Control/cache/project-index"),
+                8,
+                context
+                    .execution_config
+                    .index_cache_max_total_bytes
+                    .min(256 * 1024 * 1024),
+                context.execution_config.index_cache_max_total_bytes,
+                context.execution_config.index_cache_retention_days,
+            )
+            .map_err(|_| {
+                (
+                    "CONFIG_CONSTRAINT_CONFLICT",
+                    "The configured index cache limits cannot be materialized safely.",
+                )
+            })?,
+        ) as Arc<dyn star_ports::CodeIndexCache>)
+    } else {
+        None
+    };
+    service.set_index_cache(cache);
+    handler(&service, context.project_directory, arguments)
+}
+
 async fn run_authorized_controller_command(
     package: &ActivePackage,
     action: &ActionDescriptor,
     arguments: Option<&serde_json::Value>,
     cancellation: Option<RuntimeCancellation>,
+    management_context: Option<ManagementControllerContext<'_>>,
 ) -> Result<serde_json::Value, RuntimeFailure> {
     let registration = controller_command_registration(&action.backend_ref).ok_or((
         "TOOL_RUNTIME_UNAVAILABLE",
@@ -8174,6 +8524,14 @@ async fn run_authorized_controller_command(
         .ok_or(("TOOL_ARGUMENT_INVALID", "Tool arguments must be an object."))?;
     let result = match registration.handler {
         ControllerCommandHandler::Sync(handler) => handler(arguments)?,
+        ControllerCommandHandler::Management(handler) => run_management_controller_command(
+            handler,
+            arguments,
+            management_context.ok_or((
+                "TOOL_RUNTIME_UNAVAILABLE",
+                "The management application service is unavailable.",
+            ))?,
+        )?,
         ControllerCommandHandler::ValidationRun => {
             run_validation_run_command(arguments, cancellation).await?
         }
@@ -8200,11 +8558,21 @@ async fn run_authorized_action(
     request: AuthorizedProcessRequest<'_>,
 ) -> Result<serde_json::Value, RuntimeFailure> {
     if request.action.backend_kind == BackendKind::ControllerCommand {
+        let management_context =
+            request
+                .management_service
+                .map(|service| ManagementControllerContext {
+                    service,
+                    project_directory: request.project_directory,
+                    execution_config: request.execution_config,
+                    local_appdata: request.local_appdata,
+                });
         return run_authorized_controller_command(
             request.package,
             request.action,
             request.arguments,
             request.cancellation,
+            management_context,
         )
         .await;
     }
@@ -8223,6 +8591,9 @@ async fn run_authorized_process(
         policy_profile,
         runtime_scope,
         project_directory,
+        management_service: _,
+        execution_config: _,
+        local_appdata: _,
         requested_timeout_ms,
         durable_operation_id,
         process_started,
@@ -9156,7 +9527,7 @@ async fn handle_direct_core_command(
         return invalid_request_response(
             request,
             "TOOL_RUNTIME_UNAVAILABLE",
-            "The requested read-only Controller command is not declared.",
+            "The requested core Controller command is not declared.",
             registry_revision,
         );
     };
@@ -9203,7 +9574,7 @@ async fn handle_direct_core_command(
         }
         ActionPermissionDecision::Auto => {}
     }
-    match run_authorized_controller_command(package, action, Some(&arguments), None).await {
+    match run_authorized_controller_command(package, action, Some(&arguments), None, None).await {
         Ok(result) => IpcResponse {
             schema_id: "star.ipc.response".to_owned(),
             schema_version: 1,
@@ -24017,6 +24388,60 @@ mod tests {
                 ),
             ),
             (
+                "schemas/project-id-input.schema.json",
+                include_str!("../../../catalog/tool-packages/schemas/project-id-input.schema.json"),
+            ),
+            (
+                "schemas/project-register-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/project-register-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/project-register-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/project-register-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/scan-run-input.schema.json",
+                include_str!("../../../catalog/tool-packages/schemas/scan-run-input.schema.json"),
+            ),
+            (
+                "schemas/scan-run-output.schema.json",
+                include_str!("../../../catalog/tool-packages/schemas/scan-run-output.schema.json"),
+            ),
+            (
+                "schemas/index-status-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/index-status-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/index-search-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/index-search-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/index-search-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/index-search-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/finding-list-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/finding-list-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/diagnostic-list-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/diagnostic-list-output.schema.json"
+                ),
+            ),
+            (
                 "schemas/validation-plan-input.schema.json",
                 include_str!(
                     "../../../catalog/tool-packages/schemas/validation-plan-input.schema.json"
@@ -24824,7 +25249,7 @@ mod tests {
     }
 
     #[test]
-    fn read_only_core_readiness_requires_manifest_handler_and_both_schemas() {
+    fn release_core_readiness_requires_manifest_handler_and_both_schemas() {
         let (registry, trust, _root) = release_core_registry_fixture();
         let package = &registry.active()["star.control.core"];
         assert!(controller_command_registry_consistent());
@@ -25019,6 +25444,140 @@ mod tests {
                 "The project key is not present in the tracked catalog."
             ))
         );
+    }
+
+    #[test]
+    fn management_backed_code_health_handlers_return_schema_valid_results() {
+        let root = std::env::temp_dir().join(format!(
+            "star-code-health-controller-actions-{}-{}",
+            std::process::id(),
+            star_ipc::nonce()
+        ));
+        let source = root.join("source");
+        std::fs::create_dir_all(source.join("src")).unwrap();
+        std::fs::create_dir_all(source.join(".star-control")).unwrap();
+        let project_id = ProjectId::new();
+        std::fs::write(
+            source.join(".star-control/project.toml"),
+            format!(
+                "schema_version = 1\nproject_id = \"{}\"\ndisplay_name = \"code-health-action-fixture\"\nrepository_kind = \"none\"\nsource_of_truth = [\"source\"]\n",
+                project_id.as_str()
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            source.join(".star-control/config.toml"),
+            "schema_version = 1\n[scan]\nmax_files = 4096\n",
+        )
+        .unwrap();
+        std::fs::write(
+            source.join("src/lib.rs"),
+            b"pub fn code_health_fixture() -> bool { true }\n",
+        )
+        .unwrap();
+
+        let service = ManagementApplicationService::new(
+            Arc::new(
+                SqliteManagementRepositorySet::open(root.join("management"), "code-health-action")
+                    .unwrap(),
+            ),
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("bindings")).unwrap()),
+            Arc::new(LocalArtifactStore::default()),
+        )
+        .with_syntax_adapter(Arc::new(RustSyntaxAdapter));
+        let registration = service
+            .register_project(
+                &source.canonicalize().unwrap(),
+                "register-code-health-fixture",
+            )
+            .unwrap();
+        let service = Arc::new(Mutex::new(service));
+        let execution_config = UserExecutionConfig::default();
+
+        let (registry, _trust, _registry_root) = release_core_registry_fixture();
+        let package = &registry.active()["star.control.core"];
+        let registration_action = package
+            .manifest
+            .actions
+            .iter()
+            .find(|action| action.backend_ref == "project.register")
+            .unwrap();
+        let registration_output = serde_json::to_value(registration).unwrap();
+        validate_schema_instance(
+            package.resources.action_schemas[&registration_action.tool_id]
+                .output
+                .as_ref()
+                .unwrap(),
+            &registration_output,
+        )
+        .unwrap();
+        let invoke = |backend_ref: &str, arguments: serde_json::Value| {
+            let action = package
+                .manifest
+                .actions
+                .iter()
+                .find(|action| action.backend_ref == backend_ref)
+                .unwrap();
+            let schemas = package
+                .resources
+                .action_schemas
+                .get(&action.tool_id)
+                .unwrap();
+            validate_schema_instance(schemas.input.as_ref().unwrap(), &arguments).unwrap();
+            let ControllerCommandHandler::Management(handler) =
+                controller_command_registration(backend_ref)
+                    .unwrap()
+                    .handler
+            else {
+                panic!("{backend_ref} must use the management application service");
+            };
+            let result = run_management_controller_command(
+                handler,
+                &arguments,
+                ManagementControllerContext {
+                    service: &service,
+                    project_directory: &source,
+                    execution_config: &execution_config,
+                    local_appdata: &root,
+                },
+            )
+            .unwrap();
+            validate_schema_instance(schemas.output.as_ref().unwrap(), &result).unwrap_or_else(
+                |error| {
+                    panic!("{backend_ref} output failed Schema validation: {error:?}\n{result}")
+                },
+            );
+            result
+        };
+
+        let scan = invoke(
+            "scan.run",
+            serde_json::json!({
+                "project_id":project_id,
+                "idempotency_key":"scan-code-health-fixture",
+                "mode":"full"
+            }),
+        );
+        assert_eq!(scan["scan_run"]["project_id"], project_id.as_str());
+        assert!(scan["code_index_snapshot"].is_object());
+
+        let status = invoke("index.status", serde_json::json!({"project_id":project_id}));
+        assert_eq!(status["current"], true);
+        let _ = invoke(
+            "index.search",
+            serde_json::json!({
+                "project_id":project_id,
+                "query":"code_health_fixture",
+                "tier":"text",
+                "require_current":true
+            }),
+        );
+        let _ = invoke("finding.list", serde_json::json!({"project_id":project_id}));
+        let diagnostics = invoke(
+            "diagnostic.list",
+            serde_json::json!({"project_id":project_id}),
+        );
+        assert!(diagnostics["items"].is_array());
     }
 
     #[tokio::test]

@@ -182,7 +182,7 @@ P-0039의 Hook은 `SessionStart`, `UserPromptSubmit`, `Stop`, `PreToolUse`, `Pos
 }
 ```
 
-Hook은 작업을 직접 실행하거나 Profile을 자동 적용하거나 결제를 승인하지 않는다. SessionStart는 중앙 Skill과 route 경계만 주입한다. ready MCP action과 CLI-only command를 모두 사용할 수 없어도 일반 개발 작업을 차단하지 않고 native fallback·이유·Star-Control evidence 부재를 안내한다. 잘못된 입력에는 non-zero로 종료하고 stdout에 성공 JSON을 쓰지 않는다. Plugin 설치 뒤 사용자는 Codex `/hooks`에서 exact Hook을 검토·신뢰한다.
+Hook은 작업을 직접 실행하거나 Profile을 자동 적용하거나 결제를 승인하지 않는다. SessionStart는 중앙 Skill과 route 경계만 주입한다. ready MCP action과 CLI-only command를 모두 사용할 수 없어도 일반 개발 작업을 차단하지 않고 native fallback·이유·Star-Control evidence 부재를 안내한다. 잘못된 입력에는 non-zero로 종료하고 stdout에 성공 JSON을 쓰지 않는다. Plugin 설치 뒤 사용자는 **Codex CLI `/hooks`** browser에서 exact Hook을 검토·신뢰한다. Desktop 설정 화면은 이 browser를 제공하는 표면으로 간주하지 않는다.
 
 ## CLI 계약
 
@@ -197,7 +197,7 @@ star integration status [--json]
 star integration uninstall [--codex <exe>] [--json]
 star update reconcile-installed-runtime --install-root <absolute-path> [--json]
 star update offline-installer-restart --install-root <absolute-path> --installer <absolute-exe> --codex-desktop <absolute-exe> [--json]
-star hook session-start
+star hook session-start|session-end|user-prompt-submit|stop|pre-tool-use|post-tool-use|subagent-start|subagent-stop
 ```
 
 공통 exit code:
@@ -212,6 +212,8 @@ star hook session-start
 | 7 | Codex desktop 실행 중인 offline-only integration 변경 시도 |
 
 Codex CLI 실행 실패는 program 설치와 local Marketplace 렌더링을 되돌리지 않는다. 결과는 `registration_state=manual_action_required`, 실패 단계와 secret 없는 `manual_commands[]`를 반환한다.
+
+등록 상태에서 `integration status`는 `hook_trust_required=true`, `hook_review_surface="codex_cli"`, `hook_review_command="/hooks"`를 반환한다. 이 값은 Hook이 발견·신뢰됐다는 증거가 아니라 사용자가 열어야 할 공식 review surface를 기계적으로 구분한다.
 
 ## 설치·update·repair·제거 순서
 

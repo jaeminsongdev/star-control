@@ -138,6 +138,8 @@ pub struct IntegrationResult {
     pub registration_state: CodexRegistrationState,
     pub requires_new_task: bool,
     pub hook_trust_required: bool,
+    pub hook_review_surface: Option<String>,
+    pub hook_review_command: Option<String>,
     pub manual_commands: Vec<String>,
     pub manual_steps: Vec<String>,
 }
@@ -226,6 +228,8 @@ impl CodexIntegrationManager {
                 registration_state: CodexRegistrationState::Removed,
                 requires_new_task: true,
                 hook_trust_required: false,
+                hook_review_surface: None,
+                hook_review_command: None,
                 manual_commands: Vec::new(),
                 manual_steps: vec!["Codex를 다시 시작하거나 새 작업을 연다.".to_owned()],
             });
@@ -256,6 +260,8 @@ impl CodexIntegrationManager {
                 registration_state: CodexRegistrationState::Removed,
                 requires_new_task: true,
                 hook_trust_required: false,
+                hook_review_surface: None,
+                hook_review_command: None,
                 manual_commands: Vec::new(),
                 manual_steps: vec![
                     "Codex 앱에서 남아 있는 star-control Plugin을 제거하고 새 작업을 연다."
@@ -292,6 +298,8 @@ impl CodexIntegrationManager {
                 registration_state: CodexRegistrationState::ManualActionRequired,
                 requires_new_task: true,
                 hook_trust_required: false,
+                hook_review_surface: None,
+                hook_review_command: None,
                 manual_commands,
                 manual_steps: vec![
                     "Codex 앱에서 star-control Plugin을 제거한 뒤 Marketplace 제거 명령을 실행한다."
@@ -1022,11 +1030,15 @@ fn result_from_record(
         registration_state: record.registration_state,
         requires_new_task: true,
         hook_trust_required: record.registration_state != CodexRegistrationState::Removed,
+        hook_review_surface: (record.registration_state != CodexRegistrationState::Removed)
+            .then(|| "codex_cli".to_owned()),
+        hook_review_command: (record.registration_state != CodexRegistrationState::Removed)
+            .then(|| "/hooks".to_owned()),
         manual_commands,
         manual_steps: if record.registration_state == CodexRegistrationState::Registered {
             vec![
                 "Codex에서 새 작업을 연다.".to_owned(),
-                "Codex /hooks에서 SessionStart와 SessionEnd를 포함한 Star-Control Hook을 검토하고 신뢰한다."
+                "Codex CLI /hooks에서 SessionStart와 SessionEnd를 포함한 Star-Control Hook을 검토하고 신뢰한다. Desktop 설정 화면은 Hook browser가 아니다."
                     .to_owned(),
             ]
         } else if removal_pending {
@@ -1039,7 +1051,7 @@ fn result_from_record(
             vec![
                 "manual_commands를 실행하거나 Codex Plugin 화면에서 star-control을 설치한다."
                     .to_owned(),
-                "새 작업을 열고 /hooks에서 SessionStart와 SessionEnd를 포함한 Star-Control Hook을 검토하고 신뢰한다."
+                "새 작업을 연 뒤 Codex CLI /hooks에서 SessionStart와 SessionEnd를 포함한 Star-Control Hook을 검토하고 신뢰한다. Desktop 설정 화면은 Hook browser가 아니다."
                     .to_owned(),
             ]
         },
@@ -1433,5 +1445,9 @@ mod tests {
         let result = result_from_record("status", "verified", &record, Vec::new());
         assert!(result.manual_steps[1].contains("SessionStart"));
         assert!(result.manual_steps[1].contains("SessionEnd"));
+        assert!(result.manual_steps[1].contains("Codex CLI /hooks"));
+        assert!(result.manual_steps[1].contains("Desktop 설정 화면은 Hook browser가 아니다"));
+        assert_eq!(result.hook_review_surface.as_deref(), Some("codex_cli"));
+        assert_eq!(result.hook_review_command.as_deref(), Some("/hooks"));
     }
 }

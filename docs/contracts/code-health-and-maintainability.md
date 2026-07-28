@@ -2,7 +2,7 @@
 
 ## 상태와 소유권
 
-이 문서는 P-0062의 **정본 설계**다. 아래 Artifact, Rule, Check, adapter와 제품 경로는 명시적으로 구현 Slice가 닫히기 전까지 구현 전이며 문서 존재를 구현 완료로 표현하지 않는다. P-0064A의 Rust exact structural clone 후보만 이 문서의 계획 중 source 구현 대상이고, current evidence는 `PLANS.md`, source test 및 생성 validation report가 소유한다.
+이 문서는 P-0062에서 시작해 P-0070으로 봉인한 **Code Health 정본 계약**이다. SARIF normalizer, structural clone, complexity, unused surface, Gate/Radar, Git history·ownership·debt, semantic-provider boundary, mutation·Rule Pack·repository posture와 Evaluation/Profile 결정의 source 구현은 닫혔다. 다만 문서나 source 존재를 현재 설치·실행 성공으로 승격하지 않으며 current evidence는 `PLANS.md`, source test, live Registry와 생성 validation report가 소유한다. 등록되지 않은 외부 provider의 실제 결과는 계속 `unavailable|unverified`다.
 
 이 계약은 [Project Catalog·Code Index](project-catalog-and-code-index.md), [변경 계획·영향 분석](change-planning-and-impact.md), [검사·완료·증거](validation-and-evidence.md), [공통 Validation Gate](../features/common-validation-gate.md), [안전한 Patch·codemod](safe-patch-and-codemod.md), [실패·보안·의존성 유지보수](failure-security-and-dependency-maintenance.md), [설정·Catalog](config-and-catalog.md), [Profile](../features/profiles.md), [D02 평가](../features/operations.md#d02-비용평가규칙-개선)를 조합한다. 이 문서는 기존 type의 의미를 복제하지 않고 Code Health의 producer·coverage·판정·연결 규칙만 소유한다.
 
@@ -40,14 +40,15 @@ Git source / CodeIndex
 
 추가 후보 Artifact는 각각 별도 source Schema와 valid/full/invalid/future fixture를 가진다. 생성 JSON은 `star-schema-gen`의 declared path로만 만든다.
 
-| 계획 Schema | 최소 binding | 역할 |
+| current Schema·projection | 최소 binding | 역할 |
 |---|---|---|
 | `static-analysis-import-report.schema.json` | ProjectRevision, WorkspaceSnapshot, ToolDescriptor/tool hash, Rule Pack digest, URI mapping policy | SARIF import의 accepted/rejected/truncated count, completeness, limitation과 raw/normalized ArtifactRef |
-| `code-health-observation-set.schema.json` | Project/revision/workspace/CodeIndex, rule/config fingerprint, source-class coverage | duplication·complexity·unused·debt observation, budget, limitation, content fingerprint |
+| `code-index-snapshot.schema.json`의 structural clone·complexity·unused candidate와 `Finding`/`Occurrence` projection | Project/revision/workspace/CodeIndex, rule/config fingerprint, source-class coverage | 별도 observation-set을 만들지 않고 기존 index→Finding 경로에 duplication·complexity·unused observation, budget, limitation, content fingerprint를 보존 |
 | `git-history-risk-snapshot.schema.json` | repository identity, inspected commit range/time window, CODEOWNERS source fingerprint | relative churn/change burst/component mapping/opaque ownership/PII redaction/validity boundary |
 | `quality-rule-pack-manifest.schema.json` | pack id/version/source/digest/tool identity | supported language/source class, rule definitions, corpus, SARIF mapping, lifecycle, trust/freshness |
+| `mutation-testing-snapshot.schema.json` | Project/revision/index, changed path·trigger, exact provider/tool/config digest, fixed budget | killed/survived/timed-out/flaky 분류와 completeness를 분리하고 partial evidence의 pass 승격을 금지 |
 
-이 계약들은 기존 document에 field를 무단 추가하지 않는다. `serde(deny_unknown_fields)` reader, historical fixture 또는 명시적 새 version·migration이 먼저 필요하며, 새 schema가 구현될 때까지 Catalog/manifest count를 바꾸지 않는다.
+이 계약들은 기존 document에 field를 무단 추가하지 않는다. 구현된 additive Schema와 projection은 `serde(deny_unknown_fields)` reader, valid/full/invalid/future fixture와 generated manifest에 결속한다. 이후 field 변경도 historical fixture 또는 명시적 새 version·migration을 먼저 요구한다.
 
 ## identity·fingerprint·artifact·privacy
 
@@ -172,9 +173,9 @@ P-0069의 현재 source corpus는 external provider 비용 또는 실사용 coho
 
 All slices include deterministic output, positive/negative/edge/regression/failure/recovery, timeout/cancel, resource limit, stale source/tool/Rule Pack, partial semantic frontier, baseline/suppression compatibility, redaction/secret/Windows path and replay/idempotence tests. Tests, severity, corpus and validators are never weakened to make a slice pass.
 
-## P-0062 acceptance
+## P-0062 historical acceptance
 
 - This document is in the docs reading order and states the exact reuse boundary for existing contracts.
-- New Artifact/Rule/Check names are explicitly design-only until their source Schema, generated manifest, handler, CLI/MCP, fixture and product evidence exist.
+- P-0062 시점의 새 Artifact/Rule/Check 이름은 source Schema, generated manifest, handler, CLI/MCP, fixture와 product evidence가 생길 때까지 design-only였다. 현재 구현 상태는 위 상태 절과 P-0063~P-0075 evidence가 소유한다.
 - External provider and 17th Profile decisions remain fail-closed and approval-bound.
 - 문서 Slice의 `quick -Unit docs`가 public-contract 변경으로 FULL로 승격되는 경우 FULL과 strict self-review를 통과한 뒤 P-0062 local commit을 만든다.

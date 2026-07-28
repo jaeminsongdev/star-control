@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/project-register-input-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project_key", "idempotency_key"],
+  "properties": {
+    "project_key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,127}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  }
+}

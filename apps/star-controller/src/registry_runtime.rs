@@ -82,6 +82,46 @@ const REQUIRED_RELEASE_RESOURCES: &[(&str, &str)] = &[
         include_str!("../../../catalog/tool-packages/schemas/project-status-output.schema.json"),
     ),
     (
+        "schemas/project-id-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/project-id-input.schema.json"),
+    ),
+    (
+        "schemas/project-register-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/project-register-input.schema.json"),
+    ),
+    (
+        "schemas/project-register-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/project-register-output.schema.json"),
+    ),
+    (
+        "schemas/scan-run-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/scan-run-input.schema.json"),
+    ),
+    (
+        "schemas/scan-run-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/scan-run-output.schema.json"),
+    ),
+    (
+        "schemas/index-status-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/index-status-output.schema.json"),
+    ),
+    (
+        "schemas/index-search-input.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/index-search-input.schema.json"),
+    ),
+    (
+        "schemas/index-search-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/index-search-output.schema.json"),
+    ),
+    (
+        "schemas/finding-list-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/finding-list-output.schema.json"),
+    ),
+    (
+        "schemas/diagnostic-list-output.schema.json",
+        include_str!("../../../catalog/tool-packages/schemas/diagnostic-list-output.schema.json"),
+    ),
+    (
         "schemas/validation-plan-input.schema.json",
         include_str!("../../../catalog/tool-packages/schemas/validation-plan-input.schema.json"),
     ),

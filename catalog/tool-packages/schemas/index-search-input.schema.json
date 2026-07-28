@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/index-search-input-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project_id", "query", "tier", "require_current"],
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "tier": {
+      "enum": ["text", "syntax", "semantic"]
+    },
+    "require_current": {
+      "type": "boolean"
+    }
+  }
+}

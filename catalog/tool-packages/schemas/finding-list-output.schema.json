@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/finding-list-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_id", "schema_version", "finding_id", "finding_fingerprint",
+          "project_id", "rule_id", "rule_version", "identity_anchor",
+          "identity_tokens", "title_code", "message_code", "severity",
+          "confidence", "lifecycle", "first_observed_scan_id",
+          "last_observed_scan_id", "current_occurrence_ids",
+          "active_suppression_ids", "active_disposition_id", "content_fingerprint"
+        ],
+        "properties": {
+          "schema_id": { "const": "star.finding" },
+          "schema_version": { "const": 1 },
+          "finding_id": { "type": "string", "pattern": "^fnd_[a-z2-7]{52}$" },
+          "finding_fingerprint": { "$ref": "#/$defs/sha256" },
+          "project_id": { "type": "string", "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$" },
+          "rule_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "rule_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "identity_anchor": { "type": "string", "minLength": 1, "maxLength": 4096 },
+          "identity_tokens": { "type": "array", "items": { "type": "string" } },
+          "title_code": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "message_code": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "severity": { "enum": ["info", "warning", "error", "critical"] },
+          "confidence": { "enum": ["low", "medium", "high"] },
+          "lifecycle": { "enum": ["open", "not_observed", "resolved"] },
+          "first_observed_scan_id": { "type": "string", "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$" },
+          "last_observed_scan_id": { "type": "string", "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$" },
+          "current_occurrence_ids": { "type": "array", "items": { "type": "string", "pattern": "^occ_[a-z2-7]{52}$" } },
+          "active_suppression_ids": { "type": "array", "items": { "type": "string", "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$" } },
+          "active_disposition_id": { "type": ["string", "null"] },
+          "content_fingerprint": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

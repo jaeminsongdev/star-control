@@ -1,6 +1,6 @@
 format_version = 1
 package_id = "star.control.core"
-package_version = "1.4.0"
+package_version = "1.5.0"
 display_name = "Star-Control Core"
 description = "Required release-owned typed Controller commands exposed through the live Tool Registry."
 required = true
@@ -202,6 +202,84 @@ paid_action = "no"
 idempotency = "read_only"
 input_schema_file = "schemas/project-status-input.schema.json"
 output_schema_file = "schemas/project-status-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.project.register"
+backend_kind = "controller_command"
+backend_ref = "project.register"
+display_name = "Register Project"
+summary = "Register the current project for managed code-health scans."
+description = "Registers the identity-matched current project in derived management state with an explicit idempotency key before a managed scan is requested."
+permission_actions = ["local_write"]
+paid_action = "no"
+idempotency = "non_idempotent"
+input_schema_file = "schemas/project-register-input.schema.json"
+output_schema_file = "schemas/project-register-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.scan.run"
+backend_kind = "controller_command"
+backend_ref = "scan.run"
+display_name = "Run Project Scan"
+summary = "Build a source-bound code-health index and findings."
+description = "Runs the existing full or incremental managed scan for an exact ProjectId and returns its ScanRun, CodeIndexSnapshot, and Finding count without applying source changes."
+permission_actions = ["local_write"]
+paid_action = "no"
+idempotency = "non_idempotent"
+input_schema_file = "schemas/scan-run-input.schema.json"
+output_schema_file = "schemas/scan-run-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.index.status"
+backend_kind = "controller_command"
+backend_ref = "index.status"
+display_name = "Get Code Index Status"
+summary = "Read the current code-health index status and coverage."
+description = "Returns the latest CodeIndexSnapshot and an explicit current flag for an exact ProjectId."
+permission_actions = ["local_read"]
+paid_action = "no"
+idempotency = "read_only"
+input_schema_file = "schemas/project-id-input.schema.json"
+output_schema_file = "schemas/index-status-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.index.search"
+backend_kind = "controller_command"
+backend_ref = "index.search"
+display_name = "Search Code Index"
+summary = "Search the source-bound code-health index."
+description = "Searches text, syntax, or semantic index entities with an explicit current-snapshot requirement and preserves coverage limitations."
+permission_actions = ["local_read"]
+paid_action = "no"
+idempotency = "read_only"
+input_schema_file = "schemas/index-search-input.schema.json"
+output_schema_file = "schemas/index-search-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.finding.list"
+backend_kind = "controller_command"
+backend_ref = "finding.list"
+display_name = "List Code Health Findings"
+summary = "List normalized code-health findings for a project."
+description = "Returns the existing source-bound Finding records for an exact ProjectId without preparing or applying remediation."
+permission_actions = ["local_read"]
+paid_action = "no"
+idempotency = "read_only"
+input_schema_file = "schemas/project-id-input.schema.json"
+output_schema_file = "schemas/finding-list-output.schema.json"
+
+[[actions]]
+tool_id = "star.core.diagnostic.list"
+backend_kind = "controller_command"
+backend_ref = "diagnostic.list"
+display_name = "List Validation Diagnostics"
+summary = "List normalized validation diagnostics for code-health review."
+description = "Returns DiagnosticV2 records for an exact ProjectId without changing baseline, suppression, Gate, or source state."
+permission_actions = ["local_read"]
+paid_action = "no"
+idempotency = "read_only"
+input_schema_file = "schemas/project-id-input.schema.json"
+output_schema_file = "schemas/diagnostic-list-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.validation.plan"

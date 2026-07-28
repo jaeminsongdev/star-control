@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/diagnostic-list-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "required": [
+          "schema_id", "schema_version", "diagnostic_id", "sequence", "code",
+          "rule_ref", "producer", "title", "message", "severity", "confidence",
+          "status", "observation_status", "blocking", "project_id", "plan_item_id",
+          "validation_run_id", "scope", "locations", "evidence_refs", "observed_at",
+          "first_seen_at", "last_seen_at", "fingerprint"
+        ],
+        "properties": {
+          "schema_id": { "const": "star.diagnostic" },
+          "schema_version": { "const": 2 },
+          "diagnostic_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "code": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "rule_ref": { "type": "object" },
+          "producer": { "type": "object" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 4096 },
+          "message": { "type": "string", "minLength": 1, "maxLength": 16384 },
+          "severity": { "type": "string" },
+          "confidence": { "type": "string" },
+          "status": { "type": "string" },
+          "observation_status": { "type": "string" },
+          "blocking": { "type": "boolean" },
+          "project_id": { "type": "string", "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$" },
+          "plan_item_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "validation_run_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "scope": { "type": "object" },
+          "locations": { "type": "array" },
+          "evidence_refs": { "type": "array" },
+          "observed_at": { "type": "string", "format": "date-time" },
+          "first_seen_at": { "type": "string", "format": "date-time" },
+          "last_seen_at": { "type": "string", "format": "date-time" },
+          "fingerprint": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

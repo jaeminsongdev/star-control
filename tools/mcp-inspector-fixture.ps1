@@ -181,6 +181,12 @@ $requiredCoreToolIds = @(
     'star.core.doctor',
     'star.core.project.list',
     'star.core.project.status',
+    'star.core.project.register',
+    'star.core.scan.run',
+    'star.core.index.status',
+    'star.core.index.search',
+    'star.core.finding.list',
+    'star.core.diagnostic.list',
     'star.core.validation.plan',
     'star.core.validation.run'
 )
@@ -358,7 +364,7 @@ try {
         $coreSearchItems.Count -ne $requiredCoreToolIds.Count -or
         @(Compare-Object $coreSearchIds $expectedCoreIds).Count -ne 0 -or
         @($coreSearchItems | Where-Object { $_.source -ne 'release' -or $_.readiness -ne 'ready' }).Count -ne 0) {
-        throw 'Inspector core search did not return the exact 17 ready release actions'
+        throw 'Inspector core search did not return the exact 23 ready release actions'
     }
 
     foreach ($toolId in $requiredCoreToolIds) {

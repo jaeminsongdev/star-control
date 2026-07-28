@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/index-search-output-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["snapshot_id", "requested_tier", "used_tier", "current", "confirmed_empty", "limitations", "items"],
+  "properties": {
+    "snapshot_id": { "type": "string", "pattern": "^cix_[a-z2-7]{52}$" },
+    "requested_tier": { "$ref": "#/$defs/tier" },
+    "used_tier": { "$ref": "#/$defs/tier" },
+    "current": { "type": "boolean" },
+    "confirmed_empty": { "type": "boolean" },
+    "limitations": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": { "type": "string", "maxLength": 4096 }
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entity_key", "kind", "canonical_source_id", "symbol_id", "qualified_name", "source_range", "tier", "confidence", "content_fingerprint"],
+        "properties": {
+          "entity_key": { "type": "string", "minLength": 1, "maxLength": 1024 },
+          "kind": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "canonical_source_id": { "type": ["string", "null"] },
+          "symbol_id": { "type": ["string", "null"] },
+          "qualified_name": { "type": "string", "minLength": 1, "maxLength": 2048 },
+          "source_range": { "type": ["object", "null"] },
+          "tier": { "$ref": "#/$defs/tier" },
+          "confidence": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "content_fingerprint": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "tier": { "enum": ["text", "syntax", "semantic"] },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

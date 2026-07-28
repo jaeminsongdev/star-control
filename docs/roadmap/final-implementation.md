@@ -229,7 +229,7 @@ M1 구현은 다음 gate를 먼저 통과해야 한다.
 
 ## M1 확장. Code Health·장기 유지보수 — P-0062 이후
 
-P-0062는 [Code Health·장기 유지보수 계약](../contracts/code-health-and-maintainability.md)으로 기존 Project Catalog·Code Index, Finding·Diagnostic, ValidationPlan·Gate, Maintenance Radar·ReviewPack, M4 PatchSet과 D02 EvaluationRun의 재사용 경계를 **설계만** 확정했다. 신규 Schema, handler, CLI/MCP route, Catalog entry와 generated manifest는 아직 구현하지 않았으며, source docs만으로 제품 완료를 주장하지 않는다.
+P-0062는 [Code Health·장기 유지보수 계약](../contracts/code-health-and-maintainability.md)으로 기존 Project Catalog·Code Index, Finding·Diagnostic, ValidationPlan·Gate, Maintenance Radar·ReviewPack, M4 PatchSet과 D02 EvaluationRun의 재사용 경계를 **설계만** 확정했다. 해당 P-0062 시점에는 신규 Schema, handler, CLI/MCP route, Catalog entry와 generated manifest를 구현하지 않았으며 source docs만으로 제품 완료를 주장하지 않았다. 이후 P-0063~P-0070이 source 경로를 구현했고 P-0075가 register·scan·index·Finding·Diagnostic의 required core MCP route를 추가한다.
 
 구현은 다음 bounded vertical Slice로 진행한다.
 
@@ -300,7 +300,7 @@ M1 input이 stale·partial이면 M2는 이를 confirmed impact로 사용하지 �
 
 ## P1. 기초 계약과 설정
 
-계약 의미와 설정 병합 설계는 [데이터 계약 지도](../contracts/README.md), [ADR-0002](../decisions/ADR-0002-데이터-계약과-설정-정본.md), [ADR-0004](../decisions/ADR-0004-무재시작-고정-MCP와-Live-Tool-Registry.md)와 [ADR-0005](../decisions/ADR-0005-MCP-구현-계약-동결.md)로 확정했다. MCP exact field·hash·Win32 순서·검증 행렬의 Rust type, generated Schema, fixture와 runtime 수직 Slice는 구현됐다. 2026-07-12 독립 감사 당시 required core 13개 owner·Schema 부재와 stale evidence는 역사적 사실로 보존한다. P-0030·P-0031·P-0035는 먼저 여섯 action을 연결했고 P-0044는 durable Goal/Plan/Run 9개, P-0050은 `merge.status`·`handoff.get` 2개를 추가해 current source readiness를 17/17로 닫았다. 현재 설치본은 과거 6-action build이므로 source candidate의 새 11개 action을 installed success로 추측하지 않는다. source candidate install·current Inspector와 signed x64 Stable lifecycle은 아직 외부 Gate이므로 P1 release 판정은 **BLOCK**이며 완료로 표시하지 않는다. 세부 판정은 [P-0053 최종 출시 감사](../testing/p53-final-release-audit-2026-07-20.md), [MCP 독립 감사](../testing/mcp-independent-audit-2026-07-12.md)와 [MCP 완료 감사](../testing/mcp-completion-audit.md)를 따른다.
+계약 의미와 설정 병합 설계는 [데이터 계약 지도](../contracts/README.md), [ADR-0002](../decisions/ADR-0002-데이터-계약과-설정-정본.md), [ADR-0004](../decisions/ADR-0004-무재시작-고정-MCP와-Live-Tool-Registry.md)와 [ADR-0005](../decisions/ADR-0005-MCP-구현-계약-동결.md)로 확정했다. MCP exact field·hash·Win32 순서·검증 행렬의 Rust type, generated Schema, fixture와 runtime 수직 Slice는 구현됐다. 2026-07-12 독립 감사 당시 required core 13개 owner·Schema 부재와 stale evidence는 역사적 사실로 보존한다. P-0030·P-0031·P-0035는 먼저 여섯 action을 연결했고 P-0044는 durable Goal/Plan/Run 9개, P-0050은 `merge.status`·`handoff.get` 2개를 추가해 당시 source readiness를 17/17로 닫았다. P-0075 current source는 Code Health 진입 action 6개를 더해 23/23이며, installed `d825516`의 17/17은 공식 Updater 적용과 live Inspector 전까지 별도 상태다. source candidate install·current Inspector와 signed x64 Stable lifecycle은 서로 다른 Gate이고, signed public P1 release 판정은 계속 **BLOCK**이다. 세부 판정은 [P-0053 최종 출시 감사](../testing/p53-final-release-audit-2026-07-20.md), [MCP 독립 감사](../testing/mcp-independent-audit-2026-07-12.md)와 [MCP 완료 감사](../testing/mcp-completion-audit.md)를 따른다.
 
 ### 첫 수직 Slice
 
@@ -1215,7 +1215,7 @@ P7은 사용자 9단계의 global/project coordination과 remote 경계를 완�
 | M7/M8 | supply-chain freshness, recovery, migration·restore·platform evidence | license/security/install/rollback block |
 | M9 | project별 current source·artifact·Gate와 remote observation handoff | multi-project release block |
 | M11 | final 16번째 Rust style Profile의 toolchain/policy/coverage/Patch/Gate/CLI-only conformance | P9 final audit·public release `ready` block |
-| MCP/core | required core 17/17 owning handler와 input/output Schema source readiness 구현; installed runtime current evidence는 P-0053에서 재생성 | current 설치본 audit 누락 시 release block |
+| MCP/core | required core 23/23 owning handler와 input/output Schema source readiness 구현; P-0075의 6개 Code Health action은 installed runtime에서 별도 재검증 | current 설치본 audit 누락 시 release block |
 
 ### 공통 구현 불변식
 
@@ -1353,6 +1353,7 @@ M11 구현 완료는 모든 case가 current tool/config/source/Catalog fingerpri
 - current installed payload의 bundled `rt_c569d8e23ed61e8e`는 activation revision 5로 reconcile됐고 integration verified, Registry revision 7 declared=ready 17/17을 확인했다. current Codex MCP 17개 action은 모두 search·describe·invoke됐으며 15개 성공, ChangeBundle 없는 disposable goal의 merge/handoff 2개는 설계된 `COORDINATION_NOT_FOUND`였다. `validation.run` Operation `opn_01KY9TWQERDG6FF2WHVR389VE5`는 TARGET 8/8 PASS로 종결됐다.
 - exact package 재생성 중 source revision만으로 generation ID를 만든 탓에 서로 다른 Runtime byte가 같은 ID를 받는 결함을 발견했다. commit `0d0eca9a`는 Controller·CLI Runtime·Catalog·Schema의 canonical file-set digest로 ID를 만들고, reseal payload 변화 시 generation directory를 바꾸며 verifier가 content ID를 재계산한다. 같은 exact source의 FULL 10/10, RELEASE 14/15(signing/publication만 unverified), x64/ARM64 473-file package·SBOM/audit/provenance, x64 격리 lifecycle, current host 무재시작 17/17과 unpublished GitHub draft provider/download digest·cleanup을 다시 봉인했다. P-0055 비서명 seal은 `DONE`이며 certificate·timestamp와 signed external evidence가 없으므로 공개 Stable만 `blocked_external`이다.
 - P-0056 exact source `1bce4724`는 최신 main 재감사에서 발견한 v2 validation/planning·EffectiveConfig·portable recovery와 M7~M11 current-evidence 공백을 닫고 23개 기능·16 Profile final audit을 구현했다. FULL 10/10, RELEASE 14/15(signing/publication만 unverified), x64/ARM64 manifest entry 503개 package, x64 격리 lifecycle·rollback, ARM64 `native_unverified` 교차 simulation, installer·SBOM·RustSec·pre-sign provenance와 unpublished GitHub draft provider/download digest·cleanup을 새 byte로 다시 봉인했다. 현재 P-0056 비서명 seal은 `DONE`이고 공개 signed Stable만 `blocked_external`이다.
+- P-0075 current source candidate는 기존 17개 required core에 `project.register`, `scan.run`, `index.status`, `index.search`, `finding.list`, `diagnostic.list`를 additive로 연결해 source-required set을 23/23으로 확장한다. 각 action은 기존 `ManagementApplicationService`와 owning Schema를 재사용하며, installed `d825516`의 17/17 상태는 공식 Updater 적용·terminal receipt·installed Registry 재검증 전까지 별도 상태로 유지한다.
 
 ### ReleaseManifest·evidence v6 Slice
 

@@ -70,6 +70,7 @@ RUNTIME_EXECUTABLES = {
 ALLOWED_TOP_LEVEL = {
     ".agents",
     ".cargo",
+    ".codex",
     ".github",
     ".star-control",
     "apps",
@@ -86,6 +87,7 @@ ALLOWED_TOP_LEVEL = {
     "tools",
 }
 PRODUCT_SOURCE_TOP_LEVEL = {
+    ".codex",
     ".github",
     "apps",
     "catalog",

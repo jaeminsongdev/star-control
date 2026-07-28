@@ -10,7 +10,7 @@
 |---|---|---|
 | A01 | MCP-first | `goal.start`, `goal.status`, `goal.pause`, `goal.resume`, `goal.cancel` |
 | A02 | CLI-only | `stage.plan`, `stage.show`, `stage.replan`, `stage.result.record`, `stage.result.show` |
-| A03 | MCP-first | `project.list`, `project.status` |
+| A03 | MCP-first | `project.list`, `project.status`, `project.register`, `scan.run`, `index.status`, `index.search` |
 | A04 | MCP-first | `validation.plan` |
 | A05 | CLI-only | `codex.capability.inspect`, `route.decide`, `route.show` |
 | A06 | MCP-first | `run.continue` |
@@ -18,8 +18,8 @@
 | A08 | MCP-first | `star_approval_resolve` |
 | A09 | MCP-first | `merge.status`, `handoff.get` |
 | A10 | MCP-first | `star_tool_search`, `star_tool_describe`, `star_tool_registry_status` |
-| B01 | MCP-first | `validation.plan`, `validation.run`, `evidence.get` |
-| B02 | MCP-first | `validation.run` |
+| B01 | MCP-first | `validation.plan`, `validation.run`, `evidence.get`, `finding.list` |
+| B02 | MCP-first | `validation.run`, `diagnostic.list` |
 | B03 | MCP-first | `validation.run` |
 | B04 | CLI-only | `contract.snapshot`, `contract.compare`, `registry.declaration.plan` |
 | B05 | CLI-only | `security.inspect`, `deps.scan`, `deps.prepare`, `maintenance.radar`, `maintenance.radar.code-health`, `maintenance.radar.git-history`, `maintenance.rule-pack` |
@@ -59,7 +59,7 @@
 
 | 작업 | route | 필수 경계 |
 |---|---|---|
-| SARIF·clone·complexity·unused surface | current scan/index/validation action을 MCP-first로 검색 | current Project·checkout·index와 source-bound evidence가 없으면 `unverified` |
+| SARIF·clone·complexity·unused surface | `project.register` → `scan.run` → `index.status|search` → `finding.list|diagnostic.list`를 MCP-first로 검색 | current Project·checkout·index와 source-bound evidence가 없으면 `unverified` |
 | Code Health Radar | CLI-only `maintenance radar code-health` | read-only projection이며 source 수정 완료가 아님 |
 | Git history·ownership·debt | CLI-only `maintenance radar git-history` | bounded revision range와 redacted author identity 필요 |
 | Rule Pack·mutation evidence | CLI-only `maintenance rule-pack`; mutation provider는 registered adapter only | exact pack/provider/tool/config/artifact digest가 없으면 `unavailable|unverified` |

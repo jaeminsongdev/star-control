@@ -31,10 +31,11 @@ description: Use when Codex should plan, execute, validate, inspect code health,
 ## 4. Code Health
 
 1. clone·complexity·unused surface·SARIF·semantic refactor·mutation·Rule Pack·Git history/ownership/debt·Radar 요청이면 [routing-matrix.md](references/routing-matrix.md)의 Code Health route를 읽는다.
-2. scanner, index, Radar와 provider output은 evidence이며 source 변경 완료가 아니다. current Project·checkout·index·provider identity와 artifact digest가 결합된 결과만 사용한다.
-3. executable 존재만으로 provider가 등록됐다고 보지 않는다. exact descriptor·protocol·result artifact가 없으면 `unavailable|unverified`로 유지하고 provider를 설치하지 않는다.
-4. semantic refactor는 isolated preview와 typed PatchSet을 만든 뒤 기존 pre/post Gate·exact approval 경로로만 적용한다. mutation result나 Radar가 source를 직접 바꾸지 않게 한다.
-5. Code Health 전용 17번째 built-in Profile을 추측해 추가하지 않는다. live 16개 Profile 조합을 resolve하고 별도 EvaluationRun·제품 결정이 있을 때만 profile decision을 반영한다.
+2. live Registry에서 `project.register`, `scan.run`, `index.status|search`, `finding.list|diagnostic.list`를 각각 search→describe하고 ready action만 순서대로 호출한다. register·scan의 `write_closed`와 index·finding·diagnostic의 `read_closed`를 바꾸지 않는다.
+3. scanner, index, Radar와 provider output은 evidence이며 source 변경 완료가 아니다. current Project·checkout·index·provider identity와 artifact digest가 결합된 결과만 사용한다.
+4. executable 존재만으로 provider가 등록됐다고 보지 않는다. exact descriptor·protocol·result artifact가 없으면 `unavailable|unverified`로 유지하고 provider를 설치하지 않는다.
+5. semantic refactor는 isolated preview와 typed PatchSet을 만든 뒤 기존 pre/post Gate·exact approval 경로로만 적용한다. mutation result나 Radar가 source를 직접 바꾸지 않게 한다.
+6. Code Health 전용 17번째 built-in Profile을 추측해 추가하지 않는다. live 16개 Profile 조합을 resolve하고 별도 EvaluationRun·제품 결정이 있을 때만 profile decision을 반영한다.
 
 ## 5. Runtime and Codex integration updates
 
@@ -43,6 +44,7 @@ description: Use when Codex should plan, execute, validate, inspect code health,
 3. Runtime-only candidate는 installed Updater가 apply하고 Codex·fixed MCP/Hook identity를 유지한다. integration/bridge candidate는 inspect가 restart를 요구하고 사용자가 허용한 경우에만 전용 Updater restart transaction을 사용한다.
 4. Codex cache, Plugin cache, Runtime selector, installation/management DB를 직접 수정하지 않는다. source/template 또는 release stage를 고친 뒤 verified updater·repair 경로로 다시 생성한다.
 5. apply 시작이나 `restart_armed`를 완료로 보지 않는다. terminal receipt, active source revision, process identity, rendered/cache hash, management와 Doctor postcheck를 확인한다.
+6. `hook_trust_required=true`이면 `hook_review_surface=codex_cli`, `hook_review_command=/hooks`를 확인하고 사람에게 Codex CLI Hook browser 검토를 안내한다. Desktop 설정 화면을 Hook browser로 표현하거나 trust state를 직접 쓰지 않는다.
 
 ## 6. Approval, operation, and evidence
 
