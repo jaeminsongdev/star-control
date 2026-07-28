@@ -27,6 +27,8 @@ const DEMAND_SCAN_RESPONSE_BUDGET: Duration = Duration::from_secs(10);
 const DISCOVERY_PROBE_RESPONSE_BUDGET: Duration = Duration::from_secs(40);
 const VALIDATION_RUN_DEFAULT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 const VALIDATION_RUN_MAX_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
+const INSTALLED_CLIENT_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const VERIFIED_START_MAX_ATTEMPTS: usize = 2;
 
 #[derive(Debug, Error)]
 pub enum ControllerClientError {
@@ -112,27 +114,31 @@ impl ControllerClient {
         {
             Ok(response) => Ok(response),
             Err(ControllerClientError::Unavailable) => {
-                bootstrap.start_background().map_err(map_start_error)?;
-                let deadline = tokio::time::Instant::now() + self.config.connect_timeout;
-                loop {
-                    match self
-                        .call_with_mcp_tool(
-                            command,
-                            payload.clone(),
-                            correlation_id.clone(),
-                            mcp_tool,
-                        )
-                        .await
-                    {
-                        Ok(response) => return Ok(response),
-                        Err(ControllerClientError::Unavailable)
-                            if tokio::time::Instant::now() < deadline =>
+                for _ in 0..VERIFIED_START_MAX_ATTEMPTS {
+                    bootstrap.start_background().map_err(map_start_error)?;
+                    let deadline = tokio::time::Instant::now() + self.config.connect_timeout;
+                    loop {
+                        match self
+                            .call_with_mcp_tool(
+                                command,
+                                payload.clone(),
+                                correlation_id.clone(),
+                                mcp_tool,
+                            )
+                            .await
                         {
-                            tokio::time::sleep(Duration::from_millis(25)).await;
+                            Ok(response) => return Ok(response),
+                            Err(ControllerClientError::Unavailable)
+                                if tokio::time::Instant::now() < deadline =>
+                            {
+                                tokio::time::sleep(Duration::from_millis(25)).await;
+                            }
+                            Err(ControllerClientError::Unavailable) => break,
+                            Err(error) => return Err(error),
                         }
-                        Err(error) => return Err(error),
                     }
                 }
+                Err(ControllerClientError::Unavailable)
             }
             Err(error) => Err(error),
         }
@@ -442,7 +448,7 @@ pub fn mcp_client_config(
         client_version: env!("CARGO_PKG_VERSION").to_owned(),
         client_instance_id: format!("mcp_{}", nonce()),
         capabilities: vec![],
-        connect_timeout: Duration::from_millis(5_000),
+        connect_timeout: INSTALLED_CLIENT_CONNECT_TIMEOUT,
     })
 }
 
@@ -460,7 +466,7 @@ pub fn cli_client_config(
         client_version: env!("CARGO_PKG_VERSION").to_owned(),
         client_instance_id: format!("cli_{}", nonce()),
         capabilities: vec![],
-        connect_timeout: Duration::from_millis(5_000),
+        connect_timeout: INSTALLED_CLIENT_CONNECT_TIMEOUT,
     })
 }
 
@@ -682,6 +688,16 @@ mod tests {
                 &serde_json::json!({"timeout_ms":86_400_000})
             ),
             Duration::from_secs(60 * 60 + 5)
+        );
+    }
+
+    #[test]
+    fn verified_start_retries_one_cold_controller_handoff_without_weakening_each_attempt() {
+        assert_eq!(INSTALLED_CLIENT_CONNECT_TIMEOUT, Duration::from_secs(5));
+        assert_eq!(VERIFIED_START_MAX_ATTEMPTS, 2);
+        assert_eq!(
+            INSTALLED_CLIENT_CONNECT_TIMEOUT.as_millis() * VERIFIED_START_MAX_ATTEMPTS as u128,
+            10_000
         );
     }
 

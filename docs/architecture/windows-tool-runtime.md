@@ -55,8 +55,9 @@ Gateway auto-start 순서:
 2. 없으면 installer-owned install manifest의 absolute Controller path·SHA-256·version과 호출한 Gateway SHA-256을 fixed local volume의 final file handle에서 확인하고 write·delete share 없는 lease를 잡는다. v1 install manifest에는 독립 detached-signature 형식·key ID·trust anchor가 정의돼 있지 않으므로 runtime이 존재하지 않는 manifest signature를 검증했다고 주장하지 않는다. 배포 package 서명 검증은 installer 경계이고, runtime 정본은 strict manifest 형식과 설치 image의 full hash lease다.
 3. explicit application path로 `CreateProcessW`를 suspended·hidden/no-window 상태로 호출하고 실제 image path를 확인한 뒤 resume한다. Gateway가 outer Job 안이면 Controller에 한해서 `CREATE_BREAKAWAY_FROM_JOB`을 요청한다. image 생성 뒤 lease를 놓는다.
 4. 최대 `ipc.connect_timeout_ms=5000` 동안 authenticated pipe readiness를 기다린다.
-5. 동시에 여러 Gateway가 시작해도 Controller mutex를 얻은 process 하나만 남고 나머지는 정상 종료한다.
-6. readiness 실패를 일반 tool 실행으로 우회하지 않는다.
+5. 첫 verified start가 기존 Controller의 종료·mutex handoff와 겹쳐 readiness를 얻지 못하면 같은 5초 계약으로 한 번만 다시 시작·연결한다. 각 connect 시도의 v1 상한은 바꾸지 않으며 전체 fallback은 최대 10초다.
+6. 동시에 여러 Gateway가 시작해도 Controller mutex를 얻은 process 하나만 남고 나머지는 정상 종료한다.
+7. 두 번째 readiness도 실패하면 일반 tool 실행으로 우회하지 않고 `IPC_CONTROLLER_UNAVAILABLE`을 반환한다.
 
 outer Job이 breakaway를 허용하지 않으면 Gateway는 Controller를 같은 kill-on-close Job 안에 조용히 시작하지 않고 `IPC_CONTROLLER_UNAVAILABLE`과 `star controller start --background` 안내를 반환한다. 외부 tool child에는 breakaway를 절대 사용하지 않는다.
 

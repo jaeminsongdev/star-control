@@ -1332,7 +1332,22 @@ fn unique_operation_root(
     fs::create_dir_all(runtime_root).map_err(|_| RustStyleRuntimeError::Io)?;
     let nonce = star_contracts::ArtifactId::new();
     let project_key = Sha256Hash::digest(project_id.as_str().as_bytes());
-    let nonce_text = nonce.as_str();
+    let leaf = operation_root_leaf(kind, &nonce)?;
+    let root = runtime_root
+        .join("p")
+        .join(short_hash(&project_key))
+        .join(leaf);
+    if root.exists() || root.starts_with(project_root) || project_root.starts_with(&root) {
+        return Err(RustStyleRuntimeError::UnsafeRuntimeRoot);
+    }
+    fs::create_dir_all(&root).map_err(|_| RustStyleRuntimeError::Io)?;
+    Ok(root)
+}
+
+fn operation_root_leaf(
+    kind: &str,
+    nonce: &star_contracts::ArtifactId,
+) -> Result<String, RustStyleRuntimeError> {
     let kind = match kind {
         "inspect" => "i",
         "check" => "c",
@@ -1341,15 +1356,12 @@ fn unique_operation_root(
         "gate-post" => "go",
         _ => return Err(RustStyleRuntimeError::UnsafeRuntimeRoot),
     };
-    let root = runtime_root
-        .join("p")
-        .join(short_hash(&project_key))
-        .join(format!("{kind}-{}", &nonce_text[nonce_text.len() - 12..]));
-    if root.exists() || root.starts_with(project_root) || project_root.starts_with(&root) {
-        return Err(RustStyleRuntimeError::UnsafeRuntimeRoot);
-    }
-    fs::create_dir_all(&root).map_err(|_| RustStyleRuntimeError::Io)?;
-    Ok(root)
+    Ok(format!("{kind}-{}", operation_nonce_token(nonce)))
+}
+
+fn operation_nonce_token(nonce: &star_contracts::ArtifactId) -> String {
+    let nonce_key = Sha256Hash::digest(nonce.as_str().as_bytes());
+    nonce_key.as_str()[7..27].to_owned()
 }
 
 #[cfg(windows)]
@@ -1452,9 +1464,23 @@ mod tests {
     use star_execution::{rollback_applied, rust_style::apply_rust_style_patch};
 
     #[test]
+    fn operation_roots_hash_the_full_ulid_when_monotonic_suffixes_are_equal() {
+        let first = star_contracts::ArtifactId::parse("art_00000000000000000000000000").unwrap();
+        let second = star_contracts::ArtifactId::parse("art_00000000010000000000000000").unwrap();
+        assert_eq!(
+            &first.as_str()[first.as_str().len() - 12..],
+            &second.as_str()[second.as_str().len() - 12..]
+        );
+        assert_ne!(
+            operation_root_leaf("inspect", &first).unwrap(),
+            operation_root_leaf("inspect", &second).unwrap()
+        );
+    }
+
+    #[test]
     fn actual_pinned_workspace_check_prepare_apply_and_rollback_is_isolated() {
         let nonce = star_contracts::ArtifactId::new();
-        let nonce_suffix = &nonce.as_str()[nonce.as_str().len() - 12..];
+        let nonce_suffix = operation_nonce_token(&nonce);
         let project_root =
             std::env::temp_dir().join(format!("rsp-{}-{}", std::process::id(), nonce_suffix));
         let runtime_root =
@@ -1554,7 +1580,7 @@ mod tests {
             .to_path_buf();
         let project_root = repository.join("specs/corpus/rust-style/multicrate");
         let nonce = star_contracts::ArtifactId::new();
-        let nonce_suffix = &nonce.as_str()[nonce.as_str().len() - 12..];
+        let nonce_suffix = operation_nonce_token(&nonce);
         let runtime_root =
             std::env::temp_dir().join(format!("rsm-{}-{}", std::process::id(), nonce_suffix));
         let policy_path = repository.join("catalog/policies/rust-style.toml");

@@ -300,6 +300,7 @@ Windows 11 24H2, 4-core·8 GiB 기준:
 |---|---:|
 | Gateway cold initialize p95, Controller ready | 2초 이하 |
 | verified Controller fallback start p95 | 5초 이하 |
+| verified Controller 종료·mutex handoff recovery | 5초 시도 2회, 전체 10초 이하 |
 | 이미 실행 중 Controller IPC connect p95 | 250 ms 이하 |
 | 512 action search p95 | 100 ms 이하 |
 | describe p95 | 50 ms 이하 |
