@@ -12,6 +12,7 @@
 - `ToolchainRecord`는 manifest·lockfile·toolchain constraint와 declared/suggested command를, `GuidanceRecord`는 `.star-control`·`AGENTS.md`·README·contract/build manifest 우선순위와 충돌을 기록한다. 둘 다 source content fingerprint에 묶인다.
 - hardcoding detector는 endpoint·absolute path·timeout/retry/limit·raw command·duplicate error/config literal을 production source에서만 후보화한다. raw literal은 persistence와 fingerprint에서 제외하고 source range·shape·length bucket·false-positive guard 및 owning symbol/source entity만 저장한다.
 - `index files`, `index search|definitions|references`, `index hardcoding`, `graph neighbors`, `index status`는 current 여부·used tier·limitation·`confirmed_empty`를 stable JSON으로 반환한다.
+- `index status`의 CLI/MCP 출력은 snapshot identity·tier·counts와 기존 item shape를 유지한 bounded coverage/freshness/limitation sample을 포함한다. 전체 상태는 additive `freshness_summary`·`limitation_summary` 및 전체·반환 개수·truncation metadata로 숨김없이 집계하고 64KiB transport budget을 지킨다. `partitions`, toolchain·guidance, hardcoding·clone·complexity candidate와 `artifact_refs` 상세는 status 응답에 중복하지 않으며 owning query·finding 경로에서 읽는다.
 
 이 문서에서 **Project Catalog**는 사용자가 관리하는 project·checkout·workspace와 그 관계의 관찰 snapshot을 뜻한다. [설정과 Catalog 계약](config-and-catalog.md)의 built-in Task·Tool·Rule·Profile descriptor Catalog 및 `CatalogSnapshot`과 다른 domain이다. 이름 충돌을 피하기 위해 wire type은 항상 `ProjectCatalogSnapshot`을 사용한다.
 

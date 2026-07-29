@@ -4,7 +4,7 @@
 
 - 기준 source는 `a5dec7cc50a4c602d0d975c4ab73666e4750d52c`에서 시작한 `codex/p0076-self-code-health` 작업 묶음이다.
 - 목표는 Star-Control의 `project.register → scan.run → index.status|search → finding.list|diagnostic.list` 경로를 Star-Control source 자체에 적용하고, 선행 결함을 고친 뒤 실제 finding 하나를 bounded refactor로 닫는 것이다.
-- source, installed Runtime, derived management/index state를 분리한다. 이 Slice는 source 구현과 격리 dogfood를 소유하며 Runtime 교체·Codex cache/DB 직접 수정·dependency 설치·remote push는 수행하지 않는다.
+- source, installed Runtime, derived management/index state를 분리한다. 최초 source Slice를 봉인한 뒤 사용자가 x64 Runtime-only 적용을 승인해 installed closure를 이어갔다. Codex cache/DB 직접 수정·dependency 설치·remote push는 수행하지 않는다.
 
 ## 재현한 선행 결함
 
@@ -25,6 +25,7 @@ installed project identity는 project `prj_01KYMDB5QKB1ZJYEZ2V7GZXP4S`, checkout
 4. text adapter version을 2로 올려 과거 raw text projection 재사용을 차단한다.
 5. SQLite management document limit을 32MiB로 올리고 `SQLITE_TOOBIG`을 `QuotaExceeded`로 분류한다. 실제 self-scan snapshot 21,263,878 bytes에 대해 약 11MiB의 bounded headroom을 둔다.
 6. 새 limitation code 5개를 stable-error catalog에 additive 등록하고 catalog 기대 개수를 533으로 동기화했다. generated Schema는 `star-schema-gen` 정식 경로로 재생성했다.
+7. installed full self-scan 뒤 전체 `CodeIndexSnapshot`을 반환하던 `index.status`가 `IPC_FRAME_INVALID`를 재현했다. CLI와 MCP가 공유하는 status projection은 identity·tier·counts와 기존 item shape의 bounded sample을 보존하고, 전체 freshness state·limitation code count를 additive summary와 truncation metadata로 제공한다. 상세 collection은 owning query로 분리하고 결과를 64KiB transport budget으로 fail-closed한다. installed snapshot의 5,043 freshness와 1,771 limitation을 raw 전체 array로 다시 싣지 않는다.
 
 ## self-scan과 finding 기반 리팩터링
 
@@ -52,12 +53,19 @@ required partition은 모두 성공했고 기존 blocker `sensitive_literal_disc
 | schema/catalog/inventory | Schema `--check` pass, feature 23/23, Schema 217, Profile 16/16, Runtime EXE 4/4, stable error 533, MCP 170/170 |
 | pre-document FULL | `target/validation/20260729T055903012Z-1456/report.json`, 11/11 pass, 210,974ms |
 | document-inclusive closure candidate | `target/validation/20260729T060431994Z-13004/report.json`, 11/11 pass, 145,875ms |
+| bounded `index.status` regression | 수정 전 unbounded `partitions` assertion fail을 재현했고, 수정 후 MCP Schema·64KiB budget·CLI/MCP 공통 oversize fail-closed test가 pass |
 
 위 두 report를 이 문서와 `PLANS.md`의 마지막 byte에 대한 증거로 대신하지 않는다. 원장 DONE 전환 뒤 `catalog/product-source-evidence.json`을 다시 생성하고 source 문서를 더 수정하지 않은 채 final current-byte FULL과 STRICT 리뷰를 수행한다. exact final report는 생성 validation artifact와 최종 handoff가 소유한다.
 
+## 1차 installed closure
+
+- clean source commit `0d287546a692fd62e71058a216f2d609c02ee4ce`를 공식 Updater의 Runtime generation `rt_daada9f72a1c7776`로 적용했다. candidate inspect는 breaking·permission widening 없이 `requires_codex_restart=false`였으므로 Codex를 재시작하지 않았다.
+- installed Goal `gol_01KYP9A03N6ERMNQ8Y510CF5D2` 생성으로 legacy `GOAL_STORE_CORRUPT` 복구를 확인했다. project `prj_01KYMDB5QKB1ZJYEZ2V7GZXP4S`의 full scan `scn_01KYP9BAX1K4Z3Y27KSMZWH0ZZ`은 1,260 source와 Finding 3,842개로 `succeeded`했다.
+- `finding.list`는 current 3,173개, `diagnostic.list`는 0개를 반환했지만 `index.status`는 두 번 모두 nonretryable `IPC_FRAME_INVALID`였다. 이 실패를 숨기지 않고 위 bounded projection 교정으로 closure를 다시 열었다.
+
 ## 남은 경계
 
-- installed Runtime은 이 source를 포함하지 않는다. 따라서 installed `goal.start` 복구와 installed self-scan 성공은 별도 Runtime 교체 승인 뒤 재검증해야 한다.
+- bounded `index.status` 교정은 새 clean commit·FULL·STRICT 뒤 새 Runtime으로 적용하고 installed `index.status`·TARGET·Doctor를 다시 확인해야 한다. 그 전까지 1차 Runtime 성공을 최종 closure로 승격하지 않는다.
 - 격리 dogfood state는 테스트 파생 상태이며 current source 정본이 아니다. 사용자 management state와 Codex runtime DB/cache는 직접 수정하지 않았다.
 - linked worktree가 공유하는 `target/`에서 증분 compilation finalize `access denied` 경고가 있었지만 test/Gate exit는 성공했다. 정책상 `target/`을 정리하지 않았다.
-- 서명, installer, publish, push는 이 Slice 범위 밖이다.
+- 서명, publish, push는 이 Slice 범위 밖이다.

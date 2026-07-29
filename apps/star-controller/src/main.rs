@@ -1731,9 +1731,13 @@ fn serialize_management_controller_result(
     })
 }
 
-const MAX_SCAN_ACTION_RESULT_BYTES: usize = 64 * 1024;
+const MAX_CODE_HEALTH_ACTION_RESULT_BYTES: usize = 64 * 1024;
+const MAX_INDEX_STATUS_COVERAGE_ITEMS: usize = 128;
+const MAX_INDEX_STATUS_FRESHNESS_ITEMS: usize = 16;
+const MAX_INDEX_STATUS_LIMITATION_ITEMS: usize = 16;
+const MAX_INDEX_STATUS_LIMITATION_CODES: usize = 128;
 
-fn serialize_bounded_scan_controller_result(
+fn serialize_bounded_code_health_controller_result(
     result: impl serde::Serialize,
 ) -> Result<serde_json::Value, RuntimeFailure> {
     let value = serialize_management_controller_result(result)?;
@@ -1743,13 +1747,137 @@ fn serialize_bounded_scan_controller_result(
             "The management result could not be serialized.",
         )
     })?;
-    if encoded.len() > MAX_SCAN_ACTION_RESULT_BYTES {
+    if encoded.len() > MAX_CODE_HEALTH_ACTION_RESULT_BYTES {
         return Err((
             "TOOL_PROTOCOL_INVALID",
-            "The scan result exceeded its bounded transport contract.",
+            "The code-health result exceeded its bounded transport contract.",
         ));
     }
     Ok(value)
+}
+
+fn serialize_bounded_code_health_management_result(
+    result: impl serde::Serialize,
+) -> Result<serde_json::Value, ApplicationError> {
+    let value = serialize_management_result(result)?;
+    let encoded = serde_json::to_vec(&value).map_err(|_| ApplicationError::Invalid)?;
+    if encoded.len() > MAX_CODE_HEALTH_ACTION_RESULT_BYTES {
+        return Err(ApplicationError::Invalid);
+    }
+    Ok(value)
+}
+
+fn index_status_projection(result: star_application::IndexStatusResult) -> serde_json::Value {
+    let snapshot = result.snapshot;
+    let coverage_total = snapshot.coverage.len();
+    let coverage = snapshot
+        .coverage
+        .into_iter()
+        .take(MAX_INDEX_STATUS_COVERAGE_ITEMS)
+        .collect::<Vec<_>>();
+    let coverage_returned = coverage.len();
+
+    let freshness_partition_total = snapshot.freshness.len();
+    let mut freshness_by_state = BTreeMap::new();
+    for proof in &snapshot.freshness {
+        let summary = freshness_by_state
+            .entry(proof.state)
+            .or_insert((0_u64, 0_u64));
+        summary.0 = summary.0.saturating_add(1);
+        summary.1 = summary.1.saturating_add(proof.unverified_scope_count);
+    }
+    let freshness_summary = freshness_by_state
+        .into_iter()
+        .map(|(state, (partition_count, unverified_scope_count))| {
+            serde_json::json!({
+                "state": state,
+                "partition_count": partition_count,
+                "unverified_scope_count": unverified_scope_count,
+            })
+        })
+        .collect::<Vec<_>>();
+    let freshness = snapshot
+        .freshness
+        .into_iter()
+        .take(MAX_INDEX_STATUS_FRESHNESS_ITEMS)
+        .collect::<Vec<_>>();
+    let freshness_returned = freshness.len();
+
+    let limitation_total = snapshot.limitations.len();
+    let mut limitation_counts = BTreeMap::new();
+    for limitation in &snapshot.limitations {
+        let count = limitation_counts
+            .entry(limitation.code.clone())
+            .or_insert(0_u64);
+        *count = count.saturating_add(1);
+    }
+    let limitation_code_total = limitation_counts.len();
+    let limitation_summary = limitation_counts
+        .into_iter()
+        .take(MAX_INDEX_STATUS_LIMITATION_CODES)
+        .map(|(code, count)| serde_json::json!({"code": code, "count": count}))
+        .collect::<Vec<_>>();
+    let limitation_codes_returned = limitation_summary.len();
+    let limitations = snapshot
+        .limitations
+        .into_iter()
+        .take(MAX_INDEX_STATUS_LIMITATION_ITEMS)
+        .collect::<Vec<_>>();
+    let limitations_returned = limitations.len();
+
+    serde_json::json!({
+        "snapshot": {
+            "schema_id": snapshot.schema_id,
+            "schema_version": snapshot.schema_version,
+            "code_index_snapshot_id": snapshot.code_index_snapshot_id,
+            "project_id": snapshot.project_id,
+            "checkout_id": snapshot.checkout_id,
+            "project_catalog_snapshot_id": snapshot.project_catalog_snapshot_id,
+            "checkout_observation_fingerprint": snapshot.checkout_observation_fingerprint,
+            "project_revision_id": snapshot.project_revision_id,
+            "workspace_snapshot_id": snapshot.workspace_snapshot_id,
+            "scan_run_id": snapshot.scan_run_id,
+            "generation_id": snapshot.generation_id,
+            "analysis_input_fingerprint": snapshot.analysis_input_fingerprint,
+            "scan_config_fingerprint": snapshot.scan_config_fingerprint,
+            "index_config_fingerprint": snapshot.index_config_fingerprint,
+            "scan_mode": snapshot.scan_mode,
+            "required_tier": snapshot.required_tier,
+            "max_tier": snapshot.max_tier,
+            "adapter_set_fingerprint": snapshot.adapter_set_fingerprint,
+            "classification_fingerprint": snapshot.classification_fingerprint,
+            "coverage": coverage,
+            "counts": snapshot.counts,
+            "freshness": freshness,
+            "freshness_summary": freshness_summary,
+            "limitations": limitations,
+            "limitation_summary": limitation_summary,
+            "projection": {
+                "bounded": true,
+                "max_bytes": MAX_CODE_HEALTH_ACTION_RESULT_BYTES,
+                "coverage": {
+                    "total": coverage_total,
+                    "returned": coverage_returned,
+                    "truncated": coverage_returned < coverage_total,
+                },
+                "freshness": {
+                    "partition_total": freshness_partition_total,
+                    "returned": freshness_returned,
+                    "truncated": freshness_returned < freshness_partition_total,
+                },
+                "limitations": {
+                    "total": limitation_total,
+                    "returned": limitations_returned,
+                    "code_total": limitation_code_total,
+                    "codes_returned": limitation_codes_returned,
+                    "truncated": limitations_returned < limitation_total
+                        || limitation_codes_returned < limitation_code_total,
+                },
+            },
+            "content_fingerprint": snapshot.content_fingerprint,
+        },
+        "current": result.current,
+    })
 }
 
 fn management_controller_project_id(
@@ -1833,7 +1961,7 @@ fn run_scan_command(
             "content_fingerprint": snapshot.content_fingerprint,
         })
     });
-    serialize_bounded_scan_controller_result(serde_json::json!({
+    serialize_bounded_code_health_controller_result(serde_json::json!({
         "scan_run": result.scan_run,
         "code_index_snapshot": code_index_snapshot,
         "finding_count": result.finding_count,
@@ -1849,7 +1977,7 @@ fn run_index_status_command(
     let result = service
         .index_status(&project_id)
         .map_err(map_management_controller_error)?;
-    serialize_management_controller_result(result)
+    serialize_bounded_code_health_controller_result(index_status_projection(result))
 }
 
 fn run_index_search_command(
@@ -12999,7 +13127,8 @@ fn handle_management_command(
             management_project_id(&request.payload).and_then(|project_id| {
                 service
                     .index_status(&project_id)
-                    .and_then(serialize_management_result)
+                    .map(index_status_projection)
+                    .and_then(serialize_bounded_code_health_management_result)
             })
         }
         "index.files"
@@ -24332,13 +24461,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scan_action_rejects_results_above_its_transport_budget() {
+    fn code_health_action_rejects_results_above_its_transport_budget() {
         let oversized = serde_json::json!({
-            "value": "x".repeat(MAX_SCAN_ACTION_RESULT_BYTES + 1)
+            "value": "x".repeat(MAX_CODE_HEALTH_ACTION_RESULT_BYTES + 1)
         });
         assert!(matches!(
-            serialize_bounded_scan_controller_result(oversized),
+            serialize_bounded_code_health_controller_result(oversized.clone()),
             Err(("TOOL_PROTOCOL_INVALID", _))
+        ));
+        assert!(matches!(
+            serialize_bounded_code_health_management_result(oversized),
+            Err(ApplicationError::Invalid)
         ));
     }
     use star_project::catalog::CatalogProjectRole;
@@ -25649,12 +25782,106 @@ mod tests {
             );
         }
         assert!(
-            serde_json::to_vec(&scan).unwrap().len() < 64 * 1024,
+            serde_json::to_vec(&scan).unwrap().len() < MAX_CODE_HEALTH_ACTION_RESULT_BYTES,
             "scan.run must remain a bounded MCP/IPC result"
         );
 
         let status = invoke("index.status", serde_json::json!({"project_id":project_id}));
         assert_eq!(status["current"], true);
+        assert!(status["snapshot"]["coverage"].is_array());
+        assert!(status["snapshot"]["freshness"].is_array());
+        assert!(status["snapshot"]["limitations"].is_array());
+        assert_eq!(status["snapshot"]["projection"]["bounded"], true);
+        assert_eq!(
+            status["snapshot"]["projection"]["max_bytes"],
+            MAX_CODE_HEALTH_ACTION_RESULT_BYTES
+        );
+        assert!(
+            status["snapshot"]["freshness"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|item| item["partition_key"].is_string() && item["state"].is_string())
+        );
+        assert!(
+            status["snapshot"]["freshness_summary"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|item| item["state"].is_string() && item["partition_count"].is_number())
+        );
+        for unbounded in [
+            "partitions",
+            "toolchains",
+            "guidance",
+            "hardcoding_candidates",
+            "structural_clone_candidates",
+            "complexity_metric_candidates",
+            "artifact_refs",
+        ] {
+            assert!(
+                status["snapshot"].get(unbounded).is_none(),
+                "index.status must not return the unbounded {unbounded} collection"
+            );
+        }
+        assert!(
+            serde_json::to_vec(&status).unwrap().len() < MAX_CODE_HEALTH_ACTION_RESULT_BYTES,
+            "index.status must remain a bounded MCP/IPC result"
+        );
+
+        let mut large_status = service.lock().unwrap().index_status(&project_id).unwrap();
+        let coverage = large_status.snapshot.coverage.first().unwrap().clone();
+        large_status.snapshot.coverage = vec![coverage; MAX_INDEX_STATUS_COVERAGE_ITEMS + 1];
+        let freshness = large_status.snapshot.freshness.first().unwrap().clone();
+        large_status.snapshot.freshness = vec![freshness; 5_043];
+        large_status.snapshot.limitations = (0..1_771)
+            .map(|index| star_contracts::index::IndexLimitation {
+                code: format!("INDEX_STATUS_TEST_LIMITATION_{}", index % 5),
+                scope: None,
+                parameters: BTreeMap::new(),
+            })
+            .collect();
+        let large_projection = index_status_projection(large_status);
+        assert_eq!(
+            large_projection["snapshot"]["projection"]["coverage"]["total"],
+            MAX_INDEX_STATUS_COVERAGE_ITEMS + 1
+        );
+        assert_eq!(
+            large_projection["snapshot"]["projection"]["coverage"]["returned"],
+            MAX_INDEX_STATUS_COVERAGE_ITEMS
+        );
+        assert_eq!(
+            large_projection["snapshot"]["projection"]["freshness"]["partition_total"],
+            5_043
+        );
+        assert_eq!(
+            large_projection["snapshot"]["projection"]["freshness"]["returned"],
+            MAX_INDEX_STATUS_FRESHNESS_ITEMS
+        );
+        assert_eq!(
+            large_projection["snapshot"]["projection"]["limitations"]["total"],
+            1_771
+        );
+        assert_eq!(
+            large_projection["snapshot"]["projection"]["limitations"]["returned"],
+            MAX_INDEX_STATUS_LIMITATION_ITEMS
+        );
+        assert_eq!(
+            large_projection["snapshot"]["projection"]["limitations"]["code_total"],
+            5
+        );
+        assert!(
+            large_projection["snapshot"]["limitation_summary"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|item| item["code"].is_string() && item["count"].is_number())
+        );
+        assert!(
+            serde_json::to_vec(&large_projection).unwrap().len()
+                < MAX_CODE_HEALTH_ACTION_RESULT_BYTES,
+            "index.status must aggregate installed-scale status collections"
+        );
         let _ = invoke(
             "index.search",
             serde_json::json!({

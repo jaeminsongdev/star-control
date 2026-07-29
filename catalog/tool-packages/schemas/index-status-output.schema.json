@@ -20,10 +20,21 @@
         "scan_run_id": { "type": "string", "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$" },
         "required_tier": { "$ref": "#/$defs/tier" },
         "max_tier": { "$ref": "#/$defs/tier" },
-        "coverage": { "type": "array" },
+        "coverage": { "type": "array", "maxItems": 128 },
         "counts": { "type": "object" },
-        "freshness": { "type": "array" },
-        "limitations": { "type": "array" },
+        "freshness": { "type": "array", "maxItems": 16 },
+        "freshness_summary": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/freshnessSummary" }
+        },
+        "limitations": { "type": "array", "maxItems": 16 },
+        "limitation_summary": {
+          "type": "array",
+          "maxItems": 128,
+          "items": { "$ref": "#/$defs/limitationSummary" }
+        },
+        "projection": { "$ref": "#/$defs/projection" },
         "content_fingerprint": { "$ref": "#/$defs/sha256" }
       }
     },
@@ -31,6 +42,71 @@
   },
   "$defs": {
     "tier": { "enum": ["text", "syntax", "semantic"] },
-    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "freshnessSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "partition_count", "unverified_scope_count"],
+      "properties": {
+        "state": {
+          "enum": [
+            "current", "stale_catalog", "stale_source", "stale_config",
+            "stale_adapter", "partial", "unverified", "unavailable"
+          ]
+        },
+        "partition_count": { "type": "integer", "minimum": 0 },
+        "unverified_scope_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "limitationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "count"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bounded", "max_bytes", "coverage", "freshness", "limitations"],
+      "properties": {
+        "bounded": { "const": true },
+        "max_bytes": { "const": 65536 },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total", "returned", "truncated"],
+          "properties": {
+            "total": { "type": "integer", "minimum": 0 },
+            "returned": { "type": "integer", "minimum": 0, "maximum": 128 },
+            "truncated": { "type": "boolean" }
+          }
+        },
+        "freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["partition_total", "returned", "truncated"],
+          "properties": {
+            "partition_total": { "type": "integer", "minimum": 0 },
+            "returned": { "type": "integer", "minimum": 0, "maximum": 16 },
+            "truncated": { "type": "boolean" }
+          }
+        },
+        "limitations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total", "returned", "code_total", "codes_returned", "truncated"],
+          "properties": {
+            "total": { "type": "integer", "minimum": 0 },
+            "returned": { "type": "integer", "minimum": 0, "maximum": 16 },
+            "code_total": { "type": "integer", "minimum": 0 },
+            "codes_returned": { "type": "integer", "minimum": 0, "maximum": 128 },
+            "truncated": { "type": "boolean" }
+          }
+        }
+      }
+    }
   }
 }
