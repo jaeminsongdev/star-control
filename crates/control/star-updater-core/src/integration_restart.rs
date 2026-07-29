@@ -29,7 +29,8 @@ use star_ipc::{
 use thiserror::Error;
 
 use crate::{
-    UpdateLeaseError, acquire_update_lease,
+    INSTALLED_CLI_POSTCHECK_ATTEMPT_TIMEOUT, INSTALLED_CLI_POSTCHECK_WINDOW, UpdateLeaseError,
+    acquire_update_lease,
     process_census::{
         ProcessIdentity, exact_image_instances, request_graceful_close, snapshot,
         terminate_verified_tree, terminate_verified_tree_best_effort_excluding,
@@ -41,7 +42,6 @@ const GRACEFUL_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
 const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(12);
 const PROCESS_EXIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const CONTROLLER_DRAIN_TIMEOUT: Duration = Duration::from_secs(12);
-const REGISTRY_POSTCHECK_TIMEOUT: Duration = Duration::from_secs(12);
 
 #[derive(Clone, Debug)]
 pub struct IntegrationRepairRestartRequest {
@@ -558,16 +558,29 @@ async fn verify_active_release_registry(
     expected_tool_ids: &BTreeSet<String>,
 ) -> Result<(), IntegrationRestartError> {
     VerifiedControllerImage::from_install_directory(install_root)?.start_background()?;
-    let deadline = tokio::time::Instant::now() + REGISTRY_POSTCHECK_TIMEOUT;
-    while tokio::time::Instant::now() < deadline {
-        let declared = collect_release_tool_ids_via_installed_cli(install_root, false).await;
-        let ready = collect_release_tool_ids_via_installed_cli(install_root, true).await;
+    let deadline = tokio::time::Instant::now() + INSTALLED_CLI_POSTCHECK_WINDOW;
+    while let Some(attempt_timeout) = bounded_registry_attempt_timeout(
+        deadline.saturating_duration_since(tokio::time::Instant::now()),
+    ) {
+        let declared =
+            collect_release_tool_ids_via_installed_cli(install_root, false, attempt_timeout).await;
+        let Some(attempt_timeout) = bounded_registry_attempt_timeout(
+            deadline.saturating_duration_since(tokio::time::Instant::now()),
+        ) else {
+            break;
+        };
+        let ready =
+            collect_release_tool_ids_via_installed_cli(install_root, true, attempt_timeout).await;
         if let (Ok(declared), Ok(ready)) = (declared, ready)
             && complete_release_registry(expected_tool_ids, &declared, &ready)
         {
             return Ok(());
         }
-        tokio::time::sleep(Duration::from_millis(250)).await;
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        tokio::time::sleep(remaining.min(Duration::from_millis(250))).await;
     }
     Err(IntegrationRestartError::RuntimePostcheck)
 }
@@ -622,22 +635,33 @@ async fn probe_active_controller_via_installed_cli(
 ) -> Result<(), IntegrationRestartError> {
     let image = VerifiedControllerImage::from_install_directory(install_root)?;
     image.start_background()?;
-    let deadline = tokio::time::Instant::now() + REGISTRY_POSTCHECK_TIMEOUT;
-    while tokio::time::Instant::now() < deadline {
-        if collect_release_tool_ids_via_installed_cli(install_root, false)
+    let deadline = tokio::time::Instant::now() + INSTALLED_CLI_POSTCHECK_WINDOW;
+    while let Some(attempt_timeout) = bounded_registry_attempt_timeout(
+        deadline.saturating_duration_since(tokio::time::Instant::now()),
+    ) {
+        if collect_release_tool_ids_via_installed_cli(install_root, false, attempt_timeout)
             .await
             .is_ok()
         {
             return Ok(());
         }
-        tokio::time::sleep(Duration::from_millis(250)).await;
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        tokio::time::sleep(remaining.min(Duration::from_millis(250))).await;
     }
     Err(IntegrationRestartError::RuntimePostcheck)
+}
+
+fn bounded_registry_attempt_timeout(remaining: Duration) -> Option<Duration> {
+    (!remaining.is_zero()).then_some(remaining.min(INSTALLED_CLI_POSTCHECK_ATTEMPT_TIMEOUT))
 }
 
 async fn collect_release_tool_ids_via_installed_cli(
     install_root: &Path,
     ready_only: bool,
+    attempt_timeout: Duration,
 ) -> Result<BTreeSet<String>, IntegrationRestartError> {
     let star = install_root.join("star.exe");
     if !star.is_file() {
@@ -650,7 +674,7 @@ async fn collect_release_tool_ids_via_installed_cli(
         command.args(["--readiness", "ready"]);
     }
     command.arg("--json");
-    let output = tokio::time::timeout(Duration::from_secs(2), command.output())
+    let output = tokio::time::timeout(attempt_timeout, command.output())
         .await
         .map_err(|_| IntegrationRestartError::RuntimePostcheck)?
         .map_err(|_| IntegrationRestartError::RuntimePostcheck)?;
@@ -1548,6 +1572,21 @@ mod tests {
             &BTreeSet::new(),
             &BTreeSet::new(),
         ));
+    }
+
+    #[test]
+    fn registry_postcheck_attempts_cover_cold_controller_recovery_without_exceeding_the_window() {
+        assert_eq!(
+            bounded_registry_attempt_timeout(Duration::from_secs(30)),
+            Some(INSTALLED_CLI_POSTCHECK_ATTEMPT_TIMEOUT)
+        );
+        assert_eq!(
+            bounded_registry_attempt_timeout(Duration::from_secs(5)),
+            Some(Duration::from_secs(5))
+        );
+        assert_eq!(bounded_registry_attempt_timeout(Duration::ZERO), None);
+        assert!(INSTALLED_CLI_POSTCHECK_ATTEMPT_TIMEOUT >= Duration::from_secs(10));
+        assert!(INSTALLED_CLI_POSTCHECK_WINDOW >= INSTALLED_CLI_POSTCHECK_ATTEMPT_TIMEOUT * 3);
     }
 
     #[test]

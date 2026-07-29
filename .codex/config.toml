@@ -1,10 +1,10 @@
-# Star-Control은 로컬 source, management state와 설치 lifecycle을 다루므로
-# 기본 작업은 workspace 안에 가두고 범위 확장이 필요할 때 사용자 승인을 받는다.
-approval_policy = "on-request"
-sandbox_mode = "workspace-write"
+# 사용자 지정에 따라 Codex 실행 권한 프롬프트와 sandbox를 비활성화한다.
+# push·삭제·외부 계정 등 작업 승인 경계는 AGENTS.md를 계속 따른다.
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
 
 [sandbox_workspace_write]
-network_access = false
+network_access = true
 
 [features]
 hooks = true
