@@ -11,7 +11,7 @@
 공개 배포 Plugin은 다음을 포함한다.
 
 - MCP·Profile·lifecycle 작업을 Star-Control 흐름으로 안내하는 `star-control-operations` Skill
-- Sol Max 설계·전체 리뷰와 목표추진 Terra High 작업자를 묶는 `orchestrate-parallel-implementation` Skill
+- Sol Max 설계·전체 diff 직접 리뷰와 별도 Codex App thread/project worktree의 목표추진 Terra High 작업자를 묶는 `orchestrate-parallel-implementation` Skill
 - Star-Control MCP 설정
 - 사용자 입력 시 실행되는 검사
 - 파일 수정과 명령 실행 전에 실행되는 검사
@@ -27,7 +27,7 @@ Plugin 설치만으로 검사 코드를 자동 신뢰하지는 않는다. 사용
 
 1. `SessionStart` Hook이 fixed MCP/CLI 경계와 `star-control-operations` 사용 지침을 추가하고, 구현 요청에는 사용자가 single-agent를 명시하지 않은 한 `orchestrate-parallel-implementation`도 적용하도록 안내하며 session lifecycle을 관찰한다.
 2. operations Skill이 요청을 MCP-first, Catalog-declared CLI-only, installed local lifecycle 또는 명시적 native fallback으로 분류한다. Code Health는 `project.register` → `scan.run` → `index.status|search` → `finding.list|diagnostic.list`의 live action을 우선한다.
-3. 구현 Skill은 중앙 작업을 goal로 만들지 않고 Sol Max가 설계·DAG·재계획을 소유하게 한다. 각 응집된 Bundle은 Terra High가 별도 Goal Pursuit로 구현·교정하며 Goal은 Sol의 해당 Terra 전체 diff 승인까지 active로 유지한다. 승인 뒤 Goal complete와 통합을 확인하고, 최종 결합 전체 diff도 Sol Max가 승인해야 한다.
+3. 구현 Skill은 중앙 작업을 goal로 만들지 않고 Sol Max가 설계·DAG·재계획을 소유하게 한다. 각 응집된 Bundle은 별도 Codex App Terra High thread와 project worktree에서 Goal Pursuit로 구현·교정하며, `threadId`/`hostId` 확인 전에는 setup 표식인 `clientThreadId`로 wait/read/message하지 않는다. Goal은 Sol이 해당 worker worktree의 `baseline_sha..head_sha` 전체 diff를 직접 승인할 때까지 active로 유지한다. 승인 뒤 동일 Terra thread가 Goal complete와 통합을 확인하고, 최종 combined 전체 diff도 Sol Max가 직접 승인해야 한다.
 4. 실제 product action은 live Registry의 readiness·Schema·risk lane·descriptor hash를 확인한 뒤 Controller의 같은 application command로 실행한다.
 5. Codex 권한과 Star-Control 승인·PermissionPlan은 서로를 대신하지 않는다. 각 경계에서 요구한 승인을 모두 보존한다.
 6. Hook lifecycle evidence, worker Goal terminal state, Sol 전체 리뷰, operation terminal result와 실제 ChangeSet·Gate를 결합해 완료를 판정한다.

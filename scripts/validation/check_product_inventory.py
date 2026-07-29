@@ -676,19 +676,26 @@ def main() -> int:
         "name: orchestrate-parallel-implementation",
         "중앙 작업 자체를 `create_goal`로 등록하지 않는다",
         "gpt-5.6-sol",
-        'reasoning_effort: "max"',
+        'thinking="max"',
         "gpt-5.6-terra",
-        'reasoning_effort="high"',
+        'thinking="high"',
         "goal_pursuit: required",
-        "`followup_task`",
+        "`create_thread`",
+        "`wait_threads`",
+        "`read_thread`",
+        "`send_message_to_thread`",
+        "clientThreadId",
         "Sol 승인 전에는 `update_goal",
         "controller-level `BLOCKED`",
-        "Sol이 해당 작업자의 전체 diff",
+        "Sol이 해당 worker worktree의",
         "결합된 전체 diff",
         "`VERIFIED`",
     ):
         if required not in parallel_skill:
             errors.append(f"parallel implementation Skill contract is missing: {required}")
+    for forbidden in ("spawn_agent", "followup_task", "wait_agent", "interrupt_agent"):
+        if forbidden in parallel_skill:
+            errors.append(f"parallel implementation Skill retains obsolete collaboration API: {forbidden}")
     parallel_agent = (
         CODEX_PARALLEL_COMPONENT_PATHS[1].read_text(encoding="utf-8")
         if CODEX_PARALLEL_COMPONENT_PATHS[1].is_file()
@@ -711,8 +718,14 @@ def main() -> int:
     for required in (
         "create_goal",
         "같은 활성 목표",
-        "followup_task",
-        "Sol이 해당 Terra 작업자의 전체 diff",
+        "create_thread",
+        "wait_threads",
+        "read_thread",
+        "send_message_to_thread",
+        "clientThreadId",
+        "thread_id",
+        "host_id",
+        "Sol이 해당 Terra worktree의",
         "Sol 전체 diff 승인 전에는 `update_goal",
         "GOAL_COMPLETE",
         "SUPERSEDED_PENDING_GOAL_RESOLUTION",

@@ -249,18 +249,25 @@ $parallelSkill = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'SKILL.m
 foreach ($requiredParallelContract in @(
     '중앙 작업 자체를 `create_goal`로 등록하지 않는다',
     '`gpt-5.6-sol`',
-    'reasoning_effort: "max"',
+    'thinking="max"',
     'gpt-5.6-terra',
-    'reasoning_effort="high"',
+    'thinking="high"',
     'goal_pursuit: required',
-    '`followup_task`',
+    '`create_thread`',
+    '`wait_threads`',
+    '`read_thread`',
+    '`send_message_to_thread`',
+    'clientThreadId',
     'Sol 승인 전에는 `update_goal',
     'controller-level `BLOCKED`',
-    'Sol이 해당 작업자의 전체 diff',
+    'Sol이 해당 worker worktree의',
     '결합된 전체 diff',
     '`VERIFIED`'
 )) {
     Assert-ValidationContract -Condition ($parallelSkill.Contains($requiredParallelContract)) -Message "parallel implementation Skill contract: $requiredParallelContract"
+}
+foreach ($forbiddenParallelApi in @('spawn_agent', 'followup_task', 'wait_agent', 'interrupt_agent')) {
+    Assert-ValidationContract -Condition (-not $parallelSkill.Contains($forbiddenParallelApi)) -Message "parallel implementation Skill removes obsolete collaboration API: $forbiddenParallelApi"
 }
 $parallelAgent = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'agents/openai.yaml') -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($parallelAgent.Contains('allow_implicit_invocation: true')) -Message 'parallel implementation Skill is available by default'
@@ -268,9 +275,12 @@ Assert-ValidationContract -Condition ($parallelAgent.Contains('Use $orchestrate-
 Assert-ValidationContract -Condition (-not $parallelAgent.Contains('dependencies:')) -Message 'parallel implementation Skill does not invent a direct tool dependency'
 $parallelLifecycle = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'references/scheduling-and-lifecycle.md') -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($parallelLifecycle.Contains('같은 활성 목표')) -Message 'Terra correction preserves the same active goal'
-Assert-ValidationContract -Condition ($parallelLifecycle.Contains('Sol이 해당 Terra 작업자의 전체 diff')) -Message 'Sol reviews every complete Terra diff'
+Assert-ValidationContract -Condition ($parallelLifecycle.Contains('Sol이 해당 Terra worktree의')) -Message 'Sol reviews every complete Terra diff'
 Assert-ValidationContract -Condition ($parallelLifecycle.Contains('Sol 전체 diff 승인 전에는 `update_goal')) -Message 'Terra Goal remains active through Sol review'
 Assert-ValidationContract -Condition ($parallelLifecycle.Contains('SUPERSEDED_PENDING_GOAL_RESOLUTION')) -Message 'scope replacement does not fabricate a Goal terminal state'
+foreach ($requiredThreadLifecycle in @('create_thread', 'wait_threads', 'read_thread', 'send_message_to_thread', 'clientThreadId', 'thread_id', 'host_id')) {
+    Assert-ValidationContract -Condition ($parallelLifecycle.Contains($requiredThreadLifecycle)) -Message "parallel implementation lifecycle uses confirmed Codex App threads: $requiredThreadLifecycle"
+}
 $parallelSafety = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'references/safety-and-validation.md') -Raw -Encoding UTF8
 $parallelScenarioSection = $parallelSafety.Split('## 필수 forward scenario', 2)[1].Split('## 완료 증거', 2)[0]
 $parallelScenarioNumbers = @([regex]::Matches($parallelScenarioSection, '(?m)^(\d+)\.\s') | ForEach-Object { [int]$_.Groups[1].Value })

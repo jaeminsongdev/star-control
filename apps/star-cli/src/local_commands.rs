@@ -1028,7 +1028,7 @@ fn session_start_hook_output() -> serde_json::Value {
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
             "additionalContext": format!(
-                "`{SESSION_START_SKILL_NAME}` 지침을 따른다. 구현·수정·리팩터링·마이그레이션·테스트 추가 요청에는 사용자가 단일 에이전트를 명시하지 않은 한 `{PARALLEL_IMPLEMENTATION_SKILL_NAME}` 지침도 적용한다. 이 스킬은 중앙 작업이 아니라 각 Terra High 구현 Bundle만 목표추진으로 등록하고, Sol Max 설계와 Terra별 전체 diff 리뷰 및 결합 전체 diff 리뷰를 요구한다. {SERVER_INSTRUCTIONS}"
+                "`{SESSION_START_SKILL_NAME}` 지침을 따른다. 구현·수정·리팩터링·마이그레이션·테스트 추가 요청에는 사용자가 single-agent를 명시하지 않은 한 `{PARALLEL_IMPLEMENTATION_SKILL_NAME}` 지침도 적용한다. 이 스킬은 중앙 작업이 아니라 별도 Codex App Terra High thread/project worktree의 각 구현 Bundle만 목표추진으로 등록하고, Sol Max가 worker baseline..HEAD 전체 diff와 combined 전체 diff를 직접 리뷰하도록 요구한다. threadId와 hostId가 확인되기 전에는 clientThreadId로 wait/read/message하지 않으며, Sol 승인 전 Goal은 active다. {SERVER_INSTRUCTIONS}"
             )
         }
     })
@@ -1232,7 +1232,7 @@ mod tests {
         let serialized = serde_json::to_string(&output).unwrap();
         assert_eq!(
             serialized,
-            r#"{"continue":true,"hookSpecificOutput":{"additionalContext":"`star-control-operations` 지침을 따른다. 구현·수정·리팩터링·마이그레이션·테스트 추가 요청에는 사용자가 단일 에이전트를 명시하지 않은 한 `orchestrate-parallel-implementation` 지침도 적용한다. 이 스킬은 중앙 작업이 아니라 각 Terra High 구현 Bundle만 목표추진으로 등록하고, Sol Max 설계와 Terra별 전체 diff 리뷰 및 결합 전체 diff 리뷰를 요구한다. Star-Control 작업은 fixed MCP Gateway와 Catalog-declared CLI-only 경계를 구분한다. MCP action을 사용할 때는 `star_tool_search`로 현재 registry를 검색하고 action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 확인한다. describe에서 현재 Schema, 위험 lane, `descriptor_hash`, `required_call_tool`을 받은 뒤 그 tool에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. package나 manifest의 ready 상태는 action readiness가 아니다. Catalog에 MCP action이 없는 기능과 C01 Profile만 설치된 `star` CLI의 선언된 command로 실행하고 live `profile show|resolve` 결과를 고정한다. MCP action이 non-ready인 기능을 CLI로 우회하지 않는다. ready MCP action도 CLI-only command도 사용할 수 없으면 일반 Codex 개발 작업을 막지 말고 프로젝트 native 도구를 사용하며 fallback 사실과 이유와 Star-Control evidence 부재를 결과에 기록한다. `star_tool_registry_status`는 진단용이며 필수 선행 Gate가 아니다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`, `question_required`와 Operation ID 반환은 완료가 아니다.","hookEventName":"SessionStart"}}"#
+            r#"{"continue":true,"hookSpecificOutput":{"additionalContext":"`star-control-operations` 지침을 따른다. 구현·수정·리팩터링·마이그레이션·테스트 추가 요청에는 사용자가 single-agent를 명시하지 않은 한 `orchestrate-parallel-implementation` 지침도 적용한다. 이 스킬은 중앙 작업이 아니라 별도 Codex App Terra High thread/project worktree의 각 구현 Bundle만 목표추진으로 등록하고, Sol Max가 worker baseline..HEAD 전체 diff와 combined 전체 diff를 직접 리뷰하도록 요구한다. threadId와 hostId가 확인되기 전에는 clientThreadId로 wait/read/message하지 않으며, Sol 승인 전 Goal은 active다. Star-Control 작업은 fixed MCP Gateway와 Catalog-declared CLI-only 경계를 구분한다. MCP action을 사용할 때는 `star_tool_search`로 현재 registry를 검색하고 action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 확인한다. describe에서 현재 Schema, 위험 lane, `descriptor_hash`, `required_call_tool`을 받은 뒤 그 tool에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. package나 manifest의 ready 상태는 action readiness가 아니다. Catalog에 MCP action이 없는 기능과 C01 Profile만 설치된 `star` CLI의 선언된 command로 실행하고 live `profile show|resolve` 결과를 고정한다. MCP action이 non-ready인 기능을 CLI로 우회하지 않는다. ready MCP action도 CLI-only command도 사용할 수 없으면 일반 Codex 개발 작업을 막지 말고 프로젝트 native 도구를 사용하며 fallback 사실과 이유와 Star-Control evidence 부재를 결과에 기록한다. `star_tool_registry_status`는 진단용이며 필수 선행 Gate가 아니다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`, `question_required`와 Operation ID 반환은 완료가 아니다.","hookEventName":"SessionStart"}}"#
         );
         let context = output["hookSpecificOutput"]["additionalContext"]
             .as_str()
@@ -1244,8 +1244,8 @@ mod tests {
         );
         assert!(context.contains("프로젝트 native 도구"));
         assert!(context.contains("fallback 사실과 이유"));
-        assert!(context.contains("각 Terra High 구현 Bundle만 목표추진"));
-        assert!(context.contains("Sol Max 설계와 Terra별 전체 diff 리뷰"));
+        assert!(context.contains("별도 Codex App Terra High thread/project worktree"));
+        assert!(context.contains("clientThreadId로 wait/read/message하지 않으며"));
     }
 
     #[test]

@@ -942,17 +942,25 @@ fn parallel_skill_content_valid(bytes: &[u8]) -> bool {
     frontmatter_valid
         && text.contains("중앙 작업 자체를 `create_goal`로 등록하지 않는다")
         && text.contains("`gpt-5.6-sol`")
-        && text.contains("reasoning_effort: \"max\"")
+        && text.contains("thinking=\"max\"")
         && text.contains("gpt-5.6-terra")
-        && text.contains("reasoning_effort=\"high\"")
+        && text.contains("thinking=\"high\"")
         && text.contains("goal_pursuit: required")
-        && text.contains("`followup_task`")
+        && text.contains("`create_thread`")
+        && text.contains("`wait_threads`")
+        && text.contains("`read_thread`")
+        && text.contains("`send_message_to_thread`")
+        && text.contains("clientThreadId")
         && text.contains("Sol 승인 전에는 `update_goal")
         && text.contains("controller-level `BLOCKED`")
         && text.contains("전체 diff")
         && text.contains("`WORKER_COMPLETE`")
         && text.contains("`INTEGRATED`")
         && text.contains("`VERIFIED`")
+        && !text.contains("spawn_agent")
+        && !text.contains("followup_task")
+        && !text.contains("wait_agent")
+        && !text.contains("interrupt_agent")
 }
 
 fn parallel_skill_agent_content_valid(bytes: &[u8]) -> bool {
@@ -960,7 +968,7 @@ fn parallel_skill_agent_content_valid(bytes: &[u8]) -> bool {
         return false;
     };
     text.contains("display_name: \"Parallel Implementation\"")
-        && text.contains("short_description: \"Sol 관제와 Terra 작업자로 안전한 최대 병렬 구현\"")
+        && text.contains("short_description: \"Sol 관제와 Terra Codex App thread/worktree로 안전한 최대 병렬 구현\"")
         && text.contains("default_prompt: \"Use $orchestrate-parallel-implementation")
         && text.contains("allow_implicit_invocation: true")
         && !text.contains("dependencies:")
@@ -975,15 +983,21 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "Task Bundle 계약",
             "goal_pursuit",
             "depends_on",
+            "thread_identity",
+            "revision_identity",
             "같은 파일",
             "Sol이 이미 유효한 결과를 보존",
         ],
         PARALLEL_SCHEDULING_RELATIVE => &[
             concat!("GOAL", "_ACTIVE"),
             "create_goal",
-            "followup_task",
+            "create_thread",
+            "wait_threads",
+            "read_thread",
+            "send_message_to_thread",
+            "clientThreadId",
             "같은 활성 목표",
-            "Sol이 해당 Terra 작업자의 전체 diff",
+            "Sol이 해당 Terra worktree의",
             "Sol 전체 diff 승인 전에는 `update_goal",
             concat!("GOAL", "_COMPLETE"),
             "SUPERSEDED_PENDING_GOAL_RESOLUTION",
@@ -995,34 +1009,39 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "reset, restore, clean, stash하지 않는다",
             "public API",
             "push, PR, publish",
-            "pre-existing dirty paths",
+            "baseline_sha",
+            "diff fingerprint",
         ],
         PARALLEL_SAFETY_RELATIVE => &[
             "필수 forward scenario",
             "독립된 5개 모듈",
-            "같은 Terra 작업자",
+            "같은 Terra thread",
             "single-agent",
+            "clientThreadId",
             "사용자 scope 변경",
             "dependency 설치·추가·제거·uninstall",
             "`VERIFIED`를 선언하지 않는다",
         ],
         PARALLEL_CONTEXT_PACK_RELATIVE => &[
             "gpt-5.6-terra",
-            "reasoning_effort: \"high\"",
+            "thinking: \"high\"",
             "subagents: \"forbidden\"",
             "goal_pursuit: \"required\"",
             "completion_criteria",
-            "baseline_revision",
+            "thread_id",
+            "baseline_sha",
+            "diff_fingerprint",
         ],
         PARALLEL_WORKER_REPORT_RELATIVE => &[
             "goal_id",
             "goal_status",
-            "전체 diff 요약",
-            "Sol 전체 diff 리뷰 상태: pending",
+            "worktree_root",
+            "diff_fingerprint",
+            "전체 diff 직접 리뷰 상태: pending",
         ],
         PARALLEL_CONTROLLER_REPORT_RELATIVE => &[
-            "개별 Terra 전체 diff 리뷰",
-            "결합 전체 diff 리뷰",
+            "worker별 baseline_sha..head_sha 전체 diff 직접 리뷰",
+            "combined 전체 diff 직접 리뷰",
             "Terra Bundle",
             "최종 프로젝트 검증",
         ],
@@ -1401,13 +1420,13 @@ mod tests {
         let source = read_source_files(&source_root).unwrap();
         let install = Path::new(r"D:\도구\Star-Control 시험");
         let rendered = render_files(&source, install, "0.1.0+codex.0123456789ab").unwrap();
-        let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../target/test-state")
-            .join(format!(
-                "codex-render-roundtrip-{}-{}",
-                std::process::id(),
-                Utc::now().timestamp_micros()
-            ));
+        let temp_root = std::env::temp_dir();
+        let temp_root = temp_root.canonicalize().unwrap_or(temp_root);
+        let scratch = temp_root.join(format!(
+            "codex-render-roundtrip-{}-{}",
+            std::process::id(),
+            Utc::now().timestamp_micros()
+        ));
 
         fs::create_dir_all(&scratch).unwrap();
         write_rendered_files(&scratch, &rendered).unwrap();

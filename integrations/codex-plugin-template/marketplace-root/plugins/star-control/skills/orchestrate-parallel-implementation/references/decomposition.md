@@ -12,6 +12,8 @@
 - `completion_criteria`: 구현·테스트·검증을 포함한 닫힌 체크 목록
 - `validation`: 작업자 로컬 명령과 기대 결과
 - `workspace_mode`: `shared` 또는 `isolated`
+- `thread_identity`: 확인된 `thread_id`, `host_id`, absolute `worktree_root`와 setup-only `clientThreadId`
+- `revision_identity`: `baseline_sha`, `head_sha`, `baseline_sha..head_sha` diff fingerprint
 - `approval_boundary`: 실행 전 승인 필요한 효과
 - `goal_pursuit`: 항상 `required`
 
@@ -25,7 +27,7 @@
 6. 각 Bundle에 구현과 그 구현의 직접 테스트를 함께 둔다.
 7. 준비된 Bundle을 모두 dispatch하고 완료 시 새 ready Bundle로 refill한다.
 
-선행 Bundle에 의존하는 후속 Bundle은 선행 구현자의 자체 완료가 아니라 Sol 전체 diff 승인과 Goal complete를 거쳐 `INTEGRATED`가 된 뒤에만 `READY`로 전이한다.
+선행 Bundle에 의존하는 후속 Bundle은 선행 구현자의 자체 완료가 아니라 Sol이 worker worktree의 전체 diff를 직접 승인하고 같은 Terra thread가 Goal complete를 거쳐 `INTEGRATED`가 된 뒤에만 `READY`로 전이한다.
 
 ## 크기 기준
 
@@ -44,4 +46,4 @@
 
 ## 재계획
 
-작업 중 shared contract 필요, 소유권 충돌, 사용자 범위 변경을 발견하면 신규 dispatch를 멈추고 active worker의 추가 mutation을 안전 경계에서 중지한다. Sol이 이미 유효한 결과를 보존한 채 DAG를 재작성하고, 기존 목표 안의 교정인 Bundle만 완료 기준과 Context Pack을 갱신해 같은 Goal로 계속한다. 원 목표가 무효화된 Bundle은 변경을 격리하고 `SUPERSEDED_PENDING_GOAL_RESOLUTION`로 남겨 Goal cancel/replace 지원이나 사용자 결정을 기다린다. Terra가 임의로 scope를 확장하지 않는다.
+작업 중 shared contract 필요, 소유권 충돌, 사용자 범위 변경을 발견하면 신규 dispatch를 멈추고 active Terra의 추가 mutation을 안전 경계에서 중지한다. Sol이 이미 유효한 결과를 보존한 채 DAG를 재작성하고, 기존 목표 안의 교정인 Bundle만 동일 Terra thread에 보내 완료 기준과 Context Pack을 갱신해 같은 Goal로 계속한다. 원 목표가 무효화된 Bundle은 변경을 격리하고 `SUPERSEDED_PENDING_GOAL_RESOLUTION`로 남겨 Goal cancel/replace 지원이나 사용자 결정을 기다린다. Terra가 임의로 scope를 확장하지 않는다.
