@@ -36,7 +36,7 @@
 | P-0073 Codex Plugin·Skill·Hook 재설계 | **DONE / INSTALLED / local commits** | operations Skill/metadata의 Code Health·updater route와 `SessionEnd` lifecycle을 x64 installed Updater로 적용했다. source FULL 11/11, installed TARGET 8/8, Doctor 4/4, rendered/cache identity와 terminal integration receipt를 확인했다. |
 | P-0074 SessionEnd 3초 계약 교정 | **DONE / INSTALLED / local commits** | `d825516b86823793d53b607d6b2a0b6852d459fb`; `SessionEnd.timeout=3`, 2초 내부 deadline, terminal Updater receipt, rendered/cache identity, Hook smoke·Doctor·installed TARGET을 확인했다. |
 | P-0075 Codex Code Health route·Hook UX closure | **DONE / INSTALLED / local commits** | `39d3a13f50ae65f6373174486e7b3389ad0c1bd3`; Code Health 6개 action·16 Profile·Hook 경계를 전수 감사하고 public CLI/MCP handoff를 3×5초로 보강했다. source FULL·STRICT, x64 설치, Runtime reconcile, final installed TARGET 8/8·Doctor 4/4를 완료했다. 격리 cold-live와 사람 `/hooks` trust는 PASS로 승격하지 않는다. |
-| P-0076 Star-Control 자체 Code Health 적용 | **ACTIVE / INSTALLED CLOSURE** | source FULL 뒤 `0d287546a692fd62e71058a216f2d609c02ee4ce`를 Runtime `rt_daada9f72a1c7776`로 적용했다. installed `goal.start` 복구와 full self-scan은 성공했지만 대형 `index.status`가 `IPC_FRAME_INVALID`를 재현해 bounded status projection·회귀 검증을 진행한다. |
+| P-0076 Star-Control 자체 Code Health 적용 | **DONE / INSTALLED / local commits** | `ccb71661b86895783c440760fcd0bd76dcff9e3f`; 자체 scan이 드러낸 GoalRecord·redaction·SQLite quota·cursor clone과 대형 `index.status` IPC 결함을 교정했다. source FULL 11/11, Runtime `rt_8921c607a0af357f`, current self-scan, installed TARGET 8/8·Doctor 4/4를 확인했다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
 ## P-0074 closure
@@ -57,8 +57,9 @@
 
 - 상세 재현·수정·self-scan 전후 증거는 [P-0076 자체 Code Health dogfood](docs/testing/p0076-self-code-health-dogfood-2026-07-29.md)가 소유한다.
 - source full scan `scn_01KYP58EJXA5A5QX1H6XQHNZ9J`은 1,103 source, Finding 3,151, 21,263,878-byte snapshot으로 성공했다. post-refactor scan `scn_01KYP66XD8XVPG9S4S0MEN733J`에서 cursor codec clone occurrence는 0이다.
-- targeted regression, pre-document FULL과 문서 포함 closure-candidate FULL `target/validation/20260729T060431994Z-13004/report.json` 11/11이 통과했다. 이 DONE byte를 포함한 final FULL과 STRICT 결과는 최종 handoff가 소유한다.
-- 승인된 x64 Runtime-only 적용으로 `rt_daada9f72a1c7776`를 활성화했고 `requires_codex_restart=false`라 Codex를 재시작하지 않았다. installed `goal.start`와 full self-scan은 성공했지만 `index.status` IPC 결함을 발견해 closure를 다시 열었다. Codex cache/DB 직접 수정, dependency 설치, remote push는 수행하지 않았다.
+- bounded `index.status` 회귀, additive Schema, inventory 23/23·Schema 217·Profile 16/16·error 533·MCP 170/170과 clean commit FULL `target/validation/20260729T071000617Z-14616/report.json` 11/11을 통과했다. 중간 FULL 10/11과 격리 재실행 증거는 상세 문서가 보존한다.
+- 공식 Updater로 x64 Runtime `rt_8921c607a0af357f`를 activation revision 27에 적용했다. candidate와 실제 process identity 모두 Codex restart 불필요를 확인했다. final incremental scan `scn_01KYPBXCHWQNH5HHHNZHRQWBKR`, current bounded `index.status`, installed TARGET `target/validation/20260729T072410843Z-15216/report.json` 8/8, Doctor 4/4가 pass다. 검증 Goal은 revision 2 `cancelled`다.
+- active Runtime은 product-code commit `ccb71661…`에 정확히 묶이고, 뒤따르는 DONE 문서·source-evidence commit은 별도 current-byte 봉인이다. Codex cache/DB 직접 수정, dependency 설치, remote push는 수행하지 않았다.
 
 ## 열린 위험과 보류
 
@@ -70,7 +71,6 @@
 - R-0067: `SessionEnd`는 advisory라 timeout이 Codex 작업을 막지는 않지만 `root_stop` 관찰을 잃을 수 있다. 내부 deadline과 updater의 보수적 process census를 함께 유지한다.
 - R-0068: 첫 installed TARGET의 `ERROR_SHARING_VIOLATION(32)` report는 삭제하지 않는다. targeted 5회와 final TARGET은 통과했지만 일회성 Windows 실행 이미지 unlock 지연 가능성을 별도 이력으로 유지한다.
 - R-0069: 새 설치본의 3×5초 격리 cold-live는 다른 live Codex 작업이 Controller lifecycle을 보유해 실행하지 못했다. 기존 10.3초 실패, 단위 계약, source FULL과 installed TARGET은 cold-live PASS를 대신하지 않는다.
-- R-0072: 1차 installed Runtime에서 GoalRecord 복구와 full self-scan은 확인했지만 대형 `index.status`가 전체 snapshot을 반환해 `IPC_FRAME_INVALID`를 일으킨다. bounded CLI/MCP projection을 새 clean commit·FULL·Runtime으로 재적용하고 installed `index.status` 성공 전에는 P-0076을 완료로 승격하지 않는다.
 
 ## P-0075 봉인 범위
 
@@ -82,7 +82,7 @@
 
 ## Context Pack
 
-- 현재 상태: P-0076 1차 source와 Runtime 적용은 끝났고, installed self-scan이 드러낸 `index.status` IPC 결함을 bounded projection으로 교정 중이다. remote push는 하지 않는다.
-- 완료 근거: 1차 source FULL 11/11, Runtime `rt_daada9f72a1c7776`, installed Goal `gol_01KYP9A03N6ERMNQ8Y510CF5D2`, scan `scn_01KYP9BAX1K4Z3Y27KSMZWH0ZZ`; `index.status`는 아직 실패 증거다.
+- 현재 상태: P-0076 product-code commit `ccb71661…`과 x64 Runtime `rt_8921c607a0af357f` 적용·installed 검증을 완료했다. remote push는 하지 않았다.
+- 완료 근거: source FULL 11/11, installed current scan `scn_01KYPBXCHWQNH5HHHNZHRQWBKR`, bounded `index.status`, TARGET 8/8, Doctor 4/4, Goal `gol_01KYP9A03N6ERMNQ8Y510CF5D2` revision 2 `cancelled`다.
 - 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache 직접 수정, signing/publication, non-x64 output.
-- 다음 실행: bounded `index.status` 회귀 테스트 → source FULL·STRICT → clean commit → 새 x64 Runtime candidate inspect/apply → installed `index.status`·TARGET·Doctor → 검증용 Goal cancel 순서다. candidate가 `requires_codex_restart=true`일 때만 재시작한다.
+- 다음 실행: 이 DONE 문서와 source evidence를 별도 local commit·current-byte FULL로 봉인한다. push·signed publish·Hook trust는 각각 별도 승인/사람 Gate 없이는 실행하지 않는다.

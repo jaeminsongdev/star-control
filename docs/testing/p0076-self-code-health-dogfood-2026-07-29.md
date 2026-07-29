@@ -54,8 +54,11 @@ required partition은 모두 성공했고 기존 blocker `sensitive_literal_disc
 | pre-document FULL | `target/validation/20260729T055903012Z-1456/report.json`, 11/11 pass, 210,974ms |
 | document-inclusive closure candidate | `target/validation/20260729T060431994Z-13004/report.json`, 11/11 pass, 145,875ms |
 | bounded `index.status` regression | 수정 전 unbounded `partitions` assertion fail을 재현했고, 수정 후 MCP Schema·64KiB budget·CLI/MCP 공통 oversize fail-closed test가 pass |
+| intermediate whole-project Gate | `target/validation/20260729T065355264Z-41084/report.json`, 10/11 fail; Registry writer race와 5초 capacity budget 2건을 숨기지 않고 각각 격리 재실행해 pass 확인 |
+| clean product-code FULL | commit `ccb71661b86895783c440760fcd0bd76dcff9e3f`, `target/validation/20260729T071000617Z-14616/report.json`, 11/11 complete·stable·pass, 146,627ms |
+| installed TARGET | `target/validation/20260729T072410843Z-15216/report.json`, 8/8 complete·stable·pass, 147,424ms |
 
-위 두 report를 이 문서와 `PLANS.md`의 마지막 byte에 대한 증거로 대신하지 않는다. 원장 DONE 전환 뒤 `catalog/product-source-evidence.json`을 다시 생성하고 source 문서를 더 수정하지 않은 채 final current-byte FULL과 STRICT 리뷰를 수행한다. exact final report는 생성 validation artifact와 최종 handoff가 소유한다.
+과거 report나 product-code FULL을 이 문서와 `PLANS.md`의 마지막 byte에 대한 증거로 대신하지 않는다. 원장 DONE 전환 뒤 `catalog/product-source-evidence.json`을 다시 생성하고 source 문서를 더 수정하지 않은 채 final current-byte FULL을 수행한다. exact final report는 생성 validation artifact와 최종 handoff가 소유한다.
 
 ## 1차 installed closure
 
@@ -63,9 +66,16 @@ required partition은 모두 성공했고 기존 blocker `sensitive_literal_disc
 - installed Goal `gol_01KYP9A03N6ERMNQ8Y510CF5D2` 생성으로 legacy `GOAL_STORE_CORRUPT` 복구를 확인했다. project `prj_01KYMDB5QKB1ZJYEZ2V7GZXP4S`의 full scan `scn_01KYP9BAX1K4Z3Y27KSMZWH0ZZ`은 1,260 source와 Finding 3,842개로 `succeeded`했다.
 - `finding.list`는 current 3,173개, `diagnostic.list`는 0개를 반환했지만 `index.status`는 두 번 모두 nonretryable `IPC_FRAME_INVALID`였다. 이 실패를 숨기지 않고 위 bounded projection 교정으로 closure를 다시 열었다.
 
+## 최종 installed closure
+
+- product-code commit `ccb71661b86895783c440760fcd0bd76dcff9e3f`의 x64 stage 561개 파일을 set `sha256:528a82e9d430457c8a3b7ea77425883ac484b8f176117d55729f84549186062e`로 검증했다. Runtime generation `rt_8921c607a0af357f`은 source revision과 architecture가 일치하고 `unsigned_local`이다.
+- candidate inspect는 `bridge_compatible=true`, handler ready, rollback available, breaking·risk·permission widening 없음, `requires_codex_restart=false`였다. activation revision 27 적용 전후 ChatGPT·Codex·fixed MCP PID/creation identity가 유지됐으므로 재시작하지 않았다.
+- installed `index.status`는 5,043 freshness와 1,771 limitation을 16개 raw sample, state/code summary와 truncation metadata로 반환해 기존 `IPC_FRAME_INVALID`를 제거했다. final incremental scan `scn_01KYPBXCHWQNH5HHHNZHRQWBKR`은 1,260 source, scan Finding 3,884개로 `succeeded`; snapshot `cix_pyxvsavlij7taneynkgy2jutubymdny6ly6wm5mgunuk5swfjzoa`의 재조회는 `current=true`다.
+- installed TARGET은 8/8 complete·stable·pass, Doctor는 Registry revision 14에서 4/4 pass, management는 normal·healthy·read_write다. 검증용 Goal `gol_01KYP9A03N6ERMNQ8Y510CF5D2`는 완료 증거를 꾸미지 않고 exact durable approval 뒤 revision 2 `cancelled`로 종료했다.
+
 ## 남은 경계
 
-- bounded `index.status` 교정은 새 clean commit·FULL·STRICT 뒤 새 Runtime으로 적용하고 installed `index.status`·TARGET·Doctor를 다시 확인해야 한다. 그 전까지 1차 Runtime 성공을 최종 closure로 승격하지 않는다.
+- active Runtime은 product-code commit `ccb71661…`에 정확히 묶인다. 이 installed evidence를 기록하는 뒤따르는 docs·source-evidence commit은 binary payload 변경이 아니며 별도 current-byte FULL로 봉인한다. 두 revision을 같다고 표현하지 않는다.
 - 격리 dogfood state는 테스트 파생 상태이며 current source 정본이 아니다. 사용자 management state와 Codex runtime DB/cache는 직접 수정하지 않았다.
 - linked worktree가 공유하는 `target/`에서 증분 compilation finalize `access denied` 경고가 있었지만 test/Gate exit는 성공했다. 정책상 `target/`을 정리하지 않았다.
 - 서명, publish, push는 이 Slice 범위 밖이다.
