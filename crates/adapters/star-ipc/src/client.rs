@@ -28,7 +28,7 @@ const DISCOVERY_PROBE_RESPONSE_BUDGET: Duration = Duration::from_secs(40);
 const VALIDATION_RUN_DEFAULT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 const VALIDATION_RUN_MAX_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
 const INSTALLED_CLIENT_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-const VERIFIED_START_MAX_ATTEMPTS: usize = 2;
+const VERIFIED_START_MAX_ATTEMPTS: usize = 3;
 
 #[derive(Debug, Error)]
 pub enum ControllerClientError {
@@ -692,12 +692,12 @@ mod tests {
     }
 
     #[test]
-    fn verified_start_retries_one_cold_controller_handoff_without_weakening_each_attempt() {
+    fn verified_start_covers_a_fifteen_second_cold_handoff_without_weakening_each_attempt() {
         assert_eq!(INSTALLED_CLIENT_CONNECT_TIMEOUT, Duration::from_secs(5));
-        assert_eq!(VERIFIED_START_MAX_ATTEMPTS, 2);
+        assert_eq!(VERIFIED_START_MAX_ATTEMPTS, 3);
         assert_eq!(
             INSTALLED_CLIENT_CONNECT_TIMEOUT.as_millis() * VERIFIED_START_MAX_ATTEMPTS as u128,
-            10_000
+            15_000
         );
     }
 

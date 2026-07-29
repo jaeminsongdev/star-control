@@ -35,7 +35,7 @@
 | P-0072 Windows x64 Runtime closure | **DONE / PUSHED / INSTALLED** | `f13533922fa68a906494e97cea4087578697d49c`; Runtime generation `rt_9582adc516129569`, source FULL 11/11·installed TARGET 8/8·Doctor 4/4, `origin/main` readback까지 완료했다. |
 | P-0073 Codex Plugin·Skill·Hook 재설계 | **DONE / INSTALLED / local commits** | operations Skill/metadata의 Code Health·updater route와 `SessionEnd` lifecycle을 x64 installed Updater로 적용했다. source FULL 11/11, installed TARGET 8/8, Doctor 4/4, rendered/cache identity와 terminal integration receipt를 확인했다. |
 | P-0074 SessionEnd 3초 계약 교정 | **DONE / INSTALLED / local commits** | `d825516b86823793d53b607d6b2a0b6852d459fb`; `SessionEnd.timeout=3`, 2초 내부 deadline, terminal Updater receipt, rendered/cache identity, Hook smoke·Doctor·installed TARGET을 확인했다. |
-| P-0075 Codex Code Health route·Hook UX closure | **ACTIVE** | App Server `hooks/list`는 8개를 발견하고 `SessionEnd`만 `untrusted`로 판정했다. CLI-only Hook review 안내 교정, register→scan→index→finding/diagnostic MCP action, 안전한 Codex 기본값을 같은 bounded Slice에서 검증한다. |
+| P-0075 Codex Code Health route·Hook UX closure | **ACTIVE / CANDIDATE** | 기능·Hook 감사와 `cf95c1f` 설치 뒤 cold CLI 최초 조회가 10.3초에 실패하고 warm retry가 51ms에 성공했다. 개별 5초 timeout을 유지한 3회/15초 handoff 후보를 FULL→STRICT→공식 설치→cold-live 순서로 닫는다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
 ## P-0074 closure
@@ -60,10 +60,11 @@
 - required core package에는 `project.register`, `scan.run`, `index.status`, `index.search`, `finding.list`, `diagnostic.list`의 owning command·strict input/output Schema·lane만 additive로 연결한다.
 - 외부 analyzer executable을 자동 등록·설치하지 않으며 semantic/mutation/posture provider 부재는 `unavailable|unverified`로 유지한다.
 - 검증은 source FULL, STRICT review, official Updater candidate inspect와 installed Registry search/describe를 사용한다. Runtime/Bridge apply는 candidate inspect가 허용하고 exact scope가 현재 요청과 일치할 때만 수행한다.
+- `cf95c1f` 설치본의 실제 cold Controller는 2×5초 예산을 약 0.3초 초과했다. 각 연결 시도는 5초로 유지하고 총 시도만 3회로 늘리며, 설치 후 첫 Star-Control 호출을 CLI-only Radar read로 실행해 live cold handoff를 검증한다.
 
 ## Context Pack
 
 - 현재 상태: P-0062~P-0070 Code Health 제품 경로와 P-0071 전달, P-0072 x64 Runtime, P-0073 Plugin 재설계, P-0074 `SessionEnd` 3초 교정은 current source·installed evidence로 봉인됐다.
 - 완료 근거: inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, source FULL 11/11, installed TARGET 8/8, Doctor 4/4, terminal Updater receipt, rendered/cache equality와 Hook smoke다.
 - 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache 직접 수정, signing/publication, non-x64 output.
-- 다음 실행: P-0075 source 구현→FULL→STRICT review→local commit→공식 설치 candidate inspect 순서다. Hook trust의 최종 사람 검토, signing·non-x64·remote delivery는 별도 Gate로 남긴다.
+- 다음 실행: P-0075 3×5초 candidate의 source evidence→FULL→STRICT review→local commit→공식 x64 설치→첫 CLI-only cold read 순서다. Hook trust의 최종 사람 검토, signing·non-x64·remote delivery는 별도 Gate로 남긴다.
