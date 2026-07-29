@@ -947,7 +947,9 @@ fn parallel_skill_content_valid(bytes: &[u8]) -> bool {
         && text.contains("thinking: \"max\"")
         && text.contains("model: \"gpt-5.6-terra\"")
         && text.contains("thinking: \"high\"")
-        && text.contains("prompt: <complete Context Pack>")
+        && text.contains("BOOTSTRAP_ONLY bundle_id=<unique bundle_id>")
+        && text.contains("this is not a Bundle assignment")
+        && text.contains("complete Context Pack은 post-create identity")
         && text.contains("target: {")
         && text.contains("type: \"project\"")
         && text.contains("projectId: <list_projects projectId>")
@@ -959,6 +961,13 @@ fn parallel_skill_content_valid(bytes: &[u8]) -> bool {
         && text.contains("read_thread({ threadId, hostId })")
         && text.contains("send_message_to_thread({ threadId, prompt:")
         && text.contains("clientThreadId")
+        && text.contains("THREAD_IDENTITY_CONFIRMED")
+        && text.contains("ACTIVATE_BUNDLE")
+        && text.contains("activation ACK와 Goal active")
+        && text.contains("0건 timeout 또는 복수 match")
+        && text.contains(
+            "activation 전에는 `create_goal`, commentary, source mutation, test, commit을 금지",
+        )
         && text.contains("SOL_REVIEW_PENDING")
         && text.contains("EXISTING_GOAL_RESUMED")
         && text.contains("awaiting_external_sol_review")
@@ -972,8 +981,8 @@ fn parallel_skill_content_valid(bytes: &[u8]) -> bool {
         && !text.contains("followup_task")
         && !text.contains("wait_agent")
         && !text.contains("interrupt_agent")
-        && !text.contains("message: <complete Context Pack>")
-        && !text.contains("project: <list_projects projectId>")
+        && !text.contains("create_thread({\n  message:")
+        && !text.contains("create_thread({\n  project:")
 }
 
 fn parallel_skill_agent_content_valid(bytes: &[u8]) -> bool {
@@ -1003,6 +1012,11 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "revision_identity",
             "review_identity",
             "same threadId/Goal",
+            "scope_in",
+            "ownership.files/contracts/schemas/databases/ports/build_outputs",
+            "approval_boundary",
+            "preexisting_dirty_paths",
+            "expected/result",
             "Sol이 이미 유효한 결과를 보존",
         ],
         PARALLEL_SCHEDULING_RELATIVE => &[
@@ -1020,6 +1034,10 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "EXISTING_GOAL_RESUMED",
             "awaiting_external_sol_review",
             "CURRENT_TASK_SINGLE_AGENT",
+            "BOOTSTRAP_ONLY",
+            "THREAD_IDENTITY_CONFIRMED",
+            "ACTIVATE_BUNDLE",
+            "0건 timeout 또는 복수 match",
             "same exact `baseline_sha`, `head_sha`, `diff_fingerprint`",
             "Sol 전체 diff 승인 전",
             concat!("GOAL", "_COMPLETE"),
@@ -1038,26 +1056,32 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "필수 forward scenario",
             "single-agent",
             "새 Codex App thread 0건",
-            "clientThreadId",
-            "list_projects",
-            "list_threads",
-            "afterCursor",
-            "target:{type:\"project\", projectId, environment:{type:\"worktree\"}}",
-            "Sol thread도 prompt",
-            "THREAD_CREATING fail-closed",
-            "id(threadId), hostId, cwd",
+            "일반 구현 요청은 새 Codex App thread 0건",
+            "unique bundle_id, BOOTSTRAP_ONLY",
+            "direct threadId/hostId도 project/worktree identity",
+            "clientThreadId only는 bounded list_threads",
+            "activation 전에는 Bundle assignment가 아니며",
+            "same file/contract ownership은 한 Bundle",
+            "preexisting dirty paths와 owned worktree baseline/head/fingerprint",
             "WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고",
+            "자동 Goal turn 3회 뒤 blocked는",
             "awaiting_external_sol_review",
-            "EXISTING_GOAL_RESUMED",
+            "blocked 뒤 correction/approval은 same threadId",
             "exact baseline_sha/head_sha/diff_fingerprint Sol 승인",
-            "dependency 설치·추가·제거·uninstall",
-            "`VERIFIED`를 선언하지 않는다",
+            "승인 없는 dependency 설치·삭제·push",
         ],
         PARALLEL_CONTEXT_PACK_RELATIVE => &[
             "gpt-5.6-terra",
             "thinking: \"high\"",
             "subagents: \"forbidden\"",
             "goal_pursuit: \"required\"",
+            "BOOTSTRAP_ONLY|THREAD_IDENTITY_CONFIRMED",
+            "ACTIVATE_BUNDLE|GOAL_ACTIVE",
+            "scope_in",
+            "ownership:",
+            "approval_boundary",
+            "preexisting_dirty_paths",
+            "expected/result",
             "completion_criteria",
             "thread_id",
             "project_id",
@@ -1074,6 +1098,10 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "worktree_root",
             "diff_fingerprint",
             "bundle_state: WORKER_COMPLETE",
+            "bootstrap_state",
+            "activation_state",
+            "approval_boundary",
+            "ownership.files/contracts/schemas/databases/ports/build_outputs",
             "review_state: pending",
             "awaiting_external_sol_review",
         ],
@@ -1081,6 +1109,8 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "worker whole-diff direct review",
             "combined whole-diff direct review",
             "Terra Bundle",
+            "bootstrap_state / activation_state / bundle_id",
+            "approval_boundary",
             "awaiting_external_sol_review",
         ],
         _ => return false,
@@ -1532,14 +1562,14 @@ mod tests {
             .unwrap()
             .replace("goal_pursuit: required", "goal_pursuit: optional");
         assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
-        let invalid_parallel = std::str::from_utf8(parallel_skill).unwrap().replace(
-            "prompt: <complete Context Pack>",
-            "message: <complete Context Pack>",
+        let invalid_parallel = format!(
+            "{}\ncreate_thread({{\n  message: <complete Context Pack>\n}})",
+            std::str::from_utf8(parallel_skill).unwrap()
         );
         assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
-        let invalid_parallel = std::str::from_utf8(parallel_skill).unwrap().replace(
-            "projectId: <list_projects projectId>",
-            "project: <list_projects projectId>",
+        let invalid_parallel = format!(
+            "{}\ncreate_thread({{\n  project: <list_projects projectId>\n}})",
+            std::str::from_utf8(parallel_skill).unwrap()
         );
         assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
         let invalid_parallel_agent =
@@ -1562,6 +1592,29 @@ mod tests {
             PARALLEL_SAFETY_RELATIVE,
             invalid_safety.as_bytes()
         ));
+        for scenario_semantic in [
+            "일반 구현 요청은 새 Codex App thread 0건",
+            "unique bundle_id, BOOTSTRAP_ONLY",
+            "direct threadId/hostId도 project/worktree identity",
+            "clientThreadId only는 bounded list_threads",
+            "activation 전에는 Bundle assignment가 아니며",
+            "same file/contract ownership은 한 Bundle",
+            "preexisting dirty paths와 owned worktree baseline/head/fingerprint",
+            "WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고",
+            "자동 Goal turn 3회 뒤 blocked는",
+            "blocked 뒤 correction/approval은 same threadId",
+            "exact baseline_sha/head_sha/diff_fingerprint Sol 승인",
+            "승인 없는 dependency 설치·삭제·push",
+        ] {
+            let invalid_scenario =
+                std::str::from_utf8(source.get(PARALLEL_SAFETY_RELATIVE).unwrap())
+                    .unwrap()
+                    .replace(scenario_semantic, "tampered scenario semantic");
+            assert!(!parallel_resource_content_valid(
+                PARALLEL_SAFETY_RELATIVE,
+                invalid_scenario.as_bytes()
+            ));
+        }
         let invalid_agent = std::str::from_utf8(source.get(SKILL_AGENT_RELATIVE).unwrap())
             .unwrap()
             .replace(

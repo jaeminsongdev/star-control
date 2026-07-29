@@ -9,20 +9,22 @@ description: Orchestrate explicitly approved Codex App Terra High project-worktr
 
 ## 권한과 Bundle 경계
 
-- 중앙 작업 자체를 `create_goal`로 등록하지 않는다. `goal_pursuit: required`는 명시적으로 승인된 Terra Bundle에만 적용한다.
+- 중앙 작업 자체를 `create_goal`로 등록하지 않는다. `goal_pursuit: required`는 activation된 명시 승인 Terra Bundle에만 적용한다.
 - `Sol Max`는 요구 해석, DAG, 소유권, worker별 complete diff 직접 리뷰, combined diff 직접 리뷰를 소유한다. `Terra High`는 하나의 Bundle 구현·검증·교정만 수행한다.
 - 정확한 역할 분리가 필요하지만 새 task/thread 승인이 없으면 controller는 승인을 요청하고 현재 task를 조용히 분리·모델 강등·새 worktree로 바꾸지 않는다.
 - 동일 파일, public contract, Schema, DB migration, port, fixture namespace, build output은 동시에 여러 Bundle에 소유시키지 않는다.
 
-## 실제 Codex App thread 생성 계약
+## 실제 Codex App bootstrap과 activation 계약
 
 새 thread가 명시적으로 승인되면 먼저 `list_projects({})`로 후보의 `projectId`와 `isGitRepository`를 확인한다. Git project는 worktree를 기본으로 하고, non-Git project는 local만 사용한다. 승인된 Terra와 필요 시 Sol 모두 `prompt`를 필수로 제공한다.
+
+초기 `create_thread` prompt는 고유 `bundle_id`와 `BOOTSTRAP_ONLY`만 전달한다. 이는 아직 Bundle assignment가 아니며, activation 전에는 `create_goal`, commentary, source mutation, test, commit을 금지한다. complete Context Pack은 post-create identity를 담으므로 초기 prompt에 넣지 않는다.
 
 ```text
 create_thread({
   model: "gpt-5.6-terra",
   thinking: "high",
-  prompt: <complete Context Pack>,
+  prompt: "BOOTSTRAP_ONLY bundle_id=<unique bundle_id>; this is not a Bundle assignment.",
   target: {
     type: "project",
     projectId: <list_projects projectId>,
@@ -31,14 +33,16 @@ create_thread({
 })
 ```
 
-Sol thread도 `model: "gpt-5.6-sol"`, `thinking: "max"`, `prompt`, 동일한 `target` shape를 사용한다. `startingState`는 사용자가 특정 기존 Git state를 명시 요청한 경우에만 `environment`에 넣는다. prompt와 target 밖의 legacy alias는 실제 Schema가 아니며 사용하지 않는다.
+Sol thread도 `model: "gpt-5.6-sol"`, `thinking: "max"`, bootstrap `prompt`, 동일한 `target` shape를 사용한다. `startingState`는 사용자가 특정 기존 Git state를 명시 요청한 경우에만 `environment`에 넣는다. `message=`와 `project=`는 설명에서 금지 예시로 언급할 수 있으나 actual `create_thread` call의 top-level alias가 아니며 사용하지 않는다.
 
-`create_thread`가 `clientThreadId`만 반환하면 `THREAD_CREATING`으로 fail-closed한다. 그 값으로 lifecycle call, `wait_threads`, `read_thread`, `send_message_to_thread`, 중복 `create_thread`를 하지 않는다. controller는 `list_threads({limit: ...})`에서 실제 `id`(threadId), `hostId`, `cwd` worktree identity를 resolve한 뒤에만 다음 호출을 한다.
+direct 결과가 `threadId`/`hostId`이면 expected `projectId`와 worktree/project identity를 확인해 `THREAD_IDENTITY_CONFIRMED`로 전이한다. `create_thread`가 `clientThreadId`만 반환하면 `THREAD_CREATING`으로 fail-closed한다. 그 값으로 lifecycle call, `wait_threads`, `read_thread`, `send_message_to_thread`, 중복 `create_thread`를 하지 않는다. controller는 bounded `list_threads({limit: ...})` polling에서 고유 `bundle_id` + expected `projectId` + expected worktree/project identity가 정확히 1개인 실제 `id`(threadId), `hostId`, `cwd`를 resolve한다. 0건 timeout 또는 복수 match면 controller `BLOCKED`이고 중복 create를 금지한다.
+
+두 분기 모두 확인된 같은 `threadId`에만 complete Context Pack과 `ACTIVATE_BUNDLE`을 전달한다. worker는 activation을 받은 뒤 첫 작업으로 token budget 없는 `create_goal({ objective: <Bundle 전체 objective와 completion criteria> })`를 호출한 다음에만 commentary·source mutation·test·commit을 할 수 있다. controller는 `wait_threads`/`read_thread`로 activation ACK와 Goal active를 확인한다.
 
 ```text
+send_message_to_thread({ threadId, prompt: <complete Context Pack + ACTIVATE_BUNDLE> })
 wait_threads({ targets: [{ threadId, hostId, afterCursor }], timeoutMs: <bounded> })
 read_thread({ threadId, hostId })
-send_message_to_thread({ threadId, prompt: <correction or approval>; /* model/thinking 생략 */ })
 ```
 
 API lifecycle 예시는 `threadId`, `hostId`, `afterCursor` camelCase만 쓴다. Context Pack과 report의 저장 필드는 `thread_id`, `host_id`, `worktree_root`, `baseline_sha`, `head_sha`, `diff_fingerprint`처럼 snake_case여도 된다.
@@ -46,8 +50,8 @@ API lifecycle 예시는 `threadId`, `hostId`, `afterCursor` camelCase만 쓴다.
 ## 실행 순서
 
 1. 사용자 범위, 승인, dirty worktree, 정본, 검증 명령을 고정한다.
-2. 새 task/thread 승인이 없으면 현재 task single-agent로 구현한다. 승인된 경우에만 Sol 설계와 위 Schema의 Terra thread/worktree를 만든다.
-3. Terra의 첫 동작은 token budget 없는 `create_goal({ objective: <Bundle 전체 objective와 completion criteria> })`다.
+2. 새 task/thread 승인이 없으면 현재 task single-agent로 구현한다. 승인된 경우에만 bootstrap을 만들고 identity 확인 뒤 `ACTIVATE_BUNDLE`을 보낸다.
+3. Terra의 activation 뒤 첫 동작은 token budget 없는 `create_goal`이다.
 4. Terra는 구현·직접 검증 뒤 정확한 `baseline_sha..head_sha` diff와 fingerprint를 한 번 `WORKER_COMPLETE`로 보고하고 멈춘다. Terra는 Sol 승인을 polling하지 않는다.
 5. controller만 확인된 identity로 `wait_threads`/`read_thread`를 관찰한다. `WORKER_COMPLETE`는 `SOL_REVIEW_PENDING`으로 전이하며 Sol 리뷰가 구현 실패·거절을 뜻하지 않는다.
 6. 자동 Goal turn이 외부 Sol 승인을 기다리다 3회 후 blocked가 되면 `bundle_state=WORKER_COMPLETE`, `review_state=pending`, `goal_status=blocked`, `blocked_reason=awaiting_external_sol_review`를 분리해 기록한다.
@@ -58,6 +62,7 @@ API lifecycle 예시는 `threadId`, `hostId`, `afterCursor` camelCase만 쓴다.
 ## 금지 사항
 
 - 사용자 승인 없는 새 task/thread, parallel dispatch, project worktree 생성
+- activation 전 `create_goal`, commentary, source mutation, test, commit
 - `clientThreadId`를 lifecycle 도구에 전달하거나 setup 중복 생성
 - Sol 승인 전 `update_goal(status="complete")`, worker의 Sol review polling, 검증 전 `INTEGRATED`/`VERIFIED` 승격
 - 기존 dirty 변경 reset, clean, restore, stash와 승인 없는 dependency 설치·파일 삭제·push·publish·deploy

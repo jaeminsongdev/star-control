@@ -681,7 +681,9 @@ def main() -> int:
         'thinking: "max"',
         'model: "gpt-5.6-terra"',
         'thinking: "high"',
-        "prompt: <complete Context Pack>",
+        "BOOTSTRAP_ONLY bundle_id=<unique bundle_id>",
+        "this is not a Bundle assignment",
+        "complete Context Pack은 post-create identity",
         "target: {",
         "projectId: <list_projects projectId>",
         'environment: { type: "worktree" }',
@@ -691,6 +693,10 @@ def main() -> int:
         "read_thread({ threadId, hostId })",
         "send_message_to_thread({ threadId, prompt:",
         "clientThreadId",
+        "THREAD_IDENTITY_CONFIRMED",
+        "ACTIVATE_BUNDLE",
+        "activation ACK와 Goal active",
+        "0건 timeout 또는 복수 match",
         "SOL_REVIEW_PENDING",
         "EXISTING_GOAL_RESUMED",
         "awaiting_external_sol_review",
@@ -702,12 +708,24 @@ def main() -> int:
     for forbidden in ("spawn_agent", "followup_task", "wait_agent", "interrupt_agent"):
         if forbidden in parallel_skill:
             errors.append(f"parallel implementation Skill retains obsolete collaboration API: {forbidden}")
-    for invalid_thread_call in (
-        "message: <complete Context Pack>",
-        "project: <list_projects projectId>",
-    ):
-        if invalid_thread_call in parallel_skill:
-            errors.append(f"parallel implementation Skill retains non-schema create_thread field: {invalid_thread_call}")
+    invalid_thread_call_patterns = (
+        "create_thread({\n  message:",
+        "create_thread({\n  project:",
+    )
+    for component_path in CODEX_PARALLEL_COMPONENT_PATHS:
+        component_text = component_path.read_text(encoding="utf-8") if component_path.is_file() else ""
+        for invalid_thread_call in invalid_thread_call_patterns:
+            if invalid_thread_call in component_text:
+                errors.append(
+                    "parallel implementation rendered component retains actual non-schema "
+                    f"create_thread field: {component_path.name} {invalid_thread_call}"
+                )
+            negative_candidate = f"{component_text}\n{invalid_thread_call} <invalid value>\n}})"
+            if invalid_thread_call not in negative_candidate:
+                errors.append(
+                    "parallel implementation negative append detector is inactive: "
+                    f"{component_path.name} {invalid_thread_call}"
+                )
     parallel_agent = (
         CODEX_PARALLEL_COMPONENT_PATHS[1].read_text(encoding="utf-8")
         if CODEX_PARALLEL_COMPONENT_PATHS[1].is_file()
@@ -744,6 +762,10 @@ def main() -> int:
         "awaiting_external_sol_review",
         "GOAL_COMPLETE",
         "FINAL_VALIDATION -> VERIFIED",
+        "BOOTSTRAP_ONLY",
+        "THREAD_IDENTITY_CONFIRMED",
+        "ACTIVATE_BUNDLE",
+        "0건 timeout 또는 복수 match",
     ):
         if required not in parallel_scheduling:
             errors.append(f"parallel implementation lifecycle is missing: {required}")
@@ -764,17 +786,18 @@ def main() -> int:
             f"parallel implementation forward scenarios must be exact 1..12: observed={observed_scenarios}"
         )
     for required in (
-        "새 Codex App thread 0건",
-        'target:{type:"project", projectId, environment:{type:"worktree"}}',
-        "Sol thread도 prompt",
-        "THREAD_CREATING fail-closed",
-        "id(threadId), hostId, cwd",
+        "일반 구현 요청은 새 Codex App thread 0건",
+        "unique bundle_id, BOOTSTRAP_ONLY",
+        "direct threadId/hostId도 project/worktree identity",
+        "clientThreadId only는 bounded list_threads",
+        "activation 전에는 Bundle assignment가 아니며",
+        "same file/contract ownership은 한 Bundle",
+        "preexisting dirty paths와 owned worktree baseline/head/fingerprint",
         "WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고",
-        "bundle_state=WORKER_COMPLETE",
-        "EXISTING_GOAL_RESUMED",
+        "자동 Goal turn 3회 뒤 blocked는",
+        "blocked 뒤 correction/approval은 same threadId",
         "exact baseline_sha/head_sha/diff_fingerprint Sol 승인",
-        "dependency 설치·추가·제거·uninstall",
-        "`VERIFIED`를 선언하지 않는다",
+        "승인 없는 dependency 설치·삭제·push",
     ):
         if required not in parallel_safety:
             errors.append(f"parallel implementation safety contract is missing: {required}")

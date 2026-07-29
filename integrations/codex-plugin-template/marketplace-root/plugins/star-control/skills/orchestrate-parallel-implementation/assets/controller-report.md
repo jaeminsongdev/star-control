@@ -6,6 +6,10 @@
 - thread-creation authorization: explicit|not-granted|not-needed-single-agent
 
 ## Identity and review
+- bootstrap_state / activation_state / bundle_id:
+- scope_in / scope_out / depends_on / approval_boundary:
+- ownership.files/contracts/schemas/databases/ports/build_outputs:
+- preexisting_dirty_paths / owned_paths / review identity:
 
 ## Terra Bundle
 | Bundle | thread_id / host_id | worktree_root | baseline_sha..head_sha / fingerprint | bundle_state | review_state | goal_status | blocked_reason |
@@ -16,7 +20,7 @@
 - combined whole-diff direct review: approved|changes_requested|not_run
 
 ## Validation and remaining risk
-- worker / final commands and results:
+- worker / final validation [{command, expected/result}]:
 - pending external approval or blocker:
 ```
 

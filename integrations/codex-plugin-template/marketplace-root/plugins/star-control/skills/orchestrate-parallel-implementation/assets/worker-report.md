@@ -3,6 +3,8 @@
 ```markdown
 ## Bundle identity
 - bundle_id:
+- bootstrap_state: BOOTSTRAP_ONLY|THREAD_IDENTITY_CONFIRMED
+- activation_state: ACTIVATE_BUNDLE|GOAL_ACTIVE
 - worker_profile: gpt-5.6-terra/high
 - thread_id:
 - host_id:
@@ -13,6 +15,13 @@
 - goal_id:
 - goal_status: active|blocked|complete
 
+## Context and ownership
+- scope_in / scope_out / depends_on:
+- ownership.files/contracts/schemas/databases/ports/build_outputs:
+- approval_boundary:
+- preexisting_dirty_paths / owned_paths:
+- review identity:
+
 ## Review state
 - bundle_state: WORKER_COMPLETE
 - review_state: pending|approved|changes_requested
@@ -21,7 +30,7 @@
 
 ## Change and validation
 - changed files / baseline_sha..head_sha summary:
-- commands / exit codes:
+- validation [{command, expected/result}] / exit codes:
 - shared-contract impact:
 
 ## Handoff

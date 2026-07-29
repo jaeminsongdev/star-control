@@ -254,7 +254,9 @@ foreach ($requiredParallelContract in @(
     'thinking: "max"',
     'model: "gpt-5.6-terra"',
     'thinking: "high"',
-    'prompt: <complete Context Pack>',
+    'BOOTSTRAP_ONLY bundle_id=<unique bundle_id>',
+    'this is not a Bundle assignment',
+    'complete Context Pack은 post-create identity',
     'target: {',
     'projectId: <list_projects projectId>',
     'environment: { type: "worktree" }',
@@ -264,6 +266,10 @@ foreach ($requiredParallelContract in @(
     'read_thread({ threadId, hostId })',
     'send_message_to_thread({ threadId, prompt:',
     'clientThreadId',
+    'THREAD_IDENTITY_CONFIRMED',
+    'ACTIVATE_BUNDLE',
+    'activation ACK와 Goal active',
+    '0건 timeout 또는 복수 match',
     'SOL_REVIEW_PENDING',
     'EXISTING_GOAL_RESUMED',
     'awaiting_external_sol_review',
@@ -275,8 +281,16 @@ foreach ($requiredParallelContract in @(
 foreach ($forbiddenParallelApi in @('spawn_agent', 'followup_task', 'wait_agent', 'interrupt_agent')) {
     Assert-ValidationContract -Condition (-not $parallelSkill.Contains($forbiddenParallelApi)) -Message "parallel implementation Skill removes obsolete collaboration API: $forbiddenParallelApi"
 }
-foreach ($invalidThreadCall in @('message: <complete Context Pack>', 'project: <list_projects projectId>')) {
-    Assert-ValidationContract -Condition (-not $parallelSkill.Contains($invalidThreadCall)) -Message "parallel implementation Skill rejects non-schema create_thread field: $invalidThreadCall"
+$invalidThreadCallPatterns = @("create_thread({`n  message:", "create_thread({`n  project:")
+$parallelComponents = @(Get-ChildItem -LiteralPath $parallelSkillRoot -File -Recurse | Where-Object { $_.FullName -notmatch '\\.git\\' })
+Assert-ValidationContract -Condition ($parallelComponents.Count -eq 9) -Message 'parallel implementation Skill has exactly nine rendered components for actual-call validation'
+foreach ($component in $parallelComponents) {
+    $componentText = Get-Content -LiteralPath $component.FullName -Raw -Encoding UTF8
+    foreach ($invalidThreadCall in $invalidThreadCallPatterns) {
+        Assert-ValidationContract -Condition (-not $componentText.Contains($invalidThreadCall)) -Message "parallel implementation rendered component rejects actual non-schema create_thread call: $($component.Name) $invalidThreadCall"
+        $negativeCandidate = "$componentText`n$invalidThreadCall <invalid value>`n})"
+        Assert-ValidationContract -Condition ($negativeCandidate.Contains($invalidThreadCall)) -Message "parallel implementation negative append detector remains active: $($component.Name) $invalidThreadCall"
+    }
 }
 $parallelAgent = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'agents/openai.yaml') -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($parallelAgent.Contains('allow_implicit_invocation: true')) -Message 'parallel implementation Skill is available by default'
@@ -289,11 +303,14 @@ Assert-ValidationContract -Condition ($parallelLifecycle.Contains('awaiting_exte
 foreach ($requiredThreadLifecycle in @('list_projects', 'list_threads', 'create_thread', 'wait_threads', 'read_thread', 'send_message_to_thread', 'clientThreadId', 'threadId', 'hostId', 'afterCursor')) {
     Assert-ValidationContract -Condition ($parallelLifecycle.Contains($requiredThreadLifecycle)) -Message "parallel implementation lifecycle uses confirmed Codex App threads: $requiredThreadLifecycle"
 }
+foreach ($requiredBootstrapState in @('BOOTSTRAP_ONLY', 'THREAD_IDENTITY_CONFIRMED', 'ACTIVATE_BUNDLE', 'GOAL_ACTIVE', 'unique bundle_id + expected projectId + expected worktree/project identity', '0건 timeout 또는 복수 match는 controller `BLOCKED`')) {
+    Assert-ValidationContract -Condition ($parallelLifecycle.Contains($requiredBootstrapState)) -Message "parallel implementation lifecycle preserves bootstrap activation: $requiredBootstrapState"
+}
 $parallelSafety = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'references/safety-and-validation.md') -Raw -Encoding UTF8
 $parallelScenarioSection = $parallelSafety.Split('## 필수 forward scenario', 2)[1].Split('## 완료 증거', 2)[0]
 $parallelScenarioNumbers = @([regex]::Matches($parallelScenarioSection, '(?m)^(\d+)\.\s') | ForEach-Object { [int]$_.Groups[1].Value })
 Assert-ValidationContract -Condition (($parallelScenarioNumbers -join ',') -eq ((1..12) -join ',')) -Message 'parallel implementation Skill keeps the exact 12 forward scenarios'
-foreach ($requiredForwardScenario in @('새 Codex App thread 0건', 'target:{type:"project", projectId, environment:{type:"worktree"}}', 'Sol thread도 prompt', 'THREAD_CREATING fail-closed', 'id(threadId), hostId, cwd', 'WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고', 'bundle_state=WORKER_COMPLETE', 'EXISTING_GOAL_RESUMED', 'exact baseline_sha/head_sha/diff_fingerprint Sol 승인', 'dependency 설치·추가·제거·uninstall', '`VERIFIED`를 선언하지 않는다')) {
+foreach ($requiredForwardScenario in @('일반 구현 요청은 새 Codex App thread 0건', 'unique bundle_id, BOOTSTRAP_ONLY', 'direct threadId/hostId도 project/worktree identity', 'clientThreadId only는 bounded list_threads', 'activation 전에는 Bundle assignment가 아니며', 'same file/contract ownership은 한 Bundle', 'preexisting dirty paths와 owned worktree baseline/head/fingerprint', 'WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고', '자동 Goal turn 3회 뒤 blocked는', 'blocked 뒤 correction/approval은 same threadId', 'exact baseline_sha/head_sha/diff_fingerprint Sol 승인', '승인 없는 dependency 설치·삭제·push')) {
     Assert-ValidationContract -Condition ($parallelSafety.Contains($requiredForwardScenario)) -Message "parallel implementation forward scenario: $requiredForwardScenario"
 }
 

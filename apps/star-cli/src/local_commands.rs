@@ -1028,7 +1028,7 @@ fn session_start_hook_output() -> serde_json::Value {
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
             "additionalContext": format!(
-                "`{SESSION_START_SKILL_NAME}` 지침을 따른다. `{PARALLEL_IMPLEMENTATION_SKILL_NAME}`의 implicit invocation은 새 Codex task/thread 승인이나 병렬 위임이 아니다. 일반 구현은 현재 task single-agent로 수행하며, 사용자가 새 task/thread 또는 parallel delegation을 명시 승인한 경우에만 `list_projects({{}})` 뒤 `prompt`와 `target:{{type:project, projectId, environment:{{type:worktree}}}}`의 Codex App thread를 만든다. clientThreadId만 있으면 list_threads가 threadId/hostId/cwd를 resolve할 때까지 fail-closed하고 lifecycle call을 하지 않는다. Terra는 WORKER_COMPLETE 한 번 뒤 멈추며 controller만 Sol review를 관찰하고, same threadId/Goal correction은 exact diff 승인 뒤에만 complete할 수 있다. {SERVER_INSTRUCTIONS}"
+                "`{SESSION_START_SKILL_NAME}` 지침을 따른다. `{PARALLEL_IMPLEMENTATION_SKILL_NAME}`의 implicit invocation은 새 Codex task/thread 승인이나 병렬 위임이 아니다. 일반 구현은 현재 task single-agent로 수행한다. 명시 승인 Bundle은 `list_projects({{}})` 뒤 unique bundle_id/BOOTSTRAP_ONLY만 든 prompt와 `target:{{type:project, projectId, environment:{{type:worktree}}}}`로 bootstrap하고, threadId/hostId/cwd identity 확인 뒤 같은 threadId에 complete Context Pack + ACTIVATE_BUNDLE을 보낸다. activation 전 Goal/commentary/mutation/test/commit은 금지하며 clientThreadId만 있으면 bounded list_threads unique match가 resolve될 때까지 fail-closed한다. Terra는 WORKER_COMPLETE 한 번 뒤 멈추며 controller만 Sol review를 관찰하고, same threadId/Goal correction은 exact diff 승인 뒤에만 complete할 수 있다. {SERVER_INSTRUCTIONS}"
             )
         }
     })
@@ -1232,7 +1232,7 @@ mod tests {
         let serialized = serde_json::to_string(&output).unwrap();
         assert_eq!(
             serialized,
-            r#"{"continue":true,"hookSpecificOutput":{"additionalContext":"`star-control-operations` 지침을 따른다. `orchestrate-parallel-implementation`의 implicit invocation은 새 Codex task/thread 승인이나 병렬 위임이 아니다. 일반 구현은 현재 task single-agent로 수행하며, 사용자가 새 task/thread 또는 parallel delegation을 명시 승인한 경우에만 `list_projects({})` 뒤 `prompt`와 `target:{type:project, projectId, environment:{type:worktree}}`의 Codex App thread를 만든다. clientThreadId만 있으면 list_threads가 threadId/hostId/cwd를 resolve할 때까지 fail-closed하고 lifecycle call을 하지 않는다. Terra는 WORKER_COMPLETE 한 번 뒤 멈추며 controller만 Sol review를 관찰하고, same threadId/Goal correction은 exact diff 승인 뒤에만 complete할 수 있다. Star-Control 작업은 fixed MCP Gateway와 Catalog-declared CLI-only 경계를 구분한다. MCP action을 사용할 때는 `star_tool_search`로 현재 registry를 검색하고 action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 확인한다. describe에서 현재 Schema, 위험 lane, `descriptor_hash`, `required_call_tool`을 받은 뒤 그 tool에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. package나 manifest의 ready 상태는 action readiness가 아니다. Catalog에 MCP action이 없는 기능과 C01 Profile만 설치된 `star` CLI의 선언된 command로 실행하고 live `profile show|resolve` 결과를 고정한다. MCP action이 non-ready인 기능을 CLI로 우회하지 않는다. ready MCP action도 CLI-only command도 사용할 수 없으면 일반 Codex 개발 작업을 막지 말고 프로젝트 native 도구를 사용하며 fallback 사실과 이유와 Star-Control evidence 부재를 결과에 기록한다. `star_tool_registry_status`는 진단용이며 필수 선행 Gate가 아니다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`, `question_required`와 Operation ID 반환은 완료가 아니다.","hookEventName":"SessionStart"}}"#
+            r#"{"continue":true,"hookSpecificOutput":{"additionalContext":"`star-control-operations` 지침을 따른다. `orchestrate-parallel-implementation`의 implicit invocation은 새 Codex task/thread 승인이나 병렬 위임이 아니다. 일반 구현은 현재 task single-agent로 수행한다. 명시 승인 Bundle은 `list_projects({})` 뒤 unique bundle_id/BOOTSTRAP_ONLY만 든 prompt와 `target:{type:project, projectId, environment:{type:worktree}}`로 bootstrap하고, threadId/hostId/cwd identity 확인 뒤 같은 threadId에 complete Context Pack + ACTIVATE_BUNDLE을 보낸다. activation 전 Goal/commentary/mutation/test/commit은 금지하며 clientThreadId만 있으면 bounded list_threads unique match가 resolve될 때까지 fail-closed한다. Terra는 WORKER_COMPLETE 한 번 뒤 멈추며 controller만 Sol review를 관찰하고, same threadId/Goal correction은 exact diff 승인 뒤에만 complete할 수 있다. Star-Control 작업은 fixed MCP Gateway와 Catalog-declared CLI-only 경계를 구분한다. MCP action을 사용할 때는 `star_tool_search`로 현재 registry를 검색하고 action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 확인한다. describe에서 현재 Schema, 위험 lane, `descriptor_hash`, `required_call_tool`을 받은 뒤 그 tool에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. package나 manifest의 ready 상태는 action readiness가 아니다. Catalog에 MCP action이 없는 기능과 C01 Profile만 설치된 `star` CLI의 선언된 command로 실행하고 live `profile show|resolve` 결과를 고정한다. MCP action이 non-ready인 기능을 CLI로 우회하지 않는다. ready MCP action도 CLI-only command도 사용할 수 없으면 일반 Codex 개발 작업을 막지 말고 프로젝트 native 도구를 사용하며 fallback 사실과 이유와 Star-Control evidence 부재를 결과에 기록한다. `star_tool_registry_status`는 진단용이며 필수 선행 Gate가 아니다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`, `question_required`와 Operation ID 반환은 완료가 아니다.","hookEventName":"SessionStart"}}"#
         );
         let context = output["hookSpecificOutput"]["additionalContext"]
             .as_str()
@@ -1249,10 +1249,7 @@ mod tests {
                 .contains("implicit invocation은 새 Codex task/thread 승인이나 병렬 위임이 아니다")
         );
         assert!(context.contains("list_projects({})"));
-        assert!(
-            context
-                .contains("clientThreadId만 있으면 list_threads가 threadId/hostId/cwd를 resolve")
-        );
+        assert!(context.contains("BOOTSTRAP_ONLY만 든 prompt"));
     }
 
     #[test]
