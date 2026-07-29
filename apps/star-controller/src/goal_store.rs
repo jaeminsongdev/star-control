@@ -934,6 +934,27 @@ mod tests {
             .unwrap()
     }
 
+    fn legacy_goal_fingerprint_without_completion_evidence(goal: &GoalRecord) -> Sha256Hash {
+        canonical_sha256(&serde_json::json!({
+            "domain": GOAL_RECORD_SCHEMA_ID,
+            "version": GOAL_RECORD_SCHEMA_VERSION,
+            "value": {
+                "goal_id": goal.goal_id,
+                "revision": goal.revision,
+                "objective": goal.objective,
+                "project_key": goal.project_key,
+                "status": goal.status,
+                "plan_revision": goal.plan_revision,
+                "plan_items": goal.plan_items,
+                "pending_question": goal.pending_question,
+                "run": goal.run,
+                "created_at": goal.created_at,
+                "updated_at": goal.updated_at,
+            }
+        }))
+        .unwrap()
+    }
+
     fn stage_graph(
         goal_id: &GoalId,
         plan_revision: u64,
@@ -1010,6 +1031,37 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(error, GoalStoreError::IdempotencyConflict));
+    }
+
+    #[test]
+    fn legacy_goal_store_without_completion_evidence_remains_appendable() {
+        let mut store = store("legacy-goal-fingerprint");
+        let path = store.path.clone();
+        let legacy = start(&mut store, "legacy-goal");
+        store
+            .file
+            .goals
+            .get_mut(legacy.goal_id.as_str())
+            .unwrap()
+            .content_fingerprint = legacy_goal_fingerprint_without_completion_evidence(&legacy);
+
+        let mut persisted = serde_json::to_value(&store.file).unwrap();
+        let object = persisted.as_object_mut().unwrap();
+        object.remove("goal_configs");
+        object.remove("stage_graphs");
+        object.remove("stage_graph_history");
+        object.remove("stage_results");
+        fs::write(&path, serde_json::to_vec_pretty(&persisted).unwrap()).unwrap();
+        drop(store);
+
+        let mut reopened = GoalStore::load(path).unwrap();
+        assert_eq!(
+            reopened.get(legacy.goal_id.as_str()).unwrap().goal_id,
+            legacy.goal_id
+        );
+        let next = start(&mut reopened, "new-goal-after-legacy");
+        assert_ne!(next.goal_id, legacy.goal_id);
+        assert_eq!(reopened.file.goals.len(), 2);
     }
 
     #[test]

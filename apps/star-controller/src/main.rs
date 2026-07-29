@@ -3877,7 +3877,7 @@ fn normalize_string_sets(
     Ok(())
 }
 
-fn decode_search_cursor(value: &str) -> Result<SearchCursor, ()> {
+fn decode_canonical_cursor<T: serde::de::DeserializeOwned>(value: &str) -> Result<T, ()> {
     if value.len() > 1_024 {
         return Err(());
     }
@@ -3890,7 +3890,7 @@ fn decode_search_cursor(value: &str) -> Result<SearchCursor, ()> {
     serde_json::from_value(decoded).map_err(|_| ())
 }
 
-fn encode_search_cursor(cursor: &SearchCursor) -> String {
+fn encode_canonical_cursor<T: serde::Serialize>(cursor: &T) -> String {
     URL_SAFE_NO_PAD.encode(
         star_contracts::canonical::jcs_bytes(
             &serde_json::to_value(cursor).expect("cursor serializes"),
@@ -3923,28 +3923,6 @@ fn status_filter_hash(payload: &serde_json::Value) -> Result<Sha256Hash, ()> {
     }
     normalize_string_sets(object, &["sources"])?;
     star_contracts::canonical::canonical_sha256(&normalized).map_err(|_| ())
-}
-
-fn decode_status_cursor(value: &str) -> Result<StatusCursor, ()> {
-    if value.len() > 1_024 {
-        return Err(());
-    }
-    let bytes = URL_SAFE_NO_PAD.decode(value).map_err(|_| ())?;
-    let text = std::str::from_utf8(&bytes).map_err(|_| ())?;
-    let decoded = parse_no_duplicate_keys(text).map_err(|_| ())?;
-    if star_contracts::canonical::jcs_bytes(&decoded).map_err(|_| ())? != bytes {
-        return Err(());
-    }
-    serde_json::from_value(decoded).map_err(|_| ())
-}
-
-fn encode_status_cursor(cursor: &StatusCursor) -> String {
-    URL_SAFE_NO_PAD.encode(
-        star_contracts::canonical::jcs_bytes(
-            &serde_json::to_value(cursor).expect("cursor serializes"),
-        )
-        .expect("cursor canonicalizes"),
-    )
 }
 
 fn status_cursor_is_stale(
@@ -6800,7 +6778,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .payload
                 .get("cursor")
                 .and_then(|value| value.as_str())
-                .map(decode_status_cursor)
+                .map(decode_canonical_cursor::<StatusCursor>)
                 .transpose()
             {
                 Ok(cursor) => cursor,
@@ -6918,7 +6896,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .and_then(|item| item["package_id"].as_str())
                     .expect("non-empty page")
                     .to_owned();
-                encode_status_cursor(&StatusCursor {
+                encode_canonical_cursor(&StatusCursor {
                     registry_revision: registry.revision,
                     diagnostic_revision: registry.diagnostic_revision,
                     filter_hash: filter_hash.clone(),
@@ -7015,7 +6993,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .payload
                 .get("cursor")
                 .and_then(|value| value.as_str())
-                .map(decode_search_cursor)
+                .map(decode_canonical_cursor::<SearchCursor>)
                 .transpose()
             {
                 Ok(cursor) => cursor,
@@ -7142,7 +7120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             items.truncate(limit);
             let next_cursor = has_more.then(|| {
                 let (last_score, last_tool_id, _) = items.last().expect("page has an item");
-                encode_search_cursor(&SearchCursor {
+                encode_canonical_cursor(&SearchCursor {
                     snapshot_hash: snapshot_hash.clone(),
                     query_hash: query_hash.clone(),
                     last_score: *last_score,
@@ -26809,24 +26787,27 @@ mod tests {
             last_score: 600,
             last_tool_id: "user.fake.echo".to_owned(),
         };
-        let decoded = decode_search_cursor(&encode_search_cursor(&cursor)).unwrap();
+        let decoded =
+            decode_canonical_cursor::<SearchCursor>(&encode_canonical_cursor(&cursor)).unwrap();
         assert_eq!(decoded.snapshot_hash, cursor.snapshot_hash);
         assert_eq!(decoded.query_hash, cursor.query_hash);
         assert_eq!(decoded.last_score, cursor.last_score);
         assert_eq!(decoded.last_tool_id, cursor.last_tool_id);
         assert_ne!(decoded.snapshot_hash, Sha256Hash::digest(b"changed"));
-        let encoded = encode_search_cursor(&cursor);
+        let encoded = encode_canonical_cursor(&cursor);
         let canonical = URL_SAFE_NO_PAD.decode(&encoded).unwrap();
         let noncanonical = URL_SAFE_NO_PAD
             .encode(serde_json::to_vec_pretty(&serde_json::to_value(&cursor).unwrap()).unwrap());
-        assert!(decode_search_cursor(&noncanonical).is_err());
+        assert!(decode_canonical_cursor::<SearchCursor>(&noncanonical).is_err());
         let duplicate = String::from_utf8(canonical).unwrap().replacen(
             "\"last_score\":600",
             "\"last_score\":600,\"last_score\":601",
             1,
         );
-        assert!(decode_search_cursor(&URL_SAFE_NO_PAD.encode(duplicate)).is_err());
-        assert!(decode_search_cursor(&"a".repeat(1_025)).is_err());
+        assert!(
+            decode_canonical_cursor::<SearchCursor>(&URL_SAFE_NO_PAD.encode(duplicate)).is_err()
+        );
+        assert!(decode_canonical_cursor::<SearchCursor>(&"a".repeat(1_025)).is_err());
 
         let first = search_query_hash(&serde_json::json!({
             "query":"  ＴＯＯＬ  ",
@@ -27191,7 +27172,8 @@ mod tests {
             filter_hash: Sha256Hash::digest(b"filter"),
             last_package_id: "user.fake.echo".to_owned(),
         };
-        let decoded = decode_status_cursor(&encode_status_cursor(&cursor)).unwrap();
+        let decoded =
+            decode_canonical_cursor::<StatusCursor>(&encode_canonical_cursor(&cursor)).unwrap();
         assert!(!status_cursor_is_stale(&decoded, 3, 7, &cursor.filter_hash));
         assert!(status_cursor_is_stale(&decoded, 4, 7, &cursor.filter_hash));
         assert!(status_cursor_is_stale(&decoded, 3, 8, &cursor.filter_hash));
@@ -27203,7 +27185,7 @@ mod tests {
         ));
         let noncanonical = URL_SAFE_NO_PAD
             .encode(serde_json::to_vec_pretty(&serde_json::to_value(&cursor).unwrap()).unwrap());
-        assert!(decode_status_cursor(&noncanonical).is_err());
+        assert!(decode_canonical_cursor::<StatusCursor>(&noncanonical).is_err());
     }
 
     #[tokio::test]

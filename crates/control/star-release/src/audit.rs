@@ -43,7 +43,7 @@ pub const PRODUCT_PROFILE_AUDIT_ORDER: [&str; 16] = [
     "ci_release_deploy",
 ];
 pub const PRODUCT_GENERATED_SCHEMA_COUNT: u32 = 217;
-pub const PRODUCT_STABLE_ERROR_COUNT: u32 = 528;
+pub const PRODUCT_STABLE_ERROR_COUNT: u32 = 533;
 pub const PRODUCT_MCP_MATRIX_COUNT: u32 = 170;
 const PRODUCT_PROFILE_CONFORMANCE_REFS: [(&str, &str); 10] = [
     (

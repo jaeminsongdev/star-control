@@ -213,7 +213,11 @@ impl GoalRecord {
         } else if self.status == GoalStatus::Completed {
             return Err(GoalContractError::Lifecycle);
         }
-        if self.expected_fingerprint()? != self.content_fingerprint {
+        if self.expected_fingerprint()? != self.content_fingerprint
+            && (self.completion_evidence_ref.is_some()
+                || self.legacy_fingerprint_without_completion_evidence()?
+                    != self.content_fingerprint)
+        {
             return Err(GoalContractError::Fingerprint);
         }
         Ok(())
@@ -234,6 +238,29 @@ impl GoalRecord {
                 "pending_question": self.pending_question,
                 "run": self.run,
                 "completion_evidence_ref": self.completion_evidence_ref,
+                "created_at": self.created_at,
+                "updated_at": self.updated_at,
+            }
+        }))
+        .map_err(|_| GoalContractError::Fingerprint)
+    }
+
+    fn legacy_fingerprint_without_completion_evidence(
+        &self,
+    ) -> Result<Sha256Hash, GoalContractError> {
+        canonical_sha256(&serde_json::json!({
+            "domain": GOAL_RECORD_SCHEMA_ID,
+            "version": GOAL_RECORD_SCHEMA_VERSION,
+            "value": {
+                "goal_id": self.goal_id,
+                "revision": self.revision,
+                "objective": self.objective,
+                "project_key": self.project_key,
+                "status": self.status,
+                "plan_revision": self.plan_revision,
+                "plan_items": self.plan_items,
+                "pending_question": self.pending_question,
+                "run": self.run,
                 "created_at": self.created_at,
                 "updated_at": self.updated_at,
             }
@@ -317,5 +344,48 @@ mod tests {
             sha256: Sha256Hash::digest(b"stale-evidence"),
         });
         assert_eq!(goal.seal(), Err(GoalContractError::Plan));
+    }
+
+    #[test]
+    fn exact_legacy_goal_fingerprint_without_completion_evidence_remains_valid() {
+        let timestamp = goal_timestamp_now();
+        let mut goal = GoalRecord {
+            schema_id: GOAL_RECORD_SCHEMA_ID.to_owned(),
+            schema_version: GOAL_RECORD_SCHEMA_VERSION,
+            goal_id: GoalId::new(),
+            revision: 2,
+            objective: "read a goal written before completion evidence was added".to_owned(),
+            project_key: Some("star-control".to_owned()),
+            status: GoalStatus::Cancelled,
+            plan_revision: 0,
+            plan_items: Vec::new(),
+            pending_question: None,
+            run: Some(GoalRunState {
+                run_id: RunId::new(),
+                attempt: 1,
+                status: GoalRunStatus::Cancelled,
+                continued_at: timestamp.clone(),
+            }),
+            completion_evidence_ref: None,
+            created_at: timestamp.clone(),
+            updated_at: timestamp,
+            content_fingerprint: Sha256Hash::digest(b"unsealed"),
+        };
+        goal.content_fingerprint = goal
+            .legacy_fingerprint_without_completion_evidence()
+            .unwrap();
+
+        let serialized = serde_json::to_value(&goal).unwrap();
+        assert!(serialized.get("completion_evidence_ref").is_none());
+        let reloaded: GoalRecord = serde_json::from_value(serialized).unwrap();
+        reloaded.validate().unwrap();
+
+        let resealed = reloaded.clone().seal().unwrap();
+        assert_ne!(resealed.content_fingerprint, reloaded.content_fingerprint);
+        resealed.validate().unwrap();
+
+        let mut tampered = reloaded;
+        tampered.objective.push_str(" with tampering");
+        assert_eq!(tampered.validate(), Err(GoalContractError::Fingerprint));
     }
 }

@@ -27,7 +27,7 @@ use star_contracts::{
         SymbolResolution,
     },
 };
-use star_domain::versioned_fingerprint;
+use star_domain::{PersistenceRedactor, versioned_fingerprint};
 
 use crate::{FileObservation, ProjectError, ProjectObservation};
 
@@ -69,7 +69,7 @@ impl Default for IndexPolicy {
             hardcoding_include_vendor: false,
             max_text_tokens_per_file: 250_000,
             classification_contract_version: 1,
-            text_adapter_version: 1,
+            text_adapter_version: 2,
         }
     }
 }
@@ -699,10 +699,12 @@ fn discover_toolchains(
     request: &CodeIndexBuildRequest<'_>,
 ) -> Result<Vec<ToolchainRecord>, ProjectError> {
     let mut records = Vec::new();
+    let redactor = PersistenceRedactor::for_current_user();
     for manifest in &request.observation.files {
         let path = manifest.path.as_str();
         let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
         let scope = path.rsplit_once('/').map(|(scope, _)| scope);
+        let manifest_text = persistence_safe_text(manifest, &redactor);
         let descriptor = match name.as_str() {
             "cargo.toml" => Some((
                 vec!["rust".to_owned()],
@@ -720,7 +722,7 @@ fn discover_toolchains(
             "package.json" => Some((
                 vec!["javascript".to_owned(), "typescript".to_owned()],
                 Some("node".to_owned()),
-                package_manager_from_package_json(manifest.text.as_deref()),
+                package_manager_from_package_json(manifest_text),
                 Vec::new(),
                 &["pnpm-lock.yaml", "yarn.lock", "package-lock.json"][..],
                 &[".nvmrc", ".node-version"][..],
@@ -785,7 +787,11 @@ fn discover_toolchains(
         let toolchain = first_observed_relative(request.observation, scope, toolchain_names)
             .or_else(|| first_observed_relative(request.observation, None, toolchain_names));
         let mut commands = if name == "package.json" {
-            package_json_commands(manifest, package_manager.as_deref().unwrap_or("npm"))
+            package_json_commands(
+                manifest,
+                manifest_text,
+                package_manager.as_deref().unwrap_or("npm"),
+            )
         } else {
             suggested
                 .into_iter()
@@ -807,8 +813,21 @@ fn discover_toolchains(
             package_manager = build_system.clone();
         }
         let toolchain_constraint = toolchain
-            .and_then(|file| extract_toolchain_constraint(&name, file.text.as_deref()))
-            .or_else(|| extract_manifest_constraint(&name, manifest.text.as_deref()));
+            .and_then(|file| {
+                extract_toolchain_constraint(&name, persistence_safe_text(file, &redactor))
+            })
+            .or_else(|| extract_manifest_constraint(&name, manifest_text));
+        let mut limitations = Vec::new();
+        if manifest.text.is_some() && manifest_text.is_none()
+            || toolchain.is_some_and(|file| {
+                file.text.is_some() && persistence_safe_text(file, &redactor).is_none()
+            })
+        {
+            limitations.push(limitation(
+                "INDEX_TOOLCHAIN_CONTENT_REDACTED",
+                Some(manifest.path.as_str()),
+            ));
+        }
         let mut evidence_refs = vec![manifest.path.clone()];
         if let Some(file) = lockfile {
             evidence_refs.push(file.path.clone());
@@ -837,6 +856,7 @@ fn discover_toolchains(
                 "provenance":DiscoveryProvenance::Declared,
                 "commands":commands,
                 "evidence_refs":evidence_refs,
+                "limitations":limitations,
             }),
         )
         .map_err(|_| ProjectError::Fingerprint)?;
@@ -855,7 +875,7 @@ fn discover_toolchains(
             provenance: DiscoveryProvenance::Declared,
             commands,
             evidence_refs,
-            limitations: Vec::new(),
+            limitations,
             content_fingerprint,
         });
     }
@@ -882,6 +902,15 @@ fn first_observed_relative<'a>(
 
 fn project_path(value: &str) -> Option<ProjectPathRef> {
     ProjectPathRef::parse(value.to_owned()).ok()
+}
+
+fn persistence_safe_text<'a>(
+    file: &'a FileObservation,
+    redactor: &PersistenceRedactor,
+) -> Option<&'a str> {
+    file.text
+        .as_deref()
+        .filter(|text| redactor.validate(text).is_ok())
 }
 
 fn executable_for(build_system: Option<&str>) -> String {
@@ -912,12 +941,10 @@ fn package_manager_from_package_json(text: Option<&str>) -> Option<String> {
 
 fn package_json_commands(
     file: &FileObservation,
+    text: Option<&str>,
     package_manager: &str,
 ) -> Vec<ToolchainCommandDeclaration> {
-    let value = file
-        .text
-        .as_deref()
-        .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok());
+    let value = text.and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok());
     let mut script_names = value
         .as_ref()
         .and_then(|value| value.get("scripts"))
@@ -1007,6 +1034,7 @@ fn safe_constraint(value: &str) -> Option<String> {
 fn discover_guidance(
     request: &CodeIndexBuildRequest<'_>,
 ) -> Result<Vec<GuidanceRecord>, ProjectError> {
+    let redactor = PersistenceRedactor::for_current_user();
     let mut records = request
         .observation
         .files
@@ -1018,19 +1046,18 @@ fn discover_guidance(
                 .as_str()
                 .rsplit_once('/')
                 .and_then(|(scope, _)| project_path(scope));
-            let heading_anchors = file
-                .text
-                .as_deref()
-                .map(guidance_heading_anchors)
-                .unwrap_or_default();
-            let limitations = if file.text.is_some() {
-                Vec::new()
-            } else {
-                vec![IndexLimitation {
-                    code: "GUIDANCE_CONTENT_UNAVAILABLE".to_owned(),
-                    scope: Some(file.path.as_str().to_owned()),
-                    parameters: BTreeMap::new(),
-                }]
+            let safe_text = persistence_safe_text(file, &redactor);
+            let heading_anchors = safe_text.map(guidance_heading_anchors).unwrap_or_default();
+            let limitations = match (file.text.is_some(), safe_text.is_some()) {
+                (false, _) => vec![limitation(
+                    "GUIDANCE_CONTENT_UNAVAILABLE",
+                    Some(file.path.as_str()),
+                )],
+                (true, false) => vec![limitation(
+                    "INDEX_GUIDANCE_CONTENT_REDACTED",
+                    Some(file.path.as_str()),
+                )],
+                (true, true) => Vec::new(),
             };
             let record_key = format!("guidance:{}", file.path.as_str());
             let content_fingerprint = versioned_fingerprint(
@@ -2303,7 +2330,7 @@ fn index_text_source(
     if !source.analysis_eligible || file.text.is_none() {
         let output_fingerprint = versioned_fingerprint(
             "star.index-partition-output.text",
-            1,
+            request.policy.text_adapter_version,
             &serde_json::json!({"excluded":true}),
         )
         .map_err(|_| ProjectError::Fingerprint)?;
@@ -2325,10 +2352,42 @@ fn index_text_source(
         });
         return Ok(());
     }
-    let tokens = text_tokens(
-        file.text.as_deref().unwrap_or_default(),
-        request.policy.max_text_tokens_per_file,
-    );
+    let text = file.text.as_deref().unwrap_or_default();
+    if PersistenceRedactor::for_current_user()
+        .validate(text)
+        .is_err()
+    {
+        let limitation = limitation("INDEX_TEXT_CONTENT_REDACTED", Some(source.path.as_str()));
+        output.limitations.push(limitation.clone());
+        let output_fingerprint = versioned_fingerprint(
+            "star.index-partition-output.text",
+            request.policy.text_adapter_version,
+            &serde_json::json!({
+                "redacted":true,
+                "source_content_sha256":source.content_sha256,
+                "limitations":[&limitation],
+            }),
+        )
+        .map_err(|_| ProjectError::Fingerprint)?;
+        output.partitions.push(IndexPartition {
+            partition_key,
+            kind: IndexPartitionKind::Text,
+            required: true,
+            requested_tier: IndexTier::Text,
+            used_tier: Some(IndexTier::Text),
+            state: IndexPartitionState::Succeeded,
+            input_fingerprint,
+            output_fingerprint: Some(output_fingerprint),
+            target_count: 0,
+            indexed_count: 0,
+            failed_count: 0,
+            excluded_count: 1,
+            cache_hit: false,
+            limitations: vec![limitation],
+        });
+        return Ok(());
+    }
+    let tokens = text_tokens(text, request.policy.max_text_tokens_per_file);
     let truncated = tokens.truncated;
     let first_entity = output.entities.len();
     let first_edge = output.edges.len();
@@ -2390,7 +2449,7 @@ fn index_text_source(
     }
     let output_fingerprint = versioned_fingerprint(
         "star.index-partition-output.text",
-        1,
+        request.policy.text_adapter_version,
         &serde_json::json!({
             "entities":&output.entities[first_entity..],
             "edges":&output.edges[first_edge..],
@@ -2505,7 +2564,8 @@ fn index_syntax_partition(
         return Ok(());
     };
     match adapter.analyze(file) {
-        Ok(analysis) => {
+        Ok(mut analysis) => {
+            sanitize_syntax_analysis(&mut analysis, source);
             let SyntaxAnalysis {
                 definitions,
                 references,
@@ -2628,7 +2688,8 @@ fn index_semantic_partition(
         return Ok(());
     }
     match adapter.analyze(file) {
-        Ok(analysis) => {
+        Ok(mut analysis) => {
+            sanitize_semantic_analysis(&mut analysis, source);
             let before_symbols = output.symbols.len();
             let before_references = output.references.len();
             append_adapter_analysis(
@@ -2716,6 +2777,95 @@ fn unavailable_partition(
         cache_hit: false,
         limitations: vec![limitation],
     }
+}
+
+fn sanitize_syntax_analysis(analysis: &mut SyntaxAnalysis, source: &SourceEntry) {
+    let redactor = PersistenceRedactor::for_current_user();
+    let mut redacted = sanitize_adapter_analysis(
+        &redactor,
+        &mut analysis.definitions,
+        &mut analysis.references,
+        &mut analysis.limitations,
+    );
+    let before_structural = analysis.structural_clone_candidates.len();
+    analysis.structural_clone_candidates.retain(|candidate| {
+        redactor.validate(&candidate.structural_kind).is_ok()
+            && candidate
+                .owning_symbol_identity
+                .as_deref()
+                .is_none_or(|value| redactor.validate(value).is_ok())
+    });
+    redacted |= before_structural != analysis.structural_clone_candidates.len();
+    let before_complexity = analysis.complexity_metric_candidates.len();
+    analysis
+        .complexity_metric_candidates
+        .retain(|candidate| redactor.validate(&candidate.owning_symbol_identity).is_ok());
+    redacted |= before_complexity != analysis.complexity_metric_candidates.len();
+    if redacted {
+        analysis.limitations.push(limitation(
+            "INDEX_ADAPTER_OUTPUT_REDACTED",
+            Some(source.path.as_str()),
+        ));
+    }
+}
+
+fn sanitize_semantic_analysis(analysis: &mut SemanticAnalysis, source: &SourceEntry) {
+    let redactor = PersistenceRedactor::for_current_user();
+    if sanitize_adapter_analysis(
+        &redactor,
+        &mut analysis.definitions,
+        &mut analysis.references,
+        &mut analysis.limitations,
+    ) {
+        analysis.limitations.push(limitation(
+            "INDEX_ADAPTER_OUTPUT_REDACTED",
+            Some(source.path.as_str()),
+        ));
+    }
+}
+
+fn sanitize_adapter_analysis(
+    redactor: &PersistenceRedactor,
+    definitions: &mut Vec<SyntaxDefinition>,
+    references: &mut Vec<SyntaxReference>,
+    limitations: &mut Vec<IndexLimitation>,
+) -> bool {
+    let before_definitions = definitions.len();
+    definitions.retain(|definition| {
+        redactor.validate(&definition.qualified_name).is_ok()
+            && redactor.validate(&definition.symbol_kind).is_ok()
+            && definition
+                .visibility
+                .as_deref()
+                .is_none_or(|value| redactor.validate(value).is_ok())
+    });
+    let before_references = references.len();
+    references.retain(|reference| {
+        redactor.validate(&reference.target_name).is_ok()
+            && redactor.validate(&reference.reference_kind).is_ok()
+    });
+    let mut redacted =
+        before_definitions != definitions.len() || before_references != references.len();
+    for limitation in limitations {
+        if redactor.validate(&limitation.code).is_err() {
+            limitation.code = "INDEX_ADAPTER_LIMITATION_REDACTED".to_owned();
+            redacted = true;
+        }
+        if limitation
+            .scope
+            .as_deref()
+            .is_some_and(|scope| redactor.validate(scope).is_err())
+        {
+            limitation.scope = None;
+            redacted = true;
+        }
+        let before_parameters = limitation.parameters.len();
+        limitation.parameters.retain(|key, value| {
+            redactor.validate(key).is_ok() && redactor.validate(value).is_ok()
+        });
+        redacted |= before_parameters != limitation.parameters.len();
+    }
+    redacted
 }
 
 fn append_adapter_analysis(
@@ -3297,6 +3447,155 @@ mod tests {
         assert!(result.truncated);
         assert_eq!(result.items[0].token, "가나다");
         assert_eq!(result.items[0].range.end_column, 4);
+    }
+
+    #[test]
+    fn sensitive_source_stays_in_inventory_while_raw_text_projection_is_redacted() {
+        let (root, project, checkout) = fixture();
+        fs::write(
+            root.join("src/private.rs"),
+            "pub fn visible() {}\nconst VALUE: &str = \"token=do-not-persist\";\n",
+        )
+        .unwrap();
+
+        let observation = observe_project(&project, &root, &ScanPolicy::default()).unwrap();
+        assert_eq!(
+            observation.completeness,
+            star_contracts::management::Completeness::Complete
+        );
+        assert!(
+            observation
+                .files
+                .iter()
+                .any(|file| file.path.as_str() == "src/private.rs")
+        );
+
+        let projection = build(&root, &project, &checkout, None);
+        let partition = projection
+            .snapshot
+            .partitions
+            .iter()
+            .find(|partition| partition.partition_key == "src/private.rs:text")
+            .unwrap();
+        assert_eq!(partition.state, IndexPartitionState::Succeeded);
+        assert_eq!(partition.excluded_count, 1);
+        assert!(
+            partition
+                .limitations
+                .iter()
+                .any(|item| item.code == "INDEX_TEXT_CONTENT_REDACTED")
+        );
+        let encoded = serde_json::to_string(&projection).unwrap();
+        assert!(!encoded.contains("do-not-persist"));
+        assert!(!encoded.contains("token="));
+    }
+
+    #[test]
+    fn sensitive_toolchain_and_guidance_content_only_persist_metadata_and_limitations() {
+        let (root, project, checkout) = fixture();
+        fs::write(
+            root.join("package.json"),
+            r#"{"packageManager":"npm@10.0.0","description":"token=do-not-persist","scripts":{"build":"vite build"}}"#,
+        )
+        .unwrap();
+        fs::write(root.join("AGENTS.md"), "# token=do-not-persist\n## Build\n").unwrap();
+
+        let projection = build(&root, &project, &checkout, None);
+        let toolchain = projection
+            .snapshot
+            .toolchains
+            .iter()
+            .find(|record| {
+                record
+                    .manifest_ref
+                    .as_ref()
+                    .is_some_and(|path| path.as_str() == "package.json")
+            })
+            .unwrap();
+        assert!(toolchain.commands.is_empty());
+        assert!(
+            toolchain
+                .limitations
+                .iter()
+                .any(|item| item.code == "INDEX_TOOLCHAIN_CONTENT_REDACTED")
+        );
+        let guidance = projection
+            .snapshot
+            .guidance
+            .iter()
+            .find(|record| record.source_ref.as_str() == "AGENTS.md")
+            .unwrap();
+        assert!(guidance.heading_anchors.is_empty());
+        assert!(
+            guidance
+                .limitations
+                .iter()
+                .any(|item| item.code == "INDEX_GUIDANCE_CONTENT_REDACTED")
+        );
+        let encoded = serde_json::to_string(&projection).unwrap();
+        assert!(!encoded.contains("do-not-persist"));
+        assert!(!encoded.contains("token="));
+    }
+
+    #[test]
+    fn adapter_projection_drops_prohibited_derived_names() {
+        let (root, project, checkout) = fixture();
+        let projection = build(&root, &project, &checkout, None);
+        let source = projection
+            .source_entries
+            .iter()
+            .find(|source| source.path.as_str() == "src/lib.rs")
+            .unwrap();
+        let range = SourceRange {
+            start_line: 1,
+            start_column: 1,
+            end_line: 1,
+            end_column: 8,
+        };
+        let prohibited_name = ["api", "key"].join("_");
+        let mut analysis = SyntaxAnalysis {
+            definitions: vec![SyntaxDefinition {
+                qualified_name: prohibited_name.clone(),
+                symbol_kind: "constant".to_owned(),
+                range: range.clone(),
+                visibility: None,
+            }],
+            references: vec![SyntaxReference {
+                target_name: prohibited_name,
+                range,
+                reference_kind: "read".to_owned(),
+                resolution: SymbolResolution::Unresolved,
+            }],
+            limitations: vec![IndexLimitation {
+                code: ["api", "key"].join("_"),
+                scope: Some("token=do-not-persist".to_owned()),
+                parameters: BTreeMap::from([
+                    ("safe".to_owned(), "value".to_owned()),
+                    ("secret".to_owned(), "token=do-not-persist".to_owned()),
+                ]),
+            }],
+            ..SyntaxAnalysis::default()
+        };
+
+        sanitize_syntax_analysis(&mut analysis, source);
+
+        assert!(analysis.definitions.is_empty());
+        assert!(analysis.references.is_empty());
+        assert_eq!(
+            analysis.limitations[0].code,
+            "INDEX_ADAPTER_LIMITATION_REDACTED"
+        );
+        assert!(analysis.limitations[0].scope.is_none());
+        assert_eq!(
+            analysis.limitations[0].parameters,
+            BTreeMap::from([("safe".to_owned(), "value".to_owned())])
+        );
+        assert!(
+            analysis
+                .limitations
+                .iter()
+                .any(|item| item.code == "INDEX_ADAPTER_OUTPUT_REDACTED")
+        );
     }
 
     #[test]

@@ -99,6 +99,7 @@ const STORE_FILENAME: &str = "management.v1.db";
 const ACTIVE_SET_FILENAME: &str = "active-set.json";
 const FIRST_GENERATION_LOCATOR: &str = "generations/00000000000000000001";
 const APPLICATION_ID: i32 = 0x5354_4152;
+const MANAGEMENT_DOCUMENT_MAX_BYTES: i32 = 32 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 pub struct FileCodeIndexCache {
@@ -857,6 +858,7 @@ fn map_sql(error: rusqlite::Error) -> RepositoryError {
                 RepositoryErrorCategory::Corrupt
             }
             ErrorCode::ReadOnly => RepositoryErrorCategory::ReadOnly,
+            ErrorCode::TooBig => RepositoryErrorCategory::QuotaExceeded,
             _ => RepositoryErrorCategory::Unavailable,
         },
         _ => RepositoryErrorCategory::Unavailable,
@@ -7835,7 +7837,7 @@ fn open_store(
         .busy_timeout(Duration::from_secs(5))
         .map_err(map_sql)?;
     connection
-        .set_limit(Limit::SQLITE_LIMIT_LENGTH, 16 * 1024 * 1024)
+        .set_limit(Limit::SQLITE_LIMIT_LENGTH, MANAGEMENT_DOCUMENT_MAX_BYTES)
         .map_err(map_sql)?;
     connection
         .set_limit(Limit::SQLITE_LIMIT_SQL_LENGTH, 1024 * 1024)
@@ -10938,6 +10940,39 @@ mod tests {
             ProjectPathRef, RegistrationState, RepositoryKind, ScanStatus,
         },
     };
+
+    #[test]
+    fn management_document_limit_accepts_aggregate_snapshots_and_classifies_overflow() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .set_limit(Limit::SQLITE_LIMIT_LENGTH, MANAGEMENT_DOCUMENT_MAX_BYTES)
+            .unwrap();
+        connection
+            .execute("CREATE TABLE documents(value TEXT NOT NULL)", [])
+            .unwrap();
+
+        let above_legacy_limit = "x".repeat(16 * 1024 * 1024 + 1024);
+        connection
+            .execute(
+                "INSERT INTO documents(value) VALUES(?1)",
+                [&above_legacy_limit],
+            )
+            .unwrap();
+
+        connection
+            .set_limit(Limit::SQLITE_LIMIT_LENGTH, 1024)
+            .unwrap();
+        let error = connection
+            .execute(
+                "INSERT INTO documents(value) VALUES(?1)",
+                ["x".repeat(2048)],
+            )
+            .unwrap_err();
+        assert_eq!(
+            map_sql(error).category,
+            RepositoryErrorCategory::QuotaExceeded
+        );
+    }
 
     fn project(project_id: ProjectId, checkout_id: CheckoutId) -> Project {
         Project {

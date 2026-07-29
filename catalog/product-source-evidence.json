@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:85da9019540113f4d40d39793d510521aca1dd210d7eab5208acb9dc3c7ac405",
+  "evidence_fingerprint": "sha256:8691fb0497944d6621c7f5323434838367c9d2ac4c12d91d9657fa815dfca3d5",
   "feature_count": 23,
   "features": [
     {
@@ -13,7 +13,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:cc6eea457a9543246629510bcae1eea838756aa263b6edc0115de36897a6e474",
+      "feature_fingerprint": "sha256:ea3e0f24b1ca8a4fc8aaa8a30cba86f878f5c5187f0b6c616d6d2bc4d29e9b77",
       "feature_id": "A01",
       "generated_schemas": [
         {
@@ -29,17 +29,17 @@
         {
           "marker": "pub struct GoalStore",
           "path": "apps/star-controller/src/goal_store.rs",
-          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+          "source_sha256": "sha256:644f76de00cc271e264d4f8f68012f2b77cda50a54539fb442bc0e3497d3a045"
         },
         {
           "marker": "run_goal_start_command",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn complete_goal_from_evidence",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -58,29 +58,29 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
-        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72"
+        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
           "marker": "persisted_state_reloads_and_future_version_is_rejected",
           "path": "apps/star-controller/src/goal_store.rs",
-          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+          "source_sha256": "sha256:644f76de00cc271e264d4f8f68012f2b77cda50a54539fb442bc0e3497d3a045"
         },
         "negative": {
           "marker": "question_plan_run_and_lifecycle_are_revision_guarded",
           "path": "apps/star-controller/src/goal_store.rs",
-          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+          "source_sha256": "sha256:644f76de00cc271e264d4f8f68012f2b77cda50a54539fb442bc0e3497d3a045"
         },
         "positive": {
           "marker": "goal_config_is_fingerprinted_persistent_and_idempotency_bound",
           "path": "apps/star-controller/src/goal_store.rs",
-          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+          "source_sha256": "sha256:644f76de00cc271e264d4f8f68012f2b77cda50a54539fb442bc0e3497d3a045"
         },
         "recovery": {
           "marker": "stage_result_and_goal_completion_are_evidence_bound_and_restart_safe",
           "path": "apps/star-controller/src/goal_store.rs",
-          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+          "source_sha256": "sha256:644f76de00cc271e264d4f8f68012f2b77cda50a54539fb442bc0e3497d3a045"
         }
       }
     },
@@ -94,7 +94,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:a3a0775993091af21241ac9d22f4adef0f1c0976dc8d7512084d8713251781e5",
+      "feature_fingerprint": "sha256:54d1b38939c077aa21db0a01840aae041e1e329ca1509de1440d68d39cf7520d",
       "feature_id": "A02",
       "generated_schemas": [
         {
@@ -119,12 +119,12 @@
         {
           "marker": "stage.plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [],
@@ -135,7 +135,7 @@
       },
       "product_surface_fingerprints": [
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -151,7 +151,7 @@
         "positive": {
           "marker": "stage_result_and_goal_completion_are_evidence_bound_and_restart_safe",
           "path": "apps/star-controller/src/goal_store.rs",
-          "source_sha256": "sha256:2f66ebcc7f04de21805319722b27ce4d01cb9e22bd93a3818f292c2e6ff2e238"
+          "source_sha256": "sha256:644f76de00cc271e264d4f8f68012f2b77cda50a54539fb442bc0e3497d3a045"
         },
         "recovery": {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -178,7 +178,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:4e1bc3a3d1fbf1ca0dfe55ee9d43a9ec14e64fdb074b60d59f8f356a8aee4f22",
+      "feature_fingerprint": "sha256:2e792c757b31ce0e271be34e1c01ed275aab1b5c7ca912b1a4c9902eee13a0ba",
       "feature_id": "A03",
       "generated_schemas": [
         {
@@ -207,7 +207,7 @@
         {
           "marker": "pub fn build_code_index",
           "path": "crates/control/star-project/src/index.rs",
-          "source_sha256": "sha256:517849e6a7b213a9e96a8ae5e79f9f266de37839bd0d7f90d558187b401a4085"
+          "source_sha256": "sha256:a3d4f5e4d34b107e9e333a3bf74c06a01226e56cffcfc6ad95a6b767ad5fb108"
         },
         {
           "marker": "pub fn verify_context_pack_current",
@@ -217,7 +217,7 @@
         {
           "marker": "fn build_context_pack",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -237,9 +237,9 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
         "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
-        "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -278,7 +278,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:0cb3afa2834dd6249efe57e689fbcc8fcb63544977b6169537661addc082fb0c",
+      "feature_fingerprint": "sha256:462018430c778b1b4000c5b03377ca8c3be12933dea1eef8558c1d9b6d1fa217",
       "feature_id": "A04",
       "generated_schemas": [
         {
@@ -303,7 +303,7 @@
         {
           "marker": "planning.impact.inspect",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -318,8 +318,8 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
         "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0",
         "sha256:f5b553f04e351d6b4dcf5c2fadc8313a089f4787a7bd1904b4ef11118c0052ac"
       ],
       "test_refs": {
@@ -364,7 +364,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:6f774ed8a6e17d3386c3470bfa162435c5ff5bcaa45d552779731c9d82b5bb63",
+      "feature_fingerprint": "sha256:f92ab69494d57d2e350f498beca191ff7b2ef5c0db5ad5e8b8ba4a9c20e6bd1d",
       "feature_id": "A05",
       "generated_schemas": [
         {
@@ -390,7 +390,7 @@
         {
           "marker": "codex.capability.inspect",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "pub(crate) fn require_latest_capability",
@@ -407,7 +407,7 @@
       "product_surface_fingerprints": [
         "sha256:4a3a9e670d6976bcf7b86f1d1673e48813be2a88d8adb5359248852307b2c9cd",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0",
         "sha256:f8d009f303932bde13ba8edb2157f23d0012217e78e627650f37ad19ab4800ef"
       ],
       "test_refs": {
@@ -459,7 +459,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:f3b18dd46fcdebb3c32639f178416340cc900d74f282218c6b22a3f3579d6c2b",
+      "feature_fingerprint": "sha256:81050b624428e14fc7837dd2e3b8321be27ec4061a5b4661adfaaefcd5c9df13",
       "feature_id": "A06",
       "generated_schemas": [
         {
@@ -493,17 +493,17 @@
         {
           "marker": "codex.task.start",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn build_context_pack",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -518,9 +518,9 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
         "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
         "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0",
         "sha256:f8d009f303932bde13ba8edb2157f23d0012217e78e627650f37ad19ab4800ef"
       ],
       "test_refs": {
@@ -555,7 +555,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:b3b509dbbfc8b04f16b917d89754613115f441bd5289f68e277824c58ae359f3",
+      "feature_fingerprint": "sha256:b3b88455c0553ce729ed7e912a3e73b9586a0791d9c0f34c6abe2813032eafa2",
       "feature_id": "A07",
       "generated_schemas": [
         {
@@ -575,12 +575,12 @@
         {
           "marker": "pub struct SqliteManagementRepositorySet",
           "path": "crates/infrastructure/star-state/src/lib.rs",
-          "source_sha256": "sha256:abd78399fbd309cab9290778a338192a0ffacedecbe163abbfb04a783f133888"
+          "source_sha256": "sha256:dac7a64d3bca9f826ee41212ccdc50490b65eaad30faac821d567d0a30f7181a"
         },
         {
           "marker": "management.backup.plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -597,29 +597,29 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
-        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72"
+        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
           "marker": "backup_plan_restore_preserves_corrupt_generation_and_rejects_tamper",
           "path": "crates/infrastructure/star-state/src/lib.rs",
-          "source_sha256": "sha256:abd78399fbd309cab9290778a338192a0ffacedecbe163abbfb04a783f133888"
+          "source_sha256": "sha256:dac7a64d3bca9f826ee41212ccdc50490b65eaad30faac821d567d0a30f7181a"
         },
         "negative": {
           "marker": "active_set_header_mismatch_enters_recovery_only_even_when_manifest_is_resealed",
           "path": "crates/infrastructure/star-state/src/lib.rs",
-          "source_sha256": "sha256:abd78399fbd309cab9290778a338192a0ffacedecbe163abbfb04a783f133888"
+          "source_sha256": "sha256:dac7a64d3bca9f826ee41212ccdc50490b65eaad30faac821d567d0a30f7181a"
         },
         "positive": {
           "marker": "writer_lease_project_partition_backup_and_root_binding_are_real",
           "path": "crates/infrastructure/star-state/src/lib.rs",
-          "source_sha256": "sha256:abd78399fbd309cab9290778a338192a0ffacedecbe163abbfb04a783f133888"
+          "source_sha256": "sha256:dac7a64d3bca9f826ee41212ccdc50490b65eaad30faac821d567d0a30f7181a"
         },
         "recovery": {
           "marker": "restore_activation_is_all_old_or_all_new_across_crash_points",
           "path": "crates/infrastructure/star-state/src/lib.rs",
-          "source_sha256": "sha256:abd78399fbd309cab9290778a338192a0ffacedecbe163abbfb04a783f133888"
+          "source_sha256": "sha256:dac7a64d3bca9f826ee41212ccdc50490b65eaad30faac821d567d0a30f7181a"
         }
       }
     },
@@ -638,7 +638,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:5aa397809281c841ce561d91d6019a98afe03b792461890b2289b79ef0b62715",
+      "feature_fingerprint": "sha256:49c349ca264a51f988d779b984887e2ba25d35eaddf6dd21b045b787bf94e8dc",
       "feature_id": "A08",
       "generated_schemas": [
         {
@@ -663,12 +663,12 @@
         {
           "marker": "action_permission_decision",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn load_permission_plan",
@@ -688,9 +688,9 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
         "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
-        "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767"
+        "sha256:cf9be30f72ed6899939f6698267beabc327b12395bbf88ae4f25dfac728f6767",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -724,7 +724,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:7fabbcb767eb27195ac7fbf9fc7a24e69699984ed56d8639cda415974fd841e4",
+      "feature_fingerprint": "sha256:dc7bb3c594ee996e696b4cc7e6554247a47b44fa483de8d2da4861fef56bbb3d",
       "feature_id": "A09",
       "generated_schemas": [
         {
@@ -749,7 +749,7 @@
         {
           "marker": "change-bundle.worktree.plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -765,8 +765,8 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
-        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72"
+        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -799,7 +799,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:159c1a6146db2a037865fbbdd1aa25e596d4345d606fa50841e777a5f75c4e9d",
+      "feature_fingerprint": "sha256:9a6b3fb7657cd69f499e95528603c8627d32859abe09bc6521b6b88e6b81a390",
       "feature_id": "A10",
       "generated_schemas": [
         {
@@ -824,7 +824,7 @@
         {
           "marker": "profile.resolve",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -841,8 +841,8 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
-        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72"
+        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -876,7 +876,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:a54e0997bc9cae4be7cb363412e9a73773f8dde0a390b4c82077600cd9e77c6a",
+      "feature_fingerprint": "sha256:41271f81a223684f6f14bf77dd452e3a8f09562cb033804bdbb21a6710d18990",
       "feature_id": "B01",
       "generated_schemas": [
         {
@@ -901,7 +901,7 @@
         {
           "marker": "validation.run-plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -913,14 +913,14 @@
       "mcp_required": true,
       "owner_document": {
         "path": "docs/contracts/validation-and-evidence.md",
-        "source_sha256": "sha256:36a9cf9b793f81ab2a36993e4c37b1d7844ac5196f6fd961a23a85ce4be9fa91"
+        "source_sha256": "sha256:2eab6c8a99eceb45363fef19800dcbae2f3e27c36b7322c55aaa3001b58fa4c6"
       },
       "product_surface_fingerprints": [
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
-        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72"
+        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -954,7 +954,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:5bfe6a64275d962a3b5466305caa3c5eda67d00de7aad0abde11c88a1c7b9719",
+      "feature_fingerprint": "sha256:6807a822b198b535425fdf185d74a6ffee26f486e1013e380149d51afcbd4995",
       "feature_id": "B02",
       "generated_schemas": [
         {
@@ -979,7 +979,7 @@
         {
           "marker": "validation.run-plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -995,8 +995,8 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
-        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72"
+        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -1028,7 +1028,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:d8fe01b1438c2be0d50a853a0693955b9c836f9639b231938a0bbed9716ad16f",
+      "feature_fingerprint": "sha256:e07476a8b06cd5222380e1840e09af63996f41181f09b1d345f9b772365a8d9d",
       "feature_id": "B03",
       "generated_schemas": [
         {
@@ -1069,8 +1069,8 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
-        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72"
+        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -1103,7 +1103,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:8b236267db4d469f3738df0093c53bc3e888f01b29b2251a54ce9b8aa13436a6",
+      "feature_fingerprint": "sha256:38fcc2388a018f071f941caf8e81b2affeb1dfed9ebe610e8ea8c128def49197",
       "feature_id": "B04",
       "generated_schemas": [
         {
@@ -1124,7 +1124,7 @@
         {
           "marker": "contract.compare",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [],
@@ -1135,7 +1135,7 @@
       },
       "product_surface_fingerprints": [
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -1172,7 +1172,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:23b5ac9abe5348160d7f392a2b2600eeeab6a0b060d2dcf4a5792a067d0a4e51",
+      "feature_fingerprint": "sha256:30781c9604eec8cb9d422a6388355aa21eaa9de0a7a4c35b1489fd00efabf38a",
       "feature_id": "B05",
       "generated_schemas": [
         {
@@ -1224,17 +1224,17 @@
         {
           "marker": "maintenance.radar.git-history",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "maintenance.rule-pack",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "security.inspect",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [],
@@ -1245,7 +1245,7 @@
       },
       "product_surface_fingerprints": [
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -1278,7 +1278,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:f3affdeec4a2527df39175dc9b592db2671524cc02085d9645a491269740ef1e",
+      "feature_fingerprint": "sha256:650ecc154dd90cf367739c9e8d4ea545c2f5c01277de345d25a5c256bb463642",
       "feature_id": "B06",
       "generated_schemas": [
         {
@@ -1303,12 +1303,12 @@
         {
           "marker": "fn m7_validate_verified_failure_input",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "failures.reproduce",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [],
@@ -1319,18 +1319,18 @@
       },
       "product_surface_fingerprints": [
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
           "marker": "development_effect_receipt_binds_terminal_operation_subject_and_executable",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         "negative": {
           "marker": "verified_failure_requires_current_exact_validation_and_diagnostic_evidence",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         "positive": {
           "marker": "failure_family_redacts_path_pid_and_timestamp_but_occurrence_stays_exact",
@@ -1353,7 +1353,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:140129f994868012bf53bf0ae2af0e250ecc1ea23924f4f5a5498a9bb8f4ef12",
+      "feature_fingerprint": "sha256:1ef357b66d8093fceee18084daccde5de34ff8da4042413cef569479150806d2",
       "feature_id": "B07",
       "generated_schemas": [
         {
@@ -1388,12 +1388,12 @@
         {
           "marker": "docs.check",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "project.doctor",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -1408,14 +1408,14 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
-        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72"
+        "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
           "marker": "command_config_defaults_materialize_missing_typed_document_fields",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         "negative": {
           "marker": "execution_settings_reject_unknown_keys_and_unwired_policy_weakening",
@@ -1430,7 +1430,7 @@
         "recovery": {
           "marker": "effective_config_is_a_management_owned_restart_safe_read",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       }
     },
@@ -1445,7 +1445,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:bf4c7e23ee3d64fdda1f4fbdc39524a80e8b20e38f7c990d880485adab8b9990",
+      "feature_fingerprint": "sha256:85264dde1e8fbca45ac5887431d84146f3d5d46a6883f63adf7ea6e309e64df6",
       "feature_id": "B08",
       "generated_schemas": [
         {
@@ -1470,7 +1470,7 @@
         {
           "marker": "migration.execute",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [],
@@ -1481,7 +1481,7 @@
       },
       "product_surface_fingerprints": [
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -1515,7 +1515,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:c9b809bd1328ef121db6f7ba951ea4fb81c2ad346af70d685458d8d72dbf5004",
+      "feature_fingerprint": "sha256:4c4347ff1622311f1e52c40cfec3f81c6e8748dc6a95ba06ebecd5d795f2a77e",
       "feature_id": "B09",
       "generated_schemas": [
         {
@@ -1536,18 +1536,18 @@
         {
           "marker": "release.verification.record",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [],
       "mcp_required": false,
       "owner_document": {
         "path": "docs/contracts/ci-release-evaluation-and-product-completion.md",
-        "source_sha256": "sha256:4e8a77f65133b113514159072fab974b8c0adde0a626fe8a9ffcda6bc144ed20"
+        "source_sha256": "sha256:8027db97dc66cb1a5eb88a4ef7bc5b76ce7771397f66884589f288f8b347b75f"
       },
       "product_surface_fingerprints": [
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -1580,7 +1580,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:a50389a9ec1d2f3ac16ca11b8a83d820168c51e4ea29050ce26d6f6dca056caf",
+      "feature_fingerprint": "sha256:83218fb35684e14224b4dfb813b6e64dade6f297b835d3ff39fef241e6f778ed",
       "feature_id": "C01",
       "generated_schemas": [
         {
@@ -1615,12 +1615,12 @@
         {
           "marker": "fn bind_stage_plan_profiles",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "profile.resolve",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [],
@@ -1631,7 +1631,7 @@
       },
       "product_surface_fingerprints": [
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -1642,7 +1642,7 @@
         "negative": {
           "marker": "stage_profile_binding_rejects_unknown_and_stale_catalog_resolution",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         "positive": {
           "marker": "product_catalog_loads_all_sixteen_and_resolves_deterministically",
@@ -1671,7 +1671,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:3ee49f996fc019295c051d546dd76acce9e981a5bc27e1e7a7f971126f7b95a2",
+      "feature_fingerprint": "sha256:a46809d36b01ae2987af5337d453ced172b46237b587cb6e5e68eba2ac523eda",
       "feature_id": "D01",
       "generated_schemas": [
         {
@@ -1701,7 +1701,7 @@
         {
           "marker": "change-bundle.remote.snapshot",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [
@@ -1717,8 +1717,8 @@
         "sha256:16ea664d0a965bca912f85f9b7aa8069b408b3eb3f4160cde1493dd8bb10c491",
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b",
         "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0",
         "sha256:f5b553f04e351d6b4dcf5c2fadc8313a089f4787a7bd1904b4ef11118c0052ac"
       ],
       "test_refs": {
@@ -1730,7 +1730,7 @@
         "negative": {
           "marker": "m9_remote_approval_is_bound_to_the_exact_project_ref_and_source_commit",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         "positive": {
           "marker": "remote_operation_recomputes_request_identity_and_requires_approval_evidence",
@@ -1754,7 +1754,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:7e1736a6fea3fdb1676ebf267c2488188145e5e5b875d0eb21ce542f01f15959",
+      "feature_fingerprint": "sha256:d7468c80caddca6aa1de0d0b766f70c4f7c4d0a8bf629ca2f275c0cdc616a46d",
       "feature_id": "D02",
       "generated_schemas": [
         {
@@ -1788,23 +1788,23 @@
         {
           "marker": "evaluation.run",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "evaluation.profile.decision",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         }
       ],
       "mcp_actions": [],
       "mcp_required": false,
       "owner_document": {
         "path": "docs/contracts/ci-release-evaluation-and-product-completion.md",
-        "source_sha256": "sha256:4e8a77f65133b113514159072fab974b8c0adde0a626fe8a9ffcda6bc144ed20"
+        "source_sha256": "sha256:8027db97dc66cb1a5eb88a4ef7bc5b76ce7771397f66884589f288f8b347b75f"
       },
       "product_surface_fingerprints": [
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -1838,7 +1838,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:6f440ab62e70e85febdeaf7bab585700515c207d47b6dea385f62f291fe78255",
+      "feature_fingerprint": "sha256:1bd2cfb5fb6210299ece24ffeeb05c31dd60a1ab8057058aae17ef2148e599ab",
       "feature_id": "D03",
       "generated_schemas": [
         {
@@ -1876,7 +1876,7 @@
         {
           "marker": "pub fn build_final_product_audit_v2",
           "path": "crates/control/star-release/src/audit.rs",
-          "source_sha256": "sha256:e6e2c5e179dda79ad205d1bb21a8d0303297fb29e044249eacb099b9fa683d49"
+          "source_sha256": "sha256:8d0ceec920931dcae7eb3e9867eba37f81bc2efacbb7166a6f843600c87eae8d"
         },
         {
           "marker": "pub struct InstallationManager",
@@ -1893,11 +1893,11 @@
       "mcp_required": false,
       "owner_document": {
         "path": "docs/contracts/ci-release-evaluation-and-product-completion.md",
-        "source_sha256": "sha256:4e8a77f65133b113514159072fab974b8c0adde0a626fe8a9ffcda6bc144ed20"
+        "source_sha256": "sha256:8027db97dc66cb1a5eb88a4ef7bc5b76ce7771397f66884589f288f8b347b75f"
       },
       "product_surface_fingerprints": [
         "sha256:531981388c94ec251f60e8bd5b5479c3bf83cf66c9c043683e058808abd21530",
-        "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+        "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
       ],
       "test_refs": {
         "failure": {
@@ -1908,12 +1908,12 @@
         "negative": {
           "marker": "v2_source_evidence_rejects_tampering_and_collapsed_test_classes",
           "path": "crates/control/star-release/src/audit.rs",
-          "source_sha256": "sha256:e6e2c5e179dda79ad205d1bb21a8d0303297fb29e044249eacb099b9fa683d49"
+          "source_sha256": "sha256:8d0ceec920931dcae7eb3e9867eba37f81bc2efacbb7166a6f843600c87eae8d"
         },
         "positive": {
           "marker": "v2_audit_binds_current_source_inventory_profiles_and_lifecycle",
           "path": "crates/control/star-release/src/audit.rs",
-          "source_sha256": "sha256:e6e2c5e179dda79ad205d1bb21a8d0303297fb29e044249eacb099b9fa683d49"
+          "source_sha256": "sha256:8d0ceec920931dcae7eb3e9867eba37f81bc2efacbb7166a6f843600c87eae8d"
         },
         "recovery": {
           "marker": "interrupted_integration_candidate_is_recovered_before_next_transaction",
@@ -1924,8 +1924,8 @@
     }
   ],
   "generated_schema_count": 217,
-  "generated_schema_manifest_fingerprint": "sha256:967f4c8e683b55ae2ab595d280d167cb9c50320e58e0bbe94a384de6c4542e69",
-  "inventory_fingerprint": "sha256:2e6ca6d324d8a3380908699ebda863aaccbdeb58703668e89753a38d74cad3ec",
+  "generated_schema_manifest_fingerprint": "sha256:f2c38472df3948204326b9d3aba190b3409392e2e5fdd9be5a80faeef96dcf81",
+  "inventory_fingerprint": "sha256:90af1161a3f6f7bc48830f688d527e807e8335ff3846ec37587497366d6fe601",
   "mcp_matrix_count": 170,
   "mcp_matrix_fingerprint": "sha256:338fa0f8c4caf73a4741f13c2956c87f39a896629e6a8b46737fd778eab8f487",
   "profile_count": 16,
@@ -1962,17 +1962,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2047,17 +2047,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2134,17 +2134,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2219,17 +2219,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2306,17 +2306,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2393,17 +2393,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2486,17 +2486,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2576,17 +2576,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2668,17 +2668,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2768,17 +2768,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2863,17 +2863,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -2963,17 +2963,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -3063,17 +3063,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -3154,17 +3154,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -3248,17 +3248,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -3346,17 +3346,17 @@
         {
           "marker": "fn create_permission_plan",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "effective_permission_policy_prompts_or_denies_before_dispatch",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "fn record_stage_result",
           "path": "apps/star-controller/src/main.rs",
-          "source_sha256": "sha256:64518c767d8e2c1c2bb59742591e4585e64784840bc4a27999c64ae87c01b77b"
+          "source_sha256": "sha256:de4ca00859f5b88e90de43fa21c727890a79d7fbad564cb2347eaa879aa1f5f0"
         },
         {
           "marker": "stage_result_recovery_requires_effect_boundary_and_action",
@@ -3420,7 +3420,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:3dbe95a5552cffd4040a70e166651da492cb4e5ea3148f87f20958b59315058f",
-  "stable_error_catalog_fingerprint": "sha256:dd069e4e80bf54af35e4d52434ac9a87208047d146f395eb0736de768cd2f5b8",
-  "stable_error_count": 528
+  "source_fingerprint": "sha256:72913d1bb10271298d9eb38ddc670fb59d0264ffa631bd099657a4f99e7137d0",
+  "stable_error_catalog_fingerprint": "sha256:f3f9e0a2cc7c414bec009150d770cabbe1e323b0e7a18f1de1a9b88cb16ce63f",
+  "stable_error_count": 533
 }

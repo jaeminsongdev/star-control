@@ -920,11 +920,6 @@ pub fn observe_project(
             return Err(ProjectError::ResourceLimit);
         }
         let bytes = fs::read(&path).map_err(|_| ProjectError::Io)?;
-        if redactor.validate(&String::from_utf8_lossy(&bytes)).is_err() {
-            completeness = Completeness::Partial;
-            limitations.push("sensitive_literal_discarded".to_owned());
-            continue;
-        }
         let binary = bytes.iter().take(8192).any(|byte| *byte == 0);
         let text = if binary {
             None
@@ -1452,13 +1447,10 @@ mod tests {
         assert!(serialized.contains("src/lib.rs"));
         assert!(!serialized.contains(&root.to_string_lossy().to_string()));
         assert!(!serialized.contains("ignored.log"));
-        assert!(!serialized.contains("private.txt"));
-        assert_eq!(observation.completeness, Completeness::Partial);
-        assert!(
-            observation
-                .limitations
-                .contains(&"sensitive_literal_discarded".to_owned())
-        );
+        assert!(serialized.contains("private.txt"));
+        assert!(!serialized.contains("do-not-persist"));
+        assert_eq!(observation.completeness, Completeness::Complete);
+        assert!(observation.limitations.is_empty());
     }
 
     #[test]

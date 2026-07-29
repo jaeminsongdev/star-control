@@ -3,7 +3,7 @@ expected_feature_count = 23
 expected_profile_count = 16
 expected_runtime_executable_count = 4
 expected_generated_schema_count = 217
-expected_stable_error_count = 528
+expected_stable_error_count = 533
 expected_mcp_matrix_count = 170
 
 [[features]]
