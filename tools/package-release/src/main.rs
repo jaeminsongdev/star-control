@@ -25,7 +25,7 @@ star-package-release reseal-integration --architecture x64|arm64 --stage <dist-s
 star-package-release seal-signed --architecture x64|arm64 --stage <dist-stage-dir> --source-revision <value>\n\
 star-package-release verify --architecture x64|arm64 --stage <dir>";
 
-const REQUIRED_CODEX_INTEGRATION_ASSETS: [&str; 7] = [
+const REQUIRED_CODEX_INTEGRATION_ASSETS: [&str; 16] = [
     "integrations/codex-plugin-template/marketplace-root/.agents/plugins/marketplace.json",
     "integrations/codex-plugin-template/marketplace-root/plugins/star-control/.codex-plugin/plugin.json",
     "integrations/codex-plugin-template/marketplace-root/plugins/star-control/.mcp.json",
@@ -33,6 +33,15 @@ const REQUIRED_CODEX_INTEGRATION_ASSETS: [&str; 7] = [
     "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md",
     "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/agents/openai.yaml",
     "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/references/routing-matrix.md",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/SKILL.md",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/agents/openai.yaml",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/references/decomposition.md",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/references/scheduling-and-lifecycle.md",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/references/workspace-and-integration.md",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/references/safety-and-validation.md",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/assets/worker-context-pack.md",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/assets/worker-report.md",
+    "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/assets/controller-report.md",
 ];
 
 #[derive(Debug)]
@@ -1283,12 +1292,12 @@ mod tests {
         verify_required_codex_integration_assets(&inventory).unwrap();
 
         inventory.remove(
-            "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/agents/openai.yaml",
+            "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/assets/controller-report.md",
         );
         let error = verify_required_codex_integration_assets(&inventory)
             .unwrap_err()
             .to_string();
-        assert!(error.contains("agents/openai.yaml"));
+        assert!(error.contains("assets/controller-report.md"));
     }
 
     #[test]

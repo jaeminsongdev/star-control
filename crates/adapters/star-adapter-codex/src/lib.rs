@@ -48,7 +48,33 @@ const SKILL_AGENT_RELATIVE: &str =
     "plugins/star-control/skills/star-control-operations/agents/openai.yaml";
 const SKILL_ROUTING_RELATIVE: &str =
     "plugins/star-control/skills/star-control-operations/references/routing-matrix.md";
-const INTEGRATION_COMPONENT_RELATIVES: [&str; 7] = [
+const PARALLEL_SKILL_RELATIVE: &str =
+    "plugins/star-control/skills/orchestrate-parallel-implementation/SKILL.md";
+const PARALLEL_SKILL_AGENT_RELATIVE: &str =
+    "plugins/star-control/skills/orchestrate-parallel-implementation/agents/openai.yaml";
+const PARALLEL_DECOMPOSITION_RELATIVE: &str =
+    "plugins/star-control/skills/orchestrate-parallel-implementation/references/decomposition.md";
+const PARALLEL_SCHEDULING_RELATIVE: &str = "plugins/star-control/skills/orchestrate-parallel-implementation/references/scheduling-and-lifecycle.md";
+const PARALLEL_WORKSPACE_RELATIVE: &str = "plugins/star-control/skills/orchestrate-parallel-implementation/references/workspace-and-integration.md";
+const PARALLEL_SAFETY_RELATIVE: &str = "plugins/star-control/skills/orchestrate-parallel-implementation/references/safety-and-validation.md";
+const PARALLEL_CONTEXT_PACK_RELATIVE: &str =
+    "plugins/star-control/skills/orchestrate-parallel-implementation/assets/worker-context-pack.md";
+const PARALLEL_WORKER_REPORT_RELATIVE: &str =
+    "plugins/star-control/skills/orchestrate-parallel-implementation/assets/worker-report.md";
+const PARALLEL_CONTROLLER_REPORT_RELATIVE: &str =
+    "plugins/star-control/skills/orchestrate-parallel-implementation/assets/controller-report.md";
+const PARALLEL_SKILL_COMPONENT_RELATIVES: [&str; 9] = [
+    PARALLEL_SKILL_RELATIVE,
+    PARALLEL_SKILL_AGENT_RELATIVE,
+    PARALLEL_DECOMPOSITION_RELATIVE,
+    PARALLEL_SCHEDULING_RELATIVE,
+    PARALLEL_WORKSPACE_RELATIVE,
+    PARALLEL_SAFETY_RELATIVE,
+    PARALLEL_CONTEXT_PACK_RELATIVE,
+    PARALLEL_WORKER_REPORT_RELATIVE,
+    PARALLEL_CONTROLLER_REPORT_RELATIVE,
+];
+const INTEGRATION_COMPONENT_RELATIVES: [&str; 16] = [
     MARKETPLACE_RELATIVE,
     PLUGIN_MANIFEST_RELATIVE,
     MCP_RELATIVE,
@@ -56,8 +82,18 @@ const INTEGRATION_COMPONENT_RELATIVES: [&str; 7] = [
     SKILL_RELATIVE,
     SKILL_AGENT_RELATIVE,
     SKILL_ROUTING_RELATIVE,
+    PARALLEL_SKILL_RELATIVE,
+    PARALLEL_SKILL_AGENT_RELATIVE,
+    PARALLEL_DECOMPOSITION_RELATIVE,
+    PARALLEL_SCHEDULING_RELATIVE,
+    PARALLEL_WORKSPACE_RELATIVE,
+    PARALLEL_SAFETY_RELATIVE,
+    PARALLEL_CONTEXT_PACK_RELATIVE,
+    PARALLEL_WORKER_REPORT_RELATIVE,
+    PARALLEL_CONTROLLER_REPORT_RELATIVE,
 ];
 const SKILL_NAME: &str = "star-control-operations";
+const PARALLEL_SKILL_NAME: &str = "orchestrate-parallel-implementation";
 const ROUTED_FEATURE_IDS: &[&str] = &[
     "A01", "A02", "A03", "A04", "A05", "A06", "A07", "A08", "A09", "A10", "B01", "B02", "B03",
     "B04", "B05", "B06", "B07", "B08", "B09", "C01", "D01", "D02", "D03",
@@ -87,10 +123,10 @@ enum RegistrationMode {
     Register,
     ManualActionRequired,
 }
-const PLUGIN_DESCRIPTION: &str = "Route Codex development, code-health, validation, and Runtime lifecycle work through Star-Control with explicit evidence and fallback boundaries.";
-const PLUGIN_SHORT_DESCRIPTION: &str = "Use Star-Control actions, Profiles, and lifecycle routes.";
-const PLUGIN_LONG_DESCRIPTION: &str = "Connects Codex to the installed Star-Control gateway, resolves declarative Profiles, routes code-health and validation work through ready MCP actions or Catalog-declared CLI-only features, and keeps Runtime updates, approvals, evidence, and native fallback explicit.";
-const PLUGIN_DEFAULT_PROMPT: &str = "Use $star-control-operations to route this task through Star-Control actions, Profiles, code-health checks, or installed lifecycle commands while preserving approvals, evidence, and fallback status.";
+const PLUGIN_DESCRIPTION: &str = "Route Codex development, implementation orchestration, code-health, validation, and Runtime lifecycle work through Star-Control with explicit evidence and fallback boundaries.";
+const PLUGIN_SHORT_DESCRIPTION: &str = "Use Star-Control routes and safe parallel implementation.";
+const PLUGIN_LONG_DESCRIPTION: &str = "Connects Codex to the installed Star-Control gateway, resolves declarative Profiles, routes code-health and validation work through ready MCP actions or Catalog-declared CLI-only features, and orchestrates implementation with Sol Max design and full review plus goal-driven Terra High workers.";
+const PLUGIN_DEFAULT_PROMPT: &str = "Use $star-control-operations for Star-Control routes and $orchestrate-parallel-implementation for implementation with Sol Max design and full review plus goal-driven Terra High workers.";
 const HOOK_STATUS_MESSAGE: &str = "Loading Star-Control operations";
 const DEFAULT_LIFECYCLE_HOOK_TIMEOUT_SECONDS: u64 = 10;
 const SESSION_END_HOOK_TIMEOUT_SECONDS: u64 = 3;
@@ -610,6 +646,26 @@ fn validate_rendered(
     if !skill_routing_content_valid(routing) {
         return Err(CodexAdapterError::InvalidRenderedPlugin);
     }
+    let parallel_skill = rendered
+        .get(PARALLEL_SKILL_RELATIVE)
+        .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+    if !parallel_skill_content_valid(parallel_skill) {
+        return Err(CodexAdapterError::InvalidRenderedPlugin);
+    }
+    let parallel_agent = rendered
+        .get(PARALLEL_SKILL_AGENT_RELATIVE)
+        .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+    if !parallel_skill_agent_content_valid(parallel_agent) {
+        return Err(CodexAdapterError::InvalidRenderedPlugin);
+    }
+    for relative in PARALLEL_SKILL_COMPONENT_RELATIVES.into_iter().skip(2) {
+        let resource = rendered
+            .get(relative)
+            .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+        if !parallel_resource_content_valid(relative, resource) {
+            return Err(CodexAdapterError::InvalidRenderedPlugin);
+        }
+    }
     Ok(())
 }
 
@@ -869,6 +925,110 @@ fn skill_routing_content_valid(bytes: &[u8]) -> bool {
         && text.contains("CLI-only")
         && feature_ids == ROUTED_FEATURE_IDS
         && profile_ids == ROUTED_PROFILE_IDS
+}
+
+fn parallel_skill_content_valid(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let expected_name = format!("name: {PARALLEL_SKILL_NAME}");
+    let mut lines = text.lines();
+    let frontmatter_valid = lines.next() == Some("---")
+        && lines.next() == Some(expected_name.as_str())
+        && lines
+            .next()
+            .is_some_and(|line| line.starts_with("description: "))
+        && lines.next() == Some("---");
+    frontmatter_valid
+        && text.contains("중앙 작업 자체를 `create_goal`로 등록하지 않는다")
+        && text.contains("`gpt-5.6-sol`")
+        && text.contains("reasoning_effort: \"max\"")
+        && text.contains("gpt-5.6-terra")
+        && text.contains("reasoning_effort=\"high\"")
+        && text.contains("goal_pursuit: required")
+        && text.contains("`followup_task`")
+        && text.contains("Sol 승인 전에는 `update_goal")
+        && text.contains("controller-level `BLOCKED`")
+        && text.contains("전체 diff")
+        && text.contains("`WORKER_COMPLETE`")
+        && text.contains("`INTEGRATED`")
+        && text.contains("`VERIFIED`")
+}
+
+fn parallel_skill_agent_content_valid(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    text.contains("display_name: \"Parallel Implementation\"")
+        && text.contains("short_description: \"Sol 관제와 Terra 작업자로 안전한 최대 병렬 구현\"")
+        && text.contains("default_prompt: \"Use $orchestrate-parallel-implementation")
+        && text.contains("allow_implicit_invocation: true")
+        && !text.contains("dependencies:")
+}
+
+fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let required: &[&str] = match relative {
+        PARALLEL_DECOMPOSITION_RELATIVE => &[
+            "Task Bundle 계약",
+            "goal_pursuit",
+            "depends_on",
+            "같은 파일",
+            "Sol이 이미 유효한 결과를 보존",
+        ],
+        PARALLEL_SCHEDULING_RELATIVE => &[
+            concat!("GOAL", "_ACTIVE"),
+            "create_goal",
+            "followup_task",
+            "같은 활성 목표",
+            "Sol이 해당 Terra 작업자의 전체 diff",
+            "Sol 전체 diff 승인 전에는 `update_goal",
+            concat!("GOAL", "_COMPLETE"),
+            "SUPERSEDED_PENDING_GOAL_RESOLUTION",
+            "FINAL_VALIDATION -> VERIFIED",
+        ],
+        PARALLEL_WORKSPACE_RELATIVE => &[
+            "공유 worktree",
+            "격리 worktree",
+            "reset, restore, clean, stash하지 않는다",
+            "public API",
+            "push, PR, publish",
+            "pre-existing dirty paths",
+        ],
+        PARALLEL_SAFETY_RELATIVE => &[
+            "필수 forward scenario",
+            "독립된 5개 모듈",
+            "같은 Terra 작업자",
+            "single-agent",
+            "사용자 scope 변경",
+            "dependency 설치·추가·제거·uninstall",
+            "`VERIFIED`를 선언하지 않는다",
+        ],
+        PARALLEL_CONTEXT_PACK_RELATIVE => &[
+            "gpt-5.6-terra",
+            "reasoning_effort: \"high\"",
+            "subagents: \"forbidden\"",
+            "goal_pursuit: \"required\"",
+            "completion_criteria",
+            "baseline_revision",
+        ],
+        PARALLEL_WORKER_REPORT_RELATIVE => &[
+            "goal_id",
+            "goal_status",
+            "전체 diff 요약",
+            "Sol 전체 diff 리뷰 상태: pending",
+        ],
+        PARALLEL_CONTROLLER_REPORT_RELATIVE => &[
+            "개별 Terra 전체 diff 리뷰",
+            "결합 전체 diff 리뷰",
+            "Terra Bundle",
+            "최종 프로젝트 검증",
+        ],
+        _ => return false,
+    };
+    required.iter().all(|value| text.contains(value))
 }
 
 fn markdown_feature_id(line: &str) -> Option<&str> {
@@ -1227,6 +1387,9 @@ mod tests {
             source.get(SKILL_ROUTING_RELATIVE),
             rendered.get(SKILL_ROUTING_RELATIVE)
         );
+        for relative in PARALLEL_SKILL_COMPONENT_RELATIVES {
+            assert_eq!(source.get(relative), rendered.get(relative));
+        }
         assert_ne!(source.get(MCP_RELATIVE), rendered.get(MCP_RELATIVE));
         assert_ne!(source.get(HOOKS_RELATIVE), rendered.get(HOOKS_RELATIVE));
     }
@@ -1262,7 +1425,7 @@ mod tests {
         let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../integrations/codex-plugin-template/marketplace-root");
         let source = read_source_files(&source_root).unwrap();
-        assert_eq!(source.len(), 7);
+        assert_eq!(source.len(), 16);
         let marketplace = strict_object(&source, MARKETPLACE_RELATIVE).unwrap();
         let source_path = marketplace
             .get("plugins")
@@ -1293,10 +1456,42 @@ mod tests {
         assert!(skill_routing_content_valid(
             source.get(SKILL_ROUTING_RELATIVE).unwrap()
         ));
+        let parallel_skill = source.get(PARALLEL_SKILL_RELATIVE).unwrap();
+        assert!(parallel_skill_content_valid(parallel_skill));
+        assert!(parallel_skill_agent_content_valid(
+            source.get(PARALLEL_SKILL_AGENT_RELATIVE).unwrap()
+        ));
+        for relative in PARALLEL_SKILL_COMPONENT_RELATIVES.into_iter().skip(2) {
+            assert!(parallel_resource_content_valid(
+                relative,
+                source.get(relative).unwrap()
+            ));
+        }
         let invalid = std::str::from_utf8(skill)
             .unwrap()
             .replace("star_tool_search", concat!("star_", "goal_start"));
         assert!(!skill_content_valid(invalid.as_bytes()));
+        let invalid_parallel = std::str::from_utf8(parallel_skill)
+            .unwrap()
+            .replace("goal_pursuit: required", "goal_pursuit: optional");
+        assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
+        let invalid_parallel_agent =
+            std::str::from_utf8(source.get(PARALLEL_SKILL_AGENT_RELATIVE).unwrap())
+                .unwrap()
+                .replace(
+                    "allow_implicit_invocation: true",
+                    "allow_implicit_invocation: false",
+                );
+        assert!(!parallel_skill_agent_content_valid(
+            invalid_parallel_agent.as_bytes()
+        ));
+        let invalid_safety = std::str::from_utf8(source.get(PARALLEL_SAFETY_RELATIVE).unwrap())
+            .unwrap()
+            .replace("독립된 5개 모듈", "독립된 모듈");
+        assert!(!parallel_resource_content_valid(
+            PARALLEL_SAFETY_RELATIVE,
+            invalid_safety.as_bytes()
+        ));
         let invalid_agent = std::str::from_utf8(source.get(SKILL_AGENT_RELATIVE).unwrap())
             .unwrap()
             .replace(

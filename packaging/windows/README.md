@@ -9,7 +9,7 @@
 .\packaging\windows\build-installer.ps1 -Architecture arm64
 ```
 
-이 wrapper는 선택 architecture의 `star.exe`, `star-controller.exe`, `star-mcp.exe`, `star-updater.exe`를 먼저 빌드한 뒤 같은 invocation에서 stage를 만든다. source의 Codex Plugin template 전체도 재귀 복사되며, Marketplace·Plugin·MCP·Hook·Skill과 `agents/openai.yaml`·`references/routing-matrix.md`의 필수 7-file contract가 하나라도 빠지면 stage 검증이 실패한다. 저수준 `star-package-release stage`를 직접 호출할 때는 `--binary-dir`가 exact source에서 방금 생성됐다는 별도 build evidence가 필요하며, `--source-revision` 문자열만으로 stale binary를 exact commit 산출물이라고 주장할 수 없다. Runtime generation ID는 staged Runtime payload file-set digest에 결박되고 verifier가 이를 재계산하므로 같은 revision 문자열 아래의 다른 byte를 같은 generation으로 재사용할 수 없다.
+이 wrapper는 선택 architecture의 `star.exe`, `star-controller.exe`, `star-mcp.exe`, `star-updater.exe`를 먼저 빌드한 뒤 같은 invocation에서 stage를 만든다. source의 Codex Plugin template 전체도 재귀 복사되며, Marketplace·Plugin·MCP·Hook 4개, operations Skill 3개, parallel implementation Skill 9개인 필수 16-file contract가 하나라도 빠지면 stage 검증이 실패한다. 저수준 `star-package-release stage`를 직접 호출할 때는 `--binary-dir`가 exact source에서 방금 생성됐다는 별도 build evidence가 필요하며, `--source-revision` 문자열만으로 stale binary를 exact commit 산출물이라고 주장할 수 없다. Runtime generation ID는 staged Runtime payload file-set digest에 결박되고 verifier가 이를 재계산하므로 같은 revision 문자열 아래의 다른 byte를 같은 generation으로 재사용할 수 없다.
 
 같은 version의 기존 `dist/stage/<version>/<architecture>`가 비어 있지 않으면 덮어쓰지 않는다. 검증된 stage를 의도적으로 다시 만들 때만 `-ReplaceStage`를 사용한다. 이 switch는 `dist/stage` 아래에서 확인된 정확한 architecture 폴더에만 적용된다.
 

@@ -2047,7 +2047,7 @@ mod tests {
     }
 
     #[test]
-    fn integration_candidate_adds_skill_assets_and_rolls_back() {
+    fn integration_candidate_adds_both_skill_contracts_and_rolls_back() {
         let installed = fixture_root("integration-apply-installed");
         let candidate = fixture_root("integration-apply-candidate");
         let data = fixture_root("integration-apply-data");
@@ -2055,17 +2055,31 @@ mod tests {
         let candidate_manifest = write_release_fixture(&candidate);
         let skill_agent = "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/agents/openai.yaml";
         let routing = "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/references/routing-matrix.md";
+        let parallel_skill = "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/SKILL.md";
+        let parallel_report = "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation/assets/controller-report.md";
         let candidate_manifest = add_release_fixture_file(
             &candidate,
             candidate_manifest,
             skill_agent,
             b"interface: {}\n",
         );
-        let _candidate_manifest = add_release_fixture_file(
+        let candidate_manifest = add_release_fixture_file(
             &candidate,
             candidate_manifest,
             routing,
             b"# routing matrix\n",
+        );
+        let candidate_manifest = add_release_fixture_file(
+            &candidate,
+            candidate_manifest,
+            parallel_skill,
+            b"---\nname: orchestrate-parallel-implementation\n---\n",
+        );
+        let _candidate_manifest = add_release_fixture_file(
+            &candidate,
+            candidate_manifest,
+            parallel_report,
+            b"# controller report\n",
         );
         let manager = InstallationManager::new(data);
         manager
@@ -2078,7 +2092,9 @@ mod tests {
             review.candidate_class,
             IntegrationCandidateClass::CodexIntegrationUpdate
         );
-        assert_eq!(review.changed_files, vec![skill_agent, routing]);
+        let mut expected_changes = vec![skill_agent, routing, parallel_skill, parallel_report];
+        expected_changes.sort_unstable();
+        assert_eq!(review.changed_files, expected_changes);
         let backup = manager
             .apply_codex_integration_candidate(
                 &installed,
@@ -2095,6 +2111,14 @@ mod tests {
             std::fs::read(installed.join(routing)).unwrap(),
             b"# routing matrix\n"
         );
+        assert_eq!(
+            std::fs::read(installed.join(parallel_skill)).unwrap(),
+            b"---\nname: orchestrate-parallel-implementation\n---\n"
+        );
+        assert_eq!(
+            std::fs::read(installed.join(parallel_report)).unwrap(),
+            b"# controller report\n"
+        );
         assert!(manager.status(&installed).unwrap().verified);
         assert_eq!(
             manager
@@ -2108,6 +2132,8 @@ mod tests {
             .unwrap();
         assert!(!installed.join(skill_agent).exists());
         assert!(!installed.join(routing).exists());
+        assert!(!installed.join(parallel_skill).exists());
+        assert!(!installed.join(parallel_report).exists());
         assert!(manager.status(&installed).unwrap().verified);
         assert_eq!(
             manager

@@ -136,15 +136,21 @@ integrations/codex-plugin-template/
          ├─ .codex-plugin/plugin.json
          ├─ .mcp.json
          ├─ hooks/hooks.json
-         └─ skills/star-control-operations/
-            ├─ SKILL.md
-            ├─ agents/openai.yaml
-            └─ references/routing-matrix.md
+         └─ skills/
+            ├─ star-control-operations/
+            │  ├─ SKILL.md
+            │  ├─ agents/openai.yaml
+            │  └─ references/routing-matrix.md
+            └─ orchestrate-parallel-implementation/
+               ├─ SKILL.md
+               ├─ agents/openai.yaml
+               ├─ references/{decomposition,scheduling-and-lifecycle,workspace-and-integration,safety-and-validation}.md
+               └─ assets/{worker-context-pack,worker-report,controller-report}.md
 ```
 
-source template은 Plugin validator를 통과하는 중립 authoring 값(`0.0.0+codex.template`, `star-mcp`, `star hook session-start`)을 가진다. 렌더러는 JSON을 strict parse한 뒤 허용된 typed field인 Plugin version, MCP `command`, Hook `commandWindows`만 바꾸고 다시 serialize한다. 문자열 token 치환이나 shell 문자열 연결은 사용하지 않는다. source tree의 나머지 파일과 unknown component를 임의로 복사하지 않고 Marketplace·manifest·MCP·Hook·Skill·Skill metadata·routing reference의 닫힌 7-file set만 렌더링한다.
+source template은 Plugin validator를 통과하는 중립 authoring 값(`0.0.0+codex.template`, `star-mcp`, `star hook session-start`)을 가진다. 렌더러는 JSON을 strict parse한 뒤 허용된 typed field인 Plugin version, MCP `command`, Hook `commandWindows`만 바꾸고 다시 serialize한다. 문자열 token 치환이나 shell 문자열 연결은 사용하지 않는다. source tree의 나머지 파일과 unknown component를 임의로 복사하지 않고 Marketplace·manifest·MCP·Hook 4개와 operations Skill 3개, parallel implementation Skill 9개의 닫힌 16-file set만 렌더링한다.
 
-현재 Skill identifier는 `star-control-operations` 하나로 고정한다. `agents/openai.yaml`은 Codex UI metadata·implicit invocation과 같은 Plugin의 `star-control` MCP dependency만 선언한다. `references/routing-matrix.md`는 23개 기능의 MCP-first/CLI-only route와 16개 Profile 분류를 제공하지만 live Registry·Catalog·`profile resolve`보다 정본이 아니다. 이 source 변경은 이미 설치된 rendered Marketplace나 Codex Plugin cache를 직접 바꾸지 않으며 실제 설치 상태 전환은 후속 package·repair Gate가 담당한다.
+현재 Skill identifier는 `star-control-operations`와 `orchestrate-parallel-implementation` 두 개로 고정한다. operations의 `agents/openai.yaml`은 Codex UI metadata·implicit invocation과 같은 Plugin의 `star-control` MCP dependency만 선언한다. parallel implementation metadata는 implicit invocation을 켜되 존재하지 않는 직접 tool dependency를 만들지 않는다. 이 Skill은 Sol Max가 설계·재계획·Terra별 전체 diff 리뷰·결합 전체 diff 리뷰를 소유하고, 각 Terra High 구현 Bundle만 토큰 예산 없는 Goal Pursuit로 추진하도록 고정한다. `WORKER_COMPLETE` 뒤에도 Goal은 active이며 Sol의 해당 Terra 전체 diff 승인 뒤에만 Goal complete와 `INTEGRATED`로 전이한다. `references/routing-matrix.md`는 23개 기능의 MCP-first/CLI-only route와 16개 Profile 분류를 제공하지만 live Registry·Catalog·`profile resolve`보다 정본이 아니다. 이 source 변경은 이미 설치된 rendered Marketplace나 Codex Plugin cache를 직접 바꾸지 않으며 실제 설치 상태 전환은 후속 package·repair Gate가 담당한다.
 
 ### rendered Marketplace
 
@@ -158,13 +164,19 @@ source template은 Plugin validator를 통과하는 중립 authoring 값(`0.0.0+
          ├─ .codex-plugin/plugin.json
          ├─ .mcp.json
          ├─ hooks/hooks.json
-         └─ skills/star-control-operations/
-            ├─ SKILL.md
-            ├─ agents/openai.yaml
-            └─ references/routing-matrix.md
+         └─ skills/
+            ├─ star-control-operations/
+            │  ├─ SKILL.md
+            │  ├─ agents/openai.yaml
+            │  └─ references/routing-matrix.md
+            └─ orchestrate-parallel-implementation/
+               ├─ SKILL.md
+               ├─ agents/openai.yaml
+               ├─ references/{decomposition,scheduling-and-lifecycle,workspace-and-integration,safety-and-validation}.md
+               └─ assets/{worker-context-pack,worker-report,controller-report}.md
 ```
 
-Marketplace name은 `star-control-local`, Plugin name은 `star-control`로 고정한다. Plugin version은 제품 SemVer에 `+codex.<render-hash-prefix>` cachebuster를 붙인다. `plugin.json`에는 실제 `.mcp.json`이 있을 때만 `mcpServers`를 둔다. `hooks` manifest field는 쓰지 않고 기본 `hooks/hooks.json` discovery를 사용한다. Skill route는 `ready MCP action → Catalog-declared CLI-only command/Profile → explicit native fallback` 순서이며 non-ready MCP action을 CLI로 우회하지 않는다.
+Marketplace name은 `star-control-local`, Plugin name은 `star-control`로 고정한다. Plugin version은 제품 SemVer에 `+codex.<render-hash-prefix>` cachebuster를 붙인다. `plugin.json`에는 실제 `.mcp.json`이 있을 때만 `mcpServers`를 둔다. `hooks` manifest field는 쓰지 않고 기본 `hooks/hooks.json` discovery를 사용한다. operations Skill route는 `ready MCP action → Catalog-declared CLI-only command/Profile → explicit native fallback` 순서이며 non-ready MCP action을 CLI로 우회하지 않는다. parallel implementation Skill은 숫자 lane 제한 없이 충돌 없는 ready Bundle을 dispatch하되 `Sol Max 설계·전체 리뷰 → Terra High Goal Pursuit 구현·교정 → Sol 결합 리뷰 → 최종 검증` 순서를 보존한다.
 
 `.mcp.json`은 stdio server `star-control`의 `command`를 실제 `<install-root>/star-mcp.exe` absolute path로 렌더링한다. lifecycle Hook의 `commandWindows`는 실제 `<install-root>/star.exe hook <event>`를 가리킨다.
 
@@ -177,7 +189,7 @@ P-0039의 Hook은 `SessionStart`, `UserPromptSubmit`, `Stop`, `PreToolUse`, `Pos
   "continue": true,
   "hookSpecificOutput": {
     "hookEventName": "SessionStart",
-    "additionalContext": "`star-control-operations` 지침을 따른다. Star-Control 작업은 fixed MCP Gateway와 Catalog-declared CLI-only 경계를 구분한다. MCP action을 사용할 때는 `star_tool_search`로 현재 registry를 검색하고 action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 확인한다. describe에서 현재 Schema, 위험 lane, `descriptor_hash`, `required_call_tool`을 받은 뒤 그 tool에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. package나 manifest의 ready 상태는 action readiness가 아니다. Catalog에 MCP action이 없는 기능과 C01 Profile만 설치된 `star` CLI의 선언된 command로 실행하고 live `profile show|resolve` 결과를 고정한다. MCP action이 non-ready인 기능을 CLI로 우회하지 않는다. ready MCP action도 CLI-only command도 사용할 수 없으면 일반 Codex 개발 작업을 막지 말고 프로젝트 native 도구를 사용하며 fallback 사실과 이유와 Star-Control evidence 부재를 결과에 기록한다. `star_tool_registry_status`는 진단용이며 필수 선행 Gate가 아니다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`, `question_required`와 Operation ID 반환은 완료가 아니다."
+    "additionalContext": "`star-control-operations` 지침을 따른다. 구현·수정·리팩터링·마이그레이션·테스트 추가 요청에는 사용자가 단일 에이전트를 명시하지 않은 한 `orchestrate-parallel-implementation` 지침도 적용한다. 이 스킬은 중앙 작업이 아니라 각 Terra High 구현 Bundle만 목표추진으로 등록하고, Sol Max 설계와 Terra별 전체 diff 리뷰 및 결합 전체 diff 리뷰를 요구한다. Star-Control 작업은 fixed MCP Gateway와 Catalog-declared CLI-only 경계를 구분한다. MCP action을 사용할 때는 `star_tool_search`로 현재 registry를 검색하고 action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 확인한다. describe에서 현재 Schema, 위험 lane, `descriptor_hash`, `required_call_tool`을 받은 뒤 그 tool에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. package나 manifest의 ready 상태는 action readiness가 아니다. Catalog에 MCP action이 없는 기능과 C01 Profile만 설치된 `star` CLI의 선언된 command로 실행하고 live `profile show|resolve` 결과를 고정한다. MCP action이 non-ready인 기능을 CLI로 우회하지 않는다. ready MCP action도 CLI-only command도 사용할 수 없으면 일반 Codex 개발 작업을 막지 말고 프로젝트 native 도구를 사용하며 fallback 사실과 이유와 Star-Control evidence 부재를 결과에 기록한다. `star_tool_registry_status`는 진단용이며 필수 선행 Gate가 아니다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다. `approval_required`, `question_required`와 Operation ID 반환은 완료가 아니다."
   }
 }
 ```
@@ -231,10 +243,10 @@ update·repair에서 task를 해제하면 자동 시작은 exact owned value를 
 ### update와 repair
 
 - 같은 AppId가 이전 경로를 재사용한다.
-- `build-installer.ps1`은 선택 architecture의 `star.exe`, `star-controller.exe`, `star-mcp.exe`, `star-updater.exe`를 같은 invocation에서 다시 빌드하고 source의 `integrations/codex-plugin-template/` 전체를 stage에 재귀 복사한다. `star-package-release`는 Marketplace, Plugin, MCP, Hook, Skill, `agents/openai.yaml`, `references/routing-matrix.md` 7개 자산이 release manifest에 모두 들어 있지 않으면 stage·reseal·verify를 실패시킨다. 따라서 새 Codex 라우팅 계약은 installer와 updater 후보에 자동 포함되며 생성된 byte만 manifest digest의 주체가 된다.
+- `build-installer.ps1`은 선택 architecture의 `star.exe`, `star-controller.exe`, `star-mcp.exe`, `star-updater.exe`를 같은 invocation에서 다시 빌드하고 source의 `integrations/codex-plugin-template/` 전체를 stage에 재귀 복사한다. `star-package-release`는 Marketplace, Plugin, MCP, Hook 4개와 operations Skill 3개, parallel implementation Skill 9개인 16개 자산이 release manifest에 모두 들어 있지 않으면 stage·reseal·verify를 실패시킨다. 따라서 새 Codex 라우팅 계약은 installer와 updater 후보에 자동 포함되며 생성된 byte만 manifest digest의 주체가 된다.
 - Installer EXE를 직접 실행하는 update·repair는 사용자가 Codex 앱을 완전히 종료한 뒤 Codex 밖의 별도 PowerShell에서 실행한다. Installer 자체는 실행 중인 Codex나 Star-Control process를 강제로 닫지 않는다. 실행 중 host에서 승인된 전환은 `star update offline-installer-restart`만 사용하며, detached Updater가 exact Codex census·10초 countdown·bounded 종료와 같은 Desktop 재실행을 소유한다.
 - 설치 후 `codex_integration_update`는 Installer가 아니라 `star-updater.exe`만 처리한다. updater가 verified Codex process census와 Controller update lease를 확보한 뒤 `restart_armed`에서 정확히 10초를 세고, 새 mutation admission을 막고, 대상 Codex를 정상 종료 요청 후 exact identity fallback으로만 종료한다. fallback termination 뒤에는 별도 bounded window에서 exact image exit를 재확인하며 immediate census로 timeout을 만들지 않는다. `draining` 이후 오류는 `aborted` receipt와 same-executable best-effort relaunch를 남긴다. MCP EOF와 owner-death가 확인된 뒤에만 Plugin·Hook·`.mcp.json`을 교체하고, postcheck 뒤 같은 Codex executable을 다시 시작한다. chat 주입·thread 재개·새 turn·중단 Tool replay는 없다.
-- integration-only release stage는 verified installed root의 별도 `dist/stage` copy에 새 fixed Bridge/Plugin byte만 반영하고 `star-package-release reseal-integration --source-revision <new-revision>`으로 봉인한다. 이 명령은 기존 7-component Plugin inventory와 Runtime nested manifest/source를 보존하며 `star-updater.exe`, Controller, Runtime, catalog·schema delta를 fail-closed로 거부한다. outer manifest는 새 integration source revision을 기록하고 nested Runtime manifest는 prior Runtime source revision을 유지하며, candidate release manifest hash·changed-file digest·approval scope가 두 identity를 exact assembly로 결합한다.
+- integration-only release stage는 verified installed root의 별도 `dist/stage` copy에 새 fixed Bridge/Plugin byte만 반영하고 `star-package-release reseal-integration --source-revision <new-revision>`으로 봉인한다. 이 명령은 16-component Plugin inventory와 Runtime nested manifest/source를 보존하며 `star-updater.exe`, Controller, Runtime, catalog·schema delta를 fail-closed로 거부한다. outer manifest는 새 integration source revision을 기록하고 nested Runtime manifest는 prior Runtime source revision을 유지하며, candidate release manifest hash·changed-file digest·approval scope가 두 identity를 exact assembly로 결합한다.
 - 설치된 Updater가 아직 새 renderer/Hook allowlist를 모르는 최초 계약 확장은 integration-only candidate로 자기 자신을 bootstrap하지 않는다. 설치된 Updater의 `offline-installer-restart`가 complete x64 replacement installer를 실행해 Updater·Bridge·Plugin·Runtime을 함께 교체하고 postcheck한 뒤, 후속 동일 계약 변경부터 integration-only 경로를 사용한다.
 - updater의 integration 후보 분류는 `integrations/codex-plugin-template/` 아래 추가·변경·삭제 path 전체를 포함한다. 새 Skill metadata와 routing reference도 다른 Plugin 자산과 동일하게 backup, apply, integration repair·postcheck, rollback receipt를 거치며 일부 파일만 성공한 상태를 성공으로 승격하지 않는다.
 - full/mixed replacement installer가 기존 v2 설치를 갱신하면 setup의 bridge initialize는 prior selector를 보존한다. detached Updater는 setup 성공 뒤 새 root manifest가 소유한 정확히 한 Runtime Generation을 선택·활성화하고, manifest-declared release ToolId 전체와 live declared/ready 집합의 exact equality를 검증한다. 실패하면 prior selector를 복원·기동하되 replacement fixed files가 남으므로 `partially_applied`를 기록하고, selector 복구 실패는 `rollback_failed`로 기록한다. setup exit 0과 file 교체만으로 update 완료나 full rollback을 표시하지 않는다.
@@ -260,7 +272,7 @@ update·repair에서 task를 해제하면 자동 시작은 exact owned value를 
 - fake Codex CLI로 marketplace add·plugin add·marketplace remove argv를 정확히 검사
 - 실제 Codex CLI를 실행할 수 없는 환경에서 `manual_action_required`가 되는지 검사
 - rendered Plugin validator와 JSON parse
-- source/rendered 7-file exact set, Skill agent metadata의 MCP dependency, 23개 기능·16개 Profile routing coverage 검사
+- source/rendered 16-file exact set, 두 Skill의 agent metadata·기본 routing, 23개 기능·16개 Profile routing coverage 검사
 - SessionStart exact snapshot, `SessionEnd timeout=3`과 2초 내부 lifecycle deadline, 고정 MCP tool reference, Catalog-declared CLI-only route와 ready action 0건의 native fallback 검사
 - updater 후보의 새 Skill 자산 추가·적용·검증·rollback과 installer의 `star-updater.exe` 재빌드·필수 자산 manifest 검사를 확인
 - `cargo fmt --check`, target crate tests, workspace tests, package script check, `git diff --check`

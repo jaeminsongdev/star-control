@@ -1,20 +1,20 @@
 {
   "name": "star-control",
   "version": "0.0.0+codex.template",
-  "description": "Route Codex development, code-health, validation, and Runtime lifecycle work through Star-Control with explicit evidence and fallback boundaries.",
+  "description": "Route Codex development, implementation orchestration, code-health, validation, and Runtime lifecycle work through Star-Control with explicit evidence and fallback boundaries.",
   "author": {
     "name": "Star-Control contributors"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Star Control",
-    "shortDescription": "Use Star-Control actions, Profiles, and lifecycle routes.",
-    "longDescription": "Connects Codex to the installed Star-Control gateway, resolves declarative Profiles, routes code-health and validation work through ready MCP actions or Catalog-declared CLI-only features, and keeps Runtime updates, approvals, evidence, and native fallback explicit.",
+    "shortDescription": "Use Star-Control routes and safe parallel implementation.",
+    "longDescription": "Connects Codex to the installed Star-Control gateway, resolves declarative Profiles, routes code-health and validation work through ready MCP actions or Catalog-declared CLI-only features, and orchestrates implementation with Sol Max design and full review plus goal-driven Terra High workers.",
     "developerName": "Star-Control contributors",
     "category": "Productivity",
     "capabilities": ["Local MCP", "Development operations"],
     "defaultPrompt": [
-      "Use $star-control-operations to route this task through Star-Control actions, Profiles, code-health checks, or installed lifecycle commands while preserving approvals, evidence, and fallback status."
+      "Use $star-control-operations for Star-Control routes and $orchestrate-parallel-implementation for implementation with Sol Max design and full review plus goal-driven Terra High workers."
     ]
   },
   "mcpServers": "./.mcp.json"

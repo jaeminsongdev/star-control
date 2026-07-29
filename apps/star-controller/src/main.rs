@@ -4370,6 +4370,238 @@ async fn graceful_controller_shutdown(
     }
 }
 
+const MANAGEMENT_INITIALIZING_MESSAGE: &str =
+    "The management store is completing startup recovery and retention; retry this request.";
+const MANAGEMENT_UNAVAILABLE_MESSAGE: &str =
+    "The management application service is unavailable after startup.";
+
+#[derive(Clone)]
+enum ManagementRuntimeState {
+    Initializing,
+    Ready(Arc<Mutex<ManagementApplicationService>>),
+    Recovery {
+        recovery: Arc<SqliteManagementRecovery>,
+        inspection: Option<RecoveryInspection>,
+        _startup_diagnostic: Option<String>,
+    },
+    Failed {
+        _diagnostic: String,
+    },
+}
+
+impl ManagementRuntimeState {
+    fn failed(diagnostic: impl Into<String>) -> Self {
+        Self::Failed {
+            _diagnostic: diagnostic.into(),
+        }
+    }
+}
+
+type SharedManagementRuntime = Arc<Mutex<ManagementRuntimeState>>;
+
+struct ManagementRuntimeInit {
+    management_root: PathBuf,
+    root_binding_root: PathBuf,
+    profile_catalog_root: PathBuf,
+    rust_style_runtime_root: PathBuf,
+    rust_style_policy_path: PathBuf,
+    local_appdata: PathBuf,
+    execution_config: UserExecutionConfig,
+}
+
+fn open_management_recovery_state(
+    management_root: &Path,
+    inspection: Option<RecoveryInspection>,
+    startup_diagnostic: Option<String>,
+) -> ManagementRuntimeState {
+    match SqliteManagementRecovery::open(management_root, env!("CARGO_PKG_VERSION")) {
+        Ok(recovery) => ManagementRuntimeState::Recovery {
+            recovery: Arc::new(recovery),
+            inspection,
+            _startup_diagnostic: startup_diagnostic,
+        },
+        Err(recovery_error) => {
+            let diagnostic = match startup_diagnostic {
+                Some(startup_diagnostic) => format!(
+                    "management startup failed: {startup_diagnostic}; recovery open failed: {recovery_error}"
+                ),
+                None => recovery_error.to_string(),
+            };
+            ManagementRuntimeState::failed(diagnostic)
+        }
+    }
+}
+
+fn initialize_management_runtime(init: ManagementRuntimeInit) -> ManagementRuntimeState {
+    let inspection = inspect_management_root(&init.management_root);
+    if inspection.is_some_and(|value| value != RecoveryInspection::Healthy) {
+        return open_management_recovery_state(&init.management_root, inspection, None);
+    }
+
+    let repositories =
+        match SqliteManagementRepositorySet::open(&init.management_root, env!("CARGO_PKG_VERSION"))
+        {
+            Ok(repositories) => repositories,
+            Err(open_error) => {
+                return open_management_recovery_state(
+                    &init.management_root,
+                    inspection,
+                    Some(open_error.to_string()),
+                );
+            }
+        };
+    let root_bindings = match WindowsProjectRootBindingStore::open(&init.root_binding_root) {
+        Ok(store) => store,
+        Err(error) => {
+            drop(repositories);
+            return open_management_recovery_state(
+                &init.management_root,
+                inspection,
+                Some(error.to_string()),
+            );
+        }
+    };
+    let mut service = ManagementApplicationService::new(
+        Arc::new(repositories),
+        Arc::new(root_bindings),
+        Arc::new(LocalArtifactStore::default()),
+    )
+    .with_syntax_adapter(Arc::new(RustSyntaxAdapter))
+    .with_git_history_adapter(Arc::new(CommandGitHistoryAdapter))
+    .with_managed_registry_resolver(Arc::new(DevelopmentManagedRegistryResolver))
+    .with_managed_registry_rewriter(Arc::new(DevelopmentManagedRegistryResolver))
+    .with_profile_catalog_root(init.profile_catalog_root)
+    .with_rust_style_runtime(init.rust_style_runtime_root, init.rust_style_policy_path)
+    .with_planning_policy(init.execution_config.planning_policy.clone())
+    .with_effective_config(init.execution_config.effective.clone());
+    service.set_scan_incremental(init.execution_config.scan_incremental);
+    service.set_scan_policy(init.execution_config.scan_policy.clone());
+    service.set_index_policy(init.execution_config.index_policy.clone());
+    if init.execution_config.index_cache_enabled {
+        let cache = match FileCodeIndexCache::open_with_policy(
+            init.local_appdata.join("Star-Control/cache/project-index"),
+            8,
+            init.execution_config
+                .index_cache_max_total_bytes
+                .min(256 * 1024 * 1024),
+            init.execution_config.index_cache_max_total_bytes,
+            init.execution_config.index_cache_retention_days,
+        ) {
+            Ok(cache) => cache,
+            Err(error) => {
+                drop(service);
+                return open_management_recovery_state(
+                    &init.management_root,
+                    inspection,
+                    Some(error.to_string()),
+                );
+            }
+        };
+        service = service.with_index_cache(Arc::new(cache));
+    }
+    let service = match RustAnalyzerSemanticAdapter::discover_pinned() {
+        Ok(adapter) => service.with_semantic_adapter(Arc::new(adapter)),
+        Err(_) => service,
+    };
+    if let Err(error) = service.recover_incomplete_registrations() {
+        drop(service);
+        return open_management_recovery_state(
+            &init.management_root,
+            inspection,
+            Some(error.to_string()),
+        );
+    }
+    let startup_retention = match service.plan_retention() {
+        Ok(plan) => plan,
+        Err(error) => {
+            drop(service);
+            return open_management_recovery_state(
+                &init.management_root,
+                inspection,
+                Some(error.to_string()),
+            );
+        }
+    };
+    if let Err(error) = service.apply_retention(
+        &startup_retention,
+        startup_retention.plan_fingerprint.as_str(),
+    ) {
+        drop(service);
+        return open_management_recovery_state(
+            &init.management_root,
+            inspection,
+            Some(error.to_string()),
+        );
+    }
+    ManagementRuntimeState::Ready(Arc::new(Mutex::new(service)))
+}
+
+fn spawn_management_runtime<F>(initializer: F) -> SharedManagementRuntime
+where
+    F: FnOnce() -> ManagementRuntimeState + Send + 'static,
+{
+    let runtime = Arc::new(Mutex::new(ManagementRuntimeState::Initializing));
+    let worker_runtime = Arc::clone(&runtime);
+    let spawn = std::thread::Builder::new()
+        .name("star-management-startup".to_owned())
+        .spawn(move || {
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(initializer))
+                .unwrap_or_else(|_| {
+                    ManagementRuntimeState::failed("management startup worker panicked")
+                });
+            if let Ok(mut state) = worker_runtime.lock() {
+                *state = outcome;
+            }
+        });
+    if let Err(error) = spawn
+        && let Ok(mut state) = runtime.lock()
+    {
+        *state = ManagementRuntimeState::failed(error.to_string());
+    }
+    runtime
+}
+
+fn management_runtime_snapshot(runtime: &SharedManagementRuntime) -> ManagementRuntimeState {
+    runtime
+        .lock()
+        .map(|state| state.clone())
+        .unwrap_or_else(|_| {
+            ManagementRuntimeState::failed("management startup state lock is poisoned")
+        })
+}
+
+fn management_action_access(
+    runtime: &SharedManagementRuntime,
+) -> (
+    Option<Arc<Mutex<ManagementApplicationService>>>,
+    RuntimeFailure,
+) {
+    match management_runtime_snapshot(runtime) {
+        ManagementRuntimeState::Ready(service) => (
+            Some(service),
+            (
+                "MANAGEMENT_STORE_UNAVAILABLE",
+                MANAGEMENT_UNAVAILABLE_MESSAGE,
+            ),
+        ),
+        ManagementRuntimeState::Initializing => (
+            None,
+            ("MANAGEMENT_STORE_BUSY", MANAGEMENT_INITIALIZING_MESSAGE),
+        ),
+        ManagementRuntimeState::Recovery { .. } | ManagementRuntimeState::Failed { .. } => (
+            None,
+            (
+                "MANAGEMENT_STORE_UNAVAILABLE",
+                MANAGEMENT_UNAVAILABLE_MESSAGE,
+            ),
+        ),
+    }
+}
+
+fn runtime_failure_retryable(code: &str) -> bool {
+    matches!(code, "TOOL_PROCESS_RETRYABLE" | "MANAGEMENT_STORE_BUSY")
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let process_args = parse_controller_process_args(std::env::args_os().skip(1))?;
@@ -4471,65 +4703,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .integer("permissions.approval_ttl_ms")
                 .ok_or("approval TTL is missing from EffectiveConfig")?,
         )?;
-    let management_inspection = inspect_management_root(&management_root);
-    let repositories = if management_inspection
-        .is_some_and(|inspection| inspection != RecoveryInspection::Healthy)
-    {
-        None
-    } else {
-        SqliteManagementRepositorySet::open(&management_root, env!("CARGO_PKG_VERSION")).ok()
-    };
-    let management_service = if let Some(repositories) = repositories {
-        let mut service = ManagementApplicationService::new(
-            Arc::new(repositories),
-            Arc::new(WindowsProjectRootBindingStore::open(&root_binding_root)?),
-            Arc::new(LocalArtifactStore::default()),
-        )
-        .with_syntax_adapter(Arc::new(RustSyntaxAdapter))
-        .with_git_history_adapter(Arc::new(CommandGitHistoryAdapter))
-        .with_managed_registry_resolver(Arc::new(DevelopmentManagedRegistryResolver))
-        .with_managed_registry_rewriter(Arc::new(DevelopmentManagedRegistryResolver))
-        .with_profile_catalog_root(profile_catalog_root)
-        .with_rust_style_runtime(rust_style_runtime_root, rust_style_policy_path)
-        .with_planning_policy(initial_execution_config.planning_policy.clone())
-        .with_effective_config(initial_execution_config.effective.clone());
-        service.set_scan_incremental(initial_execution_config.scan_incremental);
-        service.set_scan_policy(initial_execution_config.scan_policy.clone());
-        service.set_index_policy(initial_execution_config.index_policy.clone());
-        if initial_execution_config.index_cache_enabled {
-            service = service.with_index_cache(Arc::new(FileCodeIndexCache::open_with_policy(
-                local_appdata.join("Star-Control/cache/project-index"),
-                8,
-                initial_execution_config
-                    .index_cache_max_total_bytes
-                    .min(256 * 1024 * 1024),
-                initial_execution_config.index_cache_max_total_bytes,
-                initial_execution_config.index_cache_retention_days,
-            )?));
-        }
-        let service = match RustAnalyzerSemanticAdapter::discover_pinned() {
-            Ok(adapter) => service.with_semantic_adapter(Arc::new(adapter)),
-            Err(_) => service,
+    let management_runtime = spawn_management_runtime({
+        let init = ManagementRuntimeInit {
+            management_root: management_root.clone(),
+            root_binding_root: root_binding_root.clone(),
+            profile_catalog_root: profile_catalog_root.clone(),
+            rust_style_runtime_root: rust_style_runtime_root.clone(),
+            rust_style_policy_path: rust_style_policy_path.clone(),
+            local_appdata: local_appdata.clone(),
+            execution_config: initial_execution_config.clone(),
         };
-        let _ = service.recover_incomplete_registrations()?;
-        let startup_retention = service.plan_retention()?;
-        let _ = service.apply_retention(
-            &startup_retention,
-            startup_retention.plan_fingerprint.as_str(),
-        )?;
-        Some(service)
-    } else {
-        None
-    }
-    .map(|service| Arc::new(Mutex::new(service)));
-    let management_recovery = if management_service.is_none() {
-        Some(SqliteManagementRecovery::open(
-            &management_root,
-            env!("CARGO_PKG_VERSION"),
-        )?)
-    } else {
-        None
-    };
+        move || initialize_management_runtime(init)
+    });
     let mut roots = registry_source_roots(
         &install_directory,
         &appdata,
@@ -4790,6 +4975,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         if is_management_command(&request.command) {
+            let (
+                available_management_service,
+                available_management_recovery,
+                management_inspection,
+            ) = match management_runtime_snapshot(&management_runtime) {
+                ManagementRuntimeState::Initializing => {
+                    let response = request_error_response(
+                        request,
+                        "MANAGEMENT_STORE_BUSY",
+                        MANAGEMENT_INITIALIZING_MESSAGE,
+                        true,
+                        registry.revision,
+                    );
+                    let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                    continue;
+                }
+                ManagementRuntimeState::Ready(service) => (Some(service), None, None),
+                ManagementRuntimeState::Recovery {
+                    recovery,
+                    inspection,
+                    ..
+                } => (None, Some(recovery), inspection),
+                ManagementRuntimeState::Failed { .. } => {
+                    let response = request_error_response(
+                        request,
+                        "MANAGEMENT_STORE_UNAVAILABLE",
+                        MANAGEMENT_UNAVAILABLE_MESSAGE,
+                        false,
+                        registry.revision,
+                    );
+                    let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                    continue;
+                }
+            };
             let execution_config = match (
                 UserToolRegistryConfig::load(&appdata),
                 UserExecutionConfig::load_for_project_and_layers(
@@ -4852,11 +5071,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
                 continue;
             }
-            let mut management_service_guard = management_service.as_ref().map(|service| {
-                service
-                    .lock()
-                    .expect("management service mutex is not poisoned")
-            });
+            let mut management_service_guard =
+                available_management_service.as_ref().map(|service| {
+                    service
+                        .lock()
+                        .expect("management service mutex is not poisoned")
+                });
             if let Some(service) = management_service_guard.as_deref_mut() {
                 service.set_scan_incremental(execution_config.scan_incremental);
                 service.set_scan_policy(execution_config.scan_policy.clone());
@@ -4893,7 +5113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let response = handle_management_command(
                 ManagementCommandContext {
                     service: management_service_guard.as_deref(),
-                    recovery: management_recovery.as_ref(),
+                    recovery: available_management_recovery.as_deref(),
                     approvals: Some(&approvals),
                     operations: Some(&operations),
                     recovery_inspection: management_inspection,
@@ -5662,7 +5882,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 let operation_gate = concurrency_gate.clone();
                                                 let operation_gate_request = gate_request.clone();
                                                 let project_directory = project_directory.clone();
-                                                let management_service = management_service.clone();
+                                                let management_runtime = management_runtime.clone();
                                                 let execution_config =
                                                     live_execution_config.clone();
                                                 let operation_local_appdata = local_appdata.clone();
@@ -5727,6 +5947,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         Arc::clone(&operation_store),
                                                         operation_id.clone(),
                                                     );
+                                                    let (
+                                                        management_service,
+                                                        management_unavailable,
+                                                    ) = management_action_access(
+                                                        &management_runtime,
+                                                    );
                                                     let result = run_authorized_action(
                                                         AuthorizedProcessRequest {
                                                             package: &package,
@@ -5739,6 +5965,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             project_directory: &project_directory,
                                                             management_service: management_service
                                                                 .as_ref(),
+                                                            management_unavailable,
                                                             execution_config: &execution_config,
                                                             local_appdata: &operation_local_appdata,
                                                             requested_timeout_ms,
@@ -5758,7 +5985,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                     serde_json::json!({
                                                         "code":code,
                                                         "message":message,
-                                                        "retryable":code == "TOOL_PROCESS_RETRYABLE"
+                                                        "retryable":runtime_failure_retryable(code)
                                                     })
                                                 });
                                                     let mut store = operation_store
@@ -5866,6 +6093,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     registry.revision,
                                 )
                             } else {
+                                let (management_service, management_unavailable) =
+                                    management_action_access(&management_runtime);
                                 let response = match run_authorized_action(
                                     AuthorizedProcessRequest {
                                         package,
@@ -5877,6 +6106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         runtime_scope: &runtime_scope,
                                         project_directory: &project_directory,
                                         management_service: management_service.as_ref(),
+                                        management_unavailable,
                                         execution_config: &live_execution_config,
                                         local_appdata: &local_appdata,
                                         requested_timeout_ms,
@@ -5909,7 +6139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             message,
                                             registry.revision,
                                         );
-                                        if code == "TOOL_PROCESS_RETRYABLE" {
+                                        if runtime_failure_retryable(code) {
                                             response
                                                 .error
                                                 .as_mut()
@@ -6353,7 +6583,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 let runtime_scope = RuntimeScopeIds::from_value(
                                                     &approval.runtime_scope,
                                                 );
-                                                let management_service = management_service.clone();
+                                                let management_runtime = management_runtime.clone();
                                                 let execution_config =
                                                     live_execution_config.clone();
                                                 let operation_local_appdata = local_appdata.clone();
@@ -6397,6 +6627,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         Arc::clone(&operation_store),
                                                         operation_id.clone(),
                                                     );
+                                                    let (
+                                                        management_service,
+                                                        management_unavailable,
+                                                    ) = management_action_access(
+                                                        &management_runtime,
+                                                    );
                                                     let result = run_authorized_action(
                                                         AuthorizedProcessRequest {
                                                             package: &package,
@@ -6409,6 +6645,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             project_directory: &project_directory,
                                                             management_service: management_service
                                                                 .as_ref(),
+                                                            management_unavailable,
                                                             execution_config: &execution_config,
                                                             local_appdata:
                                                                 &operation_local_appdata,
@@ -6424,7 +6661,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             ),
                                                             process_end: Some(process_end),
                                                         },
-                                                    ).await.map_err(|(code, message)| serde_json::json!({"code":code,"message":message,"retryable":code == "TOOL_PROCESS_RETRYABLE"}));
+                                                    ).await.map_err(|(code, message)| serde_json::json!({"code":code,"message":message,"retryable":runtime_failure_retryable(code)}));
                                                     drop(gate_lease);
                                                     let _ = operation_store
                                                         .lock()
@@ -8605,6 +8842,7 @@ struct AuthorizedProcessRequest<'a> {
     runtime_scope: &'a RuntimeScopeIds,
     project_directory: &'a std::path::Path,
     management_service: Option<&'a Arc<Mutex<ManagementApplicationService>>>,
+    management_unavailable: RuntimeFailure,
     execution_config: &'a UserExecutionConfig,
     local_appdata: &'a std::path::Path,
     requested_timeout_ms: Option<u32>,
@@ -8670,7 +8908,7 @@ async fn run_authorized_controller_command(
     action: &ActionDescriptor,
     arguments: Option<&serde_json::Value>,
     cancellation: Option<RuntimeCancellation>,
-    management_context: Option<ManagementControllerContext<'_>>,
+    management_context: Result<ManagementControllerContext<'_>, RuntimeFailure>,
 ) -> Result<serde_json::Value, RuntimeFailure> {
     let registration = controller_command_registration(&action.backend_ref).ok_or((
         "TOOL_RUNTIME_UNAVAILABLE",
@@ -8681,14 +8919,9 @@ async fn run_authorized_controller_command(
         .ok_or(("TOOL_ARGUMENT_INVALID", "Tool arguments must be an object."))?;
     let result = match registration.handler {
         ControllerCommandHandler::Sync(handler) => handler(arguments)?,
-        ControllerCommandHandler::Management(handler) => run_management_controller_command(
-            handler,
-            arguments,
-            management_context.ok_or((
-                "TOOL_RUNTIME_UNAVAILABLE",
-                "The management application service is unavailable.",
-            ))?,
-        )?,
+        ControllerCommandHandler::Management(handler) => {
+            run_management_controller_command(handler, arguments, management_context?)?
+        }
         ControllerCommandHandler::ValidationRun => {
             run_validation_run_command(arguments, cancellation).await?
         }
@@ -8715,15 +8948,15 @@ async fn run_authorized_action(
     request: AuthorizedProcessRequest<'_>,
 ) -> Result<serde_json::Value, RuntimeFailure> {
     if request.action.backend_kind == BackendKind::ControllerCommand {
-        let management_context =
-            request
-                .management_service
-                .map(|service| ManagementControllerContext {
-                    service,
-                    project_directory: request.project_directory,
-                    execution_config: request.execution_config,
-                    local_appdata: request.local_appdata,
-                });
+        let management_context = request
+            .management_service
+            .map(|service| ManagementControllerContext {
+                service,
+                project_directory: request.project_directory,
+                execution_config: request.execution_config,
+                local_appdata: request.local_appdata,
+            })
+            .ok_or(request.management_unavailable);
         return run_authorized_controller_command(
             request.package,
             request.action,
@@ -8749,6 +8982,7 @@ async fn run_authorized_process(
         runtime_scope,
         project_directory,
         management_service: _,
+        management_unavailable: _,
         execution_config: _,
         local_appdata: _,
         requested_timeout_ms,
@@ -9602,12 +9836,22 @@ fn invalid_request_response(
     message: &str,
     registry_revision: u64,
 ) -> IpcResponse {
+    request_error_response(request, code, message, false, registry_revision)
+}
+
+fn request_error_response(
+    request: IpcRequest,
+    code: &str,
+    message: &str,
+    retryable: bool,
+    registry_revision: u64,
+) -> IpcResponse {
     let error = StableErrorCode::parse(code)
         .map(|code| {
             ErrorEnvelope::new_stable(
                 code,
                 message,
-                false,
+                retryable,
                 request.client_request_id.clone(),
                 "star-controller",
             )
@@ -9616,7 +9860,7 @@ fn invalid_request_response(
             ErrorEnvelope::new(
                 code,
                 message,
-                false,
+                retryable,
                 request.client_request_id.clone(),
                 "star-controller",
             )
@@ -9731,7 +9975,18 @@ async fn handle_direct_core_command(
         }
         ActionPermissionDecision::Auto => {}
     }
-    match run_authorized_controller_command(package, action, Some(&arguments), None, None).await {
+    match run_authorized_controller_command(
+        package,
+        action,
+        Some(&arguments),
+        None,
+        Err((
+            "MANAGEMENT_STORE_UNAVAILABLE",
+            MANAGEMENT_UNAVAILABLE_MESSAGE,
+        )),
+    )
+    .await
+    {
         Ok(result) => IpcResponse {
             schema_id: "star.ipc.response".to_owned(),
             schema_version: 1,
@@ -24474,6 +24729,56 @@ mod tests {
             Err(ApplicationError::Invalid)
         ));
     }
+
+    #[test]
+    fn management_startup_worker_does_not_block_controller_bootstrap() {
+        let (started_sender, started_receiver) = std::sync::mpsc::channel();
+        let (release_sender, release_receiver) = std::sync::mpsc::channel();
+        let runtime = spawn_management_runtime(move || {
+            started_sender.send(()).unwrap();
+            release_receiver.recv().unwrap();
+            ManagementRuntimeState::failed("fixture terminal state")
+        });
+        started_receiver
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
+        assert!(matches!(
+            management_runtime_snapshot(&runtime),
+            ManagementRuntimeState::Initializing
+        ));
+        let (service, failure) = management_action_access(&runtime);
+        assert!(service.is_none());
+        assert_eq!(failure.0, "MANAGEMENT_STORE_BUSY");
+        assert!(runtime_failure_retryable(failure.0));
+        let response = request_error_response(
+            direct_core_request("profile.list", serde_json::json!({})),
+            failure.0,
+            failure.1,
+            true,
+            17,
+        );
+        assert!(response.error.unwrap().retryable);
+
+        release_sender.send(()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        loop {
+            if matches!(
+                management_runtime_snapshot(&runtime),
+                ManagementRuntimeState::Failed { .. }
+            ) {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "management startup worker did not publish its terminal state"
+            );
+            std::thread::yield_now();
+        }
+        let (_, failure) = management_action_access(&runtime);
+        assert_eq!(failure.0, "MANAGEMENT_STORE_UNAVAILABLE");
+        assert!(!runtime_failure_retryable(failure.0));
+    }
+
     use star_project::catalog::CatalogProjectRole;
 
     fn write_release_core_fixture(directory: &std::path::Path) -> &'static str {

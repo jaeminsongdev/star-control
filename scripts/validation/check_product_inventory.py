@@ -34,6 +34,21 @@ CODEX_SKILL_ROOT = (
 CODEX_SKILL_PATH = CODEX_SKILL_ROOT / "SKILL.md"
 CODEX_SKILL_AGENT_PATH = CODEX_SKILL_ROOT / "agents/openai.yaml"
 CODEX_ROUTING_MATRIX_PATH = CODEX_SKILL_ROOT / "references/routing-matrix.md"
+CODEX_PARALLEL_SKILL_ROOT = (
+    ROOT
+    / "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation"
+)
+CODEX_PARALLEL_COMPONENT_PATHS = (
+    CODEX_PARALLEL_SKILL_ROOT / "SKILL.md",
+    CODEX_PARALLEL_SKILL_ROOT / "agents/openai.yaml",
+    CODEX_PARALLEL_SKILL_ROOT / "references/decomposition.md",
+    CODEX_PARALLEL_SKILL_ROOT / "references/scheduling-and-lifecycle.md",
+    CODEX_PARALLEL_SKILL_ROOT / "references/workspace-and-integration.md",
+    CODEX_PARALLEL_SKILL_ROOT / "references/safety-and-validation.md",
+    CODEX_PARALLEL_SKILL_ROOT / "assets/worker-context-pack.md",
+    CODEX_PARALLEL_SKILL_ROOT / "assets/worker-report.md",
+    CODEX_PARALLEL_SKILL_ROOT / "assets/controller-report.md",
+)
 
 FEATURE_IDS = [
     *(f"A{index:02d}" for index in range(1, 11)),
@@ -504,6 +519,7 @@ def main() -> int:
         CODEX_SKILL_PATH,
         CODEX_SKILL_AGENT_PATH,
         CODEX_ROUTING_MATRIX_PATH,
+        *CODEX_PARALLEL_COMPONENT_PATHS,
         ROOT / "Cargo.lock",
         ROOT / "rust-toolchain.toml",
         feature_index,
@@ -641,6 +657,91 @@ def main() -> int:
     )
     if dependency_types != ["mcp"] or dependency_values != ["star-control"]:
         errors.append("Codex Skill metadata must declare exactly the star-control MCP dependency")
+
+    missing_parallel_components = [
+        path.relative_to(ROOT).as_posix()
+        for path in CODEX_PARALLEL_COMPONENT_PATHS
+        if not path.is_file()
+    ]
+    if missing_parallel_components:
+        errors.append(
+            f"parallel implementation Skill components are missing: {missing_parallel_components}"
+        )
+    parallel_skill = (
+        CODEX_PARALLEL_COMPONENT_PATHS[0].read_text(encoding="utf-8")
+        if CODEX_PARALLEL_COMPONENT_PATHS[0].is_file()
+        else ""
+    )
+    for required in (
+        "name: orchestrate-parallel-implementation",
+        "중앙 작업 자체를 `create_goal`로 등록하지 않는다",
+        "gpt-5.6-sol",
+        'reasoning_effort: "max"',
+        "gpt-5.6-terra",
+        'reasoning_effort="high"',
+        "goal_pursuit: required",
+        "`followup_task`",
+        "Sol 승인 전에는 `update_goal",
+        "controller-level `BLOCKED`",
+        "Sol이 해당 작업자의 전체 diff",
+        "결합된 전체 diff",
+        "`VERIFIED`",
+    ):
+        if required not in parallel_skill:
+            errors.append(f"parallel implementation Skill contract is missing: {required}")
+    parallel_agent = (
+        CODEX_PARALLEL_COMPONENT_PATHS[1].read_text(encoding="utf-8")
+        if CODEX_PARALLEL_COMPONENT_PATHS[1].is_file()
+        else ""
+    )
+    for required in (
+        'display_name: "Parallel Implementation"',
+        'default_prompt: "Use $orchestrate-parallel-implementation',
+        "allow_implicit_invocation: true",
+    ):
+        if required not in parallel_agent:
+            errors.append(f"parallel implementation Skill metadata is missing: {required}")
+    if "dependencies:" in parallel_agent:
+        errors.append("parallel implementation Skill must not invent a direct tool dependency")
+    parallel_scheduling = (
+        CODEX_PARALLEL_COMPONENT_PATHS[3].read_text(encoding="utf-8")
+        if CODEX_PARALLEL_COMPONENT_PATHS[3].is_file()
+        else ""
+    )
+    for required in (
+        "create_goal",
+        "같은 활성 목표",
+        "followup_task",
+        "Sol이 해당 Terra 작업자의 전체 diff",
+        "Sol 전체 diff 승인 전에는 `update_goal",
+        "GOAL_COMPLETE",
+        "SUPERSEDED_PENDING_GOAL_RESOLUTION",
+        "FINAL_VALIDATION -> VERIFIED",
+    ):
+        if required not in parallel_scheduling:
+            errors.append(f"parallel implementation lifecycle is missing: {required}")
+    parallel_safety = (
+        CODEX_PARALLEL_COMPONENT_PATHS[5].read_text(encoding="utf-8")
+        if CODEX_PARALLEL_COMPONENT_PATHS[5].is_file()
+        else ""
+    )
+    scenario_section = parallel_safety.partition("## 필수 forward scenario")[2].partition(
+        "## 완료 증거"
+    )[0]
+    observed_scenarios = [
+        int(value)
+        for value in re.findall(r"(?m)^(\d+)\.\s", scenario_section)
+    ]
+    if observed_scenarios != list(range(1, 13)):
+        errors.append(
+            f"parallel implementation forward scenarios must be exact 1..12: observed={observed_scenarios}"
+        )
+    for required in (
+        "dependency 설치·추가·제거·uninstall",
+        "`WORKER_COMPLETE` 뒤에도 Goal을 active로 유지",
+    ):
+        if required not in parallel_safety:
+            errors.append(f"parallel implementation safety contract is missing: {required}")
 
     routing_matrix = (
         CODEX_ROUTING_MATRIX_PATH.read_text(encoding="utf-8")

@@ -210,7 +210,16 @@ foreach ($requiredCodexAsset in @(
     'plugins/star-control/hooks/hooks.json',
     'skills/star-control-operations/SKILL.md',
     'skills/star-control-operations/agents/openai.yaml',
-    'skills/star-control-operations/references/routing-matrix.md'
+    'skills/star-control-operations/references/routing-matrix.md',
+    'skills/orchestrate-parallel-implementation/SKILL.md',
+    'skills/orchestrate-parallel-implementation/agents/openai.yaml',
+    'skills/orchestrate-parallel-implementation/references/decomposition.md',
+    'skills/orchestrate-parallel-implementation/references/scheduling-and-lifecycle.md',
+    'skills/orchestrate-parallel-implementation/references/workspace-and-integration.md',
+    'skills/orchestrate-parallel-implementation/references/safety-and-validation.md',
+    'skills/orchestrate-parallel-implementation/assets/worker-context-pack.md',
+    'skills/orchestrate-parallel-implementation/assets/worker-report.md',
+    'skills/orchestrate-parallel-implementation/assets/controller-report.md'
 )) {
     Assert-ValidationContract -Condition ($packageReleaseSource.Contains($requiredCodexAsset)) -Message "release package requires Codex asset: $requiredCodexAsset"
 }
@@ -235,6 +244,47 @@ $codexPluginManifest = Get-Content -LiteralPath (Join-Path $repositoryRoot 'inte
 Assert-ValidationContract -Condition ($codexPluginManifest.description.Contains('code-health')) -Message 'Codex Plugin metadata exposes the current Code Health route'
 $codexSkillAgent = Get-Content -LiteralPath (Join-Path $repositoryRoot 'integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/agents/openai.yaml') -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($codexSkillAgent.Contains('code health')) -Message 'Codex Skill UI metadata exposes the current Code Health route'
+$parallelSkillRoot = Join-Path $repositoryRoot 'integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/orchestrate-parallel-implementation'
+$parallelSkill = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'SKILL.md') -Raw -Encoding UTF8
+foreach ($requiredParallelContract in @(
+    '중앙 작업 자체를 `create_goal`로 등록하지 않는다',
+    '`gpt-5.6-sol`',
+    'reasoning_effort: "max"',
+    'gpt-5.6-terra',
+    'reasoning_effort="high"',
+    'goal_pursuit: required',
+    '`followup_task`',
+    'Sol 승인 전에는 `update_goal',
+    'controller-level `BLOCKED`',
+    'Sol이 해당 작업자의 전체 diff',
+    '결합된 전체 diff',
+    '`VERIFIED`'
+)) {
+    Assert-ValidationContract -Condition ($parallelSkill.Contains($requiredParallelContract)) -Message "parallel implementation Skill contract: $requiredParallelContract"
+}
+$parallelAgent = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'agents/openai.yaml') -Raw -Encoding UTF8
+Assert-ValidationContract -Condition ($parallelAgent.Contains('allow_implicit_invocation: true')) -Message 'parallel implementation Skill is available by default'
+Assert-ValidationContract -Condition ($parallelAgent.Contains('Use $orchestrate-parallel-implementation')) -Message 'parallel implementation Skill has an explicit invocation prompt'
+Assert-ValidationContract -Condition (-not $parallelAgent.Contains('dependencies:')) -Message 'parallel implementation Skill does not invent a direct tool dependency'
+$parallelLifecycle = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'references/scheduling-and-lifecycle.md') -Raw -Encoding UTF8
+Assert-ValidationContract -Condition ($parallelLifecycle.Contains('같은 활성 목표')) -Message 'Terra correction preserves the same active goal'
+Assert-ValidationContract -Condition ($parallelLifecycle.Contains('Sol이 해당 Terra 작업자의 전체 diff')) -Message 'Sol reviews every complete Terra diff'
+Assert-ValidationContract -Condition ($parallelLifecycle.Contains('Sol 전체 diff 승인 전에는 `update_goal')) -Message 'Terra Goal remains active through Sol review'
+Assert-ValidationContract -Condition ($parallelLifecycle.Contains('SUPERSEDED_PENDING_GOAL_RESOLUTION')) -Message 'scope replacement does not fabricate a Goal terminal state'
+$parallelSafety = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'references/safety-and-validation.md') -Raw -Encoding UTF8
+$parallelScenarioSection = $parallelSafety.Split('## 필수 forward scenario', 2)[1].Split('## 완료 증거', 2)[0]
+$parallelScenarioNumbers = @([regex]::Matches($parallelScenarioSection, '(?m)^(\d+)\.\s') | ForEach-Object { [int]$_.Groups[1].Value })
+Assert-ValidationContract -Condition (($parallelScenarioNumbers -join ',') -eq ((1..12) -join ',')) -Message 'parallel implementation Skill keeps the exact 12 forward scenarios'
+Assert-ValidationContract -Condition ($parallelSafety.Contains('dependency 설치·추가·제거·uninstall')) -Message 'dependency removal preserves the approval boundary'
+
+$controllerStartupSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'apps/star-controller/src/main.rs') -Raw -Encoding UTF8
+$managementSpawnIndex = $controllerStartupSource.IndexOf('let management_runtime = spawn_management_runtime')
+$pipeStartIndex = $controllerStartupSource.IndexOf('PipeAcceptPool::start(pipe.clone())')
+Assert-ValidationContract -Condition ($managementSpawnIndex -ge 0 -and $pipeStartIndex -gt $managementSpawnIndex) -Message 'Controller schedules management recovery and retention before opening the IPC pool without waiting for it'
+Assert-ValidationContract -Condition ($controllerStartupSource.Contains('service.recover_incomplete_registrations()')) -Message 'background management startup preserves incomplete registration recovery'
+Assert-ValidationContract -Condition ($controllerStartupSource.Contains('service.apply_retention(')) -Message 'background management startup preserves startup retention application'
+Assert-ValidationContract -Condition ($controllerStartupSource.Contains('"MANAGEMENT_STORE_BUSY"') -and $controllerStartupSource.Contains('MANAGEMENT_INITIALIZING_MESSAGE')) -Message 'management requests receive a typed busy state during startup'
+Assert-ValidationContract -Condition ($controllerStartupSource.Contains('matches!(code, "TOOL_PROCESS_RETRYABLE" | "MANAGEMENT_STORE_BUSY")')) -Message 'management startup busy state is retryable across direct and Tool action lanes'
 
 $updaterRestartSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "crates/control/star-updater-core/src/integration_restart.rs") -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($updaterRestartSource.Contains('const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(12);')) -Message "forced Codex termination has a bounded exit-observation window"

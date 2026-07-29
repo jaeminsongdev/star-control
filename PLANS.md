@@ -37,6 +37,7 @@
 | P-0074 SessionEnd 3초 계약 교정 | **DONE / INSTALLED / local commits** | `d825516b86823793d53b607d6b2a0b6852d459fb`; `SessionEnd.timeout=3`, 2초 내부 deadline, terminal Updater receipt, rendered/cache identity, Hook smoke·Doctor·installed TARGET을 확인했다. |
 | P-0075 Codex Code Health route·Hook UX closure | **DONE / INSTALLED / local commits** | `39d3a13f50ae65f6373174486e7b3389ad0c1bd3`; Code Health 6개 action·16 Profile·Hook 경계를 전수 감사하고 public CLI/MCP handoff를 3×5초로 보강했다. source FULL·STRICT, x64 설치, Runtime reconcile, final installed TARGET 8/8·Doctor 4/4를 완료했다. 격리 cold-live와 사람 `/hooks` trust는 PASS로 승격하지 않는다. |
 | P-0076 Star-Control 자체 Code Health 적용 | **DONE / INSTALLED / local commits** | `ccb71661b86895783c440760fcd0bd76dcff9e3f`; 자체 scan이 드러낸 GoalRecord·redaction·SQLite quota·cursor clone과 대형 `index.status` IPC 결함을 교정했다. source FULL 11/11, Runtime `rt_8921c607a0af357f`, current self-scan, installed TARGET 8/8·Doctor 4/4를 확인했다. |
+| P-0077 목표추진 병렬 구현 Skill·Controller cold-start | **ACTIVE** | Sol Max가 설계·DAG·재계획을 소유하고 Terra High 목표추진 작업자가 실제 구현·교정을 수행하는 기본 Skill을 제품화한다. 7.1GB management DB startup 중 pipe가 열리지 않는 `IPC controller unavailable`도 typed busy/terminal retention 상태를 보존하는 non-blocking startup으로 교정하고, 12개 forward scenario·FULL·STRICT·x64 설치·`origin/main` readback까지 닫는다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
 ## P-0074 closure
@@ -71,6 +72,7 @@
 - R-0067: `SessionEnd`는 advisory라 timeout이 Codex 작업을 막지는 않지만 `root_stop` 관찰을 잃을 수 있다. 내부 deadline과 updater의 보수적 process census를 함께 유지한다.
 - R-0068: 첫 installed TARGET의 `ERROR_SHARING_VIOLATION(32)` report는 삭제하지 않는다. targeted 5회와 final TARGET은 통과했지만 일회성 Windows 실행 이미지 unlock 지연 가능성을 별도 이력으로 유지한다.
 - R-0069: 새 설치본의 3×5초 격리 cold-live는 다른 live Codex 작업이 Controller lifecycle을 보유해 실행하지 못했다. 기존 10.3초 실패, 단위 계약, source FULL과 installed TARGET은 cold-live PASS를 대신하지 않는다.
+- R-0070: 현재 active Runtime Controller는 7.1GB project management DB startup 중 pipe 생성 전에 장시간 CPU를 사용해 CLI/MCP가 `IPC controller unavailable`을 반환한다. DB/cache 직접 수정이나 autostart 활성화로 우회하지 않고 source startup 경계와 공식 Updater로 교정한다.
 
 ## P-0075 봉인 범위
 
@@ -82,7 +84,7 @@
 
 ## Context Pack
 
-- 현재 상태: P-0076 product-code commit `ccb71661…`과 x64 Runtime `rt_8921c607a0af357f` 적용·installed 검증을 완료했다. remote push는 하지 않았다.
-- 완료 근거: source FULL 11/11, post-commit live self-scan `current=true`, bounded `index.status`, TARGET 8/8, Doctor 4/4, Goal `gol_01KYP9A03N6ERMNQ8Y510CF5D2` revision 2 `cancelled`다.
-- 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache 직접 수정, signing/publication, non-x64 output.
-- 다음 실행: 현재 Slice에 남은 로컬 작업은 없다. push·signed publish·Hook trust는 각각 별도 승인/사람 Gate 없이는 실행하지 않는다.
+- 현재 상태: P-0077은 active다. source checkout `23a1438adb54d289bbcf19b1a26c06d34982f46a` 위 working tree에 새 Skill 9개와 closed inventory·Controller startup 교정이 함께 있으며, source FULL `target/validation/20260729T120132516Z-12016/report.json`은 11/11 PASS다. installed x64 Runtime은 아직 `rt_8921c607a0af357f`라 MCP Registry와 Profile resolution의 cold-start `unavailable`은 설치 전 상태로 남아 있다.
+- 완료 조건: 새 Skill의 9개 정본 파일과 packaging/render/install closed inventory, Sol Max 설계·Terra High 목표추진 worker 계약, 12개 forward scenario, non-blocking Controller startup 회귀, source FULL·STRICT, official x64 install, installed TARGET·Doctor/live action, commit, `origin/main` exact readback이다.
+- 건드리면 안 되는 것: existing linked worktree, `target/` 정리, `legacy/`, management DB·Codex runtime/cache 직접 수정, dependency·lockfile, signing/publication, non-x64 output.
+- 다음 실행: Sol Max STRICT 교정을 재검토하고 source evidence·FULL을 다시 봉인한 뒤 clean pinned packaging worktree에서 x64 installer를 만든다. 설치는 verified candidate와 공식 Updater 경로만 사용하며 installed TARGET·Doctor/live action을 확인하고 push는 모든 Gate 뒤 마지막에 수행한다.

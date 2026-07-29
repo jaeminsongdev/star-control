@@ -1,0 +1,7 @@
+interface:
+  display_name: "Parallel Implementation"
+  short_description: "Sol 관제와 Terra 작업자로 안전한 최대 병렬 구현"
+  default_prompt: "Use $orchestrate-parallel-implementation to implement this request with maximal safe parallelism."
+
+policy:
+  allow_implicit_invocation: true

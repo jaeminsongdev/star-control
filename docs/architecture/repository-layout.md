@@ -669,12 +669,15 @@ integrations/
             ├─ .codex-plugin/
             │  └─ plugin.json       # 필수 Plugin manifest
             ├─ skills/
-            │  └─ star-control-operations/
-            │     ├─ SKILL.md        # MCP·CLI-only·Profile·native fallback orchestration
-            │     ├─ agents/
-            │     │  └─ openai.yaml  # UI metadata, implicit invocation, bundled MCP dependency
-            │     └─ references/
-            │        └─ routing-matrix.md # 23개 기능·16개 Profile derived route
+            │  ├─ star-control-operations/
+            │  │  ├─ SKILL.md        # MCP·CLI-only·Profile·native fallback orchestration
+            │  │  ├─ agents/openai.yaml # UI metadata, implicit invocation, bundled MCP dependency
+            │  │  └─ references/routing-matrix.md # 23개 기능·16개 Profile derived route
+            │  └─ orchestrate-parallel-implementation/
+            │     ├─ SKILL.md        # Sol Max 설계·전체 리뷰, 목표추진 Terra High 구현
+            │     ├─ agents/openai.yaml # 기본 implicit invocation metadata
+            │     ├─ references/     # 분해·스케줄링·workspace·안전 계약
+            │     └─ assets/         # worker Context Pack·worker/controller 보고 양식
             ├─ hooks/
             │  └─ hooks.json         # SessionStart와 star hook 명령 연결
             └─ .mcp.json             # 설치 때 실제 star-mcp 절대 경로로 렌더링
@@ -685,6 +688,7 @@ integrations/
 ### 연결 원칙
 
 - Plugin은 설치와 안내 묶음이며 제품 상태를 소유하지 않는다.
+- 구현 요청은 `orchestrate-parallel-implementation`이 Sol Max 설계와 개별·결합 전체 diff 리뷰, Terra High Bundle별 Goal Pursuit를 요구한다. 중앙 작업 자체를 worker goal로 등록하지 않는다.
 - Hook 정의는 `star hook <event>`를 호출하고 정책 판단을 script에 복사하지 않는다.
 - MCP server는 [공식 MCP 지원 방식](https://learn.chatgpt.com/docs/extend/mcp)에 맞춰 local STDIO로 실행한다.
 - MCP의 server instructions에는 전체 도구에 공통인 시작 순서·제약·승인 경계만 둔다.
