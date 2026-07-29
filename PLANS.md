@@ -83,6 +83,6 @@
 ## Context Pack
 
 - 현재 상태: P-0076 product-code commit `ccb71661…`과 x64 Runtime `rt_8921c607a0af357f` 적용·installed 검증을 완료했다. remote push는 하지 않았다.
-- 완료 근거: source FULL 11/11, installed current scan `scn_01KYPBXCHWQNH5HHHNZHRQWBKR`, bounded `index.status`, TARGET 8/8, Doctor 4/4, Goal `gol_01KYP9A03N6ERMNQ8Y510CF5D2` revision 2 `cancelled`다.
+- 완료 근거: source FULL 11/11, post-commit live self-scan `current=true`, bounded `index.status`, TARGET 8/8, Doctor 4/4, Goal `gol_01KYP9A03N6ERMNQ8Y510CF5D2` revision 2 `cancelled`다.
 - 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache 직접 수정, signing/publication, non-x64 output.
-- 다음 실행: 이 DONE 문서와 source evidence를 별도 local commit·current-byte FULL로 봉인한다. push·signed publish·Hook trust는 각각 별도 승인/사람 Gate 없이는 실행하지 않는다.
+- 다음 실행: 현재 Slice에 남은 로컬 작업은 없다. push·signed publish·Hook trust는 각각 별도 승인/사람 Gate 없이는 실행하지 않는다.
