@@ -643,6 +643,9 @@ pub trait ManagementRepositorySet: Send + Sync {
         project_id: &ProjectId,
     ) -> Result<Arc<dyn ProjectManagementRepository>, RepositoryError>;
     fn active_set(&self) -> Result<ActiveSetManifest, RepositoryError>;
+    /// Returns the current persisted store summaries without running integrity verification
+    /// or resealing the active set.
+    fn status_all(&self) -> Result<Vec<ManagementStoreStatus>, RepositoryError>;
     fn verify_all(&self) -> Result<Vec<ManagementStoreStatus>, RepositoryError>;
     fn plan_backup(&self, destination: &Path) -> Result<BackupPlan, RepositoryError>;
     fn apply_backup(

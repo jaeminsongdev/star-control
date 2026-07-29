@@ -10264,6 +10264,15 @@ impl ManagementApplicationService {
         Ok(self.repositories.verify_all()?)
     }
 
+    /// Reads the bounded persisted StoreStatus summaries for management status surfaces.
+    ///
+    /// This intentionally does not perform the explicit deep verification performed by
+    /// [`Self::verify_stores`].
+    pub fn store_status(&self) -> Result<Vec<ManagementStoreStatus>, ApplicationError> {
+        let _guard = self.command_guard()?;
+        Ok(self.repositories.status_all()?)
+    }
+
     pub fn plan_backup(&self, destination: &Path) -> Result<BackupPlan, ApplicationError> {
         let _guard = self.command_guard()?;
         Ok(self.repositories.plan_backup(destination)?)

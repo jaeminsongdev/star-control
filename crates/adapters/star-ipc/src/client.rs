@@ -675,6 +675,10 @@ mod tests {
             Duration::from_secs(10)
         );
         assert_eq!(
+            response_read_timeout("management.status", &serde_json::json!({})),
+            Duration::from_secs(10)
+        );
+        assert_eq!(
             response_read_timeout("validation.run", &serde_json::json!({"timeout_ms":180_000})),
             Duration::from_secs(185)
         );

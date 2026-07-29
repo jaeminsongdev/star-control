@@ -682,6 +682,23 @@ fn read_store_status_read_only(path: &Path) -> Result<ManagementStoreStatus, Rep
     status_from_connection(&connection)
 }
 
+/// Reads only the StoreStatus metadata needed by a normal management status request.
+///
+/// Unlike recovery inspection and explicit verification, this deliberately does not run
+/// `PRAGMA quick_check` or the event-chain walk. It opens the active store read-only and
+/// leaves both store metadata and the active-set document untouched.
+fn read_store_status_snapshot(path: &Path) -> Result<ManagementStoreStatus, RepositoryError> {
+    let connection = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(map_sql)?;
+    connection
+        .execute_batch("PRAGMA query_only=ON;")
+        .map_err(map_sql)?;
+    status_from_connection(&connection)
+}
+
 fn validate_active_set_relationships(
     root: &Path,
     manifest: &ActiveSetManifest,
@@ -2733,6 +2750,16 @@ impl ManagementRepositorySet for SqliteManagementRepositorySet {
                     "active set cache is unavailable",
                 )
             })
+    }
+
+    fn status_all(&self) -> Result<Vec<ManagementStoreStatus>, RepositoryError> {
+        let mut statuses = vec![self.global.status()?];
+        for project in self.global.list_projects()? {
+            statuses.push(read_store_status_snapshot(
+                &self.project_path(&project.project_id)?,
+            )?);
+        }
+        Ok(statuses)
     }
 
     fn verify_all(&self) -> Result<Vec<ManagementStoreStatus>, RepositoryError> {
@@ -11087,6 +11114,37 @@ mod tests {
             old_global_path,
             backup_manifest: backup.manifest,
         }
+    }
+
+    #[test]
+    fn status_all_reads_bounded_snapshots_without_verifying_or_resealing_active_set() {
+        let fixture = recovery_fixture("bounded-status");
+        let repositories =
+            SqliteManagementRepositorySet::open(&fixture.management_root, "status-test").unwrap();
+        let active_set_path = fixture.management_root.join(ACTIVE_SET_FILENAME);
+        let active_set_before = fs::read(&active_set_path).unwrap();
+        let global_before = repositories.global().status().unwrap();
+        let project_before =
+            read_store_status_snapshot(&repositories.project_path(&fixture.project_id).unwrap())
+                .unwrap();
+
+        let statuses = repositories.status_all().unwrap();
+
+        assert_eq!(
+            statuses,
+            vec![global_before.clone(), project_before.clone()]
+        );
+        assert_eq!(
+            repositories.global().status().unwrap().last_verified_at,
+            global_before.last_verified_at
+        );
+        assert_eq!(
+            read_store_status_snapshot(&repositories.project_path(&fixture.project_id).unwrap())
+                .unwrap()
+                .last_verified_at,
+            project_before.last_verified_at
+        );
+        assert_eq!(fs::read(&active_set_path).unwrap(), active_set_before);
     }
 
     fn scan_commit(mut project: Project, status: ScanStatus, seed: &str) -> ScanCommit {

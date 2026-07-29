@@ -170,6 +170,8 @@ star MCP ───────┘                                 │
 
 일반 application command가 두 store 이상을 바꾸면 성공 결과에 `coordinated_operation_id`와 최종 `StoreVersionVector`를 포함한다. generation 전체를 교체하는 backup·restore·rebuild는 별도 lifecycle 계약으로 active-set·backup-set fingerprint와 typed result를 남긴다. 어느 경로든 `completed`가 아닌 operation을 성공으로 표시하지 않는다.
 
+`management.status`의 normal-mode 응답은 global `status`, project 목록과 각 active project store의 `StoreStatus` metadata만 읽는 bounded snapshot이다. 이 read는 `last_verified_at` 또는 `active-set.json`을 갱신하지 않으며 `PRAGMA quick_check`, event-chain walk, relation 검증을 실행하지 않는다. 따라서 `last_verified_at`은 마지막 명시적 deep verification의 기록이지 status 호출이 새로 검증했다는 증거가 아니다. `ManagementApplicationService::verify_stores`와 recovery candidate 검증은 별도의 explicit deep verification 경로로 그대로 유지한다.
+
 일반 document mutating command는 `idempotency_key`와 stale-write precondition을 가진다. 일반 document 갱신은 `expected_revision`, cross-store command는 `expected_version_vector`, patch는 exact base·before hash와 승인 fingerprint를 precondition으로 사용한다. lifecycle apply는 destination·source/store vector·revision을 포함한 exact plan fingerprint가 idempotency key 역할을 하며 private `recovery-receipts`의 typed result로 crash 뒤 같은 요청을 재생한다. 같은 canonical 요청은 기존 결과를 반환하고 다른 payload·stale state는 충돌로 거부한다. 순수 plan query와 terminal result query에는 별도 idempotency key가 필요 없다.
 
 ## 공통 식별과 fingerprint

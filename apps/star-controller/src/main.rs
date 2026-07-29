@@ -14047,7 +14047,7 @@ fn handle_management_command(
             })
         }
         "management.status" if payload_has_exact_keys(&request.payload, &[]) => {
-            service.verify_stores().and_then(|stores| {
+            service.store_status().and_then(|stores| {
                 serialize_management_result(serde_json::json!({
                     "stores":stores,
                     "recovery_required":false,
@@ -25162,6 +25162,56 @@ mod tests {
         management_root
             .join(&entry.relative_locator)
             .join("management.v1.db")
+    }
+
+    #[test]
+    fn management_status_normal_mode_returns_bounded_store_summary() {
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "star-controller-bounded-management-status-{}-{}",
+            std::process::id(),
+            star_ipc::nonce()
+        ));
+        let management_root = root.join("management");
+        let binding_root = root.join("root-bindings");
+        let source = root.join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        let execution_config = UserExecutionConfig::default();
+        let service = ManagementApplicationService::new(
+            Arc::new(SqliteManagementRepositorySet::open(&management_root, "status-test").unwrap()),
+            Arc::new(WindowsProjectRootBindingStore::open(&binding_root).unwrap()),
+            Arc::new(LocalArtifactStore::default()),
+        )
+        .with_effective_config(execution_config.effective.clone());
+        let active_set_before = std::fs::read(management_root.join("active-set.json")).unwrap();
+
+        let response = handle_management_command(
+            ManagementCommandContext {
+                service: Some(&service),
+                recovery: None,
+                approvals: None,
+                operations: None,
+                recovery_inspection: None,
+                management_root: &management_root,
+                binding_root: &binding_root,
+                project_directory: &source,
+                policy_profile: UserPolicyProfile::SafeDefault,
+                execution_config,
+                appdata: &root,
+                config_layers: vec![],
+                registry_revision: 1,
+            },
+            direct_core_request("management.status", serde_json::json!({})),
+        );
+
+        assert_eq!(response.status, IpcStatus::Ok, "{:?}", response.error);
+        let data = response.data.unwrap();
+        assert_eq!(data["recovery_required"], false);
+        assert_eq!(data["open_mode"], "normal");
+        assert_eq!(data["stores"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            std::fs::read(management_root.join("active-set.json")).unwrap(),
+            active_set_before
+        );
     }
 
     #[test]
