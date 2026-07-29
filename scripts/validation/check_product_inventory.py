@@ -675,20 +675,26 @@ def main() -> int:
     for required in (
         "name: orchestrate-parallel-implementation",
         "중앙 작업 자체를 `create_goal`로 등록하지 않는다",
-        "gpt-5.6-sol",
-        'thinking="max"',
-        "gpt-5.6-terra",
-        'thinking="high"',
+        "list_projects({})",
+        "list_threads({limit: ...})",
+        'model: "gpt-5.6-sol"',
+        'thinking: "max"',
+        'model: "gpt-5.6-terra"',
+        'thinking: "high"',
+        "prompt: <complete Context Pack>",
+        "target: {",
+        "projectId: <list_projects projectId>",
+        'environment: { type: "worktree" }',
         "goal_pursuit: required",
-        "`create_thread`",
-        "`wait_threads`",
-        "`read_thread`",
-        "`send_message_to_thread`",
+        "create_thread({",
+        "wait_threads({ targets: [{ threadId, hostId, afterCursor }]",
+        "read_thread({ threadId, hostId })",
+        "send_message_to_thread({ threadId, prompt:",
         "clientThreadId",
-        "Sol 승인 전에는 `update_goal",
-        "controller-level `BLOCKED`",
-        "Sol이 해당 worker worktree의",
-        "결합된 전체 diff",
+        "SOL_REVIEW_PENDING",
+        "EXISTING_GOAL_RESUMED",
+        "awaiting_external_sol_review",
+        "Sol 승인 전 `update_goal",
         "`VERIFIED`",
     ):
         if required not in parallel_skill:
@@ -696,6 +702,12 @@ def main() -> int:
     for forbidden in ("spawn_agent", "followup_task", "wait_agent", "interrupt_agent"):
         if forbidden in parallel_skill:
             errors.append(f"parallel implementation Skill retains obsolete collaboration API: {forbidden}")
+    for invalid_thread_call in (
+        "message: <complete Context Pack>",
+        "project: <list_projects projectId>",
+    ):
+        if invalid_thread_call in parallel_skill:
+            errors.append(f"parallel implementation Skill retains non-schema create_thread field: {invalid_thread_call}")
     parallel_agent = (
         CODEX_PARALLEL_COMPONENT_PATHS[1].read_text(encoding="utf-8")
         if CODEX_PARALLEL_COMPONENT_PATHS[1].is_file()
@@ -717,18 +729,20 @@ def main() -> int:
     )
     for required in (
         "create_goal",
-        "같은 활성 목표",
         "create_thread",
+        "list_projects",
+        "list_threads",
         "wait_threads",
         "read_thread",
         "send_message_to_thread",
         "clientThreadId",
-        "thread_id",
-        "host_id",
-        "Sol이 해당 Terra worktree의",
-        "Sol 전체 diff 승인 전에는 `update_goal",
+        "threadId",
+        "hostId",
+        "afterCursor",
+        "SOL_REVIEW_PENDING",
+        "EXISTING_GOAL_RESUMED",
+        "awaiting_external_sol_review",
         "GOAL_COMPLETE",
-        "SUPERSEDED_PENDING_GOAL_RESOLUTION",
         "FINAL_VALIDATION -> VERIFIED",
     ):
         if required not in parallel_scheduling:
@@ -750,8 +764,17 @@ def main() -> int:
             f"parallel implementation forward scenarios must be exact 1..12: observed={observed_scenarios}"
         )
     for required in (
+        "새 Codex App thread 0건",
+        'target:{type:"project", projectId, environment:{type:"worktree"}}',
+        "Sol thread도 prompt",
+        "THREAD_CREATING fail-closed",
+        "id(threadId), hostId, cwd",
+        "WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고",
+        "bundle_state=WORKER_COMPLETE",
+        "EXISTING_GOAL_RESUMED",
+        "exact baseline_sha/head_sha/diff_fingerprint Sol 승인",
         "dependency 설치·추가·제거·uninstall",
-        "`WORKER_COMPLETE` 뒤에도 Goal을 active로 유지",
+        "`VERIFIED`를 선언하지 않는다",
     ):
         if required not in parallel_safety:
             errors.append(f"parallel implementation safety contract is missing: {required}")

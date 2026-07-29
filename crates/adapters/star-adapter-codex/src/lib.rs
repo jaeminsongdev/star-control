@@ -941,18 +941,29 @@ fn parallel_skill_content_valid(bytes: &[u8]) -> bool {
         && lines.next() == Some("---");
     frontmatter_valid
         && text.contains("중앙 작업 자체를 `create_goal`로 등록하지 않는다")
-        && text.contains("`gpt-5.6-sol`")
-        && text.contains("thinking=\"max\"")
-        && text.contains("gpt-5.6-terra")
-        && text.contains("thinking=\"high\"")
+        && text.contains("list_projects({})")
+        && text.contains("list_threads({limit: ...})")
+        && text.contains("model: \"gpt-5.6-sol\"")
+        && text.contains("thinking: \"max\"")
+        && text.contains("model: \"gpt-5.6-terra\"")
+        && text.contains("thinking: \"high\"")
+        && text.contains("prompt: <complete Context Pack>")
+        && text.contains("target: {")
+        && text.contains("type: \"project\"")
+        && text.contains("projectId: <list_projects projectId>")
+        && text.contains("environment: { type: \"worktree\" }")
+        && text.contains("startingState")
         && text.contains("goal_pursuit: required")
-        && text.contains("`create_thread`")
-        && text.contains("`wait_threads`")
-        && text.contains("`read_thread`")
-        && text.contains("`send_message_to_thread`")
+        && text.contains("create_thread({")
+        && text.contains("wait_threads({ targets: [{ threadId, hostId, afterCursor }]")
+        && text.contains("read_thread({ threadId, hostId })")
+        && text.contains("send_message_to_thread({ threadId, prompt:")
         && text.contains("clientThreadId")
-        && text.contains("Sol 승인 전에는 `update_goal")
-        && text.contains("controller-level `BLOCKED`")
+        && text.contains("SOL_REVIEW_PENDING")
+        && text.contains("EXISTING_GOAL_RESUMED")
+        && text.contains("awaiting_external_sol_review")
+        && text.contains("Sol 승인 전 `update_goal")
+        && text.contains("명시적으로 승인")
         && text.contains("전체 diff")
         && text.contains("`WORKER_COMPLETE`")
         && text.contains("`INTEGRATED`")
@@ -961,6 +972,8 @@ fn parallel_skill_content_valid(bytes: &[u8]) -> bool {
         && !text.contains("followup_task")
         && !text.contains("wait_agent")
         && !text.contains("interrupt_agent")
+        && !text.contains("message: <complete Context Pack>")
+        && !text.contains("project: <list_projects projectId>")
 }
 
 fn parallel_skill_agent_content_valid(bytes: &[u8]) -> bool {
@@ -968,7 +981,9 @@ fn parallel_skill_agent_content_valid(bytes: &[u8]) -> bool {
         return false;
     };
     text.contains("display_name: \"Parallel Implementation\"")
-        && text.contains("short_description: \"Sol 관제와 Terra Codex App thread/worktree로 안전한 최대 병렬 구현\"")
+        && text.contains(
+            "short_description: \"명시 승인된 Sol/Terra Codex App thread/worktree 병렬 구현\"",
+        )
         && text.contains("default_prompt: \"Use $orchestrate-parallel-implementation")
         && text.contains("allow_implicit_invocation: true")
         && !text.contains("dependencies:")
@@ -983,42 +998,58 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "Task Bundle 계약",
             "goal_pursuit",
             "depends_on",
+            "authorization",
             "thread_identity",
             "revision_identity",
-            "같은 파일",
+            "review_identity",
+            "same threadId/Goal",
             "Sol이 이미 유효한 결과를 보존",
         ],
         PARALLEL_SCHEDULING_RELATIVE => &[
             concat!("GOAL", "_ACTIVE"),
             "create_goal",
             "create_thread",
+            "list_projects",
+            "list_threads",
             "wait_threads",
             "read_thread",
             "send_message_to_thread",
             "clientThreadId",
-            "같은 활성 목표",
-            "Sol이 해당 Terra worktree의",
-            "Sol 전체 diff 승인 전에는 `update_goal",
+            "afterCursor",
+            "SOL_REVIEW_PENDING",
+            "EXISTING_GOAL_RESUMED",
+            "awaiting_external_sol_review",
+            "CURRENT_TASK_SINGLE_AGENT",
+            "same exact `baseline_sha`, `head_sha`, `diff_fingerprint`",
+            "Sol 전체 diff 승인 전",
             concat!("GOAL", "_COMPLETE"),
-            "SUPERSEDED_PENDING_GOAL_RESOLUTION",
             "FINAL_VALIDATION -> VERIFIED",
         ],
         PARALLEL_WORKSPACE_RELATIVE => &[
-            "공유 worktree",
-            "격리 worktree",
+            "list_projects({})",
+            "projectId",
+            "clientThreadId",
             "reset, restore, clean, stash하지 않는다",
-            "public API",
             "push, PR, publish",
             "baseline_sha",
             "diff fingerprint",
         ],
         PARALLEL_SAFETY_RELATIVE => &[
             "필수 forward scenario",
-            "독립된 5개 모듈",
-            "같은 Terra thread",
             "single-agent",
+            "새 Codex App thread 0건",
             "clientThreadId",
-            "사용자 scope 변경",
+            "list_projects",
+            "list_threads",
+            "afterCursor",
+            "target:{type:\"project\", projectId, environment:{type:\"worktree\"}}",
+            "Sol thread도 prompt",
+            "THREAD_CREATING fail-closed",
+            "id(threadId), hostId, cwd",
+            "WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고",
+            "awaiting_external_sol_review",
+            "EXISTING_GOAL_RESUMED",
+            "exact baseline_sha/head_sha/diff_fingerprint Sol 승인",
             "dependency 설치·추가·제거·uninstall",
             "`VERIFIED`를 선언하지 않는다",
         ],
@@ -1029,6 +1060,11 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "goal_pursuit: \"required\"",
             "completion_criteria",
             "thread_id",
+            "project_id",
+            "requested_target",
+            "bundle_state",
+            "review_state",
+            "blocked_reason",
             "baseline_sha",
             "diff_fingerprint",
         ],
@@ -1037,13 +1073,15 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
             "goal_status",
             "worktree_root",
             "diff_fingerprint",
-            "전체 diff 직접 리뷰 상태: pending",
+            "bundle_state: WORKER_COMPLETE",
+            "review_state: pending",
+            "awaiting_external_sol_review",
         ],
         PARALLEL_CONTROLLER_REPORT_RELATIVE => &[
-            "worker별 baseline_sha..head_sha 전체 diff 직접 리뷰",
-            "combined 전체 diff 직접 리뷰",
+            "worker whole-diff direct review",
+            "combined whole-diff direct review",
             "Terra Bundle",
-            "최종 프로젝트 검증",
+            "awaiting_external_sol_review",
         ],
         _ => return false,
     };
@@ -1494,6 +1532,16 @@ mod tests {
             .unwrap()
             .replace("goal_pursuit: required", "goal_pursuit: optional");
         assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
+        let invalid_parallel = std::str::from_utf8(parallel_skill).unwrap().replace(
+            "prompt: <complete Context Pack>",
+            "message: <complete Context Pack>",
+        );
+        assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
+        let invalid_parallel = std::str::from_utf8(parallel_skill).unwrap().replace(
+            "projectId: <list_projects projectId>",
+            "project: <list_projects projectId>",
+        );
+        assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
         let invalid_parallel_agent =
             std::str::from_utf8(source.get(PARALLEL_SKILL_AGENT_RELATIVE).unwrap())
                 .unwrap()
@@ -1506,7 +1554,10 @@ mod tests {
         ));
         let invalid_safety = std::str::from_utf8(source.get(PARALLEL_SAFETY_RELATIVE).unwrap())
             .unwrap()
-            .replace("독립된 5개 모듈", "독립된 모듈");
+            .replace(
+                "awaiting_external_sol_review",
+                "external_review_outcome_unknown",
+            );
         assert!(!parallel_resource_content_valid(
             PARALLEL_SAFETY_RELATIVE,
             invalid_safety.as_bytes()

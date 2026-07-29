@@ -248,20 +248,26 @@ $parallelSkillRoot = Join-Path $repositoryRoot 'integrations/codex-plugin-templa
 $parallelSkill = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'SKILL.md') -Raw -Encoding UTF8
 foreach ($requiredParallelContract in @(
     '중앙 작업 자체를 `create_goal`로 등록하지 않는다',
-    '`gpt-5.6-sol`',
-    'thinking="max"',
-    'gpt-5.6-terra',
-    'thinking="high"',
+    'list_projects({})',
+    'list_threads({limit: ...})',
+    'model: "gpt-5.6-sol"',
+    'thinking: "max"',
+    'model: "gpt-5.6-terra"',
+    'thinking: "high"',
+    'prompt: <complete Context Pack>',
+    'target: {',
+    'projectId: <list_projects projectId>',
+    'environment: { type: "worktree" }',
     'goal_pursuit: required',
-    '`create_thread`',
-    '`wait_threads`',
-    '`read_thread`',
-    '`send_message_to_thread`',
+    'create_thread({',
+    'wait_threads({ targets: [{ threadId, hostId, afterCursor }]',
+    'read_thread({ threadId, hostId })',
+    'send_message_to_thread({ threadId, prompt:',
     'clientThreadId',
-    'Sol 승인 전에는 `update_goal',
-    'controller-level `BLOCKED`',
-    'Sol이 해당 worker worktree의',
-    '결합된 전체 diff',
+    'SOL_REVIEW_PENDING',
+    'EXISTING_GOAL_RESUMED',
+    'awaiting_external_sol_review',
+    'Sol 승인 전 `update_goal',
     '`VERIFIED`'
 )) {
     Assert-ValidationContract -Condition ($parallelSkill.Contains($requiredParallelContract)) -Message "parallel implementation Skill contract: $requiredParallelContract"
@@ -269,23 +275,27 @@ foreach ($requiredParallelContract in @(
 foreach ($forbiddenParallelApi in @('spawn_agent', 'followup_task', 'wait_agent', 'interrupt_agent')) {
     Assert-ValidationContract -Condition (-not $parallelSkill.Contains($forbiddenParallelApi)) -Message "parallel implementation Skill removes obsolete collaboration API: $forbiddenParallelApi"
 }
+foreach ($invalidThreadCall in @('message: <complete Context Pack>', 'project: <list_projects projectId>')) {
+    Assert-ValidationContract -Condition (-not $parallelSkill.Contains($invalidThreadCall)) -Message "parallel implementation Skill rejects non-schema create_thread field: $invalidThreadCall"
+}
 $parallelAgent = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'agents/openai.yaml') -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($parallelAgent.Contains('allow_implicit_invocation: true')) -Message 'parallel implementation Skill is available by default'
 Assert-ValidationContract -Condition ($parallelAgent.Contains('Use $orchestrate-parallel-implementation')) -Message 'parallel implementation Skill has an explicit invocation prompt'
 Assert-ValidationContract -Condition (-not $parallelAgent.Contains('dependencies:')) -Message 'parallel implementation Skill does not invent a direct tool dependency'
 $parallelLifecycle = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'references/scheduling-and-lifecycle.md') -Raw -Encoding UTF8
-Assert-ValidationContract -Condition ($parallelLifecycle.Contains('같은 활성 목표')) -Message 'Terra correction preserves the same active goal'
-Assert-ValidationContract -Condition ($parallelLifecycle.Contains('Sol이 해당 Terra worktree의')) -Message 'Sol reviews every complete Terra diff'
-Assert-ValidationContract -Condition ($parallelLifecycle.Contains('Sol 전체 diff 승인 전에는 `update_goal')) -Message 'Terra Goal remains active through Sol review'
-Assert-ValidationContract -Condition ($parallelLifecycle.Contains('SUPERSEDED_PENDING_GOAL_RESOLUTION')) -Message 'scope replacement does not fabricate a Goal terminal state'
-foreach ($requiredThreadLifecycle in @('create_thread', 'wait_threads', 'read_thread', 'send_message_to_thread', 'clientThreadId', 'thread_id', 'host_id')) {
+Assert-ValidationContract -Condition ($parallelLifecycle.Contains('EXISTING_GOAL_RESUMED')) -Message 'Terra correction resumes the same existing goal'
+Assert-ValidationContract -Condition ($parallelLifecycle.Contains('SOL_REVIEW_PENDING')) -Message 'worker complete has a non-failure Sol review pending state'
+Assert-ValidationContract -Condition ($parallelLifecycle.Contains('awaiting_external_sol_review')) -Message 'automatic blocked state preserves pending external Sol review'
+foreach ($requiredThreadLifecycle in @('list_projects', 'list_threads', 'create_thread', 'wait_threads', 'read_thread', 'send_message_to_thread', 'clientThreadId', 'threadId', 'hostId', 'afterCursor')) {
     Assert-ValidationContract -Condition ($parallelLifecycle.Contains($requiredThreadLifecycle)) -Message "parallel implementation lifecycle uses confirmed Codex App threads: $requiredThreadLifecycle"
 }
 $parallelSafety = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'references/safety-and-validation.md') -Raw -Encoding UTF8
 $parallelScenarioSection = $parallelSafety.Split('## 필수 forward scenario', 2)[1].Split('## 완료 증거', 2)[0]
 $parallelScenarioNumbers = @([regex]::Matches($parallelScenarioSection, '(?m)^(\d+)\.\s') | ForEach-Object { [int]$_.Groups[1].Value })
 Assert-ValidationContract -Condition (($parallelScenarioNumbers -join ',') -eq ((1..12) -join ',')) -Message 'parallel implementation Skill keeps the exact 12 forward scenarios'
-Assert-ValidationContract -Condition ($parallelSafety.Contains('dependency 설치·추가·제거·uninstall')) -Message 'dependency removal preserves the approval boundary'
+foreach ($requiredForwardScenario in @('새 Codex App thread 0건', 'target:{type:"project", projectId, environment:{type:"worktree"}}', 'Sol thread도 prompt', 'THREAD_CREATING fail-closed', 'id(threadId), hostId, cwd', 'WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고', 'bundle_state=WORKER_COMPLETE', 'EXISTING_GOAL_RESUMED', 'exact baseline_sha/head_sha/diff_fingerprint Sol 승인', 'dependency 설치·추가·제거·uninstall', '`VERIFIED`를 선언하지 않는다')) {
+    Assert-ValidationContract -Condition ($parallelSafety.Contains($requiredForwardScenario)) -Message "parallel implementation forward scenario: $requiredForwardScenario"
+}
 
 $controllerStartupSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'apps/star-controller/src/main.rs') -Raw -Encoding UTF8
 $managementSpawnIndex = $controllerStartupSource.IndexOf('let management_runtime = spawn_management_runtime')

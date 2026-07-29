@@ -1,8 +1,7 @@
 # Terra Worker Report
 
 ```markdown
-## Bundle
-
+## Bundle identity
 - bundle_id:
 - worker_profile: gpt-5.6-terra/high
 - thread_id:
@@ -12,31 +11,23 @@
 - head_sha:
 - diff_fingerprint:
 - goal_id:
-- goal_status: active (WORKER_COMPLETE)|complete (SOL_APPROVED)|blocked
+- goal_status: active|blocked|complete
 
-## 완료 기준
+## Review state
+- bundle_state: WORKER_COMPLETE
+- review_state: pending|approved|changes_requested
+- blocked_reason: none|awaiting_external_sol_review
+- exact diff binding verified: yes|no
 
-- [ ] 구현
-- [ ] 직접 테스트
-- [ ] 지정 검증
+## Change and validation
+- changed files / baseline_sha..head_sha summary:
+- commands / exit codes:
+- shared-contract impact:
 
-## 변경
-
-- 변경 파일:
-- baseline_sha..head_sha 전체 diff 요약:
-- shared contract 영향:
-
-## 검증
-
-- 명령:
-- exit code:
-- 결과:
-
-## 인계
-
-- Sol 전체 diff 직접 리뷰 상태: pending
-- 열린 위험:
-- 필요한 승인 또는 blocker:
+## Handoff
+- Sol worker whole-diff direct review: pending
+- worker action after this report: stop; do not poll Sol
+- risks / required approval:
 ```
 
-중간 진행을 완료 보고로 바꾸지 않는다. 최초 `WORKER_COMPLETE` 보고의 `goal_status`는 반드시 `active`다. `goal_status: complete`는 Sol 전체 diff 승인 뒤 동일 Terra thread가 Goal 도구에서도 완료 처리한 최종 closure 보고에만 사용한다.
+`WORKER_COMPLETE`는 구현 실패나 거절이 아니다. 자동 Goal turn 3회 뒤 `goal_status: blocked`여도 `bundle_state: WORKER_COMPLETE`, `review_state: pending`, `blocked_reason: awaiting_external_sol_review`로 유지한다. Sol correction/approval은 동일 Terra thread와 기존 Goal을 재개한다.

@@ -1,6 +1,6 @@
 interface:
   display_name: "Parallel Implementation"
-  short_description: "Sol 관제와 Terra Codex App thread/worktree로 안전한 최대 병렬 구현"
+  short_description: "명시 승인된 Sol/Terra Codex App thread/worktree 병렬 구현"
   default_prompt: "Use $orchestrate-parallel-implementation to implement this request with maximal safe parallelism."
 
 policy:

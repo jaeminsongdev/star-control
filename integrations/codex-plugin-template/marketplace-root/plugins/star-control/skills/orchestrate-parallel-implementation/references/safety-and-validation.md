@@ -1,42 +1,30 @@
 # 안전과 검증
 
-## 승인 경계
+## 승인·검증 경계
 
-사용자의 명시적 승인 없이는 다음을 실행하지 않는다.
+사용자 명시 승인 없이는 dependency 설치·추가·제거·uninstall, 파일 삭제·대량 이동, system setting/PATH·외부 계정 변경, push/PR/publish/deploy/외부 업로드를 하지 않는다. 일반 구현 요청의 implicit Skill invocation도 새 task/thread 승인으로 해석하지 않는다.
 
-- package 또는 dependency 설치·추가·제거·uninstall
-- system setting, PATH, 외부 계정 변경
-- 파일 삭제나 대량 이동
-- 원격 push, PR, publish, deploy
-- 유료 서비스 또는 외부 업로드
-
-승인 대기는 Bundle의 구현 완료와 분리해 보고한다. 요청하지 않은 인접 결함은 근거만 남기고 현재 scope에 섞지 않는다.
-
-## 검증 계층
-
-1. Terra는 자신의 project worktree에서 Bundle에 직접 연결된 format, lint, unit, integration, build 또는 smoke를 실행한다.
-2. Sol은 worker의 `baseline_sha..head_sha` 전체 diff, fingerprint, 테스트가 요구를 실제로 증명하는지 함께 직접 검토한다.
-3. 모든 Bundle 통합 후 Sol이 combined 전체 diff와 thread interaction을 직접 검토한다.
-4. 중앙 controller가 프로젝트 정본 검증 진입점을 실행한다.
-5. 실패, 미실행, stale evidence를 pass로 바꾸지 않는다.
+Terra는 Bundle 직접 test를 실행한다. Sol은 exact worker diff/fingerprint와 테스트를 직접 검토하고, combined diff 리뷰 뒤 controller가 final validation을 실행한다. stale evidence·미실행 결과를 pass로 바꾸지 않는다.
 
 ## 필수 forward scenario
 
-스킬 또는 제품 계약을 바꿀 때 다음을 검증한다.
+스킬 또는 제품 계약을 바꿀 때 다음 정확한 1..12를 검증한다.
 
-1. 독립된 5개 모듈을 충돌 없는 ready Bundle과 별도 Terra project worktree로 fan-out한다.
-2. 같은 파일을 바꾸는 작업은 하나의 Terra thread/Bundle로 묶는다.
-3. 공통 계약을 먼저 구현하고 Sol 승인·Goal complete 뒤 consumer Bundle을 dispatch한다.
-4. 읽기·수정·테스트를 microtask나 별도 thread로 분리하지 않는다.
-5. capacity backpressure 뒤 완료 thread slot에 ready Bundle을 refill한다.
-6. 기존 dirty worktree를 reset·clean·restore하지 않고, worker worktree의 baseline SHA를 고정한다.
-7. Terra가 shared contract 변경 필요를 보고하고 임의 수정하지 않는다.
-8. `WORKER_COMPLETE` 뒤에도 Goal을 active로 유지하고 Sol 교정을 같은 Terra thread와 같은 활성 Goal에 `send_message_to_thread`로 돌려보낸다.
-9. 사용자가 single-agent를 명시하면 새 Sol/Terra thread와 project worktree 병렬화를 비활성화한다.
-10. `clientThreadId`만 있는 setup 상태에서는 wait/read/message를 하지 않고, 확인된 thread_id/host_id 뒤 `wait_threads`와 `read_thread`를 사용한다.
-11. 승인 없이 dependency 설치, 삭제, push를 실행하지 않으며 사용자 scope 변경 시 유효 작업을 보존하고 Sol이 안전하게 재계획한다.
-12. Sol worker별 전체 diff 리뷰, combined 전체 diff 리뷰와 final validation 전에 `VERIFIED`를 선언하지 않는다.
+1. 일반 구현 요청은 새 Codex App thread 0건이며 current-task single-agent로 수행한다.
+2. 사용자가 새 task/thread 또는 parallel delegation을 명시 승인하면 `list_projects({})`의 Git `projectId`로 exact `prompt`와 `target:{type:"project", projectId, environment:{type:"worktree"}}`를 사용한다.
+3. Sol thread도 prompt를 가지며 `model:"gpt-5.6-sol"`, `thinking:"max"`와 같은 target schema를 사용한다.
+4. `clientThreadId`만 반환되면 THREAD_CREATING fail-closed이며 wait/read/send/duplicate create가 0건이다.
+5. `list_threads`가 id(threadId), hostId, cwd를 resolve한 뒤에만 `threadId`, `hostId`, `afterCursor` lifecycle call을 한다.
+6. same file/contract는 한 Bundle로 묶고 공통 계약은 consumer보다 먼저 Sol 승인한다.
+7. 기존 dirty worktree를 reset·clean·restore하지 않고 owned worktree baseline/head/fingerprint를 보존한다.
+8. Terra는 WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고 controller만 wait_threads/read_thread로 관찰한다.
+9. 자동 Goal turn 3회 뒤 blocked는 `bundle_state=WORKER_COMPLETE`, `review_state=pending`, `blocked_reason=awaiting_external_sol_review`이며 실패·거절이 아니다.
+10. blocked 뒤 correction/approval은 same threadId의 send_message_to_thread로 기존 Goal을 EXISTING_GOAL_RESUMED하며 새 create_goal을 만들지 않는다.
+11. exact baseline_sha/head_sha/diff_fingerprint Sol 승인 뒤에만 같은 Goal complete와 INTEGRATED를 허용한다.
+12. 승인 없는 dependency 설치·삭제·push와 Sol combined review/final validation 전 VERIFIED 선언을 하지 않는다.
 
 ## 완료 증거
 
-최종 보고에는 command, exit code, 핵심 결과, 각 `thread_id`/`host_id`, absolute worktree root, baseline/head SHA, diff fingerprint, Goal 상태, 미실행 gate와 잔여 위험을 구분해 남긴다. 과거 artifact나 worker 자체 주장만으로 현재 source를 검증 완료로 승격하지 않는다.
+report는 command, exit code, thread_id/host_id, worktree_root, baseline_sha/head_sha/diff_fingerprint, bundle_state/review_state/goal_status/blocked_reason을 구분한다. `awaiting_external_sol_review`는 implementation failure로 승격하지 않는다.
+
+Sol combined review와 final validation 전에는 `VERIFIED`를 선언하지 않는다.
