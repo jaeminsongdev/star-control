@@ -49,6 +49,36 @@ CODEX_PARALLEL_COMPONENT_PATHS = (
     CODEX_PARALLEL_SKILL_ROOT / "assets/worker-report.md",
     CODEX_PARALLEL_SKILL_ROOT / "assets/controller-report.md",
 )
+PARALLEL_FORWARD_SCENARIOS = (
+    "일반 구현 요청은 새 Codex App thread 0건이며 current-task single-agent로 수행한다.",
+    '명시 승인 create_thread bootstrap은 unique bundle_id, BOOTSTRAP_ONLY, prompt, target:{type:"project", projectId, environment:{type:"worktree"}}를 사용한다.',
+    "direct threadId/hostId도 project/worktree identity를 확인한 뒤 같은 ACTIVATE_BUNDLE protocol로 activation한다.",
+    "clientThreadId only는 bounded list_threads unique bundle_id + expected projectId + worktree/project identity exactly one resolve이며 timeout/복수 match는 controller BLOCKED다.",
+    "activation 전에는 Bundle assignment가 아니며 create_goal/commentary/source mutation/test/commit 0건이고 activation ACK/Goal active 뒤에만 진행한다.",
+    "same file/contract ownership은 한 Bundle로 묶고 shared contract conflict는 mutation 없이 controller에 보고한다.",
+    "preexisting dirty paths와 owned worktree baseline/head/fingerprint를 보존하고 reset·clean·restore하지 않는다.",
+    "Terra는 WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고 controller만 wait_threads/read_thread로 관찰한다.",
+    "자동 Goal turn 3회 뒤 blocked는 bundle_state=WORKER_COMPLETE, review_state=pending, blocked_reason=awaiting_external_sol_review이며 실패·거절이 아니다.",
+    "blocked 뒤 correction/approval은 same threadId의 send_message_to_thread로 existing Goal을 EXISTING_GOAL_RESUMED하며 새 create_goal을 만들지 않는다.",
+    "exact baseline_sha/head_sha/diff_fingerprint Sol 승인 뒤에만 same Goal complete와 INTEGRATED를 허용한다.",
+    "승인 없는 dependency 설치·삭제·push와 Sol combined review/final validation 전 VERIFIED 선언을 하지 않는다.",
+)
+
+
+def parallel_component_actual_thread_alias_guard_valid(content: str) -> bool:
+    return all(
+        f"create_thread({{\n  {alias}:" not in content
+        for alias in ("message", "project")
+    )
+
+
+def parallel_forward_scenarios_valid(content: str) -> bool:
+    section = content.partition("## 필수 forward scenario")[2].partition("## 완료 증거")[0]
+    observed = [
+        (int(number), body)
+        for number, body in re.findall(r"(?m)^(\d+)\. (.+)$", section)
+    ]
+    return observed == list(enumerate(PARALLEL_FORWARD_SCENARIOS, start=1))
 
 FEATURE_IDS = [
     *(f"A{index:02d}" for index in range(1, 11)),
@@ -714,16 +744,20 @@ def main() -> int:
     )
     for component_path in CODEX_PARALLEL_COMPONENT_PATHS:
         component_text = component_path.read_text(encoding="utf-8") if component_path.is_file() else ""
+        if not parallel_component_actual_thread_alias_guard_valid(component_text):
+            errors.append(
+                "parallel implementation rendered component rejects actual non-schema "
+                f"create_thread fields: {component_path.name}"
+            )
         for invalid_thread_call in invalid_thread_call_patterns:
-            if invalid_thread_call in component_text:
+            alias = "message" if "message:" in invalid_thread_call else "project"
+            negative_candidate = (
+                f"{component_text}\ncreate_thread({{\n"
+                f"  {alias}: <different invalid value for {component_path.name}>\n}})"
+            )
+            if parallel_component_actual_thread_alias_guard_valid(negative_candidate):
                 errors.append(
-                    "parallel implementation rendered component retains actual non-schema "
-                    f"create_thread field: {component_path.name} {invalid_thread_call}"
-                )
-            negative_candidate = f"{component_text}\n{invalid_thread_call} <invalid value>\n}})"
-            if invalid_thread_call not in negative_candidate:
-                errors.append(
-                    "parallel implementation negative append detector is inactive: "
+                    "parallel implementation negative append is not rejected by common alias guard: "
                     f"{component_path.name} {invalid_thread_call}"
                 )
     parallel_agent = (
@@ -774,33 +808,16 @@ def main() -> int:
         if CODEX_PARALLEL_COMPONENT_PATHS[5].is_file()
         else ""
     )
-    scenario_section = parallel_safety.partition("## 필수 forward scenario")[2].partition(
-        "## 완료 증거"
-    )[0]
-    observed_scenarios = [
-        int(value)
-        for value in re.findall(r"(?m)^(\d+)\.\s", scenario_section)
-    ]
-    if observed_scenarios != list(range(1, 13)):
-        errors.append(
-            f"parallel implementation forward scenarios must be exact 1..12: observed={observed_scenarios}"
-        )
-    for required in (
-        "일반 구현 요청은 새 Codex App thread 0건",
-        "unique bundle_id, BOOTSTRAP_ONLY",
-        "direct threadId/hostId도 project/worktree identity",
-        "clientThreadId only는 bounded list_threads",
-        "activation 전에는 Bundle assignment가 아니며",
-        "same file/contract ownership은 한 Bundle",
-        "preexisting dirty paths와 owned worktree baseline/head/fingerprint",
-        "WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고",
-        "자동 Goal turn 3회 뒤 blocked는",
-        "blocked 뒤 correction/approval은 same threadId",
-        "exact baseline_sha/head_sha/diff_fingerprint Sol 승인",
-        "승인 없는 dependency 설치·삭제·push",
-    ):
-        if required not in parallel_safety:
-            errors.append(f"parallel implementation safety contract is missing: {required}")
+    if not parallel_forward_scenarios_valid(parallel_safety):
+        errors.append("parallel implementation forward scenarios must match the exact 1..12 mapping")
+    for index, expected in enumerate(PARALLEL_FORWARD_SCENARIOS, start=1):
+        negative_candidate = parallel_safety.replace(
+            f"{index}. {expected}", f"{index}. tampered scenario semantic"
+        ) + f"\n{expected}"
+        if parallel_forward_scenarios_valid(negative_candidate):
+            errors.append(
+                f"parallel implementation scenario {index} negative semantic is not rejected"
+            )
 
     routing_matrix = (
         CODEX_ROUTING_MATRIX_PATH.read_text(encoding="utf-8")

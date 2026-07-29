@@ -74,6 +74,20 @@ const PARALLEL_SKILL_COMPONENT_RELATIVES: [&str; 9] = [
     PARALLEL_WORKER_REPORT_RELATIVE,
     PARALLEL_CONTROLLER_REPORT_RELATIVE,
 ];
+const PARALLEL_FORWARD_SCENARIOS: [&str; 12] = [
+    "일반 구현 요청은 새 Codex App thread 0건이며 current-task single-agent로 수행한다.",
+    "명시 승인 create_thread bootstrap은 unique bundle_id, BOOTSTRAP_ONLY, prompt, target:{type:\"project\", projectId, environment:{type:\"worktree\"}}를 사용한다.",
+    "direct threadId/hostId도 project/worktree identity를 확인한 뒤 같은 ACTIVATE_BUNDLE protocol로 activation한다.",
+    "clientThreadId only는 bounded list_threads unique bundle_id + expected projectId + worktree/project identity exactly one resolve이며 timeout/복수 match는 controller BLOCKED다.",
+    "activation 전에는 Bundle assignment가 아니며 create_goal/commentary/source mutation/test/commit 0건이고 activation ACK/Goal active 뒤에만 진행한다.",
+    "same file/contract ownership은 한 Bundle로 묶고 shared contract conflict는 mutation 없이 controller에 보고한다.",
+    "preexisting dirty paths와 owned worktree baseline/head/fingerprint를 보존하고 reset·clean·restore하지 않는다.",
+    "Terra는 WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고 controller만 wait_threads/read_thread로 관찰한다.",
+    "자동 Goal turn 3회 뒤 blocked는 bundle_state=WORKER_COMPLETE, review_state=pending, blocked_reason=awaiting_external_sol_review이며 실패·거절이 아니다.",
+    "blocked 뒤 correction/approval은 same threadId의 send_message_to_thread로 existing Goal을 EXISTING_GOAL_RESUMED하며 새 create_goal을 만들지 않는다.",
+    "exact baseline_sha/head_sha/diff_fingerprint Sol 승인 뒤에만 same Goal complete와 INTEGRATED를 허용한다.",
+    "승인 없는 dependency 설치·삭제·push와 Sol combined review/final validation 전 VERIFIED 선언을 하지 않는다.",
+];
 const INTEGRATION_COMPONENT_RELATIVES: [&str; 16] = [
     MARKETPLACE_RELATIVE,
     PLUGIN_MANIFEST_RELATIVE,
@@ -646,6 +660,14 @@ fn validate_rendered(
     if !skill_routing_content_valid(routing) {
         return Err(CodexAdapterError::InvalidRenderedPlugin);
     }
+    for relative in PARALLEL_SKILL_COMPONENT_RELATIVES {
+        let component = rendered
+            .get(relative)
+            .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
+        if !parallel_component_actual_thread_alias_guard_valid(component) {
+            return Err(CodexAdapterError::InvalidRenderedPlugin);
+        }
+    }
     let parallel_skill = rendered
         .get(PARALLEL_SKILL_RELATIVE)
         .ok_or(CodexAdapterError::InvalidRenderedPlugin)?;
@@ -981,8 +1003,7 @@ fn parallel_skill_content_valid(bytes: &[u8]) -> bool {
         && !text.contains("followup_task")
         && !text.contains("wait_agent")
         && !text.contains("interrupt_agent")
-        && !text.contains("create_thread({\n  message:")
-        && !text.contains("create_thread({\n  project:")
+        && parallel_component_actual_thread_alias_guard_valid(bytes)
 }
 
 fn parallel_skill_agent_content_valid(bytes: &[u8]) -> bool {
@@ -996,6 +1017,16 @@ fn parallel_skill_agent_content_valid(bytes: &[u8]) -> bool {
         && text.contains("default_prompt: \"Use $orchestrate-parallel-implementation")
         && text.contains("allow_implicit_invocation: true")
         && !text.contains("dependencies:")
+        && parallel_component_actual_thread_alias_guard_valid(bytes)
+}
+
+fn parallel_component_actual_thread_alias_guard_valid(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    !["message", "project"]
+        .iter()
+        .any(|alias| text.contains(&format!("create_thread({{\n  {alias}:")))
 }
 
 fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
@@ -1116,6 +1147,27 @@ fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
         _ => return false,
     };
     required.iter().all(|value| text.contains(value))
+        && parallel_component_actual_thread_alias_guard_valid(bytes)
+        && (relative != PARALLEL_SAFETY_RELATIVE || parallel_forward_scenarios_valid(text))
+}
+
+fn parallel_forward_scenarios_valid(text: &str) -> bool {
+    let Some(section) = text
+        .split_once("## 필수 forward scenario")
+        .and_then(|(_, value)| value.split_once("## 완료 증거"))
+        .map(|(value, _)| value)
+    else {
+        return false;
+    };
+    let scenarios = section
+        .lines()
+        .filter_map(|line| line.split_once(". "))
+        .filter_map(|(number, body)| number.parse::<usize>().ok().map(|number| (number, body)))
+        .collect::<Vec<_>>();
+    scenarios.len() == PARALLEL_FORWARD_SCENARIOS.len()
+        && scenarios.iter().enumerate().all(|(index, (number, body))| {
+            *number == index + 1 && *body == PARALLEL_FORWARD_SCENARIOS[index]
+        })
 }
 
 fn markdown_feature_id(line: &str) -> Option<&str> {
@@ -1562,16 +1614,24 @@ mod tests {
             .unwrap()
             .replace("goal_pursuit: required", "goal_pursuit: optional");
         assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
-        let invalid_parallel = format!(
-            "{}\ncreate_thread({{\n  message: <complete Context Pack>\n}})",
-            std::str::from_utf8(parallel_skill).unwrap()
-        );
-        assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
-        let invalid_parallel = format!(
-            "{}\ncreate_thread({{\n  project: <list_projects projectId>\n}})",
-            std::str::from_utf8(parallel_skill).unwrap()
-        );
-        assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
+        let install = Path::new(r"D:\도구\Star-Control 시험");
+        let rendered = render_files(&source, install, "0.1.0+codex.0123456789ab").unwrap();
+        for relative in PARALLEL_SKILL_COMPONENT_RELATIVES {
+            for (alias, value) in [
+                ("message", format!("<invalid message alias for {relative}>")),
+                ("project", format!("<invalid project alias for {relative}>")),
+            ] {
+                let mut candidate = rendered.clone();
+                let mut component = candidate.get(relative).unwrap().clone();
+                component.extend_from_slice(
+                    format!("\ncreate_thread({{\n  {alias}: {value}\n}})").as_bytes(),
+                );
+                candidate.insert(relative.to_owned(), component);
+                assert!(
+                    validate_rendered(&candidate, install, "0.1.0+codex.0123456789ab").is_err()
+                );
+            }
+        }
         let invalid_parallel_agent =
             std::str::from_utf8(source.get(PARALLEL_SKILL_AGENT_RELATIVE).unwrap())
                 .unwrap()
@@ -1592,24 +1652,16 @@ mod tests {
             PARALLEL_SAFETY_RELATIVE,
             invalid_safety.as_bytes()
         ));
-        for scenario_semantic in [
-            "일반 구현 요청은 새 Codex App thread 0건",
-            "unique bundle_id, BOOTSTRAP_ONLY",
-            "direct threadId/hostId도 project/worktree identity",
-            "clientThreadId only는 bounded list_threads",
-            "activation 전에는 Bundle assignment가 아니며",
-            "same file/contract ownership은 한 Bundle",
-            "preexisting dirty paths와 owned worktree baseline/head/fingerprint",
-            "WORKER_COMPLETE 한 번 뒤 Sol review를 polling하지 않고",
-            "자동 Goal turn 3회 뒤 blocked는",
-            "blocked 뒤 correction/approval은 same threadId",
-            "exact baseline_sha/head_sha/diff_fingerprint Sol 승인",
-            "승인 없는 dependency 설치·삭제·push",
-        ] {
+        for (index, scenario_semantic) in PARALLEL_FORWARD_SCENARIOS.iter().enumerate() {
             let invalid_scenario =
                 std::str::from_utf8(source.get(PARALLEL_SAFETY_RELATIVE).unwrap())
                     .unwrap()
-                    .replace(scenario_semantic, "tampered scenario semantic");
+                    .replace(
+                        &format!("{}. {scenario_semantic}", index + 1),
+                        &format!("{}. tampered scenario semantic", index + 1),
+                    )
+                    + "\n"
+                    + scenario_semantic;
             assert!(!parallel_resource_content_valid(
                 PARALLEL_SAFETY_RELATIVE,
                 invalid_scenario.as_bytes()
