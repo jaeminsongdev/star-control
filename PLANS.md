@@ -35,7 +35,7 @@
 | P-0072 Windows x64 Runtime closure | **DONE / PUSHED / INSTALLED** | `f13533922fa68a906494e97cea4087578697d49c`; Runtime generation `rt_9582adc516129569`, source FULL 11/11·installed TARGET 8/8·Doctor 4/4, `origin/main` readback까지 완료했다. |
 | P-0073 Codex Plugin·Skill·Hook 재설계 | **DONE / INSTALLED / local commits** | operations Skill/metadata의 Code Health·updater route와 `SessionEnd` lifecycle을 x64 installed Updater로 적용했다. source FULL 11/11, installed TARGET 8/8, Doctor 4/4, rendered/cache identity와 terminal integration receipt를 확인했다. |
 | P-0074 SessionEnd 3초 계약 교정 | **DONE / INSTALLED / local commits** | `d825516b86823793d53b607d6b2a0b6852d459fb`; `SessionEnd.timeout=3`, 2초 내부 deadline, terminal Updater receipt, rendered/cache identity, Hook smoke·Doctor·installed TARGET을 확인했다. |
-| P-0075 Codex Code Health route·Hook UX closure | **ACTIVE / CANDIDATE** | 기능·Hook 감사와 `cf95c1f` 설치 뒤 cold CLI 최초 조회가 10.3초에 실패하고 warm retry가 51ms에 성공했다. 개별 5초 timeout을 유지한 3회/15초 handoff 후보를 FULL→STRICT→공식 설치→cold-live 순서로 닫는다. |
+| P-0075 Codex Code Health route·Hook UX closure | **DONE / INSTALLED / local commits** | `39d3a13f50ae65f6373174486e7b3389ad0c1bd3`; Code Health 6개 action·16 Profile·Hook 경계를 전수 감사하고 public CLI/MCP handoff를 3×5초로 보강했다. source FULL·STRICT, x64 설치, Runtime reconcile, final installed TARGET 8/8·Doctor 4/4를 완료했다. 격리 cold-live와 사람 `/hooks` trust는 PASS로 승격하지 않는다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
 ## P-0074 closure
@@ -45,6 +45,13 @@
 - x64 outer source는 `d825516b…`, active Runtime은 `rt_4f5e2b2ea6dbe52d`로 분리되며 candidate 재검사는 `no_change`다.
 - Codex cache/runtime DB 직접 수정, signing/publication, non-x64 output, 원격 push는 수행하지 않았다.
 
+## P-0075 closure
+
+- 구현·설치·Hook 감사는 [P-0075 Codex Code Health route·Hook UX 최종 감사](docs/testing/p0075-codex-code-health-hook-review-2026-07-29.md)가 소유한다.
+- exact installed source는 `39d3a13f50ae65f6373174486e7b3389ad0c1bd3`, active Runtime은 `rt_98f48bd0bef83be9`, activation revision은 25다. restart receipt의 `partially_applied`는 숨기지 않고 공식 reconcile `upd_c_eG_MOEgqw9a6wSgDi733MUtAWYv5v-DDoyf3NYfo8`로 selector만 승격했다.
+- 첫 installed TARGET은 Windows sharing violation 한 건으로 7/8 fail이었다. exact 테스트 5/5 pass 뒤 새 TARGET operation `opn_01KYP0ADDAKVR7Z6J9M71NTY8F`이 8/8 complete·stable·pass였고 Doctor 4/4, Code Health 6/6 action ready/trusted다.
+- Hook source/root, rendered/cache identity와 paired smoke를 확인했다. Desktop 설정은 Hook browser가 아니며 `SessionEnd` trust는 Codex CLI `/hooks` 사람 Gate로 남긴다.
+
 ## 열린 위험과 보류
 
 - R-0062: executable 존재만으로 registered provider가 되지 않는다. `cargo-mutants`와 pinned `rust-analyzer`는 관찰됐지만 mutation/semantic-refactor port의 exact descriptor·protocol·artifact binding이 없으므로 real result는 `unavailable|unverified`다. Scorecard/OpenRewrite는 설치하지 않는다.
@@ -53,18 +60,20 @@
 - R-0065: Codex Hook은 보조 guardrail이다. `PermissionRequest`를 실제 Star-Control PermissionPlan/Approval 판정 없이 추가해 강제 통제로 표현하지 않는다.
 - R-0066: Codex Hook trust와 새 작업은 사용자 보안 경계다. `integration status`가 `hook_trust_required=true`, `requires_new_task=true`를 보존하며 제품은 Codex trust DB/cache를 직접 수정하지 않는다.
 - R-0067: `SessionEnd`는 advisory라 timeout이 Codex 작업을 막지는 않지만 `root_stop` 관찰을 잃을 수 있다. 내부 deadline과 updater의 보수적 process census를 함께 유지한다.
+- R-0068: 첫 installed TARGET의 `ERROR_SHARING_VIOLATION(32)` report는 삭제하지 않는다. targeted 5회와 final TARGET은 통과했지만 일회성 Windows 실행 이미지 unlock 지연 가능성을 별도 이력으로 유지한다.
+- R-0069: 새 설치본의 3×5초 격리 cold-live는 다른 live Codex 작업이 Controller lifecycle을 보유해 실행하지 못했다. 기존 10.3초 실패, 단위 계약, source FULL과 installed TARGET은 cold-live PASS를 대신하지 않는다.
 
-## P-0075 활성 범위
+## P-0075 봉인 범위
 
 - Hook trust 저장소·Codex cache/runtime DB는 직접 수정하지 않는다. 공식 `hooks/list` discovery와 Codex CLI `/hooks` 사람 검토 경계를 보존한다.
 - required core package에는 `project.register`, `scan.run`, `index.status`, `index.search`, `finding.list`, `diagnostic.list`의 owning command·strict input/output Schema·lane만 additive로 연결한다.
 - 외부 analyzer executable을 자동 등록·설치하지 않으며 semantic/mutation/posture provider 부재는 `unavailable|unverified`로 유지한다.
 - 검증은 source FULL, STRICT review, official Updater candidate inspect와 installed Registry search/describe를 사용한다. Runtime/Bridge apply는 candidate inspect가 허용하고 exact scope가 현재 요청과 일치할 때만 수행한다.
-- `cf95c1f` 설치본의 실제 cold Controller는 2×5초 예산을 약 0.3초 초과했다. 각 연결 시도는 5초로 유지하고 총 시도만 3회로 늘리며, 설치 후 첫 Star-Control 호출을 CLI-only Radar read로 실행해 live cold handoff를 검증한다.
+- `cf95c1f` 설치본의 실제 cold Controller는 2×5초 예산을 약 0.3초 초과했다. 각 연결 시도는 5초로 유지하고 총 시도만 3회로 늘렸다. 새 설치본의 isolated cold handoff는 후속 수동 Gate로 분리한다.
 
 ## Context Pack
 
-- 현재 상태: P-0062~P-0070 Code Health 제품 경로와 P-0071 전달, P-0072 x64 Runtime, P-0073 Plugin 재설계, P-0074 `SessionEnd` 3초 교정은 current source·installed evidence로 봉인됐다.
-- 완료 근거: inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, source FULL 11/11, installed TARGET 8/8, Doctor 4/4, terminal Updater receipt, rendered/cache equality와 Hook smoke다.
+- 현재 상태: P-0062~P-0070 Code Health 제품 경로, P-0071 전달, P-0072 x64 Runtime, P-0073 Plugin 재설계, P-0074 `SessionEnd` 3초와 P-0075 Code Health route·Hook UX는 current source·installed evidence로 봉인됐다.
+- 완료 근거: inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, source FULL 11/11, final installed TARGET 8/8, Doctor 4/4, official Runtime reconcile, rendered/cache equality와 Hook smoke다. 첫 TARGET fail과 cold-live unverified는 별도 이력이다.
 - 건드리면 안 되는 것: existing user worktree, linked `target/`, `legacy/`, Codex runtime DB/cache 직접 수정, signing/publication, non-x64 output.
-- 다음 실행: P-0075 3×5초 candidate의 source evidence→FULL→STRICT review→local commit→공식 x64 설치→첫 CLI-only cold read 순서다. Hook trust의 최종 사람 검토, signing·non-x64·remote delivery는 별도 Gate로 남긴다.
+- 다음 실행: active 제품 Slice는 없다. Codex CLI `/hooks`의 `SessionEnd` 사람 trust, 다른 Codex 작업이 없는 isolated cold CLI 재검증, signing·non-x64·remote delivery만 별도 Gate로 남긴다.

@@ -6,7 +6,7 @@
 - Codex-facing 필수 경로 `project.register → scan.run → index.status|search → finding.list|diagnostic.list` 6개는 installed Registry revision 13에서 모두 `ready`다. write action 2개는 `write_closed`, read action 4개는 `read_closed`다.
 - 현재 Star-Control scan은 operation 성공과 제품 scan 완성을 구분한다. 마지막 bounded scan operation은 성공했지만 `scan_run.status=incomplete`이며 current/LKG index가 없으므로 index read는 `PROJECT_NOT_ATTACHED`, finding·diagnostic read는 빈 목록이다.
 - Codex Desktop 설정 화면에 Hook 검토 목록이 없는 것은 discovery 실패가 아니다. 공식 검토 surface는 Codex CLI `/hooks`이고, App Server `hooks/list`는 8개를 발견했으며 `SessionEnd` 하나만 미신뢰로 남았다.
-- `cf95c1f` 기준 source FULL·STRICT, x64 stage·installer, 공식 updater 설치, Runtime reconcile, installed TARGET·Doctor·Hook smoke를 완료했다. 이후 실제 cold Controller에서 CLI-only Radar 최초 조회가 10.3초에 실패해 3×5초 handoff 후보를 추가했으며, 이 후보의 FULL·설치·cold-live 증거를 다시 닫아야 한다. 서명·ARM64·원격 push와 사람의 최종 Hook trust는 별도 Gate다.
+- 실제 cold Controller에서 CLI-only Radar 최초 조회가 10.3초에 실패한 근거로 public CLI/MCP handoff를 3×5초로 보강했다. source FULL·STRICT, x64 stage·installer, 공식 updater 설치·Runtime reconcile, installed TARGET·Doctor·Registry·Hook smoke를 완료했다. 다만 현재 Codex 계정의 다른 live 작업이 Controller lifecycle을 보유해 새 설치본의 격리 cold-live는 만들지 못했으며 PASS로 승격하지 않는다. 서명·ARM64·원격 push와 사람의 최종 Hook trust도 별도 Gate다.
 
 ## Codex 설정
 
@@ -63,9 +63,11 @@
 | `0e566f69efd9c0c2280f9b90375995f4b56a1614` | 일반 installed CLI postcheck를 45초 window/15초 attempt와 `kill_on_drop`으로 보강 |
 | `1c3e626bada515f2309da09111eb8df30aa361c3` | public CLI/MCP Controller 시작의 5초 재시도와 Rust-style operation root ID 충돌 교정 |
 | `cf95c1f7a9b1f4b2654f71098776d927740667ca` | Runtime reconcile의 남은 12초/2초 경계를 기존 45초/15초 cold-start 경계와 통일하고 Codex 권한 정책 반영 |
-| 현재 closure candidate | 실제 cold CLI handoff가 2×5초 경계를 넘긴 증거에 따라 개별 5초 timeout은 유지하고 public CLI/MCP 시작 시도를 3회, 총 15초로 보강 |
+| `39d3a13f50ae65f6373174486e7b3389ad0c1bd3` | 실제 cold CLI handoff가 2×5초 경계를 넘긴 증거에 따라 개별 5초 timeout은 유지하고 public CLI/MCP 시작 시도를 3회, 총 15초로 보강 |
 
-설치된 `cf95c1f`에서 Controller가 cold인 상태로 `development record show maintenance_radar_snapshot p0075-git-history-0e566f6 --json`을 실행했을 때 10.3초 뒤 `IPC controller unavailable`로 실패했고, 이미 기동된 Controller에 대한 즉시 재시도는 51ms에 성공했다. 이는 각 연결 시도의 5초 p95 계약이 아니라 총 2회 예산이 이 호스트의 약 11초 관리 DB cold start보다 짧다는 실측이다. 후보는 각 시도를 5초로 유지하면서 3회/15초만 허용한다.
+설치된 `cf95c1f`에서 Controller가 cold인 상태로 `development record show maintenance_radar_snapshot p0075-git-history-0e566f6 --json`을 실행했을 때 10.3초 뒤 `IPC controller unavailable`로 실패했고, 이미 기동된 Controller에 대한 즉시 재시도는 51ms에 성공했다. 이는 각 연결 시도의 5초 p95 계약이 아니라 총 2회 예산이 이 호스트의 약 11초 관리 DB cold start보다 짧다는 실측이다. `39d3a13`은 각 시도를 5초로 유지하면서 3회/15초만 허용한다.
+
+새 설치 작업을 연 뒤 첫 사용자 CLI Radar read는 58ms에 성공했지만 Codex MCP가 Controller를 먼저 시작했으므로 cold 증거로 쓰지 않는다. 실제 `SessionEnd` lifecycle과 50.8초 idle 관찰로 격리를 시도했으나 다른 live Codex 작업 때문에 Controller가 유지됐다. 다른 작업이나 프로세스를 강제 종료하지 않았으며 새 설치본의 3번째 시도 live 사용 여부는 `unverified`다.
 
 과거 초대형 operation `opn_01KYMDC1RV9J4A3P095VXYF57R` 재조회는 설치된 `cf95c1f`에서도 `IPC_AUTH_FAILED`가 아니라 `IPC_FRAME_INVALID`를 반환한다.
 
@@ -78,23 +80,27 @@
 | focused IPC test | `star-ipc` unit 26/26 + property 1/1 pass |
 | focused IPC Clippy | `star-ipc --all-targets -- -D warnings` pass |
 | source inventory | feature 23/23, Schema 217, MCP 170/170, Profile 16/16, Runtime EXE 4/4 |
-| source FULL | `target/validation/20260729T030719464Z-20752/report.json`, 11/11 complete·stable·pass, 145,584ms, report `sha256:515aebb7…` |
+| source FULL closure | `target/validation/20260729T040530019Z-20384/report.json`, 11/11 complete·stable·pass, 151,082ms, input `c0126714fa1f56eac16e5a8a0afa147ae141d4285d152157426932783f17c9e7`, report `sha256:ce2acd189acfd29db5def32745265b2bc3612a1cf8a8f9ed46875101d7ac65e1` |
 | STRICT | Blocker 0, Major 0 |
-| x64 stage | `dist/stage/p0075-final-cf95c1f/x64`, 561 files, set `sha256:e3411a5c…`, manifest `sha256:0167d20e…` |
-| installer | `dist/installers/p0075-final-cf95c1f/star-control-windows-x64-0.1.0-setup.exe`, `sha256:5bb74b95…`, `NotSigned` |
-| prior installed source | `cf95c1f7a9b1f4b2654f71098776d927740667ca`, x64, `unsigned_local` |
-| Runtime activation | `rt_7335071b0d31a7b0`, revision 24, prior `rt_ada8dc47632575da` |
-| reconcile | `upd_7nusNE1q8TtPCRv4Wg3Eo-BPCng6DHnsmhIJSl4If2w`, 23 expected ToolId, integration verified, fallback PID 0 |
-| installed TARGET | operation `opn_01KYNYEG3H3NX5CA5KSNPK911P`, 8/8 complete·stable·pass, evidence `sha256:119273c9…` |
+| x64 stage | `dist/stage/p0075-final-39d3a13/x64`, 561 files, set `sha256:9ada5d7c6e467c3a957bad39de9ba668382621f30306c8b2020baff2186289b1`, manifest `sha256:c8dace083dbcfe50f827794171d77b48bb31bd87ed3f8b6c5311ad18dfa23f6d` |
+| installer | `dist/installers/p0075-final-39d3a13/star-control-windows-x64-0.1.0-setup.exe`, `sha256:c14104266b326ac261db2562de63346eb799392bf83cffb921476bc40c6664a0`, `NotSigned` |
+| installed source | `39d3a13f50ae65f6373174486e7b3389ad0c1bd3`, x64, `unsigned_local`, root/stage manifest byte-identical |
+| Runtime activation | `rt_98f48bd0bef83be9`, revision 25, prior `rt_7335071b0d31a7b0` |
+| reconcile | `upd_c_eG_MOEgqw9a6wSgDi733MUtAWYv5v-DDoyf3NYfo8`, 23 expected ToolId, integration verified, fallback PID 0 |
+| first installed TARGET | operation `opn_01KYP03XHG8VBTHDX2SPMZ8B7B`, 7/8 fail, `ERROR_SHARING_VIOLATION(32)`, evidence `sha256:0c6fed43df45ef6368fbde9507973140a1fd36c59411915a8fa6cdbfabef7fbc` |
+| targeted retry | `running_image_keeps_its_lease_and_the_next_call_observes_new_bytes` 5/5 pass |
+| final installed TARGET | operation `opn_01KYP0ADDAKVR7Z6J9M71NTY8F`, 8/8 complete·stable·pass, 123,672ms, evidence `sha256:ddc7c4b2bfe4dc6e6049f27e72a709aa00152b89d5902d620287d7b4f7ce8958` |
 | installed Doctor | 4/4 pass, implemented Controller command 23 |
-| installed Registry | release action 23/23 ready, revision 13 |
+| installed Registry | required package ready/trusted, Code Health 6/6 action ready/trusted, revision 13 |
 
-첫 `1c3e626` selector reconcile은 오래된 12초/2초 경계에서 fail-closed 후 prior selector를 복구했다. `cf95c1f` installer를 시작한 updater 자체는 교체 전 binary였으므로 최종 설치에서도 restart receipt `upd_HrEGVQSI-mi2vaT4X6LF6uJi1Wn6qvG52AY5PNT3CTo`를 `rollback_failed`로 남겼다. 그러나 root payload와 installation record는 새 manifest와 exact match였고 `update inspect`는 `no_change`였다. 새로 설치된 updater의 공식 reconcile이 위 operation으로 selector를 정상 승격했으며 `update status`는 이후 20ms에 응답했다. 실패 receipt는 역사 증거로 보존하고 성공으로 재작성하지 않았다.
+`39d3a13` offline installer의 restart receipt `upd_CUbpbI_tf8b6grqITRvQS8L4kxkbHINafTpYfGGVefA`는 `partially_applied`를 남겼고 selector는 prior Runtime을 유지했다. root payload·installation record·stage manifest는 exact match였으며 candidate 재검사는 `no_change`였다. 새로 설치된 updater의 공식 reconcile이 위 operation으로 `rt_98f48bd0bef83be9`를 정상 승격했다. 과거 `cf95c1f` 설치의 `rollback_failed` receipt와 이번 `partially_applied` receipt는 역사 증거로 보존하고 성공으로 재작성하지 않았다.
+
+첫 installed TARGET의 operation 상태 `succeeded`는 validation subprocess가 정상 반환됐다는 뜻일 뿐 report `fail`을 덮지 않는다. 동일 exact source에서 실패 테스트를 5회 통과한 뒤 전체 TARGET을 새로 실행해 8/8 PASS를 얻었으며, 첫 report도 삭제하지 않는다.
 
 ## Hook 진단과 남은 사람 Gate
 
 - installed integration은 `verified`/`registered`, `requires_new_task=true`, `hook_trust_required=true`, `hook_review_surface=codex_cli`, `hook_review_command=/hooks`다.
-- source/root Hook file은 서로 byte-identical(`sha256:fec608c0…`), rendered/cache Hook file도 서로 byte-identical(`sha256:f20b80ce…`)이다. renderer가 절대 Windows command를 넣으므로 source와 rendered hash가 다른 것은 정상이다.
+- source/root Hook file은 서로 byte-identical(`sha256:fec608c0e55a5345a97d3dd1232159408cbb63e0a6eb69e383fffcdf526c8133`), rendered/cache Hook file도 서로 byte-identical(`sha256:f20b80cee24c8ae9aab8ad5cb7f56ac3bf50cb8c39c28453d4272a78b26013b7`)이다. renderer가 절대 Windows command를 넣으므로 source와 rendered hash가 다른 것은 정상이다.
 - 8개 event가 모두 렌더됐다. `SessionEnd.timeout=3`, 나머지는 10초다.
 - installed Hook smoke는 `SessionStart` JSON output·exit 0, `SessionEnd` 무출력·exit 0이다.
 - 전역 trust state는 기존 7개 event를 보유하고 `SessionEnd` key가 없다. App Server가 계산한 current hash는 `sha256:968d14df66efccebded73826f7356a3634873b2c90e872f8dcb388e0fe1682cb`다.
@@ -110,4 +116,5 @@
 - 플랫폼 Gate: 이번 설치 증거는 Windows x64만 소유한다. ARM64 native install을 주장하지 않는다.
 - provider Gate: semantic refactor, mutation, Rule Pack analyzer, repository posture의 exact production descriptor·protocol·artifact binding은 아직 없다.
 - 상태 Gate: current Code Health scan은 incomplete이고 live EvaluationRun은 0이다. source/test 존재를 현재 제품 결과로 승격하지 않는다.
-- Git: `cf95c1f`까지 local commit이고 3×5초 closure candidate는 검증 전이다. 원격 push는 수행하지 않았다.
+- cold-live Gate: 새 설치본의 3번째 5초 attempt 사용은 다른 live Codex 작업을 종료하지 않고 격리할 수 없어 `unverified`다. 기존 `cf95c1f` 10.3초 실패와 `39d3a13` source/unit/FULL·installed TARGET을 서로 다른 증거로 유지한다.
+- Git: `39d3a13f50ae65f6373174486e7b3389ad0c1bd3`까지 local commit이며 원격 push는 수행하지 않았다.
