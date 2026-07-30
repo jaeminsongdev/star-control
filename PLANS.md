@@ -37,7 +37,7 @@
 | P-0074 SessionEnd 3초 계약 교정 | **DONE / INSTALLED / local commits** | `d825516b86823793d53b607d6b2a0b6852d459fb`; `SessionEnd.timeout=3`, 2초 내부 deadline, terminal Updater receipt, rendered/cache identity, Hook smoke·Doctor·installed TARGET을 확인했다. |
 | P-0075 Codex Code Health route·Hook UX closure | **DONE / INSTALLED / local commits** | `39d3a13f50ae65f6373174486e7b3389ad0c1bd3`; Code Health 6개 action·16 Profile·Hook 경계를 전수 감사하고 public CLI/MCP handoff를 3×5초로 보강했다. source FULL·STRICT, x64 설치, Runtime reconcile, final installed TARGET 8/8·Doctor 4/4를 완료했다. 격리 cold-live와 사람 `/hooks` trust는 PASS로 승격하지 않는다. |
 | P-0076 Star-Control 자체 Code Health 적용 | **DONE / INSTALLED / local commits** | `ccb71661b86895783c440760fcd0bd76dcff9e3f`; 자체 scan이 드러낸 GoalRecord·redaction·SQLite quota·cursor clone과 대형 `index.status` IPC 결함을 교정했다. source FULL 11/11, Runtime `rt_8921c607a0af357f`, current self-scan, installed TARGET 8/8·Doctor 4/4를 확인했다. |
-| P-0077 목표추진 Codex App thread 구현 Skill·Controller cold-start | **ACTIVE / INTEGRATED / COMBINED REVIEW PENDING** | Sol Max가 worker A/B 전체 diff를 각각 승인했고, 같은 Codex App task의 기존 Goal `019fae13-a038…`·`019fae13-a045…`을 `complete`로 종료한 뒤 중앙에 통합했다. 2단계 bootstrap/activation·12개 exact scenario·bounded `management.status`를 포함한 combined 전체 diff 리뷰, source FULL, x64 재설치와 `origin/main` readback이 남아 있다. |
+| P-0077 목표추진 Codex App thread 구현 Skill·Controller cold-start | **DONE / INSTALLED / DELIVERY READY** | Codex App 2단계 thread activation, Terra High Goal Pursuit·same-task correction, Sol Max worker/combined 전체 diff 승인, exact 12 scenario validator와 bounded `management.status`를 구현했다. source FULL 11/11, x64 Runtime `rt_801e0b34cbe7f7f6`, installed TARGET 8/8·Doctor 4/4·Profile 16/16을 확인했다. |
 | public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
 
 ## P-0074 closure
@@ -62,6 +62,14 @@
 - 공식 Updater로 x64 Runtime `rt_8921c607a0af357f`를 activation revision 27에 적용했다. candidate와 실제 process identity 모두 Codex restart 불필요를 확인했다. final incremental scan `scn_01KYPBXCHWQNH5HHHNZHRQWBKR`, current bounded `index.status`, installed TARGET `target/validation/20260729T072410843Z-15216/report.json` 8/8, Doctor 4/4가 pass다. 검증 Goal은 revision 2 `cancelled`다.
 - active Runtime은 product-code commit `ccb71661…`에 정확히 묶이고, 뒤따르는 DONE 문서·source-evidence commit은 별도 current-byte 봉인이다. Codex cache/DB 직접 수정, dependency 설치, remote push는 수행하지 않았다.
 
+## P-0077 closure
+
+- 상세 worker identity·Goal·12 scenario·STRICT·설치 증거는 [P-0077 목표추진 Codex App thread 관제·Controller bounded status 설치 폐쇄](docs/testing/p0077-goal-pursuit-thread-orchestration-2026-07-30.md)가 소유한다.
+- product-code commit은 `286b9021b190674e2be3f7dd89f893e3df6074d0`, FULL·패키지 source는 `567ca04432639d76456610676764ec46a47657c3`다. worker A/B Goal `019fae13-a038…`·`019fae13-a045…`은 exact 전체 diff Sol 승인 뒤 같은 task에서 `complete`이며 combined review도 P0~P3 0건이다.
+- verified x64 set `sha256:519985f7…`를 공식 offline updater로 적용했다. restart receipt `partially_applied`를 보존하고 `no_change` 재검사 뒤 공식 reconcile `upd_BN4TIP…`로 Runtime `rt_801e0b34cbe7f7f6`를 activation revision 29에 승격했다.
+- cold management 요청은 40~449ms typed BUSY, Ready 뒤 status는 74ms·healthy였다. final installed TARGET operation `opn_01KYRBC…`은 8/8 complete·stable·pass, Doctor 4/4, Profile 16/16이다. 첫 TARGET 7/8 fail report와 invalid optional-argument 호출은 삭제하거나 PASS로 승격하지 않는다.
+- 설치 source와 뒤따르는 docs/source-evidence seal을 분리한다. unsigned local, ARM64, 사람 `/hooks` trust와 signed publication은 이번 완료로 승격하지 않는다.
+
 ## 열린 위험과 보류
 
 - R-0062: executable 존재만으로 registered provider가 되지 않는다. `cargo-mutants`와 pinned `rust-analyzer`는 관찰됐지만 mutation/semantic-refactor port의 exact descriptor·protocol·artifact binding이 없으므로 real result는 `unavailable|unverified`다. Scorecard/OpenRewrite는 설치하지 않는다.
@@ -72,7 +80,7 @@
 - R-0067: `SessionEnd`는 advisory라 timeout이 Codex 작업을 막지는 않지만 `root_stop` 관찰을 잃을 수 있다. 내부 deadline과 updater의 보수적 process census를 함께 유지한다.
 - R-0068: 첫 installed TARGET의 `ERROR_SHARING_VIOLATION(32)` report는 삭제하지 않는다. targeted 5회와 final TARGET은 통과했지만 일회성 Windows 실행 이미지 unlock 지연 가능성을 별도 이력으로 유지한다.
 - R-0069: 새 설치본의 3×5초 격리 cold-live는 다른 live Codex 작업이 Controller lifecycle을 보유해 실행하지 못했다. 기존 10.3초 실패, 단위 계약, source FULL과 installed TARGET은 cold-live PASS를 대신하지 않는다.
-- R-0070: active Runtime `rt_a2b3b27d764e6eba`는 7.1GB management DB 초기화를 background로 옮겨 cold request를 typed `MANAGEMENT_STORE_BUSY/retryable=true`로 응답한다. 다만 Ready 뒤 `management.status`가 deep verify를 호출해 10초 IPC budget을 넘는 잔여 결함은 source `286b902…`에서 bounded read-only snapshot으로 교정됐을 뿐 아직 installed Runtime에는 적용되지 않았다.
+- R-0070 closed in P-0077: active Runtime `rt_801e0b34cbe7f7f6`에서 7.12GB management DB cold 요청은 typed BUSY로 bounded되고 Ready 뒤 `management.status`는 74ms에 healthy status를 반환했다. deep verification은 explicit 경로로만 보존한다.
 
 ## P-0075 봉인 범위
 
@@ -84,7 +92,7 @@
 
 ## Context Pack
 
-- 현재 상태: product-code commit `286b9021b190674e2be3f7dd89f893e3df6074d0`에 Codex App thread orchestration worker 체인과 bounded `management.status` worker commit이 충돌 없이 통합됐다. 두 worker의 exact `baseline..HEAD` 전체 diff는 Sol Max가 각각 승인했고, 기존 Terra Goal `019fae13-a038-7453-9d8b-e3e3c0ca228e`와 `019fae13-a045-79b2-95c9-7a0c8913dd28`은 같은 task에서 `complete`다. installed x64 Runtime `rt_a2b3b27d764e6eba`와 설치된 Skill은 이전 source `8f14ebb…`에 묶여 있어 current combined candidate의 설치 증거가 아니다.
-- 완료 조건: 새 Skill 9개 정본과 packaging/render/install closed inventory, 명시 승인된 Codex App bootstrap/activation, Sol Max 설계·worker/combined 전체 diff 리뷰, Terra High Goal Pursuit·same-thread correction·Goal complete, exact 12 forward scenario, non-blocking startup와 bounded status 회귀, source FULL, official x64 install, installed TARGET·Doctor/live action, commit, `origin/main` exact readback이다.
+- 현재 상태: P-0077 제품·설치 closure는 package source `567ca04432639d76456610676764ec46a47657c3`, active Runtime `rt_801e0b34cbe7f7f6`, installed Plugin `0.1.0+codex.2c7a7693b178`에 묶여 있다. 두 Terra Goal은 같은 task에서 `complete`, Sol worker/combined 전체 diff는 승인됐고 source FULL·installed TARGET·Doctor·Profile·bounded live status가 pass다. 현재 변경은 실행 바이트를 바꾸지 않는 docs/source-evidence seal이다.
+- 완료 조건: 위 제품·설치 Gate와 함께 이 final tracked state의 current-byte FULL, final Sol review, 의도한 commit, fast-forward `origin/main` push와 exact remote ref readback이다.
 - 건드리면 안 되는 것: existing linked worktree, `target/` 정리, `legacy/`, management DB·Codex runtime/cache 직접 수정, dependency·lockfile, signing/publication, non-x64 output.
-- 다음 실행: 완료된 worker identity와 current-byte source evidence를 포함한 combined 전체 diff를 Sol Max가 직접 승인한다. 이어 source FULL을 통과한 exact commit을 clean pinned packaging worktree에서 x64 installer로 만들고, verified candidate·공식 Updater로 설치해 bounded live `management.status`, installed Skill identity, TARGET·Doctor를 확인한다. push는 모든 Gate 뒤 마지막에 수행한다.
+- 다음 실행: docs/source-evidence를 재생성해 current-byte FULL과 Sol Max final closure review로 봉인한 뒤 의도한 commit만 fast-forward로 `origin/main`에 push하고 remote ref를 읽는다. push 결과는 tracked source가 아니라 Git remote와 최종 handoff가 소유한다.
