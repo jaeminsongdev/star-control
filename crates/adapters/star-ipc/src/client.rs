@@ -25,6 +25,8 @@ use crate::{
 const RESPONSE_IO_GRACE: Duration = Duration::from_secs(5);
 const DEMAND_SCAN_RESPONSE_BUDGET: Duration = Duration::from_secs(10);
 const DISCOVERY_PROBE_RESPONSE_BUDGET: Duration = Duration::from_secs(40);
+const MANAGEMENT_RECOVERY_PLAN_RESPONSE_BUDGET: Duration = Duration::from_secs(10 * 60);
+const MANAGEMENT_RECOVERY_APPLY_RESPONSE_BUDGET: Duration = Duration::from_secs(60 * 60);
 const VALIDATION_RUN_DEFAULT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 const VALIDATION_RUN_MAX_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
 const INSTALLED_CLIENT_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -362,6 +364,18 @@ fn response_read_timeout(command: &str, payload: &serde_json::Value) -> Duration
     ) {
         return Duration::from_secs(10 * 60);
     }
+    if matches!(
+        command,
+        "management.backup.plan" | "management.compaction.plan"
+    ) {
+        return MANAGEMENT_RECOVERY_PLAN_RESPONSE_BUDGET;
+    }
+    if matches!(
+        command,
+        "management.backup.apply" | "management.compaction.apply"
+    ) {
+        return MANAGEMENT_RECOVERY_APPLY_RESPONSE_BUDGET;
+    }
     // Every application command performs the bounded demand scan before
     // dispatch, so the transport must not expire at the exact 5 s stability
     // boundary and turn a valid response into an authentication-looking error.
@@ -677,6 +691,22 @@ mod tests {
         assert_eq!(
             response_read_timeout("management.status", &serde_json::json!({})),
             Duration::from_secs(10)
+        );
+        assert_eq!(
+            response_read_timeout("management.backup.plan", &serde_json::json!({})),
+            Duration::from_secs(10 * 60)
+        );
+        assert_eq!(
+            response_read_timeout("management.compaction.plan", &serde_json::json!({})),
+            Duration::from_secs(10 * 60)
+        );
+        assert_eq!(
+            response_read_timeout("management.backup.apply", &serde_json::json!({})),
+            Duration::from_secs(60 * 60)
+        );
+        assert_eq!(
+            response_read_timeout("management.compaction.apply", &serde_json::json!({})),
+            Duration::from_secs(60 * 60)
         );
         assert_eq!(
             response_read_timeout("validation.run", &serde_json::json!({"timeout_ms":180_000})),
