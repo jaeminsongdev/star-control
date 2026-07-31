@@ -55,61 +55,9 @@ prefix_rule(
     not_match = ["git status", "git -c alias.status=!echo status --short"],
 )
 
-prefix_rule(
-    pattern = ["git", "push"],
-    decision = "prompt",
-    justification = "Every remote push requires explicit user review.",
-    match = ["git push", "git push origin main", "git push origin main --force"],
-)
-
-prefix_rule(
-    pattern = ["git", "branch", ["-d", "-D", "--delete"]],
-    decision = "prompt",
-    justification = "Branch deletion requires explicit user review.",
-    match = ["git branch -d topic", "git branch -D topic", "git branch --delete topic"],
-)
-
-prefix_rule(
-    pattern = ["git", ["rm", "restore"]],
-    decision = "prompt",
-    justification = "Removing or restoring tracked content can discard user work and requires review.",
-    match = ["git rm file.txt", "git restore file.txt"],
-)
-
-prefix_rule(
-    pattern = [["cargo", "npm", "pnpm", "yarn", "pip", "pip3", "winget", "choco"], ["add", "install", "ci", "i"]],
-    decision = "prompt",
-    justification = "Package and tool installation changes the dependency or host environment and requires review.",
-    match = ["cargo install cargo-audit", "npm install", "npm ci", "pnpm i", "pip install ruff", "winget install Git.Git"],
-)
-
-prefix_rule(
-    pattern = [["python", "python3", "py"], "-m", "pip", "install"],
-    decision = "prompt",
-    justification = "Python module installation changes the dependency or host environment and requires review.",
-    match = ["python -m pip install ruff", "py -m pip install pytest"],
-)
-
-prefix_rule(
-    pattern = [["reg", "reg.exe"], ["add", "delete", "import", "restore"]],
-    decision = "prompt",
-    justification = "Windows registry changes are system-setting changes and require review.",
-    match = ["reg add HKCU\\Software\\Example", "reg.exe delete HKCU\\Software\\Example"],
-)
-
-prefix_rule(
-    pattern = [["setx", "Set-ExecutionPolicy", "Enable-WindowsOptionalFeature", "Disable-WindowsOptionalFeature"]],
-    decision = "prompt",
-    justification = "System and shell policy changes require explicit user review.",
-    match = ["setx STAR_MODE enabled", "Set-ExecutionPolicy RemoteSigned"],
-)
-
-prefix_rule(
-    pattern = [["Remove-Item", "Move-Item", "rm", "rmdir", "mv", "move"]],
-    decision = "prompt",
-    justification = "Filesystem delete and move operations require review; PreToolUse separately forbids unbounded recursive targets.",
-    match = ["Remove-Item -LiteralPath D:\\work\\tmp", "Move-Item a b", "rm file.txt"],
-)
+# approval_policy="never"에서는 prompt rule이 대화형 승인이 아니라 실행 차단이 된다.
+# 정상 push·install·system setting·bounded delete/move는 요청 범위와 AGENTS.md가
+# 통제하며 Rules에는 등록하지 않는다. 아래 규칙은 결정적으로 금지할 행위만 남긴다.
 
 # Prefix Rules deliberately cover canonical direct mutation spellings. The
 # typed PreToolUse parser additionally recognizes descendants, alternate flag

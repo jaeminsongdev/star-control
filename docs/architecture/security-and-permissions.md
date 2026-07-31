@@ -28,7 +28,8 @@ Star-Control은 모든 동작의 승인 여부를 설정할 수 있게 하고, �
 - 유료 동작만 반드시 질문
 - 나머지는 승인된 계획과 설정 범위 안에서 자동
 - 되돌릴 수 있는 기록과 검사 의무는 유지
-- Codex 또는 관리자가 요구하는 승인은 그대로 유지
+- 로컬 Codex 실행은 사용자 고정값 `approval_policy="never"`, `sandbox_mode="danger-full-access"`로 tool approval prompt 없이 진행
+- Star-Control 제품의 `ApprovalRequest`·PermissionPlan·Gate와 관리자가 강제한 상위 정책은 그대로 유지
 - 9단계 ChangeBundle의 remote upload·PR 생성/수정·remote merge·publish는 예외로 action별 현재 사용자 승인을 요구
 
 ### custom

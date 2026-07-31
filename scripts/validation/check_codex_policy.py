@@ -61,7 +61,7 @@ def extract_rule_blocks(text: str) -> list[str]:
             raise ValueError("unterminated prefix_rule block")
 
 
-def run_execpolicy(arguments: list[str]) -> str:
+def run_execpolicy(arguments: list[str]) -> str | None:
     completed = subprocess.run(
         [
             "codex",
@@ -86,7 +86,7 @@ def run_execpolicy(arguments: list[str]) -> str:
         )
     payload = json.loads(completed.stdout)
     decision = payload.get("decision")
-    if decision not in {"allow", "prompt", "forbidden"}:
+    if decision not in {None, "allow", "prompt", "forbidden"}:
         raise ValueError(f"unexpected execpolicy decision: {decision!r}")
     return decision
 
@@ -94,20 +94,12 @@ def run_execpolicy(arguments: list[str]) -> str:
 def main() -> int:
     failures: list[str] = []
     config = tomllib.loads(CONFIG.read_text(encoding="utf-8"))
-    expected_granular = {
-        "sandbox_approval": False,
-        "rules": True,
-        "mcp_elicitations": True,
-        "request_permissions": True,
-        "skill_approval": True,
-    }
     if config.get("sandbox_mode") != "danger-full-access":
         failures.append("sandbox_mode must remain danger-full-access")
-    if config.get("approvals_reviewer") != "user":
-        failures.append("approvals_reviewer must be user")
-    policy = config.get("approval_policy")
-    if not isinstance(policy, dict) or policy.get("granular") != expected_granular:
-        failures.append("approval_policy granular fields do not match the reviewed policy")
+    if config.get("approval_policy") != "never":
+        failures.append("approval_policy must remain never")
+    if "approvals_reviewer" in config:
+        failures.append("approvals_reviewer is inert under never and must be omitted")
     if config.get("features", {}).get("hooks") is not True:
         failures.append("Codex Hooks must remain enabled")
 
@@ -115,6 +107,9 @@ def main() -> int:
     blocks = extract_rule_blocks(rules_text)
     if not blocks:
         failures.append("no prefix_rule declarations found")
+    prompt_blocks = [block for block in blocks if 'decision = "prompt"' in block]
+    if prompt_blocks:
+        failures.append("prompt rules are incompatible with approval_policy=never")
     allowed_blocks = [block for block in blocks if 'decision = "allow"' in block]
     for block in allowed_blocks:
         if 'pattern = ["git", "status", "--short"]' not in block:
@@ -123,13 +118,8 @@ def main() -> int:
             failures.append("stale task-specific allow rule detected")
 
     required_rule_fragments = {
-        'pattern = ["git", "push"]': 'decision = "prompt"',
         'pattern = ["git", "clean"]': 'decision = "forbidden"',
         'pattern = ["git", "reset", "--hard"]': 'decision = "forbidden"',
-        'pattern = ["git", ["rm", "restore"]]': 'decision = "prompt"',
-        'pattern = [["cargo", "npm", "pnpm"': 'decision = "prompt"',
-        'pattern = [["python", "python3", "py"], "-m", "pip", "install"]': 'decision = "prompt"',
-        'pattern = [["Remove-Item", "Move-Item"': 'decision = "prompt"',
         '"$CODEX_HOME/plugins/cache"': 'decision = "forbidden"',
         'pattern = ["sqlite3", ["$CODEX_HOME/state_5.sqlite"': 'decision = "forbidden"',
     }
@@ -165,21 +155,28 @@ def main() -> int:
             failures.append(f"typed Hook guard marker missing: {marker}")
 
     agents = AGENTS.read_text(encoding="utf-8")
-    for boundary in ("`git reset`, `git clean`", "package·dependency 설치", "push, PR"):
+    for boundary in (
+        'approval_policy = "never"',
+        'sandbox_mode = "danger-full-access"',
+        "`prompt` Rules",
+    ):
         if boundary not in agents:
-            failures.append(f"AGENTS approval boundary missing: {boundary}")
+            failures.append(f"AGENTS execution-policy boundary missing: {boundary}")
 
     codex = shutil.which("codex")
     if codex is not None:
         policy_cases = [
             (["git", "status", "--short"], "allow"),
-            (["git", "push", "origin", "main"], "prompt"),
+            (["git", "push", "origin", "main"], None),
             (["git", "push", "--force", "origin", "main"], "forbidden"),
             (["git", "push", "origin", "main", "--force"], "forbidden"),
             (["git", "reset", "--hard"], "forbidden"),
             (["git", "reset", "HEAD", "--hard"], "forbidden"),
-            (["npm", "ci"], "prompt"),
-            (["python", "-m", "pip", "install", "ruff"], "prompt"),
+            (["npm", "ci"], None),
+            (["python", "-m", "pip", "install", "ruff"], None),
+            (["git", "branch", "-D", "topic"], None),
+            (["git", "restore", "file.txt"], None),
+            (["Remove-Item", "-LiteralPath", "D:\\work\\tmp"], None),
             (
                 [
                     "Set-Content",

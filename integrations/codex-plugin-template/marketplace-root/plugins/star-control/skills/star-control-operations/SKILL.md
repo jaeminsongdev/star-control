@@ -51,5 +51,5 @@ description: Use when Codex should plan, execute, validate, inspect code health,
 1. `approval_required`와 `question_required`는 완료가 아니다. exact scope·fingerprint·expiry를 사용자 결정에 묶고 필요한 경우 `star_approval_resolve`로 기록한다.
 2. Operation ID가 반환되면 `star_tool_operation_get`으로 terminal result를 확인한다. timeout·취소·outcome unknown을 성공으로 바꾸지 않는다.
 3. 적용 뒤 실제 ChangeSet을 다시 수집하고 관련 Check를 실행해 Diagnostic, GateDecision, EvidenceBundle 또는 ReviewPack에 연결한다.
-4. 유료 작업, destructive action, remote push·publish·deploy와 system setting 변경은 별도 사용자 승인이 없으면 실행하지 않는다.
-5. 최종 보고에는 사용한 Profile resolution fingerprint, MCP/CLI/native route, 승인 상태, 검증 결과와 남은 위험을 구분한다.
+4. 로컬 Codex 실행 기본값은 `approval_policy="never"`, `sandbox_mode="danger-full-access"`다. 현재 사용자 요청 범위에 포함된 destructive action, remote push·publish·deploy와 system setting 변경은 tool approval prompt 없이 수행하되, 범위 밖 외부 효과를 추론하지 않는다. Star-Control이 반환한 `approval_required|question_required`와 유료·product Gate는 별도 제품 결정으로 보존한다.
+5. 최종 보고에는 사용한 Profile resolution fingerprint, MCP/CLI/native route, 제품 승인 상태, 검증 결과와 남은 위험을 구분한다.

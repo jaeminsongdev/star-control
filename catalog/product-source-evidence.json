@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:6ac35dbf7374549c641136be37b4725cb7ebfe6147542d9f11d0bdf721e02964",
+  "evidence_fingerprint": "sha256:ff53c4aabf46f72f2780ea650a8de08ba1ec2b41e101231029054e48062b8c8d",
   "feature_count": 23,
   "features": [
     {
@@ -274,11 +274,11 @@
         {
           "marker": "star_tool_search",
           "path": "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md",
-          "source_sha256": "sha256:78e7a2b085294b10c3c08b0bbbcda4de8f25fe9ba2991a6b4551e536ca1568db"
+          "source_sha256": "sha256:49f085e8e37695e66e692ddf4a6d6aae26d8efc07e64dd3d7087bef6f0d085c9"
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:a9107564b3f50eccb4220490cbdda54f72638e6a81ca0745308db5b6c034c0da",
+      "feature_fingerprint": "sha256:fbba23f3b1270359b2be250331029eb730f3889447b79a0897844cf0fe9b018f",
       "feature_id": "A04",
       "generated_schemas": [
         {
@@ -316,9 +316,9 @@
       },
       "product_surface_fingerprints": [
         "sha256:1edd1bed8d6be4718c53344aa6c7bb3ba67ce69e0300a86b888fa841afdc0f57",
+        "sha256:49f085e8e37695e66e692ddf4a6d6aae26d8efc07e64dd3d7087bef6f0d085c9",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
         "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
-        "sha256:78e7a2b085294b10c3c08b0bbbcda4de8f25fe9ba2991a6b4551e536ca1568db",
         "sha256:cb3e0e21166f6a07381160c420ff9a1d05a527d357461354326eaa55ffdf22f3",
         "sha256:e8e8e6a7363cfb712aa4cfa144d988a13dc5c909c6a2645b3a3103e161650c91"
       ],
@@ -664,7 +664,7 @@
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:24ad4c6847e48831bdd2ddaf8069229603f2fdeba3ad63c392a0f59305462d14",
+      "feature_fingerprint": "sha256:ef7722dc8a5b25099b08c1cb432ffba3c98aff77544db774ab80f0a9ae090c8a",
       "feature_id": "A08",
       "generated_schemas": [
         {
@@ -708,7 +708,7 @@
       "mcp_required": true,
       "owner_document": {
         "path": "docs/architecture/security-and-permissions.md",
-        "source_sha256": "sha256:3da6f0a84e7f7ee6f2761767488d26e797e76f98563faf77d59b413037067b2b"
+        "source_sha256": "sha256:9f4e52985194b91756e2085c0ed3341482da27a35809f71cc9a3fb9bc1332f39"
       },
       "product_surface_fingerprints": [
         "sha256:1edd1bed8d6be4718c53344aa6c7bb3ba67ce69e0300a86b888fa841afdc0f57",
@@ -825,7 +825,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:17b5f0ed525cf17e7f397af6fa13b28215f946bf9ed4b3cef146fdbd4584e9c5",
+      "feature_fingerprint": "sha256:36c27e4719d38907e2eef247081a451b5c741eed28e420f96ff220eb38905793",
       "feature_id": "A10",
       "generated_schemas": [
         {
@@ -861,7 +861,7 @@
       "mcp_required": true,
       "owner_document": {
         "path": "docs/contracts/config-and-catalog.md",
-        "source_sha256": "sha256:fab024078c6d9fae4bf967b2c293510ae012ea06614dcbaa00299e61b591f760"
+        "source_sha256": "sha256:01a7bdaccc6caf9a177e7a04249a4a53c2564dd5f91669e91aba8779ade12fe9"
       },
       "product_surface_fingerprints": [
         "sha256:1edd1bed8d6be4718c53344aa6c7bb3ba67ce69e0300a86b888fa841afdc0f57",
@@ -1761,11 +1761,11 @@
         {
           "marker": "star_tool_search",
           "path": "integrations/codex-plugin-template/marketplace-root/plugins/star-control/skills/star-control-operations/SKILL.md",
-          "source_sha256": "sha256:78e7a2b085294b10c3c08b0bbbcda4de8f25fe9ba2991a6b4551e536ca1568db"
+          "source_sha256": "sha256:49f085e8e37695e66e692ddf4a6d6aae26d8efc07e64dd3d7087bef6f0d085c9"
         }
       ],
       "codex_required": true,
-      "feature_fingerprint": "sha256:456f08956e531531d21b448aece78fb2306c4b9811ae9883db5ce6cd80eddd39",
+      "feature_fingerprint": "sha256:0d3ab153d2d3b3a119ce7fb4a8437fddbf4d527b2e79e9f3e59891ceba922c45",
       "feature_id": "D01",
       "generated_schemas": [
         {
@@ -1809,9 +1809,9 @@
       },
       "product_surface_fingerprints": [
         "sha256:1edd1bed8d6be4718c53344aa6c7bb3ba67ce69e0300a86b888fa841afdc0f57",
+        "sha256:49f085e8e37695e66e692ddf4a6d6aae26d8efc07e64dd3d7087bef6f0d085c9",
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
         "sha256:77dc70e538094bf9534ce970d7df5f52fbe0f3efbf2afcde38b4f8b01881ed72",
-        "sha256:78e7a2b085294b10c3c08b0bbbcda4de8f25fe9ba2991a6b4551e536ca1568db",
         "sha256:cb3e0e21166f6a07381160c420ff9a1d05a527d357461354326eaa55ffdf22f3",
         "sha256:e8e8e6a7363cfb712aa4cfa144d988a13dc5c909c6a2645b3a3103e161650c91"
       ],
@@ -3514,7 +3514,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:5b545788ca9cc9b0cff5a13cf15f806cb4f6e239b631332493071832f81d0a77",
+  "source_fingerprint": "sha256:269af6171bc3dc4f3654960dc4a576526337ee67fb08c02b736348fb07255f7a",
   "stable_error_catalog_fingerprint": "sha256:1734349f129497e0274c62eca3d7f7cefd74e3f1f90b97a71799c4e10cdfd343",
   "stable_error_count": 552
 }

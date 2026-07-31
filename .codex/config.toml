@@ -1,6 +1,5 @@
-# 프로젝트 작업은 full-access를 유지하되 외부 효과와 위험 명령은 Rules/Hook/사람 승인을 겹쳐 적용한다.
-approval_policy = { granular = { sandbox_approval = false, rules = true, mcp_elicitations = true, request_permissions = true, skill_approval = true } }
-approvals_reviewer = "user"
+# 사용자가 고정한 무프롬프트·full-access 기본값이다. 명백한 파괴 행위는 Rules/Hook이 deny한다.
+approval_policy = "never"
 sandbox_mode = "danger-full-access"
 
 [sandbox_workspace_write]

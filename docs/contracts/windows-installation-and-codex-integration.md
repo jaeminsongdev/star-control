@@ -182,7 +182,7 @@ Marketplace name은 `star-control-local`, Plugin name은 `star-control`로 고�
 
 ## Hook 계약
 
-P-0039의 Hook은 `SessionStart`, `UserPromptSubmit`, `Stop`, `PreToolUse`, `PostToolUse`, `SubagentStart`, `SubagentStop`을 사용한다. 모든 입력은 event 이름과 `session_id`, 최대 1 MiB, 중복 key 없음만 수용한다. Hook은 Controller에 관측을 best-effort로 남기되 Controller 부재만으로 Codex task를 실패시키지 않는다. `SessionStart`만 stdout에 다음 의미의 JSON을 낸다.
+현재 Hook set은 `SessionStart`, `SessionEnd`, `UserPromptSubmit`, `Stop`, `PreToolUse`, `PostToolUse`, `SubagentStart`, `SubagentStop` 정확히 8개다. 공통 envelope와 event별 필드를 typed parse하며 최대 1 MiB, 중복 key 없음, bounded string/object shape만 수용한다. Hook은 Controller에 관측을 best-effort로 남기되 Controller 부재만으로 Codex task를 실패시키지 않는다. `SessionStart`는 stdout에 다음 의미의 JSON을 낸다.
 
 ```json
 {
@@ -194,7 +194,7 @@ P-0039의 Hook은 `SessionStart`, `UserPromptSubmit`, `Stop`, `PreToolUse`, `Pos
 }
 ```
 
-Hook은 작업을 직접 실행하거나 Profile을 자동 적용하거나 결제를 승인하지 않는다. SessionStart는 중앙 Skill과 route 경계만 주입한다. ready MCP action과 CLI-only command를 모두 사용할 수 없어도 일반 개발 작업을 차단하지 않고 native fallback·이유·Star-Control evidence 부재를 안내한다. 잘못된 입력에는 non-zero로 종료하고 stdout에 성공 JSON을 쓰지 않는다. Plugin 설치 뒤 사용자는 **Codex CLI `/hooks`** browser에서 exact Hook을 검토·신뢰한다. Desktop 설정 화면은 이 browser를 제공하는 표면으로 간주하지 않는다.
+Hook은 작업을 직접 실행하거나 Profile을 자동 적용하거나 결제를 승인하지 않는다. SessionStart는 중앙 Skill과 route 경계만 주입한다. ready MCP action과 CLI-only command를 모두 사용할 수 없어도 일반 개발 작업을 차단하지 않고 native fallback·이유·Star-Control evidence 부재를 안내한다. `PreToolUse`는 malformed 입력과 force push, `git reset --hard`, `git clean`, 보호된 runtime/cache/DB 직접 수정, 검증되지 않은 recursive delete/move를 `permissionDecision=deny`로 fail closed한다. `PostToolUse`는 `accepted|approval_required|partial|stale|unverified|flaky|outcome_unknown|not_run` 또는 Operation ID를 발견하면 terminal success로 오인하지 않도록 `additionalContext`를 반환하며 이미 발생한 side effect를 되돌린다고 주장하지 않는다. 그 밖의 잘못된 event 입력은 non-zero로 종료하고 stdout에 성공 JSON을 쓰지 않는다. Plugin 설치 뒤 사용자는 **Codex CLI `/hooks`** browser에서 exact Hook을 검토·신뢰한다. Desktop 설정 화면은 이 browser를 제공하는 표면으로 간주하지 않는다.
 
 ## CLI 계약
 

@@ -45,12 +45,14 @@
 - 생성 상태를 바꿔야 하면 source, template 또는 installer를 수정하고 검증된 생성·repair 절차로 다시 만든다.
 - 로컬 `--check/`와 루트 `manifest.json`은 생성 주체와 용도가 확인된 상태로 보존하며 임의 삭제·commit하지 않는다.
 
-## 승인 경계
+## 실행 정책과 권한 경계
 
-- package·dependency 설치, system setting·PATH 변경, 파일 삭제·대량 이동은 별도 사용자 승인을 받는다.
-- push, PR, publish, deploy, 외부 account 변경, 유료 기능 사용과 그 밖의 외부 효과는 별도 사용자 승인을 받는다.
-- 명시된 작업 범위가 검증됐고 사용자 변경을 숨기거나 섞지 않는 경우 local commit은 별도 사람 승인 없이 가능하다.
-- 작업 지시가 commit을 금지하면 해당 제한을 우선하며, P-0003 정책 정리에서는 commit하지 않는다.
+- 이 저장소의 Codex 실행 기본값은 `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`다. `approvals_reviewer`와 `prompt` Rules를 사용하지 않는다.
+- 사용자가 요청한 범위 안의 package·dependency 설치, system setting·PATH 변경, bounded 파일 삭제·이동, push·PR·publish·deploy는 별도 tool approval prompt 없이 수행한다.
+- `never`는 요청 범위를 넓히는 권한이 아니다. 유료 서비스, 외부 account 변경, 공개 범위 확대처럼 요청에 포함되지 않은 외부 효과가 필요하면 일반 대화로 범위를 확인한다.
+- force push, `git reset --hard`, `git clean`, 검증되지 않은 recursive delete/move, Codex·Star-Control 생성 상태 직접 수정은 Rules와 typed `PreToolUse`에서 계속 금지한다.
+- Star-Control action의 `approval_required|question_required`, exact PatchSet·publish·retention Gate는 Codex tool approval과 별도인 제품 계약으로 보존한다.
+- 명시된 작업 범위가 검증됐고 사용자 변경을 숨기거나 섞지 않는 경우 local commit은 별도 사람 승인 없이 가능하다. 작업 지시가 commit을 금지하면 해당 제한을 우선한다.
 
 ## 검증과 증거
 

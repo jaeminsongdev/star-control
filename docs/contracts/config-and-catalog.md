@@ -1110,6 +1110,8 @@ required_phases = ["stage", "goal"]
 
 Star-Control 설정은 Codex 설정을 대체하지 않는다.
 
+현재 저장소와 사용자 개인 설정의 실행 기본값은 `approval_policy="never"`, `sandbox_mode="danger-full-access"`다. 이는 Codex tool approval prompt와 local sandbox를 끄는 사용자 선택이며 Star-Control의 제품 승인, requested scope, Gate와 evidence 의무를 자동 완화하지 않는다. `approvals_reviewer`와 execpolicy `prompt` rule은 이 조합에서 사용하지 않는다.
+
 - `reasoning_effort`는 Codex가 모델별로 지원하는 `minimal | low | medium | high | xhigh` 중에서 선택한다.
 - Plan 단계의 생각 깊이는 일반 실행과 분리한다.
 - Codex의 `approval_policy`와 `sandbox_mode`를 완화하지 않고 현재 허용 범위 안에서 PermissionPlan을 만든다.

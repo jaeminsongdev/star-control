@@ -29,10 +29,10 @@ Plugin 설치만으로 검사 코드를 자동 신뢰하지는 않는다. 사용
 2. operations Skill이 요청을 MCP-first, Catalog-declared CLI-only, installed local lifecycle 또는 명시적 native fallback으로 분류한다. Code Health는 `project.register` → `scan.run` → `index.status|search` → `finding.list|diagnostic.list`의 live action을 우선한다.
 3. 구현 Skill은 중앙 작업을 goal로 만들지 않고 Sol Max가 설계·DAG·재계획을 소유하게 한다. 사용자가 새 task/thread 또는 parallel delegation을 명시 승인한 경우에만 `list_projects({})`의 Git `projectId`와 `isGitRepository`를 확인해 unique `bundle_id`와 `BOOTSTRAP_ONLY`만 담은 `prompt`, `target:{type:"project",projectId,environment:{type:"worktree"}}` shape로 Terra/Sol thread를 bootstrap한다. 이는 Bundle assignment가 아니므로 activation 전 Goal·commentary·mutation·test·commit은 금지다. direct identity 또는 `clientThreadId`의 bounded `list_threads` unique match로 id(threadId)/hostId/cwd를 resolve한 뒤 같은 threadId로 complete Context Pack + `ACTIVATE_BUNDLE`을 보내 Goal active ACK를 확인한다. Terra는 WORKER_COMPLETE 한 번 뒤 멈추고 controller만 `SOL_REVIEW_PENDING`을 관찰한다. 자동 blocked는 `awaiting_external_sol_review`이지 구현 실패가 아니며, same threadId/Goal의 `EXISTING_GOAL_RESUMED`가 exact baseline/head/fingerprint Sol 승인 뒤에만 complete한다.
 4. 실제 product action은 live Registry의 readiness·Schema·risk lane·descriptor hash를 확인한 뒤 Controller의 같은 application command로 실행한다.
-5. Codex 권한과 Star-Control 승인·PermissionPlan은 서로를 대신하지 않는다. 각 경계에서 요구한 승인을 모두 보존한다.
+5. 이 저장소와 사용자 전역 Codex 설정은 `approval_policy="never"`, `sandbox_mode="danger-full-access"`를 고정한다. Codex tool approval prompt는 만들지 않으며 Star-Control의 `ApprovalRequest`·PermissionPlan·Gate는 별도 제품 계약으로 보존한다.
 6. Hook lifecycle evidence, worker Goal terminal state, Sol 전체 리뷰, operation terminal result와 실제 ChangeSet·Gate를 결합해 완료를 판정한다.
 
-Hook은 일부 local tool path가 opt-out할 수 있는 보조 guardrail이다. 현재 Plugin Hook은 lifecycle과 context를 관찰하며 product action을 독자적으로 허용·거부하지 않는다. 실제 실행 통제는 fixed MCP lane, Controller admission, Codex permission과 exact approval가 소유한다.
+`never`에서는 `prompt` Rules가 대화형 승인이 아니라 실행 차단이므로 사용하지 않는다. Rules는 force push, `git reset --hard`, `git clean`, 생성 상태 직접 수정처럼 결정적으로 금지할 명령만 `forbidden`으로 둔다. typed `PreToolUse`는 argv prefix로 표현하기 어려운 flag 위치·경로 의미·malformed 입력을 추가로 deny하고, `PostToolUse`는 non-terminal 상태를 context로 돌려준다. Hook은 모든 도구의 완전한 보안 경계가 아니며 실제 product action 통제는 fixed MCP lane과 Controller admission이 소유한다.
 
 ## MCP가 제공할 기능
 
@@ -66,7 +66,8 @@ Controller는 watcher와 호출 직전 demand scan으로 TOML·Schema·EXE 변�
 |---|---|---|
 | `SessionStart` | `startup|resume|clear|compact`에서 Skill/MCP route context 주입, session 시작 관찰 | `continue=true`, `additionalContext` |
 | `UserPromptSubmit` | turn 시작과 updater activity lease 관찰 | 없음 |
-| `PreToolUse` / `PostToolUse` | local tool 실행 depth 시작·종료 관찰 | 없음 |
+| `PreToolUse` | typed input 검증, force push·destructive Git·보호된 생성 상태·검증되지 않은 recursive delete/move 차단, 실행 depth 시작 관찰 | malformed/위험 입력에 `permissionDecision=deny` |
+| `PostToolUse` | 실행 depth 종료 관찰, `accepted|approval_required|partial|stale|unverified|flaky|outcome_unknown|not_run`과 Operation ID를 terminal success로 오인하지 않도록 context 주입 | 해당 marker가 있을 때 `additionalContext` |
 | `SubagentStart` / `SubagentStop` | subagent depth 시작·종료 관찰 | 없음 |
 | `Stop` | root turn stop과 bounded drain lease 관찰 | 없음 |
 | `SessionEnd` | main session 종료를 기존 bounded `root_stop` lifecycle로 관찰 | 없음 |
@@ -76,6 +77,7 @@ Controller는 watcher와 호출 직전 demand scan으로 TOML·Schema·EXE 변�
 - Codex의 `SessionEnd` timeout 상한은 3초다. Plugin은 정확히 3초를 선언하고 `star.exe`의 Controller lifecycle 관찰에는 2초 내부 deadline을 적용해 process 시작·입출력·정리 여유를 남긴다. 다른 lifecycle Hook의 기존 10초 선언은 유지한다.
 - Hook definition이 바뀌면 Codex의 신뢰 검토가 다시 필요하다. Plugin/Bridge 변경은 candidate review가 `requires_codex_restart=true`를 반환한 경우에만 전용 Updater restart transaction으로 적용한다.
 - lifecycle observation 중 Controller가 unavailable이면 Hook은 Codex 작업을 실패시키지 않고 evidence 누락을 남긴다. 누락 evidence를 idle·pass·approval로 승격하지 않는다.
+- 공식 Codex 설정 의미와 위험 경고는 [Agent approvals & security](https://learn.chatgpt.com/docs/sandboxing/agent-approvals-security)와 [Configuration Reference](https://developers.openai.com/codex/config-reference/)를 따른다. `never + danger-full-access`는 사용자가 의도적으로 선택한 무프롬프트·무샌드박스 정책이며 source scope·Rules/Hook deny·제품 Gate를 제거하지 않는다.
 
 ## App Server 사용
 

@@ -48,7 +48,8 @@ Plugin Hook은 공식적으로 지원되는 event만 사용한다.
 |---|---|
 | `SessionStart` | task·instance heartbeat 등록 또는 갱신 |
 | `UserPromptSubmit` | 새 WorkSession 시작 |
-| `PreToolUse`/`PostToolUse` | Tool activity counter 증감 |
+| `PreToolUse` | typed input 검증과 Tool activity counter 증가. malformed 입력, force push, destructive Git, 보호된 생성 상태 직접 수정, 검증되지 않은 recursive delete/move는 실행 전 deny |
+| `PostToolUse` | Tool activity counter 감소. non-terminal marker와 Operation ID가 있으면 terminal receipt/readback 요구 context 반환 |
 | `SubagentStart`/`SubagentStop` | child activity counter 증감 |
 | `Stop` | root turn 종료 후보 기록 |
 | MCP initialize | MCP connection 등록·owner 검증 |
