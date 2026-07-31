@@ -52,24 +52,30 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
             "command": "star hook pre-tool-use",
             "commandWindows": "star hook pre-tool-use",
-            "timeout": 10
+            "timeout": 10,
+            "statusMessage": "Checking deterministic workspace guardrails",
+            "additionalContextLimit": 1000
           }
         ]
       }
     ],
     "PostToolUse": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
             "command": "star hook post-tool-use",
             "commandWindows": "star hook post-tool-use",
-            "timeout": 10
+            "timeout": 10,
+            "statusMessage": "Checking terminal operation state",
+            "additionalContextLimit": 1000
           }
         ]
       }

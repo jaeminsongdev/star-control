@@ -1,0 +1,455 @@
+{
+  "$defs": {
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
+    "BranchCoverageShadowV1": {
+      "additionalProperties": false,
+      "properties": {
+        "covered_branches": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "gate_eligible": {
+          "description": "Branch coverage remains informational until the selected provider\nprotocol is declared stable by the Catalog.",
+          "type": "boolean"
+        },
+        "measured_branches": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "measured_branches",
+        "covered_branches",
+        "gate_eligible"
+      ],
+      "type": "object"
+    },
+    "CoverageGateStateV1": {
+      "enum": [
+        "pass",
+        "block",
+        "not_applicable",
+        "unverified"
+      ],
+      "type": "string"
+    },
+    "ExternalAnalysisCompleteness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable",
+        "unverified",
+        "timed_out",
+        "cancelled",
+        "flaky",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "ExternalAnalysisEvidenceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "completed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "completeness": {
+          "$ref": "#/$defs/ExternalAnalysisCompleteness"
+        },
+        "config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "environment_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evidence_id": {
+          "type": "string"
+        },
+        "executable_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exit_code": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "input_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "normalized_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ExternalAnalysisProtocolV1"
+        },
+        "provider_id": {
+          "type": "string"
+        },
+        "provider_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "started_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "evidence_id",
+        "project_id",
+        "provider_id",
+        "protocol",
+        "config_fingerprint",
+        "input_fingerprint",
+        "source_fingerprint",
+        "environment_fingerprint",
+        "started_at",
+        "completed_at",
+        "completeness",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ExternalAnalysisProtocolV1": {
+      "additionalProperties": false,
+      "properties": {
+        "detail_level": {
+          "$ref": "#/$defs/ProtocolDetailLevel"
+        },
+        "machine_readable": {
+          "type": "boolean"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "protocol_id": {
+          "type": "string"
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "schema_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stability": {
+          "$ref": "#/$defs/ProtocolStability"
+        }
+      },
+      "required": [
+        "protocol_id",
+        "protocol_version",
+        "media_type",
+        "stability",
+        "detail_level",
+        "machine_readable"
+      ],
+      "type": "object"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "ProtocolDetailLevel": {
+      "enum": [
+        "structured",
+        "exit_classification",
+        "raw_only"
+      ],
+      "type": "string"
+    },
+    "ProtocolStability": {
+      "enum": [
+        "stable",
+        "unstable",
+        "human_text"
+      ],
+      "type": "string"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.coverage-observation:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "branch_shadow": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BranchCoverageShadowV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "changed_line_count": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "changed_scope_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "covered_executable_line_count": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "evidence": {
+      "$ref": "#/$defs/ExternalAnalysisEvidenceV1"
+    },
+    "excluded_line_count": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "executable_line_count": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "gate_state": {
+      "$ref": "#/$defs/CoverageGateStateV1"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "line_coverage_basis_points": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "observation_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "required_line_coverage_basis_points": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.coverage-observation",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "uncovered_executable_line_count": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "observation_id",
+    "project_id",
+    "evidence",
+    "changed_scope_fingerprint",
+    "changed_line_count",
+    "executable_line_count",
+    "covered_executable_line_count",
+    "uncovered_executable_line_count",
+    "excluded_line_count",
+    "line_coverage_basis_points",
+    "required_line_coverage_basis_points",
+    "gate_state"
+  ],
+  "title": "CoverageObservationV1",
+  "type": "object"
+}

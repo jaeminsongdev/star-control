@@ -1,6 +1,10 @@
 {
   "files": [
     {
+      "file": "command-descriptor-v1.schema.json",
+      "hash": "sha256:fc1cd61f08cd53d1039f3df511132e3cb92eb590d87ddb5ec8e08a0238249b91"
+    },
+    {
       "file": "effective-config-v1.schema.json",
       "hash": "sha256:59fa2067581c230771a6d75a322b7ef945de21dc4a584d97e730f06db9f245a9"
     },
@@ -122,7 +126,31 @@
     },
     {
       "file": "compatibility-report-v2.schema.json",
-      "hash": "sha256:a1018e1b3dad4ebc04df5c15531342e68a7d5ad191b4dd3236920b57bf240b43"
+      "hash": "sha256:50176cef96a4a483c89f6b0ebfc58eb61f2ebfeb4f77b91b548ebb05d92057df"
+    },
+    {
+      "file": "external-analysis-evidence-v1.schema.json",
+      "hash": "sha256:c048e3d40953db8066a7012937dd2b504b34d6d23f921e9a5ba3c0ad03ddbc18"
+    },
+    {
+      "file": "coverage-observation-v1.schema.json",
+      "hash": "sha256:d74436bb4393374a6ed2430286f3ab5e986a959d67fdbc4b746ae35c44e42f94"
+    },
+    {
+      "file": "flaky-test-observation-v1.schema.json",
+      "hash": "sha256:cc6303d3a6b8a7a510234ef0c05b40c40b768ec6e92b60b0b7e87516af3d772d"
+    },
+    {
+      "file": "reproducibility-verification-report-v1.schema.json",
+      "hash": "sha256:bb58ef3074e7058b4e35ba1f92a32113fb25fb8e95d7e106f4a25a65398ce93e"
+    },
+    {
+      "file": "runtime-safety-observation-v1.schema.json",
+      "hash": "sha256:4bb4c30196aade55535977a2b8dc35b87fcb03069c1772c6105d724d73d9499c"
+    },
+    {
+      "file": "near-clone-observation-v1.schema.json",
+      "hash": "sha256:08fe805d6970683fda5196eb06930f9aa8c89ff826d4d4fbde8c434ba5a347ee"
     },
     {
       "file": "documentation-snapshot.schema.json",
@@ -178,7 +206,7 @@
     },
     {
       "file": "supply-chain-snapshot.schema.json",
-      "hash": "sha256:dff554d59510df8c74f9731203608f52403c9541fc93c0c14418fe13f70939ba"
+      "hash": "sha256:eaff5d7fccc73346504b2a2c2a8c1c1270d301057d261a9e1f1c0db9e076f5d2"
     },
     {
       "file": "external-data-snapshot.schema.json",
@@ -198,7 +226,7 @@
     },
     {
       "file": "quality-rule-pack-manifest.schema.json",
-      "hash": "sha256:ba159de511ae6c93b3a54e2d585d5dfaab39c005980e837d2a08b2bbc7980a7b"
+      "hash": "sha256:112b93eee006740b80b50fcd197a8b8813ad36af7f9d44e63f8f729f40c01bf8"
     },
     {
       "file": "dependency-update-plan.schema.json",
@@ -450,7 +478,7 @@
     },
     {
       "file": "stable-error-code-catalog.schema.json",
-      "hash": "sha256:dc15664fd0bb15ab3df3dc9656a2790c3d444e85afe023486b4017fdfabc29ed"
+      "hash": "sha256:9f0dce64cea688dbe38d8075bca7ff161e42e7820cde2e9d83123d3b3e9b8dc2"
     },
     {
       "file": "baseline-v2.schema.json",
@@ -570,7 +598,7 @@
     },
     {
       "file": "code-index-snapshot.schema.json",
-      "hash": "sha256:6bec53950cb628f3e53d735ce8adafb81e43ccc898913836087ab6a63e5044ff"
+      "hash": "sha256:2875bc66b099488366f9f1532d9a2ef1f3e1e37eb0458a043429e252d7900303"
     },
     {
       "file": "project-v1-to-v2-migration-plan.schema.json",
@@ -647,6 +675,30 @@
     {
       "file": "management-store-status.schema.json",
       "hash": "sha256:d44ddf1d19d20b2c54249aacd9c9e25711a675362fe8f881e2d798120d96e64a"
+    },
+    {
+      "file": "management-status-query.schema.json",
+      "hash": "sha256:2b6233b6d7e92076af83142d3679cf665d9c491f8c9d16d7b9807a445870ba00"
+    },
+    {
+      "file": "management-status-page.schema.json",
+      "hash": "sha256:8aa3c1cea6f3b340f3872ef28d160f80bdac750b6baf415aff4daea4380646a6"
+    },
+    {
+      "file": "management-maintenance-state.schema.json",
+      "hash": "sha256:ded8803ac9fe78253094790abadf54372acb7bd750c6359665652d8dadc7e44f"
+    },
+    {
+      "file": "management-retention-plan-v2.schema.json",
+      "hash": "sha256:600f6b183e0acfa3f1451fb8258b73ebf41b60ec1b50c500f49ab557920c3bbd"
+    },
+    {
+      "file": "management-retention-checkpoint.schema.json",
+      "hash": "sha256:e1e61fe713508235962c9de8b3947aa46a22ced75bad76d4eb8e4a4b98ec8892"
+    },
+    {
+      "file": "management-compaction-plan.schema.json",
+      "hash": "sha256:8874db7abea5d644becb6f7b8fcdbb59d8cb52b3294e122bbcb8f1446755bab2"
     },
     {
       "file": "management-active-set.schema.json",

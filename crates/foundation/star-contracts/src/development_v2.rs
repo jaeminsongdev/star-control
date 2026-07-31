@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{ProjectId, Sha256Hash};
+use crate::{ProjectId, Sha256Hash, external_analysis::CompatibilityProviderObservationV1};
 
 pub const PROJECT_CONTRACT_MANIFEST_SCHEMA_ID: &str = "star.project-contract-manifest";
 pub const CONTRACT_SURFACE_SNAPSHOT_SCHEMA_ID: &str = "star.contract-surface-snapshot";
@@ -245,6 +245,8 @@ pub struct CompatibilityReportV2 {
     pub changes: Vec<ContractChangeRecord>,
     #[serde(default)]
     pub consumer_impacts: Vec<ConsumerImpactRecord>,
+    #[serde(default)]
+    pub provider_observations: Vec<CompatibilityProviderObservationV1>,
     pub outcome: CompatibilityClass,
     pub completeness: CoverageState,
     #[serde(default)]

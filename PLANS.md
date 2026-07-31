@@ -1,98 +1,39 @@
-# PLANS.md
+# Star-Control 현재 작업 원장
 
-## 목적
+## 목표와 불변식
 
-이 문서는 현재 판단과 다음 실행만 보존하는 bounded snapshot이다. 세부 계약은 [문서 읽는 순서](docs/README.md), 구현 순서는 [최종 구현 로드맵](docs/roadmap/final-implementation.md), 실행 증거는 `docs/testing/`과 생성 validation artifact가 소유한다. historical `DONE`은 해당 revision의 seal이며 현재 source 완료 증거로 자동 승격하지 않는다.
+- 범위는 P-0078~P-0086이다. source·manifest·Catalog가 정본이고 DB/index/cache는 derived state다.
+- `partial|stale|unverified|flaky|not_run|outcome_unknown`과 operation `accepted|approval_required`를 PASS로 승격하지 않는다.
+- Finding에서 source 변경은 `ChangeRecipeV2 → isolated PatchSetV2 → pre/post Gate → exact approval`을 거친다.
+- package/tool 설치, Runtime 교체, 전역 Rules 적용, 실제 retention/compaction은 검증된 plan·receipt·fingerprint를 사용한다. Codex cache/trust DB와 Star-Control DB를 직접 수정하지 않는다.
+- `target/`, linked worktree, 사용자 source와 `.ai-runs`를 정리하지 않는다. force push는 금지한다.
 
-## 확정 불변식
+## 현재 Gate
 
-- source·manifest·Catalog가 canonical이고 DB/index/cache는 derived state다. 신규 scanner별 DB나 completion model을 만들지 않는다.
-- `partial|stale|unsupported|unverified|not_run|flaky|outcome_unknown`을 pass로 바꾸지 않는다.
-- Finding은 source를 직접 바꾸지 않으며 `ChangeRecipeV2 → isolated PatchSetV2 → pre/post Gate → exact approval` 경로만 사용한다.
-- external analyzer·LSP·OpenRewrite·mutation engine·Scorecard는 registered adapter다. 설치되지 않은 provider는 설치하지 않고 `unavailable|unverified`로 보존한다.
-- `legacy/`, `target/`, Codex runtime DB/cache 및 사용자 management/project data를 직접 수정·정리하지 않는다.
-- remote push/PR/publish, dependency·executable 설치, Runtime 교체, signer·timestamp는 별도 승인 없이는 실행하지 않는다.
+| P-ID | 목표 | 현재 상태 | 다음 Gate |
+|---|---|---|---|
+| P-0078 | Ready 이후 lifecycle-bound retention, lease/cancel/join/checkpoint, hold·migration backup floor, 별도 compaction | 구현·focused PASS. 10,005행 generation을 10,000+5행 transaction으로 분할하고 commit/checkpoint 사이 replay 및 process restart를 검증했다. compaction은 verified `BackupApplyResult`와 실제 backup byte를 다시 결합한다. | 최종 source FULL 후 실제 DB read-only plan. 삭제는 exact plan 승인과 backup 뒤에만 적용한다. |
+| P-0079 | 32/256 item, 65,536-byte hard limit, opaque revision cursor의 management status page | 구현·state/Controller/CLI focused PASS. legacy oversize와 stale cursor는 fail closed다. | 설치 Runtime cold status와 `--all` cap 실측. |
+| P-0080 | help-first parsing, `command describe --json`, token-aware alias audit, recipe→change→patch lifecycle | 구현·CLI 29/29 PASS. canonical `patch.apply-v2`와 legacy alias를 descriptor에서 분리했다. | installed CLI/Skill introspection과 updater receipt hash 확인. |
+| P-0081 | typed 8-Hook set, Rules audit, granular approvals | repository source 구현. `codex execpolicy check` 포함 policy validator PASS(`rules=16`, `hooks=8`). STRICT에서 `+src:dst`와 `-vf` force-push 우회도 typed Hook deny로 보강했다. | 전역 설정은 backup/merge 후 공식 경로로 적용하고, 새 Hook hash는 `/hooks` 또는 `hooks/list`에서 사용자 trust 검토한다. |
+| P-0082 | changed executable-line coverage와 exact-input/environment flaky evidence | 계약·Schema·application normalizer·provider descriptor 구현, contract tests PASS. branch는 shadow이고 retry 성공은 PASS가 아니다. | current source live artifact 생성; protocol/result가 불완전하면 `unverified|partial` 유지. |
+| P-0083 | Buf/oasdiff/cargo-semver/libabigail compatibility evidence와 architecture rules | `CompatibilityReportV2`, CLI `contract compare --providers`, layer/edge/cycle exception 계약 구현·focused PASS. STRICT에서 human/raw-only 결과의 classification 승격을 막고 application 수용 시 exception owner/expiry를 검증한다. | available provider별 exact artifact와 current subject binding 검증. |
+| P-0084 | SBOM/advisory/license/VEX/provenance와 두-root reproducibility | `SupplyChainSnapshot` provider path와 `ReproducibilityVerificationReportV1` 구현. PASS는 두 root의 동일 artifact digest와 complete provider evidence에 exact 연결된 `slsa_provenance_ref`를 요구하며 human/raw-only protocol은 PASS에 기여할 수 없다. | Syft/cargo-deny/cargo-audit live evidence, isolated two-root build와 ReleaseManifest binding. |
+| P-0085 | sanitizer/generator/doctest/Loom 및 bounded near-clone | unavailable/timeout/cancel/raw artifact와 advisory-only 계약·Schema·normalizer를 구현했다. built-in near-clone은 identifier/literal normalized 5-token-shingle SimHash, token-count ratio와 configurable threshold·candidate/pair cap으로 실제 Finding을 생성하고 recipe/PatchSet을 만들지 않는다. adapter 13/13, validation 50/50 PASS다. | 실제 프로젝트 선언/fixture가 있는 runtime provider만 실행한다. |
+| P-0086 | final source·Runtime·Registry·Profile·Code Health·Evaluation seal 및 delivery | 이전 source FULL은 `target/validation/20260731T103927396Z-44964/report.json`에서 13/13 PASS했다. 이후 STRICT 보강 3건의 focused test와 workspace Clippy `-D warnings`가 PASS했으며 inventory evidence는 마지막 source byte 전이라 의도적으로 stale다. | 현재 source evidence 재생성 → FULL 13/13 → final exact-tuple STRICT → commit → official install/operations → force-free push/readback. |
 
-## 현재 상태
+## 열린 위험
 
-| 범위 | 상태 | 현재 판정 |
-|---|---|---|
-| P-0039~P-0059 | historical seal | 기존 core·23개 feature·16개 Profile의 현재 source 재감사 근거는 historical과 분리한다. |
-| P-0060 Codex routing·delivery | deferred | 설치/package 후속은 본 Code Health source Slice와 분리하며 Runtime을 변경하지 않는다. |
-| P-0061 PR0~31 final lock | held | CrossRepo bundle aggregate와 external gate를 보존한다. |
-| P-0062 Code Health 정본 설계 | **DONE / local commit** | `5751ab5a269774931ca22afc28cf86b9d98e8039`; FULL 11/11 complete/stable/pass, inventory 23/23·Schema 213·MCP 170/170·Profile 16/16. |
-| P-0063 SARIF 2.1.0 normalizer | **DONE / local commit** | `eed833af5387c9d6367199829839419511ba6000`; registered `SarifV210` parser→raw/normalized ArtifactRef→`ValidationRunV2`/`DiagnosticV2`→current Scan generation Finding/Occurrence→immutable import report. FULL 11/11 complete/stable/pass. |
-| P-0064A structural clone | **DONE / local commit** | `d04cb2d7b664d52dd6228dddae57fb6a525ce458`; Rust exact token clone, production/test cohort, source-bound Finding/Occurrence, incremental reuse, macro·fixture exclusion과 FULL 11/11 complete/stable/pass. |
-| P-0064B complexity regression | **DONE / local commit** | `c59c3a8789c582d8a43d0884855e799a39613588`; Rust AST complexity metric, compatible previous-index baseline의 new/worsened/improved relation, source-bound Finding과 FULL 11/11 complete/stable/pass. |
-| P-0064C unused surface | **DONE / local commit** | `17f56418d27ea6fd5738090cefb38fe5fcddc329`; Rust function/type/file/export/dependency candidate, read-only dependency snapshot과 manifest/lockfile disagreement, build-script frontier, FULL 11/11 complete/stable/pass. |
-| P-0065 Gate·Radar | **DONE / local commit** | `db3cb92b3ae9c9dbf332ebf8c1dfdafb50dcf75e`; code-health shadow planning과 read-only Radar projection, current schema/evidence, FULL 11/11 complete/stable/pass. |
-| P-0066 Git history·ownership·debt | **DONE / local commit** | `a84d4f298a2a9e4a9b252da10abb1ffda8b13b60`; read-only Git/CODEOWNERS/debt snapshot, advisory Impact/Radar, privacy corpus, FULL 11/11 complete/stable/pass. |
-| P-0067 semantic refactor provider | **DONE / local commit** | registered provider capability의 isolated preview를 typed PatchSetV2·existing pre/post Gate·exact approval path로만 정규화했고, absent provider fail-closed 및 Git worktree replay fixture를 FULL 11/11 complete/stable/pass로 검증했다. |
-| P-0068 mutation·Rule Pack·repository posture | **DONE / local commit** | `937a9ac7898f6d30d1353b11429da52fca9b2199`; changed-code-only mutation budget·strict schema, versioned Rule Pack과 exact-tool SARIF digest binding, read-only posture snapshot/advisory Radar·fail-closed adapter 경계를 FULL 11/11 complete/stable/pass로 고정했다. |
-| P-0069 EvaluationRun·Profile 결정 | **DONE / local commit** | `fbbf30ea14df34fc06582c22e30ab22c42ef341a`; Code Health trial/reject evidence를 고정했고, external cost/actual workload cohort 부재로 `trial_candidate`만 기록하며 16개 built-in 유지·17번째 accept hold를 FULL 11/11 complete/stable/pass로 확인했다. |
-| P-0070 제품 전수 봉인 | **DONE / local commit** | final audit/ReviewPack, inventory 23/23·Schema 217·MCP 170/170·Profile 16/16, release source closure와 FULL 11/11 complete/stable/pass를 확인했고 signing/publish를 blocked_external로 분리했다. |
-| P-0071 전체 STRICT 리뷰·main 전달 | **DONE / PUSHED** | `9ab88e0e069540800a4701d4516ae9692837bc77`; final FULL 11/11과 STRICT review 뒤 `origin/main` readback까지 완료했다. |
-| P-0072 Windows x64 Runtime closure | **DONE / PUSHED / INSTALLED** | `f13533922fa68a906494e97cea4087578697d49c`; Runtime generation `rt_9582adc516129569`, source FULL 11/11·installed TARGET 8/8·Doctor 4/4, `origin/main` readback까지 완료했다. |
-| P-0073 Codex Plugin·Skill·Hook 재설계 | **DONE / INSTALLED / local commits** | operations Skill/metadata의 Code Health·updater route와 `SessionEnd` lifecycle을 x64 installed Updater로 적용했다. source FULL 11/11, installed TARGET 8/8, Doctor 4/4, rendered/cache identity와 terminal integration receipt를 확인했다. |
-| P-0074 SessionEnd 3초 계약 교정 | **DONE / INSTALLED / local commits** | `d825516b86823793d53b607d6b2a0b6852d459fb`; `SessionEnd.timeout=3`, 2초 내부 deadline, terminal Updater receipt, rendered/cache identity, Hook smoke·Doctor·installed TARGET을 확인했다. |
-| P-0075 Codex Code Health route·Hook UX closure | **DONE / INSTALLED / local commits** | `39d3a13f50ae65f6373174486e7b3389ad0c1bd3`; Code Health 6개 action·16 Profile·Hook 경계를 전수 감사하고 public CLI/MCP handoff를 3×5초로 보강했다. source FULL·STRICT, x64 설치, Runtime reconcile, final installed TARGET 8/8·Doctor 4/4를 완료했다. 격리 cold-live와 사람 `/hooks` trust는 PASS로 승격하지 않는다. |
-| P-0076 Star-Control 자체 Code Health 적용 | **DONE / INSTALLED / local commits** | `ccb71661b86895783c440760fcd0bd76dcff9e3f`; 자체 scan이 드러낸 GoalRecord·redaction·SQLite quota·cursor clone과 대형 `index.status` IPC 결함을 교정했다. source FULL 11/11, Runtime `rt_8921c607a0af357f`, current self-scan, installed TARGET 8/8·Doctor 4/4를 확인했다. |
-| P-0077 목표추진 Codex App thread 구현 Skill·Controller cold-start | **DONE / INSTALLED / DELIVERY READY** | Codex App 2단계 thread activation, Terra High Goal Pursuit·same-task correction, Sol Max worker/combined 전체 diff 승인, exact 12 scenario validator와 bounded `management.status`를 구현했다. source FULL 11/11, x64 Runtime `rt_801e0b34cbe7f7f6`, installed TARGET 8/8·Doctor 4/4·Profile 16/16을 확인했다. |
-| public signed Stable | `blocked_external` | certificate/private key/trusted timestamp와 signed lifecycle/publish가 필요하다. |
+- 현재 provider discovery는 16개 descriptor 중 9개가 host에서 보이지만 모두 `unverified`다. executable/version/digest discovery는 analysis run·등록·protocol artifact를 증명하지 않는다.
+- Runtime 설치, 전역 Rules/config 적용, Hook 8/8 trusted 확인과 실제 management DB retention/compaction은 아직 실행하지 않았다. source Gate와 official updater/operation receipt 뒤에 수행한다.
+- 실제 DB read-only retention plan에서 보호 대상, 단일-row byte 초과 또는 migration backup floor가 나오면 삭제량이 줄 수 있다. 이를 숨기거나 정책을 약화하지 않는다.
+- `slsa_provenance_ref`, reviewed VEX/reachability, project-declared sanitizer/Loom가 없으면 각각 재현성·not-affected·runtime-safety PASS를 만들지 않는다.
+- public signed Stable은 certificate/private key/trusted timestamp와 별도 publish lifecycle이 없어 `blocked_external`이다.
 
-## P-0074 closure
+## 이어서 실행할 순서
 
-- 구현·설치 감사는 [P-0074 SessionEnd Hook 3초 계약 교정·설치 감사](docs/testing/p0074-session-end-hook-timeout-2026-07-28.md)가 소유한다.
-- source FULL은 11/11 complete·stable·pass다. closure MCP operations의 Controller idle shutdown은 pass로 합성하지 않고 동일 canonical native entrypoint로 fallback했다. 설치 후 TARGET은 8/8 complete·stable·pass, Doctor는 4/4 pass다.
-- x64 outer source는 `d825516b…`, active Runtime은 `rt_4f5e2b2ea6dbe52d`로 분리되며 candidate 재검사는 `no_change`다.
-- Codex cache/runtime DB 직접 수정, signing/publication, non-x64 output, 원격 push는 수행하지 않았다.
-
-## P-0075 closure
-
-- 구현·설치·Hook 감사는 [P-0075 Codex Code Health route·Hook UX 최종 감사](docs/testing/p0075-codex-code-health-hook-review-2026-07-29.md)가 소유한다.
-- exact installed source는 `39d3a13f50ae65f6373174486e7b3389ad0c1bd3`, active Runtime은 `rt_98f48bd0bef83be9`, activation revision은 25다. restart receipt의 `partially_applied`는 숨기지 않고 공식 reconcile `upd_c_eG_MOEgqw9a6wSgDi733MUtAWYv5v-DDoyf3NYfo8`로 selector만 승격했다.
-- 첫 installed TARGET은 Windows sharing violation 한 건으로 7/8 fail이었다. exact 테스트 5/5 pass 뒤 새 TARGET operation `opn_01KYP0ADDAKVR7Z6J9M71NTY8F`이 8/8 complete·stable·pass였고 Doctor 4/4, Code Health 6/6 action ready/trusted다.
-- Hook source/root, rendered/cache identity와 paired smoke를 확인했다. Desktop 설정은 Hook browser가 아니며 `SessionEnd` trust는 Codex CLI `/hooks` 사람 Gate로 남긴다.
-
-## P-0076 closure
-
-- 상세 재현·수정·self-scan 전후 증거는 [P-0076 자체 Code Health dogfood](docs/testing/p0076-self-code-health-dogfood-2026-07-29.md)가 소유한다.
-- source full scan `scn_01KYP58EJXA5A5QX1H6XQHNZ9J`은 1,103 source, Finding 3,151, 21,263,878-byte snapshot으로 성공했다. post-refactor scan `scn_01KYP66XD8XVPG9S4S0MEN733J`에서 cursor codec clone occurrence는 0이다.
-- bounded `index.status` 회귀, additive Schema, inventory 23/23·Schema 217·Profile 16/16·error 533·MCP 170/170과 clean commit FULL `target/validation/20260729T071000617Z-14616/report.json` 11/11을 통과했다. 중간 FULL 10/11과 격리 재실행 증거는 상세 문서가 보존한다.
-- 공식 Updater로 x64 Runtime `rt_8921c607a0af357f`를 activation revision 27에 적용했다. candidate와 실제 process identity 모두 Codex restart 불필요를 확인했다. final incremental scan `scn_01KYPBXCHWQNH5HHHNZHRQWBKR`, current bounded `index.status`, installed TARGET `target/validation/20260729T072410843Z-15216/report.json` 8/8, Doctor 4/4가 pass다. 검증 Goal은 revision 2 `cancelled`다.
-- active Runtime은 product-code commit `ccb71661…`에 정확히 묶이고, 뒤따르는 DONE 문서·source-evidence commit은 별도 current-byte 봉인이다. Codex cache/DB 직접 수정, dependency 설치, remote push는 수행하지 않았다.
-
-## P-0077 closure
-
-- 상세 worker identity·Goal·12 scenario·STRICT·설치 증거는 [P-0077 목표추진 Codex App thread 관제·Controller bounded status 설치 폐쇄](docs/testing/p0077-goal-pursuit-thread-orchestration-2026-07-30.md)가 소유한다.
-- product-code commit은 `286b9021b190674e2be3f7dd89f893e3df6074d0`, FULL·패키지 source는 `567ca04432639d76456610676764ec46a47657c3`다. worker A/B Goal `019fae13-a038…`·`019fae13-a045…`은 exact 전체 diff Sol 승인 뒤 같은 task에서 `complete`이며 combined review도 P0~P3 0건이다.
-- verified x64 set `sha256:519985f7…`를 공식 offline updater로 적용했다. restart receipt `partially_applied`를 보존하고 `no_change` 재검사 뒤 공식 reconcile `upd_BN4TIP…`로 Runtime `rt_801e0b34cbe7f7f6`를 activation revision 29에 승격했다.
-- cold management 요청은 40~449ms typed BUSY, Ready 뒤 status는 74ms·healthy였다. final installed TARGET operation `opn_01KYRBC…`은 8/8 complete·stable·pass, Doctor 4/4, Profile 16/16이다. 첫 TARGET 7/8 fail report와 invalid optional-argument 호출은 삭제하거나 PASS로 승격하지 않는다.
-- 설치 source와 뒤따르는 docs/source-evidence seal을 분리한다. unsigned local, ARM64, 사람 `/hooks` trust와 signed publication은 이번 완료로 승격하지 않는다.
-
-## 열린 위험과 보류
-
-- R-0062: executable 존재만으로 registered provider가 되지 않는다. `cargo-mutants`와 pinned `rust-analyzer`는 관찰됐지만 mutation/semantic-refactor port의 exact descriptor·protocol·artifact binding이 없으므로 real result는 `unavailable|unverified`다. Scorecard/OpenRewrite는 설치하지 않는다.
-- R-0063: `code_health_maintenance` 17번째 Profile은 EvaluationRun evidence와 제품 결정 전까지 추가하지 않는다. 기본은 기존 16 Profile 조합이다.
-- R-0064: raw source, author name/email, secret 및 개인 absolute path는 ArtifactRef·fingerprint·Radar에 저장하지 않는다.
-- R-0065: Codex Hook은 보조 guardrail이다. `PermissionRequest`를 실제 Star-Control PermissionPlan/Approval 판정 없이 추가해 강제 통제로 표현하지 않는다.
-- R-0066: Codex Hook trust와 새 작업은 사용자 보안 경계다. `integration status`가 `hook_trust_required=true`, `requires_new_task=true`를 보존하며 제품은 Codex trust DB/cache를 직접 수정하지 않는다.
-- R-0067: `SessionEnd`는 advisory라 timeout이 Codex 작업을 막지는 않지만 `root_stop` 관찰을 잃을 수 있다. 내부 deadline과 updater의 보수적 process census를 함께 유지한다.
-- R-0068: 첫 installed TARGET의 `ERROR_SHARING_VIOLATION(32)` report는 삭제하지 않는다. targeted 5회와 final TARGET은 통과했지만 일회성 Windows 실행 이미지 unlock 지연 가능성을 별도 이력으로 유지한다.
-- R-0069: 새 설치본의 3×5초 격리 cold-live는 다른 live Codex 작업이 Controller lifecycle을 보유해 실행하지 못했다. 기존 10.3초 실패, 단위 계약, source FULL과 installed TARGET은 cold-live PASS를 대신하지 않는다.
-- R-0070 closed in P-0077: active Runtime `rt_801e0b34cbe7f7f6`에서 7.12GB management DB cold 요청은 typed BUSY로 bounded되고 Ready 뒤 `management.status`는 74ms에 healthy status를 반환했다. deep verification은 explicit 경로로만 보존한다.
-
-## P-0075 봉인 범위
-
-- Hook trust 저장소·Codex cache/runtime DB는 직접 수정하지 않는다. 공식 `hooks/list` discovery와 Codex CLI `/hooks` 사람 검토 경계를 보존한다.
-- required core package에는 `project.register`, `scan.run`, `index.status`, `index.search`, `finding.list`, `diagnostic.list`의 owning command·strict input/output Schema·lane만 additive로 연결한다.
-- 외부 analyzer executable을 자동 등록·설치하지 않으며 semantic/mutation/posture provider 부재는 `unavailable|unverified`로 유지한다.
-- 검증은 source FULL, STRICT review, official Updater candidate inspect와 installed Registry search/describe를 사용한다. Runtime/Bridge apply는 candidate inspect가 허용하고 exact scope가 현재 요청과 일치할 때만 수행한다.
-- `cf95c1f` 설치본의 실제 cold Controller는 2×5초 예산을 약 0.3초 초과했다. 각 연결 시도는 5초로 유지하고 총 시도만 3회로 늘렸다. 새 설치본의 isolated cold handoff는 후속 수동 Gate로 분리한다.
-
-## Context Pack
-
-- 현재 상태: P-0077 제품·설치 closure는 package source `567ca04432639d76456610676764ec46a47657c3`, active Runtime `rt_801e0b34cbe7f7f6`, installed Plugin `0.1.0+codex.2c7a7693b178`에 묶여 있다. 두 Terra Goal은 같은 task에서 `complete`, Sol worker/combined 전체 diff는 승인됐고 source FULL·installed TARGET·Doctor·Profile·bounded live status가 pass다. 현재 변경은 실행 바이트를 바꾸지 않는 docs/source-evidence seal이다.
-- 완료 조건: 위 제품·설치 Gate와 함께 이 final tracked state의 current-byte FULL, final Sol review, 의도한 commit, fast-forward `origin/main` push와 exact remote ref readback이다.
-- 건드리면 안 되는 것: existing linked worktree, `target/` 정리, `legacy/`, management DB·Codex runtime/cache 직접 수정, dependency·lockfile, signing/publication, non-x64 output.
-- 다음 실행: docs/source-evidence를 재생성해 current-byte FULL과 Sol Max final closure review로 봉인한 뒤 의도한 commit만 fast-forward로 `origin/main`에 push하고 remote ref를 읽는다. push 결과는 tracked source가 아니라 Git remote와 최종 handoff가 소유한다.
+1. 마지막 source byte의 `catalog/product-source-evidence.json`과 ignored live provider inventory를 생성하고 inventory·Schema·policy/provider validator를 통과시킨다.
+2. source FULL 13/13과 exact-tuple STRICT를 현재 diff에서 다시 통과시킨다.
+3. 관련 파일만 local commit한 뒤 공식 updater로 x64 Runtime/Plugin을 설치하고 exact receipt/hash, TARGET·Doctor·Registry·16 Profile·Code Health를 검증한다.
+4. 실제 DB에는 read-only retention/compaction plan을 먼저 만들고, reclaim 가치·hold·backup을 검토한 뒤 exact fingerprint로만 apply한다.
+5. 최종 commit을 force 없이 `origin/main`에 push하고 `git ls-remote origin refs/heads/main`으로 SHA를 readback한다.

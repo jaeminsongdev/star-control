@@ -66,10 +66,34 @@ PARALLEL_FORWARD_SCENARIOS = (
 
 
 def parallel_component_actual_thread_alias_guard_valid(content: str) -> bool:
-    return all(
-        f"create_thread({{\n  {alias}:" not in content
-        for alias in ("message", "project")
+    raw_tokens = re.findall(
+        r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|[A-Za-z0-9_]+|[(){}:,]',
+        content,
     )
+    tokens = [
+        token[1:-1] if len(token) >= 2 and token[0] in "\"'" else token
+        for token in raw_tokens
+    ]
+    for index in range(len(tokens) - 2):
+        if tokens[index : index + 3] != ["create_thread", "(", "{"]:
+            continue
+        depth = 1
+        cursor = index + 3
+        while cursor < len(tokens) and depth > 0:
+            token = tokens[cursor]
+            if token == "{":
+                depth += 1
+            elif token == "}":
+                depth -= 1
+            elif (
+                depth == 1
+                and token in ("message", "project")
+                and cursor + 1 < len(tokens)
+                and tokens[cursor + 1] == ":"
+            ):
+                return False
+            cursor += 1
+    return True
 
 
 def parallel_forward_scenarios_valid(content: str) -> bool:
@@ -738,10 +762,6 @@ def main() -> int:
     for forbidden in ("spawn_agent", "followup_task", "wait_agent", "interrupt_agent"):
         if forbidden in parallel_skill:
             errors.append(f"parallel implementation Skill retains obsolete collaboration API: {forbidden}")
-    invalid_thread_call_patterns = (
-        "create_thread({\n  message:",
-        "create_thread({\n  project:",
-    )
     for component_path in CODEX_PARALLEL_COMPONENT_PATHS:
         component_text = component_path.read_text(encoding="utf-8") if component_path.is_file() else ""
         if not parallel_component_actual_thread_alias_guard_valid(component_text):
@@ -749,17 +769,19 @@ def main() -> int:
                 "parallel implementation rendered component rejects actual non-schema "
                 f"create_thread fields: {component_path.name}"
             )
-        for invalid_thread_call in invalid_thread_call_patterns:
-            alias = "message" if "message:" in invalid_thread_call else "project"
-            negative_candidate = (
-                f"{component_text}\ncreate_thread({{\n"
-                f"  {alias}: <different invalid value for {component_path.name}>\n}})"
+        for alias in ("message", "project"):
+            negative_candidates = (
+                f"{component_text}\ncreate_thread({{{alias}: 'one-line'}})",
+                f"{component_text}\ncreate_thread({{\t{alias}\t:\t'tabbed'\t}})",
+                f"{component_text}\r\ncreate_thread({{\r\n  prompt: 'valid-first',\r\n  {alias}: 'crlf'\r\n}})",
+                f"{component_text}\ncreate_thread({{ prompt: 'valid-first', target: {{ type: 'project' }}, {alias}: 'reordered' }})",
             )
-            if parallel_component_actual_thread_alias_guard_valid(negative_candidate):
-                errors.append(
-                    "parallel implementation negative append is not rejected by common alias guard: "
-                    f"{component_path.name} {invalid_thread_call}"
-                )
+            for negative_candidate in negative_candidates:
+                if parallel_component_actual_thread_alias_guard_valid(negative_candidate):
+                    errors.append(
+                        "parallel implementation token-aware alias guard accepted a forbidden "
+                        f"{alias} variant: {component_path.name}"
+                    )
     parallel_agent = (
         CODEX_PARALLEL_COMPONENT_PATHS[1].read_text(encoding="utf-8")
         if CODEX_PARALLEL_COMPONENT_PATHS[1].is_file()

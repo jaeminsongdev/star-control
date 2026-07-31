@@ -8,7 +8,7 @@ description: Use when Codex should plan, execute, validate, inspect code health,
 ## 1. Preflight
 
 1. 현재 작업 범위와 금지 경로, 요구 산출물, 완료 조건, 승인 조건을 먼저 고정한다.
-2. CLI 또는 Profile이 필요하면 `star installation status --json`, `star integration status --json`, `star management status --json`으로 source·설치·management identity를 분리한다.
+2. CLI 또는 Profile이 필요하면 먼저 `star command describe <dotted-command> --json`으로 canonical route·ownership·Schema·risk lane·descriptor hash를 고정한다. 이어 `star installation status --json`, `star integration status --json`, `star management status --json`으로 source·설치·management identity를 분리한다.
 3. management가 `recovery_only`이거나 결과가 `partial`, `stale`, `unverified`, `not_run`, `flaky`, `outcome_unknown`이면 그 상태를 보존한다. 설정이나 native 도구로 성공을 합성하지 않는다.
 
 ## 2. Profile resolution
@@ -24,7 +24,7 @@ description: Use when Codex should plan, execute, validate, inspect code health,
 2. action readiness가 `ready`인 결과만 `star_tool_describe`로 다시 조회해 현재 Schema, risk lane, `descriptor_hash`와 `required_call_tool`을 확인한다.
 3. 반환된 `required_call_tool`에 `tool_id`, `descriptor_hash`, `arguments`를 전달한다. `TOOL_DESCRIPTOR_STALE`이면 다시 describe한다.
 4. MCP action이 `unavailable`, `untrusted`, `incompatible`, `degraded`이면 같은 기능의 CLI command로 우회하지 않는다.
-5. routing matrix가 CLI-only로 표시한 기능만 설치된 `star` CLI의 선언된 command로 실행한다. `--help`와 JSON 결과에서 현재 Schema·승인·중단 상태를 확인한다.
+5. routing matrix가 CLI-only로 표시한 기능만 설치된 `star` CLI의 선언된 command로 실행한다. `star command describe <dotted-command> --json` 결과의 canonical route·ownership·Schema·risk lane·descriptor hash를 사용하고, `--help`는 사람용 usage 확인에만 쓴다.
 6. ready MCP action도 CLI-only command도 사용할 수 없으면 프로젝트 native 도구로 fallback하고, 이유와 누락된 Star-Control evidence를 결과에 기록한다.
 7. `star_tool_registry_status`는 Registry 진단에만 사용하며 action readiness 대신 사용하지 않는다.
 
@@ -34,7 +34,7 @@ description: Use when Codex should plan, execute, validate, inspect code health,
 2. live Registry에서 `project.register`, `scan.run`, `index.status|search`, `finding.list|diagnostic.list`를 각각 search→describe하고 ready action만 순서대로 호출한다. register·scan의 `write_closed`와 index·finding·diagnostic의 `read_closed`를 바꾸지 않는다.
 3. scanner, index, Radar와 provider output은 evidence이며 source 변경 완료가 아니다. current Project·checkout·index·provider identity와 artifact digest가 결합된 결과만 사용한다.
 4. executable 존재만으로 provider가 등록됐다고 보지 않는다. exact descriptor·protocol·result artifact가 없으면 `unavailable|unverified`로 유지하고 provider를 설치하지 않는다.
-5. semantic refactor는 isolated preview와 typed PatchSet을 만든 뒤 기존 pre/post Gate·exact approval 경로로만 적용한다. mutation result나 Radar가 source를 직접 바꾸지 않게 한다.
+5. semantic refactor는 `recipe list|describe|validate` → `change prepare` → `patch show|apply|status|recover`의 canonical route로 isolated preview와 typed PatchSet을 만든 뒤 기존 pre/post Gate·exact approval 경로로만 적용한다. 구형 project-scoped `patch prepare|apply` alias는 descriptor가 deprecated로 표시한 경우에만 호환 경고와 함께 사용하며, mutation result나 Radar가 source를 직접 바꾸지 않게 한다.
 6. Code Health 전용 17번째 built-in Profile을 추측해 추가하지 않는다. live 16개 Profile 조합을 resolve하고 별도 EvaluationRun·제품 결정이 있을 때만 profile decision을 반영한다.
 
 ## 5. Runtime and Codex integration updates

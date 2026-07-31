@@ -1018,6 +1018,7 @@ const CORE_CONTROLLER_COMMANDS: &[&str] = &[
     "project.register",
     "scan.run",
     "index.status",
+    "management.status.page",
     "index.search",
     "finding.list",
     "diagnostic.list",

@@ -1,0 +1,370 @@
+{
+  "$defs": {
+    "RetentionCandidateV2": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
+        "entity_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "entity_revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "estimated_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "estimated_rows": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "generation_id": {
+          "pattern": "^gen_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "retention_class": {
+          "type": "string"
+        },
+        "scan_run_id": {
+          "pattern": "^scn_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_kind": {
+          "$ref": "#/$defs/RetentionTargetKindV2"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "project_id",
+        "target_kind",
+        "retention_class",
+        "reason_code",
+        "estimated_rows",
+        "estimated_bytes"
+      ],
+      "type": "object"
+    },
+    "RetentionMigrationBackupCandidateV1": {
+      "additionalProperties": false,
+      "properties": {
+        "backup_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "backup_locator": {
+          "type": "string"
+        },
+        "candidate_id": {
+          "type": "string"
+        },
+        "estimated_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "estimated_rows": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_modified_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "manifest_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "reason_code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "backup_locator",
+        "backup_fingerprint",
+        "manifest_fingerprint",
+        "last_modified_at",
+        "reason_code",
+        "estimated_rows",
+        "estimated_bytes"
+      ],
+      "type": "object"
+    },
+    "RetentionPolicyV2": {
+      "additionalProperties": false,
+      "properties": {
+        "incomplete_staging_retention_days": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "keep_latest_successful_scans": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "local_decision_retention_days": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_batch_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_batch_rows": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "migration_backup_min_count": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "resolved_finding_retention_days": {
+          "format": "uint64",
+          "minimum": 0,
+          "pattern": "^fnd_[a-z2-7]{52}$",
+          "type": "integer"
+        },
+        "scan_detail_retention_days": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "keep_latest_successful_scans",
+        "incomplete_staging_retention_days",
+        "scan_detail_retention_days",
+        "resolved_finding_retention_days",
+        "local_decision_retention_days",
+        "migration_backup_min_count",
+        "max_batch_rows",
+        "max_batch_bytes"
+      ],
+      "type": "object"
+    },
+    "RetentionProtectedMigrationBackupV1": {
+      "additionalProperties": false,
+      "properties": {
+        "backup_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backup_locator": {
+          "type": "string"
+        },
+        "estimated_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "estimated_rows": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_modified_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "manifest_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "backup_locator",
+        "reason_code",
+        "estimated_rows",
+        "estimated_bytes"
+      ],
+      "type": "object"
+    },
+    "RetentionProtectedTargetV1": {
+      "additionalProperties": false,
+      "properties": {
+        "estimated_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "estimated_rows": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "reason_code": {
+          "type": "string"
+        },
+        "target_kind": {
+          "$ref": "#/$defs/RetentionTargetKindV2"
+        },
+        "target_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_id",
+        "target_kind",
+        "target_ref",
+        "reason_code",
+        "estimated_rows",
+        "estimated_bytes"
+      ],
+      "type": "object"
+    },
+    "RetentionTargetKindV2": {
+      "enum": [
+        "scan_generation",
+        "resolved_finding",
+        "local_suppression",
+        "local_disposition"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-retention-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/RetentionCandidateV2"
+      },
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "estimated_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "estimated_rows": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "expected_store_revisions": {
+      "additionalProperties": {
+        "format": "uint64",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "migration_backup_candidates": {
+      "items": {
+        "$ref": "#/$defs/RetentionMigrationBackupCandidateV1"
+      },
+      "type": "array"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "policy": {
+      "$ref": "#/$defs/RetentionPolicyV2"
+    },
+    "policy_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "protected_migration_backups": {
+      "items": {
+        "$ref": "#/$defs/RetentionProtectedMigrationBackupV1"
+      },
+      "type": "array"
+    },
+    "protected_targets": {
+      "items": {
+        "$ref": "#/$defs/RetentionProtectedTargetV1"
+      },
+      "type": "array"
+    },
+    "schema_id": {
+      "const": "star.management-retention-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "created_at",
+    "policy",
+    "policy_fingerprint",
+    "source_fingerprint",
+    "expected_store_revisions",
+    "candidates",
+    "protected_targets",
+    "migration_backup_candidates",
+    "protected_migration_backups",
+    "estimated_rows",
+    "estimated_bytes",
+    "plan_fingerprint"
+  ],
+  "title": "RetentionPlanV2",
+  "type": "object"
+}

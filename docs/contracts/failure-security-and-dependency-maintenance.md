@@ -596,6 +596,21 @@ adapter는 Diagnostic·ArtifactRef만 생산하고 M3 core가 다음을 판정�
 
 1~8의 contract·pure engine·generic registered adapter 경로와 receipt binding은 현재 구현이다. 특정 OSV/NVD, debugger, license scanner, package-manager provider가 Catalog에 설치·신뢰·ready 상태가 아니면 해당 effect는 unavailable로 남는다. 9의 dependency source write는 isolated preview와 M4 PatchSet·exact 승인 없이는 열리지 않는다.
 
+### 외부 Code Health evidence
+
+P-0082~P-0085는 새 품질 DB나 단일 점수를 만들지 않고 공통 `ExternalAnalysisEvidenceV1`을 기존 `Finding`/`DiagnosticV2`/Gate/Radar/ReleaseManifest/EvaluationRun 경계에 연결한다. provider별 version, executable digest, protocol, config/input/source/environment fingerprint, raw·normalized `ArtifactRef`, completeness와 limitation이 모두 current여야 한다. Gateway는 도구별 log parser를 소유하지 않으며 application normalizer는 Catalog가 `stable + machine-readable + structured`로 선언한 protocol만 읽는다. 실행 파일 discovery만 된 상태는 `unverified`다.
+
+- 변경된 executable line coverage만 Gate 입력이다. unstable branch option은 shadow 정보이며 Gate가 아니다.
+- flaky는 같은 test·input·environment에서 pass/fail이 함께 관찰된 경우뿐이다. retry 성공은 ordinary PASS가 아니고 quarantine은 owner·approval·미래 expiry를 요구한다.
+- Buf/oasdiff/cargo-semver-checks/libabigail 결과는 기존 `CompatibilityReportV2`에 붙는다. machine detail이 없는 cargo-semver 결과는 exit classification과 raw artifact까지만 인정한다.
+- Rule Pack의 layer, allowed/forbidden edge, dependency cycle exception은 owner·approval·expiry를 요구한다.
+- Syft/cargo-deny/cargo-audit의 SPDX·CycloneDX·license·advisory·reachability·VEX·provenance는 기존 `SupplyChainSnapshot`과 ReleaseManifest ref에 붙는다. reviewed VEX와 reachability 없이는 `not_affected`로 낮추지 않는다.
+- 재현성 PASS는 같은 source/config/toolchain을 서로 다른 두 root에서 빌드한 artifact digest 일치와 SLSA subject/material/builder binding을 모두 요구한다. 세 binding boolean은 complete provider evidence가 소유한 exact `slsa_provenance_ref` 없이 참일 수 없고, 그 ref가 없거나 partial이면 `unverified`다. diffoscope는 불일치 진단 보조일 뿐이다.
+- sanitizer, generator/doctest, Loom은 프로젝트가 toolchain/test를 이미 선언한 경우에만 실행할 수 있다. 없으면 설치하지 않고 `unavailable`이다.
+- near-clone은 identifier/literal 정규화 5-token-shingle SimHash와 token-count ratio를 사용하는 bounded fingerprint의 advisory Finding만 만든다. configurable threshold와 후보·pair 상한은 rule-set fingerprint와 limitation에 결합되며 자동 extract-method/PatchSet을 만들지 않는다.
+
+현재 provider 선언의 정본은 `catalog/external-analysis-providers.toml`이다. `scripts/validation/check_external_analysis_providers.py`의 live discovery artifact는 host executable/version/digest만 증명하고 analysis run·등록·protocol 검증을 증명하지 않는다.
+
 ## 8단계 인계
 
 다음 사용자 8단계 [migration·performance·language/platform 정본](migration-performance-and-platform.md)은 최소 다음 exact input을 받는다.
@@ -624,6 +639,12 @@ migration은 rollback·restore 가능성과 data state checkpoint를, performanc
 - npm `package-lock.json`: https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json/
 - NuGet dependency locking: https://learn.microsoft.com/en-us/nuget/consume-packages/package-references-in-project-files#locking-dependencies
 - Git `bisect`: https://git-scm.com/docs/git-bisect
+- LLVM source-based coverage: https://clang.llvm.org/docs/SourceBasedCodeCoverage.html
+- Develocity flaky test detection: https://docs.gradle.com/develocity/2026.1/using-develocity/flaky-test-detection/
+- SPDX specifications: https://spdx.dev/use/specifications/
+- CycloneDX VEX: https://cyclonedx.org/capabilities/vex/
+- Reproducible Builds definition: https://reproducible-builds.org/docs/definition/
+- SLSA artifact verification 1.2: https://slsa.dev/spec/v1.2/verifying-artifacts
 
 외부 문서의 version·endpoint·정책은 변할 수 있다. adapter 구현 시 Catalog의 source URL·schema/API version·확인 시각·maximum age를 다시 검증하고, 이 문서의 확인 날짜를 runtime freshness로 사용하지 않는다.
 

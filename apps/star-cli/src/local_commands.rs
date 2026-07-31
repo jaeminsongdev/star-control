@@ -1,4 +1,11 @@
-use std::{future::Future, io::Read, path::PathBuf, str::FromStr, time::Duration};
+use std::{
+    collections::BTreeSet,
+    future::Future,
+    io::Read,
+    path::{Component, Path, PathBuf},
+    str::FromStr,
+    time::Duration,
+};
 
 use star_adapter_codex::{CodexAdapterError, CodexIntegrationManager, IntegrationOptions};
 use star_adapter_windows::autostart::{self, AutostartError, AutostartState};
@@ -1034,6 +1041,615 @@ fn session_start_hook_output() -> serde_json::Value {
     })
 }
 
+#[derive(Debug)]
+struct ValidatedHookInput<'a> {
+    session_id: &'a str,
+    cwd: &'a str,
+    tool_name: Option<&'a str>,
+    tool_input: Option<&'a serde_json::Value>,
+    tool_response: Option<&'a serde_json::Value>,
+}
+
+fn bounded_hook_string<'a>(
+    value: &'a serde_json::Value,
+    field: &str,
+    max_len: usize,
+) -> Result<&'a str, String> {
+    let text = value
+        .get(field)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("hook input has no string {field}"))?;
+    if text.is_empty() || text.len() > max_len || text.contains('\0') {
+        return Err(format!("hook input has invalid {field}"));
+    }
+    Ok(text)
+}
+
+fn validate_optional_string(value: &serde_json::Value, field: &str) -> Result<(), String> {
+    match value.get(field) {
+        None | Some(serde_json::Value::Null) => Ok(()),
+        Some(serde_json::Value::String(text)) if text.len() <= HOOK_INPUT_MAX_BYTES as usize => {
+            Ok(())
+        }
+        Some(_) => Err(format!("hook input has invalid {field}")),
+    }
+}
+
+fn validate_permission_mode(value: &serde_json::Value) -> Result<(), String> {
+    match bounded_hook_string(value, "permission_mode", 64)? {
+        "default" | "acceptEdits" | "plan" | "dontAsk" | "bypassPermissions" => Ok(()),
+        _ => Err("hook input has unsupported permission_mode".to_owned()),
+    }
+}
+
+fn validate_typed_hook_input<'a>(
+    event: HookEvent,
+    value: &'a serde_json::Value,
+) -> Result<ValidatedHookInput<'a>, String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "hook input must be one JSON object".to_owned())?;
+    let event_name = bounded_hook_string(value, "hook_event_name", 64)?;
+    if event_name != event.hook_event_name() {
+        return Err(format!(
+            "hook_event_name must be {}",
+            event.hook_event_name()
+        ));
+    }
+    let session_id = bounded_hook_string(value, "session_id", 256)?;
+    if !lifecycle_identifier_valid(session_id) {
+        return Err(format!(
+            "{} hook input has an invalid session_id",
+            event.hook_event_name()
+        ));
+    }
+    let cwd = bounded_hook_string(value, "cwd", 32_768)?;
+    let _model = bounded_hook_string(value, "model", 256)?;
+    validate_optional_string(value, "transcript_path")?;
+    if event != HookEvent::SessionEnd {
+        validate_permission_mode(value)?;
+    }
+
+    let turn_scoped = matches!(
+        event,
+        HookEvent::UserPromptSubmit
+            | HookEvent::Stop
+            | HookEvent::PreToolUse
+            | HookEvent::PostToolUse
+            | HookEvent::SubagentStart
+            | HookEvent::SubagentStop
+    );
+    if turn_scoped {
+        bounded_hook_string(value, "turn_id", 256)?;
+    }
+
+    let mut tool_name = None;
+    let mut tool_input = None;
+    let mut tool_response = None;
+    match event {
+        HookEvent::SessionStart => match bounded_hook_string(value, "source", 32)? {
+            "startup" | "resume" | "clear" | "compact" => {}
+            _ => return Err("SessionStart hook input has invalid source".to_owned()),
+        },
+        HookEvent::SessionEnd => {
+            if bounded_hook_string(value, "reason", 32)? != "other" {
+                return Err("SessionEnd hook input has invalid reason".to_owned());
+            }
+        }
+        HookEvent::UserPromptSubmit => {
+            bounded_hook_string(value, "prompt", HOOK_INPUT_MAX_BYTES as usize)?;
+        }
+        HookEvent::Stop => {
+            if !object
+                .get("stop_hook_active")
+                .is_some_and(serde_json::Value::is_boolean)
+            {
+                return Err("Stop hook input has invalid stop_hook_active".to_owned());
+            }
+            validate_optional_string(value, "last_assistant_message")?;
+        }
+        HookEvent::PreToolUse | HookEvent::PostToolUse => {
+            tool_name = Some(bounded_hook_string(value, "tool_name", 512)?);
+            bounded_hook_string(value, "tool_use_id", 256)?;
+            tool_input = Some(
+                object
+                    .get("tool_input")
+                    .ok_or_else(|| "tool hook input has no tool_input".to_owned())?,
+            );
+            if event == HookEvent::PostToolUse {
+                tool_response = Some(
+                    object
+                        .get("tool_response")
+                        .ok_or_else(|| "PostToolUse input has no tool_response".to_owned())?,
+                );
+            }
+        }
+        HookEvent::SubagentStart => {
+            bounded_hook_string(value, "agent_id", 256)?;
+            bounded_hook_string(value, "agent_type", 256)?;
+        }
+        HookEvent::SubagentStop => {
+            bounded_hook_string(value, "agent_id", 256)?;
+            bounded_hook_string(value, "agent_type", 256)?;
+            validate_optional_string(value, "agent_transcript_path")?;
+            validate_optional_string(value, "last_assistant_message")?;
+            if !object
+                .get("stop_hook_active")
+                .is_some_and(serde_json::Value::is_boolean)
+            {
+                return Err("SubagentStop hook input has invalid stop_hook_active".to_owned());
+            }
+        }
+    }
+    Ok(ValidatedHookInput {
+        session_id,
+        cwd,
+        tool_name,
+        tool_input,
+        tool_response,
+    })
+}
+
+fn pre_tool_use_deny_output(reason: &str) -> serde_json::Value {
+    serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        }
+    })
+}
+
+fn print_hook_json(value: &serde_json::Value) {
+    let output = serde_json::to_string(value).unwrap_or_else(|_| {
+        r#"{"decision":"deny","reason":"HOOK_OUTPUT_SERIALIZATION_FAILED"}"#.to_owned()
+    });
+    println!("{output}");
+}
+
+fn shell_tokens(command: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut quote = None;
+    let mut chars = command.chars().peekable();
+    while let Some(character) = chars.next() {
+        if let Some(active_quote) = quote {
+            if character == active_quote {
+                quote = None;
+            } else if character == '\\' && active_quote == '"' {
+                if let Some(next) = chars.next() {
+                    current.push(next);
+                }
+            } else {
+                current.push(character);
+            }
+            continue;
+        }
+        match character {
+            '\'' | '"' => quote = Some(character),
+            ';' | '|' | '&' | '\n' | '\r' => {
+                if !current.is_empty() {
+                    tokens.push(std::mem::take(&mut current));
+                }
+                tokens.push(";".to_owned());
+                while chars
+                    .peek()
+                    .is_some_and(|next| matches!(next, ';' | '|' | '&' | '\n' | '\r'))
+                {
+                    chars.next();
+                }
+            }
+            character if character.is_whitespace() => {
+                if !current.is_empty() {
+                    tokens.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(character),
+        }
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+    tokens
+}
+
+fn command_segments(command: &str) -> Vec<Vec<String>> {
+    let mut segments = Vec::new();
+    let mut segment = Vec::new();
+    for token in shell_tokens(command) {
+        if token == ";" {
+            if !segment.is_empty() {
+                segments.push(std::mem::take(&mut segment));
+            }
+        } else {
+            segment.push(token);
+        }
+    }
+    if !segment.is_empty() {
+        segments.push(segment);
+    }
+    segments
+}
+
+fn executable_name(value: &str) -> String {
+    Path::new(value)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or(value)
+        .to_ascii_lowercase()
+}
+
+fn git_command_tokens(segment: &[String]) -> Option<&[String]> {
+    let position = segment
+        .iter()
+        .position(|token| executable_name(token) == "git")?;
+    let wrappers_are_safe = segment[..position].iter().all(|token| {
+        let token = executable_name(token);
+        matches!(
+            token.as_str(),
+            "call" | "command" | "sudo" | "cmd" | "pwsh" | "powershell"
+        ) || token.eq_ignore_ascii_case("/c")
+            || token.eq_ignore_ascii_case("-command")
+    });
+    wrappers_are_safe.then_some(&segment[position + 1..])
+}
+
+fn git_subcommand(tokens: &[String]) -> Option<(&str, &[String])> {
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = tokens[index].as_str();
+        if matches!(
+            token,
+            "-C" | "-c" | "--git-dir" | "--work-tree" | "--namespace"
+        ) {
+            index = index.saturating_add(2);
+            continue;
+        }
+        if token.starts_with('-') {
+            index += 1;
+            continue;
+        }
+        return Some((token, &tokens[index + 1..]));
+    }
+    None
+}
+
+fn force_push_or_destructive_git_reason(command: &str) -> Option<&'static str> {
+    for segment in command_segments(command) {
+        let Some(tokens) = git_command_tokens(&segment) else {
+            continue;
+        };
+        let Some((subcommand, arguments)) = git_subcommand(tokens) else {
+            continue;
+        };
+        if subcommand.eq_ignore_ascii_case("push")
+            && arguments.iter().any(|argument| {
+                matches!(
+                    argument.as_str(),
+                    "-f" | "--force" | "--force-with-lease" | "--force-if-includes"
+                ) || argument.starts_with("--force=")
+                    || argument.starts_with("--force-with-lease=")
+                    || (argument.starts_with('+') && argument.len() > 1)
+                    || (argument.starts_with('-')
+                        && !argument.starts_with("--")
+                        && argument[1..].contains('f'))
+            })
+        {
+            return Some("force push is forbidden regardless of flag position");
+        }
+        if subcommand.eq_ignore_ascii_case("reset")
+            && arguments
+                .iter()
+                .any(|argument| argument == "--hard" || argument.starts_with("--hard="))
+        {
+            return Some("git reset --hard is forbidden");
+        }
+        if subcommand.eq_ignore_ascii_case("clean") {
+            return Some("git clean is forbidden; preserve dirty and untracked worktrees");
+        }
+    }
+    None
+}
+
+fn path_contains_dynamic_syntax(value: &str) -> bool {
+    value.is_empty()
+        || value
+            .chars()
+            .any(|character| matches!(character, '*' | '?' | '[' | ']' | '$' | '%' | '`'))
+        || value.starts_with('~')
+        || value.contains("$(")
+        || value.contains("..")
+}
+
+fn lexically_normalize(path: &Path) -> Option<PathBuf> {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                normalized.push(component.as_os_str());
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return None;
+                }
+            }
+        }
+    }
+    Some(normalized)
+}
+
+fn explicit_bounded_path(value: &str, cwd: &str) -> bool {
+    if path_contains_dynamic_syntax(value) {
+        return false;
+    }
+    let cwd = PathBuf::from(cwd);
+    if !cwd.is_absolute() {
+        return false;
+    }
+    let raw = PathBuf::from(value);
+    let joined = if raw.is_absolute() {
+        raw
+    } else {
+        cwd.join(raw)
+    };
+    let Some(cwd) = lexically_normalize(&cwd) else {
+        return false;
+    };
+    let Some(target) = lexically_normalize(&joined) else {
+        return false;
+    };
+    target.starts_with(&cwd) && target != cwd && target.parent().is_some()
+}
+
+fn recursive_delete_or_move_is_unverified(command: &str, cwd: &str) -> bool {
+    for segment in command_segments(command) {
+        let Some(first) = segment.first() else {
+            continue;
+        };
+        let executable = executable_name(first);
+        if executable == "remove-item" {
+            let recursive = segment
+                .iter()
+                .any(|token| token.eq_ignore_ascii_case("-recurse"));
+            if !recursive {
+                continue;
+            }
+            let literal = segment
+                .iter()
+                .position(|token| token.eq_ignore_ascii_case("-literalpath"))
+                .and_then(|index| segment.get(index + 1));
+            if !literal.is_some_and(|path| explicit_bounded_path(path, cwd)) {
+                return true;
+            }
+        } else if matches!(executable.as_str(), "rm" | "rmdir") {
+            let recursive = segment.iter().any(|token| {
+                token == "--recursive"
+                    || (token.starts_with('-')
+                        && token[1..].chars().any(|flag| flag == 'r' || flag == 'R'))
+            });
+            if recursive {
+                let targets: Vec<_> = segment
+                    .iter()
+                    .skip(1)
+                    .filter(|token| !token.starts_with('-'))
+                    .collect();
+                if targets.is_empty()
+                    || targets
+                        .iter()
+                        .any(|target| !explicit_bounded_path(target, cwd))
+                {
+                    return true;
+                }
+            }
+        } else if executable == "move-item" {
+            let source = segment
+                .iter()
+                .position(|token| token.eq_ignore_ascii_case("-literalpath"))
+                .and_then(|index| segment.get(index + 1));
+            let destination = segment
+                .iter()
+                .position(|token| token.eq_ignore_ascii_case("-destination"))
+                .and_then(|index| segment.get(index + 1));
+            if !source.is_some_and(|path| explicit_bounded_path(path, cwd))
+                || !destination.is_some_and(|path| explicit_bounded_path(path, cwd))
+            {
+                return true;
+            }
+        } else if matches!(executable.as_str(), "mv" | "move") {
+            let targets: Vec<_> = segment
+                .iter()
+                .skip(1)
+                .filter(|token| !token.starts_with('-'))
+                .collect();
+            if targets.len() < 2
+                || targets
+                    .iter()
+                    .any(|target| !explicit_bounded_path(target, cwd))
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn protected_generated_state_reference(value: &str) -> bool {
+    let normalized = value.replace('\\', "/").to_ascii_lowercase();
+    normalized.contains("/.codex/plugins/cache/")
+        || normalized.contains("/.codex/state")
+        || normalized.contains("/.codex/trust")
+        || normalized.contains("/appdata/roaming/star-control/")
+        || normalized.contains("/appdata/local/star-control/")
+        || (normalized.contains("/.codex/")
+            && (normalized.contains(".db") || normalized.contains(".sqlite")))
+}
+
+fn mutation_intent(command: &str) -> bool {
+    command_segments(command).iter().any(|segment| {
+        segment.first().is_some_and(|first| {
+            matches!(
+                executable_name(first).as_str(),
+                "remove-item"
+                    | "move-item"
+                    | "copy-item"
+                    | "rename-item"
+                    | "set-content"
+                    | "add-content"
+                    | "out-file"
+                    | "new-item"
+                    | "rm"
+                    | "rmdir"
+                    | "mv"
+                    | "move"
+                    | "cp"
+                    | "copy"
+                    | "del"
+                    | "erase"
+                    | "sqlite3"
+            )
+        }) || segment
+            .iter()
+            .any(|token| matches!(token.as_str(), ">" | ">>"))
+    })
+}
+
+fn tool_input_command<'a>(tool_name: &str, input: &'a serde_json::Value) -> Option<&'a str> {
+    if matches!(tool_name, "Bash" | "apply_patch") {
+        return input.get("command").and_then(serde_json::Value::as_str);
+    }
+    input.get("command").and_then(serde_json::Value::as_str)
+}
+
+fn pre_tool_use_denial_reason(input: &ValidatedHookInput<'_>) -> Option<String> {
+    let tool_name = input.tool_name?;
+    let tool_input = input.tool_input?;
+    if matches!(tool_name, "Bash" | "apply_patch")
+        && tool_input_command(tool_name, tool_input).is_none()
+    {
+        return Some(format!("malformed {tool_name} input has no string command"));
+    }
+    if let Some(command) = tool_input_command(tool_name, tool_input) {
+        if let Some(reason) = force_push_or_destructive_git_reason(command) {
+            return Some(reason.to_owned());
+        }
+        if recursive_delete_or_move_is_unverified(command, input.cwd) {
+            return Some(
+                "recursive delete or move target is not an explicit bounded path below cwd"
+                    .to_owned(),
+            );
+        }
+        if protected_generated_state_reference(command)
+            && (tool_name == "apply_patch" || mutation_intent(command))
+        {
+            return Some(
+                "direct mutation of Codex trust/runtime DB, plugin cache, or Star-Control generated runtime state is forbidden"
+                    .to_owned(),
+            );
+        }
+    }
+    let serialized = serde_json::to_string(tool_input).ok()?;
+    let mutating_tool = tool_name == "apply_patch"
+        || [
+            "write", "edit", "delete", "remove", "move", "rename", "patch",
+        ]
+        .iter()
+        .any(|marker| tool_name.to_ascii_lowercase().contains(marker));
+    if mutating_tool && protected_generated_state_reference(&serialized) {
+        return Some(
+            "direct mutation of Codex trust/runtime DB, plugin cache, or Star-Control generated runtime state is forbidden"
+                .to_owned(),
+        );
+    }
+    None
+}
+
+fn collect_post_tool_markers(
+    value: &serde_json::Value,
+    parent_key: Option<&str>,
+    markers: &mut BTreeSet<String>,
+    operation_ids: &mut BTreeSet<String>,
+) {
+    match value {
+        serde_json::Value::Object(object) => {
+            for (key, value) in object {
+                let normalized_key = key.to_ascii_lowercase();
+                if normalized_key == "operation_id"
+                    && let Some(id) = value
+                        .as_str()
+                        .filter(|id| !id.is_empty() && id.len() <= 256)
+                {
+                    operation_ids.insert(id.to_owned());
+                }
+                if normalized_key == "approval_required" && value == &serde_json::Value::Bool(true)
+                {
+                    markers.insert("approval_required".to_owned());
+                }
+                if normalized_key == "terminal" && value == &serde_json::Value::Bool(false) {
+                    markers.insert("terminal=false".to_owned());
+                }
+                collect_post_tool_markers(value, Some(&normalized_key), markers, operation_ids);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_post_tool_markers(value, parent_key, markers, operation_ids);
+            }
+        }
+        serde_json::Value::String(value) => {
+            let normalized = value.to_ascii_lowercase();
+            let status_key = parent_key.is_some_and(|key| {
+                matches!(
+                    key,
+                    "status"
+                        | "state"
+                        | "outcome"
+                        | "completeness"
+                        | "decision"
+                        | "result"
+                        | "verification"
+                )
+            });
+            if status_key
+                && matches!(
+                    normalized.as_str(),
+                    "accepted"
+                        | "approval_required"
+                        | "partial"
+                        | "stale"
+                        | "unverified"
+                        | "flaky"
+                        | "outcome_unknown"
+                        | "not_run"
+                )
+            {
+                markers.insert(normalized);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn post_tool_use_context(input: &ValidatedHookInput<'_>) -> Option<serde_json::Value> {
+    let response = input.tool_response?;
+    let mut markers = BTreeSet::new();
+    let mut operation_ids = BTreeSet::new();
+    collect_post_tool_markers(response, None, &mut markers, &mut operation_ids);
+    if markers.is_empty() && operation_ids.is_empty() {
+        return None;
+    }
+    let markers = markers.into_iter().collect::<Vec<_>>().join(",");
+    let operations = operation_ids.into_iter().collect::<Vec<_>>().join(",");
+    Some(serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PostToolUse",
+            "additionalContext": format!(
+                "Star-Control terminal-state guard: markers=[{markers}] operation_ids=[{operations}]. accepted/approval_required/partial/stale/unverified/flaky/outcome_unknown/not_run 또는 Operation ID만으로 완료를 선언하지 말고 terminal receipt와 exact readback을 확인한다. PostToolUse는 이미 발생한 side effect를 되돌리지 않는다."
+            )
+        }
+    }))
+}
+
 async fn run_hook(event: HookEvent) -> i32 {
     let mut input = Vec::new();
     if std::io::stdin()
@@ -1043,37 +1659,55 @@ async fn run_hook(event: HookEvent) -> i32 {
         || input.is_empty()
         || input.len() as u64 > HOOK_INPUT_MAX_BYTES
     {
+        if event == HookEvent::PreToolUse {
+            print_hook_json(&pre_tool_use_deny_output(
+                "malformed or oversized PreToolUse input",
+            ));
+            return 0;
+        }
         eprintln!("invalid {} hook input", event.hook_event_name());
         return 2;
     }
     let Ok(text) = std::str::from_utf8(&input) else {
+        if event == HookEvent::PreToolUse {
+            print_hook_json(&pre_tool_use_deny_output(
+                "PreToolUse input is not valid UTF-8",
+            ));
+            return 0;
+        }
         eprintln!("invalid {} hook input", event.hook_event_name());
         return 2;
     };
     let Ok(value) = parse_no_duplicate_keys(text) else {
+        if event == HookEvent::PreToolUse {
+            print_hook_json(&pre_tool_use_deny_output(
+                "PreToolUse input is malformed JSON or contains duplicate keys",
+            ));
+            return 0;
+        }
         eprintln!("invalid {} hook input", event.hook_event_name());
         return 2;
     };
-    if value
-        .get("hook_event_name")
-        .and_then(|value| value.as_str())
-        != Some(event.hook_event_name())
-    {
-        eprintln!("hook_event_name must be {}", event.hook_event_name());
-        return 2;
-    }
-    let Some(session_id) = value.get("session_id").and_then(serde_json::Value::as_str) else {
-        eprintln!("{} hook input has no session_id", event.hook_event_name());
-        return 2;
+    let validated = match validate_typed_hook_input(event, &value) {
+        Ok(input) => input,
+        Err(error) if event == HookEvent::PreToolUse => {
+            print_hook_json(&pre_tool_use_deny_output(&format!(
+                "malformed PreToolUse input: {error}"
+            )));
+            return 0;
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            return 2;
+        }
     };
-    if !lifecycle_identifier_valid(session_id) {
-        eprintln!(
-            "{} hook input has an invalid session_id",
-            event.hook_event_name()
-        );
-        return 2;
+    if event == HookEvent::PreToolUse
+        && let Some(reason) = pre_tool_use_denial_reason(&validated)
+    {
+        print_hook_json(&pre_tool_use_deny_output(&reason));
+        return 0;
     }
-    if let Err(error) = report_hook_lifecycle_with_host_budget(event, session_id).await {
+    if let Err(error) = report_hook_lifecycle_with_host_budget(event, validated.session_id).await {
         // A Hook must not turn a healthy Codex task into a failure merely
         // because the optional Controller is currently unavailable.  The
         // updater treats missing census evidence as a block, never as proof
@@ -1081,11 +1715,13 @@ async fn run_hook(event: HookEvent) -> i32 {
         eprintln!("Star-Control lifecycle observation was not recorded: {error}");
     }
     if event == HookEvent::SessionStart {
-        let output = session_start_hook_output();
-        println!(
-            "{}",
-            serde_json::to_string(&output).expect("hook output serializes")
-        );
+        print_hook_json(&session_start_hook_output());
+    } else if event == HookEvent::PostToolUse {
+        if let Some(output) = post_tool_use_context(&validated) {
+            print_hook_json(&output);
+        }
+    } else if matches!(event, HookEvent::Stop | HookEvent::SubagentStop) {
+        print_hook_json(&serde_json::json!({"continue":true}));
     }
     0
 }
@@ -1438,6 +2074,109 @@ mod tests {
                 < Duration::from_secs(SESSION_END_CODEX_HOST_TIMEOUT_SECONDS)
         );
         assert_eq!(HookEvent::Stop.lifecycle_report_timeout(), None);
+    }
+
+    fn pre_tool_hook_input(command: &str) -> serde_json::Value {
+        serde_json::json!({
+            "session_id":"thr_fixture",
+            "transcript_path":null,
+            "cwd":r"D:\work\repo",
+            "hook_event_name":"PreToolUse",
+            "model":"gpt-5.6-sol",
+            "permission_mode":"default",
+            "turn_id":"turn_fixture",
+            "tool_name":"Bash",
+            "tool_use_id":"tool_fixture",
+            "tool_input":{"command":command},
+        })
+    }
+
+    #[test]
+    fn typed_pre_tool_hook_denies_malformed_and_every_force_flag_position() {
+        let malformed = serde_json::json!({
+            "hook_event_name":"PreToolUse",
+            "session_id":"thr_fixture",
+        });
+        assert!(validate_typed_hook_input(HookEvent::PreToolUse, &malformed).is_err());
+
+        for command in [
+            "git push --force origin main",
+            "git push origin main --force",
+            "git -C D:\\work\\repo push origin main -f",
+            "pwsh -Command git push upstream HEAD --force-with-lease=abc",
+            "git push origin +main:main",
+            "git push -vf origin main",
+        ] {
+            let value = pre_tool_hook_input(command);
+            let input = validate_typed_hook_input(HookEvent::PreToolUse, &value).unwrap();
+            assert_eq!(
+                pre_tool_use_denial_reason(&input).as_deref(),
+                Some("force push is forbidden regardless of flag position"),
+                "{command}"
+            );
+        }
+        let safe = pre_tool_hook_input("git push origin main");
+        let safe = validate_typed_hook_input(HookEvent::PreToolUse, &safe).unwrap();
+        assert!(pre_tool_use_denial_reason(&safe).is_none());
+    }
+
+    #[test]
+    fn typed_pre_tool_hook_denies_destructive_git_generated_state_and_unbounded_paths() {
+        for (command, reason_fragment) in [
+            ("git reset HEAD --hard", "git reset --hard"),
+            ("git clean -fd", "git clean"),
+            (
+                r"Set-Content C:\Users\u\.codex\plugins\cache\x\SKILL.md changed",
+                "generated runtime state",
+            ),
+            ("Remove-Item -Recurse $target", "recursive delete or move"),
+            ("Move-Item source destination", "recursive delete or move"),
+        ] {
+            let value = pre_tool_hook_input(command);
+            let input = validate_typed_hook_input(HookEvent::PreToolUse, &value).unwrap();
+            let reason = pre_tool_use_denial_reason(&input).unwrap();
+            assert!(reason.contains(reason_fragment), "{command}: {reason}");
+        }
+
+        for command in [
+            r"Remove-Item -LiteralPath D:\work\repo\tmp -Recurse",
+            r"Move-Item -LiteralPath D:\work\repo\from -Destination D:\work\repo\to",
+        ] {
+            let value = pre_tool_hook_input(command);
+            let input = validate_typed_hook_input(HookEvent::PreToolUse, &value).unwrap();
+            assert!(pre_tool_use_denial_reason(&input).is_none(), "{command}");
+        }
+    }
+
+    #[test]
+    fn post_tool_hook_marks_non_terminal_states_without_claiming_rollback() {
+        let value = serde_json::json!({
+            "session_id":"thr_fixture",
+            "transcript_path":null,
+            "cwd":r"D:\work\repo",
+            "hook_event_name":"PostToolUse",
+            "model":"gpt-5.6-sol",
+            "permission_mode":"default",
+            "turn_id":"turn_fixture",
+            "tool_name":"mcp__star__invoke",
+            "tool_use_id":"tool_fixture",
+            "tool_input":{"tool_id":"star.example"},
+            "tool_response":{
+                "status":"accepted",
+                "operation_id":"op_fixture",
+                "terminal":false,
+                "evidence":{"completeness":"partial"}
+            },
+        });
+        let input = validate_typed_hook_input(HookEvent::PostToolUse, &value).unwrap();
+        let output = post_tool_use_context(&input).unwrap();
+        let context = output["hookSpecificOutput"]["additionalContext"]
+            .as_str()
+            .unwrap();
+        assert!(context.contains("accepted"));
+        assert!(context.contains("partial"));
+        assert!(context.contains("op_fixture"));
+        assert!(context.contains("side effect를 되돌리지 않는다"));
     }
 
     #[tokio::test]

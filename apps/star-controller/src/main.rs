@@ -14,6 +14,9 @@ use star_adapter_codex::app_server::{
 };
 use star_adapter_github::{GhCliClient, GhCliConfig, GitHubReleasePublisher};
 use star_adapter_rust_index::{RustAnalyzerSemanticAdapter, RustSyntaxAdapter};
+use star_application::external_analysis::{
+    attach_compatibility_providers, attach_supply_chain_providers,
+};
 use star_application::rust_style_runtime::RustStyleScope;
 use star_application::{
     ApplicationError, ManagedRegistryResolveRequest, ManagedRegistryResolveResult,
@@ -74,13 +77,14 @@ use star_contracts::{
         InvocationWorkingDirectoryV2, ProcessStartStateV2, SuppressionStateV2, SuppressionV2,
         ValidationResultV2, ValidationRunV2, ValidationStabilityV2,
     },
+    external_analysis::{CompatibilityProviderObservationV1, SupplyChainProviderObservationV1},
     fixed_mcp::ApprovalDecision,
     ids::{
         ApprovalId, CapabilitySnapshotId, CheckoutId, CodexExecutionId, ContextPackId,
-        DiagnosticId, EvidenceBundleId, FindingId, GateId, GoalId, OperationId, PatchApplicationId,
-        PatchSetId, PermissionPlanId, ProjectId, RequestId, ReviewPackId, RouteDecisionId, RunId,
-        StageGraphId, StageId, StageResultId, SuppressionId, SymbolId, TaskSpecId,
-        ValidationResultId,
+        DiagnosticId, EvidenceBundleId, FindingId, GateId, GoalId, ManagementStoreId, OperationId,
+        PatchApplicationId, PatchSetId, PermissionPlanId, ProjectId, RequestId, ReviewPackId,
+        RouteDecisionId, RunId, StageGraphId, StageId, StageResultId, SuppressionId, SymbolId,
+        TaskSpecId, ValidationResultId,
     },
     index::{IndexPartitionState, IndexScanMode, IndexTier, SourceClass},
     ipc::{
@@ -103,7 +107,10 @@ use star_contracts::{
         ManagedDeclarationKind, ManagedDesiredFields, ManagedLifecycle,
     },
     management::{
-        DispositionDecision, DispositionStatus, ProjectPathRef, ProjectV1ToV2MigrationPlan,
+        DispositionDecision, DispositionStatus, MANAGEMENT_MAINTENANCE_STATE_SCHEMA_ID,
+        MANAGEMENT_MAINTENANCE_STATE_SCHEMA_VERSION, ManagementCompactionPlanV1,
+        ManagementMaintenancePhase, ManagementMaintenanceStateV1, ManagementStatusQueryV1,
+        ProjectPathRef, ProjectV1ToV2MigrationPlan, RetentionCheckpointV1, RetentionPlanV2,
     },
     manifest::{
         ActionDescriptor, BackendKind, ExecutableDescriptor, ExitCodes, IntegrityFile,
@@ -137,7 +144,10 @@ use star_contracts::{
         ChangePlanV1ToV2MigrationPlan, CheckOverride, CheckOverrideKind, ScopeReasonCode,
         ValidationPlanV2Readiness, ValidationScopeLevel,
     },
-    recovery::{BackupPlan, LocalStateExportPlan, LocalStateImportPlan, RebuildPlan, RestorePlan},
+    recovery::{
+        BackupApplyResult, BackupPlan, LocalStateExportPlan, LocalStateImportPlan, RebuildPlan,
+        RestorePlan,
+    },
     release_v2::{
         BUDGET_SNAPSHOT_V1_SCHEMA_ID, BudgetDecisionV1, BudgetSnapshotV1, COST_RECORD_V1_SCHEMA_ID,
         CaseAdjudication, ComparabilityState, CostRecordRefV1, CostRecordV1,
@@ -219,7 +229,8 @@ use star_planning::{
     routing::{RouteRequestV1, RoutingPolicyV1, route_codex_stage},
 };
 use star_ports::{
-    ArtifactStore, ArtifactWritePolicy, ArtifactWriteRequest, RepositoryErrorCategory,
+    ArtifactStore, ArtifactWritePolicy, ArtifactWriteRequest, ManagementRepositorySet,
+    RepositoryError, RepositoryErrorCategory,
 };
 use star_project::catalog::{
     CatalogAvailability, CatalogIdentityStatus, CatalogProjectRole, ProjectCatalogManifest,
@@ -257,7 +268,10 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 use windows::{
     Win32::{
@@ -905,6 +919,9 @@ const PRODUCT_FEATURE_RUNTIME_SPECS: &[ProductFeatureRuntimeSpec] = &[
         physical_owner: "star-state,star-execution/recovery",
         command_surfaces: &[
             "management.status",
+            "management.status.page",
+            "management.compaction.plan",
+            "management.compaction.apply",
             "management.backup.plan",
             "management.restore.plan",
             "management.rebuild.plan",
@@ -1048,6 +1065,7 @@ const IMPLEMENTED_CONTROLLER_COMMANDS: &[&str] = &[
     "project.register",
     "scan.run",
     "index.status",
+    "management.status.page",
     "index.search",
     "finding.list",
     "diagnostic.list",
@@ -1126,6 +1144,10 @@ const CONTROLLER_COMMAND_HANDLERS: &[ControllerCommandRegistration] = &[
     ControllerCommandRegistration {
         backend_ref: "index.status",
         handler: ControllerCommandHandler::Management(run_index_status_command),
+    },
+    ControllerCommandRegistration {
+        backend_ref: "management.status.page",
+        handler: ControllerCommandHandler::Management(run_management_status_page_command),
     },
     ControllerCommandRegistration {
         backend_ref: "index.search",
@@ -1978,6 +2000,46 @@ fn run_index_status_command(
         .index_status(&project_id)
         .map_err(map_management_controller_error)?;
     serialize_bounded_code_health_controller_result(index_status_projection(result))
+}
+
+fn run_management_status_page_command(
+    service: &ManagementApplicationService,
+    _project_directory: &std::path::Path,
+    arguments: &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let query =
+        serde_json::from_value::<ManagementStatusQueryV1>(arguments.clone()).map_err(|_| {
+            (
+                "TOOL_ARGUMENT_INVALID",
+                "The management status page query is invalid.",
+            )
+        })?;
+    query.validate().map_err(|_| {
+        (
+            "TOOL_ARGUMENT_INVALID",
+            "The management status page query exceeds its bounded contract.",
+        )
+    })?;
+    let page = service
+        .store_status_page(&query)
+        .map_err(|error| match error {
+            ApplicationError::Repository(repository)
+                if repository.category == RepositoryErrorCategory::RevisionConflict =>
+            {
+                (
+                    "MANAGEMENT_STATUS_CURSOR_STALE",
+                    "The management status registry revision changed; restart paging.",
+                )
+            }
+            other => map_management_controller_error(other),
+        })?;
+    page.validate().map_err(|_| {
+        (
+            "TOOL_PROTOCOL_INVALID",
+            "The management status page exceeded its transport contract.",
+        )
+    })?;
+    serialize_bounded_code_health_controller_result(page)
 }
 
 fn run_index_search_command(
@@ -4371,14 +4433,14 @@ async fn graceful_controller_shutdown(
 }
 
 const MANAGEMENT_INITIALIZING_MESSAGE: &str =
-    "The management store is completing startup recovery and retention; retry this request.";
+    "The management store is completing startup recovery and opening; retry this request.";
 const MANAGEMENT_UNAVAILABLE_MESSAGE: &str =
     "The management application service is unavailable after startup.";
 
 #[derive(Clone)]
 enum ManagementRuntimeState {
     Initializing,
-    Ready(Arc<Mutex<ManagementApplicationService>>),
+    Ready(Arc<ReadyManagementRuntime>),
     Recovery {
         recovery: Arc<SqliteManagementRecovery>,
         inspection: Option<RecoveryInspection>,
@@ -4389,6 +4451,11 @@ enum ManagementRuntimeState {
     },
 }
 
+struct ReadyManagementRuntime {
+    service: Arc<Mutex<ManagementApplicationService>>,
+    repositories: Arc<dyn ManagementRepositorySet>,
+}
+
 impl ManagementRuntimeState {
     fn failed(diagnostic: impl Into<String>) -> Self {
         Self::Failed {
@@ -4397,7 +4464,14 @@ impl ManagementRuntimeState {
     }
 }
 
-type SharedManagementRuntime = Arc<Mutex<ManagementRuntimeState>>;
+struct ManagementRuntimeControl {
+    state: Mutex<ManagementRuntimeState>,
+    maintenance: Mutex<ManagementMaintenanceStateV1>,
+    cancel: AtomicBool,
+    worker: Mutex<Option<std::thread::JoinHandle<()>>>,
+}
+
+type SharedManagementRuntime = Arc<ManagementRuntimeControl>;
 
 struct ManagementRuntimeInit {
     management_root: PathBuf,
@@ -4441,7 +4515,7 @@ fn initialize_management_runtime(init: ManagementRuntimeInit) -> ManagementRunti
     let repositories =
         match SqliteManagementRepositorySet::open(&init.management_root, env!("CARGO_PKG_VERSION"))
         {
-            Ok(repositories) => repositories,
+            Ok(repositories) => Arc::new(repositories),
             Err(open_error) => {
                 return open_management_recovery_state(
                     &init.management_root,
@@ -4462,7 +4536,7 @@ fn initialize_management_runtime(init: ManagementRuntimeInit) -> ManagementRunti
         }
     };
     let mut service = ManagementApplicationService::new(
-        Arc::new(repositories),
+        Arc::clone(&repositories) as Arc<dyn ManagementRepositorySet>,
         Arc::new(root_bindings),
         Arc::new(LocalArtifactStore::default()),
     )
@@ -4511,36 +4585,22 @@ fn initialize_management_runtime(init: ManagementRuntimeInit) -> ManagementRunti
             Some(error.to_string()),
         );
     }
-    let startup_retention = match service.plan_retention() {
-        Ok(plan) => plan,
-        Err(error) => {
-            drop(service);
-            return open_management_recovery_state(
-                &init.management_root,
-                inspection,
-                Some(error.to_string()),
-            );
-        }
-    };
-    if let Err(error) = service.apply_retention(
-        &startup_retention,
-        startup_retention.plan_fingerprint.as_str(),
-    ) {
-        drop(service);
-        return open_management_recovery_state(
-            &init.management_root,
-            inspection,
-            Some(error.to_string()),
-        );
-    }
-    ManagementRuntimeState::Ready(Arc::new(Mutex::new(service)))
+    ManagementRuntimeState::Ready(Arc::new(ReadyManagementRuntime {
+        service: Arc::new(Mutex::new(service)),
+        repositories,
+    }))
 }
 
 fn spawn_management_runtime<F>(initializer: F) -> SharedManagementRuntime
 where
     F: FnOnce() -> ManagementRuntimeState + Send + 'static,
 {
-    let runtime = Arc::new(Mutex::new(ManagementRuntimeState::Initializing));
+    let runtime = Arc::new(ManagementRuntimeControl {
+        state: Mutex::new(ManagementRuntimeState::Initializing),
+        maintenance: Mutex::new(ManagementMaintenanceStateV1::idle(Utc::now())),
+        cancel: AtomicBool::new(false),
+        worker: Mutex::new(None),
+    });
     let worker_runtime = Arc::clone(&runtime);
     let spawn = std::thread::Builder::new()
         .name("star-management-startup".to_owned())
@@ -4549,20 +4609,422 @@ where
                 .unwrap_or_else(|_| {
                     ManagementRuntimeState::failed("management startup worker panicked")
                 });
-            if let Ok(mut state) = worker_runtime.lock() {
-                *state = outcome;
+            if let Ok(mut state) = worker_runtime.state.lock() {
+                *state = outcome.clone();
+            }
+            if let ManagementRuntimeState::Ready(ready) = outcome
+                && std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_ready_retention_lifecycle(&worker_runtime, &ready)
+                }))
+                .is_err()
+                && let Ok(mut maintenance) = worker_runtime.maintenance.lock()
+            {
+                maintenance.phase = ManagementMaintenancePhase::Failed;
+                maintenance.updated_at = Utc::now();
+                maintenance.last_error_code =
+                    Some("MANAGEMENT_RETENTION_WORKER_PANICKED".to_owned());
             }
         });
-    if let Err(error) = spawn
-        && let Ok(mut state) = runtime.lock()
-    {
-        *state = ManagementRuntimeState::failed(error.to_string());
+    match spawn {
+        Ok(worker) => {
+            if let Ok(mut slot) = runtime.worker.lock() {
+                *slot = Some(worker);
+            }
+        }
+        Err(error) => {
+            if let Ok(mut state) = runtime.state.lock() {
+                *state = ManagementRuntimeState::failed(error.to_string());
+            }
+        }
     }
     runtime
 }
 
+fn run_ready_retention_lifecycle(
+    runtime: &SharedManagementRuntime,
+    ready: &ReadyManagementRuntime,
+) {
+    let operation_id = OperationId::new();
+    let started_at = Utc::now();
+    if let Ok(mut maintenance) = runtime.maintenance.lock() {
+        *maintenance = ManagementMaintenanceStateV1 {
+            schema_id: MANAGEMENT_MAINTENANCE_STATE_SCHEMA_ID.to_owned(),
+            schema_version: MANAGEMENT_MAINTENANCE_STATE_SCHEMA_VERSION,
+            operation_id: Some(operation_id.clone()),
+            phase: ManagementMaintenancePhase::Planning,
+            policy_fingerprint: None,
+            plan_fingerprint: None,
+            checkpoint_cursor: None,
+            planned_rows: 0,
+            planned_bytes: 0,
+            applied_rows: 0,
+            applied_bytes: 0,
+            started_at: Some(started_at),
+            updated_at: started_at,
+            last_error_code: None,
+        };
+    }
+    if runtime.cancel.load(Ordering::Acquire) {
+        finish_management_maintenance(runtime, ManagementMaintenancePhase::Cancelled, None);
+        return;
+    }
+    let loaded_execution = match ready
+        .service
+        .lock()
+        .map_err(|_| ApplicationError::Invalid)
+        .and_then(|service| service.load_retention_execution())
+    {
+        Ok(execution) => execution,
+        Err(_) => {
+            if runtime.cancel.load(Ordering::Acquire) {
+                finish_management_maintenance(runtime, ManagementMaintenancePhase::Cancelled, None);
+                return;
+            }
+            finish_management_maintenance(
+                runtime,
+                ManagementMaintenancePhase::Failed,
+                Some("MANAGEMENT_RETENTION_RECOVERY_FAILED"),
+            );
+            return;
+        }
+    };
+    if runtime.cancel.load(Ordering::Acquire) {
+        finish_management_maintenance(runtime, ManagementMaintenancePhase::Cancelled, None);
+        return;
+    }
+    let Some((plan, checkpoint)) = loaded_execution else {
+        let plan = match ready
+            .service
+            .lock()
+            .map_err(|_| ApplicationError::Invalid)
+            .and_then(|service| {
+                service.plan_retention_v2_controlled(&|| runtime.cancel.load(Ordering::Acquire))
+            }) {
+            Ok(plan) => plan,
+            Err(_) if runtime.cancel.load(Ordering::Acquire) => {
+                finish_management_maintenance(runtime, ManagementMaintenancePhase::Cancelled, None);
+                return;
+            }
+            Err(_) => {
+                finish_management_maintenance(
+                    runtime,
+                    ManagementMaintenancePhase::Failed,
+                    Some("MANAGEMENT_RETENTION_PLAN_FAILED"),
+                );
+                return;
+            }
+        };
+        if let Ok(mut maintenance) = runtime.maintenance.lock() {
+            maintenance.policy_fingerprint = Some(plan.policy_fingerprint.clone());
+            maintenance.plan_fingerprint = Some(plan.plan_fingerprint.clone());
+            maintenance.planned_rows = plan.estimated_rows;
+            maintenance.planned_bytes = plan.estimated_bytes;
+            maintenance.phase = if plan.total_candidate_count() == 0 {
+                ManagementMaintenancePhase::Complete
+            } else {
+                ManagementMaintenancePhase::ApprovalRequired
+            };
+            maintenance.updated_at = Utc::now();
+        }
+        return;
+    };
+    if let Ok(mut maintenance) = runtime.maintenance.lock() {
+        maintenance.operation_id = Some(checkpoint.operation_id.clone());
+        maintenance.policy_fingerprint = Some(plan.policy_fingerprint.clone());
+        maintenance.plan_fingerprint = Some(plan.plan_fingerprint.clone());
+        maintenance.checkpoint_cursor = Some(retention_checkpoint_cursor(&checkpoint));
+        maintenance.planned_rows = plan.estimated_rows;
+        maintenance.planned_bytes = plan.estimated_bytes;
+        maintenance.applied_rows = checkpoint.applied_rows;
+        maintenance.applied_bytes = checkpoint.applied_bytes;
+        maintenance.phase = ManagementMaintenancePhase::Applying;
+        maintenance.updated_at = Utc::now();
+    }
+
+    run_approved_retention(runtime, ready, &plan, checkpoint);
+}
+
+fn run_approved_retention(
+    runtime: &SharedManagementRuntime,
+    ready: &ReadyManagementRuntime,
+    plan: &RetentionPlanV2,
+    mut checkpoint: RetentionCheckpointV1,
+) {
+    loop {
+        if runtime.cancel.load(Ordering::Acquire) {
+            finish_management_maintenance(runtime, ManagementMaintenancePhase::Cancelled, None);
+            return;
+        }
+        let result = ready
+            .service
+            .lock()
+            .map_err(|_| ApplicationError::Invalid)
+            .and_then(|service| service.apply_retention_batch_v2(plan, &checkpoint));
+        let result = match result {
+            Ok(result) => result,
+            Err(_) => {
+                finish_management_maintenance(
+                    runtime,
+                    ManagementMaintenancePhase::Failed,
+                    Some("MANAGEMENT_RETENTION_APPLY_FAILED"),
+                );
+                return;
+            }
+        };
+        checkpoint = result.checkpoint;
+        if let Ok(mut maintenance) = runtime.maintenance.lock() {
+            maintenance.checkpoint_cursor = Some(retention_checkpoint_cursor(&checkpoint));
+            maintenance.applied_rows = checkpoint.applied_rows;
+            maintenance.applied_bytes = checkpoint.applied_bytes;
+            maintenance.updated_at = checkpoint.updated_at;
+        }
+        if checkpoint.complete {
+            let cleared = ready
+                .service
+                .lock()
+                .map_err(|_| ApplicationError::Invalid)
+                .and_then(|service| service.clear_retention_execution(&plan.plan_fingerprint));
+            if cleared.is_err() {
+                finish_management_maintenance(
+                    runtime,
+                    ManagementMaintenancePhase::Failed,
+                    Some("MANAGEMENT_RETENTION_CHECKPOINT_FAILED"),
+                );
+            } else {
+                finish_management_maintenance(runtime, ManagementMaintenancePhase::Complete, None);
+            }
+            return;
+        }
+    }
+}
+
+fn retention_checkpoint_cursor(checkpoint: &RetentionCheckpointV1) -> String {
+    match &checkpoint.active_candidate_id {
+        Some(candidate_id) => format!(
+            "candidate:{}:active:{}:rows:{}:bytes:{}",
+            checkpoint.next_candidate_index,
+            candidate_id,
+            checkpoint.active_candidate_applied_rows,
+            checkpoint.active_candidate_applied_bytes
+        ),
+        None => format!("candidate:{}", checkpoint.next_candidate_index),
+    }
+}
+
+fn spawn_approved_retention(
+    runtime: &SharedManagementRuntime,
+    ready: &Arc<ReadyManagementRuntime>,
+    approved_plan_fingerprint: &Sha256Hash,
+) -> Result<serde_json::Value, ApplicationError> {
+    if management_maintenance_snapshot(runtime).is_active() {
+        return Err(ApplicationError::Repository(RepositoryError::new(
+            RepositoryErrorCategory::Busy,
+            "management maintenance is already active",
+        )));
+    }
+    let plan = ready
+        .service
+        .lock()
+        .map_err(|_| ApplicationError::Invalid)?
+        .plan_retention_v2()?;
+    if &plan.plan_fingerprint != approved_plan_fingerprint {
+        return Err(ApplicationError::Repository(RepositoryError::new(
+            RepositoryErrorCategory::RevisionConflict,
+            "retention approval fingerprint is stale",
+        )));
+    }
+    // Reap the lifecycle planner before persisting a new execution. Publishing
+    // ApprovalRequired happens immediately before that planner returns, so an
+    // immediate caller may need to retry without leaving an orphan checkpoint.
+    let previous = runtime.worker.lock().ok().and_then(|mut slot| {
+        if slot
+            .as_ref()
+            .is_some_and(std::thread::JoinHandle::is_finished)
+        {
+            slot.take()
+        } else {
+            None
+        }
+    });
+    if let Some(previous) = previous {
+        let _ = previous.join();
+    }
+    if runtime
+        .worker
+        .lock()
+        .map(|slot| slot.is_some())
+        .unwrap_or(true)
+    {
+        return Err(ApplicationError::Repository(RepositoryError::new(
+            RepositoryErrorCategory::Busy,
+            "management maintenance worker is unavailable",
+        )));
+    }
+    let checkpoint = {
+        let service = ready
+            .service
+            .lock()
+            .map_err(|_| ApplicationError::Invalid)?;
+        match service.load_retention_execution()? {
+            Some((persisted_plan, checkpoint)) => {
+                if persisted_plan.plan_fingerprint != plan.plan_fingerprint {
+                    return Err(ApplicationError::Repository(RepositoryError::new(
+                        RepositoryErrorCategory::RevisionConflict,
+                        "persisted retention execution belongs to another plan",
+                    )));
+                }
+                checkpoint
+            }
+            None => service.start_retention_execution(&plan, OperationId::new())?,
+        }
+    };
+    let operation_id = checkpoint.operation_id.clone();
+    runtime.cancel.store(false, Ordering::Release);
+    if let Ok(mut maintenance) = runtime.maintenance.lock() {
+        *maintenance = ManagementMaintenanceStateV1 {
+            schema_id: MANAGEMENT_MAINTENANCE_STATE_SCHEMA_ID.to_owned(),
+            schema_version: MANAGEMENT_MAINTENANCE_STATE_SCHEMA_VERSION,
+            operation_id: Some(operation_id.clone()),
+            phase: ManagementMaintenancePhase::Applying,
+            policy_fingerprint: Some(plan.policy_fingerprint.clone()),
+            plan_fingerprint: Some(plan.plan_fingerprint.clone()),
+            checkpoint_cursor: Some(retention_checkpoint_cursor(&checkpoint)),
+            planned_rows: plan.estimated_rows,
+            planned_bytes: plan.estimated_bytes,
+            applied_rows: checkpoint.applied_rows,
+            applied_bytes: checkpoint.applied_bytes,
+            started_at: Some(Utc::now()),
+            updated_at: Utc::now(),
+            last_error_code: None,
+        };
+    }
+    let worker_runtime = Arc::clone(runtime);
+    let worker_ready = Arc::clone(ready);
+    let worker_plan = plan.clone();
+    let worker = match std::thread::Builder::new()
+        .name("star-management-retention".to_owned())
+        .spawn(move || {
+            run_management_maintenance_worker(&worker_runtime, || {
+                run_approved_retention(&worker_runtime, &worker_ready, &worker_plan, checkpoint)
+            });
+        }) {
+        Ok(worker) => worker,
+        Err(_) => {
+            finish_management_maintenance(
+                runtime,
+                ManagementMaintenancePhase::Failed,
+                Some("MANAGEMENT_RETENTION_WORKER_UNAVAILABLE"),
+            );
+            return Err(ApplicationError::Invalid);
+        }
+    };
+    runtime
+        .worker
+        .lock()
+        .map_err(|_| ApplicationError::Invalid)?
+        .replace(worker);
+    Ok(serde_json::json!({
+        "state":"accepted",
+        "operation_id":operation_id,
+        "plan_fingerprint":plan.plan_fingerprint,
+        "terminal":false,
+    }))
+}
+
+fn run_management_maintenance_worker<F>(runtime: &SharedManagementRuntime, job: F)
+where
+    F: FnOnce(),
+{
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(job)).is_err() {
+        finish_management_maintenance(
+            runtime,
+            ManagementMaintenancePhase::Failed,
+            Some("MANAGEMENT_RETENTION_WORKER_PANICKED"),
+        );
+    }
+}
+
+fn finish_management_maintenance(
+    runtime: &SharedManagementRuntime,
+    phase: ManagementMaintenancePhase,
+    error_code: Option<&str>,
+) {
+    if let Ok(mut maintenance) = runtime.maintenance.lock() {
+        maintenance.phase = phase;
+        maintenance.updated_at = Utc::now();
+        maintenance.last_error_code = error_code.map(str::to_owned);
+    }
+}
+
+fn management_maintenance_snapshot(
+    runtime: &SharedManagementRuntime,
+) -> ManagementMaintenanceStateV1 {
+    runtime
+        .maintenance
+        .lock()
+        .map(|state| state.clone())
+        .unwrap_or_else(|_| {
+            let mut state = ManagementMaintenanceStateV1::idle(Utc::now());
+            state.phase = ManagementMaintenancePhase::Failed;
+            state.last_error_code = Some("MANAGEMENT_MAINTENANCE_STATE_UNAVAILABLE".to_owned());
+            state
+        })
+}
+
+fn management_runtime_has_active_work(runtime: &SharedManagementRuntime) -> bool {
+    matches!(
+        management_runtime_snapshot(runtime),
+        ManagementRuntimeState::Initializing
+    ) || management_maintenance_snapshot(runtime).is_active()
+}
+
+fn management_idle_shutdown_allowed(
+    runtime: &SharedManagementRuntime,
+    decision: &ControllerLifecycleDecision,
+) -> bool {
+    matches!(decision, ControllerLifecycleDecision::ShutdownNow)
+        && !management_runtime_has_active_work(runtime)
+}
+
+fn shutdown_management_runtime(runtime: &SharedManagementRuntime, wait: std::time::Duration) {
+    runtime.cancel.store(true, Ordering::Release);
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        let finished = runtime
+            .worker
+            .lock()
+            .ok()
+            .and_then(|slot| slot.as_ref().map(std::thread::JoinHandle::is_finished))
+            .unwrap_or(true);
+        if finished || std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let worker = runtime.worker.lock().ok().and_then(|mut slot| {
+        if slot
+            .as_ref()
+            .is_some_and(std::thread::JoinHandle::is_finished)
+        {
+            slot.take()
+        } else {
+            None
+        }
+    });
+    if let Some(worker) = worker {
+        let _ = worker.join();
+    } else if management_maintenance_snapshot(runtime).is_active() {
+        finish_management_maintenance(
+            runtime,
+            ManagementMaintenancePhase::Checkpointing,
+            Some("MANAGEMENT_MAINTENANCE_SHUTDOWN_PENDING"),
+        );
+    }
+}
+
 fn management_runtime_snapshot(runtime: &SharedManagementRuntime) -> ManagementRuntimeState {
     runtime
+        .state
         .lock()
         .map(|state| state.clone())
         .unwrap_or_else(|_| {
@@ -4576,9 +5038,18 @@ fn management_action_access(
     Option<Arc<Mutex<ManagementApplicationService>>>,
     RuntimeFailure,
 ) {
+    if management_maintenance_snapshot(runtime).is_active() {
+        return (
+            None,
+            (
+                "MANAGEMENT_MAINTENANCE_BUSY",
+                "Startup retention is running; retry this action after the maintenance status is terminal.",
+            ),
+        );
+    }
     match management_runtime_snapshot(runtime) {
-        ManagementRuntimeState::Ready(service) => (
-            Some(service),
+        ManagementRuntimeState::Ready(ready) => (
+            Some(Arc::clone(&ready.service)),
             (
                 "MANAGEMENT_STORE_UNAVAILABLE",
                 MANAGEMENT_UNAVAILABLE_MESSAGE,
@@ -4599,7 +5070,10 @@ fn management_action_access(
 }
 
 fn runtime_failure_retryable(code: &str) -> bool {
-    matches!(code, "TOOL_PROCESS_RETRYABLE" | "MANAGEMENT_STORE_BUSY")
+    matches!(
+        code,
+        "TOOL_PROCESS_RETRYABLE" | "MANAGEMENT_STORE_BUSY" | "MANAGEMENT_MAINTENANCE_BUSY"
+    )
 }
 
 #[tokio::main]
@@ -4785,7 +5259,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .collect::<BTreeSet<_>>();
                     lifecycle.reconcile_owner_processes(&live_pids, Utc::now());
                 }
-                if matches!(lifecycle.decision(Utc::now()), ControllerLifecycleDecision::ShutdownNow) {
+                let decision = lifecycle.decision(Utc::now());
+                if management_idle_shutdown_allowed(&management_runtime, &decision) {
+                    shutdown_management_runtime(
+                        &management_runtime,
+                        std::time::Duration::from_secs(2),
+                    );
                     graceful_controller_shutdown(
                         &operations,
                         &cancellation_tokens,
@@ -4798,6 +5277,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             signal = &mut shutdown => {
                 let _ = signal;
+                shutdown_management_runtime(
+                    &management_runtime,
+                    std::time::Duration::from_secs(2),
+                );
                 graceful_controller_shutdown(
                     &operations,
                     &cancellation_tokens,
@@ -4907,13 +5390,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let response =
                 lifecycle_observation_response(&mut lifecycle, request, registry.revision);
+            let shutdown_decision = lifecycle.decision(Utc::now());
             let shutdown_now = response.status == IpcStatus::Ok
-                && matches!(
-                    lifecycle.decision(Utc::now()),
-                    ControllerLifecycleDecision::ShutdownNow
-                );
+                && management_idle_shutdown_allowed(&management_runtime, &shutdown_decision);
             let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
-            if shutdown_now {
+            if shutdown_now && !management_runtime_has_active_work(&management_runtime) {
+                shutdown_management_runtime(&management_runtime, std::time::Duration::from_secs(2));
                 graceful_controller_shutdown(
                     &operations,
                     &cancellation_tokens,
@@ -4976,7 +5458,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         if is_management_command(&request.command) {
             let (
-                available_management_service,
+                available_management_runtime,
                 available_management_recovery,
                 management_inspection,
             ) = match management_runtime_snapshot(&management_runtime) {
@@ -4991,7 +5473,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
                     continue;
                 }
-                ManagementRuntimeState::Ready(service) => (Some(service), None, None),
+                ManagementRuntimeState::Ready(ready) => (Some(ready), None, None),
                 ManagementRuntimeState::Recovery {
                     recovery,
                     inspection,
@@ -5009,6 +5491,90 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     continue;
                 }
             };
+            if let Some(ready) = available_management_runtime.as_ref()
+                && matches!(
+                    request.command.as_str(),
+                    "management.status" | "management.status.page"
+                )
+            {
+                let result = match request.command.as_str() {
+                    "management.status" if payload_has_exact_keys(&request.payload, &[]) => ready
+                        .repositories
+                        .status_page(&ManagementStatusQueryV1::default())
+                        .map_err(ApplicationError::Repository)
+                        .and_then(|page| {
+                            if page.truncated {
+                                return Err(ApplicationError::Repository(RepositoryError::new(
+                                    RepositoryErrorCategory::QuotaExceeded,
+                                    "management status requires the paged status query",
+                                )));
+                            }
+                            serialize_management_result(serde_json::json!({
+                                "stores":page.items,
+                                "maintenance":management_maintenance_snapshot(&management_runtime),
+                                "recovery_required":false,
+                                "open_mode":"normal",
+                            }))
+                        }),
+                    "management.status.page"
+                        if payload_has_exact_keys(
+                            &request.payload,
+                            &["cursor", "max_items", "max_bytes"],
+                        ) =>
+                    {
+                        serde_json::from_value::<ManagementStatusQueryV1>(request.payload.clone())
+                            .map_err(|_| ApplicationError::Invalid)
+                            .and_then(|query| {
+                                ready
+                                    .repositories
+                                    .status_page(&query)
+                                    .map_err(ApplicationError::Repository)
+                            })
+                            .and_then(serialize_management_result)
+                    }
+                    _ => Err(ApplicationError::Invalid),
+                };
+                let response = management_command_response(request, result, registry.revision);
+                let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                continue;
+            }
+            if let Some(ready) = available_management_runtime.as_ref()
+                && request.command == "management.retention.apply"
+            {
+                let result =
+                    if payload_has_exact_keys(&request.payload, &["approved_plan_fingerprint"]) {
+                        request
+                            .payload
+                            .get("approved_plan_fingerprint")
+                            .and_then(serde_json::Value::as_str)
+                            .and_then(|value| Sha256Hash::from_str(value).ok())
+                            .ok_or(ApplicationError::Invalid)
+                            .and_then(|approval| {
+                                spawn_approved_retention(&management_runtime, ready, &approval)
+                            })
+                    } else {
+                        Err(ApplicationError::Invalid)
+                    };
+                let response = management_command_response(request, result, registry.revision);
+                let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                continue;
+            }
+            if available_management_runtime.is_some()
+                && management_maintenance_snapshot(&management_runtime).is_active()
+            {
+                let response = request_error_response(
+                    request,
+                    "MANAGEMENT_MAINTENANCE_BUSY",
+                    "Management maintenance is running; status remains available and other management commands may be retried.",
+                    true,
+                    registry.revision,
+                );
+                let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+                continue;
+            }
+            let available_management_service = available_management_runtime
+                .as_ref()
+                .map(|ready| Arc::clone(&ready.service));
             let execution_config = match (
                 UserToolRegistryConfig::load(&appdata),
                 UserExecutionConfig::load_for_project_and_layers(
@@ -10187,6 +10753,7 @@ fn is_management_command(command: &str) -> bool {
             | "patch.apply"
             | "patch.apply-v2"
             | "management.status"
+            | "management.status.page"
             | "management.backup.plan"
             | "management.backup.apply"
             | "management.restore.plan"
@@ -10197,6 +10764,8 @@ fn is_management_command(command: &str) -> bool {
             | "management.local-state.import.apply"
             | "management.retention.plan"
             | "management.retention.apply"
+            | "management.compaction.plan"
+            | "management.compaction.apply"
             | "management.rebuild.plan"
             | "management.rebuild.apply"
             | "management.migrate.project-v1-v2.plan"
@@ -14055,6 +14624,14 @@ fn handle_management_command(
                 }))
             })
         }
+        "management.status.page"
+            if payload_has_exact_keys(&request.payload, &["cursor", "max_items", "max_bytes"]) =>
+        {
+            serde_json::from_value::<ManagementStatusQueryV1>(request.payload.clone())
+                .map_err(|_| ApplicationError::Invalid)
+                .and_then(|query| service.store_status_page(&query))
+                .and_then(serialize_management_result)
+        }
         "management.backup.plan" if payload_has_exact_keys(&request.payload, &["backup_root"]) => {
             management_absolute_path(&request.payload, "backup_root")
                 .and_then(|backup_root| service.plan_backup(&backup_root))
@@ -14122,7 +14699,7 @@ fn handle_management_command(
             })
         }
         "management.retention.plan" if payload_has_exact_keys(&request.payload, &[]) => service
-            .plan_retention()
+            .plan_retention_v2()
             .and_then(serialize_management_result),
         "management.retention.apply"
             if payload_has_exact_keys(&request.payload, &["approved_plan_fingerprint"]) =>
@@ -14133,7 +14710,94 @@ fn handle_management_command(
                 .and_then(serde_json::Value::as_str)
                 .and_then(|value| Sha256Hash::from_str(value).ok())
                 .ok_or(ApplicationError::Invalid)
-                .and_then(|approval| service.apply_current_retention(approval.as_str()))
+                .and_then(|approval| {
+                    let plan = service.plan_retention_v2()?;
+                    if approval != plan.plan_fingerprint {
+                        return Err(ApplicationError::Invalid);
+                    }
+                    Ok(serde_json::json!({
+                        "state":"approval_validated",
+                        "terminal":false,
+                        "plan_fingerprint":plan.plan_fingerprint,
+                        "requires_lifecycle_worker":true,
+                    }))
+                })
+                .and_then(serialize_management_result)
+        }
+        "management.compaction.plan"
+            if payload_has_exact_keys(
+                &request.payload,
+                &["store_id", "backup_root", "backup_result"],
+            ) =>
+        {
+            request
+                .payload
+                .get("store_id")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|value| ManagementStoreId::parse(value.to_owned()).ok())
+                .ok_or(ApplicationError::Invalid)
+                .and_then(|store_id| {
+                    let backup_root = match request.payload.get("backup_root") {
+                        Some(serde_json::Value::Null) => None,
+                        Some(serde_json::Value::String(value)) => Some(PathBuf::from(value)),
+                        _ => return Err(ApplicationError::Invalid),
+                    };
+                    let backup_result = request
+                        .payload
+                        .get("backup_result")
+                        .filter(|value| !value.is_null())
+                        .cloned()
+                        .map(serde_json::from_value::<BackupApplyResult>)
+                        .transpose()
+                        .map_err(|_| ApplicationError::Invalid)?;
+                    service.plan_compaction(
+                        &store_id,
+                        backup_root.as_deref(),
+                        backup_result.as_ref(),
+                    )
+                })
+                .and_then(serialize_management_result)
+        }
+        "management.compaction.apply"
+            if payload_has_exact_keys(
+                &request.payload,
+                &[
+                    "plan",
+                    "approved_plan_fingerprint",
+                    "backup_root",
+                    "backup_result",
+                ],
+            ) =>
+        {
+            request
+                .payload
+                .get("plan")
+                .cloned()
+                .ok_or(ApplicationError::Invalid)
+                .and_then(|value| {
+                    serde_json::from_value::<ManagementCompactionPlanV1>(value)
+                        .map_err(|_| ApplicationError::Invalid)
+                })
+                .and_then(|plan| {
+                    let approval =
+                        management_approval(&request.payload, "approved_plan_fingerprint")?;
+                    let backup_root = request
+                        .payload
+                        .get("backup_root")
+                        .and_then(serde_json::Value::as_str)
+                        .map(PathBuf::from)
+                        .ok_or(ApplicationError::Invalid)?;
+                    let backup_result = request
+                        .payload
+                        .get("backup_result")
+                        .cloned()
+                        .ok_or(ApplicationError::Invalid)
+                        .and_then(|value| {
+                            serde_json::from_value::<BackupApplyResult>(value)
+                                .map_err(|_| ApplicationError::Invalid)
+                        })?;
+                    service.apply_compaction(&plan, approval.as_str(), &backup_root, &backup_result)
+                })
                 .and_then(serialize_management_result)
         }
         "management.migrate.patch-v1-v2.plan"
@@ -14730,6 +15394,7 @@ fn handle_m6_development_command(
                     "report_id",
                     "baseline_snapshot_id",
                     "current_snapshot_id",
+                    "provider_observations",
                     "revision",
                 ],
             ) =>
@@ -14750,6 +15415,16 @@ fn handle_m6_development_command(
             let report =
                 compare_surface_snapshots(&manifest, report_id.clone(), &baseline, &current)
                     .map_err(m6_development_error)?;
+            let provider_observations: Vec<CompatibilityProviderObservationV1> =
+                serde_json::from_value(
+                    payload
+                        .get("provider_observations")
+                        .cloned()
+                        .ok_or(ApplicationError::Invalid)?,
+                )
+                .map_err(|_| ApplicationError::Invalid)?;
+            let report = attach_compatibility_providers(report, provider_observations)
+                .map_err(|_| ApplicationError::Invalid)?;
             let state = m6_compatibility_state(report.outcome);
             service
                 .publish_development_document(
@@ -15414,6 +16089,7 @@ fn handle_m7_development_command(
                     "dependency_snapshot_id",
                     "external_snapshot_ids",
                     "observations",
+                    "provider_observations",
                     "revision",
                 ],
             ) =>
@@ -15451,6 +16127,16 @@ fn handle_m7_development_command(
                 observations,
             )
             .map_err(m6_development_error)?;
+            let provider_observations: Vec<SupplyChainProviderObservationV1> =
+                serde_json::from_value(
+                    payload
+                        .get("provider_observations")
+                        .cloned()
+                        .ok_or(ApplicationError::Invalid)?,
+                )
+                .map_err(|_| ApplicationError::Invalid)?;
+            let snapshot = attach_supply_chain_providers(snapshot, provider_observations)
+                .map_err(|_| ApplicationError::Invalid)?;
             let state = m6_coverage_state(snapshot.completeness);
             service
                 .publish_development_document(
@@ -24021,27 +24707,41 @@ fn management_command_response(
                     );
                 }
                 ApplicationError::Repository(error) => {
-                    let code = match error.category {
-                        RepositoryErrorCategory::Unavailable => "MANAGEMENT_STORE_UNAVAILABLE",
-                        RepositoryErrorCategory::Busy | RepositoryErrorCategory::QuotaExceeded => {
-                            "MANAGEMENT_STORE_BUSY"
+                    let code = match (request.command.as_str(), error.category) {
+                        (
+                            "management.status" | "management.status.page",
+                            RepositoryErrorCategory::QuotaExceeded,
+                        ) => "MANAGEMENT_STATUS_REQUIRES_PAGING",
+                        ("management.status.page", RepositoryErrorCategory::RevisionConflict) => {
+                            "MANAGEMENT_STATUS_CURSOR_STALE"
                         }
-                        RepositoryErrorCategory::RevisionConflict => "MANAGEMENT_REVISION_CONFLICT",
-                        RepositoryErrorCategory::IdempotencyConflict => {
+                        (_, RepositoryErrorCategory::Unavailable) => "MANAGEMENT_STORE_UNAVAILABLE",
+                        (
+                            _,
+                            RepositoryErrorCategory::Busy | RepositoryErrorCategory::QuotaExceeded,
+                        ) => "MANAGEMENT_STORE_BUSY",
+                        (_, RepositoryErrorCategory::RevisionConflict) => {
+                            "MANAGEMENT_REVISION_CONFLICT"
+                        }
+                        (_, RepositoryErrorCategory::IdempotencyConflict) => {
                             "MANAGEMENT_IDEMPOTENCY_CONFLICT"
                         }
-                        RepositoryErrorCategory::MigrationRequired => {
+                        (_, RepositoryErrorCategory::MigrationRequired) => {
                             "MANAGEMENT_MIGRATION_REQUIRED"
                         }
-                        RepositoryErrorCategory::IncompatibleVersion => {
+                        (_, RepositoryErrorCategory::IncompatibleVersion) => {
                             "MANAGEMENT_VERSION_UNSUPPORTED"
                         }
-                        RepositoryErrorCategory::IntegrityFailed
-                        | RepositoryErrorCategory::Corrupt => "MANAGEMENT_INTEGRITY_FAILED",
-                        RepositoryErrorCategory::ReadOnly => "MANAGEMENT_READ_ONLY",
-                        RepositoryErrorCategory::NotFound | RepositoryErrorCategory::Invalid => {
-                            "MANAGEMENT_IDENTITY_CONFLICT"
-                        }
+                        (
+                            _,
+                            RepositoryErrorCategory::IntegrityFailed
+                            | RepositoryErrorCategory::Corrupt,
+                        ) => "MANAGEMENT_INTEGRITY_FAILED",
+                        (_, RepositoryErrorCategory::ReadOnly) => "MANAGEMENT_READ_ONLY",
+                        (
+                            _,
+                            RepositoryErrorCategory::NotFound | RepositoryErrorCategory::Invalid,
+                        ) => "MANAGEMENT_IDENTITY_CONFLICT",
                     };
                     return invalid_request_response(
                         request,
@@ -24777,6 +25477,169 @@ mod tests {
         let (_, failure) = management_action_access(&runtime);
         assert_eq!(failure.0, "MANAGEMENT_STORE_UNAVAILABLE");
         assert!(!runtime_failure_retryable(failure.0));
+        shutdown_management_runtime(&runtime, std::time::Duration::from_secs(1));
+    }
+
+    #[test]
+    fn management_ready_and_status_are_published_before_ready_lifecycle_planning_finishes() {
+        let root = std::env::temp_dir().join(format!(
+            "star-controller-ready-before-retention-{}",
+            RequestId::new().as_str()
+        ));
+        let repositories = Arc::new(
+            SqliteManagementRepositorySet::open(root.join("management"), "controller-test")
+                .unwrap(),
+        );
+        let repository_port: Arc<dyn ManagementRepositorySet> = repositories.clone();
+        let service = Arc::new(Mutex::new(ManagementApplicationService::new(
+            repository_port.clone(),
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("bindings")).unwrap()),
+            Arc::new(LocalArtifactStore::default()),
+        )));
+        let ready = Arc::new(ReadyManagementRuntime {
+            service: Arc::clone(&service),
+            repositories: repository_port,
+        });
+        let service_guard = service.lock().unwrap();
+        let worker_ready = Arc::clone(&ready);
+        let runtime = spawn_management_runtime(move || ManagementRuntimeState::Ready(worker_ready));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        loop {
+            if matches!(
+                management_runtime_snapshot(&runtime),
+                ManagementRuntimeState::Ready(_)
+            ) && management_maintenance_snapshot(&runtime).phase
+                == ManagementMaintenancePhase::Planning
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "management runtime did not publish Ready before retention"
+            );
+            std::thread::yield_now();
+        }
+        let page = ready
+            .repositories
+            .status_page(&ManagementStatusQueryV1::default())
+            .unwrap();
+        assert_eq!(page.items.len(), 1);
+        assert!(management_runtime_has_active_work(&runtime));
+        let (access, failure) = management_action_access(&runtime);
+        assert!(access.is_none());
+        assert_eq!(failure.0, "MANAGEMENT_MAINTENANCE_BUSY");
+        assert!(runtime_failure_retryable(failure.0));
+
+        drop(service_guard);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        loop {
+            if management_maintenance_snapshot(&runtime).phase
+                == ManagementMaintenancePhase::Complete
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "ready-lifecycle retention planning did not reach a terminal state"
+            );
+            std::thread::yield_now();
+        }
+        assert!(!management_runtime_has_active_work(&runtime));
+        shutdown_management_runtime(&runtime, std::time::Duration::from_secs(1));
+    }
+
+    #[test]
+    fn management_maintenance_worker_panic_is_fail_closed() {
+        let runtime = Arc::new(ManagementRuntimeControl {
+            state: Mutex::new(ManagementRuntimeState::failed("fixture")),
+            maintenance: Mutex::new(ManagementMaintenanceStateV1 {
+                phase: ManagementMaintenancePhase::Applying,
+                ..ManagementMaintenanceStateV1::idle(Utc::now())
+            }),
+            cancel: AtomicBool::new(false),
+            worker: Mutex::new(None),
+        });
+
+        run_management_maintenance_worker(&runtime, || panic!("fixture worker panic"));
+
+        let state = management_maintenance_snapshot(&runtime);
+        assert_eq!(state.phase, ManagementMaintenancePhase::Failed);
+        assert_eq!(
+            state.last_error_code.as_deref(),
+            Some("MANAGEMENT_RETENTION_WORKER_PANICKED")
+        );
+        assert!(!management_runtime_has_active_work(&runtime));
+    }
+
+    #[test]
+    fn idle_shutdown_waits_for_management_maintenance_to_be_terminal() {
+        let runtime = Arc::new(ManagementRuntimeControl {
+            state: Mutex::new(ManagementRuntimeState::failed("fixture")),
+            maintenance: Mutex::new(ManagementMaintenanceStateV1 {
+                phase: ManagementMaintenancePhase::Applying,
+                ..ManagementMaintenanceStateV1::idle(Utc::now())
+            }),
+            cancel: AtomicBool::new(false),
+            worker: Mutex::new(None),
+        });
+
+        assert!(!management_idle_shutdown_allowed(
+            &runtime,
+            &ControllerLifecycleDecision::ShutdownNow
+        ));
+        finish_management_maintenance(&runtime, ManagementMaintenancePhase::Complete, None);
+        assert!(management_idle_shutdown_allowed(
+            &runtime,
+            &ControllerLifecycleDecision::ShutdownNow
+        ));
+        assert!(!management_idle_shutdown_allowed(
+            &runtime,
+            &ControllerLifecycleDecision::KeepAlive
+        ));
+    }
+
+    #[test]
+    fn shutdown_cancels_and_joins_blocked_ready_lifecycle_planning() {
+        let root = std::env::temp_dir().join(format!(
+            "star-controller-retention-cancel-{}",
+            RequestId::new().as_str()
+        ));
+        let repositories = Arc::new(
+            SqliteManagementRepositorySet::open(root.join("management"), "controller-test")
+                .unwrap(),
+        );
+        let repository_port: Arc<dyn ManagementRepositorySet> = repositories;
+        let service = Arc::new(Mutex::new(ManagementApplicationService::new(
+            Arc::clone(&repository_port),
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("bindings")).unwrap()),
+            Arc::new(LocalArtifactStore::default()),
+        )));
+        let service_guard = service.lock().unwrap();
+        let ready = Arc::new(ReadyManagementRuntime {
+            service: Arc::clone(&service),
+            repositories: repository_port,
+        });
+        let runtime = spawn_management_runtime(move || ManagementRuntimeState::Ready(ready));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        while management_maintenance_snapshot(&runtime).phase
+            != ManagementMaintenancePhase::Planning
+        {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+
+        shutdown_management_runtime(&runtime, std::time::Duration::from_millis(20));
+        assert_eq!(
+            management_maintenance_snapshot(&runtime).phase,
+            ManagementMaintenancePhase::Checkpointing
+        );
+        drop(service_guard);
+        shutdown_management_runtime(&runtime, std::time::Duration::from_secs(1));
+        assert_eq!(
+            management_maintenance_snapshot(&runtime).phase,
+            ManagementMaintenancePhase::Cancelled
+        );
+        assert!(!management_runtime_has_active_work(&runtime));
     }
 
     use star_project::catalog::CatalogProjectRole;
@@ -24893,6 +25756,18 @@ mod tests {
                 "schemas/index-status-output.schema.json",
                 include_str!(
                     "../../../catalog/tool-packages/schemas/index-status-output.schema.json"
+                ),
+            ),
+            (
+                "schemas/management-status-page-input.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/management-status-page-input.schema.json"
+                ),
+            ),
+            (
+                "schemas/management-status-page-output.schema.json",
+                include_str!(
+                    "../../../catalog/tool-packages/schemas/management-status-page-output.schema.json"
                 ),
             ),
             (
@@ -26105,6 +26980,24 @@ mod tests {
             );
             result
         };
+
+        let management_page = invoke(
+            "management.status.page",
+            serde_json::json!({
+                "cursor":null,
+                "max_items":32,
+                "max_bytes":65_536
+            }),
+        );
+        assert_eq!(
+            management_page["schema_id"],
+            star_contracts::management::MANAGEMENT_STATUS_PAGE_SCHEMA_ID
+        );
+        assert!(management_page["returned_count"].as_u64().unwrap() >= 1);
+        assert!(
+            serde_json::to_vec(&management_page).unwrap().len()
+                <= MAX_CODE_HEALTH_ACTION_RESULT_BYTES
+        );
 
         let scan = invoke(
             "scan.run",

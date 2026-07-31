@@ -1,0 +1,68 @@
+{
+  "completed_at": "2026-01-01T00:00:00Z",
+  "completeness": "complete",
+  "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "evidence_id": "fixture",
+  "executable_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "exit_code": 1,
+  "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "limitations": [
+    "fixture"
+  ],
+  "normalized_artifact_ref": {
+    "artifact_id": "art_00000000000000000000000000",
+    "created_at": "2026-01-01T00:00:00Z",
+    "kind": "log",
+    "media_type": "fixture",
+    "producer": {
+      "build_id": "fixture",
+      "component": "fixture",
+      "platform": "fixture",
+      "product_version": "fixture"
+    },
+    "project_id": "prj_00000000000000000000000000",
+    "redaction_status": "not_needed",
+    "relative_path": "src/lib.rs",
+    "retention_class": "temporary",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "size_bytes": 0,
+    "source_artifact_ref": null
+  },
+  "project_id": "prj_00000000000000000000000000",
+  "protocol": {
+    "detail_level": "structured",
+    "machine_readable": false,
+    "media_type": "fixture",
+    "protocol_id": "fixture",
+    "protocol_version": "fixture",
+    "schema_uri": "fixture",
+    "stability": "stable"
+  },
+  "provider_id": "fixture",
+  "provider_version": "fixture",
+  "raw_artifact_ref": {
+    "artifact_id": "art_00000000000000000000000000",
+    "created_at": "2026-01-01T00:00:00Z",
+    "kind": "log",
+    "media_type": "fixture",
+    "producer": {
+      "build_id": "fixture",
+      "component": "fixture",
+      "platform": "fixture",
+      "product_version": "fixture"
+    },
+    "project_id": "prj_00000000000000000000000000",
+    "redaction_status": "not_needed",
+    "relative_path": "src/lib.rs",
+    "retention_class": "temporary",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "size_bytes": 0,
+    "source_artifact_ref": null
+  },
+  "schema_id": "star.external-analysis-evidence",
+  "schema_version": 1,
+  "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "started_at": "2026-01-01T00:00:00Z"
+}

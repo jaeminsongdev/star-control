@@ -505,6 +505,12 @@ doctor는 `core.autocrlf`, code page, long-path policy를 관찰만 하며 바�
 
 하나가 current source/config/Catalog/Tool/environment와 다르면 기존 result는 stale이다.
 
+## 외부 compatibility·architecture provider
+
+`CompatibilityReportV2`는 provider-neutral `ExternalAnalysisEvidenceV1`을 통해 Buf, oasdiff, cargo-semver-checks와 libabigail 관찰을 추가로 받을 수 있다. 이 관찰은 기존 surface comparator를 대체하거나 별도 호환성 점수를 만들지 않는다. stable structured machine protocol만 application이 정규화하며, cargo-semver-checks처럼 세부 machine format이 없는 실행은 exit classification과 raw `ArtifactRef`만 보존하고 log 문장을 세부 진단으로 파싱하지 않는다.
+
+Rule Pack의 architecture 규칙은 layer, allowed edge, forbidden edge, dependency cycle을 표현한다. 예외에는 subject, owner, approval ref와 미래 expiry가 모두 있어야 하며 만료 예외는 Gate 근거가 아니다. 공식 설계 근거는 [Buf breaking change detection](https://buf.build/docs/breaking/), [Cargo SemVer compatibility](https://doc.rust-lang.org/nightly/cargo/reference/semver.html), [ArchUnit user guide](https://www.archunit.org/userguide/html/000_Index.html)다. 문서 확인만으로 provider를 ready/verified로 승격하지 않으며 exact descriptor·protocol·artifact binding이 없으면 `unavailable|unverified`다.
+
 ### pass·block·review
 
 - missing/stale/partial/unverified required evidence, confirmed breaking인데 migration/window 누락, companion change 누락, doctor side effect 시도는 `block`이다.

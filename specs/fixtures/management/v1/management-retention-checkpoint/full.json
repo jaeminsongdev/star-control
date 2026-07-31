@@ -1,0 +1,20 @@
+{
+  "active_candidate_applied_bytes": 0,
+  "active_candidate_applied_rows": 0,
+  "active_candidate_id": "fixture",
+  "applied_bytes": 0,
+  "applied_rows": 0,
+  "cancelled": false,
+  "committed_batch_count": 0,
+  "complete": false,
+  "expected_store_revisions": {
+    "fixture": 0
+  },
+  "last_candidate_id": "fixture",
+  "next_candidate_index": 0,
+  "operation_id": "cop_00000000000000000000000000",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-retention-checkpoint",
+  "schema_version": 1,
+  "updated_at": "2026-01-01T00:00:00Z"
+}

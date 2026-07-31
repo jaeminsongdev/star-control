@@ -11,15 +11,22 @@ use std::{
 };
 
 use star_contracts::{
+    canonical::canonical_sha256,
     config_v1::ConfigOverrideV1,
+    fixed_mcp::RiskLane,
     ids::RequestId,
     ipc::{IpcResponse, IpcStatus},
+    registry::{
+        COMMAND_DESCRIPTOR_V1_SCHEMA_ID, COMMAND_DESCRIPTOR_V1_SCHEMA_VERSION, CommandDescriptorV1,
+        CommandOwnershipV1,
+    },
 };
 use star_ipc::client::{ControllerClient, ControllerClientError, cli_client_config};
 use star_ipc::controller_start::VerifiedControllerImage;
 
 const VERSION: &str = concat!("Star-Control ", env!("CARGO_PKG_VERSION"));
-const HELP: &str = "star tools list [--source release|user|project] [--readiness <value>] [--json]\n\
+const HELP: &str = "star command describe <dotted-command> [--json]\n\
+star tools list [--source release|user|project] [--readiness <value>] [--json]\n\
 star tools describe <tool-id> [--json]\n\
 star tools status [<package-id>] [--json]\n\
 star tools validate <manifest-path> --source user|project [--json]\n\
@@ -100,7 +107,7 @@ star registry candidate classify <project-id> <candidate-id> <managed_declaratio
 star registry declaration plan <project-id> <change-kind> --desired <json-file> --reason <text> [--declaration <managed-declaration-id>] [--consumers <json-file>] [--manifest <project-relative-path>] [--json]\n\
 star registry status <project-id> [--manifest <project-relative-path>] [--json]\n\
 star contract snapshot <project-id> <snapshot-id> --role baseline|current [--source-revision <git-revision>] [--manifest <project-relative-path>] [--registry-snapshot <ref>] [--revision <n>] [--json]\n\
-star contract compare <project-id> <report-id> <baseline-snapshot-id> <current-snapshot-id> [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
+star contract compare <project-id> <report-id> <baseline-snapshot-id> <current-snapshot-id> [--providers <compatibility-provider-observations-json>] [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
 star docs check <project-id> <snapshot-id> [--registry-manifest <project-relative-path>] [--manifest <project-relative-path>] [--revision <n>] [--json]\n\
 star config effective [--json]\n\
 star config trace <project-id> <trace-id> --input <json-file> [--revision <n>] [--json]\n\
@@ -201,9 +208,9 @@ star patch show <patch-set-id> [--json]\n\
 star patch apply <patch-set-id> --fingerprint <sha256> [--manual-approval <approval-id>] [--guard-evidence <json-file>] [--json]\n\
 star patch status <patch-application-id> [--json]\n\
 star patch recover <patch-application-id> --strategy reverse-patch|discard-isolated [--json]\n\
-star patch prepare <project-id> <finding-id> [--json]\n\
-star patch apply <project-id> <patch-set-id> --approve <sha256> [--json]\n\
-star management status [--json]\n\
+star patch legacy prepare <project-id> <finding-id> [--json]\n\
+star patch legacy apply <project-id> <patch-set-id> --approve <sha256> [--json]\n\
+star management status [--all | --cursor <opaque>] [--max-items <1..256>] [--max-bytes <1..65536>] [--json]\n\
 star management backup plan <backup-root> [--json]\n\
 star management backup apply <backup-root> <plan-json> --approve <sha256> [--json]\n\
 star management restore plan <backup-root> [--json]\n\
@@ -214,6 +221,8 @@ star management local-state import plan <source-json> [--json]\n\
 star management local-state import apply <source-json> <plan-json> --approve <sha256> [--json]\n\
 star management retention plan [--json]\n\
 star management retention apply --approve <sha256> [--json]\n\
+star management compaction plan <management-store-id> [--backup-root <path> --backup-result <backup-apply-result-json>] [--json]\n\
+star management compaction apply <plan-json> --approve <sha256> --backup-root <path> --backup-result <backup-apply-result-json> [--json]\n\
 star management rebuild plan [--json]\n\
 star management rebuild apply <plan-json> --approve <sha256> [--json]\n\
 star management migrate project-v1-v2 plan [--json]\n\
@@ -243,6 +252,380 @@ star hook session-start|session-end|user-prompt-submit|stop|pre-tool-use|post-to
 star controller start [--background]\n\
 star controller autostart enable|disable|status";
 
+fn help_requested(args: &[String]) -> bool {
+    args.iter()
+        .any(|argument| matches!(argument.as_str(), "-h" | "--help"))
+}
+
+const MCP_COMMAND_ROUTES: &[(&str, &str, Option<&str>)] = &[
+    (
+        "goal.start",
+        "star.core.goal.start",
+        Some("schemas/goal-record-output.schema.json"),
+    ),
+    (
+        "goal.answer",
+        "star.core.goal.answer",
+        Some("schemas/goal-record-output.schema.json"),
+    ),
+    (
+        "plan.get",
+        "star.core.plan.get",
+        Some("schemas/plan-get-output.schema.json"),
+    ),
+    (
+        "plan.update",
+        "star.core.plan.update",
+        Some("schemas/goal-record-output.schema.json"),
+    ),
+    (
+        "run.continue",
+        "star.core.run.continue",
+        Some("schemas/goal-record-output.schema.json"),
+    ),
+    (
+        "goal.status",
+        "star.core.status.get",
+        Some("schemas/goal-record-output.schema.json"),
+    ),
+    (
+        "goal.pause",
+        "star.core.goal.pause",
+        Some("schemas/goal-record-output.schema.json"),
+    ),
+    (
+        "goal.resume",
+        "star.core.goal.resume",
+        Some("schemas/goal-record-output.schema.json"),
+    ),
+    (
+        "goal.cancel",
+        "star.core.goal.cancel",
+        Some("schemas/goal-record-output.schema.json"),
+    ),
+    (
+        "evidence.get",
+        "star.core.evidence.get",
+        Some("schemas/evidence-get-output.schema.json"),
+    ),
+    (
+        "merge.status",
+        "star.core.merge.status",
+        Some("schemas/change-bundle-output.schema.json"),
+    ),
+    (
+        "handoff.get",
+        "star.core.handoff.get",
+        Some("schemas/change-bundle-handoff-output.schema.json"),
+    ),
+    (
+        "doctor.run",
+        "star.core.doctor",
+        Some("schemas/doctor-output.schema.json"),
+    ),
+    (
+        "project.list",
+        "star.core.project.list",
+        Some("schemas/project-list-output.schema.json"),
+    ),
+    (
+        "project.status",
+        "star.core.project.status",
+        Some("schemas/project-status-output.schema.json"),
+    ),
+    (
+        "project.register",
+        "star.core.project.register",
+        Some("schemas/project-register-output.schema.json"),
+    ),
+    (
+        "scan.run",
+        "star.core.scan.run",
+        Some("schemas/scan-run-output.schema.json"),
+    ),
+    (
+        "index.status",
+        "star.core.index.status",
+        Some("schemas/index-status-output.schema.json"),
+    ),
+    (
+        "management.status.page",
+        "star.management.status.page",
+        Some("schemas/management-status-page-output.schema.json"),
+    ),
+    (
+        "index.search",
+        "star.core.index.search",
+        Some("schemas/index-search-output.schema.json"),
+    ),
+    (
+        "finding.list",
+        "star.core.finding.list",
+        Some("schemas/finding-list-output.schema.json"),
+    ),
+    (
+        "diagnostic.list",
+        "star.core.diagnostic.list",
+        Some("schemas/diagnostic-list-output.schema.json"),
+    ),
+    (
+        "validation.plan",
+        "star.core.validation.plan",
+        Some("schemas/validation-plan-output.schema.json"),
+    ),
+    (
+        "validation.run",
+        "star.core.validation.run",
+        Some("schemas/validation-run-output.schema.json"),
+    ),
+];
+
+fn command_risk_lane(route: &str) -> RiskLane {
+    let destructive = [
+        ".apply",
+        ".cancel",
+        ".recover",
+        ".restore",
+        ".rollback",
+        ".uninstall",
+        ".revoke",
+    ];
+    if destructive.iter().any(|suffix| route.ends_with(suffix)) {
+        RiskLane::DestructiveClosed
+    } else if [
+        ".start", ".run", ".prepare", ".record", ".update", ".resolve", ".trust", ".install",
+        ".repair", ".enable", ".disable",
+    ]
+    .iter()
+    .any(|suffix| route.ends_with(suffix))
+    {
+        RiskLane::WriteClosed
+    } else {
+        RiskLane::ReadClosed
+    }
+}
+
+fn command_usage_matches(route_tokens: &[&str], usage: &str) -> bool {
+    let usage_tokens = usage.split_whitespace().skip(1).collect::<Vec<_>>();
+    if usage_tokens.len() < route_tokens.len() {
+        return false;
+    }
+    route_tokens.iter().enumerate().all(|(index, route)| {
+        usage_tokens[index]
+            .split('|')
+            .any(|candidate| candidate == *route)
+    })
+}
+
+fn command_usage_example(route_tokens: &[&str], usage: &str) -> Vec<String> {
+    fn placeholder(token: &str) -> String {
+        let name = token
+            .trim_matches(|character| matches!(character, '<' | '>' | '[' | ']'))
+            .split('|')
+            .next()
+            .unwrap_or("value");
+        if name.contains("sha256") || name.contains("fingerprint") {
+            format!("sha256:{}", "0".repeat(64))
+        } else if name.contains("revision") || name == "n" || name.contains("count") {
+            "1".to_owned()
+        } else if name.contains("path") || name.contains("root") || name.contains("file") {
+            ".".to_owned()
+        } else if name.contains("json") {
+            "{}".to_owned()
+        } else {
+            format!("example-{name}")
+        }
+    }
+
+    let tokens = usage.split_whitespace().skip(1).collect::<Vec<_>>();
+    let mut example = route_tokens
+        .iter()
+        .map(|token| (*token).to_owned())
+        .collect::<Vec<_>>();
+    let mut optional = false;
+    for token in tokens.into_iter().skip(route_tokens.len()) {
+        if optional || token.starts_with('[') {
+            optional = !token.ends_with(']');
+            continue;
+        }
+        if token.starts_with('<') {
+            example.push(placeholder(token));
+        } else if token.contains('|') {
+            example.push(
+                token
+                    .trim_matches(|character| matches!(character, '<' | '>' | '[' | ']'))
+                    .split('|')
+                    .next()
+                    .unwrap_or(token)
+                    .to_owned(),
+            );
+        } else {
+            example.push(token.to_owned());
+        }
+    }
+    example
+}
+
+fn describe_command(route: &str) -> Result<CommandDescriptorV1, String> {
+    if route.is_empty()
+        || route.len() > 160
+        || route.split('.').any(|part| {
+            part.is_empty()
+                || !part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        })
+    {
+        return Err("dotted command is invalid".to_owned());
+    }
+    let canonical_route = if route == "doctor" {
+        "doctor.run"
+    } else {
+        route
+    };
+    let cli_route_key = if canonical_route == "management.status.page" {
+        "management.status"
+    } else if canonical_route == "doctor.run" {
+        "doctor"
+    } else {
+        canonical_route
+    };
+    let route_tokens = cli_route_key.split('.').collect::<Vec<_>>();
+    let mut usages = HELP
+        .lines()
+        .filter(|line| command_usage_matches(&route_tokens, line))
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if canonical_route == "patch.apply" {
+        usages.retain(|usage| !usage.contains("<project-id>"));
+    }
+    let mcp = MCP_COMMAND_ROUTES
+        .iter()
+        .find(|(backend_ref, _, _)| *backend_ref == canonical_route);
+    if usages.is_empty() && mcp.is_none() {
+        return Err(format!("unknown command: {route}"));
+    }
+    let local_runtime = matches!(
+        route_tokens.first().copied(),
+        Some("installation" | "integration" | "update" | "hook" | "controller")
+    );
+    let ownership = if mcp.is_some() {
+        CommandOwnershipV1::McpAndCli
+    } else if local_runtime {
+        CommandOwnershipV1::LocalRuntime
+    } else {
+        CommandOwnershipV1::CliOnly
+    };
+    let cli_route = route_tokens
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
+    let examples = usages
+        .iter()
+        .map(|usage| command_usage_example(&route_tokens, usage))
+        .collect::<Vec<Vec<String>>>();
+    let deprecated_aliases = match canonical_route {
+        "patch.apply" => {
+            vec!["patch apply <project-id> <patch-set-id> --approve <sha256>".to_owned()]
+        }
+        "change.prepare" | "patch.prepare" => {
+            vec!["patch prepare <project-id> <finding-id>".to_owned()]
+        }
+        _ => Vec::new(),
+    };
+    let controller_backend_ref = if canonical_route == "patch.apply" {
+        Some("patch.apply-v2".to_owned())
+    } else {
+        (!local_runtime).then(|| canonical_route.to_owned())
+    };
+    let argument_schema = serde_json::json!({
+        "$schema":"https://json-schema.org/draft/2020-12/schema",
+        "type":"array",
+        "prefixItems":cli_route.iter().map(|token| serde_json::json!({"const":token})).collect::<Vec<_>>(),
+        "items":{"type":"string"},
+        "minItems":cli_route.len(),
+        "x-star-control-usages":usages,
+        "x-star-control-examples":examples,
+    });
+    let mut descriptor = CommandDescriptorV1 {
+        schema_id: COMMAND_DESCRIPTOR_V1_SCHEMA_ID.to_owned(),
+        schema_version: COMMAND_DESCRIPTOR_V1_SCHEMA_VERSION,
+        canonical_route: canonical_route.to_owned(),
+        cli_route,
+        ownership,
+        controller_backend_ref,
+        mcp_tool_id: mcp.map(|(_, tool_id, _)| (*tool_id).to_owned()),
+        argument_schema,
+        result_schema_ref: mcp.and_then(|(_, _, schema)| schema.map(str::to_owned)),
+        risk_lane: command_risk_lane(canonical_route),
+        examples,
+        deprecated_aliases,
+        descriptor_hash: star_contracts::Sha256Hash::digest(b"unsealed-command-descriptor"),
+    };
+    descriptor.descriptor_hash = canonical_sha256(&serde_json::json!({
+        "schema_id":descriptor.schema_id,
+        "schema_version":descriptor.schema_version,
+        "canonical_route":descriptor.canonical_route,
+        "cli_route":descriptor.cli_route,
+        "ownership":descriptor.ownership,
+        "controller_backend_ref":descriptor.controller_backend_ref,
+        "mcp_tool_id":descriptor.mcp_tool_id,
+        "argument_schema":descriptor.argument_schema,
+        "result_schema_ref":descriptor.result_schema_ref,
+        "risk_lane":descriptor.risk_lane,
+        "examples":descriptor.examples,
+        "deprecated_aliases":descriptor.deprecated_aliases,
+    }))
+    .map_err(|_| "command descriptor fingerprint failed".to_owned())?;
+    Ok(descriptor)
+}
+
+fn dispatch_command_describe(args: &[String]) -> Option<i32> {
+    if args.first().map(String::as_str) != Some("command")
+        || args.get(1).map(String::as_str) != Some("describe")
+    {
+        return None;
+    }
+    let json = args.iter().any(|argument| argument == "--json");
+    let positionals = args
+        .iter()
+        .skip(2)
+        .filter(|argument| argument.as_str() != "--json")
+        .collect::<Vec<_>>();
+    if positionals.len() != 1
+        || args
+            .iter()
+            .skip(2)
+            .any(|value| value.starts_with('-') && value != "--json")
+    {
+        eprintln!("usage: star command describe <dotted-command> [--json]");
+        return Some(2);
+    }
+    match describe_command(positionals[0]) {
+        Ok(descriptor) if json => match serde_json::to_string_pretty(&descriptor) {
+            Ok(output) => {
+                println!("{output}");
+                Some(0)
+            }
+            Err(_) => Some(1),
+        },
+        Ok(descriptor) => {
+            println!("{}", descriptor.canonical_route);
+            println!("ownership: {:?}", descriptor.ownership);
+            println!("risk_lane: {}", descriptor.risk_lane.as_str());
+            println!("descriptor_hash: {}", descriptor.descriptor_hash);
+            for example in descriptor.examples {
+                println!("usage: star {}", example.join(" "));
+            }
+            Some(0)
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            Some(2)
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Parsed {
     command: String,
@@ -263,6 +646,20 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
         .filter(|arg| arg.as_str() != "--json")
         .cloned()
         .collect();
+    if matches!(
+        args.as_slice(),
+        [first, second, action, ..]
+            if first == "patch"
+                && second == "legacy"
+                && matches!(action.as_str(), "prepare" | "apply")
+    ) {
+        let mut normalized = Vec::with_capacity(args.len() - 1);
+        normalized.push("patch".to_owned());
+        normalized.extend(args.iter().skip(2).cloned());
+        let mut parsed = parse(&normalized)?;
+        parsed.json = json;
+        return Ok(parsed);
+    }
     match args.as_slice() {
         [first, second, tail @ ..] if first == "goal" && second == "start" => {
             let (positionals, options) = parse_tail(
@@ -1873,11 +2270,21 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             })
         }
         [first, second, tail @ ..] if first == "contract" && second == "compare" => {
-            let (positionals, options) = parse_tail(tail, &["--manifest", "--revision"], &[])?;
+            let (positionals, options) =
+                parse_tail(tail, &["--providers", "--manifest", "--revision"], &[])?;
             require_positionals(&positionals, 4, "contract compare")?;
             validate_project_id(&positionals[0], "contract compare")?;
             for value in &positionals[1..] {
                 validate_development_id(value, "record identifier")?;
+            }
+            let provider_observations = options
+                .get("--providers")
+                .and_then(Clone::clone)
+                .map(|path| read_bounded_json_file(&path))
+                .transpose()?
+                .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
+            if !provider_observations.is_array() {
+                return Err("--providers must contain a JSON array".to_owned());
             }
             Ok(Parsed {
                 command: "contract.compare".to_owned(),
@@ -1887,6 +2294,7 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                     "report_id":positionals[1],
                     "baseline_snapshot_id":positionals[2],
                     "current_snapshot_id":positionals[3],
+                    "provider_observations":provider_observations,
                     "revision":development_revision(&options)?,
                 }),
                 json,
@@ -2269,7 +2677,14 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             validate_development_id(&positionals[1], "snapshot-id")?;
             validate_development_id(&positionals[2], "dependency-snapshot-id")?;
             let input = read_bounded_json_file(&required_option(&options, "--input")?)?;
-            require_json_object_keys(&input, &["external_snapshot_ids", "observations"])?;
+            require_json_object_keys(
+                &input,
+                &[
+                    "external_snapshot_ids",
+                    "observations",
+                    "provider_observations",
+                ],
+            )?;
             Ok(Parsed {
                 command: "security.release-manifest".to_owned(),
                 payload: serde_json::json!({
@@ -2278,6 +2693,7 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
                     "dependency_snapshot_id":positionals[2],
                     "external_snapshot_ids":input.get("external_snapshot_ids"),
                     "observations":input.get("observations"),
+                    "provider_observations":input.get("provider_observations"),
                     "revision":development_revision(&options)?,
                 }),
                 json,
@@ -3779,11 +4195,61 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             }
         }
         [first, second, tail @ ..] if first == "management" && second == "status" => {
-            let (positionals, _) = parse_tail(tail, &[], &[])?;
+            let (positionals, options) = parse_tail(
+                tail,
+                &["--cursor", "--max-items", "--max-bytes"],
+                &["--all"],
+            )?;
             require_positionals(&positionals, 0, "management status")?;
+            let all = options.contains_key("--all");
+            if all && options.contains_key("--cursor") {
+                return Err("management status --all cannot be combined with --cursor".to_owned());
+            }
+            let max_items = options
+                .get("--max-items")
+                .and_then(Clone::clone)
+                .map(|value| {
+                    value
+                        .parse::<u32>()
+                        .ok()
+                        .filter(|value| (1..=256).contains(value))
+                        .ok_or_else(|| "--max-items must be between 1 and 256".to_owned())
+                })
+                .transpose()?
+                .unwrap_or(32);
+            let max_bytes = options
+                .get("--max-bytes")
+                .and_then(Clone::clone)
+                .map(|value| {
+                    value
+                        .parse::<u64>()
+                        .ok()
+                        .filter(|value| (1..=65_536).contains(value))
+                        .ok_or_else(|| "--max-bytes must be between 1 and 65536".to_owned())
+                })
+                .transpose()?
+                .unwrap_or(65_536);
+            let paged = all
+                || options.contains_key("--cursor")
+                || options.contains_key("--max-items")
+                || options.contains_key("--max-bytes");
             Ok(Parsed {
-                command: "management.status".to_owned(),
-                payload: serde_json::json!({}),
+                command: if all {
+                    "management.status.page.all".to_owned()
+                } else if paged {
+                    "management.status.page".to_owned()
+                } else {
+                    "management.status".to_owned()
+                },
+                payload: if paged {
+                    serde_json::json!({
+                        "cursor":options.get("--cursor").and_then(Clone::clone),
+                        "max_items":max_items,
+                        "max_bytes":max_bytes,
+                    })
+                } else {
+                    serde_json::json!({})
+                },
                 json,
             })
         }
@@ -4073,6 +4539,74 @@ fn parse(args: &[String]) -> Result<Parsed, String> {
             Ok(Parsed {
                 command: "management.retention.apply".to_owned(),
                 payload: serde_json::json!({"approved_plan_fingerprint":approval}),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "management" && second == "compaction" && third == "plan" =>
+        {
+            let (positionals, options) =
+                parse_tail(tail, &["--backup-root", "--backup-result"], &[])?;
+            require_positionals(&positionals, 1, "management compaction plan")?;
+            let store_id = star_contracts::ids::ManagementStoreId::parse(positionals[0].clone())
+                .map_err(|_| "management store ID is invalid".to_owned())?;
+            let backup_root = options.get("--backup-root").and_then(Clone::clone);
+            let backup_result = options
+                .get("--backup-result")
+                .and_then(Clone::clone)
+                .map(|path| {
+                    serde_json::from_value::<star_contracts::recovery::BackupApplyResult>(
+                        read_bounded_json_file(&path)?,
+                    )
+                    .map_err(|_| "backup result JSON must be BackupApplyResult".to_owned())
+                })
+                .transpose()?;
+            if backup_root.is_some() != backup_result.is_some() {
+                return Err(
+                    "--backup-root and --backup-result must be supplied together".to_owned(),
+                );
+            }
+            Ok(Parsed {
+                command: "management.compaction.plan".to_owned(),
+                payload: serde_json::json!({
+                    "store_id":store_id,
+                    "backup_root":backup_root,
+                    "backup_result":backup_result,
+                }),
+                json,
+            })
+        }
+        [first, second, third, tail @ ..]
+            if first == "management" && second == "compaction" && third == "apply" =>
+        {
+            let (positionals, options) = parse_tail(
+                tail,
+                &["--approve", "--backup-root", "--backup-result"],
+                &[],
+            )?;
+            require_positionals(&positionals, 1, "management compaction apply")?;
+            let approval = required_option(&options, "--approve")?;
+            approval
+                .parse::<star_contracts::Sha256Hash>()
+                .map_err(|_| "--approve must be the exact compaction plan sha256".to_owned())?;
+            let plan = serde_json::from_value::<
+                star_contracts::management::ManagementCompactionPlanV1,
+            >(read_bounded_json_file(&positionals[0])?)
+            .map_err(|_| "plan JSON must be ManagementCompactionPlanV1".to_owned())?;
+            let backup_root = required_option(&options, "--backup-root")?;
+            let backup_result =
+                serde_json::from_value::<star_contracts::recovery::BackupApplyResult>(
+                    read_bounded_json_file(&required_option(&options, "--backup-result")?)?,
+                )
+                .map_err(|_| "backup result JSON must be BackupApplyResult".to_owned())?;
+            Ok(Parsed {
+                command: "management.compaction.apply".to_owned(),
+                payload: serde_json::json!({
+                    "plan":plan,
+                    "approved_plan_fingerprint":approval,
+                    "backup_root":backup_root,
+                    "backup_result":backup_result,
+                }),
                 json,
             })
         }
@@ -4673,6 +5207,9 @@ async fn call_controller_command(
     command: &str,
     mut payload: serde_json::Value,
 ) -> Result<IpcResponse, ControllerClientError> {
+    if command == "management.status.page.all" {
+        return call_all_management_status_pages(client, bootstrap, payload).await;
+    }
     let pagination = match command {
         "tool.search" if payload.get("query").and_then(serde_json::Value::as_str) == Some("") => {
             Some((50_u64, 512_usize, 11_usize, "tool_id", false))
@@ -4797,6 +5334,158 @@ async fn call_controller_command(
     Err(ControllerClientError::MalformedResponse)
 }
 
+async fn call_all_management_status_pages(
+    client: &ControllerClient,
+    bootstrap: &VerifiedControllerImage,
+    mut payload: serde_json::Value,
+) -> Result<IpcResponse, ControllerClientError> {
+    const MAX_TOTAL_ITEMS: usize = 4_096;
+    const MAX_TOTAL_BYTES: usize = 8 * 1024 * 1024;
+    const MAX_PAGES: usize = 128;
+
+    let object = payload
+        .as_object_mut()
+        .ok_or(ControllerClientError::MalformedResponse)?;
+    object.insert("cursor".to_owned(), serde_json::Value::Null);
+    let requested_page_size = object
+        .get("max_items")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(32)
+        .min(256);
+    let mut combined = None;
+    let mut items = Vec::new();
+    let mut item_ids = BTreeSet::new();
+    let mut cursors = BTreeSet::new();
+    let mut snapshot_hash = None;
+    let mut snapshot_revision = None;
+    let mut total_count = None;
+    let mut combined_bytes = 0_usize;
+    let mut current_cursor: Option<String> = None;
+
+    for _ in 0..MAX_PAGES {
+        let remaining = MAX_TOTAL_ITEMS.saturating_sub(items.len());
+        if remaining == 0 {
+            break;
+        }
+        payload
+            .as_object_mut()
+            .ok_or(ControllerClientError::MalformedResponse)?
+            .insert(
+                "max_items".to_owned(),
+                u64::try_from(requested_page_size.min(remaining))
+                    .map_err(|_| ControllerClientError::MalformedResponse)?
+                    .into(),
+            );
+        let response = client
+            .call_with_verified_start(
+                bootstrap,
+                "management.status.page",
+                payload.clone(),
+                RequestId::new(),
+            )
+            .await?;
+        if response.status != IpcStatus::Ok {
+            return Ok(response);
+        }
+        let data = response
+            .data
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .ok_or(ControllerClientError::MalformedResponse)?;
+        let page_snapshot = data
+            .get("snapshot_hash")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(ControllerClientError::MalformedResponse)?;
+        let page_revision = data
+            .get("snapshot_revision")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or(ControllerClientError::MalformedResponse)?;
+        let page_total = data
+            .get("total_count")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or(ControllerClientError::MalformedResponse)?;
+        if snapshot_hash
+            .as_deref()
+            .is_some_and(|value| value != page_snapshot)
+            || snapshot_revision.is_some_and(|value| value != page_revision)
+            || total_count.is_some_and(|value| value != page_total)
+        {
+            return Err(ControllerClientError::MalformedResponse);
+        }
+        snapshot_hash.get_or_insert_with(|| page_snapshot.to_owned());
+        snapshot_revision.get_or_insert(page_revision);
+        total_count.get_or_insert(page_total);
+        let page_items = data
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .ok_or(ControllerClientError::MalformedResponse)?;
+        let page_bytes = serde_json::to_vec(page_items)
+            .map_err(|_| ControllerClientError::MalformedResponse)?
+            .len();
+        if combined_bytes.saturating_add(page_bytes) > MAX_TOTAL_BYTES {
+            break;
+        }
+        for item in page_items {
+            let item_id = item
+                .get("store_id")
+                .and_then(serde_json::Value::as_str)
+                .ok_or(ControllerClientError::MalformedResponse)?;
+            if !item_ids.insert(item_id.to_owned()) || items.len() >= MAX_TOTAL_ITEMS {
+                return Err(ControllerClientError::MalformedResponse);
+            }
+            items.push(item.clone());
+        }
+        combined_bytes = combined_bytes.saturating_add(page_bytes);
+        if combined.is_none() {
+            combined = Some(response.clone());
+        }
+        let next_cursor = match data.get("next_cursor") {
+            None | Some(serde_json::Value::Null) => None,
+            Some(value) => Some(
+                value
+                    .as_str()
+                    .ok_or(ControllerClientError::MalformedResponse)?
+                    .to_owned(),
+            ),
+        };
+        let Some(next_cursor) = next_cursor else {
+            current_cursor = None;
+            break;
+        };
+        if !cursors.insert(next_cursor.clone()) {
+            return Err(ControllerClientError::MalformedResponse);
+        }
+        current_cursor = Some(next_cursor.clone());
+        payload
+            .as_object_mut()
+            .ok_or(ControllerClientError::MalformedResponse)?
+            .insert("cursor".to_owned(), next_cursor.into());
+    }
+
+    let mut response = combined.ok_or(ControllerClientError::MalformedResponse)?;
+    response.data = Some(serde_json::json!({
+        "schema_id":"star.management-status-aggregate",
+        "schema_version":1,
+        "snapshot_hash":snapshot_hash,
+        "snapshot_revision":snapshot_revision,
+        "total_count":total_count,
+        "items":items,
+        "returned_count":item_ids.len(),
+        "truncated":current_cursor.is_some(),
+        "next_cursor":current_cursor,
+        "bounds":{
+            "kind":"cli_bounded_all",
+            "max_items":MAX_TOTAL_ITEMS,
+            "max_bytes":MAX_TOTAL_BYTES,
+            "max_pages":MAX_PAGES,
+            "combined_item_bytes":combined_bytes,
+        },
+    }));
+    Ok(response)
+}
+
 #[tokio::main]
 async fn main() {
     let mut raw: Vec<_> = std::env::args().skip(1).collect();
@@ -4804,12 +5493,14 @@ async fn main() {
         println!("{VERSION}");
         return;
     }
-    if raw
-        .first()
-        .is_some_and(|arg| arg == "--help" || arg == "help")
-        || raw.is_empty()
-    {
+    if raw.first().is_some_and(|arg| arg == "help") || raw.is_empty() || help_requested(&raw) {
         println!("{HELP}");
+        return;
+    }
+    if let Some(exit_code) = dispatch_command_describe(&raw) {
+        if exit_code != 0 {
+            std::process::exit(exit_code);
+        }
         return;
     }
     let config_overrides = match take_global_config_overrides(&mut raw) {
@@ -4831,6 +5522,11 @@ async fn main() {
             std::process::exit(2);
         }
     };
+    if matches!(parsed.command.as_str(), "patch.prepare" | "patch.apply") {
+        eprintln!(
+            "warning: legacy finding-scoped patch syntax is deprecated; use recipe list/describe/validate, change prepare, then patch show/apply/status/recover"
+        );
+    }
     if !config_overrides.is_empty() {
         let Some(payload) = parsed.payload.as_object_mut() else {
             eprintln!("command payload cannot carry typed config overrides");
@@ -4908,6 +5604,34 @@ mod tests {
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| (*value).to_owned()).collect()
+    }
+
+    #[test]
+    fn command_descriptor_examples_are_canonical_argv_not_usage_metasyntax() {
+        let status = describe_command("management.status.page").unwrap();
+        assert_eq!(
+            status.examples,
+            vec![vec!["management".to_owned(), "status".to_owned()]]
+        );
+        assert_eq!(
+            status.mcp_tool_id.as_deref(),
+            Some("star.management.status.page")
+        );
+        assert_eq!(status.argument_schema["minItems"], 2);
+
+        let apply = describe_command("patch.apply").unwrap();
+        assert!(apply.examples.iter().all(|example| {
+            example
+                .iter()
+                .all(|token| !token.contains(['[', ']', '<', '>', '|']))
+        }));
+        assert!(apply.examples[0].contains(&"--fingerprint".to_owned()));
+        assert_eq!(
+            apply.controller_backend_ref.as_deref(),
+            Some("patch.apply-v2")
+        );
+        assert_eq!(apply.examples.len(), 1);
+        assert_eq!(apply.deprecated_aliases.len(), 1);
     }
 
     #[test]
@@ -5084,7 +5808,10 @@ mod tests {
             })
             .collect();
         assert_eq!(
-            HELP.lines().take(8).collect::<Vec<_>>(),
+            HELP.lines()
+                .filter(|line| line.starts_with("star tools "))
+                .take(expected.len())
+                .collect::<Vec<_>>(),
             expected.iter().map(String::as_str).collect::<Vec<_>>()
         );
     }
@@ -5929,6 +6656,21 @@ mod tests {
         assert_eq!(snapshot.payload["role"], "baseline");
         assert_eq!(snapshot.payload["revision"], 1);
 
+        let comparison = parse(&[
+            "contract".into(),
+            "compare".into(),
+            project.to_string(),
+            "report-one".into(),
+            "baseline-one".into(),
+            "current-one".into(),
+        ])
+        .unwrap();
+        assert_eq!(comparison.command, "contract.compare");
+        assert_eq!(
+            comparison.payload["provider_observations"],
+            serde_json::json!([])
+        );
+
         let environment = parse(&[
             "environment".into(),
             "fingerprint".into(),
@@ -5983,6 +6725,32 @@ mod tests {
     #[test]
     fn m7_dependency_and_status_commands_emit_bounded_payloads() {
         let project = star_contracts::ids::ProjectId::new();
+        let provider_input = std::env::temp_dir().join(format!(
+            "star-security-providers-{}-{}.json",
+            std::process::id(),
+            project
+        ));
+        std::fs::write(
+            &provider_input,
+            br#"{"external_snapshot_ids":[],"observations":[],"provider_observations":[]}"#,
+        )
+        .unwrap();
+        let release_manifest = parse(&[
+            "security".into(),
+            "release-manifest".into(),
+            project.to_string(),
+            "supply-one".into(),
+            "dependencies-one".into(),
+            "--input".into(),
+            provider_input.to_string_lossy().into_owned(),
+        ])
+        .unwrap();
+        let _ = std::fs::remove_file(&provider_input);
+        assert_eq!(release_manifest.command, "security.release-manifest");
+        assert_eq!(
+            release_manifest.payload["provider_observations"],
+            serde_json::json!([])
+        );
         let scan = parse(&[
             "deps".into(),
             "scan".into(),

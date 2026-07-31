@@ -1,0 +1,91 @@
+{
+  "branch_shadow": {
+    "covered_branches": 0,
+    "gate_eligible": false,
+    "measured_branches": 0
+  },
+  "changed_line_count": 0,
+  "changed_scope_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "covered_executable_line_count": 0,
+  "evidence": {
+    "completed_at": "2026-01-01T00:00:00Z",
+    "completeness": "complete",
+    "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "evidence_id": "fixture",
+    "executable_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "exit_code": 1,
+    "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "limitations": [
+      "fixture"
+    ],
+    "normalized_artifact_ref": {
+      "artifact_id": "art_00000000000000000000000000",
+      "created_at": "2026-01-01T00:00:00Z",
+      "kind": "log",
+      "media_type": "fixture",
+      "producer": {
+        "build_id": "fixture",
+        "component": "fixture",
+        "platform": "fixture",
+        "product_version": "fixture"
+      },
+      "project_id": "prj_00000000000000000000000000",
+      "redaction_status": "not_needed",
+      "relative_path": "src/lib.rs",
+      "retention_class": "temporary",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 0,
+      "source_artifact_ref": null
+    },
+    "project_id": "prj_00000000000000000000000000",
+    "protocol": {
+      "detail_level": "structured",
+      "machine_readable": false,
+      "media_type": "fixture",
+      "protocol_id": "fixture",
+      "protocol_version": "fixture",
+      "schema_uri": "fixture",
+      "stability": "stable"
+    },
+    "provider_id": "fixture",
+    "provider_version": "fixture",
+    "raw_artifact_ref": {
+      "artifact_id": "art_00000000000000000000000000",
+      "created_at": "2026-01-01T00:00:00Z",
+      "kind": "log",
+      "media_type": "fixture",
+      "producer": {
+        "build_id": "fixture",
+        "component": "fixture",
+        "platform": "fixture",
+        "product_version": "fixture"
+      },
+      "project_id": "prj_00000000000000000000000000",
+      "redaction_status": "not_needed",
+      "relative_path": "src/lib.rs",
+      "retention_class": "temporary",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 0,
+      "source_artifact_ref": null
+    },
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "started_at": "2026-01-01T00:00:00Z"
+  },
+  "excluded_line_count": 0,
+  "executable_line_count": 0,
+  "gate_state": "pass",
+  "limitations": [
+    "fixture"
+  ],
+  "line_coverage_basis_points": 0,
+  "observation_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "required_line_coverage_basis_points": 0,
+  "schema_id": "star.coverage-observation",
+  "schema_version": 1,
+  "uncovered_executable_line_count": 0
+}

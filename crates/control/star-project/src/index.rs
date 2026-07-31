@@ -49,6 +49,9 @@ pub struct IndexPolicy {
     pub max_text_tokens_per_file: usize,
     pub classification_contract_version: u32,
     pub text_adapter_version: u32,
+    pub near_clone_minimum_similarity_basis_points: u32,
+    pub near_clone_max_candidates: usize,
+    pub near_clone_max_pairs: usize,
 }
 
 impl Default for IndexPolicy {
@@ -70,6 +73,9 @@ impl Default for IndexPolicy {
             max_text_tokens_per_file: 250_000,
             classification_contract_version: 1,
             text_adapter_version: 2,
+            near_clone_minimum_similarity_basis_points: 8_500,
+            near_clone_max_candidates: 4_096,
+            near_clone_max_pairs: 10_000,
         }
     }
 }
@@ -93,6 +99,8 @@ pub struct SyntaxReference {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SyntaxStructuralCloneCandidate {
     pub normalized_token_fingerprint: Sha256Hash,
+    pub normalized_shape_fingerprint: Sha256Hash,
+    pub normalized_shape_simhash: String,
     pub normalized_token_count: u32,
     pub range: SourceRange,
     pub structural_kind: String,
@@ -3039,6 +3047,8 @@ fn append_structural_clone_candidates(
                 "source_range":candidate.range,
                 "structural_kind":candidate.structural_kind,
                 "normalized_token_fingerprint":candidate.normalized_token_fingerprint,
+                "normalized_shape_fingerprint":candidate.normalized_shape_fingerprint,
+                "normalized_shape_simhash":candidate.normalized_shape_simhash,
             }),
         )
         .map_err(|_| ProjectError::Fingerprint)?;
@@ -3051,6 +3061,8 @@ fn append_structural_clone_candidates(
                 "language_id":source.language_id,
                 "structural_kind":candidate.structural_kind,
                 "normalized_token_fingerprint":candidate.normalized_token_fingerprint,
+                "normalized_shape_fingerprint":candidate.normalized_shape_fingerprint,
+                "normalized_shape_simhash":candidate.normalized_shape_simhash,
                 "normalized_token_count":candidate.normalized_token_count,
                 "owning_symbol_identity":owning_symbol_identity,
                 "redaction_state":HardcodingRedactionState::ShapeOnly,
@@ -3069,6 +3081,8 @@ fn append_structural_clone_candidates(
                 language_id: source.language_id.clone(),
                 structural_kind: candidate.structural_kind,
                 normalized_token_fingerprint: candidate.normalized_token_fingerprint,
+                normalized_shape_fingerprint: Some(candidate.normalized_shape_fingerprint),
+                normalized_shape_simhash: Some(candidate.normalized_shape_simhash),
                 normalized_token_count: candidate.normalized_token_count,
                 owning_symbol_identity,
                 redaction_state: HardcodingRedactionState::ShapeOnly,
@@ -3792,6 +3806,8 @@ mod tests {
                 }],
                 structural_clone_candidates: vec![SyntaxStructuralCloneCandidate {
                     normalized_token_fingerprint: Sha256Hash::digest(b"fixture-structural"),
+                    normalized_shape_fingerprint: Sha256Hash::digest(b"fixture-shape"),
+                    normalized_shape_simhash: format!("simhash256:{}", "0".repeat(64)),
                     normalized_token_count: 16,
                     range: SourceRange {
                         start_line: 1,

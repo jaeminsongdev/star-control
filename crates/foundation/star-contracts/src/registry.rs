@@ -10,6 +10,35 @@ use crate::{
     runtime::{ExecutableIdentity, ExternalProtocol, IsolationProfile},
 };
 
+pub const COMMAND_DESCRIPTOR_V1_SCHEMA_ID: &str = "star.command-descriptor";
+pub const COMMAND_DESCRIPTOR_V1_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandOwnershipV1 {
+    McpAndCli,
+    CliOnly,
+    LocalRuntime,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CommandDescriptorV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub canonical_route: String,
+    pub cli_route: Vec<String>,
+    pub ownership: CommandOwnershipV1,
+    pub controller_backend_ref: Option<String>,
+    pub mcp_tool_id: Option<String>,
+    pub argument_schema: serde_json::Value,
+    pub result_schema_ref: Option<String>,
+    pub risk_lane: RiskLane,
+    pub examples: Vec<Vec<String>>,
+    pub deprecated_aliases: Vec<String>,
+    pub descriptor_hash: Sha256Hash,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RegistrySource {

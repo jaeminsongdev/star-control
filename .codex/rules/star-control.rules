@@ -1,0 +1,130 @@
+# Rules는 argv prefix만 판정한다. suffix flag와 경로 의미 검사는 typed PreToolUse가 보완한다.
+prefix_rule(
+    pattern = ["git", "push", ["-f", "--force", "--force-with-lease", "--force-if-includes"]],
+    decision = "forbidden",
+    justification = "Force push is forbidden; publish a normal fast-forward update or ask the user for a recovery plan.",
+    match = [
+        "git push -f origin main",
+        "git push --force origin main",
+        "git push --force-with-lease origin main",
+    ],
+    not_match = ["git push origin main --force"],
+)
+
+# argv prefix rules cannot express an arbitrary remote/ref wildcard. These exact
+# suffix fixtures catch the canonical main-push spellings; typed PreToolUse
+# still rejects every force flag position and every remote/ref combination.
+prefix_rule(
+    pattern = ["git", "push", ["origin", "upstream"], ["main", "master", "HEAD", "HEAD:main"], ["-f", "--force", "--force-with-lease", "--force-if-includes"]],
+    decision = "forbidden",
+    justification = "Suffix force push is forbidden; typed PreToolUse covers non-canonical remote and ref names.",
+    match = [
+        "git push origin main --force",
+        "git push upstream HEAD --force-with-lease",
+        "git push origin HEAD:main -f",
+    ],
+)
+
+prefix_rule(
+    pattern = ["git", "reset", "--hard"],
+    decision = "forbidden",
+    justification = "Preserve dirty worktrees; inspect and isolate changes without git reset --hard.",
+    match = ["git reset --hard", "git reset --hard HEAD"],
+    not_match = ["git reset HEAD --hard"],
+)
+
+prefix_rule(
+    pattern = ["git", "reset", ["HEAD", "main", "origin/main"], "--hard"],
+    decision = "forbidden",
+    justification = "Suffix --hard reset is forbidden; typed PreToolUse covers every revision spelling.",
+    match = ["git reset HEAD --hard", "git reset origin/main --hard"],
+)
+
+prefix_rule(
+    pattern = ["git", "clean"],
+    decision = "forbidden",
+    justification = "Preserve untracked user files; never use git clean in this repository.",
+    match = ["git clean -fd", "git clean -n"],
+)
+
+prefix_rule(
+    pattern = ["git", "status", "--short"],
+    decision = "allow",
+    justification = "The bounded porcelain status snapshot is read-only.",
+    match = ["git status --short", "git status --short --branch"],
+    not_match = ["git status", "git -c alias.status=!echo status --short"],
+)
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "Every remote push requires explicit user review.",
+    match = ["git push", "git push origin main", "git push origin main --force"],
+)
+
+prefix_rule(
+    pattern = ["git", "branch", ["-d", "-D", "--delete"]],
+    decision = "prompt",
+    justification = "Branch deletion requires explicit user review.",
+    match = ["git branch -d topic", "git branch -D topic", "git branch --delete topic"],
+)
+
+prefix_rule(
+    pattern = ["git", ["rm", "restore"]],
+    decision = "prompt",
+    justification = "Removing or restoring tracked content can discard user work and requires review.",
+    match = ["git rm file.txt", "git restore file.txt"],
+)
+
+prefix_rule(
+    pattern = [["cargo", "npm", "pnpm", "yarn", "pip", "pip3", "winget", "choco"], ["add", "install", "ci", "i"]],
+    decision = "prompt",
+    justification = "Package and tool installation changes the dependency or host environment and requires review.",
+    match = ["cargo install cargo-audit", "npm install", "npm ci", "pnpm i", "pip install ruff", "winget install Git.Git"],
+)
+
+prefix_rule(
+    pattern = [["python", "python3", "py"], "-m", "pip", "install"],
+    decision = "prompt",
+    justification = "Python module installation changes the dependency or host environment and requires review.",
+    match = ["python -m pip install ruff", "py -m pip install pytest"],
+)
+
+prefix_rule(
+    pattern = [["reg", "reg.exe"], ["add", "delete", "import", "restore"]],
+    decision = "prompt",
+    justification = "Windows registry changes are system-setting changes and require review.",
+    match = ["reg add HKCU\\Software\\Example", "reg.exe delete HKCU\\Software\\Example"],
+)
+
+prefix_rule(
+    pattern = [["setx", "Set-ExecutionPolicy", "Enable-WindowsOptionalFeature", "Disable-WindowsOptionalFeature"]],
+    decision = "prompt",
+    justification = "System and shell policy changes require explicit user review.",
+    match = ["setx STAR_MODE enabled", "Set-ExecutionPolicy RemoteSigned"],
+)
+
+prefix_rule(
+    pattern = [["Remove-Item", "Move-Item", "rm", "rmdir", "mv", "move"]],
+    decision = "prompt",
+    justification = "Filesystem delete and move operations require review; PreToolUse separately forbids unbounded recursive targets.",
+    match = ["Remove-Item -LiteralPath D:\\work\\tmp", "Move-Item a b", "rm file.txt"],
+)
+
+# Prefix Rules deliberately cover canonical direct mutation spellings. The
+# typed PreToolUse parser additionally recognizes descendants, alternate flag
+# positions, environment expansion, shell wrappers, redirection, and generic
+# write/edit/delete tool inputs.
+prefix_rule(
+    pattern = [["Set-Content", "Add-Content", "Out-File", "New-Item", "Remove-Item", "Move-Item", "Copy-Item", "Rename-Item"], "-LiteralPath", ["$CODEX_HOME/plugins/cache", "$env:CODEX_HOME\\plugins\\cache", "%CODEX_HOME%\\plugins\\cache", "~/.codex/plugins/cache", "$USERPROFILE/.codex/plugins/cache", "$env:USERPROFILE\\.codex\\plugins\\cache", "%USERPROFILE%\\.codex\\plugins\\cache", "$APPDATA/Star-Control", "$env:APPDATA\\Star-Control", "%APPDATA%\\Star-Control", "$USERPROFILE/AppData/Roaming/Star-Control", "$env:USERPROFILE\\AppData\\Roaming\\Star-Control", "%USERPROFILE%\\AppData\\Roaming\\Star-Control", "$LOCALAPPDATA/Star-Control", "$env:LOCALAPPDATA\\Star-Control", "%LOCALAPPDATA%\\Star-Control", "$USERPROFILE/AppData/Local/Star-Control", "$env:USERPROFILE\\AppData\\Local\\Star-Control", "%USERPROFILE%\\AppData\\Local\\Star-Control"]],
+    decision = "forbidden",
+    justification = "Generated Codex plugin state and Star-Control runtime state must be changed only by verified installer, updater, or product operations.",
+    match = ["Set-Content -LiteralPath $USERPROFILE/.codex/plugins/cache changed", "Remove-Item -LiteralPath $USERPROFILE/AppData/Roaming/Star-Control"],
+)
+
+prefix_rule(
+    pattern = ["sqlite3", ["$CODEX_HOME/state_5.sqlite", "$env:CODEX_HOME\\state_5.sqlite", "%CODEX_HOME%\\state_5.sqlite", "~/.codex/state_5.sqlite", "$USERPROFILE/.codex/state_5.sqlite", "$env:USERPROFILE\\.codex\\state_5.sqlite", "%USERPROFILE%\\.codex\\state_5.sqlite", "$CODEX_HOME/goals_1.sqlite", "$env:CODEX_HOME\\goals_1.sqlite", "%CODEX_HOME%\\goals_1.sqlite", "~/.codex/goals_1.sqlite", "$USERPROFILE/.codex/goals_1.sqlite", "$env:USERPROFILE\\.codex\\goals_1.sqlite", "%USERPROFILE%\\.codex\\goals_1.sqlite", "$CODEX_HOME/logs_2.sqlite", "$env:CODEX_HOME\\logs_2.sqlite", "%CODEX_HOME%\\logs_2.sqlite", "~/.codex/logs_2.sqlite", "$USERPROFILE/.codex/logs_2.sqlite", "$env:USERPROFILE\\.codex\\logs_2.sqlite", "%USERPROFILE%\\.codex\\logs_2.sqlite", "$CODEX_HOME/memories_1.sqlite", "$env:CODEX_HOME\\memories_1.sqlite", "%CODEX_HOME%\\memories_1.sqlite", "~/.codex/memories_1.sqlite", "$USERPROFILE/.codex/memories_1.sqlite", "$env:USERPROFILE\\.codex\\memories_1.sqlite", "%USERPROFILE%\\.codex\\memories_1.sqlite"]],
+    decision = "forbidden",
+    justification = "Codex runtime and trust-adjacent SQLite state must never be edited directly.",
+    match = ["sqlite3 $CODEX_HOME/state_5.sqlite VACUUM", "sqlite3 $CODEX_HOME/goals_1.sqlite DELETE FROM goals"],
+)

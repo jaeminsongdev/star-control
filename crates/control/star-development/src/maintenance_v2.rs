@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 use star_contracts::{
     ProjectId, Sha256Hash, canonical_sha256,
     development_v2::CoverageState,
+    external_analysis::{
+        ExternalAnalysisCompleteness, MAX_EXTERNAL_PROVIDER_OBSERVATIONS,
+        SupplyChainProviderObservationV1,
+    },
     maintenance_v2::{
         DEPENDENCY_SNAPSHOT_SCHEMA_ID, DEPENDENCY_UPDATE_PLAN_SCHEMA_ID, DependencyRecord,
         DependencySnapshot, DependencyUpdatePlan, DependencyUpdateStatus,
@@ -834,6 +838,108 @@ pub fn build_external_data_snapshot(
     Ok(snapshot)
 }
 
+/// Bind provider-normalized SBOM, advisory, license, VEX, and provenance
+/// evidence to the existing SupplyChainSnapshot. Raw tool output remains an
+/// ArtifactRef carried by each common evidence record.
+pub fn attach_supply_chain_provider_observations(
+    mut snapshot: SupplyChainSnapshot,
+    mut providers: Vec<SupplyChainProviderObservationV1>,
+) -> Result<SupplyChainSnapshot, DevelopmentError> {
+    if providers.len() > MAX_EXTERNAL_PROVIDER_OBSERVATIONS
+        || providers
+            .iter()
+            .map(|provider| provider.limitations.len())
+            .sum::<usize>()
+            > 256
+    {
+        return Err(DevelopmentError::Invalid);
+    }
+    for provider in &providers {
+        provider.validate().map_err(|_| DevelopmentError::Invalid)?;
+        if provider.evidence.project_id != snapshot.project_id
+            || provider.evidence.source_fingerprint != snapshot.dependency_snapshot_fingerprint
+        {
+            return Err(DevelopmentError::Conflict);
+        }
+    }
+    providers.sort_by(|left, right| {
+        (&left.evidence.provider_id, &left.evidence.evidence_id)
+            .cmp(&(&right.evidence.provider_id, &right.evidence.evidence_id))
+    });
+    if providers
+        .iter()
+        .map(|provider| {
+            (
+                provider.provider_kind,
+                &provider.evidence.provider_id,
+                &provider.evidence.evidence_id,
+            )
+        })
+        .collect::<BTreeSet<_>>()
+        .len()
+        != providers.len()
+    {
+        return Err(DevelopmentError::Conflict);
+    }
+    snapshot.provider_observations = providers;
+    let freshness_rank = |freshness: ExternalFreshness| match freshness {
+        ExternalFreshness::Current => 0,
+        ExternalFreshness::Unknown => 1,
+        ExternalFreshness::Stale => 2,
+        ExternalFreshness::Expired => 3,
+        ExternalFreshness::Unavailable => 4,
+    };
+    for observed in snapshot
+        .provider_observations
+        .iter()
+        .filter_map(|provider| provider.advisory_freshness.as_ref())
+        .map(|freshness| freshness.freshness)
+    {
+        if freshness_rank(observed) > freshness_rank(snapshot.freshness) {
+            snapshot.freshness = observed;
+        }
+    }
+    if snapshot.provider_observations.iter().any(|provider| {
+        matches!(
+            provider.evidence.completeness,
+            ExternalAnalysisCompleteness::Unavailable | ExternalAnalysisCompleteness::Unverified
+        )
+    }) {
+        snapshot.completeness = CoverageState::Unverified;
+    } else if snapshot
+        .provider_observations
+        .iter()
+        .any(|provider| provider.evidence.completeness != ExternalAnalysisCompleteness::Complete)
+    {
+        snapshot.completeness = CoverageState::Partial;
+    }
+    snapshot.limitations.extend(
+        snapshot
+            .provider_observations
+            .iter()
+            .flat_map(|provider| provider.limitations.iter().cloned()),
+    );
+    snapshot.limitations.sort();
+    snapshot.limitations.dedup();
+    snapshot.content_fingerprint = fingerprint(
+        SUPPLY_CHAIN_SNAPSHOT_SCHEMA_ID,
+        &serde_json::json!({
+            "snapshot_id": snapshot.snapshot_id,
+            "project_id": snapshot.project_id,
+            "subject_revision": snapshot.subject_revision,
+            "dependency_snapshot_ref": snapshot.dependency_snapshot_ref,
+            "dependency_snapshot_fingerprint": snapshot.dependency_snapshot_fingerprint,
+            "external_data_snapshot_refs": snapshot.external_data_snapshot_refs,
+            "observations": snapshot.observations,
+            "provider_observations": snapshot.provider_observations,
+            "freshness": snapshot.freshness,
+            "completeness": snapshot.completeness,
+            "limitations": snapshot.limitations,
+        }),
+    )?;
+    Ok(snapshot)
+}
+
 pub fn verify_external_data_snapshot(
     snapshot: &ExternalDataSnapshot,
 ) -> Result<(), DevelopmentError> {
@@ -950,6 +1056,7 @@ pub fn build_supply_chain_snapshot(
             .map(|item| item.snapshot_id.clone())
             .collect(),
         observations,
+        provider_observations: Vec::new(),
         freshness,
         completeness,
         limitations,
@@ -965,6 +1072,7 @@ pub fn build_supply_chain_snapshot(
             "dependency_snapshot_fingerprint": snapshot.dependency_snapshot_fingerprint,
             "external_data_snapshot_refs": snapshot.external_data_snapshot_refs,
             "observations": snapshot.observations,
+            "provider_observations": snapshot.provider_observations,
             "freshness": snapshot.freshness,
             "completeness": snapshot.completeness,
             "limitations": snapshot.limitations,

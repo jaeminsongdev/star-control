@@ -887,6 +887,24 @@
           },
           "type": "array"
         },
+        "normalized_shape_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Identifier/literal-normalized shape digest. Optional only so snapshots\nwritten by the preceding exact-clone contract remain readable."
+        },
+        "normalized_shape_simhash": {
+          "description": "A bounded 256-bit SimHash encoded as `simhash256:` plus 64 lowercase\nhexadecimal characters. It contains no source tokens or literal text.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "normalized_token_count": {
           "format": "uint32",
           "minimum": 0,

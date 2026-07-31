@@ -20,9 +20,9 @@ use star_contracts::{
     },
     ids::{
         CheckoutId, CodeIndexSnapshotId, CoordinatedOperationId, DiagnosticId, EvidenceBundleId,
-        FindingId, GateId, PatchSetId, ProjectId, ProjectRevisionId, ReviewPackId, RootBindingId,
-        ScanRunId, SuppressionId, TaskSpecId, ValidationResultId, ValidationRunId,
-        WorkspaceSnapshotId,
+        FindingId, GateId, ManagementStoreId, PatchSetId, ProjectId, ProjectRevisionId,
+        ReviewPackId, RootBindingId, ScanRunId, SuppressionId, TaskSpecId, ValidationResultId,
+        ValidationRunId, WorkspaceSnapshotId,
     },
     index::{CodeIndexSnapshot, IndexEdge, IndexEntity, ProjectCatalogSnapshot, SourceEntry},
     maintenance_v2::{
@@ -35,9 +35,11 @@ use star_contracts::{
     },
     management::{
         Baseline, CanonicalSource, ChangePlan, CoordinatedOperation, Disposition, Finding,
-        ManagementStoreStatus, Occurrence, ParticipantReceipt, PatchSet, Project, ProjectCheckout,
-        ProjectPathRef, ProjectRevision, ScanRun, Suppression, Symbol, SymbolReference,
-        ValidationResult, WorkspaceSnapshot,
+        ManagementCompactionApplyResultV1, ManagementCompactionPlanV1, ManagementStatusPageV1,
+        ManagementStatusQueryV1, ManagementStoreStatus, Occurrence, ParticipantReceipt, PatchSet,
+        Project, ProjectCheckout, ProjectPathRef, ProjectRevision, RetentionBatchResultV1,
+        RetentionCheckpointV1, RetentionPlanV2, RetentionPolicyV2, ScanRun, Suppression, Symbol,
+        SymbolReference, ValidationResult, WorkspaceSnapshot,
     },
     patch_v2::{ChangeRecipeV2, PatchSetV2, TargetSelector, WorktreeDecision},
     planning::PlanningBundle,
@@ -646,6 +648,12 @@ pub trait ManagementRepositorySet: Send + Sync {
     /// Returns the current persisted store summaries without running integrity verification
     /// or resealing the active set.
     fn status_all(&self) -> Result<Vec<ManagementStoreStatus>, RepositoryError>;
+    /// Returns a transport-bounded, revision-bound page without running integrity verification
+    /// or materializing the complete project registry in memory.
+    fn status_page(
+        &self,
+        query: &ManagementStatusQueryV1,
+    ) -> Result<ManagementStatusPageV1, RepositoryError>;
     fn verify_all(&self) -> Result<Vec<ManagementStoreStatus>, RepositoryError>;
     fn plan_backup(&self, destination: &Path) -> Result<BackupPlan, RepositoryError>;
     fn apply_backup(
@@ -687,6 +695,57 @@ pub trait ManagementRepositorySet: Send + Sync {
         plan: &RetentionPlan,
         approved_plan_fingerprint: &str,
     ) -> Result<RetentionApplyResult, RepositoryError>;
+    fn plan_retention_v2(
+        &self,
+        policy: &RetentionPolicyV2,
+    ) -> Result<RetentionPlanV2, RepositoryError>;
+    fn plan_retention_v2_controlled(
+        &self,
+        policy: &RetentionPolicyV2,
+        is_cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<RetentionPlanV2, RepositoryError> {
+        if is_cancelled() {
+            return Err(RepositoryError::new(
+                RepositoryErrorCategory::Unavailable,
+                "retention planning was cancelled",
+            ));
+        }
+        self.plan_retention_v2(policy)
+    }
+    fn load_retention_execution(
+        &self,
+    ) -> Result<Option<(RetentionPlanV2, RetentionCheckpointV1)>, RepositoryError>;
+    fn start_retention_execution(
+        &self,
+        plan: &RetentionPlanV2,
+        checkpoint: &RetentionCheckpointV1,
+    ) -> Result<(), RepositoryError>;
+    fn apply_retention_batch_v2(
+        &self,
+        plan: &RetentionPlanV2,
+        checkpoint: &RetentionCheckpointV1,
+    ) -> Result<RetentionBatchResultV1, RepositoryError>;
+    fn save_retention_checkpoint(
+        &self,
+        checkpoint: &RetentionCheckpointV1,
+    ) -> Result<(), RepositoryError>;
+    fn clear_retention_execution(
+        &self,
+        plan_fingerprint: &Sha256Hash,
+    ) -> Result<(), RepositoryError>;
+    fn plan_compaction(
+        &self,
+        store_id: &ManagementStoreId,
+        backup_root: Option<&Path>,
+        backup_result: Option<&BackupApplyResult>,
+    ) -> Result<ManagementCompactionPlanV1, RepositoryError>;
+    fn apply_compaction(
+        &self,
+        plan: &ManagementCompactionPlanV1,
+        approved_plan_fingerprint: &str,
+        backup_root: &Path,
+        backup_result: &BackupApplyResult,
+    ) -> Result<ManagementCompactionApplyResultV1, RepositoryError>;
 }
 
 pub trait ManagementRecovery: Send + Sync {

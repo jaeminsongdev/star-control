@@ -1,0 +1,107 @@
+{
+  "$defs": {
+    "CommandOwnershipV1": {
+      "enum": [
+        "mcp_and_cli",
+        "cli_only",
+        "local_runtime"
+      ],
+      "type": "string"
+    },
+    "RiskLane": {
+      "enum": [
+        "read_closed",
+        "read_open",
+        "write_closed",
+        "destructive_closed",
+        "write_open",
+        "destructive_open"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.command-descriptor:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "argument_schema": true,
+    "canonical_route": {
+      "type": "string"
+    },
+    "cli_route": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "controller_backend_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "deprecated_aliases": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "descriptor_hash": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "examples": {
+      "items": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "type": "array"
+    },
+    "mcp_tool_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ownership": {
+      "$ref": "#/$defs/CommandOwnershipV1"
+    },
+    "result_schema_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "risk_lane": {
+      "$ref": "#/$defs/RiskLane"
+    },
+    "schema_id": {
+      "const": "star.command-descriptor",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "canonical_route",
+    "cli_route",
+    "ownership",
+    "argument_schema",
+    "risk_lane",
+    "examples",
+    "deprecated_aliases",
+    "descriptor_hash"
+  ],
+  "title": "CommandDescriptorV1",
+  "type": "object"
+}

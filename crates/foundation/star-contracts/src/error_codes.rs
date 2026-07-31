@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn source_catalog_is_sorted_unique_and_matches_the_canonical_document_tables() {
         let codes = stable_error_codes();
-        assert_eq!(codes.len(), 533);
+        assert_eq!(codes.len(), 552);
         assert!(codes.windows(2).all(|pair| pair[0] < pair[1]));
         assert!(codes.iter().all(|code| {
             !code.is_empty()

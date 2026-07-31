@@ -46,6 +46,7 @@ pub const TRAILING_WHITESPACE_RULE_ID: &str = "star.rule.trailing-whitespace";
 pub const TRAILING_WHITESPACE_RECIPE_ID: &str = "star.recipe.remove-trailing-whitespace";
 pub const HARDCODING_CANDIDATE_RULE_ID: &str = "star.rule.hardcoding-candidate";
 pub const STRUCTURAL_CLONE_CANDIDATE_RULE_ID: &str = "star.rule.structural-clone-candidate";
+pub const NEAR_CLONE_CANDIDATE_RULE_ID: &str = "star.rule.near-clone-candidate";
 pub const COMPLEXITY_REGRESSION_RULE_ID: &str = "star.rule.complexity-regression";
 pub const UNUSED_SURFACE_CANDIDATE_RULE_ID: &str = "star.rule.unused-surface-candidate";
 
@@ -161,6 +162,59 @@ pub fn structural_clone_candidate_rule() -> Result<Rule, ValidationError> {
     })
 }
 
+pub fn near_clone_candidate_rule() -> Result<Rule, ValidationError> {
+    let definition_fingerprint = versioned_fingerprint(
+        "star.rule-definition",
+        1,
+        &serde_json::json!({
+            "rule_id":NEAR_CLONE_CANDIDATE_RULE_ID,
+            "rule_version":"1.0.0",
+            "identity_anchor":"identifier-literal-normalized-owner-pair",
+            "message_code":"NEAR_CLONE_CANDIDATE",
+            "automatic_confirmed_defect":false,
+            "automatic_patch_set_generated":false,
+        }),
+    )
+    .map_err(|_| ValidationError::Fingerprint)?;
+    Ok(Rule {
+        schema_id: "star.rule".to_owned(),
+        schema_version: 1,
+        rule_id: NEAR_CLONE_CANDIDATE_RULE_ID.to_owned(),
+        rule_version: "1.0.0".to_owned(),
+        definition_fingerprint,
+        title: "Near-clone candidate".to_owned(),
+        category: "code-quality".to_owned(),
+        default_severity: Severity::Info,
+        default_confidence: Confidence::Medium,
+        supported_languages: vec!["rust".to_owned()],
+        source_kinds: vec![SourceKind::File],
+        analyzer_ref: "builtin.near-clone.identifier-literal-simhash.v1".to_owned(),
+        parameter_schema_ref: "star.rule.near-clone-candidate.parameters.v1".to_owned(),
+        identity_contract_version: 1,
+        identity_anchor: "identifier-literal-normalized-owner-pair".to_owned(),
+        redaction_contract_version: 1,
+        remediation_recipe_refs: Vec::new(),
+        lifecycle: RuleLifecycle::Active,
+    })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NearClonePolicy {
+    pub minimum_similarity_basis_points: u32,
+    pub max_candidates: usize,
+    pub max_pairs: usize,
+}
+
+impl Default for NearClonePolicy {
+    fn default() -> Self {
+        Self {
+            minimum_similarity_basis_points: 8_500,
+            max_candidates: 4_096,
+            max_pairs: 10_000,
+        }
+    }
+}
+
 pub fn complexity_regression_rule() -> Result<Rule, ValidationError> {
     let definition_fingerprint = versioned_fingerprint("star.rule-definition", 1, &serde_json::json!({"rule_id":COMPLEXITY_REGRESSION_RULE_ID,"rule_version":"1.0.0","identity_anchor":"metric-version-language-cohort-symbol","message_code":"COMPLEXITY_REGRESSION","automatic_confirmed_defect":false})).map_err(|_| ValidationError::Fingerprint)?;
     Ok(Rule {
@@ -213,6 +267,7 @@ pub struct FindingProjection {
     pub findings: Vec<Finding>,
     pub occurrences: Vec<Occurrence>,
     pub rule_set_fingerprint: Sha256Hash,
+    pub limitations: Vec<String>,
 }
 
 /// Projects safe SARIF candidates into the existing source-derived Finding
@@ -237,6 +292,7 @@ pub fn project_sarif_findings(
         findings: Vec::new(),
         occurrences: Vec::new(),
         rule_set_fingerprint: Sha256Hash::digest(b"star.sarif-2.1.0-projection.v1"),
+        limitations: Vec::new(),
     };
     for candidate in candidates {
         if candidate.locations.is_empty() {
@@ -380,6 +436,7 @@ pub fn analyze_builtin_findings(
     structural_clone_candidates: &[StructuralCloneCandidate],
     complexity_metric_candidates: &[ComplexityMetricCandidate],
     previous_complexity_metrics: Option<&[ComplexityMetricCandidate]>,
+    near_clone_policy: NearClonePolicy,
 ) -> Result<FindingProjection, ValidationError> {
     let mut projection = analyze_trailing_whitespace(
         project_id,
@@ -392,6 +449,7 @@ pub fn analyze_builtin_findings(
     )?;
     let hardcoding_rule = hardcoding_candidate_rule()?;
     let structural_clone_rule = structural_clone_candidate_rule()?;
+    let near_clone_rule = near_clone_candidate_rule()?;
     let complexity_rule = complexity_regression_rule()?;
     let unused_surface_rule = unused_surface_candidate_rule()?;
     let trailing_rule = trailing_whitespace_rule()?;
@@ -519,6 +577,16 @@ pub fn analyze_builtin_findings(
         symbols,
         structural_clone_candidates,
     )?;
+    append_near_clone_findings(
+        &mut projection,
+        project_id,
+        revision,
+        workspace_snapshot_id,
+        scan_run_id,
+        symbols,
+        structural_clone_candidates,
+        near_clone_policy,
+    )?;
     append_complexity_regression_findings(
         &mut projection,
         project_id,
@@ -573,6 +641,14 @@ pub fn analyze_builtin_findings(
                 "rule_id":structural_clone_rule.rule_id,
                 "rule_version":structural_clone_rule.rule_version,
                 "definition_fingerprint":structural_clone_rule.definition_fingerprint,
+            },
+            {
+                "rule_id":near_clone_rule.rule_id,
+                "rule_version":near_clone_rule.rule_version,
+                "definition_fingerprint":near_clone_rule.definition_fingerprint,
+                "minimum_similarity_basis_points":near_clone_policy.minimum_similarity_basis_points,
+                "max_candidates":near_clone_policy.max_candidates,
+                "max_pairs":near_clone_policy.max_pairs,
             },
             {
                 "rule_id":complexity_rule.rule_id,
@@ -739,6 +815,293 @@ fn append_structural_clone_findings(
         });
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_near_clone_findings(
+    projection: &mut FindingProjection,
+    project_id: &ProjectId,
+    revision: &ProjectRevision,
+    workspace_snapshot_id: &star_contracts::ids::WorkspaceSnapshotId,
+    scan_run_id: &ScanRunId,
+    symbols: &[Symbol],
+    candidates: &[StructuralCloneCandidate],
+    policy: NearClonePolicy,
+) -> Result<(), ValidationError> {
+    if !(5_000..=10_000).contains(&policy.minimum_similarity_basis_points)
+        || policy.max_candidates == 0
+        || policy.max_candidates > 10_000
+        || policy.max_pairs == 0
+        || policy.max_pairs > 100_000
+    {
+        return Err(ValidationError::InconsistentGraph);
+    }
+    let mut eligible = Vec::new();
+    let mut legacy_signature_seen = false;
+    for candidate in candidates {
+        if candidate.structural_kind != "function_body"
+            || !matches!(
+                candidate.source_class,
+                SourceClass::Source | SourceClass::Test
+            )
+        {
+            continue;
+        }
+        match (
+            candidate.normalized_shape_fingerprint.as_ref(),
+            candidate.normalized_shape_simhash.as_deref(),
+        ) {
+            (Some(_), Some(simhash)) if decode_simhash(simhash).is_some() => {
+                eligible.push(candidate)
+            }
+            (None, None) => legacy_signature_seen = true,
+            _ => return Err(ValidationError::InconsistentGraph),
+        }
+    }
+    if legacy_signature_seen {
+        projection
+            .limitations
+            .push("NEAR_CLONE_SIGNATURE_UNAVAILABLE".to_owned());
+    }
+    eligible.sort_by(|left, right| left.candidate_key.cmp(&right.candidate_key));
+    if eligible.len() > policy.max_candidates {
+        eligible.truncate(policy.max_candidates);
+        projection
+            .limitations
+            .push("NEAR_CLONE_CANDIDATE_LIMIT".to_owned());
+    }
+
+    let mut emitted_pairs = 0_usize;
+    let mut pair_limit_reached = false;
+    'left: for left_index in 0..eligible.len() {
+        let left = eligible[left_index];
+        let left_simhash = decode_simhash(
+            left.normalized_shape_simhash
+                .as_deref()
+                .ok_or(ValidationError::InconsistentGraph)?,
+        )
+        .ok_or(ValidationError::InconsistentGraph)?;
+        for right in eligible.iter().skip(left_index + 1).copied() {
+            if left.source_class != right.source_class
+                || left.normalized_token_fingerprint == right.normalized_token_fingerprint
+            {
+                continue;
+            }
+            let right_simhash = decode_simhash(
+                right
+                    .normalized_shape_simhash
+                    .as_deref()
+                    .ok_or(ValidationError::InconsistentGraph)?,
+            )
+            .ok_or(ValidationError::InconsistentGraph)?;
+            let similarity = near_clone_similarity_basis_points(
+                &left_simhash,
+                &right_simhash,
+                left.normalized_token_count,
+                right.normalized_token_count,
+            );
+            if similarity < policy.minimum_similarity_basis_points {
+                continue;
+            }
+            if emitted_pairs == policy.max_pairs {
+                pair_limit_reached = true;
+                break 'left;
+            }
+            append_near_clone_pair_finding(
+                projection,
+                project_id,
+                revision,
+                workspace_snapshot_id,
+                scan_run_id,
+                symbols,
+                left,
+                right,
+                similarity,
+                policy.minimum_similarity_basis_points,
+            )?;
+            emitted_pairs += 1;
+        }
+    }
+    if pair_limit_reached {
+        projection
+            .limitations
+            .push("NEAR_CLONE_PAIR_LIMIT".to_owned());
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_near_clone_pair_finding(
+    projection: &mut FindingProjection,
+    project_id: &ProjectId,
+    revision: &ProjectRevision,
+    workspace_snapshot_id: &star_contracts::ids::WorkspaceSnapshotId,
+    scan_run_id: &ScanRunId,
+    symbols: &[Symbol],
+    left: &StructuralCloneCandidate,
+    right: &StructuralCloneCandidate,
+    similarity_basis_points: u32,
+    minimum_similarity_basis_points: u32,
+) -> Result<(), ValidationError> {
+    let mut subjects = [near_clone_subject(left), near_clone_subject(right)];
+    subjects.sort();
+    let identity_tokens = vec![subjects[0].clone(), subjects[1].clone()];
+    let finding_fingerprint = versioned_fingerprint(
+        "star.identity.finding",
+        1,
+        &serde_json::json!({
+            "project_id":project_id,
+            "rule_id":NEAR_CLONE_CANDIDATE_RULE_ID,
+            "identity_contract_version":1,
+            "identity_anchor":"identifier-literal-normalized-owner-pair",
+            "identity_tokens":identity_tokens,
+        }),
+    )
+    .map_err(|_| ValidationError::Fingerprint)?;
+    let finding_id = FindingId::from_fingerprint(&finding_fingerprint);
+    let mut occurrence_ids = Vec::with_capacity(2);
+    for candidate in [left, right] {
+        let occurrence_fingerprint = versioned_fingerprint(
+            "star.identity.occurrence",
+            1,
+            &serde_json::json!({
+                "finding_id":finding_id,
+                "workspace_snapshot_id":workspace_snapshot_id,
+                "source_content_sha256":candidate.source_content_sha256,
+                "location_range":candidate.source_range,
+                "evidence_key":candidate.candidate_key,
+            }),
+        )
+        .map_err(|_| ValidationError::Fingerprint)?;
+        let occurrence_id = OccurrenceId::from_fingerprint(&occurrence_fingerprint);
+        occurrence_ids.push(occurrence_id.clone());
+        projection.occurrences.push(Occurrence {
+            schema_id: "star.occurrence".to_owned(),
+            schema_version: 1,
+            occurrence_id,
+            occurrence_fingerprint,
+            finding_id: finding_id.clone(),
+            scan_run_id: scan_run_id.clone(),
+            project_revision_id: revision.project_revision_id.clone(),
+            workspace_snapshot_id: workspace_snapshot_id.clone(),
+            canonical_source_id: candidate.canonical_source_id.clone(),
+            source_content_sha256: candidate.source_content_sha256.clone(),
+            location_path: candidate.source_ref.clone(),
+            location_range: candidate.source_range.clone(),
+            symbol_id: symbols
+                .iter()
+                .find(|symbol| {
+                    symbol.canonical_source_id == candidate.canonical_source_id
+                        && symbol.qualified_name == candidate.owning_symbol_identity
+                })
+                .map(|symbol| symbol.symbol_id.clone()),
+            message_parameters: BTreeMap::from([
+                (
+                    "algorithm".to_owned(),
+                    "identifier_literal_normalized_simhash_v1".to_owned(),
+                ),
+                (
+                    "minimum_similarity_basis_points".to_owned(),
+                    minimum_similarity_basis_points.to_string(),
+                ),
+                (
+                    "similarity_basis_points".to_owned(),
+                    similarity_basis_points.to_string(),
+                ),
+            ]),
+            evidence_refs: Vec::new(),
+            observed_at: Utc::now(),
+            redaction_state: RedactionState::Redacted,
+        });
+    }
+    let content_fingerprint = versioned_fingerprint(
+        "star.finding-content",
+        1,
+        &serde_json::json!({
+            "finding_fingerprint":finding_fingerprint,
+            "occurrence_ids":occurrence_ids,
+            "similarity_basis_points":similarity_basis_points,
+            "minimum_similarity_basis_points":minimum_similarity_basis_points,
+            "severity":Severity::Info,
+            "confidence":Confidence::Medium,
+            "automatic_confirmed_defect":false,
+            "automatic_patch_set_generated":false,
+        }),
+    )
+    .map_err(|_| ValidationError::Fingerprint)?;
+    projection.findings.push(Finding {
+        schema_id: "star.finding".to_owned(),
+        schema_version: 1,
+        finding_id,
+        finding_fingerprint,
+        project_id: project_id.clone(),
+        rule_id: NEAR_CLONE_CANDIDATE_RULE_ID.to_owned(),
+        rule_version: "1.0.0".to_owned(),
+        identity_anchor: "identifier-literal-normalized-owner-pair".to_owned(),
+        identity_tokens,
+        title_code: "NEAR_CLONE_CANDIDATE_TITLE".to_owned(),
+        message_code: "NEAR_CLONE_CANDIDATE".to_owned(),
+        severity: Severity::Info,
+        confidence: Confidence::Medium,
+        lifecycle: FindingLifecycle::Open,
+        first_observed_scan_id: scan_run_id.clone(),
+        last_observed_scan_id: scan_run_id.clone(),
+        current_occurrence_ids: occurrence_ids,
+        active_disposition_id: None,
+        active_suppression_ids: Vec::new(),
+        content_fingerprint,
+    });
+    Ok(())
+}
+
+fn near_clone_subject(candidate: &StructuralCloneCandidate) -> String {
+    format!(
+        "{}#{}",
+        candidate.canonical_source_id, candidate.owning_symbol_identity
+    )
+}
+
+fn near_clone_similarity_basis_points(
+    left: &[u8; 32],
+    right: &[u8; 32],
+    left_token_count: u32,
+    right_token_count: u32,
+) -> u32 {
+    let differing_bits = left
+        .iter()
+        .zip(right)
+        .map(|(left, right)| (left ^ right).count_ones())
+        .sum::<u32>();
+    let bit_similarity = (256_u32.saturating_sub(differing_bits)) * 10_000 / 256;
+    let maximum_tokens = left_token_count.max(right_token_count);
+    let token_similarity = u64::from(left_token_count.min(right_token_count))
+        .saturating_mul(10_000)
+        .checked_div(u64::from(maximum_tokens))
+        .and_then(|value| u32::try_from(value).ok())
+        .unwrap_or(0);
+    bit_similarity.min(token_similarity)
+}
+
+fn decode_simhash(value: &str) -> Option<[u8; 32]> {
+    let encoded = value.strip_prefix("simhash256:")?;
+    if encoded.len() != 64 || !encoded.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    let mut output = [0_u8; 32];
+    for (index, chunk) in encoded.as_bytes().chunks_exact(2).enumerate() {
+        let high = hex_nibble(chunk[0])?;
+        let low = hex_nibble(chunk[1])?;
+        output[index] = high << 4 | low;
+    }
+    Some(output)
+}
+
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        _ => None,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1561,6 +1924,7 @@ pub fn analyze_trailing_whitespace(
         findings,
         occurrences,
         rule_set_fingerprint,
+        limitations: Vec::new(),
     })
 }
 
@@ -1930,6 +2294,8 @@ mod tests {
                 language_id: "rust".to_owned(),
                 structural_kind: "function_body".to_owned(),
                 normalized_token_fingerprint: normalized.clone(),
+                normalized_shape_fingerprint: Some(Sha256Hash::digest(b"shape")),
+                normalized_shape_simhash: Some(format!("simhash256:{}", "0".repeat(64))),
                 normalized_token_count: 16,
                 owning_symbol_identity: owner.to_owned(),
                 redaction_state: star_contracts::index::HardcodingRedactionState::ShapeOnly,
@@ -1956,6 +2322,7 @@ mod tests {
             &production,
             &[],
             None,
+            NearClonePolicy::default(),
         )
         .unwrap();
         let production_finding = first
@@ -1995,6 +2362,7 @@ mod tests {
             &moved,
             &[],
             None,
+            NearClonePolicy::default(),
         )
         .unwrap();
         let moved_finding = moved_projection
@@ -2023,6 +2391,7 @@ mod tests {
             &mixed,
             &[],
             None,
+            NearClonePolicy::default(),
         )
         .unwrap();
         assert!(
@@ -2031,6 +2400,109 @@ mod tests {
                 .iter()
                 .all(|finding| finding.rule_id != STRUCTURAL_CLONE_CANDIDATE_RULE_ID)
         );
+    }
+
+    #[test]
+    fn near_clone_findings_are_bounded_advisory_and_fail_closed() {
+        let project_id = ProjectId::new();
+        let revision = ProjectRevision {
+            schema_id: "star.project-revision".to_owned(),
+            schema_version: 1,
+            project_revision_id: ProjectRevisionId::new(),
+            project_id: project_id.clone(),
+            revision_kind: star_contracts::management::RevisionKind::FilesystemManifest,
+            vcs_object_format: None,
+            commit_id: None,
+            tree_id: None,
+            manifest_fingerprint: Some(Sha256Hash::digest(b"near-clone-revision")),
+            captured_at: Utc::now(),
+            completeness: Completeness::Complete,
+            limitations: Vec::new(),
+        };
+        let candidate = |owner: &str, simhash: &str| StructuralCloneCandidate {
+            candidate_key: format!("candidate:{owner}"),
+            canonical_source_id: CanonicalSourceId::from_stable_bytes(owner.as_bytes()),
+            source_ref: ProjectPathRef::parse(format!("src/{owner}.rs")).unwrap(),
+            source_content_sha256: Sha256Hash::digest(format!("source:{owner}").as_bytes()),
+            source_range: SourceRange {
+                start_line: 1,
+                start_column: 1,
+                end_line: 4,
+                end_column: 2,
+            },
+            source_class: SourceClass::Source,
+            language_id: "rust".to_owned(),
+            structural_kind: "function_body".to_owned(),
+            normalized_token_fingerprint: Sha256Hash::digest(format!("exact:{owner}").as_bytes()),
+            normalized_shape_fingerprint: Some(Sha256Hash::digest(b"normalized-shape")),
+            normalized_shape_simhash: Some(simhash.to_owned()),
+            normalized_token_count: 32,
+            owning_symbol_identity: owner.to_owned(),
+            redaction_state: star_contracts::index::HardcodingRedactionState::ShapeOnly,
+            limitations: Vec::new(),
+            content_fingerprint: Sha256Hash::digest(format!("content:{owner}").as_bytes()),
+        };
+        let same_shape = format!("simhash256:{}", "0".repeat(64));
+        let candidates = vec![
+            candidate("first", &same_shape),
+            candidate("second", &same_shape),
+            candidate("third", &same_shape),
+        ];
+        let mut projection = FindingProjection {
+            findings: Vec::new(),
+            occurrences: Vec::new(),
+            rule_set_fingerprint: Sha256Hash::digest(b"near-clone-rules"),
+            limitations: Vec::new(),
+        };
+        append_near_clone_findings(
+            &mut projection,
+            &project_id,
+            &revision,
+            &WorkspaceSnapshotId::new(),
+            &ScanRunId::new(),
+            &[],
+            &candidates,
+            NearClonePolicy {
+                minimum_similarity_basis_points: 8_500,
+                max_candidates: 3,
+                max_pairs: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(projection.findings.len(), 1);
+        assert_eq!(projection.occurrences.len(), 2);
+        assert_eq!(projection.findings[0].rule_id, NEAR_CLONE_CANDIDATE_RULE_ID);
+        assert_eq!(projection.findings[0].severity, Severity::Info);
+        assert!(
+            projection
+                .limitations
+                .contains(&"NEAR_CLONE_PAIR_LIMIT".to_owned())
+        );
+        assert!(
+            near_clone_candidate_rule()
+                .unwrap()
+                .remediation_recipe_refs
+                .is_empty()
+        );
+
+        let malformed = vec![candidate("malformed", "simhash256:not-hex")];
+        let error = append_near_clone_findings(
+            &mut FindingProjection {
+                findings: Vec::new(),
+                occurrences: Vec::new(),
+                rule_set_fingerprint: Sha256Hash::digest(b"near-clone-rules"),
+                limitations: Vec::new(),
+            },
+            &project_id,
+            &revision,
+            &WorkspaceSnapshotId::new(),
+            &ScanRunId::new(),
+            &[],
+            &malformed,
+            NearClonePolicy::default(),
+        )
+        .unwrap_err();
+        assert!(matches!(error, ValidationError::InconsistentGraph));
     }
 
     #[test]
@@ -2094,6 +2566,7 @@ mod tests {
             findings: Vec::new(),
             occurrences: Vec::new(),
             rule_set_fingerprint: Sha256Hash::digest(b"complexity-rule-set"),
+            limitations: Vec::new(),
         };
         append_complexity_regression_findings(
             &mut projection,
@@ -2257,6 +2730,7 @@ mod tests {
             &[],
             &[],
             None,
+            NearClonePolicy::default(),
         )
         .unwrap();
         let unused_findings = projection
@@ -2370,6 +2844,7 @@ mod tests {
             findings: Vec::new(),
             occurrences: Vec::new(),
             rule_set_fingerprint: Sha256Hash::digest(b"rules"),
+            limitations: Vec::new(),
         };
         let mut unused = empty_projection();
         append_unused_dependency_findings(

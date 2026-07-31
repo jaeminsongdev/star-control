@@ -1,0 +1,115 @@
+{
+  "$defs": {
+    "NearClonePairV1": {
+      "additionalProperties": false,
+      "properties": {
+        "left_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "left_subject": {
+          "type": "string"
+        },
+        "right_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "right_subject": {
+          "type": "string"
+        },
+        "similarity_basis_points": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "left_subject",
+        "right_subject",
+        "left_fingerprint",
+        "right_fingerprint",
+        "similarity_basis_points"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.near-clone-observation:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "advisory_only": {
+      "type": "boolean"
+    },
+    "algorithm": {
+      "type": "string"
+    },
+    "automatic_patch_set_generated": {
+      "type": "boolean"
+    },
+    "limitations": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "max_candidates": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "max_source_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "minimum_similarity_basis_points": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "observation_id": {
+      "type": "string"
+    },
+    "pairs": {
+      "items": {
+        "$ref": "#/$defs/NearClonePairV1"
+      },
+      "type": "array"
+    },
+    "project_id": {
+      "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "schema_id": {
+      "const": "star.near-clone-observation",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "observation_id",
+    "project_id",
+    "source_fingerprint",
+    "algorithm",
+    "minimum_similarity_basis_points",
+    "max_candidates",
+    "max_source_bytes",
+    "pairs",
+    "advisory_only",
+    "automatic_patch_set_generated"
+  ],
+  "title": "NearCloneObservationV1",
+  "type": "object"
+}

@@ -3,6 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use star_contracts::{
     ApprovalId, GateId, ReleaseManifestId, Sha256Hash, TaskInvocationId, ValidationPlanId,
     ValidationRunId,
+    external_analysis::{
+        ExternalAnalysisCompleteness, SupplyChainProviderKindV1, SupplyChainProviderObservationV1,
+    },
     release_v2::{
         EvidenceCompleteness, RELEASE_MANIFEST_V2_SCHEMA_ID, ReleaseArchitecture,
         ReleaseArtifactV2, ReleaseCompatibilityTarget, ReleaseIdentityBinding, ReleaseManifestV2,
@@ -600,6 +603,72 @@ fn seal_manifest(mut manifest: ReleaseManifestV2) -> Result<ReleaseManifestV2, R
     )
     .map_err(|_| ReleaseError::Fingerprint)?;
     Ok(manifest)
+}
+
+/// Bind exact SBOM and provenance artifacts produced by registered providers
+/// to the existing release manifest fields. Provider detail is already
+/// normalized by the application boundary; release code only checks identity,
+/// completeness, and immutable ArtifactRef binding before resealing.
+pub fn bind_release_supply_chain_provider_evidence(
+    mut manifest: ReleaseManifestV2,
+    sbom: &SupplyChainProviderObservationV1,
+    provenance: &SupplyChainProviderObservationV1,
+) -> Result<ReleaseManifestV2, ReleaseError> {
+    let release_source_fingerprint = versioned_fingerprint(
+        "star.release-source-revisions",
+        1,
+        &manifest.source_revisions,
+    )
+    .map_err(|_| ReleaseError::Invalid)?;
+    for (observation, expected_kind) in [
+        (sbom, SupplyChainProviderKindV1::Sbom),
+        (provenance, SupplyChainProviderKindV1::Provenance),
+    ] {
+        observation.validate().map_err(|_| ReleaseError::Invalid)?;
+        if observation.provider_kind != expected_kind
+            || observation.evidence.completeness != ExternalAnalysisCompleteness::Complete
+            || observation.evidence.config_fingerprint
+                != manifest.identity_binding.config_fingerprint
+            || observation.evidence.source_fingerprint != release_source_fingerprint
+            || !manifest
+                .identity_binding
+                .environment_fingerprints
+                .contains(&observation.evidence.environment_fingerprint)
+            || !manifest
+                .source_revisions
+                .iter()
+                .any(|source| source.project_id == observation.evidence.project_id)
+        {
+            return Err(ReleaseError::Blocked);
+        }
+    }
+    let artifact_ref = |observation: &SupplyChainProviderObservationV1| {
+        observation
+            .evidence
+            .normalized_artifact_ref
+            .as_ref()
+            .or(observation.evidence.raw_artifact_ref.as_ref())
+            .map(|artifact| artifact.artifact_id.as_str().to_owned())
+            .ok_or(ReleaseError::Invalid)
+    };
+    let sbom_ref = artifact_ref(sbom)?;
+    let provenance_ref = artifact_ref(provenance)?;
+    manifest.sbom_ref = Some(sbom_ref.clone());
+    manifest.provenance_ref = Some(provenance_ref.clone());
+    for decision in &mut manifest.supply_chain_applicability {
+        match decision.kind {
+            SupplyChainKind::Sbom => {
+                decision.state = SupplyChainState::Complete;
+                decision.evidence_ref = Some(sbom_ref.clone());
+            }
+            SupplyChainKind::Provenance => {
+                decision.state = SupplyChainState::Complete;
+                decision.evidence_ref = Some(provenance_ref.clone());
+            }
+            SupplyChainKind::Signing => {}
+        }
+    }
+    seal_manifest(manifest)
 }
 
 pub fn verify_release_manifest(manifest: &ReleaseManifestV2) -> Result<(), ReleaseError> {

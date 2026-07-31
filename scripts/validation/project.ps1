@@ -113,6 +113,8 @@ function Get-StarValidationChecks {
     $checks = [Collections.Generic.List[object]]::new()
     $checker = Join-Path $Context.Root "scripts/validation/check_files.py"
     [void]$checks.Add((New-ValidationCheckSpec -Id "static-files" -Unit "project" -Executable "python" -Arguments @("-X", "utf8", $checker, "--root", $Context.Root, "--paths-file", $Context.PathsFile) -WorkingDirectory $Context.Root -UnverifiedExitCodes @(3)))
+    [void]$checks.Add((New-ValidationCheckSpec -Id "codex-policy" -Unit "project" -Executable "python" -Arguments @("-X", "utf8", (Join-Path $Context.Root "scripts/validation/check_codex_policy.py")) -WorkingDirectory $Context.Root))
+    [void]$checks.Add((New-ValidationCheckSpec -Id "external-analysis-providers" -Unit "project" -Executable "python" -Arguments @("-X", "utf8", (Join-Path $Context.Root "scripts/validation/check_external_analysis_providers.py")) -WorkingDirectory $Context.Root))
     Add-StarDiffChecks -Checks $checks -Context $Context
     if ($Context.Profile -eq "quick") {
         return @($checks)
@@ -170,9 +172,12 @@ function New-ProjectValidationConfig {
             "scripts/validation/common.ps1",
             "scripts/validation/project.ps1",
             "scripts/validation/check_product_inventory.py",
+            "scripts/validation/check_codex_policy.py",
+            "scripts/validation/check_external_analysis_providers.py",
             "scripts/validation/project-validation-report.schema.json",
             "scripts/validation/requirements-validation.txt",
             "catalog/product-features.toml",
+            "catalog/external-analysis-providers.toml",
             ".github/workflows/full.yml"
         )
         ClassifyPath = { param($Path) Get-StarValidationImpact -Path $Path }

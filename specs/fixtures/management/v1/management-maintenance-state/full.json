@@ -1,0 +1,16 @@
+{
+  "applied_bytes": 0,
+  "applied_rows": 0,
+  "checkpoint_cursor": "fixture",
+  "last_error_code": "fixture",
+  "operation_id": "cop_00000000000000000000000000",
+  "phase": "idle",
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "planned_bytes": 0,
+  "planned_rows": 0,
+  "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "schema_id": "star.management-maintenance-state",
+  "schema_version": 1,
+  "started_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z"
+}

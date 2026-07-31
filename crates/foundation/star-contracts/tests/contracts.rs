@@ -292,6 +292,11 @@ fn required_release_core_package_declares_exactly_twenty_three_owned_actions() {
                 RiskLane::ReadClosed
             ),
             (
+                "star.management.status.page",
+                "management.status.page",
+                RiskLane::ReadClosed
+            ),
+            (
                 "star.core.index.search",
                 "index.search",
                 RiskLane::ReadClosed

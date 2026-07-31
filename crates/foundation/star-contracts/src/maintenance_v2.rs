@@ -4,6 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::development_v2::CoverageState;
+use crate::external_analysis::{ArchitectureRuleV1, SupplyChainProviderObservationV1};
 use crate::management::ProjectPathRef;
 use crate::{EvaluationRunId, ProjectId, Sha256Hash};
 
@@ -538,6 +539,8 @@ pub struct QualityRuleDefinition {
     pub sarif_rule_id: Option<String>,
     pub lifecycle: QualityRulePackLifecycle,
     pub replacement_rule_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub architecture_rule: Option<ArchitectureRuleV1>,
 }
 
 /// Versioned, digest-bound Rule Pack metadata. Custom analyzers may emit
@@ -574,6 +577,18 @@ pub struct QualityRulePackManifest {
 impl QualityRulePackManifest {
     pub fn is_current_schema(&self) -> bool {
         self.schema_id == QUALITY_RULE_PACK_MANIFEST_SCHEMA_ID && self.schema_version == 1
+    }
+
+    pub fn validate_architecture_rules(
+        &self,
+        observed_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), crate::external_analysis::ExternalAnalysisContractError> {
+        for rule in &self.rules {
+            if let Some(architecture_rule) = &rule.architecture_rule {
+                architecture_rule.validate(observed_at)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -651,6 +666,8 @@ pub struct SupplyChainSnapshot {
     #[serde(default)]
     pub external_data_snapshot_refs: Vec<String>,
     pub observations: Vec<SupplyChainObservation>,
+    #[serde(default)]
+    pub provider_observations: Vec<SupplyChainProviderObservationV1>,
     pub freshness: ExternalFreshness,
     pub completeness: CoverageState,
     #[serde(default)]

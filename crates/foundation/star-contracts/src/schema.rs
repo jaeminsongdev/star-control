@@ -52,6 +52,14 @@ use crate::{
         VALIDATION_RESULT_V2_SCHEMA_ID, VALIDATION_RUN_V2_SCHEMA_ID, ValidationResultV2,
         ValidationRunV2,
     },
+    external_analysis::{
+        COVERAGE_OBSERVATION_V1_SCHEMA_ID, CoverageObservationV1,
+        EXTERNAL_ANALYSIS_EVIDENCE_V1_SCHEMA_ID, ExternalAnalysisEvidenceV1,
+        FLAKY_TEST_OBSERVATION_V1_SCHEMA_ID, FlakyTestObservationV1,
+        NEAR_CLONE_OBSERVATION_V1_SCHEMA_ID, NearCloneObservationV1,
+        REPRODUCIBILITY_VERIFICATION_REPORT_V1_SCHEMA_ID, RUNTIME_SAFETY_OBSERVATION_V1_SCHEMA_ID,
+        ReproducibilityVerificationReportV1, RuntimeSafetyObservationV1,
+    },
     fixed_mcp::{CallInput, McpToolResult, fixed_input_schema, fixed_result_schema},
     index::{CodeIndexSnapshot, ProjectCatalogSnapshot},
     installation::{
@@ -86,9 +94,14 @@ use crate::{
     },
     management::{
         Baseline, CanonicalSource, ChangePlan, ChangeRecipe, CoordinatedOperation, Disposition,
-        Finding, ManagementStoreStatus, Occurrence, PatchSet, Project, ProjectCheckout,
-        ProjectRevision, ProjectV1, ProjectV1ToV2MigrationPlan, ProjectV1ToV2MigrationResult, Rule,
-        ScanRun, Suppression, Symbol, SymbolReference, ValidationResult, WorkspaceSnapshot,
+        Finding, MANAGEMENT_COMPACTION_PLAN_SCHEMA_ID, MANAGEMENT_MAINTENANCE_STATE_SCHEMA_ID,
+        MANAGEMENT_STATUS_PAGE_SCHEMA_ID, MANAGEMENT_STATUS_QUERY_SCHEMA_ID,
+        ManagementCompactionPlanV1, ManagementMaintenanceStateV1, ManagementStatusPageV1,
+        ManagementStatusQueryV1, ManagementStoreStatus, Occurrence, PatchSet, Project,
+        ProjectCheckout, ProjectRevision, ProjectV1, ProjectV1ToV2MigrationPlan,
+        ProjectV1ToV2MigrationResult, RETENTION_CHECKPOINT_SCHEMA_ID, RETENTION_PLAN_V2_SCHEMA_ID,
+        RetentionCheckpointV1, RetentionPlanV2, Rule, ScanRun, Suppression, Symbol,
+        SymbolReference, ValidationResult, WorkspaceSnapshot,
     },
     manifest::ToolPackageManifest,
     migration_v2::{
@@ -136,7 +149,9 @@ use crate::{
         RESTORE_APPLY_RESULT_SCHEMA_ID, RESTORE_PLAN_SCHEMA_ID, RebuildApplyResult, RebuildPlan,
         RecoveryStatus, RestoreApplyResult, RestorePlan,
     },
-    registry::{RegistrySnapshot, ToolRegistryCache},
+    registry::{
+        COMMAND_DESCRIPTOR_V1_SCHEMA_ID, CommandDescriptorV1, RegistrySnapshot, ToolRegistryCache,
+    },
     release_v2::{
         BUDGET_SNAPSHOT_V1_SCHEMA_ID, BudgetSnapshotV1, COST_RECORD_V1_SCHEMA_ID, CostRecordV1,
         EVALUATION_CASE_DEFINITION_V1_SCHEMA_ID, EVALUATION_CATALOG_ITEM_SCHEMA_ID,
@@ -410,6 +425,10 @@ fn management_id_prefix(name: &str) -> Option<&'static str> {
 pub fn generated_documents() -> Vec<(&'static str, Value)> {
     let mut documents = vec![
         (
+            "command-descriptor-v1.schema.json",
+            management_schema_document::<CommandDescriptorV1>(COMMAND_DESCRIPTOR_V1_SCHEMA_ID),
+        ),
+        (
             "effective-config-v1.schema.json",
             management_schema_document::<EffectiveConfigV1>(EFFECTIVE_CONFIG_V1_SCHEMA_ID),
         ),
@@ -558,6 +577,40 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
             management_schema_document_version::<CompatibilityReportV2>(
                 COMPATIBILITY_REPORT_V2_SCHEMA_ID,
                 2,
+            ),
+        ),
+        (
+            "external-analysis-evidence-v1.schema.json",
+            management_schema_document::<ExternalAnalysisEvidenceV1>(
+                EXTERNAL_ANALYSIS_EVIDENCE_V1_SCHEMA_ID,
+            ),
+        ),
+        (
+            "coverage-observation-v1.schema.json",
+            management_schema_document::<CoverageObservationV1>(COVERAGE_OBSERVATION_V1_SCHEMA_ID),
+        ),
+        (
+            "flaky-test-observation-v1.schema.json",
+            management_schema_document::<FlakyTestObservationV1>(
+                FLAKY_TEST_OBSERVATION_V1_SCHEMA_ID,
+            ),
+        ),
+        (
+            "reproducibility-verification-report-v1.schema.json",
+            management_schema_document::<ReproducibilityVerificationReportV1>(
+                REPRODUCIBILITY_VERIFICATION_REPORT_V1_SCHEMA_ID,
+            ),
+        ),
+        (
+            "runtime-safety-observation-v1.schema.json",
+            management_schema_document::<RuntimeSafetyObservationV1>(
+                RUNTIME_SAFETY_OBSERVATION_V1_SCHEMA_ID,
+            ),
+        ),
+        (
+            "near-clone-observation-v1.schema.json",
+            management_schema_document::<NearCloneObservationV1>(
+                NEAR_CLONE_OBSERVATION_V1_SCHEMA_ID,
             ),
         ),
         (
@@ -1199,6 +1252,34 @@ pub fn generated_documents() -> Vec<(&'static str, Value)> {
         (
             "management-store-status.schema.json",
             management_schema_document::<ManagementStoreStatus>("star.management-store-status"),
+        ),
+        (
+            "management-status-query.schema.json",
+            schema_document::<ManagementStatusQueryV1>(MANAGEMENT_STATUS_QUERY_SCHEMA_ID),
+        ),
+        (
+            "management-status-page.schema.json",
+            management_schema_document::<ManagementStatusPageV1>(MANAGEMENT_STATUS_PAGE_SCHEMA_ID),
+        ),
+        (
+            "management-maintenance-state.schema.json",
+            management_schema_document::<ManagementMaintenanceStateV1>(
+                MANAGEMENT_MAINTENANCE_STATE_SCHEMA_ID,
+            ),
+        ),
+        (
+            "management-retention-plan-v2.schema.json",
+            management_schema_document::<RetentionPlanV2>(RETENTION_PLAN_V2_SCHEMA_ID),
+        ),
+        (
+            "management-retention-checkpoint.schema.json",
+            management_schema_document::<RetentionCheckpointV1>(RETENTION_CHECKPOINT_SCHEMA_ID),
+        ),
+        (
+            "management-compaction-plan.schema.json",
+            management_schema_document::<ManagementCompactionPlanV1>(
+                MANAGEMENT_COMPACTION_PLAN_SCHEMA_ID,
+            ),
         ),
         (
             "management-active-set.schema.json",

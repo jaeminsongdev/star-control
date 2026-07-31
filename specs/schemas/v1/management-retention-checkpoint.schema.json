@@ -1,0 +1,107 @@
+{
+  "$defs": {
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-retention-checkpoint:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active_candidate_applied_bytes": {
+      "default": 0,
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "active_candidate_applied_rows": {
+      "default": 0,
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "active_candidate_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "applied_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "applied_rows": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "cancelled": {
+      "type": "boolean"
+    },
+    "committed_batch_count": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "expected_store_revisions": {
+      "additionalProperties": {
+        "format": "uint64",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "last_candidate_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "next_candidate_index": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "operation_id": {
+      "pattern": "^cop_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "schema_id": {
+      "const": "star.management-retention-checkpoint",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "operation_id",
+    "plan_fingerprint",
+    "expected_store_revisions",
+    "next_candidate_index",
+    "committed_batch_count",
+    "applied_rows",
+    "applied_bytes",
+    "complete",
+    "cancelled",
+    "updated_at"
+  ],
+  "title": "RetentionCheckpointV1",
+  "type": "object"
+}

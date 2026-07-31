@@ -1,0 +1,265 @@
+schema_id = "star.external-analysis-provider-catalog"
+schema_version = 1
+normalization_owner = "star-application"
+gateway_tool_specific_parser = false
+auto_install = false
+
+# 이 Catalog는 실행 파일의 존재를 verified 결과로 승격하지 않는다. 실제
+# version, executable digest, protocol 및 source-bound ArtifactRef는 매 실행의
+# ExternalAnalysisEvidenceV1에 기록한다.
+
+[[providers]]
+id = "cargo-llvm-cov"
+category = "changed_line_coverage"
+discovery = "path"
+executable_candidates = ["cargo-llvm-cov"]
+version_command = ["cargo", "llvm-cov", "--version"]
+protocol_id = "llvm-cov-export-json"
+protocol_version = "documented"
+media_type = "application/json"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.coverage-observation"
+limitation = "branch coverage remains shadow-only while the selected cargo-llvm-cov option is unstable"
+
+[[providers]]
+id = "cargo-nextest"
+category = "flaky_test"
+discovery = "path"
+executable_candidates = ["cargo-nextest"]
+version_command = ["cargo", "nextest", "--version"]
+protocol_id = "nextest-junit"
+protocol_version = "documented"
+media_type = "application/xml"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.flaky-test-observation"
+limitation = "only configured JUnit output is normalized; console output and retry success remain non-PASS evidence"
+
+[[providers]]
+id = "cargo-mutants"
+category = "mutation_testing"
+discovery = "path"
+executable_candidates = ["cargo-mutants"]
+version_command = ["cargo", "mutants", "--version"]
+protocol_id = "cargo-mutants-outcomes"
+protocol_version = "provider-dependent"
+media_type = "application/octet-stream"
+stability = "human_text"
+detail_level = "raw_only"
+machine_readable = false
+application_normalization = false
+observation_schema = "star.mutation-testing-snapshot"
+limitation = "list JSON does not establish a stable full-run outcome protocol; preserve the raw artifact and limitation"
+
+[[providers]]
+id = "rust-analyzer"
+category = "semantic_analysis"
+discovery = "path"
+executable_candidates = ["rust-analyzer"]
+version_command = ["rust-analyzer", "--version"]
+protocol_id = "language-server-protocol"
+protocol_version = "3.17"
+media_type = "application/vscode-jsonrpc"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.static-analysis-import-report"
+limitation = "a matching rust-src and toolchain fingerprint are required before semantic results are complete"
+
+[[providers]]
+id = "buf"
+category = "compatibility"
+discovery = "path"
+executable_candidates = ["buf"]
+version_command = ["buf", "--version"]
+protocol_id = "buf-breaking-json"
+protocol_version = "documented"
+media_type = "application/json"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.compatibility-report"
+limitation = "unavailable unless the project declares protobuf inputs and an exact against input"
+
+[[providers]]
+id = "oasdiff"
+category = "compatibility"
+discovery = "path"
+executable_candidates = ["oasdiff"]
+version_command = ["oasdiff", "--version"]
+protocol_id = "oasdiff-json"
+protocol_version = "documented"
+media_type = "application/json"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.compatibility-report"
+limitation = "unavailable unless the project declares baseline and candidate OpenAPI documents"
+
+[[providers]]
+id = "cargo-semver-checks"
+category = "compatibility"
+discovery = "path"
+executable_candidates = ["cargo-semver-checks"]
+version_command = ["cargo", "semver-checks", "--version"]
+protocol_id = "cargo-semver-exit-classification"
+protocol_version = "documented"
+media_type = "text/plain"
+stability = "stable"
+detail_level = "exit_classification"
+machine_readable = true
+application_normalization = false
+observation_schema = "star.compatibility-report"
+limitation = "without structured machine detail only exit classification and the raw artifact are accepted"
+
+[[providers]]
+id = "libabigail"
+category = "compatibility"
+discovery = "path"
+executable_candidates = ["abidiff"]
+version_command = ["abidiff", "--version"]
+protocol_id = "libabigail-abidiff"
+protocol_version = "provider-dependent"
+media_type = "text/plain"
+stability = "human_text"
+detail_level = "raw_only"
+machine_readable = false
+application_normalization = false
+observation_schema = "star.compatibility-report"
+limitation = "human output is retained as a raw artifact and is not sentence-parsed into diagnostics"
+
+[[providers]]
+id = "syft"
+category = "sbom"
+discovery = "path"
+executable_candidates = ["syft"]
+version_command = ["syft", "--version"]
+protocol_id = "spdx-or-cyclonedx-json"
+protocol_version = "declared-by-artifact"
+media_type = "application/json"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.supply-chain-snapshot"
+limitation = "the emitted SBOM standard and version must be read from and retained with the artifact"
+
+[[providers]]
+id = "cargo-deny"
+category = "license_advisory_policy"
+discovery = "path"
+executable_candidates = ["cargo-deny"]
+version_command = ["cargo", "deny", "--version"]
+protocol_id = "cargo-deny-jsonl"
+protocol_version = "documented"
+media_type = "application/x-ndjson"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.supply-chain-snapshot"
+limitation = "only documented --format json JSONL is normalized; experimental SARIF remains raw shadow evidence, and license expressions/advisory freshness remain source-attributed facts"
+
+[[providers]]
+id = "cargo-audit"
+category = "advisory"
+discovery = "path"
+executable_candidates = ["cargo-audit"]
+version_command = ["cargo", "audit", "--version"]
+protocol_id = "cargo-audit-json"
+protocol_version = "documented"
+media_type = "application/json"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.supply-chain-snapshot"
+limitation = "only cargo audit --json is normalized; database freshness and reachability are retained, and findings are not downgraded without reviewed VEX"
+
+[[providers]]
+id = "diffoscope"
+category = "reproducibility_diagnostic"
+discovery = "path"
+executable_candidates = ["diffoscope"]
+version_command = ["diffoscope", "--version"]
+protocol_id = "diffoscope-diagnostic"
+protocol_version = "provider-dependent"
+media_type = "text/plain"
+stability = "human_text"
+detail_level = "raw_only"
+machine_readable = false
+application_normalization = false
+observation_schema = "star.reproducibility-verification-report"
+limitation = "diagnostic only; its presence is never a reproducibility PASS condition"
+
+[[providers]]
+id = "sanitizer"
+category = "runtime_safety"
+discovery = "project_declared"
+executable_candidates = []
+version_command = []
+protocol_id = "project-test-result"
+protocol_version = "project-declared"
+media_type = "application/json"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.runtime-safety-observation"
+limitation = "unavailable unless the project supplies the required toolchain and test target"
+
+[[providers]]
+id = "generator-doctest"
+category = "runtime_safety"
+discovery = "project_declared"
+executable_candidates = []
+version_command = []
+protocol_id = "project-test-result"
+protocol_version = "project-declared"
+media_type = "application/json"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.runtime-safety-observation"
+limitation = "non-Schema generator and doctest targets must be declared by the project"
+
+[[providers]]
+id = "loom"
+category = "bounded_concurrency"
+discovery = "project_declared"
+executable_candidates = []
+version_command = []
+protocol_id = "project-test-result"
+protocol_version = "project-declared"
+media_type = "application/json"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.runtime-safety-observation"
+limitation = "unavailable unless a bounded Loom test and compatible dependency already exist in the project"
+
+[[providers]]
+id = "builtin-near-clone"
+category = "near_clone"
+discovery = "builtin"
+executable_candidates = []
+version_command = []
+protocol_id = "identifier-literal-normalized-simhash-v1"
+protocol_version = "1"
+media_type = "application/json"
+stability = "stable"
+detail_level = "structured"
+machine_readable = true
+application_normalization = true
+observation_schema = "star.near-clone-observation"
+limitation = "bounded advisory finding only; automatic extract-method or PatchSet generation is prohibited"

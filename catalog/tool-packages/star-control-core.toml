@@ -1,6 +1,6 @@
 format_version = 1
 package_id = "star.control.core"
-package_version = "1.5.2"
+package_version = "1.5.3"
 display_name = "Star-Control Core"
 description = "Required release-owned typed Controller commands exposed through the live Tool Registry."
 required = true
@@ -241,6 +241,19 @@ paid_action = "no"
 idempotency = "read_only"
 input_schema_file = "schemas/project-id-input.schema.json"
 output_schema_file = "schemas/index-status-output.schema.json"
+
+[[actions]]
+tool_id = "star.management.status.page"
+backend_kind = "controller_command"
+backend_ref = "management.status.page"
+display_name = "Page Management Status"
+summary = "Read a bounded page of management store status."
+description = "Returns a revision-bound page of global and project management store status with an opaque cursor and a hard 65536-byte response budget."
+permission_actions = ["local_read"]
+paid_action = "no"
+idempotency = "read_only"
+input_schema_file = "schemas/management-status-page-input.schema.json"
+output_schema_file = "schemas/management-status-page-output.schema.json"
 
 [[actions]]
 tool_id = "star.core.index.search"

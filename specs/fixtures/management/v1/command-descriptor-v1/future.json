@@ -1,0 +1,12 @@
+{
+  "argument_schema": "fixture",
+  "canonical_route": "fixture",
+  "cli_route": [],
+  "deprecated_aliases": [],
+  "descriptor_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "examples": [],
+  "ownership": "mcp_and_cli",
+  "risk_lane": "read_closed",
+  "schema_id": "star.command-descriptor",
+  "schema_version": 2
+}

@@ -13,6 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use sha2::{Digest, Sha256};
 use star_contracts::{
     Sha256Hash,
     index::IndexLimitation,
@@ -51,7 +52,7 @@ impl SyntaxAdapter for RustSyntaxAdapter {
 
     fn fingerprint(&self) -> Sha256Hash {
         Sha256Hash::digest(
-            b"star.rust-syntax-adapter.v3;tree-sitter=0.26.11;tree-sitter-rust=0.24.2;structural-clone=exact-token-v1;complexity=rust-ast-v1",
+            b"star.rust-syntax-adapter.v4;tree-sitter=0.26.11;tree-sitter-rust=0.24.2;structural-clone=exact-token-v1;near-clone=identifier-literal-simhash-v1;complexity=rust-ast-v1",
         )
     }
 
@@ -1092,13 +1093,24 @@ fn collect_structural_clone_candidates(
     if node.kind() == "block" {
         let owning_symbol_identity = enclosing_function_identity(node, source);
         let mut normalized = Vec::new();
+        let mut normalized_shape = Vec::new();
+        let mut shape_tokens = Vec::new();
         let mut token_count = 0_usize;
         if owning_symbol_identity.is_some()
-            && append_normalized_leaf_tokens(node, source, &mut normalized, &mut token_count)?
+            && append_normalized_leaf_tokens(
+                node,
+                source,
+                &mut normalized,
+                &mut normalized_shape,
+                &mut shape_tokens,
+                &mut token_count,
+            )?
         {
             if token_count >= MIN_STRUCTURAL_CLONE_TOKENS {
                 candidates.push(SyntaxStructuralCloneCandidate {
                     normalized_token_fingerprint: Sha256Hash::digest(&normalized),
+                    normalized_shape_fingerprint: Sha256Hash::digest(&normalized_shape),
+                    normalized_shape_simhash: shape_simhash(&shape_tokens),
                     normalized_token_count: token_count as u32,
                     range: source_range(node, source),
                     structural_kind: if node
@@ -1262,6 +1274,8 @@ fn append_normalized_leaf_tokens(
     node: Node<'_>,
     source: &[u8],
     normalized: &mut Vec<u8>,
+    normalized_shape: &mut Vec<u8>,
+    shape_tokens: &mut Vec<Vec<u8>>,
     token_count: &mut usize,
 ) -> Result<bool, AdapterFailure> {
     if node.kind().contains("comment") {
@@ -1279,15 +1293,77 @@ fn append_normalized_leaf_tokens(
         normalized.push(0);
         normalized.extend_from_slice(text);
         normalized.push(0);
+        let mut shape_token = Vec::new();
+        shape_token.extend_from_slice(node.kind().as_bytes());
+        shape_token.push(0);
+        if !identifier_or_literal_kind(node.kind()) {
+            shape_token.extend_from_slice(text);
+        }
+        normalized_shape.extend_from_slice(&shape_token);
+        normalized_shape.push(0);
+        shape_tokens.push(shape_token);
         return Ok(true);
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        if !append_normalized_leaf_tokens(child, source, normalized, token_count)? {
+        if !append_normalized_leaf_tokens(
+            child,
+            source,
+            normalized,
+            normalized_shape,
+            shape_tokens,
+            token_count,
+        )? {
             return Ok(false);
         }
     }
     Ok(true)
+}
+
+fn identifier_or_literal_kind(kind: &str) -> bool {
+    kind.contains("identifier")
+        || kind.contains("literal")
+        || matches!(
+            kind,
+            "self" | "self_type" | "crate" | "super" | "true" | "false"
+        )
+}
+
+fn shape_simhash(tokens: &[Vec<u8>]) -> String {
+    const SHINGLE_WIDTH: usize = 5;
+    let mut scores = [0_i32; 256];
+    let width = SHINGLE_WIDTH.min(tokens.len().max(1));
+    for window in tokens.windows(width) {
+        let mut hasher = Sha256::new();
+        for token in window {
+            hasher.update((token.len() as u32).to_be_bytes());
+            hasher.update(token);
+        }
+        let digest = hasher.finalize();
+        for (byte_index, byte) in digest.iter().enumerate() {
+            for bit_index in 0..8 {
+                let score = &mut scores[byte_index * 8 + bit_index];
+                if byte & (1 << bit_index) == 0 {
+                    *score -= 1;
+                } else {
+                    *score += 1;
+                }
+            }
+        }
+    }
+    let mut encoded = String::with_capacity(75);
+    encoded.push_str("simhash256:");
+    for chunk in scores.chunks_exact(8) {
+        let mut byte = 0_u8;
+        for (bit_index, score) in chunk.iter().enumerate() {
+            if *score >= 0 {
+                byte |= 1 << bit_index;
+            }
+        }
+        use std::fmt::Write as _;
+        let _ = write!(encoded, "{byte:02x}");
+    }
+    encoded
 }
 
 fn enforce_limits(node: Node<'_>, visited: &mut usize, depth: usize) -> Result<(), AdapterFailure> {
@@ -1526,6 +1602,14 @@ mod tests {
         assert_ne!(
             renamed_bodies[0].normalized_token_fingerprint,
             renamed_bodies[1].normalized_token_fingerprint
+        );
+        assert_eq!(
+            renamed_bodies[0].normalized_shape_fingerprint,
+            renamed_bodies[1].normalized_shape_fingerprint
+        );
+        assert_eq!(
+            renamed_bodies[0].normalized_shape_simhash,
+            renamed_bodies[1].normalized_shape_simhash
         );
     }
 

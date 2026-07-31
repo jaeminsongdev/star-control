@@ -1,0 +1,14 @@
+{
+  "advisory_only": false,
+  "algorithm": "fixture",
+  "automatic_patch_set_generated": false,
+  "max_candidates": 0,
+  "max_source_bytes": 0,
+  "minimum_similarity_basis_points": 0,
+  "observation_id": "fixture",
+  "pairs": [],
+  "project_id": "prj_00000000000000000000000000",
+  "schema_id": "star.near-clone-observation",
+  "schema_version": 1,
+  "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

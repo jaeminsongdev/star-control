@@ -106,6 +106,18 @@ const REQUIRED_RELEASE_RESOURCES: &[(&str, &str)] = &[
         include_str!("../../../catalog/tool-packages/schemas/index-status-output.schema.json"),
     ),
     (
+        "schemas/management-status-page-input.schema.json",
+        include_str!(
+            "../../../catalog/tool-packages/schemas/management-status-page-input.schema.json"
+        ),
+    ),
+    (
+        "schemas/management-status-page-output.schema.json",
+        include_str!(
+            "../../../catalog/tool-packages/schemas/management-status-page-output.schema.json"
+        ),
+    ),
+    (
         "schemas/index-search-input.schema.json",
         include_str!("../../../catalog/tool-packages/schemas/index-search-input.schema.json"),
     ),

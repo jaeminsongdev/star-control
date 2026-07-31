@@ -412,6 +412,14 @@ pub struct StructuralCloneCandidate {
     pub language_id: String,
     pub structural_kind: String,
     pub normalized_token_fingerprint: Sha256Hash,
+    /// Identifier/literal-normalized shape digest. Optional only so snapshots
+    /// written by the preceding exact-clone contract remain readable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normalized_shape_fingerprint: Option<Sha256Hash>,
+    /// A bounded 256-bit SimHash encoded as `simhash256:` plus 64 lowercase
+    /// hexadecimal characters. It contains no source tokens or literal text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normalized_shape_simhash: Option<String>,
     pub normalized_token_count: u32,
     pub owning_symbol_identity: String,
     pub redaction_state: HardcodingRedactionState,

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://star-control.local/schema/core/management-status-page-input-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["cursor", "max_items", "max_bytes"],
+  "properties": {
+    "cursor": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "max_items": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 256
+    },
+    "max_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65536
+    }
+  }
+}

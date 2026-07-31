@@ -78,7 +78,7 @@ Git source / CodeIndex
 
 | Check family | Rule family | 초기 제품 의미 |
 |---|---|---|
-| duplication | `code_clone` | Rust function/block exact structural clone부터; deterministic token, bounded index/hash, generated/vendor/cache/output 제외와 production/test cohort 분리, near clone은 후속 |
+| duplication | `code_clone` | Rust function/block exact structural clone과 function-body near-clone; deterministic token/identifier-literal SimHash, bounded 후보·pair, generated/vendor/cache/output 제외와 production/test cohort 분리 |
 | complexity | `complexity_regression` | cyclomatic, nesting, token/line, branch/match-arm을 symbol-level metric으로 비교; threshold는 project config와 compatible metric version에만 적용 |
 | unused_surface | `unused_symbol`, `unused_file`, `unused_dependency` | private symbol/file 및 dependency candidate; public consumer·macro·reflection·dynamic frontier는 confirmed deletion으로 바꾸지 않음 |
 | history_hotspot | `relative_churn`, `change_burst` | exact commit range/component window의 read-only derived priority; shallow/rewrite history는 unverified |
@@ -119,7 +119,7 @@ P-0064A는 Rust `function` body와 그 안의 nested `block`의 exact token leaf
 
 candidate는 `Source`와 `Test`를 서로 다른 cohort로만 grouping한다. generated/vendor/cache/output과 그 밖의 source class는 후보를 만들지 않으며, token cap 또는 parser limit은 empty-clean 결과가 아니라 source-bound limitation이다. Finding identity는 normalized token fingerprint, structural kind, cohort, sorted owning symbol identity로 계산하고 location은 Occurrence에만 남긴다. 따라서 line 이동은 Finding identity를 바꾸지 않지만 one-member change와 cohort 이동은 새 비교 대상이다.
 
-이 Finding의 severity는 `Info`, confidence는 `Medium`이고 자동 Gate block, PatchSet, 자동 extract-method를 만들지 않는다. identifier/literal normalization near clone, complexity와 semantic remediation은 P-0064B 이후의 별도 Slice다.
+이 Finding의 severity는 `Info`, confidence는 `Medium`이고 자동 Gate block, PatchSet, 자동 extract-method를 만들지 않는다. P-0085의 별도 `star.rule.near-clone-candidate`도 이 안전 경계를 공유한다. 해당 규칙은 function body의 identifier/literal을 token kind로 정규화하고 5-token shingle의 256-bit SimHash와 token-count ratio 중 낮은 값으로 similarity를 계산한다. threshold, 최대 후보와 최대 pair는 `IndexPolicy`에 고정·검증되며 기본값은 각각 8,500 basis points, 4,096개, 10,000쌍이다. 상한 도달은 `NEAR_CLONE_CANDIDATE_LIMIT|NEAR_CLONE_PAIR_LIMIT`, 구 snapshot의 signature 부재는 `NEAR_CLONE_SIGNATURE_UNAVAILABLE` limitation으로 보존한다.
 
 ## P-0064B complexity regression 경계
 

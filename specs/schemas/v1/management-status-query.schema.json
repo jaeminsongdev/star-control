@@ -1,0 +1,29 @@
+{
+  "$id": "urn:star-control:schema:star.management-status-query:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "max_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "max_items": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "max_items",
+    "max_bytes"
+  ],
+  "title": "ManagementStatusQueryV1",
+  "type": "object"
+}

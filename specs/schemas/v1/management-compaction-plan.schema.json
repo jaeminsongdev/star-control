@@ -1,0 +1,183 @@
+{
+  "$defs": {
+    "ManagementCompactionBackupBindingV1": {
+      "additionalProperties": false,
+      "properties": {
+        "approved_backup_plan_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "backup_destination_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "backup_result_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "backup_set_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "backup_set_id": {
+          "pattern": "^bks_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "source_active_set_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "store_byte_sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "store_id": {
+          "pattern": "^mst_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "store_revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "store_size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "backup_set_id",
+        "approved_backup_plan_fingerprint",
+        "backup_result_fingerprint",
+        "backup_set_fingerprint",
+        "backup_destination_fingerprint",
+        "source_active_set_fingerprint",
+        "store_id",
+        "store_revision",
+        "store_size_bytes",
+        "store_byte_sha256"
+      ],
+      "type": "object"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "StoreScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "global",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "project",
+              "type": "string"
+            },
+            "project_id": {
+              "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "project_id"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-compaction-plan:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "available_free_bytes_at_plan": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "backup_binding": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ManagementCompactionBackupBindingV1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "database_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "estimated_reclaimable_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "plan_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "required_free_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema_id": {
+      "const": "star.management-compaction-plan",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "store_fingerprint": {
+      "$ref": "#/$defs/Sha256Hash"
+    },
+    "store_id": {
+      "pattern": "^mst_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": "string"
+    },
+    "store_revision": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "store_scope": {
+      "$ref": "#/$defs/StoreScope"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "store_id",
+    "store_scope",
+    "store_revision",
+    "source_fingerprint",
+    "store_fingerprint",
+    "database_bytes",
+    "estimated_reclaimable_bytes",
+    "required_free_bytes",
+    "available_free_bytes_at_plan",
+    "created_at",
+    "plan_fingerprint"
+  ],
+  "title": "ManagementCompactionPlanV1",
+  "type": "object"
+}

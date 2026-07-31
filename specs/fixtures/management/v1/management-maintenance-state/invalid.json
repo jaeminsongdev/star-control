@@ -1,0 +1,11 @@
+{
+  "applied_bytes": 0,
+  "applied_rows": 0,
+  "phase": "idle",
+  "planned_bytes": 0,
+  "planned_rows": 0,
+  "schema_id": "star.management-maintenance-state",
+  "schema_version": 1,
+  "unexpected": true,
+  "updated_at": "2026-01-01T00:00:00Z"
+}

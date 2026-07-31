@@ -1,0 +1,23 @@
+{
+  "argument_schema": "fixture",
+  "canonical_route": "fixture",
+  "cli_route": [
+    "fixture"
+  ],
+  "controller_backend_ref": "fixture",
+  "deprecated_aliases": [
+    "fixture"
+  ],
+  "descriptor_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "examples": [
+    [
+      "fixture"
+    ]
+  ],
+  "mcp_tool_id": "fixture",
+  "ownership": "mcp_and_cli",
+  "result_schema_ref": "fixture",
+  "risk_lane": "read_closed",
+  "schema_id": "star.command-descriptor",
+  "schema_version": 1
+}

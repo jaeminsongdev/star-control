@@ -21,6 +21,10 @@ use star_contracts::{
         ProjectContractManifest, ProjectDoctorReport, SurfaceChangeKind, SurfaceObservation,
         SurfaceSnapshotRole, ToolchainObservation,
     },
+    external_analysis::{
+        CompatibilityProviderObservationV1, ExternalAnalysisCompleteness,
+        MAX_EXTERNAL_PROVIDER_OBSERVATIONS,
+    },
 };
 
 use crate::{DevelopmentError, fingerprint, placeholder, safe_relative_path, token};
@@ -467,6 +471,7 @@ pub fn compare_surface_snapshots(
         current_snapshot_fingerprint: current.content_fingerprint.clone(),
         changes,
         consumer_impacts,
+        provider_observations: Vec::new(),
         outcome,
         completeness,
         limitations,
@@ -485,6 +490,117 @@ pub fn compare_surface_snapshots(
             "current_snapshot_fingerprint": report.current_snapshot_fingerprint,
             "changes": report.changes,
             "consumer_impacts": report.consumer_impacts,
+            "provider_observations": report.provider_observations,
+            "outcome": report.outcome,
+            "completeness": report.completeness,
+            "limitations": report.limitations,
+        }),
+    )?;
+    Ok(report)
+}
+
+/// Attach stable provider evidence to the existing B04 report. This does not
+/// parse provider logs and never invents per-change diagnostics from a
+/// human-text or exit-classification-only protocol.
+pub fn attach_compatibility_provider_observations(
+    mut report: CompatibilityReportV2,
+    mut observations: Vec<CompatibilityProviderObservationV1>,
+) -> Result<CompatibilityReportV2, DevelopmentError> {
+    if observations.len() > MAX_EXTERNAL_PROVIDER_OBSERVATIONS
+        || observations
+            .iter()
+            .map(|observation| observation.limitations.len())
+            .sum::<usize>()
+            > 256
+    {
+        return Err(DevelopmentError::Invalid);
+    }
+    let expected_input_fingerprint = fingerprint(
+        "star.compatibility-provider-input",
+        &serde_json::json!({
+            "baseline_snapshot_ref":report.baseline_snapshot_ref,
+            "baseline_snapshot_fingerprint":report.baseline_snapshot_fingerprint,
+            "current_snapshot_ref":report.current_snapshot_ref,
+            "current_snapshot_fingerprint":report.current_snapshot_fingerprint,
+        }),
+    )?;
+    for observation in &observations {
+        observation
+            .validate()
+            .map_err(|_| DevelopmentError::Invalid)?;
+        if observation.evidence.project_id != report.project_id
+            || observation.evidence.source_fingerprint != report.current_snapshot_fingerprint
+            || observation.evidence.input_fingerprint != expected_input_fingerprint
+        {
+            return Err(DevelopmentError::Conflict);
+        }
+    }
+    observations.sort_by(|left, right| {
+        (&left.evidence.provider_id, &left.evidence.evidence_id)
+            .cmp(&(&right.evidence.provider_id, &right.evidence.evidence_id))
+    });
+    if observations
+        .iter()
+        .map(|observation| {
+            (
+                observation.provider_kind,
+                &observation.evidence.provider_id,
+                &observation.evidence.evidence_id,
+            )
+        })
+        .collect::<BTreeSet<_>>()
+        .len()
+        != observations.len()
+    {
+        return Err(DevelopmentError::Conflict);
+    }
+    report.provider_observations = observations;
+    report.outcome = aggregate_compatibility(
+        report
+            .changes
+            .iter()
+            .map(|change| change.classification)
+            .chain(
+                report
+                    .provider_observations
+                    .iter()
+                    .map(|observation| observation.classification),
+            ),
+    );
+    if report.provider_observations.iter().any(|observation| {
+        matches!(
+            observation.evidence.completeness,
+            ExternalAnalysisCompleteness::Unavailable | ExternalAnalysisCompleteness::Unverified
+        )
+    }) {
+        report.completeness = CoverageState::Unverified;
+    } else if report.provider_observations.iter().any(|observation| {
+        observation.evidence.completeness != ExternalAnalysisCompleteness::Complete
+    }) {
+        report.completeness = CoverageState::Partial;
+    }
+    report.limitations.extend(
+        report
+            .provider_observations
+            .iter()
+            .flat_map(|observation| observation.limitations.iter().cloned()),
+    );
+    report.limitations.sort();
+    report.limitations.dedup();
+    report.report_fingerprint = fingerprint(
+        COMPATIBILITY_REPORT_V2_SCHEMA_ID,
+        &serde_json::json!({
+            "report_id": report.report_id,
+            "project_id": report.project_id,
+            "manifest_ref": report.manifest_ref,
+            "manifest_fingerprint": report.manifest_fingerprint,
+            "baseline_snapshot_ref": report.baseline_snapshot_ref,
+            "baseline_snapshot_fingerprint": report.baseline_snapshot_fingerprint,
+            "current_snapshot_ref": report.current_snapshot_ref,
+            "current_snapshot_fingerprint": report.current_snapshot_fingerprint,
+            "changes": report.changes,
+            "consumer_impacts": report.consumer_impacts,
+            "provider_observations": report.provider_observations,
             "outcome": report.outcome,
             "completeness": report.completeness,
             "limitations": report.limitations,

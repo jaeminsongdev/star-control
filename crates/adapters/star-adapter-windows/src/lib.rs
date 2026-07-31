@@ -2396,11 +2396,12 @@ mod tests {
         let bundled = manager.verified_bundled_runtime_generation(&root).unwrap();
         assert_eq!(bundled.generation_id, "rt_bundled");
         let tool_ids = manager.verified_runtime_tool_ids(&root, &bundled).unwrap();
-        assert_eq!(tool_ids.len(), 23);
+        assert_eq!(tool_ids.len(), 24);
         assert!(tool_ids.contains("star.core.goal.start"));
         assert!(tool_ids.contains("star.core.scan.run"));
         assert!(tool_ids.contains("star.core.finding.list"));
         assert!(tool_ids.contains("star.core.validation.run"));
+        assert!(tool_ids.contains("star.management.status.page"));
     }
 
     #[test]

@@ -2,8 +2,8 @@ schema_version = 1
 expected_feature_count = 23
 expected_profile_count = 16
 expected_runtime_executable_count = 4
-expected_generated_schema_count = 217
-expected_stable_error_count = 533
+expected_generated_schema_count = 230
+expected_stable_error_count = 552
 expected_mcp_matrix_count = 170
 
 [[features]]
@@ -99,11 +99,11 @@ recovery_test = "apps/star-controller/tests/codex_app_server.rs#codex_app_server
 [[features]]
 id = "A07"
 owner_doc = "docs/contracts/events-and-state.md"
-schema_files = ["management-store-status.schema.json", "management-backup-plan.schema.json", "management-restore-plan.schema.json"]
-handler_refs = ["crates/infrastructure/star-state/src/lib.rs#pub struct SqliteManagementRepositorySet", "apps/star-controller/src/main.rs#management.backup.plan"]
-cli_commands = ["management.status", "management.backup.plan", "management.restore.plan", "management.rebuild.plan"]
+schema_files = ["management-store-status.schema.json", "management-status-page.schema.json", "management-maintenance-state.schema.json", "management-retention-plan-v2.schema.json", "management-retention-checkpoint.schema.json", "management-compaction-plan.schema.json", "management-backup-plan.schema.json", "management-restore-plan.schema.json"]
+handler_refs = ["crates/infrastructure/star-state/src/lib.rs#pub struct SqliteManagementRepositorySet", "apps/star-controller/src/main.rs#management.status.page"]
+cli_commands = ["management.status", "management.status.page", "management.retention.plan", "management.retention.apply", "management.compaction.plan", "management.compaction.apply", "management.backup.plan", "management.restore.plan", "management.rebuild.plan"]
 mcp_required = true
-mcp_actions = ["goal.status", "goal.pause", "goal.resume"]
+mcp_actions = ["goal.status", "goal.pause", "goal.resume", "management.status.page"]
 codex_required = false
 codex_refs = []
 positive_test = "crates/infrastructure/star-state/src/lib.rs#writer_lease_project_partition_backup_and_root_binding_are_real"
@@ -204,8 +204,8 @@ recovery_test = "crates/control/star-validation/src/rules.rs#checked_in_validato
 [[features]]
 id = "B04"
 owner_doc = "docs/contracts/contract-compatibility-and-environment.md"
-schema_files = ["contract-surface-snapshot.schema.json", "compatibility-report-v2.schema.json"]
-handler_refs = ["crates/control/star-development/src/compatibility_v2.rs#pub fn compare_surface_snapshots", "apps/star-controller/src/main.rs#contract.compare"]
+schema_files = ["contract-surface-snapshot.schema.json", "compatibility-report-v2.schema.json", "external-analysis-evidence-v1.schema.json"]
+handler_refs = ["crates/control/star-development/src/compatibility_v2.rs#pub fn compare_surface_snapshots", "crates/control/star-development/src/compatibility_v2.rs#pub fn attach_compatibility_provider_observations", "crates/control/star-application/src/external_analysis.rs#pub fn attach_compatibility_providers", "apps/star-controller/src/main.rs#contract.compare"]
 cli_commands = ["contract.snapshot", "contract.compare", "registry.declaration.plan"]
 mcp_required = false
 mcp_actions = []
@@ -219,8 +219,8 @@ recovery_test = "crates/control/star-application/src/rust_style.rs#fixed_pipelin
 [[features]]
 id = "B05"
 owner_doc = "docs/contracts/failure-security-and-dependency-maintenance.md"
-schema_files = ["dependency-snapshot.schema.json", "supply-chain-snapshot.schema.json", "git-history-risk-snapshot.schema.json", "maintenance-radar-snapshot.schema.json", "mutation-testing-snapshot.schema.json", "quality-rule-pack-manifest.schema.json"]
-handler_refs = ["crates/control/star-development/src/maintenance_v2.rs#pub fn scan_dependency_snapshot", "crates/control/star-project/src/git_history.rs#CommandGitHistoryAdapter", "crates/control/star-application/src/lib.rs#pub fn mutation_testing_snapshot", "crates/control/star-application/src/lib.rs#pub fn repository_posture_snapshot", "apps/star-controller/src/main.rs#maintenance.radar.git-history", "apps/star-controller/src/main.rs#maintenance.rule-pack", "apps/star-controller/src/main.rs#security.inspect"]
+schema_files = ["dependency-snapshot.schema.json", "supply-chain-snapshot.schema.json", "git-history-risk-snapshot.schema.json", "maintenance-radar-snapshot.schema.json", "mutation-testing-snapshot.schema.json", "quality-rule-pack-manifest.schema.json", "external-analysis-evidence-v1.schema.json", "coverage-observation-v1.schema.json", "flaky-test-observation-v1.schema.json", "reproducibility-verification-report-v1.schema.json", "runtime-safety-observation-v1.schema.json", "near-clone-observation-v1.schema.json"]
+handler_refs = ["crates/control/star-development/src/maintenance_v2.rs#pub fn scan_dependency_snapshot", "crates/control/star-development/src/maintenance_v2.rs#pub fn attach_supply_chain_provider_observations", "crates/control/star-project/src/git_history.rs#CommandGitHistoryAdapter", "crates/control/star-application/src/lib.rs#pub fn mutation_testing_snapshot", "crates/control/star-application/src/lib.rs#pub fn repository_posture_snapshot", "crates/control/star-application/src/external_analysis.rs#pub fn normalize_coverage_observation", "crates/control/star-application/src/external_analysis.rs#pub fn normalize_flaky_test_observation", "crates/control/star-application/src/external_analysis.rs#pub fn verify_reproducibility_report", "crates/control/star-application/src/external_analysis.rs#pub fn normalize_runtime_safety_observation", "crates/control/star-application/src/external_analysis.rs#pub fn accept_near_clone_advisory", "apps/star-controller/src/main.rs#maintenance.radar.git-history", "apps/star-controller/src/main.rs#maintenance.rule-pack", "apps/star-controller/src/main.rs#security.inspect"]
 cli_commands = ["security.inspect", "deps.scan", "deps.prepare", "maintenance.radar", "maintenance.radar.code-health", "maintenance.radar.git-history", "maintenance.rule-pack"]
 mcp_required = false
 mcp_actions = []

@@ -10,7 +10,10 @@ use std::{
     time::Duration,
 };
 
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use base64::{
+    Engine as _,
+    engine::general_purpose::{STANDARD as BASE64, URL_SAFE_NO_PAD},
+};
 use chrono::{DateTime, Utc};
 use rusqlite::{
     Connection, ErrorCode, OpenFlags, OptionalExtension, Transaction, TransactionBehavior,
@@ -20,7 +23,10 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 pub use star_contracts::recovery::RecoveryInspection;
 use star_contracts::{
     BackupSetId, LocalStateBundleId, RecoveryPlanId, Sha256Hash, canonical_sha256,
-    evidence::{ArtifactRef, Completeness, GateDecision, GateScope},
+    evidence::{
+        ArtifactRef, Completeness, GateDecision, GateScope,
+        RetentionClass as EvidenceRetentionClass,
+    },
     evidence_v2::{
         BaselineV2, DecisionSubjectKindV2, DiagnosticEvidenceRefV2, DiagnosticV2, DispositionV2,
         EvidenceBundleV2, EvidenceFreshnessV2, GateDecisionV2, ReviewPackV1, SuppressionV2,
@@ -37,14 +43,24 @@ use star_contracts::{
     managed_registry::{ManagedRegistrySnapshot, RegistryConsistencyRecord},
     management::{
         Baseline, CanonicalSource, ChangePlan, CheckoutAttachmentState, CheckoutHeadState,
-        CheckoutKind, CoordinatedOperation, Disposition, Finding, IntegrityState,
-        MANAGEMENT_STORE_VERSION, ManagementStoreStatus, MigrationApplyState, Occurrence,
+        CheckoutKind, CoordinatedOperation, Disposition, DispositionStatus, Finding,
+        FindingLifecycle, IntegrityState, MANAGEMENT_COMPACTION_PLAN_SCHEMA_ID,
+        MANAGEMENT_COMPACTION_PLAN_SCHEMA_VERSION, MANAGEMENT_STATUS_DEFAULT_MAX_ITEMS,
+        MANAGEMENT_STATUS_PAGE_SCHEMA_ID, MANAGEMENT_STATUS_PAGE_SCHEMA_VERSION,
+        MANAGEMENT_STORE_VERSION, ManagementCompactionApplyResultV1,
+        ManagementCompactionBackupBindingV1, ManagementCompactionPlanV1, ManagementStatusPageV1,
+        ManagementStatusQueryV1, ManagementStoreStatus, MigrationApplyState, Occurrence,
         ParticipantReceipt, PatchSet, Project, ProjectCheckout, ProjectRevision, ProjectStorePoint,
         ProjectV1, ProjectV1ToV2MigrationEntry, ProjectV1ToV2MigrationPlan,
-        ProjectV1ToV2MigrationResult, REDACTION_CONTRACT_VERSION, RegistrationState,
-        RepositoryKind, ScanRun, ScanStatus, StoreOpenMode, StorePoint, StoreScope,
-        StoreVersionVector, Suppression, Symbol, SymbolReference, ValidationResult,
-        WorkspaceSnapshot,
+        ProjectV1ToV2MigrationResult, REDACTION_CONTRACT_VERSION, RETENTION_CHECKPOINT_SCHEMA_ID,
+        RETENTION_CHECKPOINT_SCHEMA_VERSION, RETENTION_PLAN_V2_SCHEMA_ID,
+        RETENTION_PLAN_V2_SCHEMA_VERSION, RegistrationState, RepositoryKind,
+        RetentionBatchResultV1, RetentionCandidateV2, RetentionCheckpointV1,
+        RetentionMigrationBackupCandidateV1, RetentionPlanV2, RetentionPolicyV2,
+        RetentionProtectedMigrationBackupV1, RetentionProtectedTargetV1, RetentionTargetKindV2,
+        ScanRun, ScanStatus, StoreOpenMode, StorePoint, StoreScope, StoreVersionVector,
+        Suppression, SuppressionScope, SuppressionStatus, Symbol, SymbolReference,
+        ValidationResult, WorkspaceSnapshot,
     },
     planning::PlanningBundle,
     recovery::{
@@ -90,13 +106,21 @@ use windows::{
             DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
             SetFileSecurityW,
         },
-        Storage::FileSystem::{REPLACEFILE_WRITE_THROUGH, ReplaceFileW},
+        Storage::FileSystem::{GetDiskFreeSpaceExW, REPLACEFILE_WRITE_THROUGH, ReplaceFileW},
     },
     core::{HSTRING, PCWSTR, w},
 };
 
 const STORE_FILENAME: &str = "management.v1.db";
 const ACTIVE_SET_FILENAME: &str = "active-set.json";
+const RETENTION_EXECUTION_PLAN_FILENAME: &str = "retention-plan-v2.json";
+const RETENTION_CHECKPOINT_FILENAME: &str = "retention-checkpoint-v1.json";
+const MIGRATION_BACKUPS_DIRECTORY: &str = "migration-backups";
+const MIGRATION_BACKUP_MANIFEST_FILENAME: &str = "migration-backup.json";
+const MIGRATION_BACKUP_PREFIX: &str = "project-v1-to-v2-";
+const RETENTION_DELETE_TOMBSTONE_PREFIX: &str = ".retention-deleting-";
+const RETENTION_BACKUP_DIRECTORY_LIMIT: usize = 4_096;
+const RETENTION_BACKUP_FILE_SCAN_LIMIT: usize = 10_001;
 const FIRST_GENERATION_LOCATOR: &str = "generations/00000000000000000001";
 const APPLICATION_ID: i32 = 0x5354_4152;
 const MANAGEMENT_DOCUMENT_MAX_BYTES: i32 = 32 * 1024 * 1024;
@@ -1029,6 +1053,332 @@ pub struct SqliteManagementRepositorySet {
     projects: Mutex<BTreeMap<ProjectId, Weak<SqliteProjectRepository>>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ManagementStatusCursorV1 {
+    schema_version: u32,
+    global_store_id: ManagementStoreId,
+    snapshot_revision: u64,
+    global_returned: bool,
+    after_project_id: Option<ProjectId>,
+}
+
+fn encode_management_status_cursor(
+    cursor: &ManagementStatusCursorV1,
+) -> Result<String, RepositoryError> {
+    serde_json::to_vec(cursor)
+        .map(|bytes| URL_SAFE_NO_PAD.encode(bytes))
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management status cursor serialization failed",
+            )
+        })
+}
+
+fn decode_management_status_cursor(
+    encoded: &str,
+) -> Result<ManagementStatusCursorV1, RepositoryError> {
+    if encoded.is_empty() || encoded.len() > 1_024 || !encoded.is_ascii() {
+        return Err(repository_error(
+            RepositoryErrorCategory::Invalid,
+            "management status cursor is invalid",
+        ));
+    }
+    let bytes = URL_SAFE_NO_PAD.decode(encoded).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "management status cursor is invalid",
+        )
+    })?;
+    let input = std::str::from_utf8(&bytes).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "management status cursor is invalid",
+        )
+    })?;
+    let value = star_contracts::parse_no_duplicate_keys(input).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "management status cursor is invalid",
+        )
+    })?;
+    let cursor: ManagementStatusCursorV1 = serde_json::from_value(value).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "management status cursor is invalid",
+        )
+    })?;
+    let canonical = serde_json::to_vec(&cursor).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "management status cursor is invalid",
+        )
+    })?;
+    if canonical != bytes || cursor.schema_version != 1 || !cursor.global_returned {
+        return Err(repository_error(
+            RepositoryErrorCategory::Invalid,
+            "management status cursor is invalid",
+        ));
+    }
+    Ok(cursor)
+}
+
+fn validate_retention_plan_v2(plan: &RetentionPlanV2) -> Result<(), RepositoryError> {
+    plan.validate().map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "retention plan shape is invalid",
+        )
+    })?;
+    let policy_fingerprint =
+        versioned_fingerprint("star.management-retention-policy", 2, &plan.policy).map_err(
+            |_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "retention policy fingerprint failed",
+                )
+            },
+        )?;
+    let source_fingerprint = versioned_fingerprint(
+        "star.management-retention-source",
+        2,
+        &serde_json::json!({
+            "expected_store_revisions":plan.expected_store_revisions,
+            "migration_backup_candidates":plan.migration_backup_candidates,
+            "protected_migration_backups":plan.protected_migration_backups,
+        }),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "retention source fingerprint failed",
+        )
+    })?;
+    let plan_fingerprint = versioned_fingerprint(
+        "star.management-retention-plan",
+        RETENTION_PLAN_V2_SCHEMA_VERSION,
+        &serde_json::json!({
+            "policy_fingerprint":policy_fingerprint,
+            "source_fingerprint":source_fingerprint,
+            "expected_store_revisions":plan.expected_store_revisions,
+            "candidates":plan.candidates,
+            "protected_targets":plan.protected_targets,
+            "migration_backup_candidates":plan.migration_backup_candidates,
+            "protected_migration_backups":plan.protected_migration_backups,
+            "estimated_rows":plan.estimated_rows,
+            "estimated_bytes":plan.estimated_bytes,
+        }),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "retention plan fingerprint failed",
+        )
+    })?;
+    if policy_fingerprint != plan.policy_fingerprint
+        || source_fingerprint != plan.source_fingerprint
+        || plan_fingerprint != plan.plan_fingerprint
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "retention plan fingerprint is invalid",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_retention_checkpoint(
+    plan: &RetentionPlanV2,
+    checkpoint: &RetentionCheckpointV1,
+) -> Result<(), RepositoryError> {
+    let expected_last_candidate_id = checkpoint
+        .next_candidate_index
+        .checked_sub(1)
+        .and_then(|index| usize::try_from(index).ok())
+        .and_then(|index| {
+            plan.candidates
+                .iter()
+                .map(|candidate| candidate.candidate_id.as_str())
+                .chain(
+                    plan.migration_backup_candidates
+                        .iter()
+                        .map(|candidate| candidate.candidate_id.as_str()),
+                )
+                .nth(index)
+        });
+    let active_candidate = usize::try_from(checkpoint.next_candidate_index)
+        .ok()
+        .and_then(|index| plan.candidates.get(index));
+    let active_candidate_valid = match (checkpoint.active_candidate_id.as_deref(), active_candidate)
+    {
+        (None, _) => {
+            checkpoint.active_candidate_applied_rows == 0
+                && checkpoint.active_candidate_applied_bytes == 0
+        }
+        (Some(active_id), Some(candidate)) => {
+            active_id == candidate.candidate_id
+                && checkpoint.active_candidate_applied_rows > 0
+                && checkpoint.active_candidate_applied_rows < candidate.estimated_rows
+                && checkpoint.active_candidate_applied_bytes <= candidate.estimated_bytes
+        }
+        (Some(_), None) => false,
+    };
+    if checkpoint.schema_id != RETENTION_CHECKPOINT_SCHEMA_ID
+        || checkpoint.schema_version != RETENTION_CHECKPOINT_SCHEMA_VERSION
+        || checkpoint.plan_fingerprint != plan.plan_fingerprint
+        || checkpoint.next_candidate_index > plan.total_candidate_count() as u64
+        || checkpoint.committed_batch_count < checkpoint.next_candidate_index
+        || checkpoint.committed_batch_count > checkpoint.applied_rows
+        || checkpoint.applied_rows > plan.estimated_rows
+        || checkpoint.applied_bytes > plan.estimated_bytes
+        || checkpoint.last_candidate_id.as_deref() != expected_last_candidate_id
+        || !active_candidate_valid
+        || checkpoint.expected_store_revisions.len() != plan.expected_store_revisions.len()
+        || checkpoint
+            .expected_store_revisions
+            .iter()
+            .any(|(key, revision)| {
+                plan.expected_store_revisions
+                    .get(key)
+                    .is_none_or(|planned_revision| revision < planned_revision)
+            })
+        || (checkpoint.complete
+            && (checkpoint.next_candidate_index != plan.total_candidate_count() as u64
+                || checkpoint.active_candidate_id.is_some()
+                || checkpoint.applied_rows != plan.estimated_rows
+                || checkpoint.applied_bytes != plan.estimated_bytes))
+        || (checkpoint.complete && checkpoint.cancelled)
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "retention checkpoint is invalid",
+        ));
+    }
+    Ok(())
+}
+
+fn read_strict_json_file<T: DeserializeOwned>(path: &Path) -> Result<T, RepositoryError> {
+    let input = fs::read_to_string(path).map_err(map_io)?;
+    let value = star_contracts::parse_no_duplicate_keys(&input).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Corrupt,
+            "management execution document is invalid",
+        )
+    })?;
+    serde_json::from_value(value).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Corrupt,
+            "management execution document shape is invalid",
+        )
+    })
+}
+
+fn available_disk_bytes(path: &Path) -> Result<u64, RepositoryError> {
+    let directory = if path.is_dir() {
+        path
+    } else {
+        path.parent().ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management store path has no parent",
+            )
+        })?
+    };
+    let directory = HSTRING::from(directory.as_os_str());
+    let mut available = 0_u64;
+    unsafe { GetDiskFreeSpaceExW(PCWSTR(directory.as_ptr()), Some(&mut available), None, None) }
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "available disk space could not be determined",
+            )
+        })?;
+    Ok(available)
+}
+
+fn compaction_space_snapshot(path: &Path) -> Result<(u64, u64, u64), RepositoryError> {
+    let database_bytes = fs::metadata(path).map_err(map_io)?.len();
+    let connection = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(map_sql)?;
+    connection
+        .execute_batch("PRAGMA query_only=ON;")
+        .map_err(map_sql)?;
+    let page_size: i64 = connection
+        .query_row("PRAGMA page_size", [], |row| row.get(0))
+        .map_err(map_sql)?;
+    let freelist_count: i64 = connection
+        .query_row("PRAGMA freelist_count", [], |row| row.get(0))
+        .map_err(map_sql)?;
+    let page_size = u64::try_from(page_size).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Corrupt,
+            "management store page size is invalid",
+        )
+    })?;
+    let freelist_count = u64::try_from(freelist_count).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Corrupt,
+            "management store freelist count is invalid",
+        )
+    })?;
+    let reclaimable = page_size.checked_mul(freelist_count).ok_or_else(|| {
+        repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "management compaction estimate overflowed",
+        )
+    })?;
+    let required_free_bytes = database_bytes.checked_mul(2).ok_or_else(|| {
+        repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "management compaction space requirement overflowed",
+        )
+    })?;
+    Ok((database_bytes, reclaimable, required_free_bytes))
+}
+
+fn validate_compaction_plan(plan: &ManagementCompactionPlanV1) -> Result<(), RepositoryError> {
+    let expected = versioned_fingerprint(
+        "star.management-compaction-plan",
+        MANAGEMENT_COMPACTION_PLAN_SCHEMA_VERSION,
+        &serde_json::json!({
+            "store_id":plan.store_id,
+            "store_scope":plan.store_scope,
+            "store_revision":plan.store_revision,
+            "source_fingerprint":plan.source_fingerprint,
+            "store_fingerprint":plan.store_fingerprint,
+            "database_bytes":plan.database_bytes,
+            "estimated_reclaimable_bytes":plan.estimated_reclaimable_bytes,
+            "required_free_bytes":plan.required_free_bytes,
+            "available_free_bytes_at_plan":plan.available_free_bytes_at_plan,
+            "backup_binding":plan.backup_binding,
+        }),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "management compaction plan fingerprint failed",
+        )
+    })?;
+    if plan.schema_id != MANAGEMENT_COMPACTION_PLAN_SCHEMA_ID
+        || plan.schema_version != MANAGEMENT_COMPACTION_PLAN_SCHEMA_VERSION
+        || plan.required_free_bytes < plan.database_bytes
+        || plan.backup_binding.as_ref().is_some_and(|binding| {
+            binding.store_id != plan.store_id || binding.store_revision != plan.store_revision
+        })
+        || plan.plan_fingerprint != expected
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "management compaction plan is invalid",
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LegacyActiveSetEntry {
@@ -1134,6 +1484,34 @@ impl SqliteManagementRepositorySet {
         drop(active_set);
         let locator = initial_project_locator(&self.root, project_id);
         Ok(self.root.join(locator).join(STORE_FILENAME))
+    }
+
+    fn store_path_and_status(
+        &self,
+        store_id: &ManagementStoreId,
+    ) -> Result<(PathBuf, ManagementStoreStatus), RepositoryError> {
+        let entry = self
+            .active_set
+            .lock()
+            .map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Unavailable,
+                    "active set cache is unavailable",
+                )
+            })?
+            .entries
+            .iter()
+            .find(|entry| &entry.store_id == store_id)
+            .cloned()
+            .ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::NotFound,
+                    "management store is not active",
+                )
+            })?;
+        let path = active_store_file(&self.root, &entry);
+        let status = read_store_status_snapshot(&path)?;
+        Ok((path, status))
     }
 
     fn project_repository(
@@ -1453,22 +1831,12 @@ fn backup_apply_result(
     manifest: BackupSetManifest,
     applied_at: DateTime<Utc>,
 ) -> Result<BackupApplyResult, RepositoryError> {
-    let result_fingerprint = versioned_fingerprint(
-        "star.management-backup-apply-result",
-        1,
-        &serde_json::json!({
-            "backup_set_id":plan.backup_set_id,
-            "applied_at":applied_at,
-            "approved_plan_fingerprint":plan.plan_fingerprint,
-            "manifest":manifest,
-        }),
-    )
-    .map_err(|_| {
-        repository_error(
-            RepositoryErrorCategory::Invalid,
-            "backup result fingerprint failed",
-        )
-    })?;
+    let result_fingerprint = backup_apply_result_fingerprint(
+        &plan.backup_set_id,
+        applied_at,
+        &plan.plan_fingerprint,
+        &manifest,
+    )?;
     Ok(BackupApplyResult {
         schema_id: BACKUP_APPLY_RESULT_SCHEMA_ID.to_owned(),
         schema_version: 1,
@@ -1477,6 +1845,30 @@ fn backup_apply_result(
         approved_plan_fingerprint: plan.plan_fingerprint.clone(),
         manifest,
         result_fingerprint,
+    })
+}
+
+fn backup_apply_result_fingerprint(
+    backup_set_id: &BackupSetId,
+    applied_at: DateTime<Utc>,
+    approved_plan_fingerprint: &Sha256Hash,
+    manifest: &BackupSetManifest,
+) -> Result<Sha256Hash, RepositoryError> {
+    versioned_fingerprint(
+        "star.management-backup-apply-result",
+        1,
+        &serde_json::json!({
+            "backup_set_id":backup_set_id,
+            "applied_at":applied_at,
+            "approved_plan_fingerprint":approved_plan_fingerprint,
+            "manifest":manifest,
+        }),
+    )
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "backup result fingerprint failed",
+        )
     })
 }
 
@@ -2726,6 +3118,47 @@ fn validate_backup_set_relationships(
     Ok(())
 }
 
+fn validate_current_retention_store_revisions(
+    repositories: &SqliteManagementRepositorySet,
+    expected: &BTreeMap<String, u64>,
+    replay_project: Option<&ProjectId>,
+) -> Result<(), RepositoryError> {
+    let global_revision = expected.get("global").copied().ok_or_else(|| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "retention plan omits the global store revision",
+        )
+    })?;
+    if repositories.global.status()?.store_revision != global_revision {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "retention global revision is stale",
+        ));
+    }
+    for (project_id, expected_revision) in expected {
+        if project_id == "global" {
+            continue;
+        }
+        let project_id = ProjectId::parse(project_id.clone()).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "retention plan has an invalid project revision key",
+            )
+        })?;
+        if replay_project == Some(&project_id) {
+            continue;
+        }
+        let status = read_store_status_snapshot(&repositories.project_path(&project_id)?)?;
+        if status.store_revision != *expected_revision {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "retention project revision is stale",
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl ManagementRepositorySet for SqliteManagementRepositorySet {
     fn global(&self) -> &dyn GlobalManagementRepository {
         &self.global
@@ -2753,13 +3186,168 @@ impl ManagementRepositorySet for SqliteManagementRepositorySet {
     }
 
     fn status_all(&self) -> Result<Vec<ManagementStoreStatus>, RepositoryError> {
-        let mut statuses = vec![self.global.status()?];
-        for project in self.global.list_projects()? {
-            statuses.push(read_store_status_snapshot(
-                &self.project_path(&project.project_id)?,
-            )?);
+        let (project_total, _) = self.global.project_ids_page(None, 0)?;
+        if project_total.saturating_add(1) > u64::from(MANAGEMENT_STATUS_DEFAULT_MAX_ITEMS) {
+            return Err(repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "management status requires the paged status query",
+            ));
         }
-        Ok(statuses)
+        let page = self.status_page(&ManagementStatusQueryV1::default())?;
+        if page.truncated {
+            return Err(repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "management status requires the paged status query",
+            ));
+        }
+        Ok(page.items)
+    }
+
+    fn status_page(
+        &self,
+        query: &ManagementStatusQueryV1,
+    ) -> Result<ManagementStatusPageV1, RepositoryError> {
+        query.validate().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management status query is invalid",
+            )
+        })?;
+        let global = self.global.status()?;
+        let cursor = query
+            .cursor
+            .as_deref()
+            .map(decode_management_status_cursor)
+            .transpose()?;
+        if cursor.as_ref().is_some_and(|cursor| {
+            cursor.global_store_id != global.store_id
+                || cursor.snapshot_revision != global.store_revision
+        }) {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "management status cursor is stale",
+            ));
+        }
+        let global_returned = cursor.is_some();
+        let after_project_id = cursor
+            .as_ref()
+            .and_then(|cursor| cursor.after_project_id.as_ref());
+        let project_slots = usize::try_from(query.max_items)
+            .map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "management status page limit is invalid",
+                )
+            })?
+            .saturating_sub(usize::from(!global_returned));
+        let fetch_limit = project_slots.saturating_add(1).max(1);
+        let (project_total, project_ids) = self
+            .global
+            .project_ids_page(after_project_id, fetch_limit)?;
+        let snapshot_hash = versioned_fingerprint(
+            "star.management-status-snapshot",
+            MANAGEMENT_STATUS_PAGE_SCHEMA_VERSION,
+            &serde_json::json!({
+                "global_store_id":global.store_id,
+                "snapshot_revision":global.store_revision,
+                "project_count":project_total,
+            }),
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management status snapshot fingerprint failed",
+            )
+        })?;
+        let mut items = if global_returned {
+            Vec::new()
+        } else {
+            vec![global.clone()]
+        };
+        let mut consumed = 0_usize;
+        let mut last_project_id = after_project_id.cloned();
+
+        let page_with = |items: Vec<ManagementStoreStatus>,
+                         last_project_id: Option<ProjectId>,
+                         has_more: bool|
+         -> Result<ManagementStatusPageV1, RepositoryError> {
+            let next_cursor = has_more
+                .then(|| {
+                    encode_management_status_cursor(&ManagementStatusCursorV1 {
+                        schema_version: 1,
+                        global_store_id: global.store_id.clone(),
+                        snapshot_revision: global.store_revision,
+                        global_returned: true,
+                        after_project_id: last_project_id,
+                    })
+                })
+                .transpose()?;
+            Ok(ManagementStatusPageV1 {
+                schema_id: MANAGEMENT_STATUS_PAGE_SCHEMA_ID.to_owned(),
+                schema_version: MANAGEMENT_STATUS_PAGE_SCHEMA_VERSION,
+                snapshot_revision: global.store_revision,
+                snapshot_hash: snapshot_hash.clone(),
+                returned_count: u32::try_from(items.len()).map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::QuotaExceeded,
+                        "management status page item count overflowed",
+                    )
+                })?,
+                total_count: project_total.saturating_add(1),
+                items,
+                truncated: has_more,
+                next_cursor,
+                max_items: query.max_items,
+                max_bytes: query.max_bytes,
+            })
+        };
+
+        for project_id in project_ids.iter().take(project_slots) {
+            let status = read_store_status_snapshot(&self.project_path(project_id)?)?;
+            let mut tentative = items.clone();
+            tentative.push(status);
+            let tentative_consumed = consumed + 1;
+            let has_more = tentative_consumed < project_ids.len();
+            let tentative_page = page_with(tentative.clone(), Some(project_id.clone()), has_more)?;
+            let encoded_len = serde_json::to_vec(&tentative_page)
+                .map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "management status page serialization failed",
+                    )
+                })?
+                .len() as u64;
+            if encoded_len > query.max_bytes {
+                break;
+            }
+            items = tentative;
+            consumed = tentative_consumed;
+            last_project_id = Some(project_id.clone());
+        }
+        let has_more = consumed < project_ids.len();
+        if has_more && consumed == 0 && cursor.is_some() {
+            return Err(repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "management status page byte budget cannot fit the next item",
+            ));
+        }
+        let page = page_with(items, last_project_id, has_more)?;
+        page.validate().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "management status page exceeds its transport budget",
+            )
+        })?;
+        let final_global = self.global.status()?;
+        if final_global.store_id != global.store_id
+            || final_global.store_revision != global.store_revision
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "management status cursor is stale",
+            ));
+        }
+        Ok(page)
     }
 
     fn verify_all(&self) -> Result<Vec<ManagementStoreStatus>, RepositoryError> {
@@ -3128,6 +3716,680 @@ impl ManagementRepositorySet for SqliteManagementRepositorySet {
         Ok(RetentionApplyResult {
             applied_count,
             plan_fingerprint: plan.plan_fingerprint.clone(),
+        })
+    }
+
+    fn plan_retention_v2(
+        &self,
+        policy: &RetentionPolicyV2,
+    ) -> Result<RetentionPlanV2, RepositoryError> {
+        self.plan_retention_v2_controlled(policy, &|| false)
+    }
+
+    fn plan_retention_v2_controlled(
+        &self,
+        policy: &RetentionPolicyV2,
+        is_cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<RetentionPlanV2, RepositoryError> {
+        policy.validate().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "retention policy is invalid",
+            )
+        })?;
+        let created_at = Utc::now();
+        let global = self.global.status()?;
+        let mut expected_store_revisions =
+            BTreeMap::from([("global".to_owned(), global.store_revision)]);
+        let mut candidates = Vec::new();
+        let mut protected_targets = Vec::new();
+        for project in self.global.list_projects()? {
+            if is_cancelled() {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Unavailable,
+                    "retention planning was cancelled",
+                ));
+            }
+            let repository = self.project_repository(&project.project_id)?;
+            let status = repository.status()?;
+            expected_store_revisions.insert(
+                project.project_id.as_str().to_owned(),
+                status.store_revision,
+            );
+            let (mut project_candidates, mut project_protected) =
+                repository.retention_analysis_v2(policy, created_at, is_cancelled)?;
+            candidates.append(&mut project_candidates);
+            protected_targets.append(&mut project_protected);
+        }
+        candidates.sort_by(|left, right| {
+            left.project_id
+                .cmp(&right.project_id)
+                .then_with(|| left.candidate_id.cmp(&right.candidate_id))
+        });
+        protected_targets.sort_by(|left, right| {
+            left.project_id
+                .cmp(&right.project_id)
+                .then_with(|| left.target_ref.cmp(&right.target_ref))
+                .then_with(|| left.reason_code.cmp(&right.reason_code))
+        });
+        let (migration_backup_candidates, protected_migration_backups) =
+            retention_migration_backup_inventory(&self.root, policy)?;
+        let (estimated_rows, estimated_bytes) = candidates
+            .iter()
+            .map(|candidate| (candidate.estimated_rows, candidate.estimated_bytes))
+            .chain(
+                migration_backup_candidates
+                    .iter()
+                    .map(|candidate| (candidate.estimated_rows, candidate.estimated_bytes)),
+            )
+            .try_fold(
+                (0_u64, 0_u64),
+                |(rows, bytes), (candidate_rows, candidate_bytes)| {
+                    Ok::<_, RepositoryError>((
+                        rows.checked_add(candidate_rows).ok_or_else(|| {
+                            repository_error(
+                                RepositoryErrorCategory::QuotaExceeded,
+                                "retention row estimate overflowed",
+                            )
+                        })?,
+                        bytes.checked_add(candidate_bytes).ok_or_else(|| {
+                            repository_error(
+                                RepositoryErrorCategory::QuotaExceeded,
+                                "retention byte estimate overflowed",
+                            )
+                        })?,
+                    ))
+                },
+            )?;
+        let policy_fingerprint =
+            versioned_fingerprint("star.management-retention-policy", 2, policy).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "retention policy fingerprint failed",
+                )
+            })?;
+        let source_fingerprint = versioned_fingerprint(
+            "star.management-retention-source",
+            2,
+            &serde_json::json!({
+                "expected_store_revisions":expected_store_revisions,
+                "migration_backup_candidates":migration_backup_candidates,
+                "protected_migration_backups":protected_migration_backups,
+            }),
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "retention source fingerprint failed",
+            )
+        })?;
+        let plan_fingerprint = versioned_fingerprint(
+            "star.management-retention-plan",
+            RETENTION_PLAN_V2_SCHEMA_VERSION,
+            &serde_json::json!({
+                "policy_fingerprint":policy_fingerprint,
+                "source_fingerprint":source_fingerprint,
+                "expected_store_revisions":expected_store_revisions,
+                "candidates":candidates,
+                "protected_targets":protected_targets,
+                "migration_backup_candidates":migration_backup_candidates,
+                "protected_migration_backups":protected_migration_backups,
+                "estimated_rows":estimated_rows,
+                "estimated_bytes":estimated_bytes,
+            }),
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "retention plan fingerprint failed",
+            )
+        })?;
+        let plan = RetentionPlanV2 {
+            schema_id: RETENTION_PLAN_V2_SCHEMA_ID.to_owned(),
+            schema_version: RETENTION_PLAN_V2_SCHEMA_VERSION,
+            created_at,
+            policy: policy.clone(),
+            policy_fingerprint,
+            source_fingerprint,
+            expected_store_revisions,
+            candidates,
+            protected_targets,
+            migration_backup_candidates,
+            protected_migration_backups,
+            estimated_rows,
+            estimated_bytes,
+            plan_fingerprint,
+        };
+        validate_retention_plan_v2(&plan)?;
+        Ok(plan)
+    }
+
+    fn load_retention_execution(
+        &self,
+    ) -> Result<Option<(RetentionPlanV2, RetentionCheckpointV1)>, RepositoryError> {
+        let plan_path = self.root.join(RETENTION_EXECUTION_PLAN_FILENAME);
+        let checkpoint_path = self.root.join(RETENTION_CHECKPOINT_FILENAME);
+        let plan_exists = plan_path.try_exists().map_err(map_io)?;
+        let checkpoint_exists = checkpoint_path.try_exists().map_err(map_io)?;
+        if !plan_exists && !checkpoint_exists {
+            return Ok(None);
+        }
+        if !plan_exists || !checkpoint_exists {
+            return Err(repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "retention execution documents are incomplete",
+            ));
+        }
+        let plan: RetentionPlanV2 = read_strict_json_file(&plan_path)?;
+        let checkpoint: RetentionCheckpointV1 = read_strict_json_file(&checkpoint_path)?;
+        validate_retention_plan_v2(&plan)?;
+        validate_retention_checkpoint(&plan, &checkpoint)?;
+        if checkpoint.complete || checkpoint.cancelled {
+            return Ok(None);
+        }
+        Ok(Some((plan, checkpoint)))
+    }
+
+    fn start_retention_execution(
+        &self,
+        plan: &RetentionPlanV2,
+        checkpoint: &RetentionCheckpointV1,
+    ) -> Result<(), RepositoryError> {
+        validate_retention_plan_v2(plan)?;
+        validate_retention_checkpoint(plan, checkpoint)?;
+        let plan_path = self.root.join(RETENTION_EXECUTION_PLAN_FILENAME);
+        let checkpoint_path = self.root.join(RETENTION_CHECKPOINT_FILENAME);
+        if plan_path.try_exists().map_err(map_io)?
+            && checkpoint_path.try_exists().map_err(map_io)?
+        {
+            let existing_plan: RetentionPlanV2 = read_strict_json_file(&plan_path)?;
+            let existing_checkpoint: RetentionCheckpointV1 =
+                read_strict_json_file(&checkpoint_path)?;
+            if !existing_checkpoint.complete
+                && !existing_checkpoint.cancelled
+                && existing_plan.plan_fingerprint != plan.plan_fingerprint
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "another retention execution is active",
+                ));
+            }
+        }
+        let plan_bytes = serde_json::to_vec_pretty(plan).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "retention plan serialization failed",
+            )
+        })?;
+        let checkpoint_bytes = serde_json::to_vec_pretty(checkpoint).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "retention checkpoint serialization failed",
+            )
+        })?;
+        write_private_atomic(&plan_path, &plan_bytes)?;
+        write_private_atomic(&checkpoint_path, &checkpoint_bytes)
+    }
+
+    fn apply_retention_batch_v2(
+        &self,
+        plan: &RetentionPlanV2,
+        checkpoint: &RetentionCheckpointV1,
+    ) -> Result<RetentionBatchResultV1, RepositoryError> {
+        validate_retention_plan_v2(plan)?;
+        validate_retention_checkpoint(plan, checkpoint)?;
+        let mut next = checkpoint.clone();
+        if next.complete {
+            return Ok(RetentionBatchResultV1 {
+                processed_candidates: 0,
+                applied_rows: 0,
+                applied_bytes: 0,
+                checkpoint: next,
+            });
+        }
+        let candidate_index = usize::try_from(next.next_candidate_index).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "retention checkpoint cursor overflowed",
+            )
+        })?;
+        if candidate_index == plan.total_candidate_count() {
+            if next.active_candidate_id.is_some()
+                || next.applied_rows != plan.estimated_rows
+                || next.applied_bytes != plan.estimated_bytes
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::IntegrityFailed,
+                    "retention checkpoint totals are incomplete at the terminal cursor",
+                ));
+            }
+            validate_current_retention_store_revisions(
+                self,
+                &checkpoint.expected_store_revisions,
+                None,
+            )?;
+            if !migration_backup_inventory_matches(
+                &self.root,
+                plan,
+                plan.migration_backup_candidates.len(),
+            )? {
+                return Err(repository_error(
+                    RepositoryErrorCategory::RevisionConflict,
+                    "migration backup inventory changed before retention completion",
+                ));
+            }
+            next.complete = true;
+            next.updated_at = Utc::now();
+            self.save_retention_checkpoint(&next)?;
+            return Ok(RetentionBatchResultV1 {
+                processed_candidates: 0,
+                applied_rows: 0,
+                applied_bytes: 0,
+                checkpoint: next,
+            });
+        }
+        let (applied_rows, applied_bytes, candidate_id, candidate_complete) =
+            if let Some(candidate) = plan.candidates.get(candidate_index) {
+                validate_current_retention_store_revisions(
+                    self,
+                    &checkpoint.expected_store_revisions,
+                    Some(&candidate.project_id),
+                )?;
+                if !migration_backup_inventory_matches(&self.root, plan, 0)? {
+                    return Err(repository_error(
+                        RepositoryErrorCategory::RevisionConflict,
+                        "migration backup inventory changed after retention planning",
+                    ));
+                }
+                let expected_revision = next
+                    .expected_store_revisions
+                    .get(candidate.project_id.as_str())
+                    .copied()
+                    .ok_or_else(|| {
+                        repository_error(
+                            RepositoryErrorCategory::IntegrityFailed,
+                            "retention checkpoint omits project revision",
+                        )
+                    })?;
+                let (applied_rows, applied_bytes, committed_revision, candidate_complete) = self
+                    .project_repository(&candidate.project_id)?
+                    .apply_retention_candidate_v2(
+                        expected_revision,
+                        candidate,
+                        &plan.plan_fingerprint,
+                        RetentionBatchLimits {
+                            rows: plan.policy.max_batch_rows,
+                            bytes: plan.policy.max_batch_bytes,
+                        },
+                        RetentionCandidateProgress {
+                            rows: next.active_candidate_applied_rows,
+                            bytes: next.active_candidate_applied_bytes,
+                        },
+                    )?;
+                next.expected_store_revisions
+                    .insert(candidate.project_id.as_str().to_owned(), committed_revision);
+                (
+                    applied_rows,
+                    applied_bytes,
+                    candidate.candidate_id.clone(),
+                    candidate_complete,
+                )
+            } else {
+                validate_current_retention_store_revisions(
+                    self,
+                    &checkpoint.expected_store_revisions,
+                    None,
+                )?;
+                let migration_index = candidate_index
+                    .checked_sub(plan.candidates.len())
+                    .ok_or_else(|| {
+                        repository_error(
+                            RepositoryErrorCategory::IntegrityFailed,
+                            "retention migration backup cursor is invalid",
+                        )
+                    })?;
+                let candidate = plan
+                    .migration_backup_candidates
+                    .get(migration_index)
+                    .ok_or_else(|| {
+                        repository_error(
+                            RepositoryErrorCategory::IntegrityFailed,
+                            "retention migration backup candidate is missing",
+                        )
+                    })?;
+                let (applied_rows, applied_bytes) =
+                    apply_migration_backup_retention_candidate(&self.root, plan, migration_index)?;
+                (
+                    applied_rows,
+                    applied_bytes,
+                    candidate.candidate_id.clone(),
+                    true,
+                )
+            };
+        next.committed_batch_count = next.committed_batch_count.saturating_add(1);
+        next.applied_rows = next.applied_rows.checked_add(applied_rows).ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "retention applied row count overflowed",
+            )
+        })?;
+        next.applied_bytes = next
+            .applied_bytes
+            .checked_add(applied_bytes)
+            .ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "retention applied byte count overflowed",
+                )
+            })?;
+        if candidate_complete {
+            if let Some(candidate) = plan.candidates.get(candidate_index) {
+                let candidate_rows = next
+                    .active_candidate_applied_rows
+                    .checked_add(applied_rows)
+                    .ok_or_else(|| {
+                        repository_error(
+                            RepositoryErrorCategory::QuotaExceeded,
+                            "retention candidate row count overflowed",
+                        )
+                    })?;
+                let candidate_bytes = next
+                    .active_candidate_applied_bytes
+                    .checked_add(applied_bytes)
+                    .ok_or_else(|| {
+                        repository_error(
+                            RepositoryErrorCategory::QuotaExceeded,
+                            "retention candidate byte count overflowed",
+                        )
+                    })?;
+                if candidate_rows != candidate.estimated_rows
+                    || candidate_bytes != candidate.estimated_bytes
+                {
+                    return Err(repository_error(
+                        RepositoryErrorCategory::IntegrityFailed,
+                        "retention candidate committed totals do not match the approved plan",
+                    ));
+                }
+            }
+            next.next_candidate_index = next.next_candidate_index.saturating_add(1);
+            next.last_candidate_id = Some(candidate_id);
+            next.active_candidate_id = None;
+            next.active_candidate_applied_rows = 0;
+            next.active_candidate_applied_bytes = 0;
+        } else {
+            next.active_candidate_id = Some(candidate_id);
+            next.active_candidate_applied_rows = next
+                .active_candidate_applied_rows
+                .checked_add(applied_rows)
+                .ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::QuotaExceeded,
+                        "retention active candidate row count overflowed",
+                    )
+                })?;
+            next.active_candidate_applied_bytes = next
+                .active_candidate_applied_bytes
+                .checked_add(applied_bytes)
+                .ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::QuotaExceeded,
+                        "retention active candidate byte count overflowed",
+                    )
+                })?;
+        }
+        next.complete = next.next_candidate_index == plan.total_candidate_count() as u64;
+        next.updated_at = Utc::now();
+        self.save_retention_checkpoint(&next)?;
+        Ok(RetentionBatchResultV1 {
+            processed_candidates: u64::from(candidate_complete),
+            applied_rows,
+            applied_bytes,
+            checkpoint: next,
+        })
+    }
+
+    fn save_retention_checkpoint(
+        &self,
+        checkpoint: &RetentionCheckpointV1,
+    ) -> Result<(), RepositoryError> {
+        let plan_path = self.root.join(RETENTION_EXECUTION_PLAN_FILENAME);
+        let plan: RetentionPlanV2 = read_strict_json_file(&plan_path)?;
+        validate_retention_plan_v2(&plan)?;
+        validate_retention_checkpoint(&plan, checkpoint)?;
+        let bytes = serde_json::to_vec_pretty(checkpoint).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "retention checkpoint serialization failed",
+            )
+        })?;
+        write_private_atomic(&self.root.join(RETENTION_CHECKPOINT_FILENAME), &bytes)
+    }
+
+    fn clear_retention_execution(
+        &self,
+        plan_fingerprint: &Sha256Hash,
+    ) -> Result<(), RepositoryError> {
+        let plan_path = self.root.join(RETENTION_EXECUTION_PLAN_FILENAME);
+        let checkpoint_path = self.root.join(RETENTION_CHECKPOINT_FILENAME);
+        if !plan_path.try_exists().map_err(map_io)?
+            && !checkpoint_path.try_exists().map_err(map_io)?
+        {
+            return Ok(());
+        }
+        let plan: RetentionPlanV2 = read_strict_json_file(&plan_path)?;
+        let checkpoint: RetentionCheckpointV1 = read_strict_json_file(&checkpoint_path)?;
+        if &plan.plan_fingerprint != plan_fingerprint || !checkpoint.complete {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "retention execution is not complete",
+            ));
+        }
+        // Completed plan/checkpoint documents are retained as the crash-recovery receipt.
+        Ok(())
+    }
+
+    fn plan_compaction(
+        &self,
+        store_id: &ManagementStoreId,
+        backup_root: Option<&Path>,
+        backup_result: Option<&BackupApplyResult>,
+    ) -> Result<ManagementCompactionPlanV1, RepositoryError> {
+        if backup_root.is_some() != backup_result.is_some() {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management compaction backup root and result must be supplied together",
+            ));
+        }
+        let (path, status) = self.store_path_and_status(store_id)?;
+        let active_set = self.active_set()?;
+        let (database_bytes, estimated_reclaimable_bytes, required_free_bytes) =
+            compaction_space_snapshot(&path)?;
+        let available_free_bytes_at_plan = available_disk_bytes(&path)?;
+        let store_fingerprint =
+            versioned_fingerprint("star.management-compaction-store", 1, &status).map_err(
+                |_| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "management compaction store fingerprint failed",
+                    )
+                },
+            )?;
+        let source_fingerprint = versioned_fingerprint(
+            "star.management-compaction-source",
+            1,
+            &serde_json::json!({
+                "active_set_fingerprint":active_set.manifest_fingerprint,
+                "store_fingerprint":store_fingerprint,
+            }),
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management compaction source fingerprint failed",
+            )
+        })?;
+        let backup_binding = match (backup_root, backup_result) {
+            (Some(backup_root), Some(backup_result)) => Some(verified_compaction_backup_binding(
+                &self.root,
+                backup_root,
+                backup_result,
+                &status,
+                &active_set,
+            )?),
+            (None, None) => None,
+            _ => unreachable!("paired compaction backup inputs were checked"),
+        };
+        let plan_fingerprint = versioned_fingerprint(
+            "star.management-compaction-plan",
+            MANAGEMENT_COMPACTION_PLAN_SCHEMA_VERSION,
+            &serde_json::json!({
+                "store_id":status.store_id,
+                "store_scope":status.store_scope,
+                "store_revision":status.store_revision,
+                "source_fingerprint":source_fingerprint,
+                "store_fingerprint":store_fingerprint,
+                "database_bytes":database_bytes,
+                "estimated_reclaimable_bytes":estimated_reclaimable_bytes,
+                "required_free_bytes":required_free_bytes,
+                "available_free_bytes_at_plan":available_free_bytes_at_plan,
+                "backup_binding":backup_binding,
+            }),
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management compaction plan fingerprint failed",
+            )
+        })?;
+        let plan = ManagementCompactionPlanV1 {
+            schema_id: MANAGEMENT_COMPACTION_PLAN_SCHEMA_ID.to_owned(),
+            schema_version: MANAGEMENT_COMPACTION_PLAN_SCHEMA_VERSION,
+            store_id: status.store_id,
+            store_scope: status.store_scope,
+            store_revision: status.store_revision,
+            source_fingerprint,
+            store_fingerprint,
+            database_bytes,
+            estimated_reclaimable_bytes,
+            required_free_bytes,
+            available_free_bytes_at_plan,
+            backup_binding,
+            created_at: Utc::now(),
+            plan_fingerprint,
+        };
+        validate_compaction_plan(&plan)?;
+        Ok(plan)
+    }
+
+    fn apply_compaction(
+        &self,
+        plan: &ManagementCompactionPlanV1,
+        approved_plan_fingerprint: &str,
+        backup_root: &Path,
+        backup_result: &BackupApplyResult,
+    ) -> Result<ManagementCompactionApplyResultV1, RepositoryError> {
+        validate_compaction_plan(plan)?;
+        if plan.plan_fingerprint.as_str() != approved_plan_fingerprint
+            || plan.backup_binding.is_none()
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "management compaction approval or backup binding is missing",
+            ));
+        }
+        let (path, status) = self.store_path_and_status(&plan.store_id)?;
+        if status.store_scope != plan.store_scope || status.store_revision != plan.store_revision {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "management compaction source revision is stale",
+            ));
+        }
+        let active_set = self.active_set()?;
+        let current_backup_binding = verified_compaction_backup_binding(
+            &self.root,
+            backup_root,
+            backup_result,
+            &status,
+            &active_set,
+        )?;
+        if plan.backup_binding.as_ref() != Some(&current_backup_binding) {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "management compaction backup binding is stale",
+            ));
+        }
+        let current_store_fingerprint =
+            versioned_fingerprint("star.management-compaction-store", 1, &status).map_err(
+                |_| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "management compaction store fingerprint failed",
+                    )
+                },
+            )?;
+        let current_source_fingerprint = versioned_fingerprint(
+            "star.management-compaction-source",
+            1,
+            &serde_json::json!({
+                "active_set_fingerprint":active_set.manifest_fingerprint,
+                "store_fingerprint":current_store_fingerprint,
+            }),
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management compaction source fingerprint failed",
+            )
+        })?;
+        let before_bytes = fs::metadata(&path).map_err(map_io)?.len();
+        if current_store_fingerprint != plan.store_fingerprint
+            || current_source_fingerprint != plan.source_fingerprint
+            || before_bytes != plan.database_bytes
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "management compaction source fingerprint is stale",
+            ));
+        }
+        if available_disk_bytes(&path)? < plan.required_free_bytes {
+            return Err(repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "management compaction has insufficient free space",
+            ));
+        }
+        match &plan.store_scope {
+            StoreScope::Global => {
+                let connection = self.global.connection.lock().map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Unavailable,
+                        "global store lock is unavailable",
+                    )
+                })?;
+                connection
+                    .execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")
+                    .map_err(map_sql)?;
+                verify_connection(&connection)?;
+            }
+            StoreScope::Project { project_id } => {
+                let repository = self.project_repository(project_id)?;
+                let connection = repository.connection.lock().map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Unavailable,
+                        "project store lock is unavailable",
+                    )
+                })?;
+                connection
+                    .execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")
+                    .map_err(map_sql)?;
+                verify_connection(&connection)?;
+            }
+        }
+        let after_bytes = fs::metadata(&path).map_err(map_io)?.len();
+        Ok(ManagementCompactionApplyResultV1 {
+            plan_fingerprint: plan.plan_fingerprint.clone(),
+            before_bytes,
+            after_bytes,
+            completed_at: Utc::now(),
         })
     }
 }
@@ -3835,6 +5097,86 @@ fn read_verified_backup_set(root: &Path) -> Result<BackupSetManifest, Repository
     Ok(manifest)
 }
 
+fn verified_compaction_backup_binding(
+    management_root: &Path,
+    backup_root: &Path,
+    result: &BackupApplyResult,
+    status: &ManagementStoreStatus,
+    active_set: &ActiveSetManifest,
+) -> Result<ManagementCompactionBackupBindingV1, RepositoryError> {
+    let expected_result_fingerprint = backup_apply_result_fingerprint(
+        &result.backup_set_id,
+        result.applied_at,
+        &result.approved_plan_fingerprint,
+        &result.manifest,
+    )?;
+    if result.schema_id != BACKUP_APPLY_RESULT_SCHEMA_ID
+        || result.schema_version != 1
+        || result.backup_set_id != result.manifest.backup_set_id
+        || result.result_fingerprint != expected_result_fingerprint
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "management compaction backup result is invalid",
+        ));
+    }
+    let completed = read_recovery_receipt::<BackupApplyResult>(
+        management_root,
+        "backup",
+        &result.approved_plan_fingerprint,
+    )?
+    .ok_or_else(|| {
+        repository_error(
+            RepositoryErrorCategory::NotFound,
+            "management compaction backup receipt is missing",
+        )
+    })?;
+    let manifest = read_verified_backup_set(backup_root)?;
+    if completed != *result
+        || manifest != result.manifest
+        || manifest.source_active_set_fingerprint != active_set.manifest_fingerprint
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "management compaction backup is not bound to the current active set",
+        ));
+    }
+    let entry = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.store_id == status.store_id && entry.scope == status.store_scope)
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::NotFound,
+                "management compaction backup omits the target store",
+            )
+        })?;
+    if entry.generation != status.generation
+        || entry.management_store_version != status.management_store_version
+        || entry.store_revision != status.store_revision
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "management compaction backup target is stale",
+        ));
+    }
+    Ok(ManagementCompactionBackupBindingV1 {
+        backup_set_id: result.backup_set_id.clone(),
+        approved_backup_plan_fingerprint: result.approved_plan_fingerprint.clone(),
+        backup_result_fingerprint: result.result_fingerprint.clone(),
+        backup_set_fingerprint: manifest.set_fingerprint,
+        backup_destination_fingerprint: backup_destination_fingerprint(
+            management_root,
+            backup_root,
+        )?,
+        source_active_set_fingerprint: manifest.source_active_set_fingerprint,
+        store_id: entry.store_id.clone(),
+        store_revision: entry.store_revision,
+        store_size_bytes: entry.size_bytes,
+        store_byte_sha256: entry.byte_sha256.clone(),
+    })
+}
+
 fn active_set_file_fingerprint(root: &Path) -> Result<Option<Sha256Hash>, RepositoryError> {
     let path = root.join(ACTIVE_SET_FILENAME);
     match fs::File::open(path) {
@@ -4326,6 +5668,654 @@ impl SqliteGlobalRepository {
             )
         })?;
         backup_connection(&connection, destination)
+    }
+}
+
+fn analyze_project_retention_v2(
+    connection: &Connection,
+    project_id: &ProjectId,
+    policy: &RetentionPolicyV2,
+    created_at: DateTime<Utc>,
+    is_cancelled: &(dyn Fn() -> bool + Sync),
+) -> Result<(Vec<RetentionCandidateV2>, Vec<RetentionProtectedTargetV1>), RepositoryError> {
+    policy.validate().map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "retention policy is invalid",
+        )
+    })?;
+    let current_generation = get_meta_optional(connection, "current_generation")
+        .map_err(map_sql)?
+        .unwrap_or_default();
+    let (protected_snapshots, unscoped_protection) = protected_snapshot_reasons(connection)?;
+    let active_suppressions_v2 = query_documents::<SuppressionV2, _>(
+        connection,
+        "SELECT document_json FROM suppressions_v2",
+        [],
+    )?
+    .into_iter()
+    .filter(|suppression| suppression.status == SuppressionStatus::Active)
+    .collect::<Vec<_>>();
+    let hold_artifact_ids = query_documents::<ArtifactRef, _>(
+        connection,
+        "SELECT document_json FROM artifact_refs",
+        [],
+    )?
+    .into_iter()
+    .filter(|artifact| artifact.retention_class == EvidenceRetentionClass::Hold)
+    .map(|artifact| artifact.artifact_id.as_str().to_owned())
+    .collect::<BTreeSet<_>>();
+    let hold_finding_ids =
+        query_documents::<Occurrence, _>(connection, "SELECT document_json FROM occurrences", [])?
+            .into_iter()
+            .filter(|occurrence| {
+                occurrence.evidence_refs.iter().any(|artifact| {
+                    artifact.retention_class == EvidenceRetentionClass::Hold
+                        || hold_artifact_ids.contains(artifact.artifact_id.as_str())
+                })
+            })
+            .map(|occurrence| occurrence.finding_id.as_str().to_owned())
+            .collect::<BTreeSet<_>>();
+
+    let incomplete_cutoff = created_at
+        - chrono::Duration::days(
+            policy
+                .incomplete_staging_retention_days
+                .min(i64::MAX as u64) as i64,
+        );
+    let scan_detail_cutoff = created_at
+        - chrono::Duration::days(policy.scan_detail_retention_days.min(i64::MAX as u64) as i64);
+    let resolved_cutoff = created_at
+        - chrono::Duration::days(policy.resolved_finding_retention_days.min(i64::MAX as u64) as i64);
+    let local_decision_cutoff = created_at
+        - chrono::Duration::days(policy.local_decision_retention_days.min(i64::MAX as u64) as i64);
+
+    let scan_documents: Vec<(String, String)> = {
+        let mut statement = connection
+            .prepare("SELECT generation_id, document_json FROM scan_runs ORDER BY generation_id")
+            .map_err(map_sql)?;
+        statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(map_sql)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_sql)?
+    };
+    let mut runs = Vec::with_capacity(scan_documents.len());
+    let mut run_locations = BTreeMap::new();
+    for (generation_id, document) in scan_documents {
+        if is_cancelled() {
+            return Err(repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "retention planning was cancelled",
+            ));
+        }
+        let run: ScanRun = serde_json::from_str(&document).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "stored ScanRun is invalid",
+            )
+        })?;
+        let finished_at = run.finished_at.unwrap_or(run.started_at);
+        run_locations.insert(
+            run.scan_run_id.as_str().to_owned(),
+            (
+                generation_id.clone(),
+                finished_at,
+                run.workspace_snapshot_id.clone(),
+            ),
+        );
+        runs.push((generation_id, finished_at, run));
+    }
+
+    let mut candidates = Vec::new();
+    let mut protected_targets = Vec::new();
+    let mut generation_candidates = BTreeSet::new();
+    let embedded_artifact_hold = |run: &ScanRun| {
+        run.artifact_refs.iter().any(|artifact| {
+            artifact.retention_class == EvidenceRetentionClass::Hold
+                || hold_artifact_ids.contains(artifact.artifact_id.as_str())
+        })
+    };
+
+    for (generation_id, finished_at, run) in runs
+        .iter()
+        .filter(|(_, _, run)| run.status != ScanStatus::Succeeded)
+    {
+        if is_cancelled() {
+            return Err(repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "retention planning was cancelled",
+            ));
+        }
+        if *finished_at >= incomplete_cutoff {
+            continue;
+        }
+        let (estimated_rows, estimated_bytes) =
+            retention_generation_stats(connection, generation_id)?;
+        let max_document_bytes =
+            retention_generation_max_document_bytes(connection, generation_id)?;
+        let reason_code = "INCOMPLETE_STAGING_EXPIRED";
+        let candidate = RetentionCandidateV2 {
+            candidate_id: retention_candidate_id(
+                project_id,
+                RetentionTargetKindV2::ScanGeneration,
+                Some(generation_id),
+                None,
+                None,
+                reason_code,
+            )?,
+            project_id: project_id.clone(),
+            target_kind: RetentionTargetKindV2::ScanGeneration,
+            generation_id: Some(generation_id.clone()),
+            entity_id: None,
+            entity_revision: None,
+            scan_run_id: Some(run.scan_run_id.clone()),
+            retention_class: "incomplete_staging".to_owned(),
+            reason_code: reason_code.to_owned(),
+            estimated_rows,
+            estimated_bytes,
+        };
+        let protection = if *generation_id == current_generation {
+            Some("CURRENT_GENERATION")
+        } else if let Some(reason) = protected_snapshots.get(run.workspace_snapshot_id.as_str()) {
+            Some(reason.as_str())
+        } else if embedded_artifact_hold(run) {
+            Some("ARTIFACT_RETENTION_HOLD")
+        } else if max_document_bytes > policy.max_batch_bytes {
+            Some("RETENTION_ROW_EXCEEDS_BATCH_LIMIT")
+        } else {
+            unscoped_protection.as_deref()
+        };
+        if protection.is_none() {
+            generation_candidates.insert(generation_id.clone());
+        }
+        push_retention_candidate_or_protection(
+            &mut candidates,
+            &mut protected_targets,
+            policy,
+            candidate,
+            protection,
+        );
+    }
+
+    let mut successful = runs
+        .iter()
+        .filter(|(_, _, run)| run.status == ScanStatus::Succeeded)
+        .collect::<Vec<_>>();
+    successful.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| right.0.cmp(&left.0)));
+    for (index, (generation_id, finished_at, run)) in successful.into_iter().enumerate() {
+        if is_cancelled() {
+            return Err(repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "retention planning was cancelled",
+            ));
+        }
+        if *finished_at >= scan_detail_cutoff {
+            continue;
+        }
+        let (estimated_rows, estimated_bytes) =
+            retention_generation_stats(connection, generation_id)?;
+        let max_document_bytes =
+            retention_generation_max_document_bytes(connection, generation_id)?;
+        let reason_code = "SUCCESSFUL_SCAN_DETAIL_EXPIRED";
+        let candidate = RetentionCandidateV2 {
+            candidate_id: retention_candidate_id(
+                project_id,
+                RetentionTargetKindV2::ScanGeneration,
+                Some(generation_id),
+                None,
+                None,
+                reason_code,
+            )?,
+            project_id: project_id.clone(),
+            target_kind: RetentionTargetKindV2::ScanGeneration,
+            generation_id: Some(generation_id.clone()),
+            entity_id: None,
+            entity_revision: None,
+            scan_run_id: Some(run.scan_run_id.clone()),
+            retention_class: "successful_scan_detail".to_owned(),
+            reason_code: reason_code.to_owned(),
+            estimated_rows,
+            estimated_bytes,
+        };
+        let protection = if *generation_id == current_generation {
+            Some("CURRENT_GENERATION")
+        } else if index < usize::try_from(policy.keep_latest_successful_scans).unwrap_or(usize::MAX)
+        {
+            Some("LATEST_SUCCESSFUL_SCAN_FLOOR")
+        } else if let Some(reason) = protected_snapshots.get(run.workspace_snapshot_id.as_str()) {
+            Some(reason.as_str())
+        } else if embedded_artifact_hold(run) {
+            Some("ARTIFACT_RETENTION_HOLD")
+        } else if max_document_bytes > policy.max_batch_bytes {
+            Some("RETENTION_ROW_EXCEEDS_BATCH_LIMIT")
+        } else {
+            unscoped_protection.as_deref()
+        };
+        if protection.is_none() {
+            generation_candidates.insert(generation_id.clone());
+        }
+        push_retention_candidate_or_protection(
+            &mut candidates,
+            &mut protected_targets,
+            policy,
+            candidate,
+            protection,
+        );
+    }
+
+    let finding_documents: Vec<(String, String, String)> = {
+        let mut statement = connection
+            .prepare("SELECT entity_id, generation_id, document_json FROM findings")
+            .map_err(map_sql)?;
+        statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .map_err(map_sql)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_sql)?
+    };
+    for (entity_id, generation_id, document) in finding_documents {
+        if is_cancelled() {
+            return Err(repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "retention planning was cancelled",
+            ));
+        }
+        let finding: Finding = serde_json::from_str(&document).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "stored Finding is invalid",
+            )
+        })?;
+        let Some((_, finished_at, workspace_snapshot_id)) =
+            run_locations.get(finding.last_observed_scan_id.as_str())
+        else {
+            continue;
+        };
+        if finding.lifecycle != FindingLifecycle::Resolved
+            || *finished_at >= resolved_cutoff
+            || generation_id == current_generation
+            || generation_candidates.contains(&generation_id)
+        {
+            continue;
+        }
+        let finding_parameter = finding.finding_id.as_str();
+        let (finding_rows, finding_bytes) = retention_document_stats(
+            connection,
+            "findings",
+            "entity_id=?1 AND generation_id=?2",
+            &[&entity_id, &generation_id],
+        )?;
+        let (occurrence_rows, occurrence_bytes) = retention_document_stats(
+            connection,
+            "occurrences",
+            "generation_id=?1 AND json_extract(document_json, '$.finding_id')=?2",
+            &[&generation_id, &finding_parameter],
+        )?;
+        let estimated_rows = finding_rows.saturating_add(occurrence_rows);
+        let estimated_bytes = finding_bytes.saturating_add(occurrence_bytes);
+        let max_document_bytes = retention_document_max_bytes(
+            connection,
+            "findings",
+            "entity_id=?1 AND generation_id=?2",
+            &[&entity_id, &generation_id],
+        )?
+        .max(retention_document_max_bytes(
+            connection,
+            "occurrences",
+            "generation_id=?1 AND json_extract(document_json, '$.finding_id')=?2",
+            &[&generation_id, &finding_parameter],
+        )?);
+        let reason_code = "RESOLVED_FINDING_EXPIRED";
+        let candidate = RetentionCandidateV2 {
+            candidate_id: retention_candidate_id(
+                project_id,
+                RetentionTargetKindV2::ResolvedFinding,
+                Some(&generation_id),
+                Some(&entity_id),
+                None,
+                reason_code,
+            )?,
+            project_id: project_id.clone(),
+            target_kind: RetentionTargetKindV2::ResolvedFinding,
+            generation_id: Some(generation_id),
+            entity_id: Some(entity_id),
+            entity_revision: None,
+            scan_run_id: Some(finding.last_observed_scan_id),
+            retention_class: "resolved_finding".to_owned(),
+            reason_code: reason_code.to_owned(),
+            estimated_rows,
+            estimated_bytes,
+        };
+        let active_v2_decision = active_suppressions_v2.iter().any(|suppression| {
+            if suppression.subject_binding_constraint.is_some() {
+                return false;
+            }
+            let exact_subject = suppression.subject_kind == DecisionSubjectKindV2::Finding
+                && suppression
+                    .subject_fingerprint
+                    .as_ref()
+                    .is_some_and(|fingerprint| fingerprint == &finding.finding_fingerprint);
+            let rule_subject = suppression
+                .rule_ref_constraint
+                .as_ref()
+                .is_some_and(|rule| {
+                    rule.rule_id == finding.rule_id && rule.rule_version == finding.rule_version
+                });
+            let evidence_subject = suppression.review_evidence_refs.iter().any(|reference| {
+                matches!(
+                    reference,
+                    DiagnosticEvidenceRefV2::Finding {
+                        finding_id,
+                        finding_fingerprint,
+                    } if finding_id == &finding.finding_id
+                        && finding_fingerprint == &finding.finding_fingerprint
+                )
+            });
+            exact_subject || rule_subject || evidence_subject
+        });
+        let protection = if !finding.active_suppression_ids.is_empty()
+            || finding.active_disposition_id.is_some()
+            || active_v2_decision
+        {
+            Some("ACTIVE_DECISION_HOLD")
+        } else if let Some(reason) = protected_snapshots.get(workspace_snapshot_id.as_str()) {
+            Some(reason.as_str())
+        } else if hold_finding_ids.contains(finding.finding_id.as_str()) {
+            Some("ARTIFACT_RETENTION_HOLD")
+        } else if max_document_bytes > policy.max_batch_bytes {
+            Some("RETENTION_ROW_EXCEEDS_BATCH_LIMIT")
+        } else {
+            unscoped_protection.as_deref()
+        };
+        push_retention_candidate_or_protection(
+            &mut candidates,
+            &mut protected_targets,
+            policy,
+            candidate,
+            protection,
+        );
+    }
+
+    let legacy_suppressions: Vec<(String, i64, String, i64)> = {
+        let mut statement = connection
+            .prepare(
+                "SELECT current.entity_id, current.revision, current.document_json,
+                        (SELECT MAX(candidate.revision)
+                         FROM suppressions AS candidate
+                         WHERE candidate.entity_id = current.entity_id)
+                 FROM suppressions AS current",
+            )
+            .map_err(map_sql)?;
+        statement
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })
+            .map_err(map_sql)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_sql)?
+    };
+    for (entity_id, revision, document, latest_revision) in legacy_suppressions {
+        if is_cancelled() {
+            return Err(repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "retention planning was cancelled",
+            ));
+        }
+        let revision = u64::try_from(revision).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "stored Suppression revision is invalid",
+            )
+        })?;
+        let latest_revision = u64::try_from(latest_revision).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "latest Suppression revision is invalid",
+            )
+        })?;
+        let suppression: Suppression = serde_json::from_str(&document).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "stored Suppression is invalid",
+            )
+        })?;
+        if suppression.scope_kind != SuppressionScope::Local
+            || suppression.created_at >= local_decision_cutoff
+        {
+            continue;
+        }
+        let candidate = local_decision_candidate(
+            project_id,
+            RetentionTargetKindV2::LocalSuppression,
+            &entity_id,
+            revision,
+            "local_suppression_v1",
+            "LOCAL_SUPPRESSION_EXPIRED",
+            document.len() as u64,
+        )?;
+        let protection = (revision == latest_revision
+            && suppression.status == SuppressionStatus::Active)
+            .then_some("ACTIVE_LOCAL_DECISION");
+        push_retention_candidate_or_protection(
+            &mut candidates,
+            &mut protected_targets,
+            policy,
+            candidate,
+            protection,
+        );
+    }
+
+    let legacy_dispositions: Vec<(String, i64, String, i64)> = {
+        let mut statement = connection
+            .prepare(
+                "SELECT current.entity_id, current.revision, current.document_json,
+                        (SELECT MAX(candidate.revision)
+                         FROM dispositions AS candidate
+                         WHERE candidate.entity_id = current.entity_id)
+                 FROM dispositions AS current",
+            )
+            .map_err(map_sql)?;
+        statement
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })
+            .map_err(map_sql)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_sql)?
+    };
+    for (entity_id, revision, document, latest_revision) in legacy_dispositions {
+        if is_cancelled() {
+            return Err(repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "retention planning was cancelled",
+            ));
+        }
+        let revision = u64::try_from(revision).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "stored Disposition revision is invalid",
+            )
+        })?;
+        let latest_revision = u64::try_from(latest_revision).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "latest Disposition revision is invalid",
+            )
+        })?;
+        let disposition: Disposition = serde_json::from_str(&document).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "stored Disposition is invalid",
+            )
+        })?;
+        if disposition.decided_at >= local_decision_cutoff {
+            continue;
+        }
+        let candidate = local_decision_candidate(
+            project_id,
+            RetentionTargetKindV2::LocalDisposition,
+            &entity_id,
+            revision,
+            "local_disposition_v1",
+            "LOCAL_DISPOSITION_EXPIRED",
+            document.len() as u64,
+        )?;
+        let protection = (revision == latest_revision
+            && disposition.status == DispositionStatus::Active)
+            .then_some("ACTIVE_LOCAL_DECISION");
+        push_retention_candidate_or_protection(
+            &mut candidates,
+            &mut protected_targets,
+            policy,
+            candidate,
+            protection,
+        );
+    }
+
+    for (table, target_kind, retention_class, reason_code) in [
+        (
+            "suppressions_v2",
+            RetentionTargetKindV2::LocalSuppression,
+            "local_suppression_v2",
+            "LOCAL_SUPPRESSION_EXPIRED",
+        ),
+        (
+            "dispositions_v2",
+            RetentionTargetKindV2::LocalDisposition,
+            "local_disposition_v2",
+            "LOCAL_DISPOSITION_EXPIRED",
+        ),
+    ] {
+        let documents: Vec<(String, String)> = {
+            let mut statement = connection
+                .prepare(&format!("SELECT entity_id, document_json FROM {table}"))
+                .map_err(map_sql)?;
+            statement
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .map_err(map_sql)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(map_sql)?
+        };
+        for (entity_id, document) in documents {
+            if is_cancelled() {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Unavailable,
+                    "retention planning was cancelled",
+                ));
+            }
+            let (revision, decided_at, active) = if table == "suppressions_v2" {
+                let value: SuppressionV2 = serde_json::from_str(&document).map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "stored SuppressionV2 is invalid",
+                    )
+                })?;
+                (
+                    value.revision,
+                    value.created_at,
+                    value.status == SuppressionStatus::Active,
+                )
+            } else {
+                let value: DispositionV2 = serde_json::from_str(&document).map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "stored DispositionV2 is invalid",
+                    )
+                })?;
+                (
+                    value.revision,
+                    value.decided_at,
+                    value.status == DispositionStatus::Active,
+                )
+            };
+            if decided_at >= local_decision_cutoff {
+                continue;
+            }
+            let candidate = local_decision_candidate(
+                project_id,
+                target_kind,
+                &entity_id,
+                revision,
+                retention_class,
+                reason_code,
+                document.len() as u64,
+            )?;
+            push_retention_candidate_or_protection(
+                &mut candidates,
+                &mut protected_targets,
+                policy,
+                candidate,
+                active.then_some("ACTIVE_LOCAL_DECISION"),
+            );
+        }
+    }
+
+    Ok((candidates, protected_targets))
+}
+
+impl SqliteGlobalRepository {
+    fn project_ids_page(
+        &self,
+        after_project_id: Option<&ProjectId>,
+        limit: usize,
+    ) -> Result<(u64, Vec<ProjectId>), RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "global store lock is unavailable",
+            )
+        })?;
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM projects", [], |row| row.get(0))
+            .map_err(map_sql)?;
+        let total = u64::try_from(total).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "global store contains an invalid project count",
+            )
+        })?;
+        let limit = i64::try_from(limit).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management status page limit is invalid",
+            )
+        })?;
+        let raw_ids = if let Some(after_project_id) = after_project_id {
+            let mut statement = connection
+                .prepare(
+                    "SELECT project_id FROM projects WHERE project_id > ?1 ORDER BY project_id LIMIT ?2",
+                )
+                .map_err(map_sql)?;
+            statement
+                .query_map(params![after_project_id.as_str(), limit], |row| {
+                    row.get::<_, String>(0)
+                })
+                .map_err(map_sql)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(map_sql)?
+        } else {
+            let mut statement = connection
+                .prepare("SELECT project_id FROM projects ORDER BY project_id LIMIT ?1")
+                .map_err(map_sql)?;
+            statement
+                .query_map(params![limit], |row| row.get::<_, String>(0))
+                .map_err(map_sql)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(map_sql)?
+        };
+        let project_ids = raw_ids
+            .into_iter()
+            .map(|value| {
+                ProjectId::parse(value).map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "global store contains an invalid project identifier",
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((total, project_ids))
     }
 }
 
@@ -5274,6 +7264,27 @@ impl SqliteProjectRepository {
         backup_connection(&connection, destination)
     }
 
+    fn retention_analysis_v2(
+        &self,
+        policy: &RetentionPolicyV2,
+        created_at: DateTime<Utc>,
+        is_cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<(Vec<RetentionCandidateV2>, Vec<RetentionProtectedTargetV1>), RepositoryError> {
+        let connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        analyze_project_retention_v2(
+            &connection,
+            &self.project_id,
+            policy,
+            created_at,
+            is_cancelled,
+        )
+    }
+
     fn retention_candidates(
         &self,
         incomplete_cutoff: DateTime<Utc>,
@@ -5421,6 +7432,288 @@ impl SqliteProjectRepository {
         }
         transaction.commit().map_err(map_sql)?;
         Ok(applied)
+    }
+
+    fn apply_retention_candidate_v2(
+        &self,
+        expected_revision: u64,
+        candidate: &RetentionCandidateV2,
+        plan_fingerprint: &Sha256Hash,
+        limits: RetentionBatchLimits,
+        progress: RetentionCandidateProgress,
+    ) -> Result<(u64, u64, u64, bool), RepositoryError> {
+        if candidate.project_id != self.project_id || candidate.estimated_rows == 0 {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "retention candidate is invalid",
+            ));
+        }
+        let mut connection = self.connection.lock().map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "project store lock is unavailable",
+            )
+        })?;
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(map_sql)?;
+        let current_revision: u64 =
+            get_meta(&transaction, "store_revision")?
+                .parse()
+                .map_err(|_| {
+                    repository_error(RepositoryErrorCategory::Corrupt, "revision is invalid")
+                })?;
+        let last_candidate =
+            get_meta_optional(&transaction, "retention_last_candidate_id").map_err(map_sql)?;
+        let last_plan =
+            get_meta_optional(&transaction, "retention_last_plan_fingerprint").map_err(map_sql)?;
+        if current_revision == expected_revision.saturating_add(1)
+            && last_candidate.as_deref() == Some(candidate.candidate_id.as_str())
+            && last_plan.as_deref() == Some(plan_fingerprint.as_str())
+        {
+            let rows = get_meta(&transaction, "retention_last_applied_rows")?
+                .parse()
+                .map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "retention replay row count is invalid",
+                    )
+                })?;
+            let bytes = get_meta(&transaction, "retention_last_applied_bytes")?
+                .parse()
+                .map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "retention replay byte count is invalid",
+                    )
+                })?;
+            let candidate_complete = get_meta(&transaction, "retention_last_candidate_complete")?
+                .parse()
+                .map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "retention replay completion state is invalid",
+                    )
+                })?;
+            return Ok((rows, bytes, current_revision, candidate_complete));
+        }
+        if current_revision != expected_revision {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "retention project revision is stale",
+            ));
+        }
+        let current_generation = get_meta_optional(&transaction, "current_generation")
+            .map_err(map_sql)?
+            .unwrap_or_default();
+        if candidate
+            .generation_id
+            .as_deref()
+            .is_some_and(|generation| generation == current_generation)
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::Invalid,
+                "retention candidate targets the current generation",
+            ));
+        }
+        let remaining = retention_candidate_remaining_stats(&transaction, candidate)?;
+        if progress.rows.checked_add(remaining.0) != Some(candidate.estimated_rows)
+            || progress.bytes.checked_add(remaining.1) != Some(candidate.estimated_bytes)
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "retention candidate estimate no longer matches source",
+            ));
+        }
+        let (applied_rows, applied_bytes, candidate_complete) = match candidate.target_kind {
+            RetentionTargetKindV2::ScanGeneration => {
+                let generation_id = candidate.generation_id.as_deref().ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "scan retention candidate omits generation",
+                    )
+                })?;
+                let mut selected = RetentionRowSelection::default();
+                for table in RETENTION_GENERATION_TABLES {
+                    if select_retention_rows_for_predicate(
+                        &transaction,
+                        table,
+                        "generation_id=?1",
+                        &[&generation_id],
+                        limits,
+                        &mut selected,
+                    )? {
+                        break;
+                    }
+                }
+                let applied_rows = delete_selected_retention_rows(&transaction, &selected.rows)?;
+                (
+                    applied_rows,
+                    selected.bytes,
+                    retention_generation_stats(&transaction, generation_id)?.0 == 0,
+                )
+            }
+            RetentionTargetKindV2::ResolvedFinding => {
+                let generation_id = candidate.generation_id.as_deref().ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "resolved finding candidate omits generation",
+                    )
+                })?;
+                let entity_id = candidate.entity_id.as_deref().ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "resolved finding candidate omits identity",
+                    )
+                })?;
+                let mut selected = RetentionRowSelection::default();
+                let full = select_retention_rows_for_predicate(
+                    &transaction,
+                    "occurrences",
+                    "generation_id=?1 AND json_extract(document_json, '$.finding_id')=?2",
+                    &[&generation_id, &entity_id],
+                    limits,
+                    &mut selected,
+                )?;
+                if !full {
+                    let _ = select_retention_rows_for_predicate(
+                        &transaction,
+                        "findings",
+                        "generation_id=?1 AND entity_id=?2",
+                        &[&generation_id, &entity_id],
+                        limits,
+                        &mut selected,
+                    )?;
+                }
+                let applied_rows = delete_selected_retention_rows(&transaction, &selected.rows)?;
+                let finding_rows = retention_document_stats(
+                    &transaction,
+                    "findings",
+                    "generation_id=?1 AND entity_id=?2",
+                    &[&generation_id, &entity_id],
+                )?
+                .0;
+                let occurrence_rows = retention_document_stats(
+                    &transaction,
+                    "occurrences",
+                    "generation_id=?1 AND json_extract(document_json, '$.finding_id')=?2",
+                    &[&generation_id, &entity_id],
+                )?
+                .0;
+                (
+                    applied_rows,
+                    selected.bytes,
+                    finding_rows == 0 && occurrence_rows == 0,
+                )
+            }
+            RetentionTargetKindV2::LocalSuppression | RetentionTargetKindV2::LocalDisposition => {
+                let entity_id = candidate.entity_id.as_deref().ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::Invalid,
+                        "local decision candidate omits identity",
+                    )
+                })?;
+                let entity_revision = candidate
+                    .entity_revision
+                    .map(i64::try_from)
+                    .transpose()
+                    .map_err(|_| {
+                        repository_error(
+                            RepositoryErrorCategory::Invalid,
+                            "local decision revision is invalid",
+                        )
+                    })?;
+                let changed = match candidate.retention_class.as_str() {
+                    "local_suppression_v1" => transaction
+                        .execute(
+                            "DELETE FROM suppressions WHERE entity_id=?1 AND revision=?2",
+                            params![entity_id, entity_revision],
+                        )
+                        .map_err(map_sql)?,
+                    "local_suppression_v2" => transaction
+                        .execute(
+                            "DELETE FROM suppressions_v2 WHERE entity_id=?1",
+                            [entity_id],
+                        )
+                        .map_err(map_sql)?,
+                    "local_disposition_v1" => transaction
+                        .execute(
+                            "DELETE FROM dispositions WHERE entity_id=?1 AND revision=?2",
+                            params![entity_id, entity_revision],
+                        )
+                        .map_err(map_sql)?,
+                    "local_disposition_v2" => transaction
+                        .execute(
+                            "DELETE FROM dispositions_v2 WHERE entity_id=?1",
+                            [entity_id],
+                        )
+                        .map_err(map_sql)?,
+                    _ => {
+                        return Err(repository_error(
+                            RepositoryErrorCategory::Invalid,
+                            "local decision retention class is invalid",
+                        ));
+                    }
+                };
+                if changed != 1 {
+                    return Err(repository_error(
+                        RepositoryErrorCategory::RevisionConflict,
+                        "local decision retention candidate no longer matches source",
+                    ));
+                }
+                (changed as u64, candidate.estimated_bytes, true)
+            }
+        };
+        if applied_rows == 0 || applied_rows > limits.rows || applied_bytes > limits.bytes {
+            return Err(repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "retention batch exceeds its configured transaction limit",
+            ));
+        }
+        set_meta(
+            &transaction,
+            "retention_last_candidate_id",
+            &candidate.candidate_id,
+        )
+        .map_err(map_sql)?;
+        set_meta(
+            &transaction,
+            "retention_last_plan_fingerprint",
+            plan_fingerprint.as_str(),
+        )
+        .map_err(map_sql)?;
+        set_meta(
+            &transaction,
+            "retention_last_applied_rows",
+            &applied_rows.to_string(),
+        )
+        .map_err(map_sql)?;
+        set_meta(
+            &transaction,
+            "retention_last_applied_bytes",
+            &applied_bytes.to_string(),
+        )
+        .map_err(map_sql)?;
+        set_meta(
+            &transaction,
+            "retention_last_candidate_complete",
+            &candidate_complete.to_string(),
+        )
+        .map_err(map_sql)?;
+        append_event(
+            &transaction,
+            "retention.applied",
+            Some(&self.project_id),
+            plan_fingerprint,
+        )?;
+        bump_revision(&transaction)?;
+        transaction.commit().map_err(map_sql)?;
+        Ok((
+            applied_rows,
+            applied_bytes,
+            current_revision.saturating_add(1),
+            candidate_complete,
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -8799,29 +11092,41 @@ fn deserialize_optional<T: serde::de::DeserializeOwned>(
     .transpose()
 }
 
-fn protected_snapshot_ids(
+fn protected_snapshot_reasons(
     connection: &Connection,
-) -> Result<std::collections::BTreeSet<String>, RepositoryError> {
-    let mut protected = std::collections::BTreeSet::new();
+) -> Result<(BTreeMap<String, String>, Option<String>), RepositoryError> {
+    let mut protected = BTreeMap::new();
     let mut baselines: Vec<Baseline> = query_documents(
         connection,
         "SELECT document_json FROM baselines UNION ALL SELECT document_json FROM shared_baselines",
         [],
     )?;
     for baseline in baselines.drain(..) {
-        protected.insert(baseline.workspace_snapshot_id.as_str().to_owned());
+        protected.insert(
+            baseline.workspace_snapshot_id.as_str().to_owned(),
+            "BASELINE_HOLD".to_owned(),
+        );
     }
     for plan in
         query_documents::<ChangePlan, _>(connection, "SELECT document_json FROM change_plans", [])?
     {
-        protected.insert(plan.target_workspace_snapshot_id.as_str().to_owned());
+        protected.insert(
+            plan.target_workspace_snapshot_id.as_str().to_owned(),
+            "CHANGE_EVIDENCE_HOLD".to_owned(),
+        );
     }
     for patch in
         query_documents::<PatchSet, _>(connection, "SELECT document_json FROM patch_sets", [])?
     {
-        protected.insert(patch.base_workspace_snapshot_id.as_str().to_owned());
+        protected.insert(
+            patch.base_workspace_snapshot_id.as_str().to_owned(),
+            "CHANGE_EVIDENCE_HOLD".to_owned(),
+        );
         if let Some(snapshot_id) = patch.applied_workspace_snapshot_id {
-            protected.insert(snapshot_id.as_str().to_owned());
+            protected.insert(
+                snapshot_id.as_str().to_owned(),
+                "CHANGE_EVIDENCE_HOLD".to_owned(),
+            );
         }
     }
     for result in query_documents::<ValidationResult, _>(
@@ -8829,16 +11134,611 @@ fn protected_snapshot_ids(
         "SELECT document_json FROM validation_results",
         [],
     )? {
-        protected.insert(result.workspace_snapshot_id.as_str().to_owned());
+        protected.insert(
+            result.workspace_snapshot_id.as_str().to_owned(),
+            "VALIDATION_RESULT_HOLD".to_owned(),
+        );
     }
     for decision in query_documents::<GateDecision, _>(
         connection,
         "SELECT document_json FROM gate_decisions",
         [],
     )? {
-        protected.insert(gate_workspace_snapshot_id(&decision)?.as_str().to_owned());
+        protected.insert(
+            gate_workspace_snapshot_id(&decision)?.as_str().to_owned(),
+            "GATE_DECISION_HOLD".to_owned(),
+        );
     }
-    Ok(protected)
+
+    let runs: Vec<ValidationRunV2> = query_documents(
+        connection,
+        "SELECT document_json FROM validation_runs_v2",
+        [],
+    )?;
+    let results: Vec<ValidationResultV2> = query_documents(
+        connection,
+        "SELECT document_json FROM validation_results_v2",
+        [],
+    )?;
+    let gates: Vec<GateDecisionV2> = query_documents(
+        connection,
+        "SELECT document_json FROM gate_decisions_v2",
+        [],
+    )?;
+    let review_packs: Vec<ReviewPackV1> =
+        query_documents(connection, "SELECT document_json FROM review_packs_v1", [])?;
+    let reviewed_gates = review_packs
+        .iter()
+        .map(|pack| {
+            (
+                pack.authoritative_gate_decision_ref.gate_id.clone(),
+                pack.authoritative_gate_decision_ref.revision,
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    if reviewed_gates.iter().any(|(gate_id, revision)| {
+        !gates
+            .iter()
+            .any(|gate| &gate.gate_id == gate_id && gate.revision == *revision)
+    }) {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "ReviewPack references a missing GateDecisionV2",
+        ));
+    }
+
+    let mut binding_snapshots = BTreeMap::new();
+    for binding in runs
+        .iter()
+        .map(|run| &run.subject_binding)
+        .chain(results.iter().map(|result| &result.subject_binding))
+    {
+        if let Some(existing) = binding_snapshots.insert(
+            binding.binding_fingerprint.clone(),
+            binding.workspace_snapshot_id.as_str().to_owned(),
+        ) && existing != binding.workspace_snapshot_id.as_str()
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "subject binding fingerprint maps to conflicting workspace snapshots",
+            ));
+        }
+    }
+
+    let mut unscoped_reason = None;
+    for gate in &gates {
+        let reviewed = reviewed_gates.contains(&(gate.gate_id.clone(), gate.revision));
+        let reason = if reviewed {
+            "REVIEW_PACK_HOLD"
+        } else {
+            "GATE_DECISION_HOLD"
+        };
+        let mut matched = false;
+        for reference in gate
+            .required_run_refs
+            .iter()
+            .chain(gate.satisfied_run_refs.iter())
+        {
+            let run = runs
+                .iter()
+                .find(|run| {
+                    run.validation_run_id == reference.validation_run_id
+                        && run.revision == reference.revision
+                })
+                .ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::IntegrityFailed,
+                        "GateDecisionV2 references a missing ValidationRunV2",
+                    )
+                })?;
+            protected.insert(
+                run.subject_binding
+                    .workspace_snapshot_id
+                    .as_str()
+                    .to_owned(),
+                reason.to_owned(),
+            );
+            matched = true;
+        }
+        for reference in &gate.validation_result_refs {
+            let result = results
+                .iter()
+                .find(|result| {
+                    result.validation_result_id.as_str() == reference.document_id
+                        && result.revision == reference.revision
+                })
+                .ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::IntegrityFailed,
+                        "GateDecisionV2 references a missing ValidationResultV2",
+                    )
+                })?;
+            protected.insert(
+                result
+                    .subject_binding
+                    .workspace_snapshot_id
+                    .as_str()
+                    .to_owned(),
+                reason.to_owned(),
+            );
+            matched = true;
+        }
+        if !matched {
+            unscoped_reason = Some(reason.to_owned());
+        }
+    }
+
+    for baseline in
+        query_documents::<BaselineV2, _>(connection, "SELECT document_json FROM baselines_v2", [])?
+    {
+        let reason = if baseline.active {
+            "ACTIVE_BASELINE_HOLD"
+        } else {
+            "BASELINE_HOLD"
+        };
+        if let Some(snapshot_id) = binding_snapshots.get(&baseline.subject_binding_fingerprint) {
+            protected.insert(snapshot_id.clone(), reason.to_owned());
+        } else {
+            unscoped_reason = Some(reason.to_owned());
+        }
+    }
+    for suppression in query_documents::<SuppressionV2, _>(
+        connection,
+        "SELECT document_json FROM suppressions_v2",
+        [],
+    )?
+    .into_iter()
+    .filter(|suppression| suppression.status == SuppressionStatus::Active)
+    {
+        if let Some(binding) = suppression.subject_binding_constraint.as_ref() {
+            if let Some(snapshot_id) = binding_snapshots.get(binding) {
+                protected.insert(snapshot_id.clone(), "ACTIVE_SUPPRESSION_HOLD".to_owned());
+            } else {
+                unscoped_reason = Some("ACTIVE_SUPPRESSION_HOLD".to_owned());
+            }
+        } else {
+            // An unbound active rule/finding suppression can apply across scan
+            // generations. Keep the protection unscoped instead of guessing a
+            // narrower generation and deleting evidence that still supports it.
+            unscoped_reason = Some("ACTIVE_SUPPRESSION_HOLD".to_owned());
+        }
+    }
+    let active_legacy_suppression = query_documents::<Suppression, _>(
+        connection,
+        "SELECT current.document_json
+         FROM suppressions AS current
+         WHERE current.revision = (
+             SELECT MAX(candidate.revision)
+             FROM suppressions AS candidate
+             WHERE candidate.entity_id = current.entity_id
+         )
+         UNION ALL
+         SELECT document_json FROM shared_suppressions",
+        [],
+    )?
+    .into_iter()
+    .any(|suppression| suppression.status == SuppressionStatus::Active);
+    let active_disposition = query_documents::<Disposition, _>(
+        connection,
+        "SELECT current.document_json
+         FROM dispositions AS current
+         WHERE current.revision = (
+             SELECT MAX(candidate.revision)
+             FROM dispositions AS candidate
+             WHERE candidate.entity_id = current.entity_id
+         )",
+        [],
+    )?
+    .into_iter()
+    .any(|disposition| disposition.status == DispositionStatus::Active)
+        || query_documents::<DispositionV2, _>(
+            connection,
+            "SELECT document_json FROM dispositions_v2",
+            [],
+        )?
+        .into_iter()
+        .any(|disposition| disposition.status == DispositionStatus::Active);
+    if active_legacy_suppression {
+        unscoped_reason = Some("ACTIVE_SUPPRESSION_HOLD".to_owned());
+    }
+    if active_disposition {
+        unscoped_reason = Some("ACTIVE_DISPOSITION_HOLD".to_owned());
+    }
+    Ok((protected, unscoped_reason))
+}
+
+fn protected_snapshot_ids(connection: &Connection) -> Result<BTreeSet<String>, RepositoryError> {
+    Ok(protected_snapshot_reasons(connection)?
+        .0
+        .into_keys()
+        .collect())
+}
+
+const RETENTION_GENERATION_TABLES: [&str; 10] = [
+    "canonical_sources",
+    "symbols",
+    "symbol_references",
+    "code_index_snapshots",
+    "source_entries",
+    "index_entities",
+    "index_edges",
+    "findings",
+    "occurrences",
+    "scan_runs",
+];
+
+fn retention_document_stats(
+    connection: &Connection,
+    table: &str,
+    predicate: &str,
+    parameters: &[&dyn rusqlite::ToSql],
+) -> Result<(u64, u64), RepositoryError> {
+    let sql = format!(
+        "SELECT COUNT(*), COALESCE(SUM(length(document_json)), 0) FROM {table} WHERE {predicate}"
+    );
+    let (rows, bytes): (i64, i64) = connection
+        .query_row(&sql, parameters, |row| Ok((row.get(0)?, row.get(1)?)))
+        .map_err(map_sql)?;
+    Ok((
+        u64::try_from(rows).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "retention row estimate is invalid",
+            )
+        })?,
+        u64::try_from(bytes).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "retention byte estimate is invalid",
+            )
+        })?,
+    ))
+}
+
+fn retention_document_max_bytes(
+    connection: &Connection,
+    table: &str,
+    predicate: &str,
+    parameters: &[&dyn rusqlite::ToSql],
+) -> Result<u64, RepositoryError> {
+    let sql =
+        format!("SELECT COALESCE(MAX(length(document_json)), 0) FROM {table} WHERE {predicate}");
+    let bytes: i64 = connection
+        .query_row(&sql, parameters, |row| row.get(0))
+        .map_err(map_sql)?;
+    u64::try_from(bytes).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Corrupt,
+            "retention maximum document size is invalid",
+        )
+    })
+}
+
+fn retention_generation_stats(
+    connection: &Connection,
+    generation_id: &str,
+) -> Result<(u64, u64), RepositoryError> {
+    RETENTION_GENERATION_TABLES
+        .iter()
+        .try_fold((0_u64, 0_u64), |(rows, bytes), table| {
+            let (table_rows, table_bytes) =
+                retention_document_stats(connection, table, "generation_id=?1", &[&generation_id])?;
+            Ok((
+                rows.checked_add(table_rows).ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::QuotaExceeded,
+                        "retention row estimate overflowed",
+                    )
+                })?,
+                bytes.checked_add(table_bytes).ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::QuotaExceeded,
+                        "retention byte estimate overflowed",
+                    )
+                })?,
+            ))
+        })
+}
+
+fn retention_generation_max_document_bytes(
+    connection: &Connection,
+    generation_id: &str,
+) -> Result<u64, RepositoryError> {
+    RETENTION_GENERATION_TABLES
+        .iter()
+        .try_fold(0_u64, |maximum, table| {
+            retention_document_max_bytes(connection, table, "generation_id=?1", &[&generation_id])
+                .map(|bytes| maximum.max(bytes))
+        })
+}
+
+#[derive(Clone, Copy)]
+struct RetentionBatchLimits {
+    rows: u64,
+    bytes: u64,
+}
+
+#[derive(Clone, Copy)]
+struct RetentionCandidateProgress {
+    rows: u64,
+    bytes: u64,
+}
+
+#[derive(Default)]
+struct RetentionRowSelection {
+    rows: Vec<(String, i64)>,
+    bytes: u64,
+}
+
+fn select_retention_rows_for_predicate(
+    transaction: &Transaction<'_>,
+    table: &str,
+    predicate: &str,
+    parameters: &[&dyn rusqlite::ToSql],
+    limits: RetentionBatchLimits,
+    selected: &mut RetentionRowSelection,
+) -> Result<bool, RepositoryError> {
+    let sql = format!(
+        "SELECT rowid, length(document_json) FROM {table} WHERE {predicate} ORDER BY rowid"
+    );
+    let mut statement = transaction.prepare(&sql).map_err(map_sql)?;
+    let mut rows = statement.query(parameters).map_err(map_sql)?;
+    while let Some(row) = rows.next().map_err(map_sql)? {
+        let row_id: i64 = row.get(0).map_err(map_sql)?;
+        let document_bytes =
+            u64::try_from(row.get::<_, i64>(1).map_err(map_sql)?).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "retention document size is invalid",
+                )
+            })?;
+        if document_bytes > limits.bytes {
+            return Err(repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "one retention row exceeds the configured byte limit",
+            ));
+        }
+        let next_bytes = selected.bytes.checked_add(document_bytes).ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "retention batch byte count overflowed",
+            )
+        })?;
+        if selected.rows.len() as u64 >= limits.rows || next_bytes > limits.bytes {
+            return Ok(true);
+        }
+        selected.rows.push((table.to_owned(), row_id));
+        selected.bytes = next_bytes;
+        if selected.rows.len() as u64 == limits.rows || selected.bytes == limits.bytes {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn delete_selected_retention_rows(
+    transaction: &Transaction<'_>,
+    selected: &[(String, i64)],
+) -> Result<u64, RepositoryError> {
+    let mut by_table = BTreeMap::<&str, Vec<i64>>::new();
+    for (table, row_id) in selected {
+        by_table.entry(table.as_str()).or_default().push(*row_id);
+    }
+    let mut changed = 0_u64;
+    for (table, row_ids) in by_table {
+        let sql = format!("DELETE FROM {table} WHERE rowid=?1");
+        let mut statement = transaction.prepare(&sql).map_err(map_sql)?;
+        for row_id in row_ids {
+            changed = changed
+                .checked_add(statement.execute([row_id]).map_err(map_sql)? as u64)
+                .ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::QuotaExceeded,
+                        "retention deleted row count overflowed",
+                    )
+                })?;
+        }
+    }
+    if changed != selected.len() as u64 {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "retention row selection no longer matches source",
+        ));
+    }
+    Ok(changed)
+}
+
+fn retention_candidate_remaining_stats(
+    connection: &Connection,
+    candidate: &RetentionCandidateV2,
+) -> Result<(u64, u64), RepositoryError> {
+    match candidate.target_kind {
+        RetentionTargetKindV2::ScanGeneration => retention_generation_stats(
+            connection,
+            candidate.generation_id.as_deref().ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "scan retention candidate omits generation",
+                )
+            })?,
+        ),
+        RetentionTargetKindV2::ResolvedFinding => {
+            let generation_id = candidate.generation_id.as_deref().ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "resolved finding candidate omits generation",
+                )
+            })?;
+            let entity_id = candidate.entity_id.as_deref().ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "resolved finding candidate omits identity",
+                )
+            })?;
+            let finding = retention_document_stats(
+                connection,
+                "findings",
+                "generation_id=?1 AND entity_id=?2",
+                &[&generation_id, &entity_id],
+            )?;
+            let occurrence = retention_document_stats(
+                connection,
+                "occurrences",
+                "generation_id=?1 AND json_extract(document_json, '$.finding_id')=?2",
+                &[&generation_id, &entity_id],
+            )?;
+            Ok((
+                finding.0.checked_add(occurrence.0).ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::QuotaExceeded,
+                        "retention remaining row count overflowed",
+                    )
+                })?,
+                finding.1.checked_add(occurrence.1).ok_or_else(|| {
+                    repository_error(
+                        RepositoryErrorCategory::QuotaExceeded,
+                        "retention remaining byte count overflowed",
+                    )
+                })?,
+            ))
+        }
+        RetentionTargetKindV2::LocalSuppression | RetentionTargetKindV2::LocalDisposition => {
+            let entity_id = candidate.entity_id.as_deref().ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "local decision candidate omits identity",
+                )
+            })?;
+            let entity_revision = i64::try_from(candidate.entity_revision.ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "local decision candidate omits revision",
+                )
+            })?)
+            .map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "local decision candidate revision is invalid",
+                )
+            })?;
+            match candidate.retention_class.as_str() {
+                "local_suppression_v1" => retention_document_stats(
+                    connection,
+                    "suppressions",
+                    "entity_id=?1 AND revision=?2",
+                    &[&entity_id, &entity_revision],
+                ),
+                "local_suppression_v2" => retention_document_stats(
+                    connection,
+                    "suppressions_v2",
+                    "entity_id=?1",
+                    &[&entity_id],
+                ),
+                "local_disposition_v1" => retention_document_stats(
+                    connection,
+                    "dispositions",
+                    "entity_id=?1 AND revision=?2",
+                    &[&entity_id, &entity_revision],
+                ),
+                "local_disposition_v2" => retention_document_stats(
+                    connection,
+                    "dispositions_v2",
+                    "entity_id=?1",
+                    &[&entity_id],
+                ),
+                _ => Err(repository_error(
+                    RepositoryErrorCategory::Invalid,
+                    "local decision retention class is invalid",
+                )),
+            }
+        }
+    }
+}
+
+fn retention_candidate_id(
+    project_id: &ProjectId,
+    target_kind: RetentionTargetKindV2,
+    generation_id: Option<&str>,
+    entity_id: Option<&str>,
+    entity_revision: Option<u64>,
+    reason_code: &str,
+) -> Result<String, RepositoryError> {
+    versioned_fingerprint(
+        "star.management-retention-candidate",
+        2,
+        &serde_json::json!({
+            "project_id":project_id,
+            "target_kind":target_kind,
+            "generation_id":generation_id,
+            "entity_id":entity_id,
+            "entity_revision":entity_revision,
+            "reason_code":reason_code,
+        }),
+    )
+    .map(|fingerprint| fingerprint.as_str().to_owned())
+    .map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Invalid,
+            "retention candidate fingerprint failed",
+        )
+    })
+}
+
+fn local_decision_candidate(
+    project_id: &ProjectId,
+    target_kind: RetentionTargetKindV2,
+    entity_id: &str,
+    entity_revision: u64,
+    retention_class: &str,
+    reason_code: &str,
+    estimated_bytes: u64,
+) -> Result<RetentionCandidateV2, RepositoryError> {
+    Ok(RetentionCandidateV2 {
+        candidate_id: retention_candidate_id(
+            project_id,
+            target_kind,
+            None,
+            Some(entity_id),
+            Some(entity_revision),
+            reason_code,
+        )?,
+        project_id: project_id.clone(),
+        target_kind,
+        generation_id: None,
+        entity_id: Some(entity_id.to_owned()),
+        entity_revision: Some(entity_revision),
+        scan_run_id: None,
+        retention_class: retention_class.to_owned(),
+        reason_code: reason_code.to_owned(),
+        estimated_rows: 1,
+        estimated_bytes,
+    })
+}
+
+fn push_retention_candidate_or_protection(
+    candidates: &mut Vec<RetentionCandidateV2>,
+    protected_targets: &mut Vec<RetentionProtectedTargetV1>,
+    policy: &RetentionPolicyV2,
+    candidate: RetentionCandidateV2,
+    protection_reason: Option<&str>,
+) {
+    let limit_reason = (matches!(
+        candidate.target_kind,
+        RetentionTargetKindV2::LocalSuppression | RetentionTargetKindV2::LocalDisposition
+    ) && candidate.estimated_bytes > policy.max_batch_bytes)
+        .then_some("RETENTION_ROW_EXCEEDS_BATCH_LIMIT");
+    if let Some(reason_code) = protection_reason.or(limit_reason) {
+        protected_targets.push(RetentionProtectedTargetV1 {
+            project_id: candidate.project_id,
+            target_kind: candidate.target_kind,
+            target_ref: candidate.candidate_id,
+            reason_code: reason_code.to_owned(),
+            estimated_rows: candidate.estimated_rows,
+            estimated_bytes: candidate.estimated_bytes,
+        });
+    } else {
+        candidates.push(candidate);
+    }
 }
 
 fn verify_project_relations(
@@ -9732,9 +12632,8 @@ pub fn plan_project_v1_to_v2(
 }
 
 fn migration_file_sha256(path: &Path) -> Result<Sha256Hash, RepositoryError> {
-    fs::read(path)
-        .map(|bytes| Sha256Hash::digest(&bytes))
-        .map_err(map_io)
+    let file = fs::File::open(path).map_err(map_io)?;
+    Sha256Hash::digest_reader(file).map_err(map_io)
 }
 
 fn migration_backup_fingerprint(
@@ -9789,12 +12688,516 @@ fn safe_backup_relative_path(value: &str) -> bool {
             .all(|component| matches!(component, std::path::Component::Normal(_)))
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct VerifiedMigrationBackupObservation {
+    backup_locator: String,
+    backup_fingerprint: Sha256Hash,
+    manifest_fingerprint: Sha256Hash,
+    last_modified_at: DateTime<Utc>,
+    estimated_rows: u64,
+    estimated_bytes: u64,
+}
+
+fn migration_backups_root(management_root: &Path) -> Result<PathBuf, RepositoryError> {
+    management_root
+        .parent()
+        .map(|parent| parent.join(MIGRATION_BACKUPS_DIRECTORY))
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "management root has no migration backup parent",
+            )
+        })
+}
+
+fn backup_relative_locator(root: &Path, path: &Path) -> Result<String, RepositoryError> {
+    let relative = path.strip_prefix(root).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "migration backup file escapes its backup root",
+        )
+    })?;
+    let mut components = Vec::new();
+    for component in relative.components() {
+        let std::path::Component::Normal(component) = component else {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "migration backup file locator is invalid",
+            ));
+        };
+        components.push(component.to_str().ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "migration backup file locator is not UTF-8",
+            )
+        })?);
+    }
+    if components.is_empty() {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "migration backup file locator is empty",
+        ));
+    }
+    Ok(components.join("/"))
+}
+
+fn collect_migration_backup_files(
+    root: &Path,
+    directory: &Path,
+    depth: usize,
+    files: &mut BTreeSet<String>,
+) -> Result<(), RepositoryError> {
+    if depth > 16 {
+        return Err(repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "migration backup directory nesting is too deep",
+        ));
+    }
+    for entry in fs::read_dir(directory).map_err(map_io)? {
+        let entry = entry.map_err(map_io)?;
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path).map_err(map_io)?;
+        if metadata.file_type().is_symlink() {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "migration backup contains a symbolic link",
+            ));
+        }
+        if metadata.is_dir() {
+            collect_migration_backup_files(root, &path, depth.saturating_add(1), files)?;
+        } else if metadata.is_file() {
+            if files.len() >= RETENTION_BACKUP_FILE_SCAN_LIMIT
+                || !files.insert(backup_relative_locator(root, &path)?)
+            {
+                return Err(repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "migration backup file inventory exceeds its bound",
+                ));
+            }
+        } else {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "migration backup contains an unsupported filesystem entry",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn verify_migration_backup_for_retention(
+    backup_root: &Path,
+) -> Result<VerifiedMigrationBackupObservation, RepositoryError> {
+    let root_metadata = fs::symlink_metadata(backup_root).map_err(map_io)?;
+    if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "migration backup root is not a regular directory",
+        ));
+    }
+    let backup_locator = backup_root
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "migration backup locator is invalid",
+            )
+        })?
+        .to_owned();
+    let manifest_path = backup_root.join(MIGRATION_BACKUP_MANIFEST_FILENAME);
+    let manifest_bytes = fs::read(&manifest_path).map_err(map_io)?;
+    if manifest_bytes.is_empty() || manifest_bytes.len() > MANAGEMENT_DOCUMENT_MAX_BYTES as usize {
+        return Err(repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "migration backup manifest exceeds its size bound",
+        ));
+    }
+    let manifest_text = std::str::from_utf8(&manifest_bytes).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Corrupt,
+            "migration backup manifest is not UTF-8",
+        )
+    })?;
+    let manifest_value = star_contracts::parse_no_duplicate_keys(manifest_text).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Corrupt,
+            "migration backup manifest is invalid",
+        )
+    })?;
+    let manifest: MigrationBackupManifest =
+        serde_json::from_value(manifest_value).map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Corrupt,
+                "migration backup manifest shape is invalid",
+            )
+        })?;
+    let keys: BTreeSet<_> = manifest
+        .files
+        .iter()
+        .map(|file| backup_kind_key(&file.kind))
+        .collect();
+    let relative_paths: BTreeSet<_> = manifest
+        .files
+        .iter()
+        .map(|file| file.relative_path.as_str())
+        .collect();
+    let expected_locator = format!(
+        "{MIGRATION_BACKUP_PREFIX}{}",
+        manifest
+            .plan_fingerprint
+            .as_str()
+            .trim_start_matches("sha256:")
+    );
+    if manifest.schema_id != "star.management.project-v1-to-v2-backup"
+        || manifest.schema_version != 1
+        || backup_locator != expected_locator
+        || manifest.files.is_empty()
+        || keys.len() != manifest.files.len()
+        || !keys.contains("global")
+        || relative_paths.len() != manifest.files.len()
+        || manifest
+            .files
+            .iter()
+            .any(|file| !safe_backup_relative_path(&file.relative_path))
+        || migration_backup_fingerprint(&manifest.plan_fingerprint, &manifest.files)?
+            != manifest.backup_fingerprint
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "migration backup manifest invariant failed",
+        ));
+    }
+    let mut estimated_bytes = u64::try_from(manifest_bytes.len()).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::QuotaExceeded,
+            "migration backup manifest size overflowed",
+        )
+    })?;
+    for file in &manifest.files {
+        let path = backup_root.join(&file.relative_path);
+        let metadata = fs::symlink_metadata(&path).map_err(map_io)?;
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || migration_file_sha256(&path)? != file.content_sha256
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "migration backup file invariant failed",
+            ));
+        }
+        estimated_bytes = estimated_bytes.checked_add(metadata.len()).ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "migration backup size overflowed",
+            )
+        })?;
+    }
+    let mut actual_files = BTreeSet::new();
+    collect_migration_backup_files(backup_root, backup_root, 0, &mut actual_files)?;
+    let mut expected_files = relative_paths
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    expected_files.insert(MIGRATION_BACKUP_MANIFEST_FILENAME.to_owned());
+    if actual_files != expected_files {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "migration backup contains unmanifested files",
+        ));
+    }
+    let last_modified_at = fs::symlink_metadata(&manifest_path)
+        .map_err(map_io)?
+        .modified()
+        .map(DateTime::<Utc>::from)
+        .map_err(map_io)?;
+    Ok(VerifiedMigrationBackupObservation {
+        backup_locator,
+        backup_fingerprint: manifest.backup_fingerprint,
+        manifest_fingerprint: Sha256Hash::digest(&manifest_bytes),
+        last_modified_at,
+        estimated_rows: u64::try_from(manifest.files.len())
+            .ok()
+            .and_then(|value| value.checked_add(1))
+            .ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "migration backup row count overflowed",
+                )
+            })?,
+        estimated_bytes,
+    })
+}
+
+fn retention_migration_backup_inventory(
+    management_root: &Path,
+    policy: &RetentionPolicyV2,
+) -> Result<
+    (
+        Vec<RetentionMigrationBackupCandidateV1>,
+        Vec<RetentionProtectedMigrationBackupV1>,
+    ),
+    RepositoryError,
+> {
+    let backups_root = migration_backups_root(management_root)?;
+    if !backups_root.try_exists().map_err(map_io)? {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let root_metadata = fs::symlink_metadata(&backups_root).map_err(map_io)?;
+    if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "migration backup parent is not a regular directory",
+        ));
+    }
+    let mut observations = Vec::new();
+    let mut protected = Vec::new();
+    for (index, entry) in fs::read_dir(&backups_root).map_err(map_io)?.enumerate() {
+        if index >= RETENTION_BACKUP_DIRECTORY_LIMIT {
+            return Err(repository_error(
+                RepositoryErrorCategory::QuotaExceeded,
+                "migration backup directory inventory exceeds its bound",
+            ));
+        }
+        let entry = entry.map_err(map_io)?;
+        let locator = entry
+            .file_name()
+            .to_str()
+            .filter(|value| {
+                !value.is_empty()
+                    && value.len() <= 255
+                    && !value.contains(['/', '\\', '\0'])
+                    && *value != "."
+                    && *value != ".."
+            })
+            .ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::IntegrityFailed,
+                    "migration backup directory has an invalid entry name",
+                )
+            })?
+            .to_owned();
+        if locator.starts_with(RETENTION_DELETE_TOMBSTONE_PREFIX) {
+            protected.push(RetentionProtectedMigrationBackupV1 {
+                backup_locator: locator,
+                backup_fingerprint: None,
+                manifest_fingerprint: None,
+                last_modified_at: None,
+                reason_code: "MIGRATION_BACKUP_RECOVERY_HOLD".to_owned(),
+                estimated_rows: 0,
+                estimated_bytes: 0,
+            });
+            continue;
+        }
+        match verify_migration_backup_for_retention(&entry.path()) {
+            Ok(observation) => observations.push(observation),
+            Err(_) => protected.push(RetentionProtectedMigrationBackupV1 {
+                backup_locator: locator,
+                backup_fingerprint: None,
+                manifest_fingerprint: None,
+                last_modified_at: None,
+                reason_code: "MIGRATION_BACKUP_UNVERIFIED".to_owned(),
+                estimated_rows: 0,
+                estimated_bytes: 0,
+            }),
+        }
+    }
+    observations.sort_by(|left, right| {
+        right
+            .last_modified_at
+            .cmp(&left.last_modified_at)
+            .then_with(|| left.backup_locator.cmp(&right.backup_locator))
+    });
+    let protected_floor = policy
+        .migration_backup_min_count
+        .saturating_add(1)
+        .try_into()
+        .unwrap_or(usize::MAX);
+    let mut candidates = Vec::new();
+    for (index, observation) in observations.into_iter().enumerate() {
+        let protected_reason = if index == 0 {
+            Some("MIGRATION_BACKUP_LATEST_KNOWN_GOOD")
+        } else if index < protected_floor {
+            Some("MIGRATION_BACKUP_FLOOR")
+        } else if observation.estimated_rows > policy.max_batch_rows
+            || observation.estimated_bytes > policy.max_batch_bytes
+        {
+            Some("MIGRATION_BACKUP_EXCEEDS_BATCH_LIMIT")
+        } else {
+            None
+        };
+        if let Some(reason_code) = protected_reason {
+            protected.push(RetentionProtectedMigrationBackupV1 {
+                backup_locator: observation.backup_locator,
+                backup_fingerprint: Some(observation.backup_fingerprint),
+                manifest_fingerprint: Some(observation.manifest_fingerprint),
+                last_modified_at: Some(observation.last_modified_at),
+                reason_code: reason_code.to_owned(),
+                estimated_rows: observation.estimated_rows,
+                estimated_bytes: observation.estimated_bytes,
+            });
+            continue;
+        }
+        let candidate_id = versioned_fingerprint(
+            "star.management-retention-migration-backup-candidate",
+            1,
+            &serde_json::json!({
+                "backup_locator":observation.backup_locator,
+                "backup_fingerprint":observation.backup_fingerprint,
+                "manifest_fingerprint":observation.manifest_fingerprint,
+                "last_modified_at":observation.last_modified_at,
+                "estimated_rows":observation.estimated_rows,
+                "estimated_bytes":observation.estimated_bytes,
+            }),
+        )
+        .map_err(|_| {
+            repository_error(
+                RepositoryErrorCategory::Invalid,
+                "migration backup retention candidate fingerprint failed",
+            )
+        })?
+        .to_string();
+        candidates.push(RetentionMigrationBackupCandidateV1 {
+            candidate_id,
+            backup_locator: observation.backup_locator,
+            backup_fingerprint: observation.backup_fingerprint,
+            manifest_fingerprint: observation.manifest_fingerprint,
+            last_modified_at: observation.last_modified_at,
+            reason_code: "MIGRATION_BACKUP_SUPERSEDED".to_owned(),
+            estimated_rows: observation.estimated_rows,
+            estimated_bytes: observation.estimated_bytes,
+        });
+    }
+    protected.sort_by(|left, right| left.backup_locator.cmp(&right.backup_locator));
+    Ok((candidates, protected))
+}
+
+fn migration_backup_inventory_matches(
+    management_root: &Path,
+    plan: &RetentionPlanV2,
+    processed_candidates: usize,
+) -> Result<bool, RepositoryError> {
+    if processed_candidates > plan.migration_backup_candidates.len() {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "migration backup retention cursor is invalid",
+        ));
+    }
+    let (candidates, protected) =
+        retention_migration_backup_inventory(management_root, &plan.policy)?;
+    Ok(
+        candidates == plan.migration_backup_candidates[processed_candidates..]
+            && protected == plan.protected_migration_backups,
+    )
+}
+
+fn retention_delete_tombstone(
+    backups_root: &Path,
+    candidate: &RetentionMigrationBackupCandidateV1,
+) -> PathBuf {
+    backups_root.join(format!(
+        "{RETENTION_DELETE_TOMBSTONE_PREFIX}{}",
+        candidate.candidate_id.trim_start_matches("sha256:")
+    ))
+}
+
+fn apply_migration_backup_retention_candidate(
+    management_root: &Path,
+    plan: &RetentionPlanV2,
+    candidate_index: usize,
+) -> Result<(u64, u64), RepositoryError> {
+    let candidate = plan
+        .migration_backup_candidates
+        .get(candidate_index)
+        .ok_or_else(|| {
+            repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "migration backup retention candidate is missing",
+            )
+        })?;
+    let backups_root = migration_backups_root(management_root)?;
+    let candidate_root = backups_root.join(&candidate.backup_locator);
+    let tombstone = retention_delete_tombstone(&backups_root, candidate);
+    let candidate_exists = candidate_root.try_exists().map_err(map_io)?;
+    let tombstone_exists = tombstone.try_exists().map_err(map_io)?;
+    if candidate_exists && tombstone_exists {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "migration backup retention candidate and tombstone both exist",
+        ));
+    }
+    if tombstone_exists {
+        let metadata = fs::symlink_metadata(&tombstone).map_err(map_io)?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "migration backup retention tombstone is not a regular directory",
+            ));
+        }
+        fs::remove_dir_all(&tombstone).map_err(map_io)?;
+        if !migration_backup_inventory_matches(management_root, plan, candidate_index + 1)? {
+            return Err(repository_error(
+                RepositoryErrorCategory::RevisionConflict,
+                "migration backup inventory changed while resuming retention",
+            ));
+        }
+        return Ok((candidate.estimated_rows, candidate.estimated_bytes));
+    }
+    if !candidate_exists {
+        if migration_backup_inventory_matches(management_root, plan, candidate_index + 1)? {
+            return Ok((candidate.estimated_rows, candidate.estimated_bytes));
+        }
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "migration backup retention candidate disappeared",
+        ));
+    }
+    if !migration_backup_inventory_matches(management_root, plan, candidate_index)? {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "migration backup inventory changed after retention planning",
+        ));
+    }
+    let observed = verify_migration_backup_for_retention(&candidate_root)?;
+    if observed.backup_fingerprint != candidate.backup_fingerprint
+        || observed.manifest_fingerprint != candidate.manifest_fingerprint
+        || observed.last_modified_at != candidate.last_modified_at
+        || observed.estimated_rows != candidate.estimated_rows
+        || observed.estimated_bytes != candidate.estimated_bytes
+    {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "migration backup retention candidate fingerprint is stale",
+        ));
+    }
+    fs::rename(&candidate_root, &tombstone).map_err(map_io)?;
+    fs::remove_dir_all(&tombstone).map_err(map_io)?;
+    if !migration_backup_inventory_matches(management_root, plan, candidate_index + 1)? {
+        return Err(repository_error(
+            RepositoryErrorCategory::RevisionConflict,
+            "migration backup inventory changed during retention apply",
+        ));
+    }
+    Ok((candidate.estimated_rows, candidate.estimated_bytes))
+}
+
 fn verify_migration_backup(
     backup_root: &Path,
     plan: &ProjectV1ToV2MigrationPlan,
 ) -> Result<MigrationBackupManifest, RepositoryError> {
-    let bytes = fs::read(backup_root.join("migration-backup.json")).map_err(map_io)?;
-    let manifest: MigrationBackupManifest = serde_json::from_slice(&bytes).map_err(|_| {
+    let bytes = fs::read(backup_root.join(MIGRATION_BACKUP_MANIFEST_FILENAME)).map_err(map_io)?;
+    let input = std::str::from_utf8(&bytes).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Corrupt,
+            "migration backup manifest is invalid",
+        )
+    })?;
+    let value = star_contracts::parse_no_duplicate_keys(input).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::Corrupt,
+            "migration backup manifest is invalid",
+        )
+    })?;
+    let manifest: MigrationBackupManifest = serde_json::from_value(value).map_err(|_| {
         repository_error(
             RepositoryErrorCategory::Corrupt,
             "migration backup manifest is invalid",
@@ -11048,6 +14451,39 @@ mod tests {
         }
     }
 
+    fn create_retention_migration_backup(management_root: &Path, seed: &str) -> PathBuf {
+        let plan_fingerprint = Sha256Hash::digest(format!("plan-{seed}").as_bytes());
+        let backup_root = migration_backups_root(management_root)
+            .unwrap()
+            .join(format!(
+                "{MIGRATION_BACKUP_PREFIX}{}",
+                plan_fingerprint.as_str().trim_start_matches("sha256:")
+            ));
+        fs::create_dir_all(&backup_root).unwrap();
+        let relative_path = "global.db".to_owned();
+        let payload = format!("migration-backup-{seed}").into_bytes();
+        fs::write(backup_root.join(&relative_path), &payload).unwrap();
+        let files = vec![MigrationBackupFile {
+            kind: MigrationBackupKind::Global,
+            relative_path,
+            content_sha256: Sha256Hash::digest(&payload),
+        }];
+        let backup_fingerprint = migration_backup_fingerprint(&plan_fingerprint, &files).unwrap();
+        let manifest = MigrationBackupManifest {
+            schema_id: "star.management.project-v1-to-v2-backup".to_owned(),
+            schema_version: 1,
+            plan_fingerprint,
+            files,
+            backup_fingerprint,
+        };
+        fs::write(
+            backup_root.join(MIGRATION_BACKUP_MANIFEST_FILENAME),
+            serde_json::to_vec_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+        backup_root
+    }
+
     struct RecoveryFixture {
         root: PathBuf,
         management_root: PathBuf,
@@ -11145,6 +14581,151 @@ mod tests {
             project_before.last_verified_at
         );
         assert_eq!(fs::read(&active_set_path).unwrap(), active_set_before);
+    }
+
+    #[test]
+    fn management_status_pages_are_revision_bound_transport_bounded_and_complete() {
+        let root = std::env::temp_dir().join(format!(
+            "star-management-status-page-{}",
+            RootBindingId::new().as_str()
+        ));
+        let repositories = SqliteManagementRepositorySet::open(&root, "status-page-test").unwrap();
+        for index in 0_u32..1 {
+            let project_id = ProjectId::from_stable_bytes(format!("project-{index:03}").as_bytes());
+            let checkout_id =
+                CheckoutId::from_stable_bytes(format!("checkout-{index:03}").as_bytes());
+            let project = project(project_id.clone(), checkout_id.clone());
+            let checkout = checkout(project_id.clone(), checkout_id, RootBindingId::new());
+            repositories
+                .global()
+                .register_project(
+                    &project,
+                    &checkout,
+                    &format!("status-page-{index}"),
+                    &Sha256Hash::digest(format!("status-page-{index}").as_bytes()),
+                )
+                .unwrap();
+            repositories.project(&project_id).unwrap();
+        }
+
+        let mut query = ManagementStatusQueryV1 {
+            cursor: None,
+            max_items: 1,
+            max_bytes: 65_536,
+        };
+        let mut store_ids = BTreeSet::new();
+        let mut first_cursor = None;
+        loop {
+            let page = repositories.status_page(&query).unwrap();
+            page.validate().unwrap();
+            assert!(serde_json::to_vec(&page).unwrap().len() <= 65_536);
+            assert!(page.items.len() <= 1);
+            assert_eq!(page.total_count, 2);
+            for status in page.items {
+                assert!(store_ids.insert(status.store_id));
+            }
+            if first_cursor.is_none() {
+                first_cursor = page.next_cursor.clone();
+            }
+            let Some(cursor) = page.next_cursor else {
+                break;
+            };
+            query.cursor = Some(cursor);
+        }
+        assert_eq!(store_ids.len(), 2);
+
+        // Legacy status must fail closed before opening every project store once the
+        // default transport item cap would be exceeded.
+        for index in 1_u32..32 {
+            let project_id = ProjectId::from_stable_bytes(format!("project-{index:03}").as_bytes());
+            let checkout_id =
+                CheckoutId::from_stable_bytes(format!("checkout-{index:03}").as_bytes());
+            repositories
+                .global()
+                .register_project(
+                    &project(project_id.clone(), checkout_id.clone()),
+                    &checkout(project_id, checkout_id, RootBindingId::new()),
+                    &format!("status-page-{index}"),
+                    &Sha256Hash::digest(format!("status-page-{index}").as_bytes()),
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            repositories.status_all().unwrap_err().category,
+            RepositoryErrorCategory::QuotaExceeded
+        );
+
+        let stale = repositories
+            .status_page(&ManagementStatusQueryV1 {
+                cursor: first_cursor,
+                max_items: 1,
+                max_bytes: 65_536,
+            })
+            .unwrap_err();
+        assert_eq!(stale.category, RepositoryErrorCategory::RevisionConflict);
+    }
+
+    #[test]
+    fn management_status_cursor_rejects_noncanonical_and_oversized_inputs() {
+        let cursor = ManagementStatusCursorV1 {
+            schema_version: 1,
+            global_store_id: ManagementStoreId::new(),
+            snapshot_revision: 1,
+            global_returned: true,
+            after_project_id: Some(ProjectId::new()),
+        };
+        let encoded = encode_management_status_cursor(&cursor).unwrap();
+        assert_eq!(decode_management_status_cursor(&encoded).unwrap(), cursor);
+        let pretty = URL_SAFE_NO_PAD
+            .encode(serde_json::to_vec_pretty(&serde_json::to_value(&cursor).unwrap()).unwrap());
+        assert!(decode_management_status_cursor(&pretty).is_err());
+        assert!(decode_management_status_cursor(&"a".repeat(1_025)).is_err());
+    }
+
+    #[test]
+    fn management_status_legacy_path_fails_closed_at_cli_equivalent_cardinality() {
+        const PROJECT_COUNT: u32 = 4_096;
+        let root = std::env::temp_dir().join(format!(
+            "star-management-status-cardinality-{}",
+            RootBindingId::new().as_str()
+        ));
+        let repositories =
+            SqliteManagementRepositorySet::open(&root, "status-cardinality-test").unwrap();
+
+        // Seed one transaction so this remains a bounded transport/cardinality
+        // fixture rather than a 4,096-event registration performance test.
+        let mut connection = repositories.global.connection.lock().unwrap();
+        let transaction = connection.transaction().unwrap();
+        for index in 0..PROJECT_COUNT {
+            let project_id =
+                ProjectId::from_stable_bytes(format!("cardinality-project-{index:04}").as_bytes());
+            let document = serde_json::to_string(&project(
+                project_id.clone(),
+                CheckoutId::from_stable_bytes(
+                    format!("cardinality-checkout-{index:04}").as_bytes(),
+                ),
+            ))
+            .unwrap();
+            transaction
+                .execute(
+                    "INSERT INTO projects(project_id, identity_scope, document_json, updated_at) VALUES(?1, 'local', ?2, ?3)",
+                    params![project_id.as_str(), document, Utc::now().to_rfc3339()],
+                )
+                .unwrap();
+        }
+        transaction.commit().unwrap();
+        drop(connection);
+
+        let (total, ids) = repositories
+            .global
+            .project_ids_page(None, PROJECT_COUNT as usize + 1)
+            .unwrap();
+        assert_eq!(total, u64::from(PROJECT_COUNT));
+        assert_eq!(ids.len(), PROJECT_COUNT as usize);
+        assert_eq!(
+            repositories.status_all().unwrap_err().category,
+            RepositoryErrorCategory::QuotaExceeded
+        );
     }
 
     fn scan_commit(mut project: Project, status: ScanStatus, seed: &str) -> ScanCommit {
@@ -11756,6 +15337,60 @@ CREATE TABLE events(
             .unwrap(),
             RecoveryInspection::Healthy
         );
+        let global_status = repositories.global().status().unwrap();
+        let unbound_compaction_plan = repositories
+            .plan_compaction(&global_status.store_id, None, None)
+            .unwrap();
+        assert_eq!(
+            unbound_compaction_plan.store_revision,
+            global_status.store_revision
+        );
+        assert!(
+            unbound_compaction_plan.required_free_bytes >= unbound_compaction_plan.database_bytes
+        );
+        assert_eq!(
+            repositories
+                .apply_compaction(
+                    &unbound_compaction_plan,
+                    unbound_compaction_plan.plan_fingerprint.as_str(),
+                    &root.join("backup"),
+                    &backup,
+                )
+                .unwrap_err()
+                .category,
+            RepositoryErrorCategory::RevisionConflict
+        );
+        let compaction_plan = repositories
+            .plan_compaction(
+                &global_status.store_id,
+                Some(&root.join("backup")),
+                Some(&backup),
+            )
+            .unwrap();
+        let mut tampered_backup = backup.clone();
+        tampered_backup.result_fingerprint = Sha256Hash::digest(b"tampered-backup-result");
+        assert_eq!(
+            repositories
+                .apply_compaction(
+                    &compaction_plan,
+                    compaction_plan.plan_fingerprint.as_str(),
+                    &root.join("backup"),
+                    &tampered_backup,
+                )
+                .unwrap_err()
+                .category,
+            RepositoryErrorCategory::IntegrityFailed
+        );
+        let compacted = repositories
+            .apply_compaction(
+                &compaction_plan,
+                compaction_plan.plan_fingerprint.as_str(),
+                &root.join("backup"),
+                &backup,
+            )
+            .unwrap();
+        assert_eq!(compacted.plan_fingerprint, compaction_plan.plan_fingerprint);
+        assert!(compacted.before_bytes > 0 && compacted.after_bytes > 0);
         let future = root.join("future.db");
         fs::copy(&global_backup, &future).unwrap();
         let future_connection = Connection::open(&future).unwrap();
@@ -11795,6 +15430,19 @@ CREATE TABLE events(
             limitations: vec!["fixture".to_owned()],
             artifact_refs: vec![],
         };
+        let mut held_run = old_run.clone();
+        held_run.scan_run_id = ScanRunId::new();
+        held_run.project_revision_id = ProjectRevisionId::new();
+        held_run.workspace_snapshot_id = WorkspaceSnapshotId::new();
+        held_run.generation_id = GenerationId::new();
+        held_run.input_fingerprint = Sha256Hash::digest(b"held-input");
+        let mut hold_artifact: ArtifactRef = serde_json::from_str(include_str!(
+            "../../../../specs/fixtures/management/v1/artifact-ref/full.json"
+        ))
+        .unwrap();
+        hold_artifact.project_id = Some(project_id.clone());
+        hold_artifact.retention_class = EvidenceRetentionClass::Hold;
+        held_run.artifact_refs = vec![hold_artifact];
         {
             let mut connection = concrete_project.connection.lock().unwrap();
             let transaction = connection.transaction().unwrap();
@@ -11807,15 +15455,114 @@ CREATE TABLE events(
                 &old_run,
             )
             .unwrap();
+            insert_generation_document(
+                &transaction,
+                "scan_runs",
+                "scan_run_id",
+                held_run.scan_run_id.as_str(),
+                held_run.generation_id.as_str(),
+                &held_run,
+            )
+            .unwrap();
             transaction.commit().unwrap();
         }
-        let plan = repositories.plan_retention().unwrap();
-        assert_eq!(plan.candidates.len(), 1);
-        let applied = repositories
-            .apply_retention(&plan, plan.plan_fingerprint.as_str())
+        let mut active_suppression: Suppression = serde_json::from_str(include_str!(
+            "../../../../specs/fixtures/management/v1/suppression/full.json"
+        ))
+        .unwrap();
+        active_suppression.revision = 1;
+        active_suppression.scope_kind = SuppressionScope::Local;
+        active_suppression.project_id = project_id.clone();
+        active_suppression.selector = "rule:retention-fixture".to_owned();
+        active_suppression.created_at = Utc::now() - chrono::Duration::days(1);
+        active_suppression.expires_at = Some(Utc::now() + chrono::Duration::days(30));
+        active_suppression.source_revision_constraint = None;
+        active_suppression.config_fingerprint_constraint = None;
+        concrete_project
+            .put_suppression(&active_suppression, 0)
             .unwrap();
-        assert_eq!(applied.applied_count, 1);
-        assert!(repositories.plan_retention().unwrap().candidates.is_empty());
+        let active_hold_plan = repositories
+            .plan_retention_v2(&RetentionPolicyV2::default())
+            .unwrap();
+        assert!(active_hold_plan.candidates.is_empty());
+        assert!(
+            active_hold_plan
+                .protected_targets
+                .iter()
+                .any(|target| target.reason_code == "ACTIVE_SUPPRESSION_HOLD")
+        );
+
+        active_suppression.revision = 2;
+        active_suppression.status = SuppressionStatus::Revoked;
+        concrete_project
+            .put_suppression(&active_suppression, 1)
+            .unwrap();
+        let plan = repositories
+            .plan_retention_v2(&RetentionPolicyV2::default())
+            .unwrap();
+        assert_eq!(plan.candidates.len(), 1);
+        assert_eq!(plan.protected_targets.len(), 1);
+        assert_eq!(
+            plan.protected_targets[0].reason_code,
+            "ARTIFACT_RETENTION_HOLD"
+        );
+        assert_eq!(plan.estimated_rows, 1);
+        assert!(plan.estimated_bytes > 0);
+        let checkpoint = RetentionCheckpointV1::start(
+            star_contracts::ids::OperationId::new(),
+            plan.plan_fingerprint.clone(),
+            plan.expected_store_revisions.clone(),
+        );
+        let mut unsafe_plan = plan.clone();
+        unsafe_plan.candidates[0].retention_class = "local_disposition_v2".to_owned();
+        assert!(unsafe_plan.validate().is_err());
+        let mut tampered_checkpoint = checkpoint.clone();
+        tampered_checkpoint.committed_batch_count = 1;
+        assert!(validate_retention_checkpoint(&plan, &tampered_checkpoint).is_err());
+        let mut tampered_checkpoint = checkpoint.clone();
+        tampered_checkpoint
+            .expected_store_revisions
+            .remove("global");
+        assert!(validate_retention_checkpoint(&plan, &tampered_checkpoint).is_err());
+        repositories
+            .start_retention_execution(&plan, &checkpoint)
+            .unwrap();
+        let applied = repositories
+            .apply_retention_batch_v2(&plan, &checkpoint)
+            .unwrap();
+        assert_eq!(applied.processed_candidates, 1);
+        assert_eq!(applied.applied_rows, 1);
+        assert!(applied.checkpoint.complete);
+        // Replaying a batch after the project transaction committed but before an
+        // external checkpoint observation is idempotent and advances the same cursor.
+        let replay = repositories
+            .apply_retention_batch_v2(&plan, &checkpoint)
+            .unwrap();
+        assert_eq!(
+            replay.checkpoint.next_candidate_index,
+            applied.checkpoint.next_candidate_index
+        );
+        assert_eq!(
+            replay.checkpoint.applied_rows,
+            applied.checkpoint.applied_rows
+        );
+        assert_eq!(
+            replay.checkpoint.expected_store_revisions,
+            applied.checkpoint.expected_store_revisions
+        );
+        repositories
+            .clear_retention_execution(&plan.plan_fingerprint)
+            .unwrap();
+        assert!(repositories.load_retention_execution().unwrap().is_none());
+        let remaining = repositories
+            .plan_retention_v2(&RetentionPolicyV2::default())
+            .unwrap();
+        assert!(remaining.candidates.is_empty());
+        assert_eq!(remaining.protected_targets.len(), 1);
+        assert_eq!(
+            remaining.protected_targets[0].reason_code,
+            "ARTIFACT_RETENTION_HOLD"
+        );
 
         let active_set = read_active_set(&root.join("management"))
             .unwrap()
@@ -11830,6 +15577,263 @@ CREATE TABLE events(
         assert!(
             !String::from_utf8_lossy(&database).contains(&source.to_string_lossy().to_string())
         );
+    }
+
+    #[test]
+    fn migration_backup_retention_preserves_floor_and_resumes_tombstone_delete() {
+        let state_root = std::env::temp_dir().join(format!(
+            "star-migration-backup-retention-{}",
+            RootBindingId::new().as_str()
+        ));
+        let management_root = state_root.join("management");
+        let repositories =
+            SqliteManagementRepositorySet::open(&management_root, "retention-backup-test").unwrap();
+        for seed in ["oldest", "older", "newer", "newest"] {
+            create_retention_migration_backup(&management_root, seed);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let invalid_locator = format!(
+            "{MIGRATION_BACKUP_PREFIX}{}",
+            Sha256Hash::digest(b"invalid")
+                .as_str()
+                .trim_start_matches("sha256:")
+        );
+        let invalid_root = migration_backups_root(&management_root)
+            .unwrap()
+            .join(invalid_locator);
+        fs::create_dir_all(&invalid_root).unwrap();
+        fs::write(invalid_root.join(MIGRATION_BACKUP_MANIFEST_FILENAME), b"{}").unwrap();
+
+        let plan = repositories
+            .plan_retention_v2(&RetentionPolicyV2::default())
+            .unwrap();
+        plan.validate().unwrap();
+        assert_eq!(plan.migration_backup_candidates.len(), 1);
+        assert_eq!(plan.protected_migration_backups.len(), 4);
+        assert_eq!(
+            plan.protected_migration_backups
+                .iter()
+                .filter(|backup| backup.reason_code == "MIGRATION_BACKUP_LATEST_KNOWN_GOOD")
+                .count(),
+            1
+        );
+        assert_eq!(
+            plan.protected_migration_backups
+                .iter()
+                .filter(|backup| backup.reason_code == "MIGRATION_BACKUP_FLOOR")
+                .count(),
+            2
+        );
+        assert_eq!(
+            plan.protected_migration_backups
+                .iter()
+                .filter(|backup| backup.reason_code == "MIGRATION_BACKUP_UNVERIFIED")
+                .count(),
+            1
+        );
+        let candidate = plan.migration_backup_candidates[0].clone();
+        assert_eq!(plan.estimated_rows, candidate.estimated_rows);
+        assert_eq!(plan.estimated_bytes, candidate.estimated_bytes);
+        let checkpoint = RetentionCheckpointV1::start(
+            star_contracts::ids::OperationId::new(),
+            plan.plan_fingerprint.clone(),
+            plan.expected_store_revisions.clone(),
+        );
+        repositories
+            .start_retention_execution(&plan, &checkpoint)
+            .unwrap();
+
+        // Model a process stop after the atomic quarantine rename and before the
+        // tombstone removal/checkpoint write. The same approved batch resumes it.
+        let backups_root = migration_backups_root(&management_root).unwrap();
+        let candidate_root = backups_root.join(&candidate.backup_locator);
+        let tombstone = retention_delete_tombstone(&backups_root, &candidate);
+        fs::rename(&candidate_root, &tombstone).unwrap();
+        let applied = repositories
+            .apply_retention_batch_v2(&plan, &checkpoint)
+            .unwrap();
+        assert!(applied.checkpoint.complete);
+        assert_eq!(applied.applied_rows, candidate.estimated_rows);
+        assert_eq!(applied.applied_bytes, candidate.estimated_bytes);
+        assert!(!candidate_root.exists());
+        assert!(!tombstone.exists());
+
+        let replay = repositories
+            .apply_retention_batch_v2(&plan, &checkpoint)
+            .unwrap();
+        assert_eq!(
+            replay.checkpoint.next_candidate_index,
+            applied.checkpoint.next_candidate_index
+        );
+        assert_eq!(
+            replay.checkpoint.applied_rows,
+            applied.checkpoint.applied_rows
+        );
+        assert_eq!(
+            replay.checkpoint.applied_bytes,
+            applied.checkpoint.applied_bytes
+        );
+        repositories
+            .clear_retention_execution(&plan.plan_fingerprint)
+            .unwrap();
+        let remaining = repositories
+            .plan_retention_v2(&RetentionPolicyV2::default())
+            .unwrap();
+        assert!(remaining.migration_backup_candidates.is_empty());
+        assert_eq!(remaining.protected_migration_backups.len(), 4);
+    }
+
+    #[test]
+    fn retention_splits_large_generation_at_row_limit_and_resumes_after_restart() {
+        let root = std::env::temp_dir().join(format!(
+            "star-retention-cardinality-{}-{}",
+            std::process::id(),
+            ProjectId::new()
+        ));
+        let management_root = root.join("management");
+        let repositories =
+            SqliteManagementRepositorySet::open(&management_root, "retention-cardinality-test")
+                .unwrap();
+        let project_id = ProjectId::new();
+        let checkout_id = CheckoutId::new();
+        let project = project(project_id.clone(), checkout_id.clone());
+        let checkout = checkout(project_id.clone(), checkout_id, RootBindingId::new());
+        let fingerprint =
+            versioned_fingerprint("star.retention.cardinality.fixture", 1, &project).unwrap();
+        repositories
+            .global()
+            .register_project(&project, &checkout, "retention-cardinality", &fingerprint)
+            .unwrap();
+        repositories
+            .project(&project_id)
+            .unwrap()
+            .commit_registration_participant(
+                &project,
+                &CoordinatedOperationId::new(),
+                &fingerprint,
+                &fingerprint,
+            )
+            .unwrap();
+
+        let concrete_project = repositories.project_repository(&project_id).unwrap();
+        let old_run = ScanRun {
+            schema_id: "star.scan-run".to_owned(),
+            schema_version: 1,
+            scan_run_id: ScanRunId::new(),
+            project_id: project_id.clone(),
+            project_revision_id: ProjectRevisionId::new(),
+            workspace_snapshot_id: WorkspaceSnapshotId::new(),
+            effective_config_fingerprint: Sha256Hash::digest(b"config"),
+            scan_config_fingerprint: Sha256Hash::digest(b"scan-config"),
+            rule_set_fingerprint: Sha256Hash::digest(b"rules"),
+            input_fingerprint: Sha256Hash::digest(b"input"),
+            status: ScanStatus::Incomplete,
+            generation_id: GenerationId::new(),
+            started_at: Utc::now() - chrono::Duration::days(8),
+            finished_at: Some(Utc::now() - chrono::Duration::days(8)),
+            reused_from_scan_run_id: None,
+            counts: BTreeMap::new(),
+            limitations: vec!["cardinality fixture".to_owned()],
+            artifact_refs: Vec::new(),
+        };
+        {
+            let mut connection = concrete_project.connection.lock().unwrap();
+            let transaction = connection.transaction().unwrap();
+            insert_generation_document(
+                &transaction,
+                "scan_runs",
+                "scan_run_id",
+                old_run.scan_run_id.as_str(),
+                old_run.generation_id.as_str(),
+                &old_run,
+            )
+            .unwrap();
+            let mut insert = transaction
+                .prepare(
+                    "INSERT INTO source_entries(entity_id, generation_id, document_json) VALUES(?1, ?2, ?3)",
+                )
+                .unwrap();
+            for index in 0..10_004_u64 {
+                insert
+                    .execute(params![
+                        format!("entry-{index:05}"),
+                        old_run.generation_id.as_str(),
+                        r#"{"fixture":true}"#,
+                    ])
+                    .unwrap();
+            }
+            drop(insert);
+            transaction.commit().unwrap();
+        }
+
+        let policy = RetentionPolicyV2::default();
+        let plan = repositories.plan_retention_v2(&policy).unwrap();
+        assert_eq!(plan.candidates.len(), 1);
+        assert_eq!(plan.candidates[0].estimated_rows, 10_005);
+        assert!(plan.candidates[0].estimated_rows > policy.max_batch_rows);
+        let checkpoint = RetentionCheckpointV1::start(
+            star_contracts::ids::OperationId::new(),
+            plan.plan_fingerprint.clone(),
+            plan.expected_store_revisions.clone(),
+        );
+        repositories
+            .start_retention_execution(&plan, &checkpoint)
+            .unwrap();
+        let first = repositories
+            .apply_retention_batch_v2(&plan, &checkpoint)
+            .unwrap();
+        assert_eq!(first.applied_rows, policy.max_batch_rows);
+        assert_eq!(first.processed_candidates, 0);
+        assert_eq!(first.checkpoint.next_candidate_index, 0);
+        assert_eq!(
+            first.checkpoint.active_candidate_id.as_deref(),
+            Some(plan.candidates[0].candidate_id.as_str())
+        );
+        assert!(!first.checkpoint.complete);
+
+        let replay = repositories
+            .apply_retention_batch_v2(&plan, &checkpoint)
+            .unwrap();
+        assert_eq!(
+            replay.checkpoint.next_candidate_index,
+            first.checkpoint.next_candidate_index
+        );
+        assert_eq!(
+            replay.checkpoint.committed_batch_count,
+            first.checkpoint.committed_batch_count
+        );
+        assert_eq!(
+            replay.checkpoint.applied_rows,
+            first.checkpoint.applied_rows
+        );
+        assert_eq!(
+            replay.checkpoint.active_candidate_id,
+            first.checkpoint.active_candidate_id
+        );
+        drop(concrete_project);
+        drop(repositories);
+
+        let reopened =
+            SqliteManagementRepositorySet::open(&management_root, "retention-cardinality-test")
+                .unwrap();
+        let (resumed_plan, resumed_checkpoint) = reopened
+            .load_retention_execution()
+            .unwrap()
+            .expect("durable partial retention checkpoint");
+        assert_eq!(resumed_plan.plan_fingerprint, plan.plan_fingerprint);
+        assert_eq!(resumed_checkpoint, replay.checkpoint);
+        let second = reopened
+            .apply_retention_batch_v2(&resumed_plan, &resumed_checkpoint)
+            .unwrap();
+        assert_eq!(second.applied_rows, 5);
+        assert_eq!(second.processed_candidates, 1);
+        assert_eq!(second.checkpoint.committed_batch_count, 2);
+        assert_eq!(second.checkpoint.applied_rows, 10_005);
+        assert!(second.checkpoint.active_candidate_id.is_none());
+        assert!(second.checkpoint.complete);
+        reopened
+            .clear_retention_execution(&plan.plan_fingerprint)
+            .unwrap();
     }
 
     #[test]

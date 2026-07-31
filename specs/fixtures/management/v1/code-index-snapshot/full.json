@@ -237,6 +237,8 @@
           "scope": "fixture"
         }
       ],
+      "normalized_shape_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "normalized_shape_simhash": "fixture",
       "normalized_token_count": 0,
       "normalized_token_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       "owning_symbol_identity": "sym_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

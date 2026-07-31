@@ -15,6 +15,7 @@ type DynResult<T> = Result<T, Box<dyn std::error::Error>>;
 type GeneratedFile = (PathBuf, Vec<u8>);
 
 const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
+    "command-descriptor-v1.schema.json",
     "effective-config-v1.schema.json",
     "task-invocation-v2.schema.json",
     "validation-run-v2.schema.json",
@@ -59,6 +60,12 @@ const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "project-contract-manifest.schema.json",
     "contract-surface-snapshot.schema.json",
     "compatibility-report-v2.schema.json",
+    "external-analysis-evidence-v1.schema.json",
+    "coverage-observation-v1.schema.json",
+    "flaky-test-observation-v1.schema.json",
+    "reproducibility-verification-report-v1.schema.json",
+    "runtime-safety-observation-v1.schema.json",
+    "near-clone-observation-v1.schema.json",
     "documentation-snapshot.schema.json",
     "config-key-trace.schema.json",
     "environment-snapshot.schema.json",
@@ -154,6 +161,12 @@ const MANAGEMENT_SCHEMA_FILES: &[&str] = &[
     "gate-decision.schema.json",
     "artifact-ref.schema.json",
     "management-store-status.schema.json",
+    "management-status-query.schema.json",
+    "management-status-page.schema.json",
+    "management-maintenance-state.schema.json",
+    "management-retention-plan-v2.schema.json",
+    "management-retention-checkpoint.schema.json",
+    "management-compaction-plan.schema.json",
     "management-active-set.schema.json",
     "management-backup-plan.schema.json",
     "management-backup-set-manifest.schema.json",

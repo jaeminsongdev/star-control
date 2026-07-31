@@ -296,7 +296,31 @@ $ParallelForwardScenarios = @(
 
 function Test-ParallelActualThreadAliasGuard {
     param([Parameter(Mandatory)][string]$Content)
-    return (-not (@('message', 'project') | Where-Object { $Content.Contains("create_thread({`n  $($_):") }))
+    $rawTokens = @([regex]::Matches($Content, '"(?:\\.|[^"\\])*"|''(?:\\.|[^''\\])*''|[A-Za-z0-9_]+|[(){}:,]') | ForEach-Object { $_.Value })
+    $tokens = @($rawTokens | ForEach-Object {
+        if ($_.Length -ge 2 -and (($_[0] -eq '"' -and $_[-1] -eq '"') -or ($_[0] -eq "'" -and $_[-1] -eq "'"))) {
+            $_.Substring(1, $_.Length - 2)
+        } else {
+            $_
+        }
+    })
+    for ($index = 0; $index -le ($tokens.Count - 3); $index++) {
+        if ($tokens[$index] -ne 'create_thread' -or $tokens[$index + 1] -ne '(' -or $tokens[$index + 2] -ne '{') { continue }
+        $depth = 1
+        $cursor = $index + 3
+        while ($cursor -lt $tokens.Count -and $depth -gt 0) {
+            $token = $tokens[$cursor]
+            if ($token -eq '{') {
+                $depth++
+            } elseif ($token -eq '}') {
+                $depth--
+            } elseif ($depth -eq 1 -and $token -in @('message', 'project') -and ($cursor + 1) -lt $tokens.Count -and $tokens[$cursor + 1] -eq ':') {
+                return $false
+            }
+            $cursor++
+        }
+    }
+    return $true
 }
 
 function Test-ParallelForwardScenarios {
@@ -314,16 +338,21 @@ function Test-ParallelForwardScenarios {
 foreach ($forbiddenParallelApi in @('spawn_agent', 'followup_task', 'wait_agent', 'interrupt_agent')) {
     Assert-ValidationContract -Condition (-not $parallelSkill.Contains($forbiddenParallelApi)) -Message "parallel implementation Skill removes obsolete collaboration API: $forbiddenParallelApi"
 }
-$invalidThreadCallPatterns = @("create_thread({`n  message:", "create_thread({`n  project:")
 $parallelComponents = @(Get-ChildItem -LiteralPath $parallelSkillRoot -File -Recurse | Where-Object { $_.FullName -notmatch '\\.git\\' })
 Assert-ValidationContract -Condition ($parallelComponents.Count -eq 9) -Message 'parallel implementation Skill has exactly nine rendered components for actual-call validation'
 foreach ($component in $parallelComponents) {
     $componentText = Get-Content -LiteralPath $component.FullName -Raw -Encoding UTF8
     Assert-ValidationContract -Condition (Test-ParallelActualThreadAliasGuard $componentText) -Message "parallel implementation rendered component accepts only schema create_thread fields: $($component.Name)"
-    foreach ($invalidThreadCall in $invalidThreadCallPatterns) {
-        $alias = if ($invalidThreadCall.Contains('message:')) { 'message' } else { 'project' }
-        $negativeCandidate = "$componentText`ncreate_thread({`n  $alias`: <different invalid value for $($component.Name)>`n})"
-        Assert-ValidationContract -Condition (-not (Test-ParallelActualThreadAliasGuard $negativeCandidate)) -Message "parallel implementation negative append is rejected by common alias guard: $($component.Name) $invalidThreadCall"
+    foreach ($alias in @('message', 'project')) {
+        $negativeCandidates = @(
+            "$componentText`ncreate_thread({$alias`: 'one-line'})",
+            "$componentText`ncreate_thread({`t$alias`t:`t'tabbed'`t})",
+            "$componentText`r`ncreate_thread({`r`n  prompt: 'valid-first',`r`n  $alias`: 'crlf'`r`n})",
+            "$componentText`ncreate_thread({ prompt: 'valid-first', target: { type: 'project' }, $alias`: 'reordered' })"
+        )
+        foreach ($negativeCandidate in $negativeCandidates) {
+            Assert-ValidationContract -Condition (-not (Test-ParallelActualThreadAliasGuard $negativeCandidate)) -Message "parallel implementation token-aware alias guard rejects $alias variant: $($component.Name)"
+        }
     }
 }
 $parallelAgent = Get-Content -LiteralPath (Join-Path $parallelSkillRoot 'agents/openai.yaml') -Raw -Encoding UTF8
@@ -350,13 +379,38 @@ for ($index = 0; $index -lt $ParallelForwardScenarios.Count; $index++) {
 }
 
 $controllerStartupSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'apps/star-controller/src/main.rs') -Raw -Encoding UTF8
+$applicationSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'crates/control/star-application/src/lib.rs') -Raw -Encoding UTF8
+$stateSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'crates/infrastructure/star-state/src/lib.rs') -Raw -Encoding UTF8
 $managementSpawnIndex = $controllerStartupSource.IndexOf('let management_runtime = spawn_management_runtime')
 $pipeStartIndex = $controllerStartupSource.IndexOf('PipeAcceptPool::start(pipe.clone())')
 Assert-ValidationContract -Condition ($managementSpawnIndex -ge 0 -and $pipeStartIndex -gt $managementSpawnIndex) -Message 'Controller schedules management recovery and retention before opening the IPC pool without waiting for it'
 Assert-ValidationContract -Condition ($controllerStartupSource.Contains('service.recover_incomplete_registrations()')) -Message 'background management startup preserves incomplete registration recovery'
-Assert-ValidationContract -Condition ($controllerStartupSource.Contains('service.apply_retention(')) -Message 'background management startup preserves startup retention application'
+Assert-ValidationContract -Condition ($controllerStartupSource.Contains('run_ready_retention_lifecycle') -and $controllerStartupSource.Contains('service.apply_retention_batch_v2(')) -Message 'Ready lifecycle maintenance preserves checkpointed retention application'
 Assert-ValidationContract -Condition ($controllerStartupSource.Contains('"MANAGEMENT_STORE_BUSY"') -and $controllerStartupSource.Contains('MANAGEMENT_INITIALIZING_MESSAGE')) -Message 'management requests receive a typed busy state during startup'
-Assert-ValidationContract -Condition ($controllerStartupSource.Contains('matches!(code, "TOOL_PROCESS_RETRYABLE" | "MANAGEMENT_STORE_BUSY")')) -Message 'management startup busy state is retryable across direct and Tool action lanes'
+Assert-ValidationContract -Condition ($controllerStartupSource.Contains('"TOOL_PROCESS_RETRYABLE" | "MANAGEMENT_STORE_BUSY" | "MANAGEMENT_MAINTENANCE_BUSY"')) -Message 'management startup and active maintenance busy states are retryable across direct and Tool action lanes'
+Assert-ValidationContract -Condition (-not $controllerStartupSource.Contains('.status_all()')) -Message 'online Controller management status never calls the unbounded status_all compatibility method'
+Assert-ValidationContract -Condition (-not $applicationSource.Contains('.status_all()')) -Message 'application management status never calls the unbounded status_all compatibility method'
+Assert-ValidationContract -Condition ($applicationSource.Contains('.status_page(&ManagementStatusQueryV1::default())')) -Message 'legacy application status delegates to one bounded default page'
+$statusSnapshotStart = $stateSource.IndexOf('fn read_store_status_snapshot(')
+$statusSnapshotEnd = if ($statusSnapshotStart -ge 0) { $stateSource.IndexOf("`n}`n`nfn validate_active_set_relationships", $statusSnapshotStart) } else { -1 }
+Assert-ValidationContract -Condition ($statusSnapshotStart -ge 0 -and $statusSnapshotEnd -gt $statusSnapshotStart) -Message 'management status read-only snapshot function is structurally discoverable'
+if ($statusSnapshotStart -ge 0 -and $statusSnapshotEnd -gt $statusSnapshotStart) {
+    $statusSnapshotSource = $stateSource.Substring($statusSnapshotStart, $statusSnapshotEnd - $statusSnapshotStart)
+    Assert-ValidationContract -Condition ($statusSnapshotSource.Contains('SQLITE_OPEN_READ_ONLY') -and $statusSnapshotSource.Contains('PRAGMA query_only=ON')) -Message 'normal management status opens query-only read-only SQLite state'
+    foreach ($forbiddenStatusOperation in @('quick_check', 'verify_connection(', 'verify_event_chain(', 'write_active_set', 'refresh_active_set')) {
+        Assert-ValidationContract -Condition (-not $statusSnapshotSource.Contains($forbiddenStatusOperation)) -Message "normal management status omits side effect or deep verification: $forbiddenStatusOperation"
+    }
+}
+$statusPageStart = $stateSource.IndexOf('    fn status_page(')
+$statusPageEnd = if ($statusPageStart -ge 0) { $stateSource.IndexOf('    fn verify_all(', $statusPageStart) } else { -1 }
+Assert-ValidationContract -Condition ($statusPageStart -ge 0 -and $statusPageEnd -gt $statusPageStart) -Message 'management status page implementation is structurally discoverable'
+if ($statusPageStart -ge 0 -and $statusPageEnd -gt $statusPageStart) {
+    $statusPageSource = $stateSource.Substring($statusPageStart, $statusPageEnd - $statusPageStart)
+    Assert-ValidationContract -Condition ($statusPageSource.Contains('read_store_status_snapshot(')) -Message 'management status page reads project summaries through the bounded snapshot path'
+    foreach ($forbiddenStatusOperation in @('read_store_status_read_only(', 'quick_check', 'verify_connection(', 'verify_event_chain(', 'write_active_set', 'refresh_active_set')) {
+        Assert-ValidationContract -Condition (-not $statusPageSource.Contains($forbiddenStatusOperation)) -Message "management status page omits side effect or deep verification: $forbiddenStatusOperation"
+    }
+}
 
 $updaterRestartSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "crates/control/star-updater-core/src/integration_restart.rs") -Raw -Encoding UTF8
 Assert-ValidationContract -Condition ($updaterRestartSource.Contains('const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(12);')) -Message "forced Codex termination has a bounded exit-observation window"

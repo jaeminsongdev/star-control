@@ -1,0 +1,71 @@
+{
+  "candidates": [
+    {
+      "candidate_id": "fixture",
+      "entity_id": "fixture",
+      "entity_revision": 0,
+      "estimated_bytes": 0,
+      "estimated_rows": 0,
+      "generation_id": "gen_00000000000000000000000000",
+      "project_id": "prj_00000000000000000000000000",
+      "reason_code": "fixture",
+      "retention_class": "fixture",
+      "scan_run_id": "scn_00000000000000000000000000",
+      "target_kind": "scan_generation"
+    }
+  ],
+  "created_at": "2026-01-01T00:00:00Z",
+  "estimated_bytes": 0,
+  "estimated_rows": 0,
+  "expected_store_revisions": {
+    "fixture": 0
+  },
+  "migration_backup_candidates": [
+    {
+      "backup_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "backup_locator": "fixture",
+      "candidate_id": "fixture",
+      "estimated_bytes": 0,
+      "estimated_rows": 0,
+      "last_modified_at": "2026-01-01T00:00:00Z",
+      "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "reason_code": "fixture"
+    }
+  ],
+  "plan_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "policy": {
+    "incomplete_staging_retention_days": 0,
+    "keep_latest_successful_scans": 0,
+    "local_decision_retention_days": 0,
+    "max_batch_bytes": 0,
+    "max_batch_rows": 0,
+    "migration_backup_min_count": 0,
+    "resolved_finding_retention_days": 0,
+    "scan_detail_retention_days": 0
+  },
+  "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "protected_migration_backups": [
+    {
+      "backup_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "backup_locator": "fixture",
+      "estimated_bytes": 0,
+      "estimated_rows": 0,
+      "last_modified_at": "2026-01-01T00:00:00Z",
+      "manifest_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "reason_code": "fixture"
+    }
+  ],
+  "protected_targets": [
+    {
+      "estimated_bytes": 0,
+      "estimated_rows": 0,
+      "project_id": "prj_00000000000000000000000000",
+      "reason_code": "fixture",
+      "target_kind": "scan_generation",
+      "target_ref": "fixture"
+    }
+  ],
+  "schema_id": "star.management-retention-plan",
+  "schema_version": 1,
+  "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

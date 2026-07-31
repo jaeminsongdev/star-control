@@ -906,6 +906,9 @@ fn skill_content_valid(bytes: &[u8]) -> bool {
     frontmatter_valid
         && text.contains("프로젝트 native 도구")
         && text.contains("Catalog-declared CLI-only")
+        && text.contains("star command describe <dotted-command> --json")
+        && text.contains("recipe list|describe|validate")
+        && text.contains("patch show|apply|status|recover")
         && text.contains("profile show")
         && text.contains("fallback")
         && !text.contains(concat!("star-control-", "workflow"))
@@ -945,6 +948,8 @@ fn skill_routing_content_valid(bytes: &[u8]) -> bool {
     text.contains("live Registry/Catalog")
         && text.contains("MCP-first")
         && text.contains("CLI-only")
+        && text.contains("management.status.page")
+        && text.contains("command describe")
         && feature_ids == ROUTED_FEATURE_IDS
         && profile_ids == ROUTED_PROFILE_IDS
 }
@@ -1024,9 +1029,70 @@ fn parallel_component_actual_thread_alias_guard_valid(bytes: &[u8]) -> bool {
     let Ok(text) = std::str::from_utf8(bytes) else {
         return false;
     };
-    !["message", "project"]
-        .iter()
-        .any(|alias| text.contains(&format!("create_thread({{\n  {alias}:")))
+    let tokens = codex_call_tokens(text);
+    for index in 0..tokens.len() {
+        if tokens[index] != "create_thread"
+            || tokens.get(index + 1).map(String::as_str) != Some("(")
+            || tokens.get(index + 2).map(String::as_str) != Some("{")
+        {
+            continue;
+        }
+        let mut depth = 1_u32;
+        let mut cursor = index + 3;
+        while cursor < tokens.len() && depth > 0 {
+            match tokens[cursor].as_str() {
+                "{" => depth = depth.saturating_add(1),
+                "}" => depth = depth.saturating_sub(1),
+                "message" | "project"
+                    if depth == 1 && tokens.get(cursor + 1).map(String::as_str) == Some(":") =>
+                {
+                    return false;
+                }
+                _ => {}
+            }
+            cursor += 1;
+        }
+    }
+    true
+}
+
+fn codex_call_tokens(text: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut chars = text.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character.is_ascii_alphanumeric() || character == '_' {
+            let mut token = String::from(character);
+            while chars
+                .peek()
+                .is_some_and(|next| next.is_ascii_alphanumeric() || *next == '_')
+            {
+                if let Some(next) = chars.next() {
+                    token.push(next);
+                }
+            }
+            tokens.push(token);
+        } else if matches!(character, '\'' | '"') {
+            let quote = character;
+            let mut token = String::new();
+            let mut escaped = false;
+            for next in chars.by_ref() {
+                if escaped {
+                    token.push(next);
+                    escaped = false;
+                } else if next == '\\' {
+                    escaped = true;
+                } else if next == quote {
+                    break;
+                } else {
+                    token.push(next);
+                }
+            }
+            tokens.push(token);
+        } else if matches!(character, '(' | ')' | '{' | '}' | ':' | ',') {
+            tokens.push(character.to_string());
+        }
+    }
+    tokens
 }
 
 fn parallel_resource_content_valid(relative: &str, bytes: &[u8]) -> bool {
@@ -1616,6 +1682,19 @@ mod tests {
         assert!(!parallel_skill_content_valid(invalid_parallel.as_bytes()));
         let install = Path::new(r"D:\도구\Star-Control 시험");
         let rendered = render_files(&source, install, "0.1.0+codex.0123456789ab").unwrap();
+        for invalid_alias in [
+            "create_thread({message: \"legacy\", target: {type: \"project\"}})",
+            "create_thread({\ttarget:{type:\"project\"},\tproject:\"legacy\"})",
+            "create_thread({\r\n  target: { type: \"project\" },\r\n  message: \"legacy\"\r\n})",
+            "create_thread({ target: {}, \"project\": \"legacy\" })",
+        ] {
+            assert!(!parallel_component_actual_thread_alias_guard_valid(
+                invalid_alias.as_bytes()
+            ));
+        }
+        assert!(parallel_component_actual_thread_alias_guard_valid(
+            b"create_thread({ prompt: \"ok\", target: { type: \"project\", projectId: \"p\" } })"
+        ));
         for relative in PARALLEL_SKILL_COMPONENT_RELATIVES {
             for (alias, value) in [
                 ("message", format!("<invalid message alias for {relative}>")),

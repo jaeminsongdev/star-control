@@ -1,8 +1,81 @@
 {
   "$defs": {
+    "ArchitectureRuleExceptionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_ref": {
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "owner",
+        "approval_ref",
+        "expires_at"
+      ],
+      "type": "object"
+    },
+    "ArchitectureRuleKindV1": {
+      "enum": [
+        "layer",
+        "allowed_edge",
+        "forbidden_edge",
+        "dependency_cycle"
+      ],
+      "type": "string"
+    },
+    "ArchitectureRuleV1": {
+      "additionalProperties": false,
+      "properties": {
+        "exceptions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ArchitectureRuleExceptionV1"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArchitectureRuleKindV1"
+        },
+        "source_layer": {
+          "type": "string"
+        },
+        "target_layer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "source_layer"
+      ],
+      "type": "object"
+    },
     "QualityRuleDefinition": {
       "additionalProperties": false,
       "properties": {
+        "architecture_rule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArchitectureRuleV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "default_severity": {
           "type": "string"
         },

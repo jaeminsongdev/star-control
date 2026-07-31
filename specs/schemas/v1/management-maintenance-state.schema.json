@@ -1,0 +1,120 @@
+{
+  "$defs": {
+    "ManagementMaintenancePhase": {
+      "enum": [
+        "idle",
+        "planning",
+        "approval_required",
+        "applying",
+        "checkpointing",
+        "complete",
+        "cancelled",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "Sha256Hash": {
+      "description": "Contract representation of a SHA-256 digest.  The prefix is always present.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:star-control:schema:star.management-maintenance-state:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applied_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "applied_rows": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "checkpoint_cursor": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "operation_id": {
+      "pattern": "^cop_[0-9A-HJKMNP-TV-Z]{26}$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "phase": {
+      "$ref": "#/$defs/ManagementMaintenancePhase"
+    },
+    "plan_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "planned_bytes": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "planned_rows": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "policy_fingerprint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_id": {
+      "const": "star.management-maintenance-state",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "started_at": {
+      "format": "date-time",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "updated_at": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_id",
+    "schema_version",
+    "phase",
+    "planned_rows",
+    "planned_bytes",
+    "applied_rows",
+    "applied_bytes",
+    "updated_at"
+  ],
+  "title": "ManagementMaintenanceStateV1",
+  "type": "object"
+}

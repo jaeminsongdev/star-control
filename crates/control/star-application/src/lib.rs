@@ -28,9 +28,9 @@ use star_contracts::{
     },
     ids::{
         CheckoutId, CodeIndexSnapshotId, CoordinatedOperationId, DiagnosticId, EvidenceBundleId,
-        FindingId, GateId, GenerationId, PatchApplicationId, PatchSetId, ProjectId,
-        RecipeExecutionId, RequestId, ReviewPackId, ScanRunId, SuppressionId, TaskSpecId,
-        WorktreeDecisionId,
+        FindingId, GateId, GenerationId, ManagementStoreId, OperationId, PatchApplicationId,
+        PatchSetId, ProjectId, RecipeExecutionId, RequestId, ReviewPackId, ScanRunId,
+        SuppressionId, TaskSpecId, WorktreeDecisionId,
     },
     index::{
         CodeIndexSnapshot, HardcodingCandidate, IndexEdge, IndexEntity, IndexFreshnessState,
@@ -48,10 +48,12 @@ use star_contracts::{
     },
     management::{
         Baseline, ChangePlan, CheckoutKind, CoordinatedOperation, CoordinationParticipant,
-        CoordinationState, Disposition, Finding, ManagementStoreStatus, ParticipantState, PatchSet,
-        PatchSetStatus, Project, ProjectCheckout, ProjectPathRef, ProjectStorePoint, ScanRun,
-        ScanStatus, StorePoint, StoreVersionVector, Suppression, SymbolReference, ValidationResult,
-        WorkspaceSnapshot,
+        CoordinationState, Disposition, Finding, ManagementCompactionApplyResultV1,
+        ManagementCompactionPlanV1, ManagementStatusPageV1, ManagementStatusQueryV1,
+        ManagementStoreStatus, ParticipantState, PatchSet, PatchSetStatus, Project,
+        ProjectCheckout, ProjectPathRef, ProjectStorePoint, RetentionBatchResultV1,
+        RetentionCheckpointV1, RetentionPlanV2, RetentionPolicyV2, ScanRun, ScanStatus, StorePoint,
+        StoreVersionVector, Suppression, SymbolReference, ValidationResult, WorkspaceSnapshot,
     },
     parse_no_duplicate_keys,
     patch_v2::{
@@ -164,11 +166,12 @@ pub use star_validation::runner::{
 };
 use star_validation::rust_style::RustFileChange;
 use star_validation::{
-    ValidationError, analyze_builtin_findings, apply_decision_projection, evaluate_decisions,
-    project_sarif_findings, validate_patch_result_with_plan,
+    NearClonePolicy, ValidationError, analyze_builtin_findings, apply_decision_projection,
+    evaluate_decisions, project_sarif_findings, validate_patch_result_with_plan,
 };
 use thiserror::Error;
 
+pub mod external_analysis;
 pub mod profile_catalog;
 pub mod rust_style;
 pub mod rust_style_runtime;
@@ -2126,7 +2129,15 @@ impl ManagementApplicationService {
             previous
                 .as_ref()
                 .map(|projection| projection.snapshot.complexity_metric_candidates.as_slice()),
+            NearClonePolicy {
+                minimum_similarity_basis_points: self
+                    .index_policy
+                    .near_clone_minimum_similarity_basis_points,
+                max_candidates: self.index_policy.near_clone_max_candidates,
+                max_pairs: self.index_policy.near_clone_max_pairs,
+            },
         )?;
+        scan_limitations.extend(projection.limitations.iter().cloned());
         let shared_decisions = match load_shared_decisions(&project, &root) {
             Ok(declarations) => declarations,
             Err(_) => {
@@ -3192,6 +3203,9 @@ impl ManagementApplicationService {
         {
             return Err(ApplicationError::Invalid);
         }
+        manifest
+            .validate_architecture_rules(Utc::now())
+            .map_err(|_| ApplicationError::Invalid)?;
         Ok(manifest)
     }
 
@@ -3552,6 +3566,7 @@ impl ManagementApplicationService {
                 matches!(
                     finding.rule_id.as_str(),
                     "star.rule.structural-clone-candidate"
+                        | "star.rule.near-clone-candidate"
                         | "star.rule.complexity-regression"
                         | "star.rule.unused-surface-candidate"
                 )
@@ -10270,7 +10285,24 @@ impl ManagementApplicationService {
     /// [`Self::verify_stores`].
     pub fn store_status(&self) -> Result<Vec<ManagementStoreStatus>, ApplicationError> {
         let _guard = self.command_guard()?;
-        Ok(self.repositories.status_all()?)
+        let page = self
+            .repositories
+            .status_page(&ManagementStatusQueryV1::default())?;
+        if page.truncated {
+            return Err(ApplicationError::Repository(RepositoryError::new(
+                RepositoryErrorCategory::QuotaExceeded,
+                "management status requires the paged status query",
+            )));
+        }
+        Ok(page.items)
+    }
+
+    pub fn store_status_page(
+        &self,
+        query: &ManagementStatusQueryV1,
+    ) -> Result<ManagementStatusPageV1, ApplicationError> {
+        let _guard = self.command_guard()?;
+        Ok(self.repositories.status_page(query)?)
     }
 
     pub fn plan_backup(&self, destination: &Path) -> Result<BackupPlan, ApplicationError> {
@@ -10353,6 +10385,115 @@ impl ManagementApplicationService {
             RetentionPolicy::default()
         };
         Ok(self.repositories.plan_retention_with_policy(&policy)?)
+    }
+
+    pub fn retention_policy_v2(&self) -> Result<RetentionPolicyV2, ApplicationError> {
+        let Some(config) = self.effective_config.as_ref() else {
+            return Ok(RetentionPolicyV2::default());
+        };
+        let integer = |key: &str| config.integer(key).ok_or(ApplicationError::Invalid);
+        let policy = RetentionPolicyV2 {
+            keep_latest_successful_scans: integer("management.keep_latest_successful_scans")?,
+            incomplete_staging_retention_days: integer(
+                "management.incomplete_staging_retention_days",
+            )?,
+            scan_detail_retention_days: integer("management.scan_detail_retention_days")?,
+            resolved_finding_retention_days: integer("management.resolved_finding_retention_days")?,
+            local_decision_retention_days: integer("management.local_decision_retention_days")?,
+            migration_backup_min_count: integer("management.migration_backup_min_count")?,
+            ..RetentionPolicyV2::default()
+        };
+        policy.validate().map_err(|_| ApplicationError::Invalid)?;
+        Ok(policy)
+    }
+
+    pub fn plan_retention_v2(&self) -> Result<RetentionPlanV2, ApplicationError> {
+        let policy = self.retention_policy_v2()?;
+        Ok(self.repositories.plan_retention_v2(&policy)?)
+    }
+
+    pub fn plan_retention_v2_controlled(
+        &self,
+        is_cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<RetentionPlanV2, ApplicationError> {
+        let policy = self.retention_policy_v2()?;
+        Ok(self
+            .repositories
+            .plan_retention_v2_controlled(&policy, is_cancelled)?)
+    }
+
+    pub fn load_retention_execution(
+        &self,
+    ) -> Result<Option<(RetentionPlanV2, RetentionCheckpointV1)>, ApplicationError> {
+        Ok(self.repositories.load_retention_execution()?)
+    }
+
+    pub fn start_retention_execution(
+        &self,
+        plan: &RetentionPlanV2,
+        operation_id: OperationId,
+    ) -> Result<RetentionCheckpointV1, ApplicationError> {
+        let checkpoint = RetentionCheckpointV1::start(
+            operation_id,
+            plan.plan_fingerprint.clone(),
+            plan.expected_store_revisions.clone(),
+        );
+        self.repositories
+            .start_retention_execution(plan, &checkpoint)?;
+        Ok(checkpoint)
+    }
+
+    pub fn apply_retention_batch_v2(
+        &self,
+        plan: &RetentionPlanV2,
+        checkpoint: &RetentionCheckpointV1,
+    ) -> Result<RetentionBatchResultV1, ApplicationError> {
+        Ok(self
+            .repositories
+            .apply_retention_batch_v2(plan, checkpoint)?)
+    }
+
+    pub fn save_retention_checkpoint(
+        &self,
+        checkpoint: &RetentionCheckpointV1,
+    ) -> Result<(), ApplicationError> {
+        Ok(self.repositories.save_retention_checkpoint(checkpoint)?)
+    }
+
+    pub fn clear_retention_execution(
+        &self,
+        plan_fingerprint: &Sha256Hash,
+    ) -> Result<(), ApplicationError> {
+        Ok(self
+            .repositories
+            .clear_retention_execution(plan_fingerprint)?)
+    }
+
+    pub fn plan_compaction(
+        &self,
+        store_id: &ManagementStoreId,
+        backup_root: Option<&Path>,
+        backup_result: Option<&BackupApplyResult>,
+    ) -> Result<ManagementCompactionPlanV1, ApplicationError> {
+        Ok(self
+            .repositories
+            .plan_compaction(store_id, backup_root, backup_result)?)
+    }
+
+    pub fn apply_compaction(
+        &self,
+        plan: &ManagementCompactionPlanV1,
+        approved_plan_fingerprint: &str,
+        backup_root: &Path,
+        backup_result: &BackupApplyResult,
+    ) -> Result<ManagementCompactionApplyResultV1, ApplicationError> {
+        let _guard = self.command_guard()?;
+        Ok(self.repositories.apply_compaction(
+            plan,
+            approved_plan_fingerprint,
+            backup_root,
+            backup_result,
+        )?)
     }
 
     pub fn apply_retention(
@@ -12744,8 +12885,8 @@ mod tests {
             content_fingerprint: Sha256Hash::digest(b"fixture-rule-pack-manifest"),
         };
         let service = ManagementApplicationService::new(
-            repositories,
-            bindings,
+            repositories.clone(),
+            bindings.clone(),
             Arc::new(LocalArtifactStore::default()),
         )
         .with_quality_rule_pack_adapter(Arc::new(FixtureQualityRulePackProvider {
@@ -12757,6 +12898,50 @@ mod tests {
                 .unwrap(),
             manifest
         );
+        let mut expired_architecture = manifest.clone();
+        expired_architecture.rules = vec![star_contracts::maintenance_v2::QualityRuleDefinition {
+            rule_id: "architecture-layer".to_owned(),
+            rule_version: "1.0.0".to_owned(),
+            default_severity: "warning".to_owned(),
+            query: star_contracts::maintenance_v2::QualityRuleQueryMetadata {
+                query_id: "architecture-layer-query".to_owned(),
+                query_digest: Sha256Hash::digest(b"architecture-layer-query"),
+                query_metadata_ref: "fixture:architecture-layer-query".to_owned(),
+            },
+            sarif_rule_id: None,
+            lifecycle: star_contracts::maintenance_v2::QualityRulePackLifecycle::Active,
+            replacement_rule_id: None,
+            architecture_rule: Some(star_contracts::external_analysis::ArchitectureRuleV1 {
+                kind: star_contracts::external_analysis::ArchitectureRuleKindV1::ForbiddenEdge,
+                source_layer: "application".to_owned(),
+                target_layer: Some("infrastructure".to_owned()),
+                exceptions: vec![
+                    star_contracts::external_analysis::ArchitectureRuleExceptionV1 {
+                        subject: "legacy-adapter".to_owned(),
+                        owner: "maintainers".to_owned(),
+                        approval_ref: "approval-expired".to_owned(),
+                        expires_at: Utc::now() - chrono::Duration::days(1),
+                    },
+                ],
+            }),
+        }];
+        let expired_service = ManagementApplicationService::new(
+            repositories,
+            bindings,
+            Arc::new(LocalArtifactStore::default()),
+        )
+        .with_quality_rule_pack_adapter(Arc::new(FixtureQualityRulePackProvider {
+            manifest: expired_architecture,
+        }));
+        assert!(matches!(
+            expired_service.quality_rule_pack_manifest(
+                "fixture-pack".to_owned(),
+                "1.0.0".to_owned(),
+                manifest.source_digest.clone(),
+            ),
+            Err(ApplicationError::Invalid)
+        ));
+        drop(expired_service);
         let tool_identity = Sha256Hash::digest(b"fixture-static-analysis-tool");
         let mut trusted = manifest.clone();
         trusted.tool_identity_sha256 = Some(tool_identity.clone());

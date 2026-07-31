@@ -1,6 +1,11 @@
 //! Backend-neutral P0 development-management contracts.
 
-use std::{borrow::Cow, collections::BTreeMap, fmt, str::FromStr};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    str::FromStr,
+};
 
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
@@ -11,15 +16,33 @@ use crate::{
     Sha256Hash,
     evidence::ArtifactRef,
     ids::{
-        BaselineId, CanonicalSourceId, ChangePlanId, CheckoutId, CoordinatedOperationId,
-        DispositionId, FindingId, GenerationId, ManagementStoreId, OccurrenceId, PatchSetId,
-        ProjectId, ProjectRevisionId, RootBindingId, ScanRunId, SuppressionId, SymbolId,
-        SymbolReferenceId, ValidationResultId, WorkspaceSnapshotId,
+        BackupSetId, BaselineId, CanonicalSourceId, ChangePlanId, CheckoutId,
+        CoordinatedOperationId, DispositionId, FindingId, GenerationId, ManagementStoreId,
+        OccurrenceId, OperationId, PatchSetId, ProjectId, ProjectRevisionId, RootBindingId,
+        ScanRunId, SuppressionId, SymbolId, SymbolReferenceId, ValidationResultId,
+        WorkspaceSnapshotId,
     },
 };
 
 pub const MANAGEMENT_STORE_VERSION: u32 = 2;
 pub const REDACTION_CONTRACT_VERSION: u32 = 1;
+pub const MANAGEMENT_STATUS_PAGE_SCHEMA_ID: &str = "star.management-status-page";
+pub const MANAGEMENT_STATUS_PAGE_SCHEMA_VERSION: u32 = 1;
+pub const MANAGEMENT_STATUS_QUERY_SCHEMA_ID: &str = "star.management-status-query";
+pub const MANAGEMENT_MAINTENANCE_STATE_SCHEMA_ID: &str = "star.management-maintenance-state";
+pub const MANAGEMENT_MAINTENANCE_STATE_SCHEMA_VERSION: u32 = 1;
+pub const MANAGEMENT_STATUS_DEFAULT_MAX_ITEMS: u32 = 32;
+pub const MANAGEMENT_STATUS_MAX_ITEMS: u32 = 256;
+pub const MANAGEMENT_STATUS_DEFAULT_MAX_BYTES: u64 = 65_536;
+pub const MANAGEMENT_STATUS_MAX_BYTES: u64 = 65_536;
+pub const RETENTION_PLAN_V2_SCHEMA_ID: &str = "star.management-retention-plan";
+pub const RETENTION_PLAN_V2_SCHEMA_VERSION: u32 = 2;
+pub const RETENTION_CHECKPOINT_SCHEMA_ID: &str = "star.management-retention-checkpoint";
+pub const RETENTION_CHECKPOINT_SCHEMA_VERSION: u32 = 1;
+pub const RETENTION_DEFAULT_BATCH_ROWS: u64 = 10_000;
+pub const RETENTION_DEFAULT_BATCH_BYTES: u64 = 64 * 1_024 * 1_024;
+pub const MANAGEMENT_COMPACTION_PLAN_SCHEMA_ID: &str = "star.management-compaction-plan";
+pub const MANAGEMENT_COMPACTION_PLAN_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Error)]
 pub enum ManagementDecodeError {
@@ -825,6 +848,533 @@ pub struct ManagementStoreStatus {
     pub last_verified_at: Option<DateTime<Utc>>,
     pub last_backup_ref: Option<ArtifactRef>,
     pub redaction_contract_version: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ManagementStatusQueryV1 {
+    pub cursor: Option<String>,
+    pub max_items: u32,
+    pub max_bytes: u64,
+}
+
+impl Default for ManagementStatusQueryV1 {
+    fn default() -> Self {
+        Self {
+            cursor: None,
+            max_items: MANAGEMENT_STATUS_DEFAULT_MAX_ITEMS,
+            max_bytes: MANAGEMENT_STATUS_DEFAULT_MAX_BYTES,
+        }
+    }
+}
+
+impl ManagementStatusQueryV1 {
+    pub fn validate(&self) -> Result<(), ManagementDecodeError> {
+        if self.max_items == 0
+            || self.max_items > MANAGEMENT_STATUS_MAX_ITEMS
+            || self.max_bytes == 0
+            || self.max_bytes > MANAGEMENT_STATUS_MAX_BYTES
+            || self
+                .cursor
+                .as_ref()
+                .is_some_and(|value| value.is_empty() || value.len() > 1_024 || !value.is_ascii())
+        {
+            return Err(ManagementDecodeError::Shape);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ManagementStatusPageV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub snapshot_revision: u64,
+    pub snapshot_hash: Sha256Hash,
+    pub items: Vec<ManagementStoreStatus>,
+    pub returned_count: u32,
+    pub total_count: u64,
+    pub truncated: bool,
+    pub next_cursor: Option<String>,
+    pub max_items: u32,
+    pub max_bytes: u64,
+}
+
+impl ManagementStatusPageV1 {
+    pub fn validate(&self) -> Result<(), ManagementDecodeError> {
+        let serialized_len = serde_json::to_vec(self)
+            .map_err(|_| ManagementDecodeError::Shape)?
+            .len() as u64;
+        if self.schema_id != MANAGEMENT_STATUS_PAGE_SCHEMA_ID
+            || self.schema_version != MANAGEMENT_STATUS_PAGE_SCHEMA_VERSION
+            || self.returned_count as usize != self.items.len()
+            || self.returned_count as u64 > self.total_count
+            || self.returned_count > self.max_items
+            || self.max_items == 0
+            || self.max_items > MANAGEMENT_STATUS_MAX_ITEMS
+            || self.max_bytes == 0
+            || self.max_bytes > MANAGEMENT_STATUS_MAX_BYTES
+            || serialized_len > self.max_bytes
+            || self
+                .next_cursor
+                .as_ref()
+                .is_some_and(|value| value.is_empty() || value.len() > 1_024 || !value.is_ascii())
+            || (self.truncated != self.next_cursor.is_some())
+        {
+            return Err(ManagementDecodeError::Shape);
+        }
+        Ok(())
+    }
+}
+
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagementMaintenancePhase {
+    Idle,
+    Planning,
+    ApprovalRequired,
+    Applying,
+    Checkpointing,
+    Complete,
+    Cancelled,
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ManagementMaintenanceStateV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub operation_id: Option<OperationId>,
+    pub phase: ManagementMaintenancePhase,
+    pub policy_fingerprint: Option<Sha256Hash>,
+    pub plan_fingerprint: Option<Sha256Hash>,
+    pub checkpoint_cursor: Option<String>,
+    pub planned_rows: u64,
+    pub planned_bytes: u64,
+    pub applied_rows: u64,
+    pub applied_bytes: u64,
+    pub started_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
+    pub last_error_code: Option<String>,
+}
+
+impl ManagementMaintenanceStateV1 {
+    pub fn idle(now: DateTime<Utc>) -> Self {
+        Self {
+            schema_id: MANAGEMENT_MAINTENANCE_STATE_SCHEMA_ID.to_owned(),
+            schema_version: MANAGEMENT_MAINTENANCE_STATE_SCHEMA_VERSION,
+            operation_id: None,
+            phase: ManagementMaintenancePhase::Idle,
+            policy_fingerprint: None,
+            plan_fingerprint: None,
+            checkpoint_cursor: None,
+            planned_rows: 0,
+            planned_bytes: 0,
+            applied_rows: 0,
+            applied_bytes: 0,
+            started_at: None,
+            updated_at: now,
+            last_error_code: None,
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        matches!(
+            self.phase,
+            ManagementMaintenancePhase::Planning
+                | ManagementMaintenancePhase::Applying
+                | ManagementMaintenancePhase::Checkpointing
+        )
+    }
+}
+
+string_enum!(RetentionTargetKindV2 {
+    ScanGeneration,
+    ResolvedFinding,
+    LocalSuppression,
+    LocalDisposition
+});
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RetentionPolicyV2 {
+    pub keep_latest_successful_scans: u64,
+    pub incomplete_staging_retention_days: u64,
+    pub scan_detail_retention_days: u64,
+    pub resolved_finding_retention_days: u64,
+    pub local_decision_retention_days: u64,
+    pub migration_backup_min_count: u64,
+    pub max_batch_rows: u64,
+    pub max_batch_bytes: u64,
+}
+
+impl Default for RetentionPolicyV2 {
+    fn default() -> Self {
+        Self {
+            keep_latest_successful_scans: 2,
+            incomplete_staging_retention_days: 7,
+            scan_detail_retention_days: 90,
+            resolved_finding_retention_days: 180,
+            local_decision_retention_days: 180,
+            migration_backup_min_count: 2,
+            max_batch_rows: RETENTION_DEFAULT_BATCH_ROWS,
+            max_batch_bytes: RETENTION_DEFAULT_BATCH_BYTES,
+        }
+    }
+}
+
+impl RetentionPolicyV2 {
+    pub fn validate(&self) -> Result<(), ManagementDecodeError> {
+        if self.keep_latest_successful_scans == 0
+            || self.incomplete_staging_retention_days == 0
+            || self.scan_detail_retention_days == 0
+            || self.resolved_finding_retention_days == 0
+            || self.local_decision_retention_days == 0
+            || self.migration_backup_min_count == 0
+            || self.max_batch_rows == 0
+            || self.max_batch_rows > RETENTION_DEFAULT_BATCH_ROWS
+            || self.max_batch_bytes == 0
+            || self.max_batch_bytes > RETENTION_DEFAULT_BATCH_BYTES
+        {
+            return Err(ManagementDecodeError::Shape);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RetentionCandidateV2 {
+    pub candidate_id: String,
+    pub project_id: ProjectId,
+    pub target_kind: RetentionTargetKindV2,
+    pub generation_id: Option<String>,
+    pub entity_id: Option<String>,
+    pub entity_revision: Option<u64>,
+    pub scan_run_id: Option<ScanRunId>,
+    pub retention_class: String,
+    pub reason_code: String,
+    pub estimated_rows: u64,
+    pub estimated_bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RetentionProtectedTargetV1 {
+    pub project_id: ProjectId,
+    pub target_kind: RetentionTargetKindV2,
+    pub target_ref: String,
+    pub reason_code: String,
+    pub estimated_rows: u64,
+    pub estimated_bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RetentionMigrationBackupCandidateV1 {
+    pub candidate_id: String,
+    pub backup_locator: String,
+    pub backup_fingerprint: Sha256Hash,
+    pub manifest_fingerprint: Sha256Hash,
+    pub last_modified_at: DateTime<Utc>,
+    pub reason_code: String,
+    pub estimated_rows: u64,
+    pub estimated_bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RetentionProtectedMigrationBackupV1 {
+    pub backup_locator: String,
+    pub backup_fingerprint: Option<Sha256Hash>,
+    pub manifest_fingerprint: Option<Sha256Hash>,
+    pub last_modified_at: Option<DateTime<Utc>>,
+    pub reason_code: String,
+    pub estimated_rows: u64,
+    pub estimated_bytes: u64,
+}
+
+fn valid_backup_locator(value: &str, require_migration_name: bool) -> bool {
+    if value.is_empty()
+        || value.len() > 255
+        || value == "."
+        || value == ".."
+        || value.contains(['/', '\\', '\0'])
+    {
+        return false;
+    }
+    if !require_migration_name {
+        return true;
+    }
+    value
+        .strip_prefix("project-v1-to-v2-")
+        .is_some_and(|suffix| {
+            suffix.len() == 64 && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+}
+
+fn bounded_retention_text(value: &str, max_len: usize) -> bool {
+    !value.is_empty() && value.len() <= max_len && !value.contains('\0')
+}
+
+fn retention_candidate_shape_valid(candidate: &RetentionCandidateV2) -> bool {
+    if Sha256Hash::from_str(&candidate.candidate_id).is_err()
+        || !bounded_retention_text(&candidate.retention_class, 128)
+        || !bounded_retention_text(&candidate.reason_code, 128)
+        || candidate
+            .generation_id
+            .as_deref()
+            .is_some_and(|value| !bounded_retention_text(value, 256))
+        || candidate
+            .entity_id
+            .as_deref()
+            .is_some_and(|value| !bounded_retention_text(value, 256))
+    {
+        return false;
+    }
+    match candidate.target_kind {
+        RetentionTargetKindV2::ScanGeneration => {
+            candidate.generation_id.is_some()
+                && candidate.entity_id.is_none()
+                && candidate.entity_revision.is_none()
+                && candidate.scan_run_id.is_some()
+                && matches!(
+                    candidate.retention_class.as_str(),
+                    "incomplete_staging" | "successful_scan_detail"
+                )
+        }
+        RetentionTargetKindV2::ResolvedFinding => {
+            candidate.generation_id.is_some()
+                && candidate.entity_id.is_some()
+                && candidate.entity_revision.is_none()
+                && candidate.scan_run_id.is_some()
+                && candidate.retention_class == "resolved_finding"
+        }
+        RetentionTargetKindV2::LocalSuppression => {
+            candidate.generation_id.is_none()
+                && candidate.entity_id.is_some()
+                && candidate.entity_revision.is_some()
+                && candidate.scan_run_id.is_none()
+                && matches!(
+                    candidate.retention_class.as_str(),
+                    "local_suppression_v1" | "local_suppression_v2"
+                )
+        }
+        RetentionTargetKindV2::LocalDisposition => {
+            candidate.generation_id.is_none()
+                && candidate.entity_id.is_some()
+                && candidate.entity_revision.is_some()
+                && candidate.scan_run_id.is_none()
+                && matches!(
+                    candidate.retention_class.as_str(),
+                    "local_disposition_v1" | "local_disposition_v2"
+                )
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RetentionPlanV2 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub created_at: DateTime<Utc>,
+    pub policy: RetentionPolicyV2,
+    pub policy_fingerprint: Sha256Hash,
+    pub source_fingerprint: Sha256Hash,
+    pub expected_store_revisions: BTreeMap<String, u64>,
+    pub candidates: Vec<RetentionCandidateV2>,
+    pub protected_targets: Vec<RetentionProtectedTargetV1>,
+    pub migration_backup_candidates: Vec<RetentionMigrationBackupCandidateV1>,
+    pub protected_migration_backups: Vec<RetentionProtectedMigrationBackupV1>,
+    pub estimated_rows: u64,
+    pub estimated_bytes: u64,
+    pub plan_fingerprint: Sha256Hash,
+}
+
+impl RetentionPlanV2 {
+    pub fn total_candidate_count(&self) -> usize {
+        self.candidates
+            .len()
+            .saturating_add(self.migration_backup_candidates.len())
+    }
+
+    pub fn validate(&self) -> Result<(), ManagementDecodeError> {
+        self.policy.validate()?;
+        let totals = self
+            .candidates
+            .iter()
+            .map(|candidate| (candidate.estimated_rows, candidate.estimated_bytes))
+            .chain(
+                self.migration_backup_candidates
+                    .iter()
+                    .map(|candidate| (candidate.estimated_rows, candidate.estimated_bytes)),
+            )
+            .try_fold(
+                (0_u64, 0_u64),
+                |(rows, bytes), (candidate_rows, candidate_bytes)| {
+                    Some((
+                        rows.checked_add(candidate_rows)?,
+                        bytes.checked_add(candidate_bytes)?,
+                    ))
+                },
+            );
+        let mut candidate_ids = BTreeSet::new();
+        let mut backup_locators = BTreeSet::new();
+        let mut protected_target_refs = BTreeSet::new();
+        if self.schema_id != RETENTION_PLAN_V2_SCHEMA_ID
+            || self.schema_version != RETENTION_PLAN_V2_SCHEMA_VERSION
+            || !self.expected_store_revisions.contains_key("global")
+            || totals != Some((self.estimated_rows, self.estimated_bytes))
+            || self.candidates.iter().any(|candidate| {
+                !retention_candidate_shape_valid(candidate)
+                    || !candidate_ids.insert(candidate.candidate_id.as_str())
+                    || candidate.estimated_rows == 0
+                    || candidate.estimated_bytes == 0
+            })
+            || self.protected_targets.iter().any(|target| {
+                Sha256Hash::from_str(&target.target_ref).is_err()
+                    || !protected_target_refs.insert(target.target_ref.as_str())
+                    || !bounded_retention_text(&target.reason_code, 128)
+                    || target.estimated_rows == 0
+            })
+            || self.migration_backup_candidates.iter().any(|candidate| {
+                Sha256Hash::from_str(&candidate.candidate_id).is_err()
+                    || !candidate_ids.insert(candidate.candidate_id.as_str())
+                    || !valid_backup_locator(&candidate.backup_locator, true)
+                    || !backup_locators.insert(candidate.backup_locator.as_str())
+                    || !bounded_retention_text(&candidate.reason_code, 128)
+                    || candidate.estimated_rows == 0
+                    || candidate.estimated_rows > self.policy.max_batch_rows
+                    || candidate.estimated_bytes == 0
+                    || candidate.estimated_bytes > self.policy.max_batch_bytes
+            })
+            || self.protected_migration_backups.iter().any(|backup| {
+                let metadata_present = (
+                    backup.backup_fingerprint.is_some(),
+                    backup.manifest_fingerprint.is_some(),
+                    backup.last_modified_at.is_some(),
+                );
+                !valid_backup_locator(&backup.backup_locator, false)
+                    || !backup_locators.insert(backup.backup_locator.as_str())
+                    || !bounded_retention_text(&backup.reason_code, 128)
+                    || !matches!(metadata_present, (true, true, true) | (false, false, false))
+                    || (metadata_present == (false, false, false)
+                        && (backup.estimated_rows != 0 || backup.estimated_bytes != 0))
+                    || (metadata_present == (true, true, true) && backup.estimated_rows == 0)
+            })
+        {
+            return Err(ManagementDecodeError::Shape);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RetentionCheckpointV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub operation_id: OperationId,
+    pub plan_fingerprint: Sha256Hash,
+    pub expected_store_revisions: BTreeMap<String, u64>,
+    pub next_candidate_index: u64,
+    pub committed_batch_count: u64,
+    pub applied_rows: u64,
+    pub applied_bytes: u64,
+    pub last_candidate_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_candidate_id: Option<String>,
+    #[serde(default)]
+    pub active_candidate_applied_rows: u64,
+    #[serde(default)]
+    pub active_candidate_applied_bytes: u64,
+    pub complete: bool,
+    pub cancelled: bool,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl RetentionCheckpointV1 {
+    pub fn start(
+        operation_id: OperationId,
+        plan_fingerprint: Sha256Hash,
+        expected_store_revisions: BTreeMap<String, u64>,
+    ) -> Self {
+        Self {
+            schema_id: RETENTION_CHECKPOINT_SCHEMA_ID.to_owned(),
+            schema_version: RETENTION_CHECKPOINT_SCHEMA_VERSION,
+            operation_id,
+            plan_fingerprint,
+            expected_store_revisions,
+            next_candidate_index: 0,
+            committed_batch_count: 0,
+            applied_rows: 0,
+            applied_bytes: 0,
+            last_candidate_id: None,
+            active_candidate_id: None,
+            active_candidate_applied_rows: 0,
+            active_candidate_applied_bytes: 0,
+            complete: false,
+            cancelled: false,
+            updated_at: Utc::now(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RetentionBatchResultV1 {
+    pub processed_candidates: u64,
+    pub applied_rows: u64,
+    pub applied_bytes: u64,
+    pub checkpoint: RetentionCheckpointV1,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ManagementCompactionPlanV1 {
+    pub schema_id: String,
+    pub schema_version: u32,
+    pub store_id: ManagementStoreId,
+    pub store_scope: StoreScope,
+    pub store_revision: u64,
+    pub source_fingerprint: Sha256Hash,
+    pub store_fingerprint: Sha256Hash,
+    pub database_bytes: u64,
+    pub estimated_reclaimable_bytes: u64,
+    pub required_free_bytes: u64,
+    pub available_free_bytes_at_plan: u64,
+    pub backup_binding: Option<ManagementCompactionBackupBindingV1>,
+    pub created_at: DateTime<Utc>,
+    pub plan_fingerprint: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ManagementCompactionBackupBindingV1 {
+    pub backup_set_id: BackupSetId,
+    pub approved_backup_plan_fingerprint: Sha256Hash,
+    pub backup_result_fingerprint: Sha256Hash,
+    pub backup_set_fingerprint: Sha256Hash,
+    pub backup_destination_fingerprint: Sha256Hash,
+    pub source_active_set_fingerprint: Sha256Hash,
+    pub store_id: ManagementStoreId,
+    pub store_revision: u64,
+    pub store_size_bytes: u64,
+    pub store_byte_sha256: Sha256Hash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ManagementCompactionApplyResultV1 {
+    pub plan_fingerprint: Sha256Hash,
+    pub before_bytes: u64,
+    pub after_bytes: u64,
+    pub completed_at: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

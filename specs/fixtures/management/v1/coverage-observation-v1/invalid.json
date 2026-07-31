@@ -1,0 +1,39 @@
+{
+  "changed_line_count": 0,
+  "changed_scope_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "covered_executable_line_count": 0,
+  "evidence": {
+    "completed_at": "2026-01-01T00:00:00Z",
+    "completeness": "complete",
+    "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "content_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "environment_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "evidence_id": "fixture",
+    "input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "project_id": "prj_00000000000000000000000000",
+    "protocol": {
+      "detail_level": "structured",
+      "machine_readable": false,
+      "media_type": "fixture",
+      "protocol_id": "fixture",
+      "protocol_version": "fixture",
+      "stability": "stable"
+    },
+    "provider_id": "fixture",
+    "schema_id": "fixture",
+    "schema_version": 0,
+    "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "started_at": "2026-01-01T00:00:00Z"
+  },
+  "excluded_line_count": 0,
+  "executable_line_count": 0,
+  "gate_state": "pass",
+  "line_coverage_basis_points": 0,
+  "observation_id": "fixture",
+  "project_id": "prj_00000000000000000000000000",
+  "required_line_coverage_basis_points": 0,
+  "schema_id": "star.coverage-observation",
+  "schema_version": 1,
+  "uncovered_executable_line_count": 0,
+  "unexpected": true
+}

@@ -1,5 +1,130 @@
 {
   "$defs": {
+    "AdvisoryFreshnessObservationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "database_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "database_updated_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "freshness": {
+          "$ref": "#/$defs/ExternalFreshness"
+        },
+        "maximum_age_seconds": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observed_at",
+        "maximum_age_seconds",
+        "freshness"
+      ],
+      "type": "object"
+    },
+    "ArtifactKind": {
+      "enum": [
+        "log",
+        "report",
+        "diff",
+        "screenshot",
+        "trace",
+        "manifest",
+        "input",
+        "output",
+        "checkpoint",
+        "change_set",
+        "review_pack"
+      ],
+      "type": "string"
+    },
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "producer": {
+          "$ref": "#/$defs/ProducerRef"
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "redaction_status": {
+          "$ref": "#/$defs/RedactionStatus"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "retention_class": {
+          "$ref": "#/$defs/RetentionClass"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "artifact_id",
+        "kind",
+        "relative_path",
+        "media_type",
+        "size_bytes",
+        "sha256",
+        "created_at",
+        "producer",
+        "redaction_status",
+        "retention_class"
+      ],
+      "type": "object"
+    },
     "CoverageState": {
       "enum": [
         "complete",
@@ -8,6 +133,176 @@
       ],
       "type": "string"
     },
+    "ExternalAnalysisCompleteness": {
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable",
+        "unverified",
+        "timed_out",
+        "cancelled",
+        "flaky",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "ExternalAnalysisEvidenceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "completed_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "completeness": {
+          "$ref": "#/$defs/ExternalAnalysisCompleteness"
+        },
+        "config_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "content_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "environment_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "evidence_id": {
+          "type": "string"
+        },
+        "executable_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sha256Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exit_code": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "input_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "normalized_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "project_id": {
+          "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ExternalAnalysisProtocolV1"
+        },
+        "provider_id": {
+          "type": "string"
+        },
+        "provider_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw_artifact_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_id": {
+          "type": "string"
+        },
+        "schema_version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_fingerprint": {
+          "$ref": "#/$defs/Sha256Hash"
+        },
+        "started_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "evidence_id",
+        "project_id",
+        "provider_id",
+        "protocol",
+        "config_fingerprint",
+        "input_fingerprint",
+        "source_fingerprint",
+        "environment_fingerprint",
+        "started_at",
+        "completed_at",
+        "completeness",
+        "content_fingerprint"
+      ],
+      "type": "object"
+    },
+    "ExternalAnalysisProtocolV1": {
+      "additionalProperties": false,
+      "properties": {
+        "detail_level": {
+          "$ref": "#/$defs/ProtocolDetailLevel"
+        },
+        "machine_readable": {
+          "type": "boolean"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "protocol_id": {
+          "type": "string"
+        },
+        "protocol_version": {
+          "type": "string"
+        },
+        "schema_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stability": {
+          "$ref": "#/$defs/ProtocolStability"
+        }
+      },
+      "required": [
+        "protocol_id",
+        "protocol_version",
+        "media_type",
+        "stability",
+        "detail_level",
+        "machine_readable"
+      ],
+      "type": "object"
+    },
     "ExternalFreshness": {
       "enum": [
         "current",
@@ -15,6 +310,73 @@
         "expired",
         "unknown",
         "unavailable"
+      ],
+      "type": "string"
+    },
+    "ProducerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "component": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "product_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "product_version",
+        "build_id",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "ProtocolDetailLevel": {
+      "enum": [
+        "structured",
+        "exit_classification",
+        "raw_only"
+      ],
+      "type": "string"
+    },
+    "ProtocolStability": {
+      "enum": [
+        "stable",
+        "unstable",
+        "human_text"
+      ],
+      "type": "string"
+    },
+    "ReachabilityStateV1": {
+      "enum": [
+        "reachable",
+        "not_reachable",
+        "unknown",
+        "not_analyzed"
+      ],
+      "type": "string"
+    },
+    "RedactionStatus": {
+      "enum": [
+        "not_needed",
+        "redacted",
+        "quarantined",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "RetentionClass": {
+      "enum": [
+        "temporary",
+        "run",
+        "evidence",
+        "hold"
       ],
       "type": "string"
     },
@@ -54,6 +416,91 @@
         "source_sha256"
       ],
       "type": "object"
+    },
+    "SupplyChainProviderKindV1": {
+      "enum": [
+        "sbom",
+        "advisory",
+        "license",
+        "vex",
+        "provenance"
+      ],
+      "type": "string"
+    },
+    "SupplyChainProviderObservationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "advisory_freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdvisoryFreshnessObservationV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/ExternalAnalysisEvidenceV1"
+        },
+        "license_expressions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "limitations": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "provider_kind": {
+          "$ref": "#/$defs/SupplyChainProviderKindV1"
+        },
+        "reachability": {
+          "$ref": "#/$defs/ReachabilityStateV1"
+        },
+        "reviewed_vex_evidence_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "standards": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "vex_state": {
+          "$ref": "#/$defs/VexStateV1"
+        }
+      },
+      "required": [
+        "provider_kind",
+        "evidence",
+        "reachability",
+        "vex_state"
+      ],
+      "type": "object"
+    },
+    "VexStateV1": {
+      "enum": [
+        "affected",
+        "not_affected",
+        "fixed",
+        "under_investigation",
+        "none"
+      ],
+      "type": "string"
     }
   },
   "$id": "urn:star-control:schema:star.supply-chain-snapshot:v1",
@@ -98,6 +545,13 @@
     "project_id": {
       "pattern": "^prj_[0-9A-HJKMNP-TV-Z]{26}$",
       "type": "string"
+    },
+    "provider_observations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SupplyChainProviderObservationV1"
+      },
+      "type": "array"
     },
     "schema_id": {
       "const": "star.supply-chain-snapshot",

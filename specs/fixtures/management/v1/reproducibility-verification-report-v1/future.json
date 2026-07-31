@@ -1,0 +1,15 @@
+{
+  "builds": [],
+  "config_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "outcome": "pass",
+  "project_id": "prj_00000000000000000000000000",
+  "provider_evidence": [],
+  "report_id": "fixture",
+  "schema_id": "star.reproducibility-verification-report",
+  "schema_version": 2,
+  "slsa_builder_bound": false,
+  "slsa_materials_bound": false,
+  "slsa_subject_bound": false,
+  "source_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "toolchain_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

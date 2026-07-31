@@ -1,6 +1,6 @@
-# 사용자 지정에 따라 Codex 실행 권한 프롬프트와 sandbox를 비활성화한다.
-# push·삭제·외부 계정 등 작업 승인 경계는 AGENTS.md를 계속 따른다.
-approval_policy = "never"
+# 프로젝트 작업은 full-access를 유지하되 외부 효과와 위험 명령은 Rules/Hook/사람 승인을 겹쳐 적용한다.
+approval_policy = { granular = { sandbox_approval = false, rules = true, mcp_elicitations = true, request_permissions = true, skill_approval = true } }
+approvals_reviewer = "user"
 sandbox_mode = "danger-full-access"
 
 [sandbox_workspace_write]

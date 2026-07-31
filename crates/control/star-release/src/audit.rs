@@ -42,8 +42,8 @@ pub const PRODUCT_PROFILE_AUDIT_ORDER: [&str; 16] = [
     "language_platform_migration",
     "ci_release_deploy",
 ];
-pub const PRODUCT_GENERATED_SCHEMA_COUNT: u32 = 217;
-pub const PRODUCT_STABLE_ERROR_COUNT: u32 = 533;
+pub const PRODUCT_GENERATED_SCHEMA_COUNT: u32 = 230;
+pub const PRODUCT_STABLE_ERROR_COUNT: u32 = 552;
 pub const PRODUCT_MCP_MATRIX_COUNT: u32 = 170;
 const PRODUCT_PROFILE_CONFORMANCE_REFS: [(&str, &str); 10] = [
     (
@@ -993,7 +993,7 @@ mod tests {
 
         assert_eq!(audit.source_evidence.feature_count, 23);
         assert_eq!(audit.source_evidence.profile_count, 16);
-        assert_eq!(audit.source_evidence.generated_schema_count, 217);
+        assert_eq!(audit.source_evidence.generated_schema_count, 230);
         assert!(audit.internal_conformance);
         assert_eq!(audit.status, ProductAuditStatusV1::BlockedExternal);
         assert!(

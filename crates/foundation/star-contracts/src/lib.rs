@@ -15,6 +15,7 @@ pub mod development_v2;
 pub mod error_codes;
 pub mod evidence;
 pub mod evidence_v2;
+pub mod external_analysis;
 pub mod fixed_mcp;
 pub mod ids;
 pub mod index;

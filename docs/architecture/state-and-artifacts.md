@@ -360,7 +360,11 @@ M8 migration backup/candidate와 evidence retention도 분리한다. plan·attem
 
 관리 DB는 latest complete generation, incomplete staging, scan detail, resolved Finding, local decision과 migration backup을 서로 다른 retention class로 관리한다. 정확한 기본값과 merge 전략은 [설정과 Catalog 계약](../contracts/config-and-catalog.md)이 소유한다. source, shared declaration과 `.ai-runs` byte는 DB retention이 삭제하지 않는다.
 
-정리는 startup 또는 수동 command에서만 실행하며 자체 예약 실행을 만들지 않는다. 먼저 candidate와 protected reason을 담은 retention plan을 만들고 같은 store revision·plan fingerprint와 필요한 permission에서만 적용한다.
+Store open·recovery까지만 startup 필수 경로다. retention plan/apply는 Controller가 `Ready`를 공개한 뒤 lifecycle-bound maintenance operation 또는 수동 command로만 실행하며 자체 예약 실행을 만들지 않는다. worker는 활성 lease·cooperative cancellation·durable checkpoint·join을 가지며 진행 중 idle shutdown 대상이 아니다. 강제 종료 뒤에는 마지막 commit된 10,000행 또는 예상 64MiB 이하 배치의 cursor부터 멱등 재개한다.
+
+`RetentionPlanV2`는 scan detail, resolved Finding, 만료·취소된 local decision과 migration backup floor의 후보 수·예상 byte를 공개한다. 한 DB candidate가 10,000행 또는 64MiB보다 커도 개별 document가 byte 한도를 넘지 않으면 `RetentionCheckpointV1.active_candidate_*` sub-cursor로 여러 transaction에 나눠 적용한다. 각 transaction은 두 한도를 넘지 않고, project store commit 뒤 checkpoint write 전에 중단돼도 마지막 batch receipt를 replay한 뒤 같은 candidate에서 이어 간다. 단일 document가 byte 한도를 넘으면 `RETENTION_ROW_EXCEEDS_BATCH_LIMIT`으로 보호한다. migration backup은 manifest와 모든 파일 digest가 다시 검증된 경우에만 후보가 될 수 있고, 최신 known-good 1개와 `management.migration_backup_min_count`개를 별도로 보호한다. 미검증·복구 tombstone·batch 한도 초과 backup은 삭제하지 않고 제외 이유를 공개한다. 승인된 apply는 같은 policy/source/store fingerprint를 재확인한 뒤 sibling tombstone으로 원자적 격리하고, 강제 종료 시 같은 candidate checkpoint에서 삭제를 재개한다. active/current/baseline/suppression/Gate/ReviewPack/hold/recovery 대상은 제외 이유와 함께 보호한다. 계획과 같은 policy/source/store fingerprint, exact approval이 아니면 apply하지 않는다. `VACUUM`·compaction은 startup 또는 retention의 숨은 후처리가 아니며 필요 공간, verified backup과 source/store fingerprint를 가진 별도 plan/apply다.
+
+일반 status는 `PRAGMA quick_check`, event-chain 전체 검증이나 active-set write를 수행하지 않는다. `ManagementStatusQueryV1`/`ManagementStatusPageV1`은 기본 32개·최대 256개와 65,536-byte hard limit, opaque cursor·registry revision을 사용한다. legacy status가 bounded 응답을 만들 수 없으면 `MANAGEMENT_STATUS_REQUIRES_PAGING`, page 사이 revision이 바뀌면 `MANAGEMENT_STATUS_CURSOR_STALE`로 fail closed한다. CLI `management status --all`도 기본 총 4,096개 또는 8MiB에서 중단하고 truncation을 명시한다.
 
 ## backup·손상·재구축
 
