@@ -416,8 +416,11 @@ $updaterRestartSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "cra
 Assert-ValidationContract -Condition ($updaterRestartSource.Contains('const FORCED_CLOSE_TIMEOUT: Duration = Duration::from_secs(12);')) -Message "forced Codex termination has a bounded exit-observation window"
 Assert-ValidationContract -Condition ($updaterRestartSource.Contains('terminate_until_process_exit(')) -Message "forced Codex termination repeats exact bounded passes"
 Assert-ValidationContract -Condition ($updaterRestartSource.Contains('terminate_verified_tree_best_effort_excluding(')) -Message "one inaccessible helper cannot prevent later exact-root termination"
-Assert-ValidationContract -Condition ($updaterRestartSource.Contains('|| Ok(exact_image_instances(&snapshot()?, desktop).is_empty())')) -Message "forced Codex termination uses a fresh exact-image census as completion proof"
-Assert-ValidationContract -Condition (([regex]::Matches($updaterRestartSource, 'close_codex_desktop\(&desktop\)\.await')).Count -eq 2) -Message "offline installer and integration restart share the exact close contract"
+Assert-ValidationContract -Condition ($updaterRestartSource.Contains('codex_images_exited(&snapshot()?, desktop, codex_cli)')) -Message "forced Codex termination uses a fresh exact-image census as completion proof"
+Assert-ValidationContract -Condition ($updaterRestartSource.Contains('exact_image_instances(snapshot, desktop).is_empty()')) -Message "Codex exit proof includes every exact Desktop image"
+Assert-ValidationContract -Condition ($updaterRestartSource.Contains('exact_image_instances(snapshot, codex_cli).is_empty()')) -Message "Codex exit proof includes the bundled CLI image required by installer preflight"
+Assert-ValidationContract -Condition ([regex]::IsMatch($updaterRestartSource, 'terminate_verified_tree_best_effort_excluding\(\s*codex_cli,')) -Message "forced Codex termination retries the exact bundled CLI image"
+Assert-ValidationContract -Condition (([regex]::Matches($updaterRestartSource, 'close_codex_desktop\(&desktop, &codex_cli\)\.await')).Count -eq 2) -Message "offline installer and integration restart share the Desktop and bundled CLI close contract"
 Assert-ValidationContract -Condition ($updaterRestartSource.Contains('abort_and_relaunch(&mut transaction, &receipt_request, &desktop);')) -Message "offline close failure relaunches the same Desktop"
 
 $installerSource = Get-Content -LiteralPath (Join-Path $repositoryRoot "packaging/windows/star-control.iss") -Raw -Encoding UTF8

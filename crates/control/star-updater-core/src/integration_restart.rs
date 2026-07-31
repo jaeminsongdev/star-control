@@ -217,6 +217,7 @@ pub async fn run_offline_installer_and_restart(
     let _update_lease = acquire_update_lease()?;
     let installer = verified_installer(&request.installer_executable)?;
     let desktop = verified_desktop(&request.codex_desktop_executable)?;
+    let codex_cli = verified_codex_cli(&desktop)?;
     let observed = snapshot()?;
     let instances = exact_image_instances(&observed, &desktop);
     if instances.is_empty() {
@@ -237,7 +238,7 @@ pub async fn run_offline_installer_and_restart(
     tokio::time::sleep((deadline - Utc::now()).to_std().unwrap_or_default()).await;
     transition_or_error(transaction.begin_draining(Utc::now()))?;
     persist_receipt(&transaction, &receipt_request)?;
-    let closed = match close_codex_desktop(&desktop).await {
+    let closed = match close_codex_desktop(&desktop, &codex_cli).await {
         Ok(closed) => closed,
         Err(error) => {
             abort_and_relaunch(&mut transaction, &receipt_request, &desktop);
@@ -833,7 +834,7 @@ async fn restart_codex_integration(
     transition_or_error(transaction.begin_draining(Utc::now()))?;
     persist_receipt(&transaction, &request)?;
 
-    let closed = match close_codex_desktop(&desktop).await {
+    let closed = match close_codex_desktop(&desktop, &codex_cli).await {
         Ok(closed) => closed,
         Err(error) => {
             abort_and_relaunch(&mut transaction, &request, &desktop);
@@ -1057,9 +1058,12 @@ fn abort_and_relaunch(
     relaunch_after_failure(desktop);
 }
 
-async fn close_codex_desktop(desktop: &Path) -> Result<CodexCloseOutcome, IntegrationRestartError> {
+async fn close_codex_desktop(
+    desktop: &Path,
+    codex_cli: &Path,
+) -> Result<CodexCloseOutcome, IntegrationRestartError> {
     let graceful_close_pids = request_graceful_close(desktop)?;
-    if wait_for_codex_exit(desktop, GRACEFUL_CLOSE_TIMEOUT).await? {
+    if wait_for_codex_exit(desktop, codex_cli, GRACEFUL_CLOSE_TIMEOUT).await? {
         return Ok(CodexCloseOutcome {
             graceful_close_pids,
             fallback_terminated_pids: Vec::new(),
@@ -1070,12 +1074,15 @@ async fn close_codex_desktop(desktop: &Path) -> Result<CodexCloseOutcome, Integr
         FORCED_CLOSE_TIMEOUT,
         PROCESS_EXIT_POLL_INTERVAL,
         || {
-            Ok(terminate_verified_tree_best_effort_excluding(
-                desktop,
+            let mut terminated =
+                terminate_verified_tree_best_effort_excluding(desktop, Some(std::process::id()))?;
+            terminated.extend(terminate_verified_tree_best_effort_excluding(
+                codex_cli,
                 Some(std::process::id()),
-            )?)
+            )?);
+            Ok(terminated)
         },
-        || Ok(exact_image_instances(&snapshot()?, desktop).is_empty()),
+        || Ok(codex_images_exited(&snapshot()?, desktop, codex_cli)),
     )
     .await?;
     if !exited {
@@ -1120,12 +1127,18 @@ where
 
 async fn wait_for_codex_exit(
     desktop: &Path,
+    codex_cli: &Path,
     timeout: Duration,
 ) -> Result<bool, IntegrationRestartError> {
     wait_for_process_exit(timeout, PROCESS_EXIT_POLL_INTERVAL, || {
-        Ok(exact_image_instances(&snapshot()?, desktop).is_empty())
+        Ok(codex_images_exited(&snapshot()?, desktop, codex_cli))
     })
     .await
+}
+
+fn codex_images_exited(snapshot: &[ProcessIdentity], desktop: &Path, codex_cli: &Path) -> bool {
+    exact_image_instances(snapshot, desktop).is_empty()
+        && exact_image_instances(snapshot, codex_cli).is_empty()
 }
 
 async fn wait_for_process_exit<F>(
@@ -1620,6 +1633,33 @@ mod tests {
                 .await
                 .unwrap()
         );
+    }
+
+    #[test]
+    fn codex_exit_requires_both_desktop_and_bundled_cli_to_be_gone() {
+        let desktop = PathBuf::from(r"C:\Program Files\WindowsApps\OpenAI.Codex\app\ChatGPT.exe");
+        let codex_cli =
+            PathBuf::from(r"C:\Program Files\WindowsApps\OpenAI.Codex\app\resources\codex.exe");
+        let desktop_process = ProcessIdentity {
+            pid: 10,
+            parent_pid: 1,
+            creation_time_100ns: Some(1010),
+            image: Some(desktop.clone()),
+        };
+        let cli_process = ProcessIdentity {
+            pid: 11,
+            parent_pid: 10,
+            creation_time_100ns: Some(1011),
+            image: Some(codex_cli.clone()),
+        };
+
+        assert!(!codex_images_exited(
+            &[desktop_process, cli_process.clone()],
+            &desktop,
+            &codex_cli,
+        ));
+        assert!(!codex_images_exited(&[cli_process], &desktop, &codex_cli));
+        assert!(codex_images_exited(&[], &desktop, &codex_cli));
     }
 
     #[tokio::test]
