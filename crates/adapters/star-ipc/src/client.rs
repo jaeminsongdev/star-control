@@ -25,6 +25,7 @@ use crate::{
 const RESPONSE_IO_GRACE: Duration = Duration::from_secs(5);
 const DEMAND_SCAN_RESPONSE_BUDGET: Duration = Duration::from_secs(10);
 const DISCOVERY_PROBE_RESPONSE_BUDGET: Duration = Duration::from_secs(40);
+const TOOL_INVOKE_SYNC_RESPONSE_BUDGET: Duration = Duration::from_secs(35);
 const MANAGEMENT_RECOVERY_PLAN_RESPONSE_BUDGET: Duration = Duration::from_secs(10 * 60);
 const MANAGEMENT_RECOVERY_APPLY_RESPONSE_BUDGET: Duration = Duration::from_secs(60 * 60);
 const VALIDATION_RUN_DEFAULT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
@@ -349,6 +350,15 @@ fn response_read_timeout(command: &str, payload: &serde_json::Value) -> Duration
             .map(|timeout_ms| Duration::from_millis(timeout_ms.min(VALIDATION_RUN_MAX_TIMEOUT_MS)))
             .unwrap_or(VALIDATION_RUN_DEFAULT_TIMEOUT);
         return RESPONSE_IO_GRACE + execution_timeout;
+    }
+    if command == "tool.invoke"
+        && payload.get("wait_mode").and_then(serde_json::Value::as_str) != Some("accepted")
+    {
+        // The Controller observes synchronous and automatic tool invocations
+        // for up to 30 seconds before returning either the terminal Operation
+        // or an accepted durable Operation. Keep the transport lease alive for
+        // that whole bounded window plus response I/O grace.
+        return TOOL_INVOKE_SYNC_RESPONSE_BUDGET;
     }
     if matches!(
         command,
@@ -687,6 +697,14 @@ mod tests {
         assert_eq!(
             response_read_timeout("tool.invoke", &serde_json::json!({"wait_mode":"accepted"})),
             Duration::from_secs(10)
+        );
+        assert_eq!(
+            response_read_timeout("tool.invoke", &serde_json::json!({"wait_mode":"sync"})),
+            Duration::from_secs(35)
+        );
+        assert_eq!(
+            response_read_timeout("tool.invoke", &serde_json::json!({})),
+            Duration::from_secs(35)
         );
         assert_eq!(
             response_read_timeout("management.status", &serde_json::json!({})),
