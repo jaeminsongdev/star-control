@@ -257,133 +257,185 @@ fn help_requested(args: &[String]) -> bool {
         .any(|argument| matches!(argument.as_str(), "-h" | "--help"))
 }
 
-const MCP_COMMAND_ROUTES: &[(&str, &str, Option<&str>)] = &[
+const MCP_COMMAND_ROUTES: &[(&str, &str, Option<&str>, RiskLane)] = &[
     (
         "goal.start",
         "star.core.goal.start",
         Some("schemas/goal-record-output.schema.json"),
+        RiskLane::WriteClosed,
     ),
     (
         "goal.answer",
         "star.core.goal.answer",
         Some("schemas/goal-record-output.schema.json"),
+        RiskLane::WriteClosed,
     ),
     (
         "plan.get",
         "star.core.plan.get",
         Some("schemas/plan-get-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "plan.update",
         "star.core.plan.update",
         Some("schemas/goal-record-output.schema.json"),
+        RiskLane::WriteClosed,
     ),
     (
         "run.continue",
         "star.core.run.continue",
         Some("schemas/goal-record-output.schema.json"),
+        RiskLane::DestructiveOpen,
     ),
     (
         "goal.status",
         "star.core.status.get",
         Some("schemas/goal-record-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "goal.pause",
         "star.core.goal.pause",
         Some("schemas/goal-record-output.schema.json"),
+        RiskLane::WriteClosed,
     ),
     (
         "goal.resume",
         "star.core.goal.resume",
         Some("schemas/goal-record-output.schema.json"),
+        RiskLane::WriteClosed,
     ),
     (
         "goal.cancel",
         "star.core.goal.cancel",
         Some("schemas/goal-record-output.schema.json"),
+        RiskLane::DestructiveOpen,
     ),
     (
         "evidence.get",
         "star.core.evidence.get",
         Some("schemas/evidence-get-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "merge.status",
         "star.core.merge.status",
         Some("schemas/change-bundle-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "handoff.get",
         "star.core.handoff.get",
         Some("schemas/change-bundle-handoff-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "doctor.run",
         "star.core.doctor",
         Some("schemas/doctor-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "project.list",
         "star.core.project.list",
         Some("schemas/project-list-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "project.status",
         "star.core.project.status",
         Some("schemas/project-status-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "project.register",
         "star.core.project.register",
         Some("schemas/project-register-output.schema.json"),
+        RiskLane::WriteClosed,
     ),
     (
         "scan.run",
         "star.core.scan.run",
         Some("schemas/scan-run-output.schema.json"),
+        RiskLane::WriteClosed,
     ),
     (
         "index.status",
         "star.core.index.status",
         Some("schemas/index-status-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "management.status.page",
         "star.management.status.page",
         Some("schemas/management-status-page-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "index.search",
         "star.core.index.search",
         Some("schemas/index-search-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "finding.list",
         "star.core.finding.list",
         Some("schemas/finding-list-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "diagnostic.list",
         "star.core.diagnostic.list",
         Some("schemas/diagnostic-list-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "validation.plan",
         "star.core.validation.plan",
         Some("schemas/validation-plan-output.schema.json"),
+        RiskLane::ReadClosed,
     ),
     (
         "validation.run",
         "star.core.validation.run",
         Some("schemas/validation-run-output.schema.json"),
+        RiskLane::WriteClosed,
     ),
 ];
 
-fn command_risk_lane(route: &str) -> RiskLane {
+fn cli_command_risk_lane(route: &str) -> RiskLane {
+    match route {
+        "change-bundle.remote.operation.apply" | "release.publish.apply" => {
+            return RiskLane::DestructiveOpen;
+        }
+        "codex.task.fork" | "codex.task.resume" | "codex.task.start" => {
+            return RiskLane::WriteOpen;
+        }
+        "change-bundle.remote.refresh" => return RiskLane::WriteOpen,
+        "integration.repair.restart" | "update.offline-installer-restart" => {
+            return RiskLane::DestructiveClosed;
+        }
+        "profile.resolve" => return RiskLane::ReadClosed,
+        "clean-room.readiness"
+        | "codex.capability.inspect"
+        | "config.trace"
+        | "contract.compare"
+        | "docs.check"
+        | "environment.fingerprint"
+        | "failures.compare"
+        | "failures.inspect"
+        | "change-bundle.validate"
+        | "migration.restore-verify"
+        | "migration.validate"
+        | "performance.compare"
+        | "security.inspect" => return RiskLane::WriteClosed,
+        _ => {}
+    }
     let destructive = [
         ".apply",
         ".cancel",
+        ".interrupt",
         ".recover",
         ".restore",
         ".rollback",
@@ -392,16 +444,38 @@ fn command_risk_lane(route: &str) -> RiskLane {
     ];
     if destructive.iter().any(|suffix| route.ends_with(suffix)) {
         RiskLane::DestructiveClosed
-    } else if [
-        ".start", ".run", ".prepare", ".record", ".update", ".resolve", ".trust", ".install",
-        ".repair", ".enable", ".disable",
-    ]
-    .iter()
-    .any(|suffix| route.ends_with(suffix))
+    } else if (route.starts_with("management.") && route.ends_with(".plan"))
+        || [
+            ".audit",
+            ".check",
+            ".compare",
+            ".describe",
+            ".definitions",
+            ".effective",
+            ".files",
+            ".get",
+            ".hardcoding",
+            ".inspect",
+            ".list",
+            ".neighbors",
+            ".probe",
+            ".recommend",
+            ".references",
+            ".search",
+            ".show",
+            ".status",
+            ".validate",
+            ".verify",
+        ]
+        .iter()
+        .any(|suffix| route.ends_with(suffix))
     {
-        RiskLane::WriteClosed
-    } else {
         RiskLane::ReadClosed
+    } else {
+        // CLI-only routes do not have a live Tool Registry descriptor to
+        // supply an exact lane. Unknown verbs therefore fail closed as a
+        // local write instead of being advertised as read-only.
+        RiskLane::WriteClosed
     }
 }
 
@@ -501,7 +575,7 @@ fn describe_command(route: &str) -> Result<CommandDescriptorV1, String> {
     }
     let mcp = MCP_COMMAND_ROUTES
         .iter()
-        .find(|(backend_ref, _, _)| *backend_ref == canonical_route);
+        .find(|(backend_ref, _, _, _)| *backend_ref == canonical_route);
     if usages.is_empty() && mcp.is_none() {
         return Err(format!("unknown command: {route}"));
     }
@@ -554,10 +628,13 @@ fn describe_command(route: &str) -> Result<CommandDescriptorV1, String> {
         cli_route,
         ownership,
         controller_backend_ref,
-        mcp_tool_id: mcp.map(|(_, tool_id, _)| (*tool_id).to_owned()),
+        mcp_tool_id: mcp.map(|(_, tool_id, _, _)| (*tool_id).to_owned()),
         argument_schema,
-        result_schema_ref: mcp.and_then(|(_, _, schema)| schema.map(str::to_owned)),
-        risk_lane: command_risk_lane(canonical_route),
+        result_schema_ref: mcp.and_then(|(_, _, schema, _)| schema.map(str::to_owned)),
+        risk_lane: mcp.map_or_else(
+            || cli_command_risk_lane(canonical_route),
+            |(_, _, _, risk_lane)| *risk_lane,
+        ),
         examples,
         deprecated_aliases,
         descriptor_hash: star_contracts::Sha256Hash::digest(b"unsealed-command-descriptor"),
@@ -5632,6 +5709,65 @@ mod tests {
         );
         assert_eq!(apply.examples.len(), 1);
         assert_eq!(apply.deprecated_aliases.len(), 1);
+    }
+
+    #[test]
+    fn command_descriptor_uses_exact_mcp_risk_lanes() {
+        for (route, _, _, expected) in MCP_COMMAND_ROUTES {
+            assert_eq!(
+                describe_command(route).unwrap().risk_lane,
+                *expected,
+                "{route} must agree with its live MCP action lane"
+            );
+        }
+    }
+
+    #[test]
+    fn cli_only_command_risk_lanes_are_effect_aware_and_fail_closed() {
+        let cases = [
+            ("maintenance.radar.code-health", RiskLane::WriteClosed),
+            ("maintenance.radar.git-history", RiskLane::WriteClosed),
+            ("maintenance.rule-pack", RiskLane::WriteClosed),
+            ("evaluation.case.publish", RiskLane::WriteClosed),
+            ("profile.resolve", RiskLane::ReadClosed),
+            ("management.retention.plan", RiskLane::ReadClosed),
+            ("management.retention.apply", RiskLane::DestructiveClosed),
+            ("change-bundle.remote.refresh", RiskLane::WriteOpen),
+            (
+                "change-bundle.remote.operation.observe",
+                RiskLane::WriteClosed,
+            ),
+            (
+                "change-bundle.remote.operation.apply",
+                RiskLane::DestructiveOpen,
+            ),
+            ("codex.task.start", RiskLane::WriteOpen),
+            (
+                "update.offline-installer-restart",
+                RiskLane::DestructiveClosed,
+            ),
+            ("command.describe", RiskLane::ReadClosed),
+            ("contract.compare", RiskLane::WriteClosed),
+            ("docs.check", RiskLane::WriteClosed),
+            ("failures.compare", RiskLane::WriteClosed),
+            ("failures.inspect", RiskLane::WriteClosed),
+            ("change-bundle.validate", RiskLane::WriteClosed),
+            ("migration.restore-verify", RiskLane::WriteClosed),
+            ("migration.validate", RiskLane::WriteClosed),
+            ("performance.compare", RiskLane::WriteClosed),
+            ("security.inspect", RiskLane::WriteClosed),
+        ];
+        for (route, expected) in cases {
+            assert_eq!(
+                describe_command(route).unwrap().risk_lane,
+                expected,
+                "{route} must describe the effect that its backend performs"
+            );
+        }
+        assert_eq!(
+            cli_command_risk_lane("future.unclassified-effect"),
+            RiskLane::WriteClosed
+        );
     }
 
     #[test]
