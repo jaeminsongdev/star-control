@@ -1758,6 +1758,7 @@ const MAX_INDEX_STATUS_COVERAGE_ITEMS: usize = 128;
 const MAX_INDEX_STATUS_FRESHNESS_ITEMS: usize = 16;
 const MAX_INDEX_STATUS_LIMITATION_ITEMS: usize = 16;
 const MAX_INDEX_STATUS_LIMITATION_CODES: usize = 128;
+const MAX_CODE_HEALTH_LIST_ITEMS: usize = 64;
 
 fn serialize_bounded_code_health_controller_result(
     result: impl serde::Serialize,
@@ -1787,6 +1788,63 @@ fn serialize_bounded_code_health_management_result(
         return Err(ApplicationError::Invalid);
     }
     Ok(value)
+}
+
+fn bounded_code_health_list_projection<T: serde::Serialize>(
+    items: Vec<T>,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    let total = items.len();
+    let items = items
+        .into_iter()
+        .map(|item| {
+            serde_json::to_value(item).map_err(|_| {
+                (
+                    "TOOL_PROTOCOL_INVALID",
+                    "The code-health list item could not be serialized.",
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut returned = Vec::new();
+    for item in items.into_iter().take(MAX_CODE_HEALTH_LIST_ITEMS) {
+        returned.push(item);
+        let returned_count = returned.len();
+        let candidate = serde_json::json!({
+            "items": &returned,
+            "projection": {
+                "bounded": true,
+                "selection": "stable_prefix",
+                "max_bytes": MAX_CODE_HEALTH_ACTION_RESULT_BYTES,
+                "max_items": MAX_CODE_HEALTH_LIST_ITEMS,
+                "total": total,
+                "returned": returned_count,
+                "truncated": returned_count < total,
+            }
+        });
+        let encoded = serde_json::to_vec(&candidate).map_err(|_| {
+            (
+                "TOOL_PROTOCOL_INVALID",
+                "The code-health list projection could not be serialized.",
+            )
+        })?;
+        if encoded.len() > MAX_CODE_HEALTH_ACTION_RESULT_BYTES {
+            returned.pop();
+            break;
+        }
+    }
+    let returned_count = returned.len();
+    serialize_bounded_code_health_controller_result(serde_json::json!({
+        "items": returned,
+        "projection": {
+            "bounded": true,
+            "selection": "stable_prefix",
+            "max_bytes": MAX_CODE_HEALTH_ACTION_RESULT_BYTES,
+            "max_items": MAX_CODE_HEALTH_LIST_ITEMS,
+            "total": total,
+            "returned": returned_count,
+            "truncated": returned_count < total,
+        }
+    }))
 }
 
 fn index_status_projection(result: star_application::IndexStatusResult) -> serde_json::Value {
@@ -2085,7 +2143,7 @@ fn run_finding_list_command(
     let items = service
         .list_findings(&project_id)
         .map_err(map_management_controller_error)?;
-    Ok(serde_json::json!({"items":items}))
+    bounded_code_health_list_projection(items)
 }
 
 fn run_diagnostic_list_command(
@@ -2097,7 +2155,7 @@ fn run_diagnostic_list_command(
     let items = service
         .list_validation_diagnostics_v2(&project_id)
         .map_err(map_management_controller_error)?;
-    Ok(serde_json::json!({"items":items}))
+    bounded_code_health_list_projection(items)
 }
 
 fn run_validation_plan_command(
@@ -25469,6 +25527,46 @@ mod tests {
     }
 
     #[test]
+    fn code_health_list_projection_is_bounded_and_reports_truncation() {
+        let small = bounded_code_health_list_projection(vec![
+            serde_json::json!({"id":"one"}),
+            serde_json::json!({"id":"two"}),
+        ])
+        .unwrap();
+        assert_eq!(small["projection"]["total"], 2);
+        assert_eq!(small["projection"]["returned"], 2);
+        assert_eq!(small["projection"]["truncated"], false);
+
+        let large = bounded_code_health_list_projection(
+            (0..(MAX_CODE_HEALTH_LIST_ITEMS + 10))
+                .map(|index| {
+                    serde_json::json!({
+                        "id": format!("item-{index}"),
+                        "detail": "x".repeat(2_048),
+                    })
+                })
+                .collect(),
+        )
+        .unwrap();
+        assert_eq!(
+            large["projection"]["total"],
+            MAX_CODE_HEALTH_LIST_ITEMS + 10
+        );
+        assert!(large["projection"]["returned"].as_u64().unwrap() < 64);
+        assert_eq!(large["projection"]["truncated"], true);
+        assert!(serde_json::to_vec(&large).unwrap().len() <= MAX_CODE_HEALTH_ACTION_RESULT_BYTES);
+
+        let oversized_item = bounded_code_health_list_projection(vec![serde_json::json!({
+            "detail": "x".repeat(MAX_CODE_HEALTH_ACTION_RESULT_BYTES)
+        })])
+        .unwrap();
+        assert_eq!(oversized_item["projection"]["total"], 1);
+        assert_eq!(oversized_item["projection"]["returned"], 0);
+        assert_eq!(oversized_item["projection"]["truncated"], true);
+        assert!(oversized_item["items"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
     fn management_startup_worker_does_not_block_controller_bootstrap() {
         let (started_sender, started_receiver) = std::sync::mpsc::channel();
         let (release_sender, release_receiver) = std::sync::mpsc::channel();
@@ -27287,12 +27385,43 @@ mod tests {
                 "require_current":true
             }),
         );
-        let _ = invoke("finding.list", serde_json::json!({"project_id":project_id}));
+        let findings = invoke("finding.list", serde_json::json!({"project_id":project_id}));
+        assert!(findings["items"].is_array());
+        assert_eq!(findings["projection"]["bounded"], true);
+        assert_eq!(
+            findings["projection"]["max_bytes"],
+            MAX_CODE_HEALTH_ACTION_RESULT_BYTES
+        );
+        assert_eq!(
+            findings["projection"]["max_items"],
+            MAX_CODE_HEALTH_LIST_ITEMS
+        );
+        assert!(findings["projection"]["total"].is_number());
+        assert!(findings["projection"]["returned"].is_number());
+        assert!(findings["projection"]["truncated"].is_boolean());
+        assert!(
+            serde_json::to_vec(&findings).unwrap().len() <= MAX_CODE_HEALTH_ACTION_RESULT_BYTES
+        );
         let diagnostics = invoke(
             "diagnostic.list",
             serde_json::json!({"project_id":project_id}),
         );
         assert!(diagnostics["items"].is_array());
+        assert_eq!(diagnostics["projection"]["bounded"], true);
+        assert_eq!(
+            diagnostics["projection"]["max_bytes"],
+            MAX_CODE_HEALTH_ACTION_RESULT_BYTES
+        );
+        assert_eq!(
+            diagnostics["projection"]["max_items"],
+            MAX_CODE_HEALTH_LIST_ITEMS
+        );
+        assert!(diagnostics["projection"]["total"].is_number());
+        assert!(diagnostics["projection"]["returned"].is_number());
+        assert!(diagnostics["projection"]["truncated"].is_boolean());
+        assert!(
+            serde_json::to_vec(&diagnostics).unwrap().len() <= MAX_CODE_HEALTH_ACTION_RESULT_BYTES
+        );
     }
 
     #[tokio::test]

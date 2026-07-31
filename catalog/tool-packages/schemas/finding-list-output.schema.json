@@ -3,11 +3,11 @@
   "$id": "https://star-control.local/schema/core/finding-list-output-v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["items"],
+  "required": ["items", "projection"],
   "properties": {
     "items": {
       "type": "array",
-      "maxItems": 100000,
+      "maxItems": 64,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -42,9 +42,26 @@
           "content_fingerprint": { "$ref": "#/$defs/sha256" }
         }
       }
+    },
+    "projection": {
+      "$ref": "#/$defs/boundedListProjection"
     }
   },
   "$defs": {
+    "boundedListProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bounded", "selection", "max_bytes", "max_items", "total", "returned", "truncated"],
+      "properties": {
+        "bounded": { "const": true },
+        "selection": { "const": "stable_prefix" },
+        "max_bytes": { "const": 65536 },
+        "max_items": { "const": 64 },
+        "total": { "type": "integer", "minimum": 0 },
+        "returned": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "truncated": { "type": "boolean" }
+      }
+    },
     "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
   }
 }
