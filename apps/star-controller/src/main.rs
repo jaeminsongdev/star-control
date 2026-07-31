@@ -1847,6 +1847,12 @@ fn bounded_code_health_list_projection<T: serde::Serialize>(
     }))
 }
 
+fn bounded_code_health_management_list_projection<T: serde::Serialize>(
+    items: Vec<T>,
+) -> Result<serde_json::Value, ApplicationError> {
+    bounded_code_health_list_projection(items).map_err(|_| ApplicationError::Invalid)
+}
+
 fn index_status_projection(result: star_application::IndexStatusResult) -> serde_json::Value {
     let snapshot = result.snapshot;
     let coverage_total = snapshot.coverage.len();
@@ -13758,9 +13764,7 @@ fn handle_management_command(
             management_project_id(&request.payload).and_then(|project_id| {
                 service
                     .list_validation_diagnostics_v2(&project_id)
-                    .and_then(|items| {
-                        serialize_management_result(serde_json::json!({"items":items}))
-                    })
+                    .and_then(bounded_code_health_management_list_projection)
             })
         }
         "diagnostic.show"
@@ -14614,9 +14618,9 @@ fn handle_management_command(
         }
         "finding.list" if payload_has_exact_keys(&request.payload, &["project_id"]) => {
             management_project_id(&request.payload).and_then(|project_id| {
-                service.list_findings(&project_id).and_then(|items| {
-                    serialize_management_result(serde_json::json!({"items":items}))
-                })
+                service
+                    .list_findings(&project_id)
+                    .and_then(bounded_code_health_management_list_projection)
             })
         }
         "patch.prepare"
@@ -27422,6 +27426,46 @@ mod tests {
         assert!(
             serde_json::to_vec(&diagnostics).unwrap().len() <= MAX_CODE_HEALTH_ACTION_RESULT_BYTES
         );
+
+        let management_root = root.join("management");
+        let binding_root = root.join("bindings");
+        for command in ["finding.list", "diagnostic.list"] {
+            let service = service.lock().unwrap();
+            let response = handle_management_command(
+                ManagementCommandContext {
+                    service: Some(&service),
+                    recovery: None,
+                    approvals: None,
+                    operations: None,
+                    recovery_inspection: None,
+                    management_root: &management_root,
+                    binding_root: &binding_root,
+                    project_directory: &source,
+                    policy_profile: UserPolicyProfile::SafeDefault,
+                    execution_config: execution_config.clone(),
+                    appdata: &root,
+                    config_layers: vec![],
+                    registry_revision: 1,
+                },
+                direct_core_request(command, serde_json::json!({"project_id":project_id})),
+            );
+            assert_eq!(
+                response.status,
+                IpcStatus::Ok,
+                "{command}: {:?}",
+                response.error
+            );
+            let data = response.data.unwrap();
+            assert_eq!(data["projection"]["bounded"], true, "{command}");
+            assert_eq!(
+                data["projection"]["max_bytes"], MAX_CODE_HEALTH_ACTION_RESULT_BYTES,
+                "{command}"
+            );
+            assert!(
+                serde_json::to_vec(&data).unwrap().len() <= MAX_CODE_HEALTH_ACTION_RESULT_BYTES,
+                "{command} management dispatcher must use the bounded projection"
+            );
+        }
     }
 
     #[tokio::test]
