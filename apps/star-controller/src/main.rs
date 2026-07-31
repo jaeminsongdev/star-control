@@ -300,7 +300,7 @@ use star_controller::policy_profile::{
 };
 use star_controller::trust_store::TrustStore;
 use star_controller::{
-    lifecycle::{CodexLifecycle, ControllerLifecycleDecision},
+    lifecycle::{CONTROLLER_IDLE_GRACE, CodexLifecycle, ControllerLifecycleDecision},
     process_runtime::{
         DirectExeSpec, ExecutableLease, JsonStdioExecutionOptions, OutputEncoding,
         ProcessEndEvidence, ProcessEndObserver, ProcessStartEvidence, ProcessStartObserver,
@@ -4467,6 +4467,7 @@ impl ManagementRuntimeState {
 struct ManagementRuntimeControl {
     state: Mutex<ManagementRuntimeState>,
     maintenance: Mutex<ManagementMaintenanceStateV1>,
+    idle_since: Mutex<Option<chrono::DateTime<Utc>>>,
     cancel: AtomicBool,
     worker: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
@@ -4598,6 +4599,7 @@ where
     let runtime = Arc::new(ManagementRuntimeControl {
         state: Mutex::new(ManagementRuntimeState::Initializing),
         maintenance: Mutex::new(ManagementMaintenanceStateV1::idle(Utc::now())),
+        idle_since: Mutex::new(None),
         cancel: AtomicBool::new(false),
         worker: Mutex::new(None),
     });
@@ -4981,9 +4983,19 @@ fn management_runtime_has_active_work(runtime: &SharedManagementRuntime) -> bool
 fn management_idle_shutdown_allowed(
     runtime: &SharedManagementRuntime,
     decision: &ControllerLifecycleDecision,
+    now: chrono::DateTime<Utc>,
 ) -> bool {
+    let active = management_runtime_has_active_work(runtime);
+    let Ok(mut idle_since) = runtime.idle_since.lock() else {
+        return false;
+    };
+    if active {
+        *idle_since = None;
+        return false;
+    }
+    let idle_since = idle_since.get_or_insert(now).to_owned();
     matches!(decision, ControllerLifecycleDecision::ShutdownNow)
-        && !management_runtime_has_active_work(runtime)
+        && now >= idle_since + CONTROLLER_IDLE_GRACE
 }
 
 fn shutdown_management_runtime(runtime: &SharedManagementRuntime, wait: std::time::Duration) {
@@ -5249,18 +5261,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let mut server = tokio::select! {
             accepted = accept_pool.accept() => accepted?,
-            _ = lifecycle_tick.tick(), if lifecycle.has_observations() => {
+            _ = lifecycle_tick.tick() => {
+                // A headless cold start must also receive the management work
+                // grace and then become eligible for idle shutdown. Limiting
+                // this tick to observed Codex instances can strand a
+                // Controller that was started only for installation postcheck.
                 // A Hook `Stop` is not guaranteed when the Desktop itself
                 // disappears. Reconcile only PIDs that an installed Hook or
                 // MCP process previously attributed to an instance.
+                let observed_at = Utc::now();
                 if let Ok(processes) = star_updater_core::process_census::snapshot() {
                     let live_pids = processes.into_iter()
                         .map(|process| process.pid)
                         .collect::<BTreeSet<_>>();
-                    lifecycle.reconcile_owner_processes(&live_pids, Utc::now());
+                    lifecycle.reconcile_owner_processes(&live_pids, observed_at);
                 }
-                let decision = lifecycle.decision(Utc::now());
-                if management_idle_shutdown_allowed(&management_runtime, &decision) {
+                let decision = lifecycle.decision(observed_at);
+                if management_idle_shutdown_allowed(&management_runtime, &decision, observed_at) {
                     shutdown_management_runtime(
                         &management_runtime,
                         std::time::Duration::from_secs(2),
@@ -5390,9 +5407,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let response =
                 lifecycle_observation_response(&mut lifecycle, request, registry.revision);
-            let shutdown_decision = lifecycle.decision(Utc::now());
+            let shutdown_observed_at = Utc::now();
+            let shutdown_decision = lifecycle.decision(shutdown_observed_at);
             let shutdown_now = response.status == IpcStatus::Ok
-                && management_idle_shutdown_allowed(&management_runtime, &shutdown_decision);
+                && management_idle_shutdown_allowed(
+                    &management_runtime,
+                    &shutdown_decision,
+                    shutdown_observed_at,
+                );
             let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
             if shutdown_now && !management_runtime_has_active_work(&management_runtime) {
                 shutdown_management_runtime(&management_runtime, std::time::Duration::from_secs(2));
@@ -25556,6 +25578,7 @@ mod tests {
                 phase: ManagementMaintenancePhase::Applying,
                 ..ManagementMaintenanceStateV1::idle(Utc::now())
             }),
+            idle_since: Mutex::new(None),
             cancel: AtomicBool::new(false),
             worker: Mutex::new(None),
         });
@@ -25572,29 +25595,79 @@ mod tests {
     }
 
     #[test]
-    fn idle_shutdown_waits_for_management_maintenance_to_be_terminal() {
+    fn idle_shutdown_waits_for_management_maintenance_and_a_fresh_grace() {
+        let now = Utc::now();
         let runtime = Arc::new(ManagementRuntimeControl {
             state: Mutex::new(ManagementRuntimeState::failed("fixture")),
             maintenance: Mutex::new(ManagementMaintenanceStateV1 {
                 phase: ManagementMaintenancePhase::Applying,
-                ..ManagementMaintenanceStateV1::idle(Utc::now())
+                ..ManagementMaintenanceStateV1::idle(now)
             }),
+            idle_since: Mutex::new(None),
             cancel: AtomicBool::new(false),
             worker: Mutex::new(None),
         });
 
         assert!(!management_idle_shutdown_allowed(
             &runtime,
-            &ControllerLifecycleDecision::ShutdownNow
+            &ControllerLifecycleDecision::ShutdownNow,
+            now,
         ));
         finish_management_maintenance(&runtime, ManagementMaintenancePhase::Complete, None);
-        assert!(management_idle_shutdown_allowed(
+        assert!(!management_idle_shutdown_allowed(
             &runtime,
-            &ControllerLifecycleDecision::ShutdownNow
+            &ControllerLifecycleDecision::ShutdownNow,
+            now,
         ));
         assert!(!management_idle_shutdown_allowed(
             &runtime,
-            &ControllerLifecycleDecision::KeepAlive
+            &ControllerLifecycleDecision::ShutdownNow,
+            now + CONTROLLER_IDLE_GRACE - chrono::Duration::milliseconds(1),
+        ));
+        assert!(management_idle_shutdown_allowed(
+            &runtime,
+            &ControllerLifecycleDecision::ShutdownNow,
+            now + CONTROLLER_IDLE_GRACE,
+        ));
+        assert!(!management_idle_shutdown_allowed(
+            &runtime,
+            &ControllerLifecycleDecision::KeepAlive,
+            now + CONTROLLER_IDLE_GRACE,
+        ));
+    }
+
+    #[test]
+    fn completed_management_startup_gets_a_fresh_idle_grace() {
+        let started_at = Utc::now();
+        let completed_at = started_at + chrono::Duration::minutes(3);
+        let runtime = Arc::new(ManagementRuntimeControl {
+            state: Mutex::new(ManagementRuntimeState::Initializing),
+            maintenance: Mutex::new(ManagementMaintenanceStateV1::idle(started_at)),
+            idle_since: Mutex::new(None),
+            cancel: AtomicBool::new(false),
+            worker: Mutex::new(None),
+        });
+
+        assert!(!management_idle_shutdown_allowed(
+            &runtime,
+            &ControllerLifecycleDecision::ShutdownNow,
+            started_at,
+        ));
+        *runtime.state.lock().unwrap() = ManagementRuntimeState::failed("fixture complete");
+        assert!(!management_idle_shutdown_allowed(
+            &runtime,
+            &ControllerLifecycleDecision::ShutdownNow,
+            completed_at,
+        ));
+        assert!(!management_idle_shutdown_allowed(
+            &runtime,
+            &ControllerLifecycleDecision::ShutdownNow,
+            completed_at + CONTROLLER_IDLE_GRACE - chrono::Duration::milliseconds(1),
+        ));
+        assert!(management_idle_shutdown_allowed(
+            &runtime,
+            &ControllerLifecycleDecision::ShutdownNow,
+            completed_at + CONTROLLER_IDLE_GRACE,
         ));
     }
 
