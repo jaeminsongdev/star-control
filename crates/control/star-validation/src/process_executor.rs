@@ -71,7 +71,10 @@ const EXECUTION_ENVIRONMENT_ALLOWLIST: &[&str] = &[
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 const OUTPUT_DRAIN_GRACE: Duration = Duration::from_secs(5);
 const TERMINATED_OUTPUT_DRAIN_GRACE: Duration = Duration::from_millis(250);
-const PROCESS_TREE_SETTLE_GRACE: Duration = Duration::from_millis(250);
+// Cargo and similar orchestrators can report their own successful exit while a
+// compiler child is still completing normal teardown. Wait for that bounded
+// clean exit before classifying the otherwise successful run as outcome-unknown.
+const PROCESS_TREE_SETTLE_GRACE: Duration = Duration::from_secs(5);
 const PROCESS_TREE_TERMINATION_GRACE: Duration = Duration::from_secs(2);
 type ExecutionEnvironment = BTreeMap<String, OsString>;
 type BoundedExecutionEnvironment = (ExecutionEnvironment, Sha256Hash);
@@ -940,6 +943,7 @@ mod tests {
 
     #[cfg(windows)]
     fn run_windows_descendant_fixture(
+        child_sleep_ms: u64,
         parent_tail: &str,
         timeout_ms: u64,
     ) -> (CheckExecutionObservation, PathBuf, u32) {
@@ -959,7 +963,7 @@ mod tests {
         let escaped_pid_file = pid_file.to_string_lossy().replace('\'', "''");
         let script = format!(
             "$childPath=(Get-Process -Id $PID).Path; \
-             $child=Start-Process -FilePath $childPath -ArgumentList @('-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 30') -PassThru; \
+             $child=Start-Process -FilePath $childPath -ArgumentList @('-NoProfile','-NonInteractive','-Command','Start-Sleep -Milliseconds {child_sleep_ms}') -PassThru -WindowStyle Hidden; \
              [IO.File]::WriteAllText('{escaped_pid_file}',[string]$child.Id); \
              {parent_tail}"
         );
@@ -997,15 +1001,26 @@ mod tests {
     #[test]
     fn timeout_terminates_the_registered_windows_descendant_tree() {
         let (observation, pid_file, child_pid) =
-            run_windows_descendant_fixture("Start-Sleep -Seconds 30", 4_000);
+            run_windows_descendant_fixture(30_000, "Start-Sleep -Seconds 30", 4_000);
         assert_eq!(observation.termination_reason, TerminationReason::Timeout);
         assert_windows_descendant_stopped(&pid_file, child_pid);
     }
 
     #[cfg(windows)]
     #[test]
+    fn successful_parent_waits_for_a_bounded_descendant_settle() {
+        let (observation, pid_file, child_pid) =
+            run_windows_descendant_fixture(750, "exit 0", 10_000);
+        assert_eq!(observation.termination_reason, TerminationReason::Exited);
+        assert_eq!(observation.completeness, Completeness::Complete);
+        assert_windows_descendant_stopped(&pid_file, child_pid);
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn successful_parent_exit_also_terminates_the_registered_windows_descendant_tree() {
-        let (observation, pid_file, child_pid) = run_windows_descendant_fixture("exit 0", 10_000);
+        let (observation, pid_file, child_pid) =
+            run_windows_descendant_fixture(30_000, "exit 0", 10_000);
         assert_eq!(
             observation.termination_reason,
             TerminationReason::OutcomeUnknown

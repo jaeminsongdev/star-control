@@ -23,7 +23,7 @@ use star_application::{
     ManagedRegistryResolverError, ManagedRegistryResolverPort, ManagedRegistryRewritePort,
     ManagedRegistryRewriteRequest, ManagedRegistryRewriteResult, ManagementApplicationService,
     ManagementRecoveryApplicationService, MaterializedRewrite, PublishedManagedRegistryResolution,
-    RecoveryExecutionConfig, RecoveryExecutionConfigResolver,
+    RecoveryExecutionConfig, RecoveryExecutionConfigResolver, ScanProjectResult,
 };
 use star_contracts::evidence::{
     ActorRef, ActorType, ArtifactKind, AuthoritativeGateState, CatalogRef, Completeness,
@@ -2021,6 +2021,10 @@ fn run_scan_command(
     let result = service
         .scan_project_with_mode(&project_id, idempotency_key, mode)
         .map_err(map_management_controller_error)?;
+    serialize_bounded_code_health_controller_result(scan_result_projection(result))
+}
+
+fn scan_result_projection(result: ScanProjectResult) -> serde_json::Value {
     let code_index_snapshot = result.code_index_snapshot.map(|snapshot| {
         let limitation_count = snapshot.limitations.len();
         let mut limitation_codes = snapshot
@@ -2047,11 +2051,11 @@ fn run_scan_command(
             "content_fingerprint": snapshot.content_fingerprint,
         })
     });
-    serialize_bounded_code_health_controller_result(serde_json::json!({
+    serde_json::json!({
         "scan_run": result.scan_run,
         "code_index_snapshot": code_index_snapshot,
         "finding_count": result.finding_count,
-    }))
+    })
 }
 
 fn run_index_status_command(
@@ -14013,7 +14017,8 @@ fn handle_management_command(
                     })
                     .ok_or(ApplicationError::Invalid)
                     .and_then(|key| service.scan_project(&project_id, key))
-                    .and_then(serialize_management_result)
+                    .map(scan_result_projection)
+                    .and_then(serialize_bounded_code_health_management_result)
             })
         }
         "scan.run"
@@ -14044,7 +14049,8 @@ fn handle_management_command(
                 };
                 service
                     .scan_project_with_mode(&project_id, key, mode)
-                    .and_then(serialize_management_result)
+                    .map(scan_result_projection)
+                    .and_then(serialize_bounded_code_health_management_result)
             })
         }
         "index.status" if payload_has_exact_keys(&request.payload, &["project_id"]) => {
@@ -27429,9 +27435,9 @@ mod tests {
 
         let management_root = root.join("management");
         let binding_root = root.join("bindings");
-        for command in ["finding.list", "diagnostic.list"] {
+        let invoke_management = |command: &str, payload: serde_json::Value| {
             let service = service.lock().unwrap();
-            let response = handle_management_command(
+            handle_management_command(
                 ManagementCommandContext {
                     service: Some(&service),
                     recovery: None,
@@ -27447,8 +27453,32 @@ mod tests {
                     config_layers: vec![],
                     registry_revision: 1,
                 },
-                direct_core_request(command, serde_json::json!({"project_id":project_id})),
-            );
+                direct_core_request(command, payload),
+            )
+        };
+        let scan_response = invoke_management(
+            "scan.run",
+            serde_json::json!({
+                "project_id":project_id,
+                "idempotency_key":"cli-bounded-scan",
+                "mode":"incremental"
+            }),
+        );
+        assert_eq!(
+            scan_response.status,
+            IpcStatus::Ok,
+            "scan.run: {:?}",
+            scan_response.error
+        );
+        let scan_data = scan_response.data.unwrap();
+        assert!(scan_data["scan_run"].is_object());
+        assert!(scan_data["code_index_snapshot"].is_object());
+        assert!(
+            serde_json::to_vec(&scan_data).unwrap().len() <= MAX_CODE_HEALTH_ACTION_RESULT_BYTES,
+            "scan.run management dispatcher must use the bounded projection"
+        );
+        for command in ["finding.list", "diagnostic.list"] {
+            let response = invoke_management(command, serde_json::json!({"project_id":project_id}));
             assert_eq!(
                 response.status,
                 IpcStatus::Ok,

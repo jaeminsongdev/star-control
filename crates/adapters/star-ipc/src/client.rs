@@ -26,6 +26,7 @@ const RESPONSE_IO_GRACE: Duration = Duration::from_secs(5);
 const DEMAND_SCAN_RESPONSE_BUDGET: Duration = Duration::from_secs(10);
 const DISCOVERY_PROBE_RESPONSE_BUDGET: Duration = Duration::from_secs(40);
 const TOOL_INVOKE_SYNC_RESPONSE_BUDGET: Duration = Duration::from_secs(35);
+const PROJECT_REGISTER_RESPONSE_BUDGET: Duration = Duration::from_secs(10 * 60);
 const MANAGEMENT_RECOVERY_PLAN_RESPONSE_BUDGET: Duration = Duration::from_secs(10 * 60);
 const MANAGEMENT_RECOVERY_APPLY_RESPONSE_BUDGET: Duration = Duration::from_secs(60 * 60);
 const VALIDATION_RUN_DEFAULT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
@@ -368,6 +369,13 @@ fn response_read_timeout(command: &str, payload: &serde_json::Value) -> Duration
         // probe (30 s maximum) after a stabilizing demand scan (5 s maximum).
         return DISCOVERY_PROBE_RESPONSE_BUDGET;
     }
+    if command == "project.register" {
+        // Registration is synchronous and idempotency-bound, but hashing and
+        // binding a large Git checkout can exceed the generic demand-scan
+        // window. Preserve the pipe through the same bounded maximum used by
+        // long local scan/apply commands.
+        return PROJECT_REGISTER_RESPONSE_BUDGET;
+    }
     if matches!(
         command,
         "scan.run" | "patch.apply" | "management.rebuild.apply"
@@ -709,6 +717,10 @@ mod tests {
         assert_eq!(
             response_read_timeout("management.status", &serde_json::json!({})),
             Duration::from_secs(10)
+        );
+        assert_eq!(
+            response_read_timeout("project.register", &serde_json::json!({})),
+            Duration::from_secs(10 * 60)
         );
         assert_eq!(
             response_read_timeout("management.backup.plan", &serde_json::json!({})),
