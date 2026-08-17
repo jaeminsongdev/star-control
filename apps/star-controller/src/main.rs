@@ -4504,6 +4504,8 @@ const MANAGEMENT_INITIALIZING_MESSAGE: &str =
     "The management store is completing startup recovery and opening; retry this request.";
 const MANAGEMENT_UNAVAILABLE_MESSAGE: &str =
     "The management application service is unavailable after startup.";
+const MANAGEMENT_STARTUP_REQUEST_GRACE: std::time::Duration = std::time::Duration::from_secs(1);
+const MANAGEMENT_STARTUP_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
 
 #[derive(Clone)]
 enum ManagementRuntimeState {
@@ -5122,6 +5124,29 @@ fn management_runtime_snapshot(runtime: &SharedManagementRuntime) -> ManagementR
         })
 }
 
+async fn management_runtime_snapshot_after_startup_wait(
+    runtime: &SharedManagementRuntime,
+    wait: std::time::Duration,
+) -> ManagementRuntimeState {
+    let deadline = tokio::time::Instant::now() + wait;
+    loop {
+        let state = management_runtime_snapshot(runtime);
+        if !matches!(&state, ManagementRuntimeState::Initializing) {
+            return state;
+        }
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
+            return state;
+        }
+        tokio::time::sleep(
+            deadline
+                .saturating_duration_since(now)
+                .min(MANAGEMENT_STARTUP_POLL_INTERVAL),
+        )
+        .await;
+    }
+}
+
 fn management_action_access(
     runtime: &SharedManagementRuntime,
 ) -> (
@@ -5573,7 +5598,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 available_management_runtime,
                 available_management_recovery,
                 management_inspection,
-            ) = match management_runtime_snapshot(&management_runtime) {
+            ) = match management_runtime_snapshot_after_startup_wait(
+                &management_runtime,
+                MANAGEMENT_STARTUP_REQUEST_GRACE,
+            )
+            .await
+            {
                 ManagementRuntimeState::Initializing => {
                     let response = request_error_response(
                         request,
@@ -25678,6 +25708,58 @@ mod tests {
         let (_, failure) = management_action_access(&runtime);
         assert_eq!(failure.0, "MANAGEMENT_STORE_UNAVAILABLE");
         assert!(!runtime_failure_retryable(failure.0));
+        shutdown_management_runtime(&runtime, std::time::Duration::from_secs(1));
+    }
+
+    #[tokio::test]
+    async fn management_request_wait_observes_terminal_startup_state() {
+        let (started_sender, started_receiver) = std::sync::mpsc::channel();
+        let (release_sender, release_receiver) = std::sync::mpsc::channel();
+        let runtime = spawn_management_runtime(move || {
+            started_sender.send(()).unwrap();
+            release_receiver.recv().unwrap();
+            ManagementRuntimeState::failed("fixture terminal state")
+        });
+        started_receiver
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
+        let release = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            release_sender.send(()).unwrap();
+        });
+
+        let snapshot = management_runtime_snapshot_after_startup_wait(
+            &runtime,
+            std::time::Duration::from_secs(1),
+        )
+        .await;
+
+        release.await.unwrap();
+        assert!(matches!(snapshot, ManagementRuntimeState::Failed { .. }));
+        shutdown_management_runtime(&runtime, std::time::Duration::from_secs(1));
+    }
+
+    #[tokio::test]
+    async fn management_request_wait_is_bounded_when_startup_stalls() {
+        let (started_sender, started_receiver) = std::sync::mpsc::channel();
+        let (release_sender, release_receiver) = std::sync::mpsc::channel();
+        let runtime = spawn_management_runtime(move || {
+            started_sender.send(()).unwrap();
+            release_receiver.recv().unwrap();
+            ManagementRuntimeState::failed("fixture terminal state")
+        });
+        started_receiver
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
+
+        let snapshot = management_runtime_snapshot_after_startup_wait(
+            &runtime,
+            std::time::Duration::from_millis(25),
+        )
+        .await;
+
+        assert!(matches!(snapshot, ManagementRuntimeState::Initializing));
+        release_sender.send(()).unwrap();
         shutdown_management_runtime(&runtime, std::time::Duration::from_secs(1));
     }
 
