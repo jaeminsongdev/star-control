@@ -22,6 +22,7 @@
 | P-0085 | sanitizer/generator/doctest/Loom 및 bounded near-clone | timeout/cancel/raw artifact와 advisory-only near-clone을 구현했다. project toolchain/fixture가 없으면 의존성을 추가하지 않고 unavailable을 반환한다. | 실제 프로젝트 선언이 있는 provider만 current fingerprint에서 실행한다. |
 | P-0086 | source·Runtime·Registry·Profile·Code Health·Evaluation 최종 봉인과 delivery | 설치 Runtime `6cabb77dbb4e8538aa4879a286f2d907fcfaefe0`에서 Doctor 4/4, Registry revision 16, Profile 16/16 resolve, MCP full scan `scn_01KYWG76HQK1JFGG87A9QHN6WJ`과 직접 CLI incremental scan `scn_01KYWGM59Z3GMZXRQ4C83CAVXW`이 terminal succeeded다. index는 current이고 code-health/git-history Radar는 limitation을 보존해 `partial`이다. tracked `evals/`와 live `evaluation_run_v2`는 0이라 Evaluation shadow는 `not_run`이다. risk-lane 보강 source는 FULL 13/13이 통과했다. | current evidence/STRICT → commit/installer/update → live descriptor/Hook readback → force-free push 순서로 닫는다. |
 | P-0087 | Codex 무프롬프트·full-access 고정 정책 | project/global config를 `approval_policy="never"`, `sandbox_mode="danger-full-access"`로 통일하고 inert reviewer·prompt Rules를 제거한다. deny-only Rules, typed Hook, AGENTS·Skill·architecture 문서와 validator를 같은 계약으로 맞춘다. | 새 Codex 작업에서 effective policy를 readback하고 source Skill 변경은 공식 updater receipt로 설치본에 반영한다. |
+| P-0088 | 대형 management store cold-start와 Profile closure 차단 제거 | 설치 Runtime에서 12.53GB project store가 `MANAGEMENT_STORE_BUSY`를 15분 이상 유지하고 Profile이 차단되는 상태를 재현했다. clean startup의 중복 deep verification, generation별 retention 반복 scan, DB 비의존 Profile command의 management gate 결합을 source에서 분리한다. | 회귀 테스트 → TARGET/FULL → STRICT → local commit → 공식 Runtime update inspect/apply → live management/Profile/fixed MCP readback 순서로 닫는다. |
 
 ## 열린 위험
 
@@ -31,3 +32,4 @@
 - Code Health Radar 1,874건과 Git history Radar 147건은 모두 `partial`이다. tracked evaluation corpus와 human ground truth가 없어 EvaluationRun을 임의 생성하지 않는다.
 - 실제 DB retention 삭제·compaction은 보호 대상과 예상 reclaim이 0인 현재 plan에서 실행하지 않는다. 정책을 약화해 효과를 만들지 않는다.
 - Windows incremental cache finalize의 access-denied note는 테스트 종료 코드를 실패시키지 않았지만 재사용 불가 환경 신호로 남긴다. `target/`을 정리해 숨기지 않는다.
+- P-0088 source가 검증되기 전에는 live management DB·`writer.lock`·Runtime selector를 직접 수정하지 않으며 현재 Profile closure는 `unverified`로 유지한다.

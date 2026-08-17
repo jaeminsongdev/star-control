@@ -261,7 +261,7 @@ use star_release::{
 use star_state::{
     FileCodeIndexCache, RecoveryInspection, SqliteManagementRecovery,
     SqliteManagementRepositorySet, WindowsProjectRootBindingStore, apply_project_v1_to_v2,
-    inspect_management_root, plan_project_v1_to_v2, rollback_project_v1_to_v2,
+    inspect_management_root_for_startup, plan_project_v1_to_v2, rollback_project_v1_to_v2,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -4576,7 +4576,7 @@ fn open_management_recovery_state(
 }
 
 fn initialize_management_runtime(init: ManagementRuntimeInit) -> ManagementRuntimeState {
-    let inspection = inspect_management_root(&init.management_root);
+    let inspection = inspect_management_root_for_startup(&init.management_root);
     if inspection.is_some_and(|value| value != RecoveryInspection::Healthy) {
         return open_management_recovery_state(&init.management_root, inspection, None);
     }
@@ -5562,6 +5562,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
         };
+        if is_profile_catalog_command(&request.command) {
+            let result = run_profile_catalog_command(&profile_catalog_root, &request);
+            let response = management_command_response(request, result, registry.revision);
+            let _ = write_json(&mut server, &serde_json::to_value(response)?).await;
+            continue;
+        }
         if is_management_command(&request.command) {
             let (
                 available_management_runtime,
@@ -10678,6 +10684,55 @@ async fn handle_direct_core_command(
             correlation_id: request.client_request_id,
         },
         Err((code, message)) => invalid_request_response(request, code, message, registry_revision),
+    }
+}
+
+fn is_profile_catalog_command(command: &str) -> bool {
+    matches!(command, "profile.list" | "profile.show" | "profile.resolve")
+}
+
+fn run_profile_catalog_command(
+    profile_catalog_root: &Path,
+    request: &IpcRequest,
+) -> Result<serde_json::Value, ApplicationError> {
+    let catalog = star_application::load_development_profile_catalog(profile_catalog_root)?;
+    match request.command.as_str() {
+        "profile.list" if payload_has_exact_keys(&request.payload, &[]) => {
+            serialize_management_result(catalog)
+        }
+        "profile.show" if payload_has_exact_keys(&request.payload, &["profile_id"]) => {
+            let profile_id = request
+                .payload
+                .get("profile_id")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty() && value.chars().count() <= 96)
+                .ok_or(ApplicationError::Invalid)?;
+            let profile = star_application::show_development_profile(&catalog, profile_id)?;
+            serialize_management_result(profile)
+        }
+        "profile.resolve" if payload_has_exact_keys(&request.payload, &["profile_ids"]) => {
+            let profile_ids = request
+                .payload
+                .get("profile_ids")
+                .and_then(serde_json::Value::as_array)
+                .filter(|values| !values.is_empty() && values.len() <= 16)
+                .and_then(|values| {
+                    values
+                        .iter()
+                        .map(|value| {
+                            value
+                                .as_str()
+                                .filter(|value| !value.is_empty() && value.chars().count() <= 96)
+                                .map(str::to_owned)
+                        })
+                        .collect::<Option<Vec<_>>>()
+                })
+                .ok_or(ApplicationError::Invalid)?;
+            let resolution =
+                star_application::resolve_loaded_development_profiles(&catalog, &profile_ids)?;
+            serialize_management_result(resolution)
+        }
+        _ => Err(ApplicationError::Invalid),
     }
 }
 
@@ -25597,7 +25652,7 @@ mod tests {
         assert_eq!(failure.0, "MANAGEMENT_STORE_BUSY");
         assert!(runtime_failure_retryable(failure.0));
         let response = request_error_response(
-            direct_core_request("profile.list", serde_json::json!({})),
+            direct_core_request("project.list", serde_json::json!({})),
             failure.0,
             failure.1,
             true,
@@ -29995,8 +30050,48 @@ mod tests {
     fn profile_catalog_commands_are_controller_owned_read_paths() {
         for command in ["profile.list", "profile.show", "profile.resolve"] {
             assert!(is_management_command(command), "{command}");
+            assert!(is_profile_catalog_command(command), "{command}");
             assert!(update_restart_pending_command_allowed(command), "{command}");
         }
+
+        let profile_catalog_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .unwrap()
+            .join("catalog/profiles");
+        let catalog = run_profile_catalog_command(
+            &profile_catalog_root,
+            &direct_core_request("profile.list", serde_json::json!({})),
+        )
+        .unwrap();
+        assert_eq!(catalog["entries"].as_array().unwrap().len(), 16);
+
+        let profile = run_profile_catalog_command(
+            &profile_catalog_root,
+            &direct_core_request(
+                "profile.show",
+                serde_json::json!({"profile_id":"debug_recovery"}),
+            ),
+        )
+        .unwrap();
+        assert_eq!(profile["profile_ref"]["profile_id"], "debug_recovery");
+
+        let resolution = run_profile_catalog_command(
+            &profile_catalog_root,
+            &direct_core_request(
+                "profile.resolve",
+                serde_json::json!({"profile_ids":["debug_recovery"]}),
+            ),
+        )
+        .unwrap();
+        assert_eq!(resolution["selected_profiles"].as_array().unwrap().len(), 1);
+        assert!(
+            run_profile_catalog_command(
+                &profile_catalog_root,
+                &direct_core_request("profile.resolve", serde_json::json!({"profile_ids":[]})),
+            )
+            .is_err()
+        );
     }
 
     #[test]

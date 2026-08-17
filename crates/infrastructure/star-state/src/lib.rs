@@ -554,13 +554,16 @@ pub fn inspect_management_root(root: &Path) -> Option<RecoveryInspection> {
     };
     for entry in &parsed.manifest.entries {
         let store = active_store_file(root, entry);
-        let inspection = inspect_store_read_only(&store);
-        if inspection != RecoveryInspection::Healthy {
-            return Some(inspection);
-        }
         let status = match read_store_status_read_only(&store) {
             Ok(status) => status,
-            Err(_) => return Some(RecoveryInspection::Corrupt),
+            Err(_) => {
+                let inspection = inspect_store_read_only(&store);
+                return Some(if inspection == RecoveryInspection::Healthy {
+                    RecoveryInspection::Corrupt
+                } else {
+                    inspection
+                });
+            }
         };
         if status.store_scope != entry.scope
             || status.store_id != entry.store_id
@@ -574,6 +577,37 @@ pub fn inspect_management_root(root: &Path) -> Option<RecoveryInspection> {
         return Some(RecoveryInspection::ActiveSetMismatch);
     }
     Some(RecoveryInspection::Healthy)
+}
+
+/// Inspects the active management set without walking healthy stores during normal startup.
+///
+/// Clean stores are admitted from bounded header/status snapshots. An unclean store or any
+/// snapshot/materialization failure falls back to the explicit deep recovery inspection so crash
+/// recovery remains fail closed.
+pub fn inspect_management_root_for_startup(root: &Path) -> Option<RecoveryInspection> {
+    let manifest_path = root.join(ACTIVE_SET_FILENAME);
+    if !manifest_path.is_file() {
+        let legacy = root.join("global").join("active").join(STORE_FILENAME);
+        if !legacy.exists() {
+            return None;
+        }
+        return Some(match read_store_status_snapshot(&legacy) {
+            Ok(status) if status.last_clean_shutdown => RecoveryInspection::Healthy,
+            _ => inspect_store_read_only(&legacy),
+        });
+    }
+    let input = match fs::read_to_string(&manifest_path) {
+        Ok(input) => input,
+        Err(_) => return Some(RecoveryInspection::ActiveSetMismatch),
+    };
+    let parsed = match parse_active_set(&input) {
+        Ok(parsed) => parsed,
+        Err(_) => return Some(RecoveryInspection::ActiveSetMismatch),
+    };
+    match validate_active_set_snapshot_materialization(root, &parsed.manifest) {
+        Ok(true) => Some(RecoveryInspection::Healthy),
+        Ok(false) | Err(_) => inspect_management_root(root),
+    }
 }
 
 fn parse_active_set(input: &str) -> Result<ParsedActiveSet, RepositoryError> {
@@ -702,7 +736,6 @@ fn read_store_status_read_only(path: &Path) -> Result<ManagementStoreStatus, Rep
     connection
         .execute_batch("PRAGMA query_only=ON;")
         .map_err(map_sql)?;
-    verify_connection(&connection)?;
     status_from_connection(&connection)
 }
 
@@ -712,6 +745,12 @@ fn read_store_status_read_only(path: &Path) -> Result<ManagementStoreStatus, Rep
 /// `PRAGMA quick_check` or the event-chain walk. It opens the active store read-only and
 /// leaves both store metadata and the active-set document untouched.
 fn read_store_status_snapshot(path: &Path) -> Result<ManagementStoreStatus, RepositoryError> {
+    if !path.is_file() {
+        return Err(repository_error(
+            RepositoryErrorCategory::NotFound,
+            "management store is missing",
+        ));
+    }
     let connection = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -720,6 +759,24 @@ fn read_store_status_snapshot(path: &Path) -> Result<ManagementStoreStatus, Repo
     connection
         .execute_batch("PRAGMA query_only=ON;")
         .map_err(map_sql)?;
+    let application_id: i32 = connection
+        .pragma_query_value(None, "application_id", |row| row.get(0))
+        .map_err(map_sql)?;
+    if application_id != APPLICATION_ID {
+        return Err(repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "management store application ID is invalid",
+        ));
+    }
+    let version: u32 = connection
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(map_sql)?;
+    if version != MANAGEMENT_STORE_VERSION {
+        return Err(repository_error(
+            RepositoryErrorCategory::IncompatibleVersion,
+            "management store version is not supported by this reader",
+        ));
+    }
     status_from_connection(&connection)
 }
 
@@ -801,6 +858,49 @@ fn validate_active_set_materialization(
         }
     }
     validate_active_set_relationships(root, manifest)
+}
+
+fn validate_active_set_snapshot_materialization(
+    root: &Path,
+    manifest: &ActiveSetManifest,
+) -> Result<bool, RepositoryError> {
+    validate_active_set(manifest).map_err(|_| {
+        repository_error(
+            RepositoryErrorCategory::IntegrityFailed,
+            "active set manifest is invalid",
+        )
+    })?;
+    let mut all_clean = true;
+    for entry in &manifest.entries {
+        let status =
+            read_store_status_snapshot(&active_store_file(root, entry)).map_err(|error| {
+                if matches!(
+                    error.category,
+                    RepositoryErrorCategory::IncompatibleVersion
+                        | RepositoryErrorCategory::NotFound
+                ) {
+                    error
+                } else {
+                    repository_error(
+                        RepositoryErrorCategory::IntegrityFailed,
+                        "management store failed bounded header inspection",
+                    )
+                }
+            })?;
+        if status.store_scope != entry.scope
+            || status.store_id != entry.store_id
+            || status.generation != entry.generation
+            || status.management_store_version != entry.management_store_version
+        {
+            return Err(repository_error(
+                RepositoryErrorCategory::IntegrityFailed,
+                "active set store header does not match the manifest",
+            ));
+        }
+        all_clean &= status.last_clean_shutdown;
+    }
+    validate_active_set_relationships(root, manifest)?;
+    Ok(all_clean)
 }
 
 pub fn restore_verified_backup_side_by_side(
@@ -1414,7 +1514,7 @@ impl SqliteManagementRepositorySet {
         let product_version = product_version.into();
         let parsed_active_set = read_active_set(&root)?;
         if let Some(parsed) = &parsed_active_set {
-            validate_active_set_materialization(&root, &parsed.manifest)?;
+            validate_active_set_snapshot_materialization(&root, &parsed.manifest)?;
         }
         let global_locator = parsed_active_set
             .as_ref()
@@ -5766,6 +5866,7 @@ fn analyze_project_retention_v2(
         );
         runs.push((generation_id, finished_at, run));
     }
+    let mut generation_inventory = None;
 
     let mut candidates = Vec::new();
     let mut protected_targets = Vec::new();
@@ -5790,10 +5891,15 @@ fn analyze_project_retention_v2(
         if *finished_at >= incomplete_cutoff {
             continue;
         }
-        let (estimated_rows, estimated_bytes) =
-            retention_generation_stats(connection, generation_id)?;
-        let max_document_bytes =
-            retention_generation_max_document_bytes(connection, generation_id)?;
+        let aggregate = retention_generation_aggregate_for_plan(
+            connection,
+            is_cancelled,
+            &mut generation_inventory,
+            generation_id,
+        )?;
+        let estimated_rows = aggregate.rows;
+        let estimated_bytes = aggregate.bytes;
+        let max_document_bytes = aggregate.max_document_bytes;
         let reason_code = "INCOMPLETE_STAGING_EXPIRED";
         let candidate = RetentionCandidateV2 {
             candidate_id: retention_candidate_id(
@@ -5853,10 +5959,15 @@ fn analyze_project_retention_v2(
         if *finished_at >= scan_detail_cutoff {
             continue;
         }
-        let (estimated_rows, estimated_bytes) =
-            retention_generation_stats(connection, generation_id)?;
-        let max_document_bytes =
-            retention_generation_max_document_bytes(connection, generation_id)?;
+        let aggregate = retention_generation_aggregate_for_plan(
+            connection,
+            is_cancelled,
+            &mut generation_inventory,
+            generation_id,
+        )?;
+        let estimated_rows = aggregate.rows;
+        let estimated_bytes = aggregate.bytes;
+        let max_document_bytes = aggregate.max_document_bytes;
         let reason_code = "SUCCESSFUL_SCAN_DETAIL_EXPIRED";
         let candidate = RetentionCandidateV2 {
             candidate_id: retention_candidate_id(
@@ -10615,7 +10726,24 @@ fn status_from_connection(
     })
 }
 
+#[cfg(test)]
+thread_local! {
+    static VERIFY_CONNECTION_CALLS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn reset_verify_connection_calls() {
+    VERIFY_CONNECTION_CALLS.with(|calls| calls.set(0));
+}
+
+#[cfg(test)]
+fn verify_connection_calls() -> u64 {
+    VERIFY_CONNECTION_CALLS.with(std::cell::Cell::get)
+}
+
 fn verify_connection(connection: &Connection) -> Result<(), RepositoryError> {
+    #[cfg(test)]
+    VERIFY_CONNECTION_CALLS.with(|calls| calls.set(calls.get().saturating_add(1)));
     let result: String = connection
         .query_row("PRAGMA quick_check", [], |row| row.get(0))
         .map_err(map_sql)?;
@@ -11367,6 +11495,105 @@ const RETENTION_GENERATION_TABLES: [&str; 10] = [
     "scan_runs",
 ];
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct RetentionGenerationAggregate {
+    rows: u64,
+    bytes: u64,
+    max_document_bytes: u64,
+}
+
+fn retention_generation_inventory(
+    connection: &Connection,
+    is_cancelled: &(dyn Fn() -> bool + Sync),
+) -> Result<BTreeMap<String, RetentionGenerationAggregate>, RepositoryError> {
+    let mut inventory = BTreeMap::<String, RetentionGenerationAggregate>::new();
+    for table in RETENTION_GENERATION_TABLES {
+        if is_cancelled() {
+            return Err(repository_error(
+                RepositoryErrorCategory::Unavailable,
+                "retention planning was cancelled",
+            ));
+        }
+        let sql = format!(
+            "SELECT generation_id, COUNT(*), COALESCE(SUM(length(document_json)), 0), \
+                    COALESCE(MAX(length(document_json)), 0) \
+             FROM {table} GROUP BY generation_id"
+        );
+        let mut statement = connection.prepare(&sql).map_err(map_sql)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })
+            .map_err(map_sql)?;
+        for row in rows {
+            if is_cancelled() {
+                return Err(repository_error(
+                    RepositoryErrorCategory::Unavailable,
+                    "retention planning was cancelled",
+                ));
+            }
+            let (generation_id, table_rows, table_bytes, table_max_document_bytes) =
+                row.map_err(map_sql)?;
+            let table_rows = u64::try_from(table_rows).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "retention row estimate is invalid",
+                )
+            })?;
+            let table_bytes = u64::try_from(table_bytes).map_err(|_| {
+                repository_error(
+                    RepositoryErrorCategory::Corrupt,
+                    "retention byte estimate is invalid",
+                )
+            })?;
+            let table_max_document_bytes =
+                u64::try_from(table_max_document_bytes).map_err(|_| {
+                    repository_error(
+                        RepositoryErrorCategory::Corrupt,
+                        "retention maximum document size is invalid",
+                    )
+                })?;
+            let aggregate = inventory.entry(generation_id).or_default();
+            aggregate.rows = aggregate.rows.checked_add(table_rows).ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "retention row estimate overflowed",
+                )
+            })?;
+            aggregate.bytes = aggregate.bytes.checked_add(table_bytes).ok_or_else(|| {
+                repository_error(
+                    RepositoryErrorCategory::QuotaExceeded,
+                    "retention byte estimate overflowed",
+                )
+            })?;
+            aggregate.max_document_bytes =
+                aggregate.max_document_bytes.max(table_max_document_bytes);
+        }
+    }
+    Ok(inventory)
+}
+
+fn retention_generation_aggregate_for_plan(
+    connection: &Connection,
+    is_cancelled: &(dyn Fn() -> bool + Sync),
+    inventory: &mut Option<BTreeMap<String, RetentionGenerationAggregate>>,
+    generation_id: &str,
+) -> Result<RetentionGenerationAggregate, RepositoryError> {
+    if inventory.is_none() {
+        *inventory = Some(retention_generation_inventory(connection, is_cancelled)?);
+    }
+    Ok(inventory
+        .as_ref()
+        .and_then(|inventory| inventory.get(generation_id))
+        .copied()
+        .unwrap_or_default())
+}
+
 fn retention_document_stats(
     connection: &Connection,
     table: &str,
@@ -11437,18 +11664,6 @@ fn retention_generation_stats(
                     )
                 })?,
             ))
-        })
-}
-
-fn retention_generation_max_document_bytes(
-    connection: &Connection,
-    generation_id: &str,
-) -> Result<u64, RepositoryError> {
-    RETENTION_GENERATION_TABLES
-        .iter()
-        .try_fold(0_u64, |maximum, table| {
-            retention_document_max_bytes(connection, table, "generation_id=?1", &[&generation_id])
-                .map(|bytes| maximum.max(bytes))
         })
 }
 
@@ -14404,6 +14619,59 @@ mod tests {
         );
     }
 
+    #[test]
+    fn retention_generation_inventory_aggregates_each_table_scan_by_generation() {
+        let connection = Connection::open_in_memory().unwrap();
+        for table in RETENTION_GENERATION_TABLES {
+            connection
+                .execute(
+                    &format!(
+                        "CREATE TABLE {table}(generation_id TEXT NOT NULL, document_json TEXT NOT NULL)"
+                    ),
+                    [],
+                )
+                .unwrap();
+        }
+        connection
+            .execute(
+                "INSERT INTO canonical_sources(generation_id, document_json) VALUES(?1, ?2)",
+                params!["gen-a", "abc"],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO symbols(generation_id, document_json) VALUES(?1, ?2), (?1, ?3)",
+                params!["gen-a", "12345", "xy"],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO scan_runs(generation_id, document_json) VALUES(?1, ?2)",
+                params!["gen-b", "z"],
+            )
+            .unwrap();
+
+        let inventory = retention_generation_inventory(&connection, &|| false).unwrap();
+
+        assert_eq!(
+            inventory.get("gen-a"),
+            Some(&RetentionGenerationAggregate {
+                rows: 3,
+                bytes: 10,
+                max_document_bytes: 5,
+            })
+        );
+        assert_eq!(
+            inventory.get("gen-b"),
+            Some(&RetentionGenerationAggregate {
+                rows: 1,
+                bytes: 1,
+                max_document_bytes: 1,
+            })
+        );
+        assert!(!inventory.contains_key("gen-missing"));
+    }
+
     fn project(project_id: ProjectId, checkout_id: CheckoutId) -> Project {
         Project {
             schema_id: "star.project".to_owned(),
@@ -14581,6 +14849,69 @@ mod tests {
             project_before.last_verified_at
         );
         assert_eq!(fs::read(&active_set_path).unwrap(), active_set_before);
+    }
+
+    #[test]
+    fn clean_startup_uses_bounded_snapshots_while_unclean_startup_verifies_deeply() {
+        let fixture = recovery_fixture("bounded-startup");
+
+        reset_verify_connection_calls();
+        assert_eq!(
+            inspect_management_root_for_startup(&fixture.management_root),
+            Some(RecoveryInspection::Healthy)
+        );
+        assert_eq!(verify_connection_calls(), 0);
+
+        reset_verify_connection_calls();
+        let repositories =
+            SqliteManagementRepositorySet::open(&fixture.management_root, "startup-test").unwrap();
+        assert_eq!(verify_connection_calls(), 0);
+        drop(repositories);
+
+        let connection = Connection::open(&fixture.old_global_path).unwrap();
+        set_meta(&connection, "last_clean_shutdown", "false").unwrap();
+        drop(connection);
+
+        reset_verify_connection_calls();
+        assert_eq!(
+            inspect_management_root_for_startup(&fixture.management_root),
+            Some(RecoveryInspection::Healthy)
+        );
+        assert!(verify_connection_calls() > 0);
+
+        reset_verify_connection_calls();
+        let repositories =
+            SqliteManagementRepositorySet::open(&fixture.management_root, "startup-test").unwrap();
+        assert!(verify_connection_calls() > 0);
+        drop(repositories);
+
+        let connection = Connection::open(&fixture.old_global_path).unwrap();
+        connection
+            .execute(
+                "UPDATE events SET event_hash=?1 WHERE sequence=(SELECT MIN(sequence) FROM events)",
+                [Sha256Hash::digest(b"tampered-event").as_str()],
+            )
+            .unwrap();
+        set_meta(&connection, "last_clean_shutdown", "false").unwrap();
+        drop(connection);
+
+        reset_verify_connection_calls();
+        assert_eq!(
+            inspect_management_root_for_startup(&fixture.management_root),
+            Some(RecoveryInspection::Corrupt)
+        );
+        assert!(verify_connection_calls() > 0);
+        let open_error = match SqliteManagementRepositorySet::open(
+            &fixture.management_root,
+            "tampered-startup-test",
+        ) {
+            Err(error) => error,
+            Ok(_) => panic!("unclean tampered event chain must not enter normal mode"),
+        };
+        assert_eq!(
+            open_error.category,
+            RepositoryErrorCategory::IntegrityFailed
+        );
     }
 
     #[test]

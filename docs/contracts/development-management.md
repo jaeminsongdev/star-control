@@ -172,6 +172,8 @@ star MCP ───────┘                                 │
 
 `management.status`의 normal-mode 응답은 global `status`, project 목록과 각 active project store의 `StoreStatus` metadata만 읽는 bounded snapshot이다. 이 read는 `last_verified_at` 또는 `active-set.json`을 갱신하지 않으며 `PRAGMA quick_check`, event-chain walk, relation 검증을 실행하지 않는다. 따라서 `last_verified_at`은 마지막 명시적 deep verification의 기록이지 status 호출이 새로 검증했다는 증거가 아니다. `ManagementApplicationService::verify_stores`와 recovery candidate 검증은 별도의 explicit deep verification 경로로 그대로 유지한다.
 
+normal Controller startup도 active-set과 각 store의 application ID·version·`StoreStatus` header를 bounded snapshot으로 확인한다. 모든 store가 `last_clean_shutdown=true`일 때는 `PRAGMA quick_check`와 event-chain walk를 반복하지 않는다. 하나라도 unclean이거나 snapshot/materialization 검증이 실패하면 기존 deep recovery inspection으로 되돌아가므로 crash 뒤 integrity 검증은 fail-closed로 유지한다.
+
 일반 document mutating command는 `idempotency_key`와 stale-write precondition을 가진다. 일반 document 갱신은 `expected_revision`, cross-store command는 `expected_version_vector`, patch는 exact base·before hash와 승인 fingerprint를 precondition으로 사용한다. lifecycle apply는 destination·source/store vector·revision을 포함한 exact plan fingerprint가 idempotency key 역할을 하며 private `recovery-receipts`의 typed result로 crash 뒤 같은 요청을 재생한다. 같은 canonical 요청은 기존 결과를 반환하고 다른 payload·stale state는 충돌로 거부한다. 순수 plan query와 terminal result query에는 별도 idempotency key가 필요 없다.
 
 ## 공통 식별과 fingerprint
@@ -1102,7 +1104,7 @@ retention은 source, 공유 declaration과 `.ai-runs` byte를 DB row 삭제와 �
 
 정확한 기본값과 merge 전략은 [설정과 Catalog 계약](config-and-catalog.md)이 소유한다. cleanup은 startup 또는 수동 command에서만 실행한다. 기본값은 complete scan 2세대, incomplete staging 7일, scan detail 90일, resolved finding·local decision 180일, latest known-good와 pre-migration backup 최소 2개다.
 
-retention 적용 전 deterministic candidate list, 예상 byte·row 수, protected reason과 plan fingerprint를 만든다. apply는 같은 store revision과 plan fingerprint에서만 실행하고 `retention.applied` event를 기록한다.
+retention 적용 전 deterministic candidate list, 예상 byte·row 수, protected reason과 plan fingerprint를 만든다. generation 통계는 generation마다 같은 대형 table을 다시 읽지 않고, 대상 table별 단일 grouped scan으로 모든 generation의 row·byte·최대 document 크기를 집계한다. 이 inventory는 planning에만 사용하며 apply의 exact candidate 재검증은 유지한다. apply는 같은 store revision과 plan fingerprint에서만 실행하고 `retention.applied` event를 기록한다.
 
 ## 구현 소유권
 
