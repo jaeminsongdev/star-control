@@ -4505,6 +4505,7 @@ const MANAGEMENT_INITIALIZING_MESSAGE: &str =
 const MANAGEMENT_UNAVAILABLE_MESSAGE: &str =
     "The management application service is unavailable after startup.";
 const MANAGEMENT_STARTUP_REQUEST_GRACE: std::time::Duration = std::time::Duration::from_secs(1);
+const MANAGEMENT_ACTION_REQUEST_GRACE: std::time::Duration = std::time::Duration::from_secs(60);
 const MANAGEMENT_STARTUP_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
 
 #[derive(Clone)]
@@ -5192,6 +5193,55 @@ fn management_action_access(runtime: &SharedManagementRuntime) -> ManagementActi
                 ),
             }
         }
+    }
+}
+
+async fn management_action_access_after_busy_wait(
+    runtime: &SharedManagementRuntime,
+    wait: std::time::Duration,
+) -> ManagementActionAccess {
+    let deadline = tokio::time::Instant::now() + wait;
+    loop {
+        let access = management_action_access(runtime);
+        if access.service.is_some()
+            || !matches!(
+                access.unavailable.0,
+                "MANAGEMENT_STORE_BUSY" | "MANAGEMENT_MAINTENANCE_BUSY"
+            )
+        {
+            return access;
+        }
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
+            return access;
+        }
+        tokio::time::sleep(
+            deadline
+                .saturating_duration_since(now)
+                .min(MANAGEMENT_STARTUP_POLL_INTERVAL),
+        )
+        .await;
+    }
+}
+
+fn controller_command_requires_management_service(action: &ActionDescriptor) -> bool {
+    action.backend_kind == BackendKind::ControllerCommand
+        && controller_command_registration(&action.backend_ref).is_some_and(|registration| {
+            matches!(
+                registration.handler,
+                ControllerCommandHandler::Management(_)
+            )
+        })
+}
+
+async fn management_action_access_for_action(
+    runtime: &SharedManagementRuntime,
+    action: &ActionDescriptor,
+) -> ManagementActionAccess {
+    if controller_command_requires_management_service(action) {
+        management_action_access_after_busy_wait(runtime, MANAGEMENT_ACTION_REQUEST_GRACE).await
+    } else {
+        management_action_access(runtime)
     }
 }
 
@@ -6606,6 +6656,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                     live_execution_config.clone();
                                                 let operation_local_appdata = local_appdata.clone();
                                                 tokio::spawn(async move {
+                                                    let ManagementActionAccess {
+                                                        service: management_service,
+                                                        status_repositories:
+                                                            management_status_repositories,
+                                                        unavailable: management_unavailable,
+                                                    } = management_action_access_for_action(
+                                                        &management_runtime,
+                                                        &action,
+                                                    )
+                                                    .await;
                                                     let gate_lease = match operation_gate
                                                         .acquire(
                                                             operation_gate_request,
@@ -6665,14 +6725,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                     let process_end = durable_process_end_observer(
                                                         Arc::clone(&operation_store),
                                                         operation_id.clone(),
-                                                    );
-                                                    let ManagementActionAccess {
-                                                        service: management_service,
-                                                        status_repositories:
-                                                            management_status_repositories,
-                                                        unavailable: management_unavailable,
-                                                    } = management_action_access(
-                                                        &management_runtime,
                                                     );
                                                     let result = run_authorized_action(
                                                         AuthorizedProcessRequest {
@@ -6807,6 +6859,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 ),
                             }
                         } else {
+                            let ManagementActionAccess {
+                                service: management_service,
+                                status_repositories: management_status_repositories,
+                                unavailable: management_unavailable,
+                            } = management_action_access_for_action(&management_runtime, action)
+                                .await;
                             let gate_lease =
                                 concurrency_gate.acquire(gate_request, queue_timeout).await;
                             if gate_lease.is_err() {
@@ -6817,11 +6875,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     registry.revision,
                                 )
                             } else {
-                                let ManagementActionAccess {
-                                    service: management_service,
-                                    status_repositories: management_status_repositories,
-                                    unavailable: management_unavailable,
-                                } = management_action_access(&management_runtime);
                                 let response = match run_authorized_action(
                                     AuthorizedProcessRequest {
                                         package,
@@ -7317,6 +7370,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                     live_execution_config.clone();
                                                 let operation_local_appdata = local_appdata.clone();
                                                 tokio::spawn(async move {
+                                                    let ManagementActionAccess {
+                                                        service: management_service,
+                                                        status_repositories:
+                                                            management_status_repositories,
+                                                        unavailable: management_unavailable,
+                                                    } = management_action_access_for_action(
+                                                        &management_runtime,
+                                                        &action,
+                                                    )
+                                                    .await;
                                                     let gate_lease = match operation_gate
                                                         .acquire(gate_request, queue_timeout)
                                                         .await
@@ -7355,14 +7418,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                     let process_end = durable_process_end_observer(
                                                         Arc::clone(&operation_store),
                                                         operation_id.clone(),
-                                                    );
-                                                    let ManagementActionAccess {
-                                                        service: management_service,
-                                                        status_repositories:
-                                                            management_status_repositories,
-                                                        unavailable: management_unavailable,
-                                                    } = management_action_access(
-                                                        &management_runtime,
                                                     );
                                                     let result = run_authorized_action(
                                                         AuthorizedProcessRequest {
@@ -25807,6 +25862,99 @@ mod tests {
         shutdown_management_runtime(&runtime, std::time::Duration::from_secs(1));
     }
 
+    fn management_runtime_with_planning_maintenance(
+        name: &str,
+    ) -> (SharedManagementRuntime, PathBuf) {
+        let root = std::env::temp_dir().join(format!(
+            "star-controller-management-wait-{name}-{}",
+            RequestId::new().as_str()
+        ));
+        let repositories = Arc::new(
+            SqliteManagementRepositorySet::open(root.join("management"), "controller-test")
+                .unwrap(),
+        );
+        let repository_port: Arc<dyn ManagementRepositorySet> = repositories;
+        let service = Arc::new(Mutex::new(ManagementApplicationService::new(
+            Arc::clone(&repository_port),
+            Arc::new(WindowsProjectRootBindingStore::open(root.join("bindings")).unwrap()),
+            Arc::new(LocalArtifactStore::default()),
+        )));
+        let now = Utc::now();
+        let mut maintenance = ManagementMaintenanceStateV1::idle(now);
+        maintenance.operation_id = Some(OperationId::new());
+        maintenance.phase = ManagementMaintenancePhase::Planning;
+        maintenance.started_at = Some(now);
+        let runtime = Arc::new(ManagementRuntimeControl {
+            state: Mutex::new(ManagementRuntimeState::Ready(Arc::new(
+                ReadyManagementRuntime {
+                    service,
+                    repositories: repository_port,
+                },
+            ))),
+            maintenance: Mutex::new(maintenance),
+            idle_since: Mutex::new(None),
+            cancel: AtomicBool::new(false),
+            worker: Mutex::new(None),
+        });
+        (runtime, root)
+    }
+
+    #[tokio::test]
+    async fn management_action_wait_observes_terminal_startup_maintenance() {
+        let (runtime, root) = management_runtime_with_planning_maintenance("terminal");
+        let (registry, _trust, _registry_root) = release_core_registry_fixture();
+        let scan_action = registry.active()["star.control.core"]
+            .manifest
+            .actions
+            .iter()
+            .find(|action| action.backend_ref == "scan.run")
+            .unwrap();
+        let finishing_runtime = Arc::clone(&runtime);
+        let finish = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            finish_management_maintenance(
+                &finishing_runtime,
+                ManagementMaintenancePhase::Complete,
+                None,
+            );
+        });
+
+        let access = management_action_access_for_action(&runtime, scan_action).await;
+
+        finish.await.unwrap();
+        assert!(access.service.is_some());
+        assert_eq!(
+            management_maintenance_snapshot(&runtime).phase,
+            ManagementMaintenancePhase::Complete
+        );
+        drop(access);
+        drop(runtime);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn management_action_wait_is_bounded_when_maintenance_stalls() {
+        let (runtime, root) = management_runtime_with_planning_maintenance("bounded");
+
+        let access = tokio::time::timeout(
+            std::time::Duration::from_millis(250),
+            management_action_access_after_busy_wait(
+                &runtime,
+                std::time::Duration::from_millis(25),
+            ),
+        )
+        .await
+        .expect("management action wait must remain bounded");
+
+        assert!(access.service.is_none());
+        assert_eq!(access.unavailable.0, "MANAGEMENT_MAINTENANCE_BUSY");
+        assert!(runtime_failure_retryable(access.unavailable.0));
+        finish_management_maintenance(&runtime, ManagementMaintenancePhase::Complete, None);
+        drop(access);
+        drop(runtime);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     #[tokio::test]
     // matrix: MCP-I018
     async fn management_ready_and_status_are_published_before_ready_lifecycle_planning_finishes() {
@@ -25875,6 +26023,9 @@ mod tests {
             .iter()
             .find(|action| action.backend_ref == "management.status.page")
             .unwrap();
+        let status_access = management_action_access_for_action(&runtime, action).await;
+        assert!(status_access.service.is_none());
+        assert!(status_access.status_repositories.is_some());
         let status_result = run_authorized_controller_command(
             package,
             action,
@@ -25885,9 +26036,9 @@ mod tests {
             })),
             None,
             Ok(ManagementControllerContext {
-                service: access.service.as_ref(),
-                status_repositories: access.status_repositories.as_ref(),
-                unavailable: access.unavailable,
+                service: status_access.service.as_ref(),
+                status_repositories: status_access.status_repositories.as_ref(),
+                unavailable: status_access.unavailable,
                 project_directory: &root,
                 execution_config: &UserExecutionConfig::default(),
                 local_appdata: &root,
