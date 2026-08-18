@@ -44,7 +44,7 @@ pub const PRODUCT_PROFILE_AUDIT_ORDER: [&str; 16] = [
 ];
 pub const PRODUCT_GENERATED_SCHEMA_COUNT: u32 = 230;
 pub const PRODUCT_STABLE_ERROR_COUNT: u32 = 552;
-pub const PRODUCT_MCP_MATRIX_COUNT: u32 = 171;
+pub const PRODUCT_MCP_MATRIX_COUNT: u32 = 172;
 const PRODUCT_PROFILE_CONFORMANCE_REFS: [(&str, &str); 10] = [
     (
         "crates/foundation/star-contracts/src/profile.rs",

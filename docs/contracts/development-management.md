@@ -1106,6 +1106,8 @@ retention은 source, 공유 declaration과 `.ai-runs` byte를 DB row 삭제와 �
 
 retention 적용 전 deterministic candidate list, 예상 byte·row 수, protected reason과 plan fingerprint를 만든다. generation 통계는 generation마다 같은 대형 table을 다시 읽지 않고, 대상 table별 단일 grouped scan으로 모든 generation의 row·byte·최대 document 크기를 집계한다. 이 inventory는 planning에만 사용하며 apply의 exact candidate 재검증은 유지한다. apply는 같은 store revision과 plan fingerprint에서만 실행하고 `retention.applied` event를 기록한다.
 
+management runtime이 `Ready`를 게시한 뒤 startup retention이 실행 중이어도 bounded `management.status.page`는 CLI와 fixed MCP 모두 repository read projection으로 응답해야 한다. 이 조회는 retention이 점유한 application service lock을 기다리지 않는다. 상태 조회 외의 management action은 maintenance terminal 전까지 `MANAGEMENT_MAINTENANCE_BUSY`, repository open·startup recovery가 끝나지 않은 `Initializing` 상태에서는 `MANAGEMENT_STORE_BUSY`를 유지한다.
+
 ## 구현 소유권
 
 | 책임 | 소유 Package |
@@ -1144,5 +1146,6 @@ retention 적용 전 deterministic candidate list, 예상 byte·row 수, protect
 14. global/project store 단독 transaction과 cross-store crash point별 coordination recovery
 15. 호환되지 않는 global/project backup generation 조합 활성화 거부
 16. backend 교체 fake conformance에서 같은 repository contract 결과
+17. Ready 뒤 retention service-lock 점유 중 CLI·fixed MCP bounded status 성공과 다른 management action의 busy 유지
 
 backend 선정 전에는 in-memory fake로 contract conformance를 설계할 수 있지만, 이를 실제 persistence 검증으로 보고하지 않는다.

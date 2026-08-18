@@ -62,7 +62,7 @@ fn main() {
     if !invalid_tests.is_empty() {
         eprintln!("ignored, quarantined, or should-panic matrix tests: {invalid_tests:?}");
     }
-    if !missing.is_empty() || expected.len() != 171 || !invalid_tests.is_empty() {
+    if !missing.is_empty() || expected.len() != 172 || !invalid_tests.is_empty() {
         std::process::exit(1);
     }
 }

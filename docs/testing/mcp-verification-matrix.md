@@ -92,6 +92,7 @@ test binary는 실제 Rust child process이며 제품 code에 `if test` backend�
 | MCP-I015 | controller autostart enable·disable·uninstall | exact HKCU value만 idempotent 관리, 다른 값 보존 |
 | MCP-I016 | IPC key 삭제·corrupt·live mismatch | same-key rewrite 또는 no-owner rotation audit, live key split 없음 |
 | MCP-I017 | Codex logical worktree cwd의 ancestor가 local Junction | verified Gateway가 final physical project root를 IPC actor에 결박하고 첫 MCP 요청 성공; Controller의 fixed-local non-reparse 재검증은 유지 |
+| MCP-I018 | Ready management runtime에서 startup retention이 service lock을 점유 | fixed MCP `management.status.page`는 bounded repository projection으로 응답하고, 다른 management action은 terminal maintenance까지 `MANAGEMENT_MAINTENANCE_BUSY` 유지 |
 
 ## R. Registry와 live reload
 

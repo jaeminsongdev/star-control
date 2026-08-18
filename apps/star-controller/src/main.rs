@@ -853,11 +853,16 @@ type ManagementControllerCommandHandler = fn(
     &std::path::Path,
     &serde_json::Value,
 ) -> Result<serde_json::Value, RuntimeFailure>;
+type ManagementStatusControllerCommandHandler = fn(
+    &dyn ManagementRepositorySet,
+    &serde_json::Value,
+) -> Result<serde_json::Value, RuntimeFailure>;
 
 #[derive(Clone, Copy)]
 enum ControllerCommandHandler {
     Sync(SyncControllerCommandHandler),
     Management(ManagementControllerCommandHandler),
+    ManagementStatus(ManagementStatusControllerCommandHandler),
     ValidationRun,
 }
 
@@ -1147,7 +1152,7 @@ const CONTROLLER_COMMAND_HANDLERS: &[ControllerCommandRegistration] = &[
     },
     ControllerCommandRegistration {
         backend_ref: "management.status.page",
-        handler: ControllerCommandHandler::Management(run_management_status_page_command),
+        handler: ControllerCommandHandler::ManagementStatus(run_management_status_page_command),
     },
     ControllerCommandRegistration {
         backend_ref: "index.search",
@@ -2071,8 +2076,7 @@ fn run_index_status_command(
 }
 
 fn run_management_status_page_command(
-    service: &ManagementApplicationService,
-    _project_directory: &std::path::Path,
+    repositories: &dyn ManagementRepositorySet,
     arguments: &serde_json::Value,
 ) -> Result<serde_json::Value, RuntimeFailure> {
     let query =
@@ -2088,18 +2092,14 @@ fn run_management_status_page_command(
             "The management status page query exceeds its bounded contract.",
         )
     })?;
-    let page = service
-        .store_status_page(&query)
+    let page = repositories
+        .status_page(&query)
         .map_err(|error| match error {
-            ApplicationError::Repository(repository)
-                if repository.category == RepositoryErrorCategory::RevisionConflict =>
-            {
-                (
-                    "MANAGEMENT_STATUS_CURSOR_STALE",
-                    "The management status registry revision changed; restart paging.",
-                )
-            }
-            other => map_management_controller_error(other),
+            repository if repository.category == RepositoryErrorCategory::RevisionConflict => (
+                "MANAGEMENT_STATUS_CURSOR_STALE",
+                "The management status registry revision changed; restart paging.",
+            ),
+            other => map_management_controller_error(ApplicationError::Repository(other)),
         })?;
     page.validate().map_err(|_| {
         (
@@ -5147,40 +5147,51 @@ async fn management_runtime_snapshot_after_startup_wait(
     }
 }
 
-fn management_action_access(
-    runtime: &SharedManagementRuntime,
-) -> (
-    Option<Arc<Mutex<ManagementApplicationService>>>,
-    RuntimeFailure,
-) {
+struct ManagementActionAccess {
+    service: Option<Arc<Mutex<ManagementApplicationService>>>,
+    status_repositories: Option<Arc<dyn ManagementRepositorySet>>,
+    unavailable: RuntimeFailure,
+}
+
+fn management_action_access(runtime: &SharedManagementRuntime) -> ManagementActionAccess {
+    let state = management_runtime_snapshot(runtime);
     if management_maintenance_snapshot(runtime).is_active() {
-        return (
-            None,
-            (
+        return ManagementActionAccess {
+            service: None,
+            status_repositories: match state {
+                ManagementRuntimeState::Ready(ready) => Some(Arc::clone(&ready.repositories)),
+                _ => None,
+            },
+            unavailable: (
                 "MANAGEMENT_MAINTENANCE_BUSY",
                 "Startup retention is running; retry this action after the maintenance status is terminal.",
             ),
-        );
+        };
     }
-    match management_runtime_snapshot(runtime) {
-        ManagementRuntimeState::Ready(ready) => (
-            Some(Arc::clone(&ready.service)),
-            (
+    match state {
+        ManagementRuntimeState::Ready(ready) => ManagementActionAccess {
+            service: Some(Arc::clone(&ready.service)),
+            status_repositories: Some(Arc::clone(&ready.repositories)),
+            unavailable: (
                 "MANAGEMENT_STORE_UNAVAILABLE",
                 MANAGEMENT_UNAVAILABLE_MESSAGE,
             ),
-        ),
-        ManagementRuntimeState::Initializing => (
-            None,
-            ("MANAGEMENT_STORE_BUSY", MANAGEMENT_INITIALIZING_MESSAGE),
-        ),
-        ManagementRuntimeState::Recovery { .. } | ManagementRuntimeState::Failed { .. } => (
-            None,
-            (
-                "MANAGEMENT_STORE_UNAVAILABLE",
-                MANAGEMENT_UNAVAILABLE_MESSAGE,
-            ),
-        ),
+        },
+        ManagementRuntimeState::Initializing => ManagementActionAccess {
+            service: None,
+            status_repositories: None,
+            unavailable: ("MANAGEMENT_STORE_BUSY", MANAGEMENT_INITIALIZING_MESSAGE),
+        },
+        ManagementRuntimeState::Recovery { .. } | ManagementRuntimeState::Failed { .. } => {
+            ManagementActionAccess {
+                service: None,
+                status_repositories: None,
+                unavailable: (
+                    "MANAGEMENT_STORE_UNAVAILABLE",
+                    MANAGEMENT_UNAVAILABLE_MESSAGE,
+                ),
+            }
+        }
     }
 }
 
@@ -6655,10 +6666,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         Arc::clone(&operation_store),
                                                         operation_id.clone(),
                                                     );
-                                                    let (
-                                                        management_service,
-                                                        management_unavailable,
-                                                    ) = management_action_access(
+                                                    let ManagementActionAccess {
+                                                        service: management_service,
+                                                        status_repositories:
+                                                            management_status_repositories,
+                                                        unavailable: management_unavailable,
+                                                    } = management_action_access(
                                                         &management_runtime,
                                                     );
                                                     let result = run_authorized_action(
@@ -6673,6 +6686,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             project_directory: &project_directory,
                                                             management_service: management_service
                                                                 .as_ref(),
+                                                            management_status_repositories:
+                                                                management_status_repositories
+                                                                    .as_ref(),
                                                             management_unavailable,
                                                             execution_config: &execution_config,
                                                             local_appdata: &operation_local_appdata,
@@ -6801,8 +6817,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     registry.revision,
                                 )
                             } else {
-                                let (management_service, management_unavailable) =
-                                    management_action_access(&management_runtime);
+                                let ManagementActionAccess {
+                                    service: management_service,
+                                    status_repositories: management_status_repositories,
+                                    unavailable: management_unavailable,
+                                } = management_action_access(&management_runtime);
                                 let response = match run_authorized_action(
                                     AuthorizedProcessRequest {
                                         package,
@@ -6814,6 +6833,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         runtime_scope: &runtime_scope,
                                         project_directory: &project_directory,
                                         management_service: management_service.as_ref(),
+                                        management_status_repositories:
+                                            management_status_repositories.as_ref(),
                                         management_unavailable,
                                         execution_config: &live_execution_config,
                                         local_appdata: &local_appdata,
@@ -7335,10 +7356,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                         Arc::clone(&operation_store),
                                                         operation_id.clone(),
                                                     );
-                                                    let (
-                                                        management_service,
-                                                        management_unavailable,
-                                                    ) = management_action_access(
+                                                    let ManagementActionAccess {
+                                                        service: management_service,
+                                                        status_repositories:
+                                                            management_status_repositories,
+                                                        unavailable: management_unavailable,
+                                                    } = management_action_access(
                                                         &management_runtime,
                                                     );
                                                     let result = run_authorized_action(
@@ -7353,6 +7376,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                             project_directory: &project_directory,
                                                             management_service: management_service
                                                                 .as_ref(),
+                                                            management_status_repositories:
+                                                                management_status_repositories
+                                                                    .as_ref(),
                                                             management_unavailable,
                                                             execution_config: &execution_config,
                                                             local_appdata:
@@ -9550,6 +9576,7 @@ struct AuthorizedProcessRequest<'a> {
     runtime_scope: &'a RuntimeScopeIds,
     project_directory: &'a std::path::Path,
     management_service: Option<&'a Arc<Mutex<ManagementApplicationService>>>,
+    management_status_repositories: Option<&'a Arc<dyn ManagementRepositorySet>>,
     management_unavailable: RuntimeFailure,
     execution_config: &'a UserExecutionConfig,
     local_appdata: &'a std::path::Path,
@@ -9561,7 +9588,9 @@ struct AuthorizedProcessRequest<'a> {
 }
 
 struct ManagementControllerContext<'a> {
-    service: &'a Arc<Mutex<ManagementApplicationService>>,
+    service: Option<&'a Arc<Mutex<ManagementApplicationService>>>,
+    status_repositories: Option<&'a Arc<dyn ManagementRepositorySet>>,
+    unavailable: RuntimeFailure,
     project_directory: &'a std::path::Path,
     execution_config: &'a UserExecutionConfig,
     local_appdata: &'a std::path::Path,
@@ -9572,12 +9601,16 @@ fn run_management_controller_command(
     arguments: &serde_json::Value,
     context: ManagementControllerContext<'_>,
 ) -> Result<serde_json::Value, RuntimeFailure> {
-    let mut service = context.service.lock().map_err(|_| {
-        (
-            "MANAGEMENT_STORE_UNAVAILABLE",
-            "The management service lock is unavailable.",
-        )
-    })?;
+    let mut service = context
+        .service
+        .ok_or(context.unavailable)?
+        .lock()
+        .map_err(|_| {
+            (
+                "MANAGEMENT_STORE_UNAVAILABLE",
+                "The management service lock is unavailable.",
+            )
+        })?;
     service.set_scan_incremental(context.execution_config.scan_incremental);
     service.set_scan_policy(context.execution_config.scan_policy.clone());
     service.set_index_policy(context.execution_config.index_policy.clone());
@@ -9630,6 +9663,16 @@ async fn run_authorized_controller_command(
         ControllerCommandHandler::Management(handler) => {
             run_management_controller_command(handler, arguments, management_context?)?
         }
+        ControllerCommandHandler::ManagementStatus(handler) => {
+            let management_context = management_context?;
+            handler(
+                management_context
+                    .status_repositories
+                    .ok_or(management_context.unavailable)?
+                    .as_ref(),
+                arguments,
+            )?
+        }
         ControllerCommandHandler::ValidationRun => {
             run_validation_run_command(arguments, cancellation).await?
         }
@@ -9656,21 +9699,20 @@ async fn run_authorized_action(
     request: AuthorizedProcessRequest<'_>,
 ) -> Result<serde_json::Value, RuntimeFailure> {
     if request.action.backend_kind == BackendKind::ControllerCommand {
-        let management_context = request
-            .management_service
-            .map(|service| ManagementControllerContext {
-                service,
-                project_directory: request.project_directory,
-                execution_config: request.execution_config,
-                local_appdata: request.local_appdata,
-            })
-            .ok_or(request.management_unavailable);
+        let management_context = ManagementControllerContext {
+            service: request.management_service,
+            status_repositories: request.management_status_repositories,
+            unavailable: request.management_unavailable,
+            project_directory: request.project_directory,
+            execution_config: request.execution_config,
+            local_appdata: request.local_appdata,
+        };
         return run_authorized_controller_command(
             request.package,
             request.action,
             request.arguments,
             request.cancellation,
-            management_context,
+            Ok(management_context),
         )
         .await;
     }
@@ -9690,6 +9732,7 @@ async fn run_authorized_process(
         runtime_scope,
         project_directory,
         management_service: _,
+        management_status_repositories: _,
         management_unavailable: _,
         execution_config: _,
         local_appdata: _,
@@ -25677,14 +25720,15 @@ mod tests {
             management_runtime_snapshot(&runtime),
             ManagementRuntimeState::Initializing
         ));
-        let (service, failure) = management_action_access(&runtime);
-        assert!(service.is_none());
-        assert_eq!(failure.0, "MANAGEMENT_STORE_BUSY");
-        assert!(runtime_failure_retryable(failure.0));
+        let access = management_action_access(&runtime);
+        assert!(access.service.is_none());
+        assert!(access.status_repositories.is_none());
+        assert_eq!(access.unavailable.0, "MANAGEMENT_STORE_BUSY");
+        assert!(runtime_failure_retryable(access.unavailable.0));
         let response = request_error_response(
             direct_core_request("project.list", serde_json::json!({})),
-            failure.0,
-            failure.1,
+            access.unavailable.0,
+            access.unavailable.1,
             true,
             17,
         );
@@ -25705,9 +25749,9 @@ mod tests {
             );
             std::thread::yield_now();
         }
-        let (_, failure) = management_action_access(&runtime);
-        assert_eq!(failure.0, "MANAGEMENT_STORE_UNAVAILABLE");
-        assert!(!runtime_failure_retryable(failure.0));
+        let access = management_action_access(&runtime);
+        assert_eq!(access.unavailable.0, "MANAGEMENT_STORE_UNAVAILABLE");
+        assert!(!runtime_failure_retryable(access.unavailable.0));
         shutdown_management_runtime(&runtime, std::time::Duration::from_secs(1));
     }
 
@@ -25763,8 +25807,9 @@ mod tests {
         shutdown_management_runtime(&runtime, std::time::Duration::from_secs(1));
     }
 
-    #[test]
-    fn management_ready_and_status_are_published_before_ready_lifecycle_planning_finishes() {
+    #[tokio::test]
+    // matrix: MCP-I018
+    async fn management_ready_and_status_are_published_before_ready_lifecycle_planning_finishes() {
         let root = std::env::temp_dir().join(format!(
             "star-controller-ready-before-retention-{}",
             RequestId::new().as_str()
@@ -25783,7 +25828,17 @@ mod tests {
             service: Arc::clone(&service),
             repositories: repository_port,
         });
-        let service_guard = service.lock().unwrap();
+        let (locked_sender, locked_receiver) = std::sync::mpsc::channel();
+        let (unlock_sender, unlock_receiver) = std::sync::mpsc::channel();
+        let locked_service = Arc::clone(&service);
+        let lock_holder = std::thread::spawn(move || {
+            let _service_guard = locked_service.lock().unwrap();
+            locked_sender.send(()).unwrap();
+            let _ = unlock_receiver.recv();
+        });
+        locked_receiver
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
         let worker_ready = Arc::clone(&ready);
         let runtime = spawn_management_runtime(move || ManagementRuntimeState::Ready(worker_ready));
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
@@ -25808,12 +25863,42 @@ mod tests {
             .unwrap();
         assert_eq!(page.items.len(), 1);
         assert!(management_runtime_has_active_work(&runtime));
-        let (access, failure) = management_action_access(&runtime);
-        assert!(access.is_none());
-        assert_eq!(failure.0, "MANAGEMENT_MAINTENANCE_BUSY");
-        assert!(runtime_failure_retryable(failure.0));
+        let access = management_action_access(&runtime);
+        assert!(access.service.is_none());
+        assert_eq!(access.unavailable.0, "MANAGEMENT_MAINTENANCE_BUSY");
+        assert!(runtime_failure_retryable(access.unavailable.0));
+        let (registry, _trust, _registry_root) = release_core_registry_fixture();
+        let package = &registry.active()["star.control.core"];
+        let action = package
+            .manifest
+            .actions
+            .iter()
+            .find(|action| action.backend_ref == "management.status.page")
+            .unwrap();
+        let status_result = run_authorized_controller_command(
+            package,
+            action,
+            Some(&serde_json::json!({
+                "cursor":null,
+                "max_items":32,
+                "max_bytes":65_536
+            })),
+            None,
+            Ok(ManagementControllerContext {
+                service: access.service.as_ref(),
+                status_repositories: access.status_repositories.as_ref(),
+                unavailable: access.unavailable,
+                project_directory: &root,
+                execution_config: &UserExecutionConfig::default(),
+                local_appdata: &root,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(status_result["returned_count"], 1);
 
-        drop(service_guard);
+        unlock_sender.send(()).unwrap();
+        lock_holder.join().unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
         loop {
             if management_maintenance_snapshot(&runtime).phase
@@ -27300,11 +27385,12 @@ mod tests {
         )
         .unwrap();
 
+        let repository_port: Arc<dyn ManagementRepositorySet> = Arc::new(
+            SqliteManagementRepositorySet::open(root.join("management"), "code-health-action")
+                .unwrap(),
+        );
         let service = ManagementApplicationService::new(
-            Arc::new(
-                SqliteManagementRepositorySet::open(root.join("management"), "code-health-action")
-                    .unwrap(),
-            ),
+            Arc::clone(&repository_port),
             Arc::new(WindowsProjectRootBindingStore::open(root.join("bindings")).unwrap()),
             Arc::new(LocalArtifactStore::default()),
         )
@@ -27348,24 +27434,31 @@ mod tests {
                 .get(&action.tool_id)
                 .unwrap();
             validate_schema_instance(schemas.input.as_ref().unwrap(), &arguments).unwrap();
-            let ControllerCommandHandler::Management(handler) =
-                controller_command_registration(backend_ref)
-                    .unwrap()
-                    .handler
-            else {
-                panic!("{backend_ref} must use the management application service");
+            let result = match controller_command_registration(backend_ref)
+                .unwrap()
+                .handler
+            {
+                ControllerCommandHandler::Management(handler) => run_management_controller_command(
+                    handler,
+                    &arguments,
+                    ManagementControllerContext {
+                        service: Some(&service),
+                        status_repositories: Some(&repository_port),
+                        unavailable: (
+                            "MANAGEMENT_STORE_UNAVAILABLE",
+                            MANAGEMENT_UNAVAILABLE_MESSAGE,
+                        ),
+                        project_directory: &source,
+                        execution_config: &execution_config,
+                        local_appdata: &root,
+                    },
+                )
+                .unwrap(),
+                ControllerCommandHandler::ManagementStatus(handler) => {
+                    handler(repository_port.as_ref(), &arguments).unwrap()
+                }
+                _ => panic!("{backend_ref} must use a management command handler"),
             };
-            let result = run_management_controller_command(
-                handler,
-                &arguments,
-                ManagementControllerContext {
-                    service: &service,
-                    project_directory: &source,
-                    execution_config: &execution_config,
-                    local_appdata: &root,
-                },
-            )
-            .unwrap();
             validate_schema_instance(schemas.output.as_ref().unwrap(), &result).unwrap_or_else(
                 |error| {
                     panic!("{backend_ref} output failed Schema validation: {error:?}\n{result}")
