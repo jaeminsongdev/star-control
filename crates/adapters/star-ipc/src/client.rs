@@ -4,7 +4,10 @@
 //! caller supplies the already verified Controller image and endpoint, then it
 //! performs the per-connection identity and HMAC checks required by IPC v1.
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use star_contracts::{
     ids::RequestId,
@@ -258,10 +261,9 @@ impl ControllerClient {
             .get("idempotency_key")
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned);
-        let project_root = std::env::current_dir()
-            .ok()
-            .and_then(|path| path.to_str().map(str::to_owned))
-            .ok_or(ControllerClientError::Unavailable)?;
+        let current_directory =
+            std::env::current_dir().map_err(|_| ControllerClientError::Unavailable)?;
+        let project_root = canonical_project_root(&current_directory)?;
         let mut actor = serde_json::json!({
             "kind": self.config.client_kind,
             "mcp_tool": mcp_tool,
@@ -317,6 +319,19 @@ fn map_start_error(error: ControllerStartError) -> ControllerClientError {
         | ControllerStartError::InstallManifest
         | ControllerStartError::RuntimeActivation => ControllerClientError::ServerIdentityMismatch,
     }
+}
+
+fn canonical_project_root(path: &Path) -> Result<String, ControllerClientError> {
+    let final_path = path
+        .canonicalize()
+        .map_err(|_| ControllerClientError::Unavailable)?;
+    if !final_path.is_dir() {
+        return Err(ControllerClientError::Unavailable);
+    }
+    final_path
+        .into_os_string()
+        .into_string()
+        .map_err(|_| ControllerClientError::Unavailable)
 }
 
 async fn write_typed<T: serde::Serialize>(
@@ -519,6 +534,48 @@ mod tests {
 
     use crate::{ServerHandshake, key_store::load_or_create, windows_pipe::create_server};
 
+    #[test]
+    // matrix: MCP-I017
+    fn project_root_binding_resolves_a_codex_style_junction_before_ipc() {
+        let fixture_root = std::env::temp_dir()
+            .canonicalize()
+            .expect("test temp has a final path")
+            .join(format!(
+                "star-ipc-project-root-{}-{}",
+                std::process::id(),
+                nonce()
+            ));
+        let physical = fixture_root.join("physical");
+        let physical_project = physical.join("Star-Control");
+        let logical = fixture_root.join("logical-worktrees");
+        std::fs::create_dir_all(&physical_project).expect("physical project fixture");
+        let status = std::process::Command::new("cmd.exe")
+            .args(["/d", "/c", "mklink", "/J"])
+            .arg(&logical)
+            .arg(&physical)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .expect("junction command starts");
+        assert!(status.success(), "junction fixture is created");
+
+        let logical_project = logical.join("Star-Control");
+        let bound = PathBuf::from(
+            canonical_project_root(&logical_project).expect("junction resolves to final project"),
+        );
+        let expected = physical_project
+            .canonicalize()
+            .expect("physical project resolves");
+        assert!(
+            bound.as_os_str().eq_ignore_ascii_case(expected.as_os_str()),
+            "the private IPC actor carries the final physical project root"
+        );
+
+        std::fs::remove_dir(&logical).expect("junction fixture is removed without traversal");
+        std::fs::remove_dir_all(&fixture_root).expect("physical fixture is removed");
+    }
+
     #[tokio::test]
     // matrix: MCP-I001 MCP-I006
     async fn client_verifies_image_hmac_and_response_binding() {
@@ -558,8 +615,19 @@ mod tests {
             let project_root = request.actor["project_root"]
                 .as_str()
                 .expect("authenticated clients bind their current project root");
-            assert!(PathBuf::from(project_root).is_absolute());
-            assert!(PathBuf::from(project_root).is_dir());
+            let bound_project_root = PathBuf::from(project_root);
+            assert!(bound_project_root.is_absolute());
+            assert!(bound_project_root.is_dir());
+            let expected_project_root = std::env::current_dir()
+                .expect("test process has a current directory")
+                .canonicalize()
+                .expect("test current directory resolves to a final path");
+            assert!(
+                bound_project_root
+                    .as_os_str()
+                    .eq_ignore_ascii_case(expected_project_root.as_os_str()),
+                "the authenticated IPC request carries the final physical project root"
+            );
             assert_eq!(
                 request.idempotency_key.as_deref(),
                 Some("client-idempotency")

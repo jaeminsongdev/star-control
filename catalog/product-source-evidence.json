@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:eba9e144c8ba8a20ad233a6d156e949e18f5ebe70245767c2a8e0c260d70e500",
+  "evidence_fingerprint": "sha256:c2927c73e84f28133a611285c3262e08e327bb728e5692101aa9a848fefb5fb6",
   "feature_count": 23,
   "features": [
     {
@@ -902,7 +902,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:5e4a2e029f745b09875524e718d80ebba59c2eab865d4db107df666f72114d37",
+      "feature_fingerprint": "sha256:a245f97ffd63ff46f1dbc5e788817a92e015bb4a029b5d813e72109278a6533e",
       "feature_id": "B01",
       "generated_schemas": [
         {
@@ -939,7 +939,7 @@
       "mcp_required": true,
       "owner_document": {
         "path": "docs/contracts/validation-and-evidence.md",
-        "source_sha256": "sha256:371ccb3c8afd59da2b4c8caa925053468537d6c8a9f6b63fa7ec0727ed712bbc"
+        "source_sha256": "sha256:8c9c5c3a68da83ad661ace85b178cb1c519a20e00f6967e471979194abea5460"
       },
       "product_surface_fingerprints": [
         "sha256:5ab43499b385bfce5d8ca9d7b6e35deef804a5408ba77e4821b2f0597ffe01b4",
@@ -1609,7 +1609,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:31e58026d1de84490b8bb889ff5c0a2f0145163d61df0c4ce6c21bbbb2b7a630",
+      "feature_fingerprint": "sha256:31f535cd7ad5645fd7dae14f677462a31523ec8643565c292da71b51cb3cb4b7",
       "feature_id": "B09",
       "generated_schemas": [
         {
@@ -1637,7 +1637,7 @@
       "mcp_required": false,
       "owner_document": {
         "path": "docs/contracts/ci-release-evaluation-and-product-completion.md",
-        "source_sha256": "sha256:31e5a7f0e7893d464ac9a86f91320963a56edafd2966f971dcc733cc80588bb6"
+        "source_sha256": "sha256:26287c17c27f61e8b2784fb5074b60c594f33ab122d5cfed752b4fdf6b4a70df"
       },
       "product_surface_fingerprints": [
         "sha256:e65b64978f3bf352da263bc559e801f2943203a6e12a02f1e38dccd9080245fe",
@@ -1848,7 +1848,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:c59411ad79d929026bd82dc47bde59aa2dd27bad337cb582b69c819fc5656f28",
+      "feature_fingerprint": "sha256:b051743eac59bec0e649c9c12aa7e0d74f5eadb9e88833f140c361229514af9d",
       "feature_id": "D02",
       "generated_schemas": [
         {
@@ -1894,7 +1894,7 @@
       "mcp_required": false,
       "owner_document": {
         "path": "docs/contracts/ci-release-evaluation-and-product-completion.md",
-        "source_sha256": "sha256:31e5a7f0e7893d464ac9a86f91320963a56edafd2966f971dcc733cc80588bb6"
+        "source_sha256": "sha256:26287c17c27f61e8b2784fb5074b60c594f33ab122d5cfed752b4fdf6b4a70df"
       },
       "product_surface_fingerprints": [
         "sha256:e65b64978f3bf352da263bc559e801f2943203a6e12a02f1e38dccd9080245fe",
@@ -1932,7 +1932,7 @@
       ],
       "codex_refs": [],
       "codex_required": false,
-      "feature_fingerprint": "sha256:cd01a6740b139e3bda32911bc799437b2c2f063b6d2fb34f3aff29fd4ff87bff",
+      "feature_fingerprint": "sha256:2a8760663bcc0ee8d74e67f316e8c5644e1714489c5b5a7df2d8603d9c08b471",
       "feature_id": "D03",
       "generated_schemas": [
         {
@@ -1970,7 +1970,7 @@
         {
           "marker": "pub fn build_final_product_audit_v2",
           "path": "crates/control/star-release/src/audit.rs",
-          "source_sha256": "sha256:e7dadd38c4ff9f4e79ba587c3802af607be09b9716bb29e4f21dbde97f926760"
+          "source_sha256": "sha256:ce7872569e3cdea8b02f6820608bda3f8847942e57070cda9f4a8818e4364713"
         },
         {
           "marker": "pub struct InstallationManager",
@@ -1987,7 +1987,7 @@
       "mcp_required": false,
       "owner_document": {
         "path": "docs/contracts/ci-release-evaluation-and-product-completion.md",
-        "source_sha256": "sha256:31e5a7f0e7893d464ac9a86f91320963a56edafd2966f971dcc733cc80588bb6"
+        "source_sha256": "sha256:26287c17c27f61e8b2784fb5074b60c594f33ab122d5cfed752b4fdf6b4a70df"
       },
       "product_surface_fingerprints": [
         "sha256:e65b64978f3bf352da263bc559e801f2943203a6e12a02f1e38dccd9080245fe",
@@ -2002,12 +2002,12 @@
         "negative": {
           "marker": "v2_source_evidence_rejects_tampering_and_collapsed_test_classes",
           "path": "crates/control/star-release/src/audit.rs",
-          "source_sha256": "sha256:e7dadd38c4ff9f4e79ba587c3802af607be09b9716bb29e4f21dbde97f926760"
+          "source_sha256": "sha256:ce7872569e3cdea8b02f6820608bda3f8847942e57070cda9f4a8818e4364713"
         },
         "positive": {
           "marker": "v2_audit_binds_current_source_inventory_profiles_and_lifecycle",
           "path": "crates/control/star-release/src/audit.rs",
-          "source_sha256": "sha256:e7dadd38c4ff9f4e79ba587c3802af607be09b9716bb29e4f21dbde97f926760"
+          "source_sha256": "sha256:ce7872569e3cdea8b02f6820608bda3f8847942e57070cda9f4a8818e4364713"
         },
         "recovery": {
           "marker": "interrupted_integration_candidate_is_recovered_before_next_transaction",
@@ -2019,9 +2019,9 @@
   ],
   "generated_schema_count": 230,
   "generated_schema_manifest_fingerprint": "sha256:662f27d5678eb6dc868f019dd84e58b141cc4f7268fea0393250ab6fee299b3b",
-  "inventory_fingerprint": "sha256:611cde8d2b68607481879fe9eb11f0734875ae1226711bc859722625316a304e",
-  "mcp_matrix_count": 170,
-  "mcp_matrix_fingerprint": "sha256:bea8af24d5bb755153b8dc34f3f185fc8c068c95c10524b83323424fb0d836f2",
+  "inventory_fingerprint": "sha256:a786769c82014b23a610988531edc3291f71bd42ae2bf3bc61e873b52b791d81",
+  "mcp_matrix_count": 171,
+  "mcp_matrix_fingerprint": "sha256:8a37220ec3665fe0e2a7d7991003ed3a95f50575ce2f0858e78c941e450ca7b8",
   "profile_count": 16,
   "profiles": [
     {
@@ -3514,7 +3514,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:ce9b954a9b6ac4634f0e70c4130ee051ddeaea78c931461a2da8db550b9337b3",
+  "source_fingerprint": "sha256:acbb8ae167116dd95f691644e5a7387e9b14113f78965dc85f2dd66de0cd4927",
   "stable_error_catalog_fingerprint": "sha256:1734349f129497e0274c62eca3d7f7cefd74e3f1f90b97a71799c4e10cdfd343",
   "stable_error_count": 552
 }

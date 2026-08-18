@@ -91,6 +91,7 @@ test binary는 실제 Rust child process이며 제품 code에 `if test` backend�
 | MCP-I014 | Controller 미실행 + Gateway outer Job breakaway 허용·거부 | 허용 시 direct durable Controller, 거부 시 verified local WMI broker로 Job 밖 Controller 기동·PID image 재검증·첫 MCP 요청 성공; 같은 Job fallback·수동 CLI bootstrap 없음 |
 | MCP-I015 | controller autostart enable·disable·uninstall | exact HKCU value만 idempotent 관리, 다른 값 보존 |
 | MCP-I016 | IPC key 삭제·corrupt·live mismatch | same-key rewrite 또는 no-owner rotation audit, live key split 없음 |
+| MCP-I017 | Codex logical worktree cwd의 ancestor가 local Junction | verified Gateway가 final physical project root를 IPC actor에 결박하고 첫 MCP 요청 성공; Controller의 fixed-local non-reparse 재검증은 유지 |
 
 ## R. Registry와 live reload
 

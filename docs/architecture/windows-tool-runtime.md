@@ -45,7 +45,7 @@ Codex
 - `star-mcp.exe`는 Controller를 필요할 때 한 번 시작할 수 있지만 상태·TOML·EXE를 직접 읽지 않는다.
 - Controller 한 instance가 current user의 Registry, trust, cache와 Operation을 쓴다.
 - Controller는 HTTP port, public named pipe와 Windows service를 만들지 않는다.
-- autostart된 Controller의 process cwd는 project identity가 아니다. 각 인증된 CLI·Gateway 요청의 final fixed-local `project_root`가 그 요청의 project `tools.d`, ProjectPathRef와 process cwd anchor를 선택하며 absolute 원문은 public evidence에 남기지 않는다.
+- autostart된 Controller의 process cwd는 project identity가 아니다. 설치·image 검증된 CLI·Gateway는 OS `current_dir`의 Junction·symlink 논리 표현을 final canonical path로 먼저 고정해 private IPC `project_root`로 전달한다. Controller는 받은 final path가 실제 fixed-local non-reparse directory인지 다시 검증하고, 그 요청의 project `tools.d`, ProjectPathRef와 process cwd anchor를 선택한다. absolute 원문은 public evidence에 남기지 않는다.
 
 기본 설치는 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`의 `Star-Control` 값에 quoted absolute `star-controller.exe --background` command를 등록한다. 이는 개발 작업 예약 기능이 아니라 current-user logon 때 local control plane을 시작하는 수명주기다. uninstaller는 값의 owner·설치 path가 맞을 때만 제거하고 `star controller autostart enable|disable|status`가 같은 값을 관리한다. Task Scheduler와 Windows service는 사용하지 않는다.
 

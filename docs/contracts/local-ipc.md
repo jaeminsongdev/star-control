@@ -102,7 +102,7 @@ protocol major가 다르면 연결을 거부한다. minor 차이는 양쪽이 �
 
 임의 method 이름, shell string과 자유 형식 payload를 application command로 허용하지 않는다. unknown field 정책과 version 규칙은 [Version과 Migration](versioning-and-migrations.md)을 따른다.
 
-Controller는 autostart 또는 이전 Gateway의 process cwd를 현재 project로 간주하지 않는다. 인증된 설치 client의 `actor.project_root`를 요청마다 final fixed-local directory로 해석하고 reparse point·상대 경로·존재하지 않는 directory를 거부한다. durable trust·Operation evidence와 MCP 결과에는 absolute path 원문을 넣지 않고 project root hash만 남긴다. pending approval의 Controller-private 재개 record만 승인 뒤 같은 root에서 실행하기 위해 원문을 DACL-protected state에 보존한다.
+Controller는 autostart 또는 이전 Gateway의 process cwd를 현재 project로 간주하지 않는다. 인증된 설치 client는 OS `current_dir`을 final canonical path로 해석한 뒤 `actor.project_root`에 넣으며, 이 단계는 Codex가 logical cwd의 ancestor Junction으로 worktree storage를 redirect해도 final physical directory identity를 전달한다. Controller는 요청마다 그 final path가 fixed-local non-reparse directory인지 다시 확인하고 상대 경로·존재하지 않는 directory·남은 reparse boundary를 거부한다. durable trust·Operation evidence와 MCP 결과에는 absolute path 원문을 넣지 않고 project root hash만 남긴다. pending approval의 Controller-private 재개 record만 승인 뒤 같은 root에서 실행하기 위해 원문을 DACL-protected state에 보존한다.
 
 ## IpcResponse 계약
 

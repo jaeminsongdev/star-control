@@ -4,7 +4,7 @@ expected_profile_count = 16
 expected_runtime_executable_count = 4
 expected_generated_schema_count = 230
 expected_stable_error_count = 552
-expected_mcp_matrix_count = 170
+expected_mcp_matrix_count = 171
 
 [[features]]
 id = "A01"
