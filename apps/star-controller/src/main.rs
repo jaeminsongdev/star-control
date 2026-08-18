@@ -9699,6 +9699,17 @@ fn run_management_controller_command(
     handler(&service, context.project_directory, arguments)
 }
 
+async fn run_blocking_controller_command(
+    command: impl FnOnce() -> Result<serde_json::Value, RuntimeFailure> + Send + 'static,
+) -> Result<serde_json::Value, RuntimeFailure> {
+    tokio::task::spawn_blocking(command).await.map_err(|_| {
+        (
+            "TOOL_RUNTIME_UNAVAILABLE",
+            "The Controller command worker stopped before returning a result.",
+        )
+    })?
+}
+
 async fn run_authorized_controller_command(
     package: &ActivePackage,
     action: &ActionDescriptor,
@@ -9714,19 +9725,44 @@ async fn run_authorized_controller_command(
         .filter(|value| value.is_object())
         .ok_or(("TOOL_ARGUMENT_INVALID", "Tool arguments must be an object."))?;
     let result = match registration.handler {
-        ControllerCommandHandler::Sync(handler) => handler(arguments)?,
+        ControllerCommandHandler::Sync(handler) => {
+            let arguments = arguments.clone();
+            run_blocking_controller_command(move || handler(&arguments)).await?
+        }
         ControllerCommandHandler::Management(handler) => {
-            run_management_controller_command(handler, arguments, management_context?)?
+            let context = management_context?;
+            let arguments = arguments.clone();
+            let service = context.service.cloned();
+            let status_repositories = context.status_repositories.cloned();
+            let unavailable = context.unavailable;
+            let project_directory = context.project_directory.to_path_buf();
+            let execution_config = context.execution_config.clone();
+            let local_appdata = context.local_appdata.to_path_buf();
+            run_blocking_controller_command(move || {
+                run_management_controller_command(
+                    handler,
+                    &arguments,
+                    ManagementControllerContext {
+                        service: service.as_ref(),
+                        status_repositories: status_repositories.as_ref(),
+                        unavailable,
+                        project_directory: &project_directory,
+                        execution_config: &execution_config,
+                        local_appdata: &local_appdata,
+                    },
+                )
+            })
+            .await?
         }
         ControllerCommandHandler::ManagementStatus(handler) => {
-            let management_context = management_context?;
-            handler(
-                management_context
-                    .status_repositories
-                    .ok_or(management_context.unavailable)?
-                    .as_ref(),
-                arguments,
-            )?
+            let context = management_context?;
+            let arguments = arguments.clone();
+            let status_repositories = context.status_repositories.cloned();
+            let unavailable = context.unavailable;
+            run_blocking_controller_command(move || {
+                handler(status_repositories.ok_or(unavailable)?.as_ref(), &arguments)
+            })
+            .await?
         }
         ControllerCommandHandler::ValidationRun => {
             run_validation_run_command(arguments, cancellation).await?
@@ -25757,6 +25793,38 @@ mod tests {
         assert_eq!(oversized_item["projection"]["returned"], 0);
         assert_eq!(oversized_item["projection"]["truncated"], true);
         assert!(oversized_item["items"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn blocking_controller_command_keeps_the_async_runtime_responsive() {
+        let (started_sender, started_receiver) = tokio::sync::oneshot::channel();
+        let (release_sender, release_receiver) = std::sync::mpsc::channel();
+        let started_at = std::time::Instant::now();
+        let command = tokio::spawn(run_blocking_controller_command(move || {
+            let _ = started_sender.send(());
+            let _ = release_receiver.recv_timeout(std::time::Duration::from_secs(2));
+            Ok(serde_json::json!({"status":"complete"}))
+        }));
+
+        tokio::time::timeout(std::time::Duration::from_millis(500), started_receiver)
+            .await
+            .expect("blocking worker must start without occupying the async runtime")
+            .expect("blocking worker must report startup");
+        assert!(started_at.elapsed() < std::time::Duration::from_millis(500));
+        tokio::time::timeout(
+            std::time::Duration::from_millis(500),
+            tokio::time::sleep(std::time::Duration::from_millis(10)),
+        )
+        .await
+        .expect("IPC timers must continue while a Controller command is blocked");
+
+        release_sender.send(()).unwrap();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(1), command)
+            .await
+            .expect("blocking worker must join after release")
+            .expect("blocking worker task must not panic")
+            .expect("blocking Controller command must succeed");
+        assert_eq!(result["status"], "complete");
     }
 
     #[test]
