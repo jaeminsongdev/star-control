@@ -36,6 +36,7 @@ const VALIDATION_RUN_DEFAULT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 const VALIDATION_RUN_MAX_TIMEOUT_MS: u64 = 60 * 60 * 1_000;
 const INSTALLED_CLIENT_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const VERIFIED_START_MAX_ATTEMPTS: usize = 3;
+const SUPERVISION_READ_MAX_ATTEMPTS: usize = 3;
 
 #[derive(Debug, Error)]
 pub enum ControllerClientError {
@@ -106,6 +107,39 @@ impl ControllerClient {
 
     #[cfg(windows)]
     pub async fn call_with_verified_start_and_mcp_tool(
+        &self,
+        bootstrap: &crate::controller_start::VerifiedControllerImage,
+        command: &str,
+        payload: serde_json::Value,
+        correlation_id: RequestId,
+        mcp_tool: Option<&str>,
+    ) -> Result<IpcResponse, ControllerClientError> {
+        for attempt in 1..=SUPERVISION_READ_MAX_ATTEMPTS {
+            let result = self
+                .call_with_verified_start_once_and_mcp_tool(
+                    bootstrap,
+                    command,
+                    payload.clone(),
+                    correlation_id.clone(),
+                    mcp_tool,
+                )
+                .await;
+            if supervision_response_retry_allowed(command, attempt, result.as_ref().err()) {
+                // `operation.get` is a read-only supervision query. A fresh
+                // authenticated connection may safely repeat it after a
+                // transient response transport failure; no application
+                // operation is created or replayed. Invalid frames are never
+                // consumed as data and a persistent fault still fails closed.
+                tokio::time::sleep(Duration::from_millis(25)).await;
+                continue;
+            }
+            return result;
+        }
+        unreachable!("the bounded supervision retry loop always returns")
+    }
+
+    #[cfg(windows)]
+    async fn call_with_verified_start_once_and_mcp_tool(
         &self,
         bootstrap: &crate::controller_start::VerifiedControllerImage,
         command: &str,
@@ -306,6 +340,16 @@ impl ControllerClient {
         }
         Ok(response)
     }
+}
+
+fn supervision_response_retry_allowed(
+    command: &str,
+    attempt: usize,
+    error: Option<&ControllerClientError>,
+) -> bool {
+    command == "operation.get"
+        && attempt < SUPERVISION_READ_MAX_ATTEMPTS
+        && matches!(error, Some(ControllerClientError::MalformedResponse))
 }
 
 fn verify_challenge_server_pid(
@@ -964,6 +1008,37 @@ mod tests {
             INSTALLED_CLIENT_CONNECT_TIMEOUT.as_millis() * VERIFIED_START_MAX_ATTEMPTS as u128,
             15_000
         );
+    }
+
+    #[test]
+    fn response_retry_is_bounded_to_read_only_operation_supervision() {
+        let malformed = ControllerClientError::MalformedResponse;
+        assert_eq!(SUPERVISION_READ_MAX_ATTEMPTS, 3);
+        assert!(supervision_response_retry_allowed(
+            "operation.get",
+            1,
+            Some(&malformed)
+        ));
+        assert!(supervision_response_retry_allowed(
+            "operation.get",
+            2,
+            Some(&malformed)
+        ));
+        assert!(!supervision_response_retry_allowed(
+            "operation.get",
+            3,
+            Some(&malformed)
+        ));
+        assert!(!supervision_response_retry_allowed(
+            "tool.invoke",
+            1,
+            Some(&malformed)
+        ));
+        assert!(!supervision_response_retry_allowed(
+            "operation.get",
+            1,
+            Some(&ControllerClientError::Authentication)
+        ));
     }
 
     #[test]
