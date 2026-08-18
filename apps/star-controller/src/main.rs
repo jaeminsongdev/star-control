@@ -4505,8 +4505,13 @@ const MANAGEMENT_INITIALIZING_MESSAGE: &str =
 const MANAGEMENT_UNAVAILABLE_MESSAGE: &str =
     "The management application service is unavailable after startup.";
 const MANAGEMENT_STARTUP_REQUEST_GRACE: std::time::Duration = std::time::Duration::from_secs(1);
-const MANAGEMENT_ACTION_REQUEST_GRACE: std::time::Duration = std::time::Duration::from_secs(60);
+// Crash recovery may rediscover a large registered checkout before the service is safe to use.
+// Keep fixed-MCP operations pending through that bounded recovery instead of leaking a retryable
+// startup error to the first caller.
+const MANAGEMENT_ACTION_REQUEST_GRACE: std::time::Duration =
+    std::time::Duration::from_secs(10 * 60);
 const MANAGEMENT_STARTUP_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+const MANAGEMENT_ACTION_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
 #[derive(Clone)]
 enum ManagementRuntimeState {
@@ -5154,6 +5159,21 @@ struct ManagementActionAccess {
     unavailable: RuntimeFailure,
 }
 
+#[derive(Clone, Copy)]
+enum ManagementAccessRequirement {
+    Service,
+    StatusRepository,
+}
+
+impl ManagementAccessRequirement {
+    fn is_satisfied(self, access: &ManagementActionAccess) -> bool {
+        match self {
+            Self::Service => access.service.is_some(),
+            Self::StatusRepository => access.status_repositories.is_some(),
+        }
+    }
+}
+
 fn management_action_access(runtime: &SharedManagementRuntime) -> ManagementActionAccess {
     let state = management_runtime_snapshot(runtime);
     if management_maintenance_snapshot(runtime).is_active() {
@@ -5199,11 +5219,12 @@ fn management_action_access(runtime: &SharedManagementRuntime) -> ManagementActi
 async fn management_action_access_after_busy_wait(
     runtime: &SharedManagementRuntime,
     wait: std::time::Duration,
+    requirement: ManagementAccessRequirement,
 ) -> ManagementActionAccess {
     let deadline = tokio::time::Instant::now() + wait;
     loop {
         let access = management_action_access(runtime);
-        if access.service.is_some()
+        if requirement.is_satisfied(&access)
             || !matches!(
                 access.unavailable.0,
                 "MANAGEMENT_STORE_BUSY" | "MANAGEMENT_MAINTENANCE_BUSY"
@@ -5218,28 +5239,38 @@ async fn management_action_access_after_busy_wait(
         tokio::time::sleep(
             deadline
                 .saturating_duration_since(now)
-                .min(MANAGEMENT_STARTUP_POLL_INTERVAL),
+                .min(MANAGEMENT_ACTION_POLL_INTERVAL),
         )
         .await;
     }
 }
 
-fn controller_command_requires_management_service(action: &ActionDescriptor) -> bool {
-    action.backend_kind == BackendKind::ControllerCommand
-        && controller_command_registration(&action.backend_ref).is_some_and(|registration| {
-            matches!(
-                registration.handler,
-                ControllerCommandHandler::Management(_)
-            )
-        })
+fn controller_command_management_requirement(
+    action: &ActionDescriptor,
+) -> Option<ManagementAccessRequirement> {
+    if action.backend_kind != BackendKind::ControllerCommand {
+        return None;
+    }
+    match controller_command_registration(&action.backend_ref)?.handler {
+        ControllerCommandHandler::Management(_) => Some(ManagementAccessRequirement::Service),
+        ControllerCommandHandler::ManagementStatus(_) => {
+            Some(ManagementAccessRequirement::StatusRepository)
+        }
+        ControllerCommandHandler::Sync(_) | ControllerCommandHandler::ValidationRun => None,
+    }
 }
 
 async fn management_action_access_for_action(
     runtime: &SharedManagementRuntime,
     action: &ActionDescriptor,
 ) -> ManagementActionAccess {
-    if controller_command_requires_management_service(action) {
-        management_action_access_after_busy_wait(runtime, MANAGEMENT_ACTION_REQUEST_GRACE).await
+    if let Some(requirement) = controller_command_management_requirement(action) {
+        management_action_access_after_busy_wait(
+            runtime,
+            MANAGEMENT_ACTION_REQUEST_GRACE,
+            requirement,
+        )
+        .await
     } else {
         management_action_access(runtime)
     }
@@ -26009,6 +26040,7 @@ mod tests {
             management_action_access_after_busy_wait(
                 &runtime,
                 std::time::Duration::from_millis(25),
+                ManagementAccessRequirement::Service,
             ),
         )
         .await
@@ -26017,6 +26049,44 @@ mod tests {
         assert!(access.service.is_none());
         assert_eq!(access.unavailable.0, "MANAGEMENT_MAINTENANCE_BUSY");
         assert!(runtime_failure_retryable(access.unavailable.0));
+        finish_management_maintenance(&runtime, ManagementMaintenancePhase::Complete, None);
+        drop(access);
+        drop(runtime);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn management_status_action_waits_for_startup_repository() {
+        let (runtime, root) = management_runtime_with_planning_maintenance("status-startup");
+        let ready = match management_runtime_snapshot(&runtime) {
+            ManagementRuntimeState::Ready(ready) => ready,
+            _ => panic!("fixture management runtime must be ready"),
+        };
+        *runtime.state.lock().unwrap() = ManagementRuntimeState::Initializing;
+        let transitioning_runtime = Arc::clone(&runtime);
+        let transition = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            *transitioning_runtime.state.lock().unwrap() = ManagementRuntimeState::Ready(ready);
+        });
+        let (registry, _trust, _registry_root) = release_core_registry_fixture();
+        let status_action = registry.active()["star.control.core"]
+            .manifest
+            .actions
+            .iter()
+            .find(|action| action.backend_ref == "management.status.page")
+            .unwrap();
+
+        let access = tokio::time::timeout(
+            std::time::Duration::from_millis(250),
+            management_action_access_for_action(&runtime, status_action),
+        )
+        .await
+        .expect("management status startup wait must remain responsive");
+
+        transition.await.unwrap();
+        assert!(access.service.is_none());
+        assert!(access.status_repositories.is_some());
+        assert_eq!(access.unavailable.0, "MANAGEMENT_MAINTENANCE_BUSY");
         finish_management_maintenance(&runtime, ManagementMaintenancePhase::Complete, None);
         drop(access);
         drop(runtime);
