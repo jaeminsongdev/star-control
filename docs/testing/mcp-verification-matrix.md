@@ -88,7 +88,7 @@ test binary는 실제 Rust child process이며 제품 code에 `if test` backend�
 | MCP-I011 | same key·different payload | `STATE_IDEMPOTENCY_CONFLICT` |
 | MCP-I012 | pipe·key file DACL | current user·LocalSystem만 허용 |
 | MCP-I013 | Controller auto-start path 교체 race | install hash와 image identity 불일치 시 시작·연결 거부 |
-| MCP-I014 | Gateway outer Job breakaway 허용·거부 | 허용 시 durable Controller, 거부 시 같은 Job 시작 없이 안내 오류 |
+| MCP-I014 | Controller 미실행 + Gateway outer Job breakaway 허용·거부 | 허용 시 direct durable Controller, 거부 시 verified local WMI broker로 Job 밖 Controller 기동·PID image 재검증·첫 MCP 요청 성공; 같은 Job fallback·수동 CLI bootstrap 없음 |
 | MCP-I015 | controller autostart enable·disable·uninstall | exact HKCU value만 idempotent 관리, 다른 값 보존 |
 | MCP-I016 | IPC key 삭제·corrupt·live mismatch | same-key rewrite 또는 no-owner rotation audit, live key split 없음 |
 

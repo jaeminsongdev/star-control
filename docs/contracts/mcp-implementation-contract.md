@@ -317,7 +317,7 @@ data는 `{operation,progress,next_after_sequence,has_more,wait_timed_out}`다. `
 
 JSON-RPC error는 parse error `-32700`, invalid request `-32600`, unknown fixed method·tool `-32601`, 고정 MCP input Schema 위반 `-32602`, SDK·Gateway invariant `-32603`에만 사용한다. Controller·Registry·EXE 오류는 McpToolResult ErrorEnvelope로 반환한다.
 
-Controller pipe가 readiness 안에 나타나지 않으면 `IPC_CONTROLLER_UNAVAILABLE`, HMAC 실패는 `IPC_AUTH_FAILED`, PID·설치 image 불일치는 `IPC_SERVER_IDENTITY_MISMATCH`, IPC major 불일치는 `IPC_PROTOCOL_MISMATCH`로 정규화한다. 인증을 통과한 뒤 malformed·truncated·oversized response frame은 인증 실패로 섞지 않고 `IPC_FRAME_INVALID`로 반환한다.
+Controller pipe가 readiness 안에 나타나지 않으면 `IPC_CONTROLLER_UNAVAILABLE`, HMAC 실패는 `IPC_AUTH_FAILED`, PID·설치 image 불일치는 `IPC_SERVER_IDENTITY_MISMATCH`, IPC major 불일치는 `IPC_PROTOCOL_MISMATCH`로 정규화한다. restrictive outer Job의 fixed MCP는 검증된 Controller command만 local WMI broker로 기동하고 반환 PID image를 lease와 다시 대조한 뒤 같은 bounded readiness를 사용한다. 수동 CLI bootstrap은 MCP 가용성의 선행 조건이 아니다. 인증을 통과한 뒤 malformed·truncated·oversized response frame은 인증 실패로 섞지 않고 `IPC_FRAME_INVALID`로 반환한다.
 
 ## MCP progress·cancellation·tasks 결정
 

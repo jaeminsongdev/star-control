@@ -53,13 +53,14 @@ Gateway auto-start 순서:
 
 1. pipe connect를 250 ms 시도한다.
 2. 없으면 installer-owned install manifest의 absolute Controller path·SHA-256·version과 호출한 Gateway SHA-256을 fixed local volume의 final file handle에서 확인하고 write·delete share 없는 lease를 잡는다. v1 install manifest에는 독립 detached-signature 형식·key ID·trust anchor가 정의돼 있지 않으므로 runtime이 존재하지 않는 manifest signature를 검증했다고 주장하지 않는다. 배포 package 서명 검증은 installer 경계이고, runtime 정본은 strict manifest 형식과 설치 image의 full hash lease다.
-3. explicit application path로 `CreateProcessW`를 suspended·hidden/no-window 상태로 호출하고 실제 image path를 확인한 뒤 resume한다. Gateway가 outer Job 안이면 Controller에 한해서 `CREATE_BREAKAWAY_FROM_JOB`을 요청한다. image 생성 뒤 lease를 놓는다.
-4. 최대 `ipc.connect_timeout_ms=5000` 동안 authenticated pipe readiness를 기다린다.
-5. 첫 verified start가 기존 Controller의 종료·mutex handoff와 겹쳐 readiness를 얻지 못하면 같은 5초 계약으로 한 번만 다시 시작·연결한다. 각 connect 시도의 v1 상한은 바꾸지 않으며 전체 fallback은 최대 10초다.
-6. 동시에 여러 Gateway가 시작해도 Controller mutex를 얻은 process 하나만 남고 나머지는 정상 종료한다.
-7. 두 번째 readiness도 실패하면 일반 tool 실행으로 우회하지 않고 `IPC_CONTROLLER_UNAVAILABLE`을 반환한다.
+3. outer Job이 없거나 breakaway를 허용하면 explicit application path로 `CreateProcessW`를 suspended·hidden/no-window 상태로 호출하고 실제 image path를 확인한 뒤 resume한다. Gateway가 outer Job 안이면 Controller에 한해서 `CREATE_BREAKAWAY_FROM_JOB`을 요청한다. image 생성 뒤 lease를 놓는다.
+4. outer Job이 breakaway를 거부하면 같은 Job child로 낮추지 않는다. 대신 fixed system PowerShell을 거친 local WMI `Win32_Process.Create` broker에 검증된 Controller absolute path와 고정 `--background --bootstrap-install-root <verified-root>` 인자만 넘긴다. broker가 반환한 PID의 canonical image가 기존 lease와 일치하는지 다시 확인한 뒤에만 readiness를 기다린다.
+5. 최대 `ipc.connect_timeout_ms=5000` 동안 authenticated pipe readiness를 기다린다.
+6. verified start가 기존 Controller의 종료·mutex handoff와 겹쳐 readiness를 얻지 못하면 같은 5초 계약으로 최대 두 번 더 시작·연결한다. 각 connect 시도의 v1 상한은 바꾸지 않으며 전체 readiness fallback은 최대 15초다.
+7. 동시에 여러 Gateway가 시작해도 Controller mutex를 얻은 process 하나만 남고 나머지는 정상 종료한다. broker가 반환한 경합 loser PID가 먼저 종료돼도 generic start failure에 한해서 이미 시작 중인 winner의 bounded readiness를 계속 확인한다. manifest·lease·image identity 실패는 이 경로로 완화하지 않는다.
+8. 세 번째 readiness도 실패하면 일반 tool 실행이나 수동 CLI bootstrap으로 우회하지 않고 `IPC_CONTROLLER_UNAVAILABLE`을 반환한다.
 
-outer Job이 breakaway를 허용하지 않으면 Gateway는 Controller를 같은 kill-on-close Job 안에 조용히 시작하지 않고 `IPC_CONTROLLER_UNAVAILABLE`과 `star controller start --background` 안내를 반환한다. 외부 tool child에는 breakaway를 절대 사용하지 않는다.
+local WMI broker는 Controller cold start 전용이며 2초 안에 broker 종료와 반환 PID를 확인한다. broker 실패·timeout·readiness 실패는 `IPC_CONTROLLER_UNAVAILABLE`, 반환 PID image 불일치는 `IPC_SERVER_IDENTITY_MISMATCH`로 fail-closed한다. 이 경로는 fixed MCP 첫 요청 전에 동작하므로 `star management status`나 `star controller start --background` 선행 실행을 요구하지 않는다. 외부 tool child에는 breakaway나 WMI broker를 절대 사용하지 않는다.
 
 ## Controller single instance와 IPC 인증
 

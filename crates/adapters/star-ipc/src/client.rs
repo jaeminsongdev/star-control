@@ -119,7 +119,17 @@ impl ControllerClient {
             Ok(response) => Ok(response),
             Err(ControllerClientError::Unavailable) => {
                 for _ in 0..VERIFIED_START_MAX_ATTEMPTS {
-                    bootstrap.start_background().map_err(map_start_error)?;
+                    if let Err(error) = bootstrap.start_background_durable() {
+                        match map_start_error(error) {
+                            // Another fixed Gateway can win the Controller
+                            // singleton race while this launch is being
+                            // rebound. Keep the existing bounded readiness
+                            // poll for generic start failures, but never hide
+                            // an image or manifest identity failure.
+                            ControllerClientError::Unavailable => {}
+                            error => return Err(error),
+                        }
+                    }
                     let deadline = tokio::time::Instant::now() + self.config.connect_timeout;
                     loop {
                         match self

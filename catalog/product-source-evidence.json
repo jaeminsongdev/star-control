@@ -1,5 +1,5 @@
 {
-  "evidence_fingerprint": "sha256:8faac347e610afba3481b40cd10339d1d6793070881a66737bc0e97ee0626548",
+  "evidence_fingerprint": "sha256:eba9e144c8ba8a20ad233a6d156e949e18f5ebe70245767c2a8e0c260d70e500",
   "feature_count": 23,
   "features": [
     {
@@ -2021,7 +2021,7 @@
   "generated_schema_manifest_fingerprint": "sha256:662f27d5678eb6dc868f019dd84e58b141cc4f7268fea0393250ab6fee299b3b",
   "inventory_fingerprint": "sha256:611cde8d2b68607481879fe9eb11f0734875ae1226711bc859722625316a304e",
   "mcp_matrix_count": 170,
-  "mcp_matrix_fingerprint": "sha256:338fa0f8c4caf73a4741f13c2956c87f39a896629e6a8b46737fd778eab8f487",
+  "mcp_matrix_fingerprint": "sha256:bea8af24d5bb755153b8dc34f3f185fc8c068c95c10524b83323424fb0d836f2",
   "profile_count": 16,
   "profiles": [
     {
@@ -3514,7 +3514,7 @@
   ],
   "schema_id": "star.product-source-evidence",
   "schema_version": 1,
-  "source_fingerprint": "sha256:9f31cb116403e694c381e4dde277108d8f04d26d808f415f085a324327068c30",
+  "source_fingerprint": "sha256:ce9b954a9b6ac4634f0e70c4130ee051ddeaea78c931461a2da8db550b9337b3",
   "stable_error_catalog_fingerprint": "sha256:1734349f129497e0274c62eca3d7f7cefd74e3f1f90b97a71799c4e10cdfd343",
   "stable_error_count": 552
 }

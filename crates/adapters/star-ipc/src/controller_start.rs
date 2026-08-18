@@ -1,10 +1,20 @@
 //! Verified Controller bootstrap without PATH lookup or same-Job fallback.
+//!
+//! A Gateway inside a restrictive outer Job cannot create a durable direct
+//! child. In that case only, the verified Controller image is handed to the
+//! local WMI process broker and the returned PID is rebound to the leased
+//! image before the caller starts IPC readiness polling.
 
 use std::{
+    ffi::OsString,
     fs::{File, OpenOptions},
     io::{self, Read},
+    os::windows::ffi::OsStringExt,
     os::windows::fs::{MetadataExt, OpenOptionsExt},
+    os::windows::process::CommandExt,
     path::{Path, PathBuf},
+    process::{Command, Stdio},
+    time::{Duration, Instant},
 };
 
 use star_contracts::{
@@ -29,6 +39,7 @@ use windows::{
                 JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
                 JobObjectExtendedLimitInformation, QueryInformationJobObject,
             },
+            SystemInformation::GetSystemDirectoryW,
             Threading::{
                 CREATE_BREAKAWAY_FROM_JOB, CREATE_NO_WINDOW, CREATE_SUSPENDED, CreateProcessW,
                 GetCurrentProcess, PROCESS_INFORMATION, ResumeThread, STARTUPINFOW,
@@ -61,6 +72,17 @@ pub enum OuterJobPolicy {
     BreakawayAllowed,
     Denied,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ControllerStartRoute {
+    Direct(OuterJobPolicy),
+    LocalWmiBroker,
+}
+
+const LOCAL_WMI_BROKER_TIMEOUT: Duration = Duration::from_secs(2);
+const BROKER_PROCESS_IDENTITY_ATTEMPTS: usize = 20;
+const BROKER_PROCESS_IDENTITY_POLL: Duration = Duration::from_millis(50);
+const CONTROLLER_BROKER_COMMAND_ENV: &str = "STAR_CONTROL_CONTROLLER_COMMAND";
 
 pub struct VerifiedControllerImage {
     path: PathBuf,
@@ -219,6 +241,17 @@ impl VerifiedControllerImage {
 
     pub fn start_background(&self) -> Result<u32, ControllerStartError> {
         let policy = current_outer_job_policy()?;
+        self.start_background_direct(policy)
+    }
+
+    pub fn start_background_durable(&self) -> Result<u32, ControllerStartError> {
+        match controller_start_route(current_outer_job_policy()?) {
+            ControllerStartRoute::Direct(policy) => self.start_background_direct(policy),
+            ControllerStartRoute::LocalWmiBroker => self.start_background_via_local_wmi(),
+        }
+    }
+
+    fn start_background_direct(&self, policy: OuterJobPolicy) -> Result<u32, ControllerStartError> {
         let flags = launch_flags(policy)? | CREATE_SUSPENDED.0;
         let application = wide_nul(&self.path.as_os_str().to_string_lossy())?;
         let mut command_line = wide_nul(&format!(
@@ -279,6 +312,103 @@ impl VerifiedControllerImage {
         let _ = &self.lease;
         result
     }
+
+    fn start_background_via_local_wmi(&self) -> Result<u32, ControllerStartError> {
+        let command_line = windows_command_line(&[
+            self.path.as_os_str().to_string_lossy().into_owned(),
+            "--background".to_owned(),
+            "--bootstrap-install-root".to_owned(),
+            self.bootstrap_install_directory
+                .as_os_str()
+                .to_string_lossy()
+                .into_owned(),
+        ]);
+        let powershell = fixed_system_directory()?
+            .join("WindowsPowerShell")
+            .join("v1.0")
+            .join("powershell.exe")
+            .canonicalize()
+            .map_err(|_| ControllerStartError::Start)?;
+        let _powershell_lease =
+            open_regular_local_file(&powershell).map_err(|_| ControllerStartError::Start)?;
+        let broker_script = concat!(
+            "$commandLine=[Environment]::GetEnvironmentVariable('",
+            "STAR_CONTROL_CONTROLLER_COMMAND",
+            "','Process');",
+            "$result=Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=$commandLine};",
+            "if($result.ReturnValue -ne 0){exit [int]$result.ReturnValue};",
+            "[Console]::Write($result.ProcessId)"
+        );
+        let mut child = Command::new(&powershell)
+            .args(["-NoProfile", "-NonInteractive", "-Command", broker_script])
+            .env(CONTROLLER_BROKER_COMMAND_ENV, command_line)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .creation_flags(CREATE_NO_WINDOW.0)
+            .spawn()
+            .map_err(|_| ControllerStartError::Start)?;
+        let deadline = Instant::now() + LOCAL_WMI_BROKER_TIMEOUT;
+        loop {
+            if child
+                .try_wait()
+                .map_err(|_| ControllerStartError::Start)?
+                .is_some()
+            {
+                break;
+            }
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(ControllerStartError::Start);
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let output = child
+            .wait_with_output()
+            .map_err(|_| ControllerStartError::Start)?;
+        if !output.status.success() {
+            return Err(ControllerStartError::Start);
+        }
+        let pid = std::str::from_utf8(&output.stdout)
+            .ok()
+            .and_then(|stdout| stdout.trim().parse::<u32>().ok())
+            .filter(|pid| *pid != 0)
+            .ok_or(ControllerStartError::Start)?;
+        for _ in 0..BROKER_PROCESS_IDENTITY_ATTEMPTS {
+            match crate::process_identity::process_image(pid) {
+                Ok(actual) => match actual.canonicalize() {
+                    Ok(actual)
+                        if actual
+                            .as_os_str()
+                            .eq_ignore_ascii_case(self.path.as_os_str()) =>
+                    {
+                        return Ok(pid);
+                    }
+                    Ok(_) => return Err(ControllerStartError::IdentityMismatch),
+                    Err(_) => std::thread::sleep(BROKER_PROCESS_IDENTITY_POLL),
+                },
+                Err(_) => std::thread::sleep(BROKER_PROCESS_IDENTITY_POLL),
+            }
+        }
+        Err(ControllerStartError::Start)
+    }
+}
+
+fn fixed_system_directory() -> Result<PathBuf, ControllerStartError> {
+    // Windows paths are bounded below the 32,767 UTF-16 code-unit extended
+    // path limit. Resolve the native system directory from Kernel32 instead
+    // of trusting an inherited SystemRoot environment value.
+    let mut buffer = vec![0_u16; 32_768];
+    let length = unsafe { GetSystemDirectoryW(Some(&mut buffer)) } as usize;
+    if length == 0 || length >= buffer.len() {
+        return Err(ControllerStartError::Start);
+    }
+    buffer.truncate(length);
+    let directory = PathBuf::from(OsString::from_wide(&buffer));
+    directory
+        .canonicalize()
+        .map_err(|_| ControllerStartError::Start)
 }
 
 fn load_install_manifest(
@@ -421,6 +551,47 @@ pub fn classify_outer_job(in_job: bool, limit_flags: u32) -> OuterJobPolicy {
     }
 }
 
+fn controller_start_route(policy: OuterJobPolicy) -> ControllerStartRoute {
+    match policy {
+        OuterJobPolicy::NotInJob | OuterJobPolicy::BreakawayAllowed => {
+            ControllerStartRoute::Direct(policy)
+        }
+        OuterJobPolicy::Denied => ControllerStartRoute::LocalWmiBroker,
+    }
+}
+
+fn windows_command_line(arguments: &[String]) -> String {
+    arguments
+        .iter()
+        .map(|argument| quote_windows_argument(argument))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn quote_windows_argument(argument: &str) -> String {
+    if !argument.is_empty() && !argument.contains([' ', '\t', '\n', '\r', '"']) {
+        return argument.to_owned();
+    }
+    let mut quoted = String::from("\"");
+    let mut backslashes = 0;
+    for character in argument.chars() {
+        if character == '\\' {
+            backslashes += 1;
+        } else if character == '"' {
+            quoted.push_str(&"\\".repeat(backslashes * 2 + 1));
+            quoted.push('"');
+            backslashes = 0;
+        } else {
+            quoted.push_str(&"\\".repeat(backslashes));
+            backslashes = 0;
+            quoted.push(character);
+        }
+    }
+    quoted.push_str(&"\\".repeat(backslashes * 2));
+    quoted.push('"');
+    quoted
+}
+
 pub fn launch_flags(policy: OuterJobPolicy) -> Result<u32, ControllerStartError> {
     Ok(match policy {
         OuterJobPolicy::NotInJob => CREATE_NO_WINDOW.0,
@@ -517,6 +688,30 @@ mod tests {
             launch_flags(classify_outer_job(true, 0)),
             Err(ControllerStartError::OuterJobDenied)
         ));
+        assert_eq!(
+            controller_start_route(classify_outer_job(true, 0)),
+            ControllerStartRoute::LocalWmiBroker
+        );
+        assert!(matches!(
+            controller_start_route(classify_outer_job(true, JOB_OBJECT_LIMIT_BREAKAWAY_OK.0)),
+            ControllerStartRoute::Direct(OuterJobPolicy::BreakawayAllowed)
+        ));
+    }
+
+    #[test]
+    fn local_broker_command_line_quotes_only_the_verified_controller_inputs() {
+        let command = windows_command_line(&[
+            r"C:\Program Files\Star-Control\star-controller.exe".to_owned(),
+            "--background".to_owned(),
+            "--bootstrap-install-root".to_owned(),
+            r"D:\개발 도구\Star-Control".to_owned(),
+        ]);
+        assert_eq!(
+            command,
+            r#""C:\Program Files\Star-Control\star-controller.exe" --background --bootstrap-install-root "D:\개발 도구\Star-Control""#
+        );
+        assert!(!command.contains("cmd.exe"));
+        assert!(!command.contains("powershell.exe"));
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 ## 목표와 불변식
 
-- 현재 범위는 P-0078~P-0087이다. source·manifest·Catalog가 정본이고 DB/index/cache는 derived state다.
+- 현재 범위는 P-0078~P-0089이다. source·manifest·Catalog가 정본이고 DB/index/cache는 derived state다.
 - `partial|stale|unverified|flaky|not_run|outcome_unknown`과 operation `accepted|approval_required`를 PASS로 승격하지 않는다.
 - Finding에서 source 변경은 `ChangeRecipeV2 → isolated PatchSetV2 → pre/post Gate → exact approval`을 거친다.
 - Runtime·Rules·retention·compaction은 공식 updater/operation과 exact receipt·fingerprint로만 변경한다. Codex cache/trust DB와 Star-Control DB는 직접 수정하지 않는다.
@@ -23,6 +23,7 @@
 | P-0086 | source·Runtime·Registry·Profile·Code Health·Evaluation 최종 봉인과 delivery | 설치 Runtime `6cabb77dbb4e8538aa4879a286f2d907fcfaefe0`에서 Doctor 4/4, Registry revision 16, Profile 16/16 resolve, MCP full scan `scn_01KYWG76HQK1JFGG87A9QHN6WJ`과 직접 CLI incremental scan `scn_01KYWGM59Z3GMZXRQ4C83CAVXW`이 terminal succeeded다. index는 current이고 code-health/git-history Radar는 limitation을 보존해 `partial`이다. tracked `evals/`와 live `evaluation_run_v2`는 0이라 Evaluation shadow는 `not_run`이다. risk-lane 보강 source는 FULL 13/13이 통과했다. | current evidence/STRICT → commit/installer/update → live descriptor/Hook readback → force-free push 순서로 닫는다. |
 | P-0087 | Codex 무프롬프트·full-access 고정 정책 | project/global config를 `approval_policy="never"`, `sandbox_mode="danger-full-access"`로 통일하고 inert reviewer·prompt Rules를 제거한다. deny-only Rules, typed Hook, AGENTS·Skill·architecture 문서와 validator를 같은 계약으로 맞춘다. | 새 Codex 작업에서 effective policy를 readback하고 source Skill 변경은 공식 updater receipt로 설치본에 반영한다. |
 | P-0088 | 대형 management store cold-start와 Profile closure 차단 제거 | source `84feb35ece8a59bba214b6ddf6ecb4fea3ebafad`에서 clean startup bounded snapshot·unclean deep verification, table별 grouped retention inventory, DB 비의존 Profile read와 management 최초 요청의 1초 bounded async startup wait를 구현했다. FULL 13/13과 STRICT를 통과하고 Runtime `rt_9b6a8dc04a29fe93`를 activation revision 41로 적용했다. controller 3회 연속 부재 뒤 cold-first `management status`는 BUSY 없이 364ms `ok/normal`·2 stores였고 fixed MCP Doctor 4/4와 Profile closure/fingerprint를 확인했다. | 1초를 넘는 실제 startup은 기존 retryable `MANAGEMENT_STORE_BUSY`를 보존한다. live DB·`writer.lock`은 직접 수정하지 않았고 설치본은 `unsigned_local`이므로 공개 release 증거로 승격하지 않는다. |
+| P-0089 | fixed MCP restrictive-Job Controller cold-start 복구 | Controller 부재 상태의 첫 `star_tool_search`에서 `IPC_CONTROLLER_UNAVAILABLE`을 재현했다. fixed MCP는 install/runtime manifest와 image lease를 검증한 뒤 outer Job이 breakaway를 거부할 때만 Windows API로 고정한 system PowerShell의 local WMI broker로 Controller를 기동하고 반환 PID image를 재검증한다. 병렬 Gateway singleton 경합의 generic start failure는 bounded readiness를 계속 확인하되 manifest·lease·image 실패는 완화하지 않는다. 영향 패키지 test·`clippy -D warnings`, FULL 13/13과 STRICT 자체 리뷰가 통과했다. | exact-SHA commit·push·설치를 마친 뒤, 새 Codex 작업의 Controller 미실행 상태에서 첫 `star_tool_search("goal.start")`·`doctor.run` 성공 및 수동 CLI bootstrap 부재를 확인한다. P-0030 구현 작업은 이 acceptance 뒤 사용자가 별도로 시작한다. |
 
 ## 열린 위험
 
