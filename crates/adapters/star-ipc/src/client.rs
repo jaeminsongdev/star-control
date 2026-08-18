@@ -22,7 +22,7 @@ use crate::{
     nonce,
     process_identity::verify_pipe_server_image,
     server_auth_tag, verify_auth_tag,
-    windows_pipe::{open_client, read_json, read_json_with_timeout, write_json},
+    windows_pipe::{open_client, read_json_with_timeout, write_json},
 };
 
 const RESPONSE_IO_GRACE: Duration = Duration::from_secs(5);
@@ -177,7 +177,13 @@ impl ControllerClient {
         let server_pid = verify_pipe_server_image(&pipe, &self.config.expected_server_image)
             .map_err(|_| ControllerClientError::ServerIdentityMismatch)?;
 
-        let challenge: IpcChallenge = read_typed(&mut pipe).await?;
+        // A connected pipe can still be waiting in the Controller accept
+        // backlog.  Timing out or observing EOF before the authenticated
+        // request exists is safe to classify as unavailable: the verified
+        // bootstrap path may reconnect without repeating an application
+        // operation.  Invalid JSON and oversized frames remain fail-closed.
+        let challenge: IpcChallenge =
+            read_handshake_typed(&mut pipe, self.config.connect_timeout).await?;
         if challenge.schema_id != "star.ipc.challenge"
             || challenge.schema_version != 1
             || challenge.protocol_major != IPC_PROTOCOL_MAJOR
@@ -205,9 +211,11 @@ impl ControllerClient {
         };
         hello.auth_tag = client_auth_tag(key.as_bytes(), &challenge, &hello)
             .map_err(|_| ControllerClientError::Authentication)?;
-        write_typed(&mut pipe, &hello).await?;
+        write_handshake_typed(&mut pipe, &hello).await?;
 
-        let welcome_value = read_json(&mut pipe).await.map_err(map_codec_error)?;
+        let welcome_value = read_json_with_timeout(&mut pipe, self.config.connect_timeout)
+            .await
+            .map_err(map_handshake_codec_error)?;
         if welcome_value
             .get("schema_id")
             .and_then(|value| value.as_str())
@@ -343,10 +351,13 @@ async fn write_typed<T: serde::Serialize>(
     write_json(pipe, &value).await.map_err(map_codec_error)
 }
 
+#[cfg(test)]
 async fn read_typed<T: serde::de::DeserializeOwned>(
     pipe: &mut (impl tokio::io::AsyncRead + Unpin),
 ) -> Result<T, ControllerClientError> {
-    let value = read_json(pipe).await.map_err(map_codec_error)?;
+    let value = crate::windows_pipe::read_json(pipe)
+        .await
+        .map_err(map_codec_error)?;
     serde_json::from_value(value).map_err(|_| ControllerClientError::MalformedResponse)
 }
 
@@ -358,6 +369,27 @@ async fn read_typed_with_timeout<T: serde::de::DeserializeOwned>(
         .await
         .map_err(map_codec_error)?;
     serde_json::from_value(value).map_err(|_| ControllerClientError::MalformedResponse)
+}
+
+async fn read_handshake_typed<T: serde::de::DeserializeOwned>(
+    pipe: &mut (impl tokio::io::AsyncRead + Unpin),
+    timeout: Duration,
+) -> Result<T, ControllerClientError> {
+    let value = read_json_with_timeout(pipe, timeout)
+        .await
+        .map_err(map_handshake_codec_error)?;
+    serde_json::from_value(value).map_err(|_| ControllerClientError::MalformedResponse)
+}
+
+async fn write_handshake_typed<T: serde::Serialize>(
+    pipe: &mut (impl tokio::io::AsyncWrite + Unpin),
+    value: &T,
+) -> Result<(), ControllerClientError> {
+    let value =
+        serde_json::to_value(value).map_err(|_| ControllerClientError::MalformedResponse)?;
+    write_json(pipe, &value)
+        .await
+        .map_err(map_handshake_codec_error)
 }
 
 fn response_read_timeout(command: &str, payload: &serde_json::Value) -> Duration {
@@ -429,6 +461,19 @@ fn map_codec_error(error: IpcCodecError) -> ControllerClientError {
     match error {
         IpcCodecError::Authentication => ControllerClientError::Authentication,
         IpcCodecError::InvalidJson | IpcCodecError::FrameTooLarge | IpcCodecError::Truncated => {
+            ControllerClientError::MalformedResponse
+        }
+    }
+}
+
+fn map_handshake_codec_error(error: IpcCodecError) -> ControllerClientError {
+    match error {
+        IpcCodecError::Authentication => ControllerClientError::Authentication,
+        // `Truncated` covers a bounded pipe I/O timeout or EOF.  Both occur
+        // before an IpcRequest is written at these call sites, so reconnecting
+        // cannot duplicate an application operation.
+        IpcCodecError::Truncated => ControllerClientError::Unavailable,
+        IpcCodecError::InvalidJson | IpcCodecError::FrameTooLarge => {
             ControllerClientError::MalformedResponse
         }
     }
@@ -675,6 +720,84 @@ mod tests {
                 serde_json::json!({"echo":{"query":"test","idempotency_key":"client-idempotency"}})
             )
         );
+        server.await.expect("server task finishes");
+    }
+
+    #[tokio::test]
+    async fn delayed_pre_request_challenge_is_retryable_unavailable() {
+        let pipe_name = format!(r"\\.\pipe\star-control-delayed-challenge-test-{}", nonce());
+        let key_path =
+            std::env::temp_dir().join(format!("star-control-delayed-key-{}.v1", nonce()));
+        let server_pipe = create_server(&pipe_name).expect("server pipe");
+        let server = tokio::spawn(async move {
+            let pipe = server_pipe;
+            pipe.connect().await.expect("client connects");
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        });
+        let client = ControllerClient::new(ControllerClientConfig {
+            pipe_name,
+            expected_server_image: std::env::current_exe().expect("test image"),
+            key_path,
+            client_kind: IpcClientKind::InternalTest,
+            client_version: "0.1.0".to_owned(),
+            client_instance_id: "delayed-challenge-client".to_owned(),
+            capabilities: vec![],
+            connect_timeout: Duration::from_millis(50),
+        });
+
+        let error = client
+            .call(
+                "tool.search",
+                serde_json::json!({"query":"test"}),
+                RequestId::new(),
+            )
+            .await
+            .expect_err("a delayed pre-request challenge is unavailable");
+
+        assert!(matches!(error, ControllerClientError::Unavailable));
+        server.await.expect("server task finishes");
+    }
+
+    #[tokio::test]
+    async fn malformed_pre_request_challenge_remains_fail_closed() {
+        let pipe_name = format!(
+            r"\\.\pipe\star-control-malformed-challenge-test-{}",
+            nonce()
+        );
+        let key_path =
+            std::env::temp_dir().join(format!("star-control-malformed-key-{}.v1", nonce()));
+        let server_pipe = create_server(&pipe_name).expect("server pipe");
+        let server = tokio::spawn(async move {
+            let mut pipe = server_pipe;
+            pipe.connect().await.expect("client connects");
+            write_json(
+                &mut pipe,
+                &serde_json::json!({"schema_id":"not-a-challenge"}),
+            )
+            .await
+            .expect("malformed challenge frame writes");
+        });
+        let client = ControllerClient::new(ControllerClientConfig {
+            pipe_name,
+            expected_server_image: std::env::current_exe().expect("test image"),
+            key_path,
+            client_kind: IpcClientKind::InternalTest,
+            client_version: "0.1.0".to_owned(),
+            client_instance_id: "malformed-challenge-client".to_owned(),
+            capabilities: vec![],
+            connect_timeout: Duration::from_secs(1),
+        });
+
+        let error = client
+            .call(
+                "tool.search",
+                serde_json::json!({"query":"test"}),
+                RequestId::new(),
+            )
+            .await
+            .expect_err("a malformed challenge remains invalid");
+
+        assert!(matches!(error, ControllerClientError::MalformedResponse));
         server.await.expect("server task finishes");
     }
 
