@@ -410,23 +410,24 @@ impl CodexIntegrationManager {
         let render_sha256 = rendered_hash(&rendered)?;
         let rendered_marketplace_root = normal_windows_path(&marketplace_root);
         let commands = registration_commands(&rendered_marketplace_root);
-        let registration_state =
-            match registration_mode(preserve_registration, options.skip_register) {
-                RegistrationMode::Preserve => CodexRegistrationState::Registered,
-                RegistrationMode::ManualActionRequired => {
+        let registration_state = match registration_mode(
+            preserve_registration,
+            options.skip_register,
+            action == "repair",
+        ) {
+            RegistrationMode::Preserve => CodexRegistrationState::Registered,
+            RegistrationMode::ManualActionRequired => CodexRegistrationState::ManualActionRequired,
+            RegistrationMode::Register => {
+                let marketplace_added =
+                    run_codex(options.codex_executable.as_deref(), &commands[0]);
+                let plugin_added = run_codex(options.codex_executable.as_deref(), &commands[1]);
+                if marketplace_added && plugin_added {
+                    CodexRegistrationState::Registered
+                } else {
                     CodexRegistrationState::ManualActionRequired
                 }
-                RegistrationMode::Register => {
-                    let marketplace_added =
-                        run_codex(options.codex_executable.as_deref(), &commands[0]);
-                    let plugin_added = run_codex(options.codex_executable.as_deref(), &commands[1]);
-                    if marketplace_added && plugin_added {
-                        CodexRegistrationState::Registered
-                    } else {
-                        CodexRegistrationState::ManualActionRequired
-                    }
-                }
-            };
+            }
+        };
         let manual_commands = if registration_state == CodexRegistrationState::Registered {
             Vec::new()
         } else {
@@ -479,8 +480,12 @@ impl CodexIntegrationManager {
     }
 }
 
-fn registration_mode(preserve_registration: bool, skip_register: bool) -> RegistrationMode {
-    if preserve_registration {
+fn registration_mode(
+    preserve_registration: bool,
+    skip_register: bool,
+    reconcile_registration: bool,
+) -> RegistrationMode {
+    if preserve_registration && !reconcile_registration {
         RegistrationMode::Preserve
     } else if skip_register {
         RegistrationMode::ManualActionRequired
@@ -1476,14 +1481,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn matching_registered_target_preserves_registration_without_writes() {
-        assert_eq!(registration_mode(true, false), RegistrationMode::Preserve);
-        assert_eq!(registration_mode(true, true), RegistrationMode::Preserve);
+    fn matching_registered_target_is_reconciled_during_repair() {
         assert_eq!(
-            registration_mode(false, true),
+            registration_mode(true, false, false),
+            RegistrationMode::Preserve
+        );
+        assert_eq!(
+            registration_mode(true, true, false),
+            RegistrationMode::Preserve
+        );
+        assert_eq!(
+            registration_mode(true, false, true),
+            RegistrationMode::Register
+        );
+        assert_eq!(
+            registration_mode(true, true, true),
             RegistrationMode::ManualActionRequired
         );
-        assert_eq!(registration_mode(false, false), RegistrationMode::Register);
+        assert_eq!(
+            registration_mode(false, true, false),
+            RegistrationMode::ManualActionRequired
+        );
+        assert_eq!(
+            registration_mode(false, false, false),
+            RegistrationMode::Register
+        );
 
         let install_root = Path::new(r"D:\도구\Star-Control");
         let integration_root = Path::new(r"D:\state\integrations\codex\0.1.0");
